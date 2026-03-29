@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synder Onboarding Deep Dive — UX Research Report</title>
+<style>
+  :root {
+    --blue: #2563eb;
+    --blue-light: #dbeafe;
+    --red: #dc2626;
+    --red-light: #fee2e2;
+    --amber: #d97706;
+    --amber-light: #fef3c7;
+    --green: #16a34a;
+    --green-light: #dcfce7;
+    --purple: #7c3aed;
+    --purple-light: #ede9fe;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-600: #4b5563;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--gray-50); color: var(--gray-800); line-height: 1.6; }
+  
+  .hero {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
+    color: white; padding: 48px 40px; border-bottom: 4px solid var(--blue);
+  }
+  .hero h1 { font-size: 32px; font-weight: 700; margin-bottom: 8px; }
+  .hero .subtitle { font-size: 16px; opacity: 0.85; }
+  .hero .meta { margin-top: 16px; font-size: 13px; opacity: 0.7; display: flex; gap: 24px; }
+  
+  .nav-tabs {
+    background: white; border-bottom: 1px solid var(--gray-200);
+    padding: 0 40px; display: flex; gap: 0; overflow-x: auto;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .nav-tab {
+    padding: 14px 20px; font-size: 14px; font-weight: 500; color: var(--gray-600);
+    cursor: pointer; border-bottom: 3px solid transparent; white-space: nowrap;
+    transition: all 0.2s;
+  }
+  .nav-tab:hover { color: var(--blue); background: var(--blue-light); }
+  .nav-tab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+  
+  .content { max-width: 1100px; margin: 0 auto; padding: 32px 40px; }
+  .section { display: none; }
+  .section.active { display: block; }
+  
+  h2 { font-size: 24px; font-weight: 700; color: var(--gray-900); margin: 32px 0 16px; }
+  h2:first-child { margin-top: 0; }
+  h3 { font-size: 18px; font-weight: 600; color: var(--gray-800); margin: 24px 0 12px; }
+  h4 { font-size: 15px; font-weight: 600; margin: 16px 0 8px; }
+  p { margin-bottom: 12px; }
+  
+  .card {
+    background: white; border: 1px solid var(--gray-200); border-radius: 12px;
+    padding: 24px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .card.critical { border-left: 4px solid var(--red); }
+  .card.warning { border-left: 4px solid var(--amber); }
+  .card.info { border-left: 4px solid var(--blue); }
+  .card.success { border-left: 4px solid var(--green); }
+  .card.bot { border-left: 4px solid var(--purple); }
+  
+  .badge {
+    display: inline-block; padding: 2px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .badge-critical { background: var(--red-light); color: var(--red); }
+  .badge-warning { background: var(--amber-light); color: var(--amber); }
+  .badge-info { background: var(--blue-light); color: var(--blue); }
+  .badge-success { background: var(--green-light); color: var(--green); }
+  .badge-bot { background: var(--purple-light); color: var(--purple); }
+  
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+  .stat-card {
+    background: white; border: 1px solid var(--gray-200); border-radius: 10px;
+    padding: 20px; text-align: center;
+  }
+  .stat-card .number { font-size: 36px; font-weight: 800; color: var(--blue); }
+  .stat-card .label { font-size: 13px; color: var(--gray-600); margin-top: 4px; }
+  .stat-card.red .number { color: var(--red); }
+  .stat-card.amber .number { color: var(--amber); }
+  .stat-card.green .number { color: var(--green); }
+  
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+  th { background: var(--gray-100); text-align: left; padding: 10px 14px; font-weight: 600; border-bottom: 2px solid var(--gray-200); }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+  tr:hover td { background: var(--gray-50); }
+  
+  .flow-diagram {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin: 16px 0; padding: 16px; background: var(--gray-100); border-radius: 8px;
+  }
+  .flow-step {
+    background: white; border: 2px solid var(--blue); border-radius: 8px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600; color: var(--blue);
+    position: relative;
+  }
+  .flow-step.highlight { background: var(--blue); color: white; }
+  .flow-step .sub { font-weight: 400; font-size: 11px; color: var(--gray-600); display: block; }
+  .flow-step.highlight .sub { color: rgba(255,255,255,0.8); }
+  .flow-arrow { color: var(--gray-300); font-size: 20px; }
+  
+  .field-list { list-style: none; }
+  .field-list li {
+    padding: 8px 12px; border-bottom: 1px solid var(--gray-100);
+    display: flex; align-items: center; gap: 8px; font-size: 14px;
+  }
+  .field-list li:last-child { border-bottom: none; }
+  .field-type {
+    background: var(--gray-100); padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; color: var(--gray-600);
+  }
+  .required { color: var(--red); font-weight: bold; }
+  .conditional { font-style: italic; color: var(--amber); font-size: 12px; }
+  
+  .bot-score {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 12px; border-radius: 16px; font-size: 13px; font-weight: 600;
+  }
+  .bot-score.fail { background: var(--red-light); color: var(--red); }
+  .bot-score.warn { background: var(--amber-light); color: var(--amber); }
+  .bot-score.pass { background: var(--green-light); color: var(--green); }
+  
+  .recommendation {
+    background: var(--blue-light); border-radius: 8px; padding: 16px;
+    margin: 12px 0; font-size: 14px;
+  }
+  .recommendation strong { color: var(--blue); }
+  
+  .funnel { margin: 24px 0; }
+  .funnel-step {
+    display: flex; align-items: center; gap: 16px; margin-bottom: 2px;
+  }
+  .funnel-bar {
+    height: 40px; border-radius: 4px;
+    display: flex; align-items: center; padding: 0 16px;
+    font-size: 13px; font-weight: 600; color: white;
+    transition: width 0.5s;
+  }
+  .funnel-label { min-width: 180px; font-size: 13px; font-weight: 500; text-align: right; }
+  .funnel-pct { min-width: 60px; font-size: 13px; font-weight: 600; }
+  
+  .progress-mockup {
+    background: white; border: 2px solid var(--gray-200); border-radius: 12px;
+    padding: 32px; margin: 20px 0; text-align: center;
+  }
+  .progress-bar-container {
+    display: flex; justify-content: center; align-items: center; gap: 0; margin: 24px auto; max-width: 600px;
+  }
+  .progress-dot {
+    width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--gray-300);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: var(--gray-300); background: white;
+    position: relative; z-index: 1;
+  }
+  .progress-dot.done { background: var(--blue); border-color: var(--blue); color: white; }
+  .progress-dot.active { border-color: var(--blue); color: var(--blue); box-shadow: 0 0 0 4px var(--blue-light); }
+  .progress-line { flex: 1; height: 3px; background: var(--gray-300); }
+  .progress-line.done { background: var(--blue); }
+  .progress-label {
+    font-size: 11px; color: var(--gray-600); margin-top: 8px; max-width: 100px; text-align: center;
+  }
+  .progress-step-wrap { display: flex; flex-direction: column; align-items: center; }
+
+  code { background: var(--gray-100); padding: 2px 6px; border-radius: 4px; font-size: 13px; }
+  .muted { color: var(--gray-600); font-size: 14px; }
+  
+  @media (max-width: 768px) {
+    .hero { padding: 24px 20px; }
+    .hero h1 { font-size: 22px; }
+    .content { padding: 20px; }
+    .nav-tabs { padding: 0 16px; }
+    .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>🔍 Synder Onboarding Deep Dive</h1>
+  <div class="subtitle">Role-based flow analysis, drop-off analytics, UX findings, and bot-friendliness audit</div>
+  <div class="meta">
+    <span>📅 March 29, 2026</span>
+    <span>👤 Analyst: Dasha</span>
+    <span>🔬 Method: Browser automation + LogRocket + Manual walkthrough</span>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="showSection('overview')">Overview</div>
+  <div class="nav-tab" onclick="showSection('flows')">Role Flows</div>
+  <div class="nav-tab" onclick="showSection('analytics')">Drop-off Analytics</div>
+  <div class="nav-tab" onclick="showSection('findings')">Findings & Recs</div>
+  <div class="nav-tab" onclick="showSection('bot')">🤖 Bot Audit</div>
+  <div class="nav-tab" onclick="showSection('stepper')">Progress Stepper</div>
+</div>
+
+<div class="content">
+
+<!-- ==================== OVERVIEW ==================== -->
+<div id="overview" class="section active">
+  <h2>Executive Summary</h2>
+  
+  <div class="stat-grid">
+    <div class="stat-card"><div class="number">6</div><div class="label">Role options</div></div>
+    <div class="stat-card"><div class="number">3</div><div class="label">Distinct flow paths</div></div>
+    <div class="stat-card red"><div class="number">63.9%</div><div class="label">Drop-off at role selection</div></div>
+    <div class="stat-card amber"><div class="number">8</div><div class="label">UX findings</div></div>
+    <div class="stat-card red"><div class="number">12</div><div class="label">Bot-blocking elements</div></div>
+  </div>
+  
+  <div class="card">
+    <h3>What we analyzed</h3>
+    <p>Complete walkthrough of Synder's onboarding flow across all 6 role options, testing every form field, dropdown, and conditional element. Automated via headless Chromium (Playwright) to simultaneously document the UX and assess bot/agent compatibility.</p>
+    
+    <h4>Method</h4>
+    <ul style="margin-left: 20px; font-size: 14px;">
+      <li>Browser automation with Playwright (headless Chromium) — walked each role end-to-end</li>
+      <li>40+ screenshots captured across all flows</li>
+      <li>LogRocket session analytics (Galileo AI API) — 90-day funnel data</li>
+      <li>Form element inspection — DOM analysis of every input, select, and radio</li>
+    </ul>
+  </div>
+  
+  <h2>Role Flow Map</h2>
+  <p>Synder's onboarding has <strong>6 role options</strong> that branch into <strong>3 distinct flow paths</strong>:</p>
+  
+  <table>
+    <thead>
+      <tr><th>Role</th><th>Flow Path</th><th>Step 1 (Extra)</th><th>Step 2 Name</th><th>Asks about client?</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Business owner / Executive manager</strong></td>
+        <td><span class="badge badge-info">Business</span></td>
+        <td>—</td>
+        <td>Provide business details</td>
+        <td>No (asks about own biz)</td>
+      </tr>
+      <tr>
+        <td><strong>Accounting or Bookkeeping Firm</strong></td>
+        <td><span class="badge badge-warning">Firm</span></td>
+        <td>Info about your practice<br><em>(employees, industries, # clients)</em></td>
+        <td>Provide Client details</td>
+        <td>Yes — client name, client's biz info</td>
+      </tr>
+      <tr>
+        <td><strong>Staff Accountant</strong></td>
+        <td><span class="badge badge-info">Business</span></td>
+        <td>—</td>
+        <td>Provide business details</td>
+        <td>No (same as Biz Owner but without accountant question)</td>
+      </tr>
+      <tr>
+        <td><strong>IT & Technology department</strong></td>
+        <td><span class="badge badge-info">Business</span></td>
+        <td>—</td>
+        <td>Provide business details</td>
+        <td>No</td>
+      </tr>
+      <tr>
+        <td><strong>Marketing</strong></td>
+        <td><span class="badge badge-info">Business</span></td>
+        <td>—</td>
+        <td>Provide business details</td>
+        <td>No</td>
+      </tr>
+      <tr>
+        <td><strong>Other</strong></td>
+        <td><span class="badge badge-warning">Firm</span></td>
+        <td>Free text role description + Info about your practice</td>
+        <td>Provide Client details</td>
+        <td>Yes — same as Accounting firm</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <div class="card info">
+    <h4>💡 Key Insight</h4>
+    <p>Only <strong>2 roles</strong> (Accounting Firm and Other) get the "firm" flow with practice info + client details. The other 4 roles all get identical "business" flows. This means <strong>67% of role options lead to the same experience</strong> — the role selector provides minimal differentiation for most users.</p>
+  </div>
+</div>
+
+<!-- ==================== ROLE FLOWS ==================== -->
+<div id="flows" class="section">
+  <h2>Role-Based Flow Documentation</h2>
+  
+  <!-- Business Owner Flow -->
+  <h3>🏢 Business Owner / Executive Manager</h3>
+  <div class="flow-diagram">
+    <div class="flow-step">Step 1<span class="sub">Role Selection</span></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step highlight">Step 2<span class="sub">Business Details</span></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Step 3<span class="sub">Select Integrations</span></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Step 4<span class="sub">Connect Integrations</span></div>
+  </div>
+  
+  <div class="card">
+    <h4>Step 1: Tell us about you</h4>
+    <p>Single dropdown: "How would you describe your role?" — 6 options</p>
+    <ul class="field-list">
+      <li><span class="field-type">DROPDOWN</span> Role <span class="required">*</span></li>
+    </ul>
+    
+    <h4>Step 2: Provide business details</h4>
+    <p><em>"We'll use this information to tailor your account"</em></p>
+    <ul class="field-list">
+      <li><span class="field-type">TEXT</span> Business name <span class="required">*</span></li>
+      <li><span class="field-type">TEXT</span> What's your business website?</li>
+      <li><span class="field-type">DROPDOWN</span> Time zone <span class="required">*</span> <span class="conditional">(defaults to UTC)</span></li>
+      <li><span class="field-type">DROPDOWN</span> Country <span class="required">*</span></li>
+      <li><span class="field-type">MULTI-SELECT</span> Industry <span class="required">*</span> <span class="conditional">⚠️ Non-standard react-select</span></li>
+      <li><span class="field-type">DROPDOWN</span> How long have you been in business? <span class="required">*</span></li>
+      <li><span class="field-type">DROPDOWN</span> Your revenue for the last year <span class="required">*</span> <span class="conditional">⚠️ HIDDEN — appears only after industry + duration are filled</span></li>
+      <li><span class="field-type">RADIO</span> Do you have an accountant/bookkeeper? <span class="conditional">→ Yes: shows email invite field / No: shows "find one" link</span></li>
+      <li><span class="field-type">TEXT</span> Accountant email <span class="required">*</span> <span class="conditional">(only if "Yes")</span></li>
+    </ul>
+    
+    <h4>Step 3: Select integrations</h4>
+    <p><em>"Synder is SOC 2 compliant and certified, so your data is thoroughly protected"</em></p>
+    <ul class="field-list">
+      <li><span class="field-type">CARDS</span> Sales integrations — platform icons (Stripe, PayPal, Shopify, Amazon, etc.)</li>
+      <li><span class="field-type">CARDS</span> Payment integrations</li>
+      <li><span class="field-type">BUTTON</span> View all integrations — opens modal with full list</li>
+    </ul>
+    
+    <h4>Step 4: Connect integrations</h4>
+    <p>OAuth connection flow for selected platforms. Also shows accounting software selection (QuickBooks, Xero, Sage Intacct, etc.)</p>
+  </div>
+  
+  <div class="card">
+    <h4>🔎 Business Owner Field Options (captured from DOM)</h4>
+    <table>
+      <tr><th>Field</th><th>Options</th></tr>
+      <tr><td>Timezone</td><td>600+ timezones (IANA list). US timezones listed first.</td></tr>
+      <tr><td>Country</td><td>250+ countries. Australia, Canada, UK, US shown first as favorites.</td></tr>
+      <tr><td>Industry</td><td>Automotive, Construction, Education, Entertainment, Hospitality/Travel, Insurance, Legal, Logistics, Manufacturer, Marketing, Non-profit, Professional Services, Real-Estate, <strong>Retail/E-Commerce</strong>, <strong>Technology/SaaS</strong>, Other</td></tr>
+      <tr><td>Business duration</td><td>Just starting, Less than 1 year, 1-3 years, 3+ years</td></tr>
+      <tr><td>Revenue</td><td>0-250K, 250K-1M, 1M-10M, 10M+</td></tr>
+    </table>
+  </div>
+  
+  <!-- Accounting Firm Flow -->
+  <h3>📊 Accounting or Bookkeeping Firm</h3>
+  <div class="flow-diagram">
+    <div class="flow-step">Step 1<span class="sub">Role Selection</span></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step highlight" style="background: var(--amber); border-color: var(--amber);">Step 1b<span class="sub">Practice Info</span></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Step 2<span class="sub">Client Details</span></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Step 3<span class="sub">Select Integrations</span></div>
+    <span class="flow-arrow">→</span>
+    <div class="flow-step">Step 4<span class="sub">Connect Integrations</span></div>
+  </div>
+  
+  <div class="card">
+    <h4>Step 1b: Info about your practice <span class="badge badge-warning">Extra step for firms only</span></h4>
+    <p>This sub-step appears WITHIN the "Tell us about you" tab — the stepper still shows 4 steps but this is effectively a 5th screen.</p>
+    <ul class="field-list">
+      <li><span class="field-type">DROPDOWN</span> How many employees? <span class="required">*</span> — 1 (just me), 2-9, 10-19, 20-49, 50+</li>
+      <li><span class="field-type">MULTI-SELECT</span> Industries you serve <span class="required">*</span> <span class="conditional">⚠️ Non-standard react-select</span></li>
+      <li><span class="field-type">DROPDOWN</span> How many clients to use Synder? <span class="required">*</span> — 1-2, 3-6, 7-14, 15-50, 50+</li>
+    </ul>
+    <p class="muted">Subtitle: "(have online transactions with Stripe, Square, Amazon, Shopify, PayPal, etc.)"</p>
+    
+    <h4>Step 2: Provide your Client's basic info</h4>
+    <p><em>"This info is needed to adjust Synder's functionality in accordance with your client's needs."</em></p>
+    <ul class="field-list">
+      <li><span class="field-type">TEXT</span> Client name <span class="required">*</span></li>
+      <li><span class="field-type">TEXT</span> What's your business website?</li>
+      <li><span class="field-type">DROPDOWN</span> Time zone <span class="required">*</span></li>
+      <li><span class="field-type">DROPDOWN</span> Country <span class="required">*</span></li>
+      <li><span class="field-type">MULTI-SELECT</span> Industry <span class="required">*</span></li>
+      <li><span class="field-type">DROPDOWN</span> How long has your Client been in business? <span class="required">*</span></li>
+    </ul>
+    <p class="muted">Note: No revenue question, no accountant question (they ARE the accountant).</p>
+  </div>
+  
+  <!-- Staff Accountant -->
+  <h3>📝 Staff Accountant</h3>
+  <div class="card">
+    <p><strong>Identical to Business Owner flow</strong> except:</p>
+    <ul style="margin-left: 20px;">
+      <li>No "Do you have an accountant?" question (they ARE the accountant)</li>
+      <li>No accountant email invite field</li>
+      <li>All other fields identical: business name, website, timezone, country, industry, duration</li>
+    </ul>
+    <div class="recommendation">
+      <strong>🤔 Question:</strong> Why does Staff Accountant get the "business" flow instead of the "firm" flow? A staff accountant at a firm would likely be managing clients, not their own business.
+    </div>
+  </div>
+  
+  <!-- Other -->
+  <h3>❓ Other</h3>
+  <div class="card">
+    <p><strong>Gets the Accounting Firm flow</strong> but with an extra step:</p>
+    <ul style="margin-left: 20px;">
+      <li><strong>Free-text field:</strong> "I describe my role as..." <span class="required">* required</span></li>
+      <li>Then proceeds to Practice Info → Client Details → Select/Connect Integrations</li>
+    </ul>
+    <div class="recommendation">
+      <strong>🤔 Question:</strong> Why does "Other" default to the firm flow? Users who don't fit existing categories might be business owners, not necessarily firms managing clients.
+    </div>
+  </div>
+
+  <h2>Step Comparison Matrix</h2>
+  <table>
+    <thead>
+      <tr><th>Step/Feature</th><th>Business Owner</th><th>Accounting Firm</th><th>Staff Accountant</th><th>Other</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Stepper tabs shown</td><td>4</td><td>4 (but 5 screens)</td><td>4</td><td>4 (but 5-6 screens)</td></tr>
+      <tr><td>Step 2 heading</td><td>"Provide business details"</td><td>"Provide Client details"</td><td>"Provide business details"</td><td>"Provide Client details"</td></tr>
+      <tr><td>Free-text role input</td><td>❌</td><td>❌</td><td>❌</td><td>✅ Required</td></tr>
+      <tr><td>Practice info sub-step</td><td>❌</td><td>✅</td><td>❌</td><td>✅</td></tr>
+      <tr><td>Employees count</td><td>❌</td><td>✅</td><td>❌</td><td>✅</td></tr>
+      <tr><td>Client count</td><td>❌</td><td>✅</td><td>❌</td><td>✅</td></tr>
+      <tr><td>Business name field</td><td>✅ "Business name"</td><td>✅ "Client name"</td><td>✅ "Business name"</td><td>✅ "Client name"</td></tr>
+      <tr><td>Revenue question</td><td>✅ (conditional)</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td>Accountant question</td><td>✅ Yes/No + email</td><td>❌</td><td>❌</td><td>❌</td></tr>
+      <tr><td>Loom video widget</td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== ANALYTICS ==================== -->
+<div id="analytics" class="section">
+  <h2>Drop-off Analytics</h2>
+  <p class="muted">Data from LogRocket Galileo AI API — 30/90-day session analysis. Combined with browser walkthrough observations.</p>
+  
+  <div class="stat-grid">
+    <div class="stat-card"><div class="number">1,101</div><div class="label">Sessions reached onboarding (30d)</div></div>
+    <div class="stat-card red"><div class="number">63.9%</div><div class="label">Drop-off at role selection</div></div>
+    <div class="stat-card amber"><div class="number">34.4%</div><div class="label">Overall completion rate</div></div>
+    <div class="stat-card"><div class="number">2</div><div class="label">Active JS bugs</div></div>
+  </div>
+  
+  <h3>Onboarding Funnel</h3>
+  <div class="funnel">
+    <div class="funnel-step">
+      <div class="funnel-label">Reached /onboarding</div>
+      <div class="funnel-bar" style="width: 100%; background: var(--blue);">1,101 sessions</div>
+      <div class="funnel-pct">100%</div>
+    </div>
+    <div class="funnel-step">
+      <div class="funnel-label">Selected a role</div>
+      <div class="funnel-bar" style="width: 36.1%; background: var(--amber);">~397</div>
+      <div class="funnel-pct">36.1%</div>
+    </div>
+    <div class="funnel-step">
+      <div class="funnel-label">Completed business/client details</div>
+      <div class="funnel-bar" style="width: 25%; background: var(--amber);">~275</div>
+      <div class="funnel-pct">~25%</div>
+    </div>
+    <div class="funnel-step">
+      <div class="funnel-label">Selected integrations</div>
+      <div class="funnel-bar" style="width: 20%; background: var(--amber);">~220</div>
+      <div class="funnel-pct">~20%</div>
+    </div>
+    <div class="funnel-step">
+      <div class="funnel-label">Completed onboarding</div>
+      <div class="funnel-bar" style="width: 15.4%; background: var(--green);">~170</div>
+      <div class="funnel-pct">~15.4%</div>
+    </div>
+    <div class="funnel-step">
+      <div class="funnel-label">Reached dashboard</div>
+      <div class="funnel-bar" style="width: 12%; background: var(--green);">~132</div>
+      <div class="funnel-pct">~12%</div>
+    </div>
+  </div>
+  
+  <h3>Drop-off Reasons by Step</h3>
+  
+  <div class="card critical">
+    <h4><span class="badge badge-critical">Critical</span> Step 1: Role Selection — 63.9% abandon</h4>
+    <p><strong>The #1 problem.</strong> Nearly two-thirds of all users who reach onboarding never get past the role selector.</p>
+    <h4>Probable reasons:</h4>
+    <ul style="margin-left: 20px; font-size: 14px;">
+      <li><strong>Opaque label:</strong> "How would you describe your role?" gives zero context about WHY the role matters or what changes based on selection</li>
+      <li><strong>Dropdown hides options:</strong> Users can't see all choices without clicking — unlike card-based selectors that show everything at a glance</li>
+      <li><strong>Decision paralysis:</strong> 6 options, unclear which to pick. "IT & Technology department" and "Marketing" feel wrong for most ecommerce users</li>
+      <li><strong>No "skip" or "I'll decide later":</strong> Required field with no way to proceed without choosing</li>
+      <li><strong>Context switch:</strong> Users just signed up with marketing promises → land on a blank page with one dropdown and zero context</li>
+    </ul>
+  </div>
+  
+  <div class="card warning">
+    <h4><span class="badge badge-warning">High</span> Step 2: Business/Client Details — ~30% drop between steps 1 and 2</h4>
+    <h4>Probable reasons:</h4>
+    <ul style="margin-left: 20px; font-size: 14px;">
+      <li><strong>Too many required fields:</strong> 6-7 required fields on one screen feels heavy</li>
+      <li><strong>Hidden conditional field:</strong> Revenue question appears AFTER filling other fields — feels like a moving goalpost</li>
+      <li><strong>Industry multi-select confusion:</strong> "Please select all that apply" but the select component doesn't look like a multi-select — it looks like a standard dropdown</li>
+      <li><strong>Silent form failures:</strong> Clicking "Next step" with empty fields doesn't scroll to the first error — validation messages appear but may be off-screen</li>
+      <li><strong>Accountant invite pressure:</strong> Being asked to invite an accountant mid-setup can feel premature or irrelevant</li>
+    </ul>
+  </div>
+  
+  <div class="card warning">
+    <h4><span class="badge badge-warning">High</span> Step 3: Integration Selection — ~20% drop</h4>
+    <h4>Probable reasons:</h4>
+    <ul style="margin-left: 20px; font-size: 14px;">
+      <li><strong>Must select BOTH sales AND accounting integrations:</strong> Business owners must select an accounting platform (QuickBooks, Xero, etc.) but these aren't shown in the default view or "View all" modal — silent failure with no error on first click</li>
+      <li><strong>Overwhelming platform list:</strong> "View all integrations" shows 30+ options</li>
+      <li><strong>No guidance:</strong> Which ones should I connect first? What if I'm not sure?</li>
+      <li><strong>"Choose at least one integration to proceed"</strong> — error appears on SECOND click only, doesn't explain what TYPE of integration is needed</li>
+    </ul>
+  </div>
+  
+  <div class="card info">
+    <h4><span class="badge badge-info">Medium</span> Step 4: Connect Integrations — ~25% drop</h4>
+    <h4>Probable reasons:</h4>
+    <ul style="margin-left: 20px; font-size: 14px;">
+      <li><strong>OAuth complexity:</strong> Connecting to Stripe, PayPal, etc. requires leaving Synder → logging into platform → authorizing</li>
+      <li><strong>Account readiness:</strong> Users may not have their platform credentials handy</li>
+      <li><strong>Fear of access:</strong> "What exactly will Synder access?" — security concerns</li>
+      <li><strong>Multi-step OAuth:</strong> Some platforms (QuickBooks) have multi-step authorization</li>
+    </ul>
+  </div>
+  
+  <h3>Known Active Bugs</h3>
+  <table>
+    <thead><tr><th>Bug</th><th>Impact</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>TypeError: Cannot read properties of undefined (reading 'email')</code></td>
+        <td>Blocks users at mapping/currency step — prevents onboarding completion</td>
+        <td><span class="badge badge-critical">P0 — Active</span></td>
+      </tr>
+      <tr>
+        <td><code>Converting circular structure to JSON</code></td>
+        <td>Breaks Product Mappings page — affects post-onboarding setup</td>
+        <td><span class="badge badge-critical">P0 — Active</span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ==================== FINDINGS ==================== -->
+<div id="findings" class="section">
+  <h2>Findings & Recommendations</h2>
+  <p>8 findings prioritized by impact. Each includes severity, evidence, and a specific recommendation.</p>
+  
+  <div class="card critical">
+    <h4>Finding #1: Role selection kills 64% of users <span class="badge badge-critical">Critical</span></h4>
+    <p><strong>Evidence:</strong> 1,101 sessions reach onboarding; only 397 proceed past role selection. The dropdown label "Choose an option" (or "How would you describe your role?") provides zero context.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Replace dropdown with <strong>visual card-based selector</strong> showing 3-4 clear options with icons and descriptions: "I run an online business" / "I'm an accountant managing clients" / "Other". Reduce from 6 options to 3 — IT, Marketing, and Staff Accountant get the same flow as Business Owner anyway.
+    </div>
+  </div>
+  
+  <div class="card critical">
+    <h4>Finding #2: Hidden required field — Revenue appears conditionally <span class="badge badge-critical">Critical</span></h4>
+    <p><strong>Evidence:</strong> On the Business Owner flow, "Your revenue for the last year" only appears after filling Industry and Duration. Users who fill the visible fields and click "Next step" get blocked by a field they didn't even know existed. No scroll-to-error behavior.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Either (a) show the Revenue field from the start, or (b) make it optional. If it must be conditional, <strong>smoothly animate it into view</strong> with a gentle highlight so users notice the new field.
+    </div>
+  </div>
+  
+  <div class="card critical">
+    <h4>Finding #3: No progress indication or context <span class="badge badge-critical">Critical</span></h4>
+    <p><strong>Evidence:</strong> The text tabs ("Tell us about you → Provide business details → Select integrations → Connect integrations") are flat, hard to scan, and don't show completion state. For the Accounting Firm flow, there are 5 actual screens but only 4 tabs — the Practice Info sub-step is hidden inside Step 1.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Add a <strong>numbered progress stepper</strong> with visual dots, completion checkmarks, and clear step counts. Show "Step 2 of 4" explicitly. See the Progress Stepper tab for a prototype.
+    </div>
+  </div>
+  
+  <div class="card warning">
+    <h4>Finding #4: Industry field is a non-standard multi-select <span class="badge badge-warning">High</span></h4>
+    <p><strong>Evidence:</strong> The Industry dropdown uses a custom react-select component with a hidden <code>#clickableInput</code> element. It's a multi-select ("Please select all that apply") but looks identical to single-select dropdowns. Users may not realize they can select multiple industries. The component also loses selections unpredictably in automated testing — suggesting potential state management issues for real users too.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Use <strong>checkbox-style multi-select</strong> with visible chips/tags for selected items. Or use a standard <code>&lt;select multiple&gt;</code>. Make the multi-select nature visually obvious.
+    </div>
+  </div>
+  
+  <div class="card warning">
+    <h4>Finding #5: Integration selection has a hidden accounting gate <span class="badge badge-warning">High</span></h4>
+    <p><strong>Evidence:</strong> Business owners must select at least one <strong>accounting</strong> integration (QuickBooks, Xero, etc.) in addition to sales integrations — but accounting options aren't prominently shown. The error message "Choose at least one integration to proceed" appears only on the second click and doesn't specify WHICH TYPE of integration is needed.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Split Step 3 into two clear sub-sections: <strong>"Where do you sell?" (sales platforms)</strong> and <strong>"Where do you do your books?" (accounting software)</strong>. Make both visibly required with section labels.
+    </div>
+  </div>
+  
+  <div class="card warning">
+    <h4>Finding #6: 4 roles with identical flows waste the role selector <span class="badge badge-warning">High</span></h4>
+    <p><strong>Evidence:</strong> Business Owner, Staff Accountant, IT & Technology, and Marketing all lead to the same "Provide business details" flow (with minor variations in the accountant question). Only Accounting Firm and Other get a different path. This means 67% of role options are cosmetic.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Consolidate to <strong>2-3 meaningful paths</strong>: "Business owner" / "Accountant/Bookkeeper managing clients" / "Other". Use the role selection to drive genuinely different experiences (welcome copy, feature highlights, default settings). If all paths converge, remove the selector entirely.
+    </div>
+  </div>
+  
+  <div class="card warning">
+    <h4>Finding #7: Accountant invite creates premature friction <span class="badge badge-warning">Medium</span></h4>
+    <p><strong>Evidence:</strong> Business owners are asked "Do you have an accountant/bookkeeper?" with a required email field if "Yes". Selecting "Yes" then trying to proceed without an email blocks the form. The "find a trusted accountant here" link (on "No") is a nice idea but mid-onboarding is the wrong time.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Move the accountant invite to <strong>post-onboarding settings</strong> or a "next steps" checklist. During onboarding, at most show a simple checkbox "I work with an accountant" and handle the invite later.
+    </div>
+  </div>
+  
+  <div class="card info">
+    <h4>Finding #8: No welcome screen or post-signup context <span class="badge badge-info">Medium</span></h4>
+    <p><strong>Evidence:</strong> Users go from signup directly to the role dropdown with no welcome, no "here's what to expect", no estimated time. The marketing site promises "three simple steps" but the onboarding shows 4 tabs with up to 5 actual screens.</p>
+    <div class="recommendation">
+      <strong>Recommendation:</strong> Add a <strong>welcome interstitial</strong>: "Welcome to Synder! Let's set up your account in about 3 minutes. Here's what we'll do: ① Tell us about your business ② Connect your sales channels ③ Link your accounting software." Builds confidence and sets expectations.
+    </div>
+  </div>
+</div>
+
+<!-- ==================== BOT AUDIT ==================== -->
+<div id="bot" class="section">
+  <h2>🤖 Bot & AI Agent Friendliness Audit</h2>
+  <p>Assessment of how well the onboarding flow can be automated by bots, AI agents, or automated testing frameworks. Tested with Playwright (headless Chromium).</p>
+  
+  <div class="stat-grid">
+    <div class="stat-card red"><div class="number">12</div><div class="label">Bot-blocking elements</div></div>
+    <div class="stat-card amber"><div class="number">5</div><div class="label">Partially automatable</div></div>
+    <div class="stat-card green"><div class="number">8</div><div class="label">Fully automatable</div></div>
+  </div>
+  
+  <div class="card">
+    <h3>Overall Bot-Friendliness Score</h3>
+    <div style="display: flex; align-items: center; gap: 16px; margin: 16px 0;">
+      <div style="font-size: 48px; font-weight: 800; color: var(--red);">3/10</div>
+      <div>
+        <p style="font-size: 16px; font-weight: 600; color: var(--red);">Not bot-friendly</p>
+        <p class="muted">Multiple non-standard form components, hidden fields, and state management issues make automated onboarding unreliable.</p>
+      </div>
+    </div>
+  </div>
+  
+  <h3>Element-by-Element Assessment</h3>
+  <table>
+    <thead>
+      <tr><th>Element</th><th>Bot Score</th><th>Issue</th><th>Fix for Bot Compatibility</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Role dropdown</td>
+        <td><span class="bot-score pass">✅ PASS</span></td>
+        <td>Standard <code>common-select</code> — works with <code>.click()</code> + option select</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Business name input</td>
+        <td><span class="bot-score warn">⚠️ PARTIAL</span></td>
+        <td>React-controlled input. Standard <code>.fill()</code> doesn't update React state. Needs <code>nativeInputValueSetter</code> + <code>dispatchEvent('input')</code></td>
+        <td>Add <code>data-testid</code> attributes. Ensure inputs respond to standard DOM events.</td>
+      </tr>
+      <tr>
+        <td>Timezone dropdown</td>
+        <td><span class="bot-score pass">✅ PASS</span></td>
+        <td>Standard <code>common-select</code></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Country dropdown</td>
+        <td><span class="bot-score warn">⚠️ PARTIAL</span></td>
+        <td>Standard <code>common-select</code> but "United States" matches 2 options (US + US Minor Outlying Islands). Strict mode fails.</td>
+        <td>Use unique IDs or <code>data-value</code> attributes for each option</td>
+      </tr>
+      <tr>
+        <td>Industry multi-select</td>
+        <td><span class="bot-score fail">❌ FAIL</span></td>
+        <td><strong>Critical blocker.</strong> Hidden <code>#clickableInput</code> element, not a standard select. Requires pixel-coordinate click below label. Selection doesn't persist reliably — <code>Escape</code> key undoes it. Value resets between interactions. No <code>name</code> or <code>data-testid</code>.</td>
+        <td>Replace with standard multi-select or add API-accessible selection method. Add <code>aria-*</code> attributes and <code>data-testid</code>.</td>
+      </tr>
+      <tr>
+        <td>Business duration dropdown</td>
+        <td><span class="bot-score pass">✅ PASS</span></td>
+        <td>Standard <code>common-select</code></td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Revenue dropdown</td>
+        <td><span class="bot-score fail">❌ FAIL</span></td>
+        <td><strong>Hidden until other fields filled.</strong> Bot must fill Industry + Duration first, wait for re-render, then discover the new dropdown. No way to know it exists beforehand. Also a <code>common-select</code> (automatable once visible).</td>
+        <td>Always render all fields. Use CSS visibility if progressive disclosure is desired.</td>
+      </tr>
+      <tr>
+        <td>Accountant radio buttons</td>
+        <td><span class="bot-score fail">❌ FAIL</span></td>
+        <td>Radio at y:944 below 900px viewport — not visible without scroll. <code>.click()</code> fails. <code>scrollIntoViewIfNeeded()</code> + <code>{force: true}</code> required. Overlapping <code>labelContainer-1-1-12</code> div intercepts pointer events.</td>
+        <td>Ensure radios are clickable via standard selectors. Remove overlapping container div. Add <code>data-testid</code>.</td>
+      </tr>
+      <tr>
+        <td>Accountant email input</td>
+        <td><span class="bot-score warn">⚠️ PARTIAL</span></td>
+        <td>Conditional field — only appears when Yes radio selected. Standard input once visible.</td>
+        <td>Add <code>data-testid</code> and visibility state.</td>
+      </tr>
+      <tr>
+        <td>Integration platform cards</td>
+        <td><span class="bot-score warn">⚠️ PARTIAL</span></td>
+        <td>Image-based cards with no text labels on some platforms. Need to click images by <code>alt</code> text or position.</td>
+        <td>Add <code>data-platform-id</code> attributes to each card. Add visible text labels.</td>
+      </tr>
+      <tr>
+        <td>"View all" modal</td>
+        <td><span class="bot-score pass">✅ PASS</span></td>
+        <td>Opens with click, closes with Escape</td>
+        <td>—</td>
+      </tr>
+      <tr>
+        <td>Form validation</td>
+        <td><span class="bot-score fail">❌ FAIL</span></td>
+        <td>No error scroll-to-field. Validation messages may be off-screen. No <code>aria-invalid</code> attributes. Form silently fails with no API response on submit — purely client-side React state check.</td>
+        <td>Add <code>aria-invalid</code>, <code>aria-errormessage</code>. Scroll to first error. Return structured error response.</td>
+      </tr>
+      <tr>
+        <td>Step navigation</td>
+        <td><span class="bot-score fail">❌ FAIL</span></td>
+        <td>Future step tabs are <strong>disabled</strong> — can't click ahead. No URL changes between steps (all /onboarding/index). No query params for step state. Back button works but re-renders form from scratch.</td>
+        <td>Add URL params (<code>?step=2</code>) or expose step state. Enable programmatic step navigation.</td>
+      </tr>
+      <tr>
+        <td>Practice Info sub-step</td>
+        <td><span class="bot-score fail">❌ FAIL</span></td>
+        <td>Hidden sub-step within Step 1 tab — no URL change, no distinct identifier. Bot must detect content change by reading page text. Stepper shows Step 1 for both role selection and practice info.</td>
+        <td>Give each logical step a unique URL or data attribute.</td>
+      </tr>
+      <tr>
+        <td>Cloudflare Access gate</td>
+        <td><span class="bot-score fail">❌ FAIL</span></td>
+        <td>Email verification required before reaching the app. Needs CF-Access-Client headers or manual email code. Blocks any bot without pre-configured service tokens.</td>
+        <td>Provide <code>CF-Access-Client-Id</code> / <code>CF-Access-Client-Secret</code> service tokens for bot accounts. Or whitelist bot IPs.</td>
+      </tr>
+    </tbody>
+  </table>
+  
+  <h3>Recommendations for Bot-Friendly Onboarding</h3>
+  
+  <div class="card bot">
+    <h4>Priority 1: Add <code>data-testid</code> attributes to all form elements</h4>
+    <p>Every input, select, radio, button, and card should have a unique <code>data-testid</code> attribute. This is the single biggest improvement for automation compatibility.</p>
+    <p><strong>Examples:</strong></p>
+    <ul style="margin-left: 20px; font-size: 14px;">
+      <li><code>data-testid="onboarding-role-select"</code></li>
+      <li><code>data-testid="onboarding-industry-select"</code></li>
+      <li><code>data-testid="onboarding-integration-stripe"</code></li>
+      <li><code>data-testid="onboarding-next-button"</code></li>
+    </ul>
+  </div>
+  
+  <div class="card bot">
+    <h4>Priority 2: Replace non-standard react-select with accessible components</h4>
+    <p>The Industry multi-select uses a custom react-select that doesn't respond to standard DOM interactions. Replace with a component that supports <code>aria-*</code> attributes and responds to <code>.fill()</code> / <code>.selectOption()</code>.</p>
+  </div>
+  
+  <div class="card bot">
+    <h4>Priority 3: Add URL-based step routing</h4>
+    <p>Each onboarding step should have a distinct URL or query parameter (<code>/onboarding?step=2</code>). This allows bots to navigate directly to specific steps and detect their current position.</p>
+  </div>
+  
+  <div class="card bot">
+    <h4>Priority 4: Provide an onboarding API</h4>
+    <p>For true bot/agent onboarding at scale, expose a REST API that accepts all onboarding parameters in a single POST request. This bypasses the UI entirely and allows programmatic org setup.</p>
+    <pre style="background: var(--gray-100); padding: 12px; border-radius: 6px; font-size: 13px; overflow-x: auto;">POST /api/v1/onboarding/complete
+{
+  "role": "business_owner",
+  "businessName": "My Company",
+  "country": "US",
+  "industry": ["retail_ecommerce"],
+  "businessDuration": "1_3_years",
+  "revenue": "250k_1m",
+  "integrations": ["stripe", "quickbooks_online"]
+}</pre>
+  </div>
+  
+  <div class="card bot">
+    <h4>Priority 5: Render all form fields immediately</h4>
+    <p>Hidden/conditional fields (Revenue, accountant email) should be rendered in the DOM from the start (even if visually hidden). This allows bots to discover and fill all fields in a single pass.</p>
+  </div>
+</div>
+
+<!-- ==================== PROGRESS STEPPER ==================== -->
+<div id="stepper" class="section">
+  <h2>Progress Stepper Concept</h2>
+  <p>The current onboarding uses flat text tabs with no visual progress indication. Here's a proposed stepper design.</p>
+  
+  <h3>Current vs Proposed</h3>
+  
+  <div class="card">
+    <h4>❌ Current: Flat text tabs</h4>
+    <div style="display: flex; gap: 24px; padding: 12px 0; font-size: 14px;">
+      <span style="color: var(--blue); font-weight: 600; border-bottom: 2px solid var(--blue); padding-bottom: 4px;">Tell us about you</span>
+      <span style="color: var(--gray-800);">Provide business details</span>
+      <span style="color: var(--gray-300);">Select integrations</span>
+      <span style="color: var(--gray-300);">Connect integrations</span>
+    </div>
+    <p class="muted">Problems: No step numbers, no completion state, no time estimate, disabled future steps look like broken links.</p>
+  </div>
+  
+  <div class="card success">
+    <h4>✅ Proposed: Visual progress stepper</h4>
+    <div id="stepper-demo" class="progress-mockup">
+      <p style="font-size: 14px; color: var(--gray-600); margin-bottom: 4px;">Step <strong id="step-num">2</strong> of 4 · About 2 minutes left</p>
+      <div class="progress-bar-container">
+        <div class="progress-step-wrap">
+          <div class="progress-dot done" id="dot-1">✓</div>
+          <div class="progress-label">About you</div>
+        </div>
+        <div class="progress-line done" id="line-1"></div>
+        <div class="progress-step-wrap">
+          <div class="progress-dot active" id="dot-2">2</div>
+          <div class="progress-label">Business details</div>
+        </div>
+        <div class="progress-line" id="line-2"></div>
+        <div class="progress-step-wrap">
+          <div class="progress-dot" id="dot-3">3</div>
+          <div class="progress-label">Integrations</div>
+        </div>
+        <div class="progress-line" id="line-3"></div>
+        <div class="progress-step-wrap">
+          <div class="progress-dot" id="dot-4">4</div>
+          <div class="progress-label">Connect</div>
+        </div>
+      </div>
+      <div style="margin-top: 24px;">
+        <button onclick="prevStep()" style="padding: 8px 20px; border: 1px solid var(--gray-300); border-radius: 6px; background: white; cursor: pointer; margin-right: 12px;">← Back</button>
+        <button onclick="nextStep()" style="padding: 8px 20px; border: none; border-radius: 6px; background: var(--blue); color: white; cursor: pointer; font-weight: 600;">Next step →</button>
+      </div>
+    </div>
+    
+    <h4>Key improvements:</h4>
+    <ul style="margin-left: 20px; font-size: 14px;">
+      <li><strong>Numbered dots</strong> — clear position in the flow</li>
+      <li><strong>Completion checkmarks (✓)</strong> — completed steps are visually distinct</li>
+      <li><strong>Active state ring</strong> — current step has a blue glow</li>
+      <li><strong>Connected lines</strong> — show flow direction and completion</li>
+      <li><strong>"Step X of Y"</strong> — explicit text for accessibility</li>
+      <li><strong>Time estimate</strong> — "About 2 minutes left" reduces anxiety</li>
+      <li><strong>Short labels</strong> — "About you" > "Tell us about you"</li>
+    </ul>
+  </div>
+  
+  <h3>Welcome Screen Concept</h3>
+  <div class="progress-mockup">
+    <div style="font-size: 48px; margin-bottom: 16px;">🎉</div>
+    <h3 style="margin-bottom: 8px;">Welcome to Synder!</h3>
+    <p style="color: var(--gray-600); max-width: 400px; margin: 0 auto 24px;">Let's set up your account. It takes about <strong>3 minutes</strong>.</p>
+    <div style="display: flex; flex-direction: column; gap: 12px; max-width: 300px; margin: 0 auto; text-align: left;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--blue-light); color: var(--blue); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">1</div>
+        <span style="font-size: 14px;">Tell us about your business</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--blue-light); color: var(--blue); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">2</div>
+        <span style="font-size: 14px;">Connect your sales channels</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--blue-light); color: var(--blue); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px;">3</div>
+        <span style="font-size: 14px;">Link your accounting software</span>
+      </div>
+    </div>
+    <button style="margin-top: 24px; padding: 12px 32px; border: none; border-radius: 8px; background: var(--blue); color: white; font-size: 16px; font-weight: 600; cursor: pointer;">Let's get started →</button>
+  </div>
+  
+  <h3>Accounting Firm Variant</h3>
+  <p>For accounting firms, the stepper should reflect the actual 5-screen flow:</p>
+  <div class="progress-mockup">
+    <p style="font-size: 14px; color: var(--gray-600); margin-bottom: 4px;">Step <strong>2</strong> of 5 · About 3 minutes left</p>
+    <div class="progress-bar-container" style="max-width: 700px;">
+      <div class="progress-step-wrap">
+        <div class="progress-dot done">✓</div>
+        <div class="progress-label">Your role</div>
+      </div>
+      <div class="progress-line done"></div>
+      <div class="progress-step-wrap">
+        <div class="progress-dot active">2</div>
+        <div class="progress-label">Your practice</div>
+      </div>
+      <div class="progress-line"></div>
+      <div class="progress-step-wrap">
+        <div class="progress-dot">3</div>
+        <div class="progress-label">Client info</div>
+      </div>
+      <div class="progress-line"></div>
+      <div class="progress-step-wrap">
+        <div class="progress-dot">4</div>
+        <div class="progress-label">Integrations</div>
+      </div>
+      <div class="progress-line"></div>
+      <div class="progress-step-wrap">
+        <div class="progress-dot">5</div>
+        <div class="progress-label">Connect</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /content -->
+
+<script>
+function showSection(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// Stepper demo
+let currentStep = 2;
+function updateStepper() {
+  for (let i = 1; i <= 4; i++) {
+    const dot = document.getElementById('dot-' + i);
+    dot.className = 'progress-dot';
+    if (i < currentStep) { dot.className = 'progress-dot done'; dot.textContent = '✓'; }
+    else if (i === currentStep) { dot.className = 'progress-dot active'; dot.textContent = i; }
+    else { dot.textContent = i; }
+    
+    if (i < 4) {
+      const line = document.getElementById('line-' + i);
+      line.className = i < currentStep ? 'progress-line done' : 'progress-line';
+    }
+  }
+  document.getElementById('step-num').textContent = currentStep;
+}
+function nextStep() { if (currentStep < 4) { currentStep++; updateStepper(); } }
+function prevStep() { if (currentStep > 1) { currentStep--; updateStepper(); } }
+</script>
+
+</body>
+</html>
