@@ -759,13 +759,30 @@ body.show-annotations .ux-note { display: block; }
   <div class="actions"><button class="btn btn-secondary" onclick="prevStep()">← Back</button><button class="btn btn-primary" onclick="nextStep()">Finish setup →</button></div>
 </section>
 
-<!-- ===== SUCCESS ===== -->
+<!-- ===== ALMOST THERE ===== -->
 <section class="step-panel" id="step-success">
-  <div class="success-screen">
-    <div class="success-icon">🎉</div>
-    <h1>You're all set!</h1>
-    <p>Your <span id="successOrgType">organization</span> is ready. Synder will start importing your transactions automatically.</p>
-    <button class="btn btn-primary" onclick="alert('→ Dashboard redirect')" style="margin:0 auto">Go to dashboard →</button>
+  <div class="panel-header" style="text-align:left;">
+    <h1>Almost there</h1>
+    <p>Platforms were successfully connected.</p>
+  </div>
+
+  <!-- Integration status cards -->
+  <div id="summaryCards" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:10px; margin-bottom:32px;"></div>
+
+  <!-- Import section -->
+  <div style="border-top:1px solid var(--gray-200); padding-top:28px;">
+    <h2 style="font-size:22px; font-weight:700; margin-bottom:8px;">Import up to 2 months of data to test Synder</h2>
+    <p style="font-size:14px; color:var(--gray-500); line-height:1.5; margin-bottom:24px;">After testing on the limited period, you can subscribe and import unlimited historical data.</p>
+
+    <div class="form-group" style="max-width:240px;">
+      <label class="form-label">From <span style="color:var(--gray-400); cursor:help;" title="Select the date from which Synder should start importing your transactions">ⓘ</span> <span style="color:var(--red);">*</span></label>
+      <input type="date" class="form-input" id="importFromDate" style="cursor:pointer;">
+    </div>
+
+    <div style="display:flex; gap:14px; margin-top:28px;">
+      <button class="btn btn-secondary" style="flex:1; justify-content:center; padding:14px;" onclick="alert('→ Import to Synder only')">Import to Synder</button>
+      <button class="btn btn-primary" style="flex:1; justify-content:center; padding:14px;" onclick="alert('→ Import & sync to accounting')">Sync to books</button>
+    </div>
   </div>
 </section>
 
@@ -926,8 +943,7 @@ function nextStep() {
   } else {
     currentStepIndex++;
     showPanel('step-success');
-    document.getElementById('successOrgType').textContent = 
-      (selectedRole === 'accountant' || selectedRole === 'other') ? "client's organization" : 'organization';
+    buildSummaryCards();
   }
 }
 
@@ -1269,6 +1285,48 @@ function togglePasswordVisibility() {
   const toggle = document.getElementById('pwToggle');
   if (pw.type === 'password') { pw.type = 'text'; toggle.textContent = '🙈'; toggle.title = 'Hide password'; }
   else { pw.type = 'password'; toggle.textContent = '👁'; toggle.title = 'Show password'; }
+}
+
+// ===== SUMMARY CARDS =====
+const integrationStates = {}; // track per-platform state
+
+function buildSummaryCards() {
+  const container = document.getElementById('summaryCards');
+  const allSelected = [...document.querySelectorAll('.int-card.selected')].filter(c => !accountingNames.has(c.querySelector('.int-name').textContent));
+  
+  let html = '';
+  allSelected.forEach((card, i) => {
+    const name = card.querySelector('.int-name').textContent;
+    const intCard = document.getElementById('int-card-'+i);
+    let status = 'Connected';
+    let statusColor = 'var(--success)';
+    let statusIcon = '✓';
+    
+    if (intCard) {
+      if (intCard.classList.contains('state-later')) {
+        status = 'Skipped'; statusColor = 'var(--gray-400)'; statusIcon = '';
+      } else if (intCard.querySelector('.invite-form') && intCard.querySelector('.invite-form').style.display !== 'none') {
+        status = 'Invitation sent'; statusColor = 'var(--gray-500)'; statusIcon = '📧';
+      } else if (intCard.innerHTML.includes('Invite sent')) {
+        status = 'Invitation sent'; statusColor = 'var(--gray-500)'; statusIcon = '📧';
+      } else if (!intCard.classList.contains('state-connected')) {
+        status = 'Skipped'; statusColor = 'var(--gray-400)'; statusIcon = '';
+      }
+    }
+    
+    html += `<div style="border:1.5px solid var(--gray-200); border-radius:var(--radius-sm); padding:16px; background:white;">
+      <div style="font-size:14px; font-weight:600; margin-bottom:6px;">${name}</div>
+      <div style="font-size:14px; color:${statusColor}; font-weight:500;">${statusIcon ? statusIcon+' ' : ''}${status}</div>
+    </div>`;
+  });
+  
+  container.innerHTML = html || '';
+  
+  // Set default date to 2 months ago
+  const d = new Date();
+  d.setMonth(d.getMonth() - 2);
+  const dateInput = document.getElementById('importFromDate');
+  if (dateInput) dateInput.value = d.toISOString().split('T')[0];
 }
 
 // ===== INIT =====
