@@ -707,12 +707,24 @@ body.show-annotations .ux-note { display: block; }
 </section>
 
 <!-- ===== STEP: CONNECT ===== -->
-<section class="step-panel" id="step-connect">
+<!-- ===== STEP: CONNECT ACCOUNTING (first) ===== -->
+<section class="step-panel" id="step-connect-accounting">
   <div class="panel-header">
-    <h1>Connect your accounts</h1>
-    <p>Log into each platform to authorize Synder. SOC 2 Type II compliant.</p>
+    <h1>Connect your accounting software</h1>
+    <p>This is required first so Synder knows where to sync your data. SOC 2 Type II compliant.</p>
   </div>
-  <div id="connectCards"></div>
+  <div id="connectAccountingCards"></div>
+  <div class="ux-note"><strong>🔍 Accounting first:</strong> The backend requires an active accounting connection before sales integrations can be linked. This enforces the correct order and prevents the common production error where users try to connect sales platforms without accounting.</div>
+  <div class="actions"><button class="btn btn-secondary" onclick="prevStep()">← Back</button><button class="btn btn-primary" onclick="nextStep()">Continue →</button></div>
+</section>
+
+<!-- ===== STEP: CONNECT INTEGRATIONS (second) ===== -->
+<section class="step-panel" id="step-connect-integrations">
+  <div class="panel-header">
+    <h1>Connect your sales platforms</h1>
+    <p>Log into each platform to authorize Synder. Your data stays encrypted.</p>
+  </div>
+  <div id="connectIntegrationCards"></div>
   <div class="skip-connect"><a href="#" onclick="event.preventDefault(); nextStep()">Skip for now — I'll connect later</a></div>
   <div class="actions"><button class="btn btn-secondary" onclick="prevStep()">← Back</button><button class="btn btn-primary" onclick="nextStep()">Finish setup →</button></div>
 </section>
@@ -743,48 +755,48 @@ const FLOWS = {
     label: 'Business Owner',
     badge: 'Business flow',
     badgeClass: '',
-    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect'],
-    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect'],
+    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect-accounting','step-connect-integrations'],
+    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect books','Connect sales'],
     showAccountant: true
   },
   accountant: {
     label: 'Accountant / Bookkeeper',
     badge: 'Firm flow',
     badgeClass: 'firm',
-    steps: ['step-signup','step-welcome','step-role','step-practice','step-client','step-integrations','step-accounting','step-sync','step-connect'],
-    stepLabels: ['Sign up','Welcome','Your role','Your practice','Client info','Integrations','Accounting','Sync mode','Connect'],
+    steps: ['step-signup','step-welcome','step-role','step-practice','step-client','step-integrations','step-accounting','step-sync','step-connect-accounting','step-connect-integrations'],
+    stepLabels: ['Sign up','Welcome','Your role','Your practice','Client info','Integrations','Accounting','Sync mode','Connect books','Connect sales'],
     showAccountant: false
   },
   staff: {
     label: 'Staff Accountant',
     badge: 'Business flow',
     badgeClass: '',
-    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect'],
-    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect'],
+    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect-accounting','step-connect-integrations'],
+    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect books','Connect sales'],
     showAccountant: false
   },
   ecommerce: {
     label: 'E-commerce / SaaS',
     badge: 'Business flow',
     badgeClass: '',
-    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect'],
-    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect'],
+    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect-accounting','step-connect-integrations'],
+    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect books','Connect sales'],
     showAccountant: true
   },
   it: {
     label: 'IT / Tech',
     badge: 'Business flow',
     badgeClass: '',
-    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect'],
-    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect'],
+    steps: ['step-signup','step-welcome','step-role','step-business','step-integrations','step-accounting','step-sync','step-connect-accounting','step-connect-integrations'],
+    stepLabels: ['Sign up','Welcome','Your role','Business details','Integrations','Accounting','Sync mode','Connect books','Connect sales'],
     showAccountant: false
   },
   other: {
     label: 'Other',
     badge: 'Firm flow',
     badgeClass: 'firm',
-    steps: ['step-signup','step-welcome','step-role','step-other-role','step-practice','step-client','step-integrations','step-accounting','step-sync','step-connect'],
-    stepLabels: ['Sign up','Welcome','Your role','Describe role','Your practice','Client info','Integrations','Accounting','Sync mode','Connect'],
+    steps: ['step-signup','step-welcome','step-role','step-other-role','step-practice','step-client','step-integrations','step-accounting','step-sync','step-connect-accounting','step-connect-integrations'],
+    stepLabels: ['Sign up','Welcome','Your role','Describe role','Your practice','Client info','Integrations','Accounting','Sync mode','Connect books','Connect sales'],
     showAccountant: false
   }
 };
@@ -879,7 +891,8 @@ function nextStep() {
   if (currentStepIndex < flow.steps.length - 1) {
     currentStepIndex++;
     const stepId = getCurrentStepId();
-    if (stepId === 'step-connect') buildConnectCards();
+    if (stepId === 'step-connect-accounting') buildConnectAccountingCards();
+    if (stepId === 'step-connect-integrations') buildConnectIntegrationCards();
     showPanel(stepId);
   } else {
     currentStepIndex++;
@@ -995,22 +1008,38 @@ function selectSync(el) {
 }
 
 // ===== CONNECT CARDS =====
-function buildConnectCards() {
-  const container = document.getElementById('connectCards');
+const platformColors = {
+  'Stripe': '#635bff', 'PayPal': '#003087', 'Square': '#1a1a1a', 'GoCardless': '#00d09c',
+  'Shopify': '#96bf48', 'Amazon': '#ff9900', 'eBay': '#e53238', 'Etsy': '#f56400',
+  'WooCommerce': '#7b51ad', 'Squarespace': '#000',
+  'QuickBooks Online': '#2ca01c', 'Xero': '#13b5ea', 'Sage Intacct': '#2e5a31', 'NetSuite': '#1a1a1a',
+};
+const accountingNames = new Set(['QuickBooks Online','Xero','Sage Intacct','NetSuite']);
+
+function buildCards(container, filter) {
   const selected = document.querySelectorAll('.int-card.selected');
-  const platforms = {
-    'Stripe': '#635bff', 'PayPal': '#003087', 'Square': '#1a1a1a', 'GoCardless': '#00d09c',
-    'Shopify': '#96bf48', 'Amazon': '#ff9900', 'eBay': '#e53238', 'Etsy': '#f56400',
-    'WooCommerce': '#7b51ad', 'Squarespace': '#000',
-    'QuickBooks Online': '#2ca01c', 'Xero': '#13b5ea', 'Sage Intacct': '#2e5a31', 'NetSuite': '#1a1a1a',
-  };
   let html = '';
   selected.forEach(card => {
     const name = card.querySelector('.int-name').textContent;
-    const color = platforms[name] || '#666';
+    const isAccounting = accountingNames.has(name);
+    if (filter === 'accounting' && !isAccounting) return;
+    if (filter === 'sales' && isAccounting) return;
+    const color = platformColors[name] || '#666';
     html += '<div class="connect-card"><div class="connect-left"><div class="connect-logo" style="background:'+color+'">'+name[0]+'</div><div class="connect-info"><h4>'+name+'</h4></div></div><button class="btn-connect" onclick="simulateConnect(this)">Connect</button></div>';
   });
-  container.innerHTML = html || '<p style="text-align:center;color:var(--gray-400);padding:24px;">No platforms selected.</p>';
+  return html;
+}
+
+function buildConnectAccountingCards() {
+  const container = document.getElementById('connectAccountingCards');
+  const html = buildCards(container, 'accounting');
+  container.innerHTML = html || '<p style="text-align:center;color:var(--gray-400);padding:24px;">No accounting software selected. <a href="#" onclick="event.preventDefault(); prevStep();" style="color:var(--primary);">Go back to select one.</a></p>';
+}
+
+function buildConnectIntegrationCards() {
+  const container = document.getElementById('connectIntegrationCards');
+  const html = buildCards(container, 'sales');
+  container.innerHTML = html || '<p style="text-align:center;color:var(--gray-400);padding:24px;">No sales platforms selected.</p>';
 }
 
 function simulateConnect(btn) {
