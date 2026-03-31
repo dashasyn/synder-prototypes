@@ -856,15 +856,21 @@ body.show-annotations .ux-note { display: block; }
   <div class="actions"><button class="btn btn-secondary" onclick="prevStep()">← Back</button><button class="btn btn-primary" id="accContinueBtn" onclick="nextStep()">Continue →</button></div>
 </section>
 
-<!-- ===== STEP: CONNECT INTEGRATIONS ===== -->
+<!-- ===== STEP: CONNECT INTEGRATIONS (one-by-one wizard) ===== -->
 <section class="step-panel" id="step-connect-integrations">
+  <!-- Sub-progress bar -->
+  <div id="intWizardProgress" style="display:flex; align-items:center; gap:8px; max-width:400px; margin:0 auto 24px;">
+    <!-- filled dynamically -->
+  </div>
+  <div id="intWizardCounter" style="text-align:center; font-size:14px; color:var(--gray-500); margin-bottom:8px;"></div>
+
   <div class="panel-header">
-    <h1>Connect your payment platform</h1>
-    <p>Let Synder import your transaction data for the selected period.</p>
+    <h1 id="intWizardTitle">Connect your payment platform</h1>
+    <p id="intWizardSubtitle">Let Synder import your transaction data for the selected period.</p>
   </div>
 
-  <!-- Trust & control info -->
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; max-width:600px; margin:0 auto 32px;">
+  <!-- Trust & control info (shown on first platform only) -->
+  <div id="intWizardTrust" style="display:grid; grid-template-columns:1fr 1fr; gap:24px; max-width:600px; margin:0 auto 32px;">
     <div style="background:var(--gray-50); border-radius:var(--radius); padding:20px;">
       <h3 style="font-size:14px; font-weight:700; color:var(--gray-800); margin-bottom:12px;">What Synder will do:</h3>
       <ul style="list-style:none; font-size:14px; color:var(--gray-600); display:flex; flex-direction:column; gap:8px;">
@@ -882,8 +888,13 @@ body.show-annotations .ux-note { display: block; }
     </div>
   </div>
 
-  <div id="connectIntegrationCards"></div>
-  <div class="actions"><button class="btn btn-secondary" onclick="prevStep()">← Back</button><button class="btn btn-primary" onclick="nextStep()">Finish setup →</button></div>
+  <!-- Single platform card (one at a time) -->
+  <div id="intWizardCard" style="max-width:560px; margin:0 auto;"></div>
+
+  <div class="actions">
+    <button class="btn btn-secondary" id="intWizardBack" onclick="intWizardPrev()">← Back</button>
+    <button class="btn btn-primary" id="intWizardNext" onclick="intWizardAdvance()">Next platform →</button>
+  </div>
 </section>
 
 <!-- ===== ALMOST THERE ===== -->
@@ -1332,75 +1343,172 @@ function simulateAccConnect(idx, name) {
 }
 
 // ===== BUILD INTEGRATION CONNECT CARDS =====
+// ===== INTEGRATION CONNECT WIZARD (one-by-one) =====
+let intWizardPlatforms = [];
+let intWizardIndex = 0;
+let intWizardStates = {}; // { index: 'pending'|'connected'|'later'|'invited' }
+
 function buildConnectIntegrationCards() {
-  const container = document.getElementById('connectIntegrationCards');
-  const selected = [...document.querySelectorAll('.int-card.selected')].filter(c => {
+  // Collect selected sales platforms
+  intWizardPlatforms = [...document.querySelectorAll('.int-card.selected')].filter(c => {
     const n = c.querySelector('.int-name').textContent;
     return !accountingNames.has(n);
-  });
-  if (!selected.length) {
-    container.innerHTML = '<p style="text-align:center;color:var(--gray-400);padding:24px;">No sales platforms selected.</p>';
-    return;
-  }
-  container.innerHTML = selected.map((card, i) => {
-    const name = card.querySelector('.int-name').textContent;
-    const color = platformColors[name] || '#555';
-    const desc = platformDescriptions[name] || 'Synder will read your transactions to sync them to your accounting software.';
-    return `
-    <div class="platform-connect-card" id="int-card-${i}">
-      <div class="platform-connect-header">
-        <div class="platform-logo-lg" style="background:${color}">${name[0]}</div>
-        <div>
-          <h3>${name}</h3>
-          <p>${desc}</p>
-        </div>
-      </div>
-      <div class="connect-btn-group" id="int-btns-${i}">
-        <button class="btn-connect-primary" onclick="simulateIntConnect(${i},'${name}')">Connect</button>
-        <button class="btn-connect-secondary" onclick="markConnectLater(${i})">Connect later</button>
-        <button class="btn-invite" onclick="toggleInviteForm(${i})">Invite account owner</button>
-      </div>
-      <div id="int-invite-${i}" style="display:none;" class="invite-form">
-        <input type="email" placeholder="owner@company.com" id="invite-email-${i}">
-        <button class="btn-connect-primary" onclick="sendInvite(${i})">Send invite</button>
-        <button class="btn-connect-secondary" onclick="toggleInviteForm(${i})">Cancel</button>
-      </div>
-      <div id="int-settings-${i}" style="display:none;"></div>
-    </div>`;
-  }).join('');
+  }).map(c => c.querySelector('.int-name').textContent);
+  intWizardIndex = 0;
+  intWizardStates = {};
+  intWizardPlatforms.forEach((_, i) => intWizardStates[i] = 'pending');
+  renderIntWizardStep();
 }
 
-function simulateIntConnect(i, name) {
-  const btns = document.getElementById('int-btns-'+i);
+function renderIntWizardStep() {
+  const container = document.getElementById('intWizardCard');
+  const total = intWizardPlatforms.length;
+
+  if (!total) {
+    container.innerHTML = '<p style="text-align:center;color:var(--gray-400);padding:24px;">No sales platforms selected.</p>';
+    document.getElementById('intWizardProgress').innerHTML = '';
+    document.getElementById('intWizardCounter').textContent = '';
+    document.getElementById('intWizardNext').textContent = 'Finish setup →';
+    document.getElementById('intWizardNext').onclick = function() { nextStep(); };
+    document.getElementById('intWizardTrust').style.display = 'none';
+    return;
+  }
+
+  const idx = intWizardIndex;
+  const name = intWizardPlatforms[idx];
+  const color = platformColors[name] || '#555';
+  const desc = platformDescriptions[name] || 'Synder will read your transactions to sync them to your accounting software.';
+  const state = intWizardStates[idx];
+
+  // Sub-progress dots
+  document.getElementById('intWizardProgress').innerHTML = intWizardPlatforms.map((p, i) => {
+    const s = intWizardStates[i];
+    const bg = s === 'connected' ? 'var(--success)' : s === 'later' || s === 'invited' ? 'var(--gray-300)' : i === idx ? 'var(--primary)' : 'var(--gray-200)';
+    const shadow = i === idx ? 'box-shadow:0 0 0 3px var(--primary-light);' : '';
+    return `<div style="flex:1; height:6px; border-radius:3px; background:${bg}; ${shadow} transition:all 0.3s;" title="${p}"></div>`;
+  }).join('');
+
+  document.getElementById('intWizardCounter').textContent = `Platform ${idx + 1} of ${total}`;
+
+  // Title updates per platform
+  document.getElementById('intWizardTitle').textContent = 'Connect ' + name;
+  document.getElementById('intWizardSubtitle').textContent = 'Let Synder import your transaction data for the selected period.';
+
+  // Show trust block only on first platform
+  document.getElementById('intWizardTrust').style.display = idx === 0 ? 'grid' : 'none';
+
+  // Build the card
+  let cardContent = '';
+  if (state === 'connected') {
+    cardContent = `
+      <div class="platform-connect-card state-connected">
+        <div class="platform-connect-header">
+          <div class="platform-logo-lg" style="background:${color}">${name[0]}</div>
+          <div><h3>${name}</h3><p>${desc}</p></div>
+        </div>
+        <div class="connect-btn-group"><span class="connected-badge">✓ Connected</span></div>
+        <div id="int-settings-w${idx}"></div>
+      </div>`;
+  } else if (state === 'later') {
+    cardContent = `
+      <div class="platform-connect-card state-later">
+        <div class="platform-connect-header">
+          <div class="platform-logo-lg" style="background:${color}">${name[0]}</div>
+          <div><h3>${name}</h3><p>${desc}</p></div>
+        </div>
+        <div class="connect-btn-group">
+          <span style="font-size:14px;color:var(--gray-400);">⏸ Will connect later</span>
+          <button class="btn-connect-secondary" style="padding:6px 12px;font-size:14px;" onclick="intWizardStates[${idx}]='pending';renderIntWizardStep();">Undo</button>
+        </div>
+      </div>`;
+  } else if (state === 'invited') {
+    cardContent = `
+      <div class="platform-connect-card">
+        <div class="platform-connect-header">
+          <div class="platform-logo-lg" style="background:${color}">${name[0]}</div>
+          <div><h3>${name}</h3><p>${desc}</p></div>
+        </div>
+        <div class="connect-btn-group"><span style="font-size:14px;color:var(--gray-500);">📧 Invite sent</span></div>
+      </div>`;
+  } else {
+    cardContent = `
+      <div class="platform-connect-card" id="int-wcard-${idx}">
+        <div class="platform-connect-header">
+          <div class="platform-logo-lg" style="background:${color}">${name[0]}</div>
+          <div><h3>${name}</h3><p>${desc}</p></div>
+        </div>
+        <div class="connect-btn-group" id="int-wbtns-${idx}">
+          <button class="btn-connect-primary" onclick="intWizardConnect(${idx},'${name}')">Connect ${name}</button>
+          <button class="btn-connect-secondary" onclick="intWizardLater(${idx})">Connect later</button>
+          <button class="btn-invite" onclick="intWizardToggleInvite(${idx})">Invite account owner</button>
+        </div>
+        <div id="int-winvite-${idx}" style="display:none;" class="invite-form">
+          <input type="email" placeholder="owner@company.com" id="int-winvite-email-${idx}">
+          <button class="btn-connect-primary" onclick="intWizardSendInvite(${idx})">Send invite</button>
+          <button class="btn-connect-secondary" onclick="intWizardToggleInvite(${idx})">Cancel</button>
+        </div>
+      </div>`;
+  }
+  container.innerHTML = cardContent;
+
+  // If connected, render settings
+  if (state === 'connected') {
+    renderIntSettings('w' + idx, name);
+  }
+
+  // Update nav buttons
+  const nextBtn = document.getElementById('intWizardNext');
+  const backBtn = document.getElementById('intWizardBack');
+  if (idx >= total - 1) {
+    nextBtn.textContent = 'Finish setup →';
+    nextBtn.onclick = function() { nextStep(); };
+  } else {
+    nextBtn.textContent = 'Next platform →';
+    nextBtn.onclick = function() { intWizardAdvance(); };
+  }
+  backBtn.onclick = function() { intWizardPrev(); };
+}
+
+function intWizardConnect(idx, name) {
+  const btns = document.getElementById('int-wbtns-'+idx);
   btns.innerHTML = '<span style="font-size:14px;color:var(--gray-500);">⏳ Redirecting to '+name+' for authorization...</span>';
   setTimeout(() => {
-    btns.innerHTML = '<span class="connected-badge">✓ Connected</span>';
-    document.getElementById('int-card-'+i).classList.add('state-connected');
-    renderIntSettings(i, name);
+    intWizardStates[idx] = 'connected';
+    renderIntWizardStep();
   }, 1800);
 }
 
-function markConnectLater(i) {
-  const card = document.getElementById('int-card-'+i);
-  card.classList.add('state-later');
-  const btns = document.getElementById('int-btns-'+i);
-  btns.innerHTML = '<span style="font-size:14px;color:var(--gray-400);">⏸ Will connect later</span> <button class="btn-connect-secondary" style="padding:6px 12px;font-size:14px;" onclick="resetIntCard('+i+')">Undo</button>';
+function intWizardLater(idx) {
+  intWizardStates[idx] = 'later';
+  renderIntWizardStep();
 }
 
-function resetIntCard(i) {
-  buildConnectIntegrationCards();
-}
-
-function toggleInviteForm(i) {
-  const form = document.getElementById('int-invite-'+i);
+function intWizardToggleInvite(idx) {
+  const form = document.getElementById('int-winvite-'+idx);
   form.style.display = form.style.display === 'none' ? 'flex' : 'none';
 }
 
-function sendInvite(i) {
-  const email = document.getElementById('invite-email-'+i).value || 'the account owner';
-  const btns = document.getElementById('int-btns-'+i);
-  document.getElementById('int-invite-'+i).style.display = 'none';
-  btns.innerHTML = '<span style="font-size:14px;color:var(--gray-500);">📧 Invite sent to '+email+'</span>';
+function intWizardSendInvite(idx) {
+  intWizardStates[idx] = 'invited';
+  renderIntWizardStep();
+}
+
+function intWizardAdvance() {
+  if (intWizardIndex < intWizardPlatforms.length - 1) {
+    intWizardIndex++;
+    renderIntWizardStep();
+  } else {
+    nextStep();
+  }
+}
+
+function intWizardPrev() {
+  if (intWizardIndex > 0) {
+    intWizardIndex--;
+    renderIntWizardStep();
+  } else {
+    prevStep();
+  }
 }
 
 function renderIntSettings(i, name) {
