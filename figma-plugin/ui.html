@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Inter', sans-serif; padding: 16px; background: #fff; color: #333; font-size: 13px; }
+  h2 { font-size: 15px; margin-bottom: 8px; color: #1a1a1a; }
+  .status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+  .status.connected { background: #E8F5E9; color: #2E7D32; }
+  .status.disconnected { background: #FFF3E0; color: #E65100; }
+  .status.error { background: #FFEBEE; color: #C62828; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.green { background: #4CAF50; }
+  .dot.orange { background: #FF9800; animation: pulse 1.5s infinite; }
+  .dot.red { background: #F44336; }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  
+  .config { margin-bottom: 16px; }
+  .config label { display: block; font-size: 11px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .config input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; outline: none; }
+  .config input:focus { border-color: #1976D2; }
+  
+  .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .btn-primary { background: #1976D2; color: white; }
+  .btn-primary:hover { background: #1565C0; }
+  .btn-secondary { background: #f5f5f5; color: #333; border: 1px solid #ddd; }
+  .btn-secondary:hover { background: #e8e8e8; }
+  .btn-danger { background: #F44336; color: white; }
+  .btn-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  
+  .log { background: #f9f9f9; border: 1px solid #eee; border-radius: 6px; padding: 8px; font-family: 'SF Mono', monospace; font-size: 11px; max-height: 180px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #555; }
+  .log .cmd { color: #1976D2; }
+  .log .ok { color: #2E7D32; }
+  .log .err { color: #C62828; }
+  .log-label { font-size: 11px; font-weight: 600; color: #666; margin: 12px 0 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+</style>
+</head>
+<body>
+
+<h2>🔍 Dasha Remote</h2>
+
+<div id="statusBar" class="status disconnected">
+  <div class="dot orange"></div>
+  <span>Waiting for server URL...</span>
+</div>
+
+<div class="config">
+  <label>Server URL</label>
+  <input type="text" id="serverUrl" placeholder="https://your-tunnel.trycloudflare.com" value="">
+</div>
+
+<div class="btn-row">
+  <button class="btn btn-primary" id="connectBtn" onclick="startPolling()">Connect</button>
+  <button class="btn btn-danger" id="stopBtn" onclick="stopPolling()" style="display:none">Stop</button>
+  <button class="btn btn-secondary" onclick="testPing()">Test Ping</button>
+</div>
+
+<div class="log-label">Activity Log</div>
+<div class="log" id="log">Ready. Enter your Cloudflare tunnel URL and click Connect.\n</div>
+
+<script>
+let pollInterval = null;
+let serverUrl = '';
+
+const log = document.getElementById('log');
+const statusBar = document.getElementById('statusBar');
+
+function addLog(msg, cls = '') {
+  const span = document.createElement('span');
+  span.className = cls;
+  span.textContent = msg + '\n';
+  log.appendChild(span);
+  log.scrollTop = log.scrollHeight;
+}
+
+function setStatus(state, text) {
+  statusBar.className = 'status ' + state;
+  statusBar.innerHTML = `<div class="dot ${state === 'connected' ? 'green' : state === 'error' ? 'red' : 'orange'}"></div><span>${text}</span>`;
+}
+
+// Poll server for pending commands
+async function poll() {
+  try {
+    const resp = await fetch(serverUrl + '/api/figma/poll', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'ready' })
+    });
+    
+    if (!resp.ok) {
+      addLog('Poll error: ' + resp.status, 'err');
+      return;
+    }
+    
+    const data = await resp.json();
+    
+    if (data.cmd) {
+      addLog('← CMD: ' + data.cmd + ' ' + JSON.stringify(data.args || {}).substring(0, 80), 'cmd');
+      
+      // Forward command to plugin main thread
+      parent.postMessage({
+        pluginMessage: {
+          type: 'execute',
+          cmd: data.cmd,
+          args: data.args || {},
+          requestId: data.requestId
+        }
+      }, '*');
+    }
+  } catch (e) {
+    // Silent on network errors during polling
+  }
+}
+
+// Send result back to server
+async function sendResult(requestId, result) {
+  try {
+    await fetch(serverUrl + '/api/figma/result', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId, result })
+    });
+    addLog('→ Result sent (' + requestId + ')', 'ok');
+  } catch (e) {
+    addLog('→ Failed to send result: ' + e.message, 'err');
+  }
+}
+
+// Listen for results from plugin main thread
+window.onmessage = async (event) => {
+  const msg = event.data.pluginMessage;
+  if (!msg) return;
+  
+  if (msg.type === 'result') {
+    addLog('→ Result: ' + JSON.stringify(msg.result).substring(0, 120), 'ok');
+    await sendResult(msg.requestId, msg.result);
+  }
+  
+  if (msg.type === 'exportResult') {
+    // Convert bytes to base64
+    const bytes = new Uint8Array(msg.bytes);
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const b64 = btoa(binary);
+    
+    addLog('→ Export: ' + bytes.length + ' bytes', 'ok');
+    await sendResult(msg.requestId, { ok: true, base64: b64, size: bytes.length });
+  }
+};
+
+function startPolling() {
+  serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  if (!serverUrl) { addLog('Enter a server URL first', 'err'); return; }
+  
+  // Save to localStorage
+  try { localStorage.setItem('dasha-server-url', serverUrl); } catch(e) {}
+  
+  setStatus('connected', 'Connected to ' + serverUrl);
+  addLog('Polling started: ' + serverUrl);
+  
+  document.getElementById('connectBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = '';
+  
+  // Poll every 2 seconds
+  poll();
+  pollInterval = setInterval(poll, 2000);
+}
+
+function stopPolling() {
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = null;
+  setStatus('disconnected', 'Disconnected');
+  addLog('Polling stopped');
+  document.getElementById('connectBtn').style.display = '';
+  document.getElementById('stopBtn').style.display = 'none';
+}
+
+async function testPing() {
+  serverUrl = document.getElementById('serverUrl').value.trim().replace(/\/$/, '');
+  if (!serverUrl) { addLog('Enter a server URL first', 'err'); return; }
+  
+  try {
+    const resp = await fetch(serverUrl + '/api/figma/ping');
+    const data = await resp.json();
+    addLog('Ping OK: ' + JSON.stringify(data), 'ok');
+    setStatus('connected', 'Server reachable');
+  } catch (e) {
+    addLog('Ping failed: ' + e.message, 'err');
+    setStatus('error', 'Cannot reach server');
+  }
+}
+
+// Restore saved URL
+try {
+  const saved = localStorage.getItem('dasha-server-url');
+  if (saved) document.getElementById('serverUrl').value = saved;
+} catch(e) {}
+</script>
+</body>
+</html>
