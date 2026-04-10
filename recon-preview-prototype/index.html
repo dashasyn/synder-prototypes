@@ -31,7 +31,7 @@
     --shadow-2: 0 4px 12px rgba(26,27,36,.10), 0 2px 4px rgba(26,27,36,.04);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: var(--g5); color: var(--g90); font-family: Roboto, -apple-system, system-ui, sans-serif; font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; background: var(--white); color: var(--g90); font-family: Roboto, -apple-system, system-ui, sans-serif; font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased; }
   a { color: var(--primary); text-decoration: none; }
   a:hover { text-decoration: underline; }
   button { font-family: inherit; font-size: 14px; cursor: pointer; }
@@ -48,9 +48,9 @@
   .proto-bar .tag { background: rgba(255,255,255,.12); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
 
   /* SYNDER PAGE CHROME */
-  .page { max-width: 1600px; margin: 0 auto; padding: 0 24px 48px; min-width: 0; }
+  .page { margin: 0 32px; padding: 0 0 48px; min-width: 0; }
   .topbar-wrap { background: var(--white); border-bottom: 1px solid var(--g20); width: 100%; }
-  .topbar-wrap .app-topbar { max-width: 1600px; margin: 0 auto; padding: 16px 24px; }
+  .topbar-wrap .app-topbar { padding: 16px 32px; }
 
   .app-topbar { display: flex; align-items: center; gap: 16px; }
   .app-topbar .close { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; color: var(--g50); }
@@ -229,10 +229,24 @@
   .proto-notes ul { margin: 0; padding-left: 20px; }
   .proto-notes li { margin-bottom: 4px; }
 
-  /* Responsive tweaks */
-  @media (max-width: 1200px) {
-    .panels { grid-template-columns: 1fr; }
-  }
+  /* Tooltip for description (i) icon */
+  .desc-ic { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--g30); color: var(--g30); font-size: 10px; line-height: 1; font-family: serif; font-style: italic; font-weight: 700; cursor: default; vertical-align: middle; }
+  .desc-ic:hover { border-color: var(--g50); color: var(--g50); }
+  .desc-ic .tip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 6px; background: var(--g90); color: #fff; font-size: 12px; font-family: Roboto, sans-serif; font-style: normal; font-weight: 400; white-space: nowrap; padding: 5px 10px; border-radius: 4px; pointer-events: none; z-index: 50; max-width: 220px; white-space: normal; text-align: center; }
+  .desc-ic:hover .tip { display: block; }
+
+  /* Bulk selection bar */
+  .bulk-select-bar { display: flex; align-items: center; gap: 10px; background: var(--primary); color: #fff; padding: 8px 12px; border-radius: 4px; margin-bottom: 8px; font-size: 13px; }
+  .bulk-select-bar .cnt { font-weight: 700; }
+  .bulk-select-bar .sp { flex: 1; }
+  .bulk-select-bar button { background: rgba(255,255,255,.18); color: #fff; border: 0; padding: 5px 12px; border-radius: 4px; font-weight: 500; font-size: 12px; cursor: pointer; }
+  .bulk-select-bar button:hover { background: rgba(255,255,255,.28); }
+  .bulk-select-bar button.prim { background: #fff; color: var(--primary); }
+  .bulk-select-bar button.prim:hover { background: #f0f0f0; }
+  .bulk-select-bar .x { background: none; padding: 4px 8px; }
+
+  /* Keep panels side-by-side at all widths — inner scroll handles overflow */
+  .panels { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 24px; }
 </style>
 </head>
 <body>
@@ -240,10 +254,10 @@
 <div class="proto-bar">
   <h1>🔍 Dasha · Reconciliation Preview Prototype <span>— Transaction Reconciliation / Not matched tab</span></h1>
   <div class="spacer"></div>
-  <div class="tag" id="modeTag">IMPROVED</div>
+  <div class="tag" id="modeTag">CURRENT</div>
   <div class="seg" role="tablist">
-    <button id="mode-current" onclick="setMode('current')">📸 Current</button>
-    <button id="mode-improved" class="active" onclick="setMode('improved')">✨ Improved</button>
+    <button id="mode-current" class="active" onclick="setMode('current')">📸 Current</button>
+    <button id="mode-improved" onclick="setMode('improved')">✨ Improved</button>
     <button id="mode-side" onclick="setMode('side')">⇔ Side by side</button>
   </div>
 </div>
@@ -1431,27 +1445,38 @@ function renderCurrent() {
           <button class="btn-outline">Reset filters</button>
         </div>
       </div>
+      <!-- Bulk bar (shown when rows checked) -->
+      <div class="bulk-select-bar" id="accBulkBar" style="display:none">
+        <span class="cnt"><span id="accBulkCnt">0</span> selected</span>
+        <div class="sp"></div>
+        <button class="prim">&#8644; Match selected</button>
+        <button>Mark as expected</button>
+        <button>Ignore selected</button>
+        <button class="x" onclick="clearBulkPanel('acc')">&#10005;</button>
+      </div>
       <div class="tbl-wrap">
         <div class="tbl-scroll">
         <table class="tbl">
           <thead><tr>
-            <th class="check-col"><input type="checkbox"></th>
+            <th class="check-col"><input type="checkbox" onchange="toggleAllPanel('acc',this)"></th>
             <th class="sort">Date</th>
             <th class="sort">Primary ID</th>
             <th class="sort">Secondary ID</th>
             <th class="sort">Type</th>
             <th class="sort num">Amount</th>
+            <th>Description</th>
             <th></th>
           </tr></thead>
           <tbody>
             ${accRows.map(r => `
               <tr>
-                <td class="check-col"><input type="checkbox"></td>
+                <td class="check-col"><input type="checkbox" class="acc-row-check" onchange="updateBulkPanel('acc')"></td>
                 <td>${fmtDate(r.date)}</td>
                 <td class="id" title="${r.primaryId}">${truncate(r.primaryId, 14)}</td>
                 <td class="id" title="${r.secondaryId}">${truncate(r.secondaryId, 14)}</td>
-                <td class="type" title="${r.description || r.type}">${r.type}</td>
+                <td class="type">${r.type}</td>
                 <td class="num ${r.amount < 0 ? 'neg' : ''}">${fmtAmount(r.amount, r.currency)}</td>
+                <td>${r.description ? `<span class="desc-ic">i<span class="tip">${r.description}</span></span>` : ''}</td>
                 <td><button class="ignore-btn">Ignore</button></td>
               </tr>`).join('')}
           </tbody>
@@ -1485,27 +1510,37 @@ function renderCurrent() {
           <button class="btn-outline">Reset filters</button>
         </div>
       </div>
+      <!-- Bulk bar for right panel -->
+      <div class="bulk-select-bar" id="ppBulkBar" style="display:none">
+        <span class="cnt"><span id="ppBulkCnt">0</span> selected</span>
+        <div class="sp"></div>
+        <button class="prim">&#8644; Match selected</button>
+        <button>Ignore selected</button>
+        <button class="x" onclick="clearBulkPanel('pp')">&#10005;</button>
+      </div>
       <div class="tbl-wrap">
         <div class="tbl-scroll">
         <table class="tbl">
           <thead><tr>
-            <th class="check-col"><input type="checkbox"></th>
+            <th class="check-col"><input type="checkbox" onchange="toggleAllPanel('pp',this)"></th>
             <th class="sort">Date</th>
             <th class="sort">Primary ID</th>
             <th class="sort">Secondary ID</th>
             <th class="sort">Type</th>
             <th class="sort num">Amount</th>
+            <th>Description</th>
             <th></th>
           </tr></thead>
           <tbody>
             ${ppRows.map(r => `
-              <tr>
-                <td class="check-col"><input type="checkbox"></td>
+              <tr style="${!r.date && r.amount===null ? 'background:var(--red-l)' : ''}">
+                <td class="check-col"><input type="checkbox" class="pp-row-check" onchange="updateBulkPanel('pp')"></td>
                 <td>${fmtDate(r.date)}</td>
                 <td class="id" title="${r.primaryId}">${truncate(r.primaryId, 14)}</td>
-                <td class="id" title="${r.secondaryId}">${truncate(r.secondaryId, 14)}</td>
-                <td class="type" title="${r.description || r.type}">${r.type}</td>
-                <td class="num ${(r.amount||0) < 0 ? 'neg' : ''}">${fmtAmount(r.amount, r.currency)}</td>
+                <td class="id" title="${r.secondaryId}">${r.secondaryId || '—'}</td>
+                <td class="type">${r.type}</td>
+                <td class="num">${r.amount !== null ? fmtAmount(r.amount, r.currency) : (r.secondaryId ? '<span style="color:var(--g50);font-size:12px" title="Amount in Secondary ID due to column mapping error">' + r.secondaryId + ' ' + r.currency + '</span>' : '—')}</td>
+                <td>${r.description ? `<span class="desc-ic">i<span class="tip">${r.description}</span></span>` : ''}</td>
                 <td><button class="ignore-btn">Ignore</button></td>
               </tr>`).join('')}
           </tbody>
@@ -1847,6 +1882,30 @@ function setMode(mode) {
   window.scrollTo(0, 0);
 }
 
+/* Panel-specific bulk bar logic */
+function updateBulkPanel(panel) {
+  const cls = panel === 'acc' ? 'acc-row-check' : 'pp-row-check';
+  const barId = panel === 'acc' ? 'accBulkBar' : 'ppBulkBar';
+  const cntId = panel === 'acc' ? 'accBulkCnt' : 'ppBulkCnt';
+  const checked = document.querySelectorAll('.' + cls + ':checked').length;
+  const bar = document.getElementById(barId);
+  if (bar) bar.style.display = checked > 0 ? 'flex' : 'none';
+  const cnt = document.getElementById(cntId);
+  if (cnt) cnt.textContent = checked;
+}
+function toggleAllPanel(panel, cb) {
+  const cls = panel === 'acc' ? 'acc-row-check' : 'pp-row-check';
+  document.querySelectorAll('.' + cls).forEach(c => c.checked = cb.checked);
+  updateBulkPanel(panel);
+}
+function clearBulkPanel(panel) {
+  const cls = panel === 'acc' ? 'acc-row-check' : 'pp-row-check';
+  document.querySelectorAll('.' + cls).forEach(c => c.checked = false);
+  const hdr = document.querySelectorAll('input[onchange*="toggleAllPanel\\(\'' + panel + '\'"]:not(.' + cls + ')');
+  hdr.forEach(c => c.checked = false);
+  updateBulkPanel(panel);
+}
+
 function toggleCluster(idx, event) {
   if (event && (event.target.closest('.actions') || event.target.closest('input'))) return;
   document.getElementById('cluster-' + idx).classList.toggle('expanded');
@@ -1867,8 +1926,8 @@ function clearBulk() {
   toggleBulk();
 }
 
-// Initial render
-setMode('improved');
+// Initial render — Current first by default
+setMode('current');
 </script>
 </body>
 </html>
