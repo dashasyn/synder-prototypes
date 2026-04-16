@@ -1,0 +1,1116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Books Preview — Synder → QuickBooks</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f4; color: #1a1a1a; }
+
+  /* ========== LAYOUT ========== */
+  .app-layout { display: flex; height: 100vh; overflow: hidden; }
+
+  /* ========== SYNDER PANEL ========== */
+  .synder-panel {
+    width: 300px; min-width: 300px;
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    display: flex; flex-direction: column;
+    overflow-y: auto;
+  }
+  .synder-panel-header {
+    background: #1a52b3;
+    color: white;
+    padding: 16px 18px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .synder-panel-header svg { flex-shrink: 0; }
+  .synder-panel-header .title { font-size: 14px; font-weight: 600; }
+  .synder-panel-header .subtitle { font-size: 11px; opacity: 0.75; margin-top: 2px; }
+
+  .synder-section { padding: 16px 18px; border-bottom: 1px solid #f0f0f0; }
+  .synder-section-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #888; margin-bottom: 12px;
+  }
+  .setting-row { margin-bottom: 14px; }
+  .setting-label { font-size: 12px; color: #444; margin-bottom: 5px; font-weight: 500; }
+  .setting-desc { font-size: 11px; color: #999; margin-top: 3px; line-height: 1.4; }
+
+  .setting-select {
+    width: 100%; padding: 7px 10px;
+    border: 1px solid #d0d0d0; border-radius: 5px;
+    font-size: 13px; color: #1a1a1a; background: #fff;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    cursor: pointer;
+  }
+  .setting-select:focus { outline: none; border-color: #1a52b3; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .toggle-info { flex: 1; }
+  .toggle-label { font-size: 12px; color: #444; font-weight: 500; }
+  .toggle-desc { font-size: 11px; color: #999; margin-top: 2px; line-height: 1.4; }
+  .toggle {
+    position: relative; width: 36px; height: 20px;
+    background: #ccc; border-radius: 10px; cursor: pointer;
+    transition: background 0.2s; flex-shrink: 0; margin-left: 12px;
+  }
+  .toggle.on { background: #1a52b3; }
+  .toggle::after {
+    content: ''; position: absolute;
+    width: 16px; height: 16px;
+    background: white; border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .toggle.on::after { transform: translateX(16px); }
+
+  .preview-btn {
+    margin: 16px 18px 20px;
+    padding: 11px 0;
+    background: #1a52b3; color: white;
+    border: none; border-radius: 6px;
+    font-size: 14px; font-weight: 600;
+    cursor: pointer; width: calc(100% - 36px);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    transition: background 0.15s;
+  }
+  .preview-btn:hover { background: #1544a0; }
+  .preview-btn.refreshing { background: #888; cursor: default; }
+
+  .change-badge {
+    display: inline-block; background: #fff3cd; color: #856404;
+    font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 10px;
+    border: 1px solid #ffc107; margin-left: 6px; vertical-align: middle;
+  }
+
+  /* ========== QB PANEL ========== */
+  .qb-panel { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* QB Top Nav */
+  .qb-topnav {
+    background: #fff;
+    border-bottom: 1px solid #d9d9d9;
+    padding: 0 20px;
+    display: flex; align-items: center;
+    height: 52px; flex-shrink: 0;
+    gap: 16px;
+  }
+  .qb-logo { display: flex; align-items: center; gap: 8px; margin-right: 8px; }
+  .qb-logo-icon {
+    width: 32px; height: 32px; background: #2CA01C; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-weight: 800; font-size: 16px; font-style: italic;
+  }
+  .qb-logo-text { font-size: 15px; font-weight: 700; color: #393a3d; }
+  .qb-logo-text span { color: #2CA01C; }
+
+  .qb-topnav-divider { width: 1px; height: 24px; background: #e0e0e0; }
+  .qb-preview-tag {
+    background: #fff3cd; color: #856404; border: 1px solid #ffc107;
+    padding: 3px 10px; border-radius: 4px; font-size: 12px; font-weight: 600;
+  }
+  .qb-topnav-spacer { flex: 1; }
+  .qb-sync-info { font-size: 12px; color: #888; }
+  .qb-sync-info strong { color: #1a1a1a; }
+
+  /* QB Side Nav */
+  .qb-body { display: flex; flex: 1; overflow: hidden; }
+  .qb-sidenav {
+    width: 200px; min-width: 200px;
+    background: #f9f9f9;
+    border-right: 1px solid #e8e8e8;
+    overflow-y: auto; padding: 12px 0;
+  }
+  .qb-nav-group { padding: 6px 0; }
+  .qb-nav-group-title {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #aaa;
+    padding: 4px 16px 6px;
+  }
+  .qb-nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; cursor: pointer;
+    font-size: 13px; color: #3c3c3c;
+    border-left: 3px solid transparent;
+    transition: all 0.1s;
+  }
+  .qb-nav-item:hover { background: #f0f0f0; color: #1a52b3; }
+  .qb-nav-item.active {
+    background: #e8f0fe; color: #1a52b3; font-weight: 600;
+    border-left-color: #1a52b3;
+  }
+  .qb-nav-item .nav-icon { width: 16px; text-align: center; font-size: 14px; }
+
+  /* QB Content */
+  .qb-content { flex: 1; overflow-y: auto; background: #fafafa; }
+  .qb-page { display: none; padding: 24px 28px; }
+  .qb-page.active { display: block; }
+
+  .qb-page-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .qb-page-title { font-size: 20px; font-weight: 700; color: #1a1a1a; }
+  .qb-page-subtitle { font-size: 13px; color: #888; margin-top: 2px; }
+  .qb-header-actions { display: flex; gap: 10px; }
+  .qb-btn {
+    padding: 7px 14px; border-radius: 5px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: none; transition: all 0.15s;
+  }
+  .qb-btn-outline { background: #fff; border: 1px solid #d0d0d0; color: #444; }
+  .qb-btn-outline:hover { border-color: #2CA01C; color: #2CA01C; }
+  .qb-btn-primary { background: #2CA01C; color: white; }
+  .qb-btn-primary:hover { background: #249116; }
+
+  /* QB Table */
+  .qb-card {
+    background: #fff; border: 1px solid #e8e8e8;
+    border-radius: 8px; overflow: hidden; margin-bottom: 20px;
+  }
+  .qb-card-header {
+    padding: 14px 18px; border-bottom: 1px solid #f0f0f0;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .qb-card-title { font-size: 14px; font-weight: 600; color: #1a1a1a; }
+  .qb-card-meta { font-size: 12px; color: #888; }
+
+  table.qb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.qb-table thead tr { background: #f8f8f8; }
+  table.qb-table th {
+    padding: 10px 14px; text-align: left;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+    text-transform: uppercase; color: #888;
+    border-bottom: 1px solid #e8e8e8; white-space: nowrap;
+  }
+  table.qb-table th.right, table.qb-table td.right { text-align: right; }
+  table.qb-table td {
+    padding: 10px 14px; border-bottom: 1px solid #f4f4f4;
+    color: #2a2a2a; vertical-align: middle;
+  }
+  table.qb-table tr:last-child td { border-bottom: none; }
+  table.qb-table tr:hover td { background: #fafcff; }
+  table.qb-table tr.highlighted td { background: #fffbea !important; }
+  table.qb-table tr.highlighted td.changed {
+    background: #fff3cd !important;
+    font-weight: 600; position: relative;
+  }
+  .changed-pill {
+    display: inline-block; background: #ffc107; color: #333;
+    font-size: 10px; padding: 1px 6px; border-radius: 8px; margin-left: 6px;
+    font-weight: 700;
+  }
+  .qb-link { color: #1a52b3; cursor: pointer; text-decoration: none; }
+  .qb-link:hover { text-decoration: underline; }
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 11px; font-weight: 600;
+  }
+  .badge-green { background: #d4edda; color: #155724; }
+  .badge-blue { background: #d0e8ff; color: #0a4a8a; }
+  .badge-orange { background: #ffe8cc; color: #8a4a00; }
+  .badge-gray { background: #f0f0f0; color: #555; }
+
+  .amount-positive { color: #155724; }
+  .amount-negative { color: #721c24; }
+
+  /* Journal Entry */
+  .je-header {
+    background: #f8f8f8; border-radius: 6px;
+    padding: 14px 18px; margin-bottom: 16px;
+    display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 12px;
+  }
+  .je-field-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #aaa; margin-bottom: 4px; letter-spacing: 0.05em; }
+  .je-field-value { font-size: 14px; color: #1a1a1a; }
+
+  /* P&L */
+  .pl-section-header td {
+    font-weight: 700; font-size: 13px; color: #1a1a1a;
+    background: #f4f4f4; padding: 8px 14px !important;
+  }
+  .pl-indent td:first-child { padding-left: 32px !important; }
+  .pl-total td { font-weight: 700; border-top: 2px solid #1a1a1a !important; }
+  .pl-grand-total td {
+    font-weight: 800; font-size: 14px;
+    background: #f0f7ee;
+    border-top: 2px solid #2CA01C !important;
+  }
+
+  /* Account Register */
+  .register-balance {
+    display: flex; justify-content: flex-end;
+    padding: 12px 18px; background: #f8f8f8;
+    border-top: 1px solid #e8e8e8;
+    font-size: 14px;
+  }
+  .register-balance strong { margin-left: 8px; font-size: 16px; color: #2CA01C; }
+
+  /* Chart of Accounts */
+  .coa-type-header td {
+    font-weight: 700; background: #f0f7ee; color: #1a5e0e;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 8px 14px !important;
+  }
+
+  /* Pulse animation for refresh */
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .refreshing-overlay { animation: pulse 0.8s ease-in-out 2; }
+
+  /* Tabs */
+  .qb-tabs {
+    display: flex; border-bottom: 2px solid #e8e8e8;
+    margin-bottom: 20px; gap: 0;
+  }
+  .qb-tab {
+    padding: 10px 18px; font-size: 13px; font-weight: 500;
+    color: #666; cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; transition: all 0.15s;
+  }
+  .qb-tab:hover { color: #1a52b3; }
+  .qb-tab.active { color: #1a52b3; border-bottom-color: #1a52b3; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="app-layout">
+
+  <!-- ===== SYNDER SETTINGS PANEL ===== -->
+  <div class="synder-panel">
+    <div class="synder-panel-header">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+        <rect width="28" height="28" rx="6" fill="white" fill-opacity="0.15"/>
+        <path d="M8 14c0-3.3 2.7-6 6-6s6 2.7 6 6-2.7 6-6 6" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+        <circle cx="14" cy="14" r="2.5" fill="white"/>
+      </svg>
+      <div>
+        <div class="title">Synder Settings</div>
+        <div class="subtitle">Per Transaction · mzkt.by (Stripe)</div>
+      </div>
+    </div>
+
+    <div class="synder-section">
+      <div class="synder-section-title">Account Mapping</div>
+
+      <div class="setting-row">
+        <div class="setting-label">Clearing Account</div>
+        <select class="setting-select" id="clearing-account" onchange="markChanged('clearing')">
+          <option value="undeposited">Undeposited Funds</option>
+          <option value="stripe-clearing">Stripe Clearing Account</option>
+          <option value="checking">Checking – 1234</option>
+          <option value="savings">Savings Account</option>
+        </select>
+        <div class="setting-desc">Where funds land before being deposited to your bank</div>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-label">Income Account</div>
+        <select class="setting-select" id="income-account" onchange="markChanged('income')">
+          <option value="sales">Sales</option>
+          <option value="services">Services</option>
+          <option value="stripe-income">Stripe Income</option>
+          <option value="product-sales">Product Sales</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-label">Fee Account</div>
+        <select class="setting-select" id="fee-account" onchange="markChanged('fee')">
+          <option value="commissions">Commissions and Fees</option>
+          <option value="bank-charges">Bank Charges</option>
+          <option value="stripe-fees">Stripe Fees</option>
+          <option value="merchant-fees">Merchant Service Fees</option>
+        </select>
+      </div>
+
+      <div class="setting-row">
+        <div class="setting-label">Bank Account</div>
+        <select class="setting-select" id="bank-account" onchange="markChanged('bank')">
+          <option value="checking-main">Checking – Main</option>
+          <option value="checking-1234">Checking – 1234</option>
+          <option value="stripe-bank">Stripe Bank Account</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="synder-section">
+      <div class="synder-section-title">Customer Settings</div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Generic Customer</div>
+          <div class="toggle-desc">Use "Synder Customer" for all transactions instead of real names</div>
+        </div>
+        <div class="toggle" id="toggle-generic" onclick="toggleSetting('generic')"></div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Create New Customers</div>
+          <div class="toggle-desc">Auto-create customers in QB when not found</div>
+        </div>
+        <div class="toggle on" id="toggle-create-customers" onclick="toggleSetting('create-customers')"></div>
+      </div>
+    </div>
+
+    <div class="synder-section">
+      <div class="synder-section-title">Transaction Settings</div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Track Fees Separately</div>
+          <div class="toggle-desc">Create separate expense entries for Stripe fees</div>
+        </div>
+        <div class="toggle on" id="toggle-fees" onclick="toggleSetting('fees')"></div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Include Taxes</div>
+          <div class="toggle-desc">Post sales tax to Taxes Payable account</div>
+        </div>
+        <div class="toggle" id="toggle-taxes" onclick="toggleSetting('taxes')"></div>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <div class="toggle-label">Auto-Apply Credits</div>
+          <div class="toggle-desc">Automatically apply credit memos to open invoices</div>
+        </div>
+        <div class="toggle on" id="toggle-credits" onclick="toggleSetting('credits')"></div>
+      </div>
+    </div>
+
+    <div class="synder-section">
+      <div class="synder-section-title">Product Mapping</div>
+      <div class="setting-row">
+        <div class="setting-label">Default Product/Service</div>
+        <select class="setting-select" id="product-default" onchange="markChanged('product')">
+          <option value="services">Services</option>
+          <option value="subscription">Subscription Service</option>
+          <option value="saas">SaaS Product</option>
+          <option value="custom">Custom — map per SKU</option>
+        </select>
+        <div class="setting-desc">Used when no SKU-level mapping exists</div>
+      </div>
+    </div>
+
+    <button class="preview-btn" id="preview-btn" onclick="refreshPreview()">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <path d="M2 8a6 6 0 1 0 1-3.3" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M2 4v4h4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Refresh Preview
+    </button>
+  </div>
+
+  <!-- ===== QB PANEL ===== -->
+  <div class="qb-panel">
+
+    <!-- QB Top Nav -->
+    <div class="qb-topnav">
+      <div class="qb-logo">
+        <div class="qb-logo-icon">Q</div>
+        <div class="qb-logo-text">Quick<span>Books</span></div>
+      </div>
+      <div class="qb-topnav-divider"></div>
+      <div class="qb-preview-tag">📖 Books Preview</div>
+      <div class="qb-topnav-spacer"></div>
+      <div class="qb-sync-info" id="sync-info">Showing <strong>last 100 transactions</strong> · Stripe (mzkt.by) · Jan–Mar 2026</div>
+    </div>
+
+    <div class="qb-body">
+      <!-- QB Side Nav -->
+      <div class="qb-sidenav">
+        <div class="qb-nav-group">
+          <div class="qb-nav-item" onclick="showPage('dashboard')">
+            <span class="nav-icon">🏠</span> Dashboard
+          </div>
+        </div>
+        <div class="qb-nav-group">
+          <div class="qb-nav-group-title">Accounting</div>
+          <div class="qb-nav-item active" id="nav-sales" onclick="showPage('sales')">
+            <span class="nav-icon">💳</span> All Sales
+          </div>
+          <div class="qb-nav-item" id="nav-journal" onclick="showPage('journal')">
+            <span class="nav-icon">📒</span> Journal
+          </div>
+          <div class="qb-nav-item" id="nav-coa" onclick="showPage('coa')">
+            <span class="nav-icon">📊</span> Chart of Accounts
+          </div>
+          <div class="qb-nav-item" id="nav-banking" onclick="showPage('banking')">
+            <span class="nav-icon">🏦</span> Banking
+          </div>
+        </div>
+        <div class="qb-nav-group">
+          <div class="qb-nav-group-title">Reports</div>
+          <div class="qb-nav-item" id="nav-pl" onclick="showPage('pl')">
+            <span class="nav-icon">📈</span> Profit & Loss
+          </div>
+          <div class="qb-nav-item" id="nav-bs" onclick="showPage('bs')">
+            <span class="nav-icon">📋</span> Balance Sheet
+          </div>
+        </div>
+      </div>
+
+      <!-- QB Content -->
+      <div class="qb-content" id="qb-content">
+
+        <!-- ===== PAGE: ALL SALES ===== -->
+        <div class="qb-page active" id="page-sales">
+          <div class="qb-page-header">
+            <div>
+              <div class="qb-page-title">All Sales</div>
+              <div class="qb-page-subtitle">Sales Receipts, Invoices, Credit Memos · Jan 1 – Mar 27, 2026</div>
+            </div>
+            <div class="qb-header-actions">
+              <button class="qb-btn qb-btn-outline">⬇ Export</button>
+              <button class="qb-btn qb-btn-outline">Filter</button>
+            </div>
+          </div>
+
+          <div class="qb-card">
+            <div class="qb-card-header">
+              <div class="qb-card-title">Transactions</div>
+              <div class="qb-card-meta" id="sales-count">10 transactions</div>
+            </div>
+            <table class="qb-table" id="sales-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Type</th>
+                  <th>No.</th>
+                  <th>Customer</th>
+                  <th>Category / Product</th>
+                  <th>Status</th>
+                  <th class="right">Amount</th>
+                </tr>
+              </thead>
+              <tbody id="sales-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== PAGE: JOURNAL ===== -->
+        <div class="qb-page" id="page-journal">
+          <div class="qb-page-header">
+            <div>
+              <div class="qb-page-title">Journal Entries</div>
+              <div class="qb-page-subtitle">Debit / credit breakdown per transaction</div>
+            </div>
+            <div class="qb-header-actions">
+              <select class="setting-select" style="width:220px; font-size:13px;" id="je-selector" onchange="renderJE()">
+              </select>
+            </div>
+          </div>
+
+          <div class="qb-card" id="je-card">
+            <div class="qb-card-header">
+              <div class="qb-card-title" id="je-title">Journal Entry</div>
+              <div class="qb-card-meta" id="je-source">via Synder · Stripe</div>
+            </div>
+            <div class="je-header" id="je-meta">
+            </div>
+            <table class="qb-table">
+              <thead>
+                <tr>
+                  <th style="width:40px">#</th>
+                  <th>Account</th>
+                  <th>Description / Memo</th>
+                  <th>Customer/Vendor</th>
+                  <th class="right">Debit</th>
+                  <th class="right">Credit</th>
+                </tr>
+              </thead>
+              <tbody id="je-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== PAGE: CHART OF ACCOUNTS ===== -->
+        <div class="qb-page" id="page-coa">
+          <div class="qb-page-header">
+            <div>
+              <div class="qb-page-title">Chart of Accounts</div>
+              <div class="qb-page-subtitle">Accounts affected by synced transactions</div>
+            </div>
+            <div class="qb-header-actions">
+              <button class="qb-btn qb-btn-outline">View all accounts</button>
+            </div>
+          </div>
+          <div class="qb-card">
+            <table class="qb-table" id="coa-table">
+              <thead>
+                <tr>
+                  <th>Account Name</th>
+                  <th>Type</th>
+                  <th>Detail Type</th>
+                  <th class="right">Balance</th>
+                </tr>
+              </thead>
+              <tbody id="coa-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== PAGE: BANKING ===== -->
+        <div class="qb-page" id="page-banking">
+          <div class="qb-page-header">
+            <div>
+              <div class="qb-page-title">Banking</div>
+              <div class="qb-page-subtitle">Account register · <span id="banking-account-name">Checking – Main</span></div>
+            </div>
+          </div>
+          <div class="qb-card">
+            <div class="qb-card-header">
+              <div class="qb-card-title" id="banking-card-title">Checking – Main</div>
+              <div class="qb-card-meta">Stripe payouts · Jan–Mar 2026</div>
+            </div>
+            <table class="qb-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>Description</th>
+                  <th>Payee / Memo</th>
+                  <th>Account</th>
+                  <th class="right">Deposit</th>
+                  <th class="right">Withdrawal</th>
+                  <th class="right">Balance</th>
+                </tr>
+              </thead>
+              <tbody id="banking-tbody">
+              </tbody>
+            </table>
+            <div class="register-balance">
+              Ending Balance: <strong id="banking-balance">$0.00</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== PAGE: P&L ===== -->
+        <div class="qb-page" id="page-pl">
+          <div class="qb-page-header">
+            <div>
+              <div class="qb-page-title">Profit and Loss</div>
+              <div class="qb-page-subtitle">January 1 – March 27, 2026 · Accrual basis</div>
+            </div>
+            <div class="qb-header-actions">
+              <button class="qb-btn qb-btn-outline">⬇ Export</button>
+            </div>
+          </div>
+          <div class="qb-card">
+            <table class="qb-table" id="pl-table">
+              <tbody id="pl-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== PAGE: BALANCE SHEET ===== -->
+        <div class="qb-page" id="page-bs">
+          <div class="qb-page-header">
+            <div>
+              <div class="qb-page-title">Balance Sheet</div>
+              <div class="qb-page-subtitle">As of March 27, 2026 · Accrual basis</div>
+            </div>
+          </div>
+          <div class="qb-card">
+            <table class="qb-table" id="bs-table">
+              <tbody id="bs-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== PAGE: DASHBOARD ===== -->
+        <div class="qb-page" id="page-dashboard">
+          <div class="qb-page-header">
+            <div>
+              <div class="qb-page-title">Dashboard</div>
+              <div class="qb-page-subtitle">Overview · Jan–Mar 2026</div>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:20px;">
+            <div class="qb-card" style="padding:18px;">
+              <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Total Income</div>
+              <div style="font-size:28px;font-weight:800;color:#2CA01C;margin-top:6px;" id="dash-income">$0.00</div>
+              <div style="font-size:12px;color:#aaa;margin-top:4px;">Jan–Mar 2026</div>
+            </div>
+            <div class="qb-card" style="padding:18px;">
+              <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Total Expenses</div>
+              <div style="font-size:28px;font-weight:800;color:#c0392b;margin-top:6px;" id="dash-expenses">$0.00</div>
+              <div style="font-size:12px;color:#aaa;margin-top:4px;">Jan–Mar 2026</div>
+            </div>
+            <div class="qb-card" style="padding:18px;">
+              <div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.05em;font-weight:700;">Net Profit</div>
+              <div style="font-size:28px;font-weight:800;color:#1a52b3;margin-top:6px;" id="dash-profit">$0.00</div>
+              <div style="font-size:12px;color:#aaa;margin-top:4px;">Jan–Mar 2026</div>
+            </div>
+          </div>
+          <div class="qb-card" style="padding:20px;">
+            <div style="font-size:14px;font-weight:600;margin-bottom:12px;">Quick access</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;">
+              <button class="qb-btn qb-btn-outline" onclick="showPage('sales')">📋 All Sales</button>
+              <button class="qb-btn qb-btn-outline" onclick="showPage('journal')">📒 Journal</button>
+              <button class="qb-btn qb-btn-outline" onclick="showPage('coa')">📊 Chart of Accounts</button>
+              <button class="qb-btn qb-btn-outline" onclick="showPage('banking')">🏦 Banking</button>
+              <button class="qb-btn qb-btn-outline" onclick="showPage('pl')">📈 P&L</button>
+              <button class="qb-btn qb-btn-outline" onclick="showPage('bs')">📋 Balance Sheet</button>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- qb-content -->
+    </div><!-- qb-body -->
+  </div><!-- qb-panel -->
+</div><!-- app-layout -->
+
+<script>
+// ================================================================
+// STATE
+// ================================================================
+const state = {
+  clearingAccount: 'undeposited',
+  incomeAccount: 'sales',
+  feeAccount: 'commissions',
+  bankAccount: 'checking-main',
+  genericCustomer: false,
+  createCustomers: true,
+  trackFees: true,
+  includeTaxes: false,
+  autoCredits: true,
+  productDefault: 'services',
+  changedFields: new Set(),
+};
+
+const prevState = {};
+
+// ================================================================
+// BASE TRANSACTIONS (realistic Synder demo data)
+// ================================================================
+const baseTransactions = [
+  { id: 'TXN-001', date: '2026-03-13', type: 'Journal Entry', platform: 'Stripe', customer: 'Stripe Payout', amount: 48.52, fee: 0, source: 'Payout', memo: 'Stripe payout to bank', isDeposit: true },
+  { id: 'TXN-002', date: '2026-03-06', type: 'Sales Receipt', platform: 'Stripe', customer: 'Pamela Anderson', amount: 30.00, fee: 1.17, source: 'Subscription', memo: 'Monthly subscription — Mar 2026', product: 'Services' },
+  { id: 'TXN-003', date: '2026-03-06', type: 'Invoice', platform: 'Stripe', customer: 'Pamela Anderson', amount: 20.85, fee: 0.93, source: 'Invoice Payment', memo: 'Invoice #INV-0042 payment', product: 'Services' },
+  { id: 'TXN-004', date: '2026-02-28', type: 'Sales Receipt', platform: 'Stripe', customer: 'Marcus Reid', amount: 85.00, fee: 2.75, source: 'Charge', memo: 'One-time charge', product: 'Services' },
+  { id: 'TXN-005', date: '2026-02-21', type: 'Sales Receipt', platform: 'Stripe', customer: 'Lena Kovacs', amount: 30.00, fee: 1.17, source: 'Subscription', memo: 'Monthly subscription — Feb 2026', product: 'Services' },
+  { id: 'TXN-006', date: '2026-02-14', type: 'Credit Memo', platform: 'Stripe', customer: 'Brian Torres', amount: -15.00, fee: 0, source: 'Refund', memo: 'Partial refund — customer request' },
+  { id: 'TXN-007', date: '2026-02-10', type: 'Journal Entry', platform: 'Stripe', customer: 'Stripe Payout', amount: 132.15, fee: 0, source: 'Payout', memo: 'Stripe payout to bank', isDeposit: true },
+  { id: 'TXN-008', date: '2026-02-07', type: 'Sales Receipt', platform: 'Stripe', customer: 'Sophie Chen', amount: 120.00, fee: 3.78, source: 'Charge', memo: 'Annual plan payment', product: 'Services' },
+  { id: 'TXN-009', date: '2026-01-31', type: 'Sales Receipt', platform: 'Stripe', customer: 'David Nguyen', amount: 30.00, fee: 1.17, source: 'Subscription', memo: 'Monthly subscription — Jan 2026', product: 'Services' },
+  { id: 'TXN-010', date: '2026-01-15', type: 'Invoice', platform: 'Stripe', customer: 'Pamela Anderson', amount: 50.00, fee: 1.75, source: 'Invoice Payment', memo: 'Invoice #INV-0038 payment', product: 'Services' },
+];
+
+// ================================================================
+// HELPERS
+// ================================================================
+function fmt(n) {
+  if (n === 0) return '$0.00';
+  const abs = Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return (n < 0 ? '-$' : '$') + abs;
+}
+
+function getClearingName() {
+  const map = {
+    'undeposited': 'Undeposited Funds',
+    'stripe-clearing': 'Stripe Clearing Account',
+    'checking': 'Checking – 1234',
+    'savings': 'Savings Account'
+  };
+  return map[state.clearingAccount];
+}
+function getIncomeName() {
+  const map = { 'sales':'Sales', 'services':'Services', 'stripe-income':'Stripe Income', 'product-sales':'Product Sales' };
+  return map[state.incomeAccount];
+}
+function getFeeName() {
+  const map = { 'commissions':'Commissions and Fees', 'bank-charges':'Bank Charges', 'stripe-fees':'Stripe Fees', 'merchant-fees':'Merchant Service Fees' };
+  return map[state.feeAccount];
+}
+function getBankName() {
+  const map = { 'checking-main':'Checking – Main', 'checking-1234':'Checking – 1234', 'stripe-bank':'Stripe Bank Account' };
+  return map[state.bankAccount];
+}
+function getCustomerName(tx) {
+  return state.genericCustomer ? 'Synder Customer' : tx.customer;
+}
+function getProductName(tx) {
+  if (!tx.product) return '';
+  const map = { 'services':'Services', 'subscription':'Subscription Service', 'saas':'SaaS Product', 'custom':'(per SKU)' };
+  return map[state.productDefault] || 'Services';
+}
+
+function isChanged(field) { return state.changedFields.has(field); }
+
+function markChanged(field) {
+  state.changedFields.add(field);
+  // Update state from DOM
+  state.clearingAccount = document.getElementById('clearing-account').value;
+  state.incomeAccount = document.getElementById('income-account').value;
+  state.feeAccount = document.getElementById('fee-account').value;
+  state.bankAccount = document.getElementById('bank-account').value;
+  state.productDefault = document.getElementById('product-default').value;
+}
+
+function toggleSetting(key) {
+  const el = document.getElementById('toggle-' + key);
+  el.classList.toggle('on');
+  const isOn = el.classList.contains('on');
+  if (key === 'generic') { state.genericCustomer = isOn; state.changedFields.add('customer'); }
+  if (key === 'fees') { state.trackFees = isOn; state.changedFields.add('fee'); }
+  if (key === 'taxes') { state.includeTaxes = isOn; state.changedFields.add('taxes'); }
+  if (key === 'create-customers') state.createCustomers = isOn;
+  if (key === 'credits') state.autoCredits = isOn;
+}
+
+// ================================================================
+// RENDER FUNCTIONS
+// ================================================================
+
+function renderSales() {
+  const tbody = document.getElementById('sales-tbody');
+  const changed = state.changedFields.size > 0;
+  const rows = baseTransactions.map(tx => {
+    const customer = getCustomerName(tx);
+    const product = getProductName(tx);
+    const customerChanged = isChanged('customer') && tx.customer !== 'Stripe Payout';
+    const productChanged = isChanged('product') && tx.product;
+
+    const typeColor = {
+      'Sales Receipt': 'badge-green',
+      'Invoice': 'badge-blue',
+      'Credit Memo': 'badge-orange',
+      'Journal Entry': 'badge-gray',
+    }[tx.type] || 'badge-gray';
+
+    return `<tr class="${changed && (customerChanged || productChanged) ? 'highlighted' : ''}">
+      <td>${tx.date}</td>
+      <td><span class="badge ${typeColor}">${tx.type}</span></td>
+      <td><a class="qb-link">${tx.id}</a></td>
+      <td class="${customerChanged ? 'changed' : ''}">${customer}${customerChanged ? '<span class="changed-pill">changed</span>' : ''}</td>
+      <td class="${productChanged ? 'changed' : ''}">${product || tx.source}${productChanged ? '<span class="changed-pill">changed</span>' : ''}</td>
+      <td><span class="badge ${tx.amount > 0 ? 'badge-green' : 'badge-orange'}">${tx.isDeposit ? 'Deposited' : tx.amount < 0 ? 'Refunded' : 'Closed'}</span></td>
+      <td class="right ${tx.amount < 0 ? 'amount-negative' : 'amount-positive'}">${fmt(tx.amount)}</td>
+    </tr>`;
+  });
+  tbody.innerHTML = rows.join('');
+  document.getElementById('sales-count').textContent = baseTransactions.length + ' transactions';
+}
+
+function renderJE() {
+  const sel = document.getElementById('je-selector').value;
+  const tx = baseTransactions.find(t => t.id === sel) || baseTransactions[1];
+
+  document.getElementById('je-title').textContent = tx.type + ' — ' + tx.id;
+  document.getElementById('je-source').textContent = 'via Synder · Stripe (mzkt.by)';
+
+  document.getElementById('je-meta').innerHTML = `
+    <div><div class="je-field-label">Date</div><div class="je-field-value">${tx.date}</div></div>
+    <div><div class="je-field-label">Transaction No.</div><div class="je-field-value">${tx.id}</div></div>
+    <div><div class="je-field-label">Source</div><div class="je-field-value">${tx.source} · Stripe</div></div>
+    <div><div class="je-field-label">Customer</div><div class="je-field-value">${getCustomerName(tx)}</div></div>
+  `;
+
+  const clearingChanged = isChanged('clearing');
+  const incomeChanged = isChanged('income');
+  const feeChanged = isChanged('fee');
+  const customerChanged = isChanged('customer');
+
+  let lines = [];
+
+  if (tx.isDeposit) {
+    // Payout: Debit Bank, Credit Clearing
+    lines = [
+      { account: getBankName(), desc: 'Stripe payout deposit', customer: '', debit: tx.amount, credit: 0, changed: isChanged('bank') },
+      { account: getClearingName(), desc: 'Clear payout from clearing', customer: '', debit: 0, credit: tx.amount, changed: clearingChanged },
+    ];
+  } else if (tx.amount < 0) {
+    // Refund: Debit Income, Credit Clearing
+    lines = [
+      { account: getIncomeName(), desc: 'Refund — ' + tx.memo, customer: getCustomerName(tx), debit: Math.abs(tx.amount), credit: 0, changed: incomeChanged || customerChanged },
+      { account: getClearingName(), desc: 'Refund to customer', customer: getCustomerName(tx), debit: 0, credit: Math.abs(tx.amount), changed: clearingChanged },
+    ];
+  } else {
+    // Sale: Debit Clearing, Credit Income; Debit Fees, Credit Clearing (net)
+    lines = [
+      { account: getClearingName(), desc: tx.memo, customer: getCustomerName(tx), debit: tx.amount, credit: 0, changed: clearingChanged || customerChanged },
+      { account: getIncomeName(), desc: getProductName(tx) || tx.source, customer: getCustomerName(tx), debit: 0, credit: tx.amount, changed: incomeChanged || customerChanged },
+    ];
+    if (state.trackFees && tx.fee > 0) {
+      lines.push({ account: getFeeName(), desc: 'Stripe processing fee', customer: '', debit: tx.fee, credit: 0, changed: feeChanged });
+      lines.push({ account: getClearingName(), desc: 'Fee offset', customer: '', debit: 0, credit: tx.fee, changed: clearingChanged });
+    }
+    if (state.includeTaxes && tx.amount > 50) {
+      const tax = (tx.amount * 0.08).toFixed(2) * 1;
+      lines.push({ account: 'Taxes Payable', desc: 'Sales tax 8%', customer: '', debit: 0, credit: tax, changed: isChanged('taxes') });
+      lines[1].credit -= tax;
+    }
+  }
+
+  const tbody = document.getElementById('je-tbody');
+  let totalDebit = 0, totalCredit = 0;
+  tbody.innerHTML = lines.map((l, i) => {
+    totalDebit += l.debit;
+    totalCredit += l.credit;
+    return `<tr class="${l.changed ? 'highlighted' : ''}">
+      <td>${i+1}</td>
+      <td class="${l.changed ? 'changed' : ''}"><a class="qb-link">${l.account}</a>${l.changed ? '<span class="changed-pill">changed</span>' : ''}</td>
+      <td>${l.desc}</td>
+      <td>${l.customer}</td>
+      <td class="right">${l.debit > 0 ? fmt(l.debit) : ''}</td>
+      <td class="right">${l.credit > 0 ? fmt(l.credit) : ''}</td>
+    </tr>`;
+  }).join('') + `<tr style="background:#f8f8f8;font-weight:700;">
+    <td colspan="4" style="padding:10px 14px;text-align:right;font-size:12px;text-transform:uppercase;color:#888;letter-spacing:.05em;">Total</td>
+    <td class="right">${fmt(totalDebit)}</td>
+    <td class="right">${fmt(totalCredit)}</td>
+  </tr>`;
+}
+
+function renderCOA() {
+  const clearingChanged = isChanged('clearing');
+  const incomeChanged = isChanged('income');
+  const feeChanged = isChanged('fee');
+  const bankChanged = isChanged('bank');
+
+  // Compute balances from transactions
+  let incomeTotal = 0, feeTotal = 0, clearingBal = 0, bankBal = 0, arBal = 0;
+  baseTransactions.forEach(tx => {
+    if (tx.isDeposit) { bankBal += tx.amount; clearingBal -= tx.amount; }
+    else if (tx.amount < 0) { incomeTotal += tx.amount; }
+    else {
+      incomeTotal += tx.amount;
+      clearingBal += tx.amount;
+      if (state.trackFees) feeTotal += tx.fee;
+    }
+  });
+
+  const coa = [
+    { type: 'Assets', rows: [
+      { name: getBankName(), type: 'Bank', detail: 'Checking', balance: bankBal, changed: bankChanged },
+      { name: getClearingName(), type: 'Current Asset', detail: 'Undeposited Funds', balance: clearingBal, changed: clearingChanged },
+      { name: 'Accounts Receivable', type: 'Accounts Receivable', detail: 'Accounts Receivable', balance: arBal, changed: false },
+    ]},
+    { type: 'Income', rows: [
+      { name: getIncomeName(), type: 'Income', detail: 'Sales of Product Income', balance: incomeTotal, changed: incomeChanged },
+    ]},
+    { type: 'Expenses', rows: [
+      { name: getFeeName(), type: 'Expense', detail: 'Commissions and Fees', balance: feeTotal, changed: feeChanged },
+    ]},
+  ];
+
+  const tbody = document.getElementById('coa-tbody');
+  let html = '';
+  coa.forEach(section => {
+    html += `<tr class="coa-type-header"><td colspan="4">${section.type}</td></tr>`;
+    section.rows.forEach(row => {
+      html += `<tr class="${row.changed ? 'highlighted' : ''}">
+        <td class="${row.changed ? 'changed' : ''}" style="padding-left:28px">
+          <a class="qb-link">${row.name}</a>${row.changed ? '<span class="changed-pill">changed</span>' : ''}
+        </td>
+        <td>${row.type}</td>
+        <td>${row.detail}</td>
+        <td class="right ${row.balance >= 0 ? 'amount-positive' : 'amount-negative'}">${fmt(row.balance)}</td>
+      </tr>`;
+    });
+  });
+  document.getElementById('coa-tbody').innerHTML = html;
+}
+
+function renderBanking() {
+  const bankName = getBankName();
+  document.getElementById('banking-account-name').textContent = bankName;
+  document.getElementById('banking-card-title').textContent = bankName;
+
+  const payouts = baseTransactions.filter(tx => tx.isDeposit);
+  let running = 0;
+  const rows = payouts.map(tx => {
+    running += tx.amount;
+    return `<tr>
+      <td>${tx.date}</td>
+      <td>Stripe Payout</td>
+      <td>${tx.memo}</td>
+      <td class="${isChanged('clearing') ? 'changed' : ''}"><a class="qb-link">${getClearingName()}</a>${isChanged('clearing') ? '<span class="changed-pill">changed</span>' : ''}</td>
+      <td class="right amount-positive">${fmt(tx.amount)}</td>
+      <td class="right">—</td>
+      <td class="right">${fmt(running)}</td>
+    </tr>`;
+  });
+
+  document.getElementById('banking-tbody').innerHTML = rows.join('');
+  document.getElementById('banking-balance').textContent = fmt(running);
+}
+
+function renderPL() {
+  let income = 0, refunds = 0, fees = 0;
+  baseTransactions.forEach(tx => {
+    if (tx.isDeposit) return;
+    if (tx.amount < 0) refunds += Math.abs(tx.amount);
+    else income += tx.amount;
+    if (state.trackFees) fees += tx.fee;
+  });
+  const grossProfit = income - refunds;
+  const netIncome = grossProfit - fees;
+
+  const incomeChanged = isChanged('income');
+  const feeChanged = isChanged('fee');
+
+  const rows = [
+    { type: 'section', label: 'Income' },
+    { type: 'item', label: getIncomeName(), amount: income, indent: true, changed: incomeChanged },
+    { type: 'item', label: 'Refunds', amount: -refunds, indent: true, changed: false },
+    { type: 'total', label: `Total ${getIncomeName()}`, amount: grossProfit, changed: incomeChanged },
+    { type: 'section', label: 'Gross Profit' },
+    { type: 'grand', label: 'Gross Profit', amount: grossProfit },
+    { type: 'section', label: 'Expenses' },
+    { type: 'item', label: getFeeName(), amount: fees, indent: true, changed: feeChanged },
+    { type: 'total', label: 'Total Expenses', amount: fees, changed: feeChanged },
+    { type: 'grand', label: 'Net Income', amount: netIncome },
+  ];
+
+  const tbody = document.getElementById('pl-tbody');
+  tbody.innerHTML = rows.map(r => {
+    if (r.type === 'section') return `<tr class="pl-section-header"><td>${r.label}</td><td></td></tr>`;
+    if (r.type === 'grand') return `<tr class="pl-grand-total"><td><strong>${r.label}</strong></td><td class="right"><strong>${fmt(r.amount)}</strong></td></tr>`;
+    if (r.type === 'total') return `<tr class="pl-total ${r.changed ? 'highlighted' : ''}"><td class="${r.changed?'changed':''}"><strong>Total ${r.label.replace('Total ','')}</strong>${r.changed?'<span class="changed-pill">changed</span>':''}</td><td class="right"><strong>${fmt(r.amount)}</strong></td></tr>`;
+    return `<tr class="${r.indent?'pl-indent':''} ${r.changed?'highlighted':''}">
+      <td class="${r.changed?'changed':''}">${r.label}${r.changed?'<span class="changed-pill">changed</span>':''}</td>
+      <td class="right ${r.amount < 0 ? 'amount-negative' : ''}">${fmt(r.amount)}</td>
+    </tr>`;
+  }).join('');
+
+  // Update dashboard
+  document.getElementById('dash-income').textContent = fmt(income);
+  document.getElementById('dash-expenses').textContent = fmt(fees);
+  document.getElementById('dash-profit').textContent = fmt(netIncome);
+}
+
+function renderBS() {
+  let bankBal = 0, clearingBal = 0, feeBal = 0, incomeBal = 0;
+  baseTransactions.forEach(tx => {
+    if (tx.isDeposit) { bankBal += tx.amount; clearingBal -= tx.amount; }
+    else if (tx.amount >= 0) {
+      incomeBal += tx.amount;
+      clearingBal += tx.amount;
+      if (state.trackFees) feeBal += tx.fee;
+    }
+  });
+  const equity = bankBal + clearingBal;
+
+  const sections = [
+    { header: 'ASSETS', rows: [
+      { label: getBankName(), amount: bankBal, changed: isChanged('bank'), indent: true },
+      { label: getClearingName(), amount: clearingBal, changed: isChanged('clearing'), indent: true },
+    ], total: { label: 'Total Assets', amount: bankBal + clearingBal }},
+    { header: 'LIABILITIES', rows: [
+      { label: 'Accounts Payable', amount: 0, indent: true },
+    ], total: { label: 'Total Liabilities', amount: 0 }},
+    { header: 'EQUITY', rows: [
+      { label: "Owner's Equity", amount: equity, indent: true },
+    ], total: { label: 'Total Equity', amount: equity }},
+  ];
+
+  const tbody = document.getElementById('bs-tbody');
+  let html = '';
+  sections.forEach(s => {
+    html += `<tr class="coa-type-header"><td colspan="2">${s.header}</td></tr>`;
+    s.rows.forEach(r => {
+      html += `<tr class="${r.changed?'highlighted pl-indent':' pl-indent'}">
+        <td class="${r.changed?'changed':''}" style="padding-left:28px">${r.label}${r.changed?'<span class="changed-pill">changed</span>':''}</td>
+        <td class="right">${fmt(r.amount)}</td>
+      </tr>`;
+    });
+    html += `<tr class="pl-total"><td><strong>${s.total.label}</strong></td><td class="right"><strong>${fmt(s.total.amount)}</strong></td></tr>`;
+  });
+  document.getElementById('bs-tbody').innerHTML = html;
+}
+
+// ================================================================
+// PAGE NAVIGATION
+// ================================================================
+function showPage(id) {
+  document.querySelectorAll('.qb-page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.qb-nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  const nav = document.getElementById('nav-' + id);
+  if (nav) nav.classList.add('active');
+  renderCurrentPage(id);
+}
+
+function renderCurrentPage(id) {
+  if (id === 'sales') renderSales();
+  else if (id === 'journal') renderJE();
+  else if (id === 'coa') renderCOA();
+  else if (id === 'banking') renderBanking();
+  else if (id === 'pl') { renderPL(); }
+  else if (id === 'bs') renderBS();
+  else if (id === 'dashboard') renderPL();
+}
+
+// ================================================================
+// REFRESH
+// ================================================================
+function refreshPreview() {
+  // Sync state from selects
+  state.clearingAccount = document.getElementById('clearing-account').value;
+  state.incomeAccount = document.getElementById('income-account').value;
+  state.feeAccount = document.getElementById('fee-account').value;
+  state.bankAccount = document.getElementById('bank-account').value;
+  state.productDefault = document.getElementById('product-default').value;
+  state.genericCustomer = document.getElementById('toggle-generic').classList.contains('on');
+  state.trackFees = document.getElementById('toggle-fees').classList.contains('on');
+  state.includeTaxes = document.getElementById('toggle-taxes').classList.contains('on');
+
+  const btn = document.getElementById('preview-btn');
+  btn.classList.add('refreshing');
+  btn.innerHTML = `<span>⏳</span> Updating...`;
+
+  const content = document.getElementById('qb-content');
+  content.classList.add('refreshing-overlay');
+
+  setTimeout(() => {
+    // Render all pages
+    renderSales();
+    renderCOA();
+    renderBanking();
+    renderPL();
+    renderBS();
+    // Re-render current
+    const activePage = document.querySelector('.qb-page.active');
+    if (activePage) {
+      const id = activePage.id.replace('page-', '');
+      renderCurrentPage(id);
+    }
+    btn.classList.remove('refreshing');
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 8a6 6 0 1 0 1-3.3" stroke="white" stroke-width="1.8" stroke-linecap="round"/><path d="M2 4v4h4" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg> Refresh Preview`;
+    content.classList.remove('refreshing-overlay');
+  }, 600);
+}
+
+// ================================================================
+// INIT
+// ================================================================
+function init() {
+  // Populate JE selector
+  const sel = document.getElementById('je-selector');
+  baseTransactions.forEach(tx => {
+    const opt = document.createElement('option');
+    opt.value = tx.id;
+    opt.textContent = `${tx.id} · ${tx.date} · ${tx.customer} · ${tx.type}`;
+    sel.appendChild(opt);
+  });
+
+  renderSales();
+  renderPL(); // init dashboard numbers
+}
+
+init();
+</script>
+</body>
+</html>

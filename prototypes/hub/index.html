@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype Hub — Synder UX</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #f8f9fb; --surface: #fff; --border: #e5e7eb; --text: #1a1a2e;
+    --muted: #6b7280; --accent: #4361ee; --accent-light: #eef2ff;
+    --danger: #ef4444; --success: #22c55e; --warn: #f59e0b;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+
+  /* ===== Layout ===== */
+  .app { display: grid; grid-template-columns: 280px 1fr; grid-template-rows: 56px 1fr; height: 100vh; }
+  .header { grid-column: 1 / -1; background: var(--text); color: #fff; display: flex; align-items: center; padding: 0 20px; gap: 16px; z-index: 100; }
+  .header .logo { font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .header .logo span { background: var(--accent); padding: 3px 8px; border-radius: 6px; font-size: 12px; }
+  .header .spacer { flex: 1; }
+  .header .status { font-size: 12px; color: #9ca3af; }
+
+  /* ===== Sidebar (dark) ===== */
+  .sidebar { background: #1e1f2e; border-right: 1px solid #2d2e3e; overflow-y: auto; display: flex; flex-direction: column; }
+  .sidebar-section { padding: 16px; }
+  .sidebar-section-title { font-size: 11px; font-weight: 600; color: #6b7294; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+
+  .proto-card {
+    padding: 12px; border: 1px solid #2d2e3e; border-radius: 10px;
+    cursor: pointer; transition: all 0.15s; margin-bottom: 8px; position: relative;
+    background: #262738;
+  }
+  .proto-card:hover { border-color: var(--accent); background: #2e3050; }
+  .proto-card.active { border-color: var(--accent); background: #2e3050; box-shadow: 0 0 0 2px rgba(67,97,238,0.3); }
+  .proto-card .proto-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; color: #e0e1ec; }
+  .proto-card .proto-meta { font-size: 11px; color: #6b7294; display: flex; gap: 8px; }
+  .proto-card .proto-meta .version { background: rgba(67,97,238,0.2); color: #8fa4f4; padding: 1px 6px; border-radius: 4px; font-weight: 500; }
+  .proto-card .comment-count {
+    position: absolute; top: 8px; right: 8px; background: var(--warn);
+    color: #fff; font-size: 10px; font-weight: 700; width: 20px; height: 20px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  }
+  .proto-card .comment-count.zero { display: none; }
+
+  .sidebar-footer { margin-top: auto; padding: 12px 16px; border-top: 1px solid #2d2e3e; font-size: 11px; color: #6b7294; }
+
+  /* ===== Main Content ===== */
+  .content { display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+  /* Toolbar (dark) */
+  .toolbar {
+    height: 44px; min-height: 44px; background: #1e1f2e; border-bottom: 1px solid #2d2e3e;
+    display: flex; align-items: center; padding: 0 16px; gap: 8px;
+  }
+  .toolbar .proto-title { font-size: 14px; font-weight: 600; flex: 1; color: #e0e1ec; }
+  .tool-btn {
+    padding: 6px 12px; border: 1px solid #3d3e50; border-radius: 6px;
+    background: #262738; font-size: 12px; cursor: pointer; color: #b0b3cc;
+    display: flex; align-items: center; gap: 4px; transition: all 0.15s;
+  }
+  .tool-btn:hover { border-color: var(--accent); color: #e0e1ec; background: #2e3050; }
+  .tool-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .tool-btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+  .version-select { padding: 5px 8px; border: 1px solid #3d3e50; border-radius: 6px; font-size: 12px; background: #262738; color: #b0b3cc; }
+
+  /* Preview Area */
+  .preview-area { flex: 1; position: relative; overflow: hidden; background: #e5e7eb; }
+  .preview-area iframe {
+    width: 100%; height: 100%; border: none; background: #fff;
+    transform-origin: 0 0;
+  }
+
+  /* Empty state */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; color: var(--muted); gap: 12px;
+  }
+  .empty-state .icon { font-size: 48px; }
+  .empty-state h3 { font-size: 18px; color: var(--text); }
+  .empty-state p { font-size: 13px; max-width: 320px; text-align: center; line-height: 1.5; }
+
+  /* ===== Comment Mode ===== */
+  .comment-overlay {
+    position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+    cursor: crosshair; z-index: 50; display: none;
+  }
+  .comment-overlay.active { display: block; }
+
+  .comment-pin {
+    position: absolute; width: 28px; height: 28px; border-radius: 50%;
+    background: var(--warn); color: #fff; font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transform: translate(-50%, -50%);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2); transition: transform 0.15s;
+    z-index: 60;
+  }
+  .comment-pin:hover { transform: translate(-50%, -50%) scale(1.15); }
+  .comment-pin.resolved { background: var(--success); }
+
+  /* Comment Panel */
+  .comment-panel {
+    position: absolute; top: 44px; right: 0; bottom: 0; width: 340px;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 70; display: none; flex-direction: column;
+    box-shadow: -4px 0 16px rgba(0,0,0,0.08);
+  }
+  .comment-panel.visible { display: flex; }
+  .comment-panel-header {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .comment-panel-header h3 { font-size: 14px; font-weight: 600; flex: 1; }
+  .comment-panel-close { background: none; border: none; font-size: 18px; cursor: pointer; color: var(--muted); padding: 4px; }
+  .comment-panel-close:hover { color: var(--text); }
+
+  .comment-list { flex: 1; overflow-y: auto; padding: 12px; }
+  .comment-item {
+    padding: 10px 12px; background: #fefce8; border: 1px solid #fde68a;
+    border-radius: 8px; margin-bottom: 8px; font-size: 13px; line-height: 1.5;
+    position: relative;
+  }
+  .comment-item.resolved { background: #f0fdf4; border-color: #86efac; opacity: 0.7; }
+  .comment-item .comment-header { display: flex; justify-content: space-between; margin-bottom: 4px; }
+  .comment-item .comment-author { font-weight: 600; font-size: 12px; color: var(--accent); }
+  .comment-item .comment-time { font-size: 10px; color: var(--muted); }
+  .comment-item .comment-text { color: var(--text); }
+  .comment-item .comment-pos { font-size: 10px; color: var(--muted); margin-top: 4px; }
+  .comment-item .comment-actions { display: flex; gap: 6px; margin-top: 6px; }
+  .comment-item .comment-actions button {
+    font-size: 11px; padding: 3px 8px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--border); background: #fff;
+  }
+  .comment-item .comment-actions button:hover { border-color: var(--accent); }
+  .comment-item .comment-actions .resolve-btn:hover { border-color: var(--success); color: var(--success); }
+  .comment-item .comment-actions .delete-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* New comment input */
+  .comment-input-area {
+    padding: 12px; border-top: 1px solid var(--border); display: none;
+  }
+  .comment-input-area.visible { display: block; }
+  .comment-input-area textarea {
+    width: 100%; min-height: 60px; padding: 8px; border: 1px solid var(--border);
+    border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;
+  }
+  .comment-input-area textarea:focus { outline: none; border-color: var(--accent); }
+  .comment-input-area .input-actions { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
+
+  /* ===== Changelog Panel ===== */
+  .changelog-panel {
+    position: absolute; top: 44px; right: 0; bottom: 0; width: 340px;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 70; display: none; flex-direction: column;
+    box-shadow: -4px 0 16px rgba(0,0,0,0.08);
+  }
+  .changelog-panel.visible { display: flex; }
+  .changelog-item { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  .changelog-item .version-tag { font-size: 12px; font-weight: 600; color: var(--accent); }
+  .changelog-item .changelog-date { font-size: 11px; color: var(--muted); }
+  .changelog-item .changelog-changes { font-size: 12px; margin-top: 6px; line-height: 1.6; color: #444; }
+  .changelog-item .changelog-changes li { margin-left: 16px; }
+
+  /* ===== Responsive ===== */
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: 56px auto 1fr; }
+    .sidebar {
+      border-right: none; border-bottom: 1px solid #2d2e3e;
+      max-height: 40vh; overflow-y: auto;
+    }
+    .sidebar-footer { display: none; }
+    .proto-card { display: inline-flex; flex-direction: column; margin-right: 8px; min-width: 200px; }
+    .sidebar-section { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 0; padding: 12px; }
+    .sidebar-section-title { display: none; }
+    .toolbar { flex-wrap: wrap; height: auto; padding: 8px 12px; gap: 6px; }
+    .toolbar .proto-title { width: 100%; font-size: 13px; }
+    .comment-panel, .changelog-panel { width: 100%; }
+    .preview-area iframe { width: 1440px; height: 900px; transform: scale(0.35); transform-origin: 0 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">🔍 Prototype Hub <span>UX</span></div>
+    <div class="spacer"></div>
+    <div class="status" id="status-text">Ready</div>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Prototypes</div>
+      <div id="proto-list"></div>
+    </div>
+    <div class="sidebar-footer">
+      Click any prototype to preview.<br>
+      Use 💬 mode to leave comments on elements.
+    </div>
+  </div>
+
+  <!-- Content -->
+  <div class="content">
+    <div class="toolbar" id="toolbar" style="display:none;">
+      <div class="proto-title" id="toolbar-title"></div>
+      <select class="version-select" id="version-select" title="Version"></select>
+      <button class="tool-btn" id="comment-toggle" onclick="toggleCommentMode()" title="Toggle comment mode">💬 Comment</button>
+      <button class="tool-btn" id="panel-toggle" onclick="toggleCommentPanel()" title="View all comments">📋 <span id="comment-badge">0</span></button>
+      <button class="tool-btn" onclick="toggleChangelog()" title="Version history">📜 History</button>
+      <button class="tool-btn" onclick="openInNewTab()" title="Open in new tab">↗️ Open</button>
+    </div>
+
+    <div class="preview-area" id="preview-area">
+      <div class="empty-state" id="empty-state">
+        <div class="icon">🎨</div>
+        <h3>Select a prototype</h3>
+        <p>Pick a prototype from the sidebar to preview it. Use comment mode to leave feedback on specific elements.</p>
+      </div>
+      <iframe id="preview-frame" style="display:none;"></iframe>
+      <div class="comment-overlay" id="comment-overlay"></div>
+      <div id="pins-container"></div>
+    </div>
+
+    <!-- Comment Panel -->
+    <div class="comment-panel" id="comment-panel">
+      <div class="comment-panel-header">
+        <h3>💬 Comments</h3>
+        <button class="comment-panel-close" onclick="toggleCommentPanel()">✕</button>
+      </div>
+      <div class="comment-list" id="comment-list"></div>
+      <div class="comment-input-area" id="comment-input-area">
+        <textarea id="comment-textarea" placeholder="Type your feedback..."></textarea>
+        <div class="input-actions">
+          <button class="tool-btn" onclick="cancelComment()">Cancel</button>
+          <button class="tool-btn active" onclick="submitComment()">Add Comment</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Changelog Panel -->
+    <div class="changelog-panel" id="changelog-panel">
+      <div class="comment-panel-header">
+        <h3>📜 Version History</h3>
+        <button class="comment-panel-close" onclick="toggleChangelog()">✕</button>
+      </div>
+      <div class="comment-list" id="changelog-list"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== Data Store =====
+const DATA_KEY = 'prototype-hub-data';
+
+function loadData() {
+  try {
+    const raw = localStorage.getItem(DATA_KEY);
+    return raw ? JSON.parse(raw) : { prototypes: {}, comments: {} };
+  } catch { return { prototypes: {}, comments: {} }; }
+}
+function saveData(data) {
+  localStorage.setItem(DATA_KEY, JSON.stringify(data));
+}
+
+// ===== Registry (loaded from registry.json) =====
+let registry = [];
+let currentProto = null;
+let currentVersion = null;
+let commentMode = false;
+let pendingCommentPos = null;
+
+async function loadRegistry() {
+  // Try external file first, fall back to inline
+  try {
+    const base = window.location.pathname.replace(/\/[^\/]*$/, '/');
+    const res = await fetch(base + 'registry.json?_=' + Date.now());
+    if (res.ok) {
+      registry = await res.json();
+    } else throw new Error('HTTP ' + res.status);
+  } catch(e) {
+    console.log('Registry fetch failed, using inline data:', e.message);
+    registry = window.INLINE_REGISTRY || [];
+  }
+  renderProtoList();
+}
+
+// Inline registry as fallback
+window.INLINE_REGISTRY = [
+  {
+    "id": "platform-transactions",
+    "name": "Platform Transactions (Per Transaction)",
+    "description": "Copy of current Platform Transactions page in per-transaction mode. Base for Archived transactions preview update.",
+    "versions": [
+      {
+        "version": "1.0",
+        "date": "2026-03-18",
+        "file": "../platform-transactions/index.html",
+        "changes": [
+          "Exact copy of current Platform Transactions page (per-transaction mode)",
+          "Full sidebar (visible, non-interactive)",
+          "All columns: Transaction info, Type, Amount, Date, Sync status",
+          "Column filters, toolbar actions, per-row menus, bulk selection, pagination"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "recon-overlay",
+    "name": "Variant A: Full-Screen Overlay",
+    "description": "Reconciliation as true full-screen overlays — no sidebar or top bar visible during reconciliation",
+    "versions": [
+      {
+        "version": "1.0",
+        "date": "2026-03-11",
+        "file": "../recon-overlay-v1.html",
+        "changes": [
+          "True full-screen overlay covering sidebar and top bar",
+          "Basic account select → overlay flow",
+          "Context bar when navigating to Transaction Recon"
+        ]
+      },
+      {
+        "version": "2.0",
+        "date": "2026-03-11",
+        "file": "../recon-overlay-v2.html",
+        "changes": [
+          "Rebuilt to match actual Synder flows",
+          "Balance Recon: Shopify (new) shows Beginning date + balance + collapsible calculation; Stripe (resume) shows read-only balance + 'How to change' link",
+          "Account dropdown grouped: Clearing / Assets",
+          "Tabs: Reconciliation / Reconciliation history",
+          "History tab with filters and table",
+          "Working view as full-screen overlay: summary banner, Investigate CTA, transaction table",
+          "Transaction Recon: table view + Add reconciliation button",
+          "Empty state: illustration + Start reconciling + FAQ",
+          "Create form overlay with context bar from Balance Recon"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "recon-pages",
+    "name": "Variant B: Normal Pages",
+    "description": "Reconciliation as standard pages with sidebar, top bar, and breadcrumb navigation",
+    "versions": [
+      {
+        "version": "1.0",
+        "date": "2026-03-11",
+        "file": "../recon-pages-v1.html",
+        "changes": [
+          "Standard page layout with sidebar and top bar always visible",
+          "Breadcrumb navigation",
+          "Context banner when navigating from Balance to Txn recon"
+        ]
+      },
+      {
+        "version": "2.0",
+        "date": "2026-03-11",
+        "file": "../recon-pages-v2.html",
+        "changes": [
+          "Rebuilt to match actual Synder flows",
+          "Balance Recon: Shopify (new) vs Stripe (resume) forms",
+          "Working view: inline page with summary banner, Investigate CTA, transaction table",
+          "Breadcrumbs update on drill-down",
+          "Transaction Recon: table view + empty state toggle",
+          "Create form as inline page with Cancel + Start matching",
+          "Context banner from Balance Recon with pre-filled fields"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "recon-flow",
+    "name": "Original: Reconciliation Flow (v1)",
+    "description": "First prototype — context bar between Balance and Transaction reconciliation",
+    "versions": [
+      {
+        "version": "1.0",
+        "date": "2026-03-10",
+        "file": "../recon-flow-v1.html",
+        "changes": [
+          "Initial prototype",
+          "Balance Reconciliation partial overlay (sidebar visible)",
+          "Investigate CTA on Difference card",
+          "Context bar, pre-filled fields, auto-save toast"
+        ]
+      }
+    ]
+  }
+];
+
+function renderProtoList() {
+  const list = document.getElementById('proto-list');
+  const data = loadData();
+
+  if (registry.length === 0) {
+    list.innerHTML = '<div style="font-size:13px;color:#888;padding:8px;">No prototypes yet.</div>';
+    return;
+  }
+
+  list.innerHTML = registry.map(p => {
+    const comments = (data.comments[p.id] || []).filter(c => !c.resolved);
+    const latestVersion = p.versions[p.versions.length - 1];
+    const isActive = currentProto && currentProto.id === p.id;
+    return `
+      <div class="proto-card ${isActive ? 'active' : ''}" onclick="selectProto('${p.id}')">
+        <div class="proto-name">${p.name}</div>
+        <div class="proto-meta">
+          <span class="version">v${latestVersion.version}</span>
+          <span>${latestVersion.date}</span>
+        </div>
+        <div class="comment-count ${comments.length === 0 ? 'zero' : ''}">${comments.length}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function selectProto(id) {
+  currentProto = registry.find(p => p.id === id);
+  if (!currentProto) return;
+
+  const latest = currentProto.versions[currentProto.versions.length - 1];
+  currentVersion = latest;
+
+  // Update toolbar
+  document.getElementById('toolbar').style.display = 'flex';
+  document.getElementById('toolbar-title').textContent = currentProto.name;
+
+  // Version select
+  const vSelect = document.getElementById('version-select');
+  vSelect.innerHTML = currentProto.versions.map((v, i) =>
+    `<option value="${i}" ${v === latest ? 'selected' : ''}>v${v.version} — ${v.date}</option>`
+  ).join('');
+  vSelect.onchange = () => {
+    currentVersion = currentProto.versions[vSelect.value];
+    loadPreview();
+  };
+
+  loadPreview();
+  renderProtoList();
+  updateCommentBadge();
+
+  // Close panels
+  document.getElementById('comment-panel').classList.remove('visible');
+  document.getElementById('changelog-panel').classList.remove('visible');
+  commentMode = false;
+  document.getElementById('comment-toggle').classList.remove('active');
+  document.getElementById('comment-overlay').classList.remove('active');
+}
+
+function loadPreview() {
+  const frame = document.getElementById('preview-frame');
+  const empty = document.getElementById('empty-state');
+  empty.style.display = 'none';
+  frame.style.display = 'block';
+  frame.src = currentVersion.file + '?_=' + Date.now();
+  renderPins();
+}
+
+function openInNewTab() {
+  if (currentVersion) window.open(currentVersion.file, '_blank');
+}
+
+// ===== Comment Mode =====
+function toggleCommentMode() {
+  commentMode = !commentMode;
+  const btn = document.getElementById('comment-toggle');
+  const overlay = document.getElementById('comment-overlay');
+  btn.classList.toggle('active', commentMode);
+  overlay.classList.toggle('active', commentMode);
+
+  if (commentMode) {
+    overlay.onclick = handleCommentClick;
+    setStatus('💬 Click anywhere on the prototype to leave a comment');
+  } else {
+    overlay.onclick = null;
+    setStatus('Ready');
+  }
+}
+
+function handleCommentClick(e) {
+  const rect = e.currentTarget.getBoundingClientRect();
+  const x = ((e.clientX - rect.left) / rect.width * 100).toFixed(1);
+  const y = ((e.clientY - rect.top) / rect.height * 100).toFixed(1);
+
+  pendingCommentPos = { x, y };
+
+  // Open comment panel with input
+  document.getElementById('comment-panel').classList.add('visible');
+  document.getElementById('comment-input-area').classList.add('visible');
+  document.getElementById('comment-textarea').value = '';
+  document.getElementById('comment-textarea').focus();
+
+  // Show temporary pin
+  showTempPin(x, y);
+}
+
+function showTempPin(x, y) {
+  const existing = document.getElementById('temp-pin');
+  if (existing) existing.remove();
+  const container = document.getElementById('pins-container');
+  const pin = document.createElement('div');
+  pin.id = 'temp-pin';
+  pin.className = 'comment-pin';
+  pin.style.left = x + '%';
+  pin.style.top = y + '%';
+  pin.textContent = '?';
+  pin.style.background = '#4361ee';
+  pin.style.animation = 'none';
+  container.appendChild(pin);
+}
+
+function submitComment() {
+  const text = document.getElementById('comment-textarea').value.trim();
+  if (!text || !pendingCommentPos || !currentProto) return;
+
+  const data = loadData();
+  if (!data.comments[currentProto.id]) data.comments[currentProto.id] = [];
+
+  data.comments[currentProto.id].push({
+    id: Date.now().toString(36),
+    text,
+    x: pendingCommentPos.x,
+    y: pendingCommentPos.y,
+    version: currentVersion.version,
+    author: 'Ignat',
+    time: new Date().toISOString(),
+    resolved: false
+  });
+
+  saveData(data);
+  pendingCommentPos = null;
+
+  document.getElementById('comment-textarea').value = '';
+  document.getElementById('comment-input-area').classList.remove('visible');
+  const temp = document.getElementById('temp-pin');
+  if (temp) temp.remove();
+
+  renderPins();
+  renderCommentList();
+  updateCommentBadge();
+  renderProtoList();
+  setStatus('✅ Comment added');
+
+  // Exit comment mode
+  commentMode = false;
+  document.getElementById('comment-toggle').classList.remove('active');
+  document.getElementById('comment-overlay').classList.remove('active');
+}
+
+function cancelComment() {
+  pendingCommentPos = null;
+  document.getElementById('comment-input-area').classList.remove('visible');
+  const temp = document.getElementById('temp-pin');
+  if (temp) temp.remove();
+}
+
+function toggleCommentPanel() {
+  const panel = document.getElementById('comment-panel');
+  document.getElementById('changelog-panel').classList.remove('visible');
+  panel.classList.toggle('visible');
+  if (panel.classList.contains('visible')) renderCommentList();
+}
+
+function renderCommentList() {
+  if (!currentProto) return;
+  const data = loadData();
+  const comments = data.comments[currentProto.id] || [];
+  const list = document.getElementById('comment-list');
+
+  if (comments.length === 0) {
+    list.innerHTML = '<div style="font-size:13px;color:#888;padding:16px;text-align:center;">No comments yet. Use 💬 mode to add feedback.</div>';
+    return;
+  }
+
+  list.innerHTML = comments.map((c, i) => {
+    const time = new Date(c.time).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return `
+      <div class="comment-item ${c.resolved ? 'resolved' : ''}">
+        <div class="comment-header">
+          <span class="comment-author">${c.author}</span>
+          <span class="comment-time">${time} · v${c.version}</span>
+        </div>
+        <div class="comment-text">${escapeHtml(c.text)}</div>
+        <div class="comment-actions">
+          <button class="resolve-btn" onclick="toggleResolve('${c.id}')">${c.resolved ? '↩ Reopen' : '✓ Resolve'}</button>
+          <button class="delete-btn" onclick="deleteComment('${c.id}')">🗑 Delete</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function toggleResolve(commentId) {
+  const data = loadData();
+  const comments = data.comments[currentProto.id] || [];
+  const c = comments.find(x => x.id === commentId);
+  if (c) c.resolved = !c.resolved;
+  saveData(data);
+  renderCommentList();
+  renderPins();
+  updateCommentBadge();
+  renderProtoList();
+}
+
+function deleteComment(commentId) {
+  const data = loadData();
+  data.comments[currentProto.id] = (data.comments[currentProto.id] || []).filter(c => c.id !== commentId);
+  saveData(data);
+  renderCommentList();
+  renderPins();
+  updateCommentBadge();
+  renderProtoList();
+}
+
+function renderPins() {
+  const container = document.getElementById('pins-container');
+  container.innerHTML = '';
+  if (!currentProto) return;
+
+  const data = loadData();
+  const comments = data.comments[currentProto.id] || [];
+
+  comments.forEach((c, i) => {
+    if (c.resolved) return;
+    const pin = document.createElement('div');
+    pin.className = 'comment-pin';
+    pin.style.left = c.x + '%';
+    pin.style.top = c.y + '%';
+    pin.textContent = i + 1;
+    pin.title = c.text;
+    pin.onclick = () => {
+      document.getElementById('comment-panel').classList.add('visible');
+      renderCommentList();
+    };
+    container.appendChild(pin);
+  });
+}
+
+function updateCommentBadge() {
+  if (!currentProto) return;
+  const data = loadData();
+  const count = (data.comments[currentProto.id] || []).filter(c => !c.resolved).length;
+  document.getElementById('comment-badge').textContent = count;
+}
+
+// ===== Changelog =====
+function toggleChangelog() {
+  const panel = document.getElementById('changelog-panel');
+  document.getElementById('comment-panel').classList.remove('visible');
+  panel.classList.toggle('visible');
+  if (panel.classList.contains('visible') && currentProto) {
+    const list = document.getElementById('changelog-list');
+    list.innerHTML = [...currentProto.versions].reverse().map(v => `
+      <div class="changelog-item">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="version-tag">v${v.version}</span>
+          <span class="changelog-date">${v.date}</span>
+        </div>
+        <div class="changelog-changes">
+          <ul>${(v.changes || ['Initial version']).map(c => `<li>${c}</li>`).join('')}</ul>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+// ===== Helpers =====
+function setStatus(text) {
+  document.getElementById('status-text').textContent = text;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===== Export comments for Dasha =====
+window.exportComments = function() {
+  const data = loadData();
+  return JSON.stringify(data.comments, null, 2);
+};
+
+// ===== Init =====
+loadRegistry().then(() => {
+  // Auto-select the first prototype if available
+  if (registry.length > 0) {
+    selectProto(registry[0].id);
+  }
+});
+</script>
+</body>
+</html>

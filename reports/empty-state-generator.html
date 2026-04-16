@@ -1,0 +1,1596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Empty State Generator — Synder UX Tools</title>
+<style>
+  :root {
+    --blue: #1a56db;
+    --blue-light: #e8eefb;
+    --blue-hover: #1347b8;
+    --gray-50: #f9fafb;
+    --gray-100: #f3f4f6;
+    --gray-200: #e5e7eb;
+    --gray-300: #d1d5db;
+    --gray-400: #9ca3af;
+    --gray-500: #6b7280;
+    --gray-600: #4b5563;
+    --gray-700: #374151;
+    --gray-800: #1f2937;
+    --gray-900: #111827;
+    --green: #059669;
+    --red: #dc2626;
+    --orange: #d97706;
+    --radius: 8px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--gray-50);
+    color: var(--gray-800);
+    line-height: 1.6;
+  }
+
+  /* Layout */
+  .app {
+    display: grid;
+    grid-template-columns: 280px 1fr 420px;
+    min-height: 100vh;
+  }
+
+  /* Sidebar */
+  .sidebar {
+    background: white;
+    border-right: 1px solid var(--gray-200);
+    padding: 20px 0;
+    overflow-y: auto;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .sidebar h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-400);
+    padding: 0 16px;
+    margin-bottom: 8px;
+  }
+  .sidebar-section { margin-bottom: 24px; }
+  .page-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    border-left: 3px solid transparent;
+    transition: all 0.15s;
+  }
+  .page-item:hover { background: var(--gray-50); }
+  .page-item.active {
+    background: var(--blue-light);
+    border-left-color: var(--blue);
+    font-weight: 600;
+  }
+  .page-item .status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .page-item .status.done { background: var(--green); }
+  .page-item .status.draft { background: var(--orange); }
+  .page-item .status.empty { background: var(--gray-300); }
+  .page-item .status.reference { background: var(--blue); }
+  .page-item .page-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .add-page-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--blue);
+    border: none;
+    background: none;
+    width: 100%;
+    text-align: left;
+  }
+  .add-page-btn:hover { background: var(--gray-50); }
+
+  /* Editor */
+  .editor {
+    padding: 32px 40px;
+    overflow-y: auto;
+    max-height: 100vh;
+  }
+  .editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .editor-header h1 { font-size: 22px; }
+  .editor-actions { display: flex; gap: 8px; }
+
+  .field-group {
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .field-group h3 {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-400);
+    margin-bottom: 8px;
+  }
+  .field-group label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--gray-600);
+    margin-bottom: 4px;
+    margin-top: 12px;
+  }
+  .field-group label:first-of-type { margin-top: 0; }
+  .field-group input[type="text"],
+  .field-group textarea,
+  .field-group select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    background: white;
+  }
+  .field-group input:focus,
+  .field-group textarea:focus,
+  .field-group select:focus {
+    outline: none;
+    border-color: var(--blue);
+    box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+  }
+  .field-group textarea { resize: vertical; min-height: 60px; }
+  .field-hint {
+    font-size: 12px;
+    color: var(--gray-400);
+    margin-top: 2px;
+  }
+
+  /* FAQ editor */
+  .faq-list { margin-top: 8px; }
+  .faq-item {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 8px;
+    position: relative;
+  }
+  .faq-item .faq-remove {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    color: var(--gray-400);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .faq-item .faq-remove:hover { color: var(--red); background: #fef2f2; }
+  .faq-item input,
+  .faq-item textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--gray-200);
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    background: white;
+  }
+  .faq-item input:focus,
+  .faq-item textarea:focus {
+    outline: none;
+    border-color: var(--blue);
+  }
+  .faq-item textarea { resize: vertical; min-height: 40px; margin-top: 6px; }
+  .add-faq-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: var(--gray-50);
+    border: 1px dashed var(--gray-300);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--gray-500);
+    margin-top: 4px;
+  }
+  .add-faq-btn:hover { border-color: var(--blue); color: var(--blue); }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+  }
+  .btn-primary { background: var(--blue); color: white; }
+  .btn-primary:hover { background: var(--blue-hover); }
+  .btn-secondary { background: white; color: var(--gray-700); border-color: var(--gray-200); }
+  .btn-secondary:hover { background: var(--gray-50); }
+  .btn-danger { background: white; color: var(--red); border-color: var(--gray-200); }
+  .btn-danger:hover { background: #fef2f2; border-color: var(--red); }
+  .btn-sm { padding: 5px 10px; font-size: 13px; }
+
+  /* Preview panel */
+  .preview-panel {
+    background: white;
+    border-left: 1px solid var(--gray-200);
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  .preview-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--gray-200);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 10;
+  }
+  .preview-header h3 { font-size: 14px; color: var(--gray-600); }
+  .preview-content {
+    padding: 40px 32px;
+  }
+
+  /* Synder-style empty state preview */
+  .es-preview {
+    text-align: center;
+    max-width: 360px;
+    margin: 0 auto;
+  }
+  .es-illustration {
+    width: 80px;
+    height: 80px;
+    background: var(--blue-light);
+    border-radius: 16px;
+    margin: 0 auto 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+  }
+  .es-header {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 8px;
+    line-height: 1.3;
+  }
+  .es-description {
+    font-size: 14px;
+    color: var(--gray-500);
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  .es-cta {
+    display: inline-block;
+    padding: 10px 24px;
+    background: var(--blue);
+    color: white;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .es-trust {
+    font-size: 13px;
+    color: var(--blue);
+    margin-bottom: 28px;
+  }
+  .es-faq-list {
+    text-align: left;
+    margin-top: 16px;
+  }
+  .es-faq-item {
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    background: white;
+  }
+  .es-faq-q {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--gray-800);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+  .es-faq-q::before {
+    content: '›';
+    font-size: 18px;
+    color: var(--gray-400);
+    flex-shrink: 0;
+    transition: transform 0.2s;
+  }
+  .es-faq-item.open .es-faq-q::before { transform: rotate(90deg); }
+  .es-faq-a {
+    font-size: 13px;
+    color: var(--gray-500);
+    margin-top: 8px;
+    padding-left: 20px;
+    line-height: 1.5;
+    display: none;
+  }
+  .es-faq-item.open .es-faq-a { display: block; }
+
+  /* Regenerate button */
+  .regen-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--gray-500);
+    cursor: pointer;
+    transition: all 0.15s;
+    float: right;
+    margin-top: -2px;
+  }
+  .regen-btn:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-light); }
+  .regen-btn.loading { pointer-events: none; opacity: 0.6; }
+  .regen-btn.loading .regen-icon { animation: spin 1s linear infinite; }
+  @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--gray-800);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 8px;
+    font-size: 14px;
+    box-shadow: var(--shadow-lg);
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 100;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* Export modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 12px;
+    padding: 24px;
+    max-width: 700px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: var(--shadow-lg);
+  }
+  .modal h2 { margin-bottom: 16px; }
+  .modal pre {
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: 6px;
+    padding: 16px;
+    font-size: 13px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 50vh;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  /* Source badge */
+  .source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .source-badge.audit { background: #fef3c7; color: #92400e; }
+  .source-badge.logrocket { background: #dbeafe; color: #1e40af; }
+  .source-badge.reference { background: #d1fae5; color: #065f46; }
+  .source-badge.custom { background: var(--gray-100); color: var(--gray-600); }
+
+  /* Empty editor state */
+  .editor-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    color: var(--gray-400);
+    text-align: center;
+  }
+  .editor-empty .icon { font-size: 48px; margin-bottom: 12px; }
+  .editor-empty p { font-size: 15px; }
+
+  /* Illustration prompt box */
+  .illust-prompt {
+    background: #fffbeb;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 8px;
+  }
+  .illust-prompt textarea {
+    border: 1px solid #fde68a !important;
+    background: white !important;
+  }
+
+  /* Options panel */
+  .options-panel {
+    margin-top: 8px;
+    border: 1px solid var(--gray-200);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .options-panel.loading {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  .option-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--gray-100);
+    cursor: pointer;
+    transition: background 0.1s;
+    font-size: 13px;
+  }
+  .option-item:last-child { border-bottom: none; }
+  .option-item:hover { background: var(--gray-50); }
+  .option-item.selected { background: var(--blue-light); }
+  .option-item input[type="radio"] { margin-top: 2px; flex-shrink: 0; }
+  .option-text { flex: 1; }
+  .option-text .option-copy { font-weight: 500; color: var(--gray-800); }
+  .option-text .option-reason { font-size: 12px; color: var(--gray-400); margin-top: 2px; }
+  .option-badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 8px;
+    background: #fef3c7;
+    color: #92400e;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .gen-options-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    background: var(--blue-light);
+    border: 1px solid var(--blue);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--blue);
+    cursor: pointer;
+    transition: all 0.15s;
+    float: right;
+    margin-top: -2px;
+  }
+  .gen-options-btn:hover { background: var(--blue); color: white; }
+  .gen-options-btn.loading { pointer-events: none; opacity: 0.6; }
+
+  /* FAQ rationale */
+  .faq-rationale {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 4px;
+    padding: 6px 8px;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #166534;
+  }
+  .faq-rationale-label {
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #15803d;
+    margin-bottom: 2px;
+  }
+
+  /* Page status select */
+  .status-select {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    border: 1px solid var(--gray-200);
+    background: white;
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div style="padding: 12px 16px 16px; border-bottom: 1px solid var(--gray-200); margin-bottom: 12px;">
+        <div style="font-size: 16px; font-weight: 700;">🎯 Empty States</div>
+        <div style="font-size: 12px; color: var(--gray-400); margin-top: 2px;">Synder UX Generator</div>
+      </div>
+      <div id="page-list"></div>
+      <button class="add-page-btn" onclick="addCustomPage()">+ Add new page</button>
+    </div>
+
+
+  </div>
+
+  <!-- Editor -->
+  <div class="editor" id="editor">
+    <div class="editor-empty">
+      <div class="icon">🎨</div>
+      <p>Select a page from the sidebar to start editing</p>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="preview-panel">
+    <div class="preview-header">
+      <h3>Live Preview</h3>
+
+    </div>
+    <div class="preview-content" id="preview">
+      <div style="text-align:center; color: var(--gray-400); padding-top: 60px;">
+        <div style="font-size: 36px; margin-bottom: 8px;">👀</div>
+        <p>Preview will appear here</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h2 id="exportTitle">Export</h2>
+    <pre id="exportContent"></pre>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+      <button class="btn btn-primary" onclick="copyExport()">📋 Copy</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add Page Modal -->
+<div class="modal-overlay" id="addPageModal">
+  <div class="modal" style="max-width: 480px;">
+    <h2>Add empty state</h2>
+    <div style="margin-bottom: 16px;">
+      <label style="display:block; font-size:13px; font-weight:600; color:var(--gray-600); margin-bottom:4px;">Page name <span style="color:var(--red)">*</span></label>
+      <input type="text" id="newPageName" placeholder="e.g. Summaries, AI Reports, Mapping..." style="width:100%; padding:8px 12px; border:1px solid var(--gray-200); border-radius:6px; font-size:14px;">
+    </div>
+    <div style="margin-bottom: 16px;">
+      <label style="display:block; font-size:13px; font-weight:600; color:var(--gray-600); margin-bottom:4px;">URL <span style="color:var(--gray-400); font-weight:400;">(optional)</span></label>
+      <input type="text" id="newPageUrl" placeholder="Synder demo link or Figma link" style="width:100%; padding:8px 12px; border:1px solid var(--gray-200); border-radius:6px; font-size:14px;">
+      <div style="font-size:12px; color:var(--gray-400); margin-top:4px;">Synder URL → I'll analyze the live page. Figma URL → I'll pull the intended design.</div>
+    </div>
+    <div style="margin-bottom: 16px;">
+      <label style="display:block; font-size:13px; font-weight:600; color:var(--gray-600); margin-bottom:4px;">Description <span style="color:var(--gray-400); font-weight:400;">(optional)</span></label>
+      <textarea id="newPageDescription" rows="3" placeholder="Describe what this page does, who it's for, what actions users take here..." style="width:100%; padding:8px 12px; border:1px solid var(--gray-200); border-radius:6px; font-size:14px; font-family:inherit; resize:vertical;"></textarea>
+      <div style="font-size:12px; color:var(--gray-400); margin-top:4px;">The more context, the better the generated copy. Helps when there's no URL.</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeAddPageModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitNewPage()">Add page</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ====== DATA ======
+const PAGES = {
+  // Reference pages (already shipped)
+  'transaction-reconciliation': {
+    name: 'Transaction Reconciliation',
+    category: 'reference',
+    source: 'reference',
+    illustrationEmoji: '🔍',
+    illustrationPrompt: 'Minimalist line-art illustration: a magnifying glass hovering over two overlapping document pages with comparison arrows between them. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Reconcile transactions with ease',
+    description: 'Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.',
+    cta: 'Start reconciling',
+    ctaAction: 'navigate',
+    trustLine: 'Read-only comparison — no changes to your books',
+    formField: null,
+    faqs: [
+      { q: 'Why should I use it?', a: 'Use this tool to verify the completeness and consistency of transactions imported into Synder compared with your integrations.' },
+      { q: 'Automated reconciliation', a: 'For Stripe, Synder can retrieve data automatically for the selected date range. Other integrations can be reconciled using CSV files.' },
+      { q: 'No sync balance changes', a: 'Reconciliation does not consume your sync balance.' },
+      { q: 'Will it change anything in my books?', a: 'No, reconciliation is read-only and won\'t alter your accounting data.' },
+      { q: 'Can I undo and re-run a reconciliation?', a: 'Yes, you can undo and re-run reconciliation anytime for any date range.' },
+      { q: 'How is this different from balance reconciliation?', a: 'Transaction reconciliation helps identify specific transactions that affect balances and cause discrepancies in clearing accounts.' }
+    ]
+  },
+  'balance-reconciliation': {
+    name: 'Balance Reconciliation',
+    category: 'reference',
+    source: 'reference',
+    illustrationEmoji: '✅',
+    illustrationPrompt: 'Minimalist line-art illustration: two document pages with a green checkmark badge in the corner. Blue monochrome with green accent, clean geometric style, 80x80px icon.',
+    header: 'Verify imported data',
+    description: 'Verify your data in Synder before posting summaries to your books by reviewing the numbers from your integrations.',
+    cta: 'Set up reconciliation',
+    ctaAction: 'navigate',
+    trustLine: 'Read-only comparison — no changes to your books',
+    formField: { label: 'Account to reconcile', type: 'select', placeholder: 'Select...' },
+    faqs: [
+      { q: 'What is balance reconciliation?', a: 'Synder compares the balance in your accounting platform with the expected balance from your integrations for a given period. It highlights any discrepancies so you can investigate before closing your books.' },
+      { q: 'How is this different from transaction reconciliation?', a: 'Transaction reconciliation matches individual transactions one-by-one. Balance reconciliation compares total amounts — it\'s faster and tells you if something is off, but won\'t show you exactly which transaction caused the difference.' },
+      { q: 'What does \'Account to reconcile\' mean?', a: 'This is the account in your accounting platform (like a bank account or clearing account) whose balance you want to verify against your integration data. Choose the account that receives deposits from your sales platform.' },
+      { q: 'What if my balances don\'t match?', a: 'That\'s exactly what this tool is for. Synder will show you the difference amount and the period where the mismatch occurred, so you can investigate. Common causes include missing transactions, duplicate imports, or timing differences between platforms.' },
+      { q: 'How often should I reconcile?', a: 'Most businesses reconcile balances monthly, typically after closing each month\'s books. Some prefer weekly for higher transaction volumes. Pick whatever matches your accounting cycle.' }
+    ]
+  },
+
+  // Pages that need empty states (from audit)
+  'summaries': {
+    name: 'Summaries List',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '📊',
+    illustrationPrompt: 'Minimalist line-art illustration: a clipboard with grouped rows/lines being organized into neat stacks with a sync arrow. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Your summaries will appear here',
+    description: 'Summaries group your imported transactions into journal entries ready to sync to your accounting system. They\'ll show up here once your first import completes.',
+    cta: 'Import transactions',
+    ctaAction: 'navigate',
+    trustLine: 'Review before syncing — nothing posts until you approve',
+    formField: null,
+    faqs: [
+      { q: 'What is a summary?', a: 'A summary is a batch of transactions grouped by day and type (sales, fees, refunds). Synder creates journal entries from these groups, ready to post to your books.' },
+      { q: 'How are summaries generated?', a: 'After importing transactions from your integrations, Synder automatically groups them into summaries based on your settings (daily or per-transaction mode).' },
+      { q: 'Do I need to sync every summary?', a: 'No. You can review each summary before syncing. If something looks off, you can skip it or adjust your mapping first.' },
+      { q: 'What\'s the difference between summaries and transactions?', a: 'Transactions are individual sales, refunds, or fees from your platforms. Summaries group these into accounting entries — like a daily sales receipt that combines all your Shopify orders.' }
+    ]
+  },
+  'register': {
+    name: 'Register (Journal Lines)',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '📒',
+    illustrationPrompt: 'Minimalist line-art illustration: an open ledger book with debit/credit columns and a pen. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Your accounting register',
+    description: 'The register shows every transaction broken down into debit and credit journal lines — the accounting view of your data.',
+    cta: 'View transactions instead',
+    ctaAction: 'navigate',
+    trustLine: 'Read-only view of your synced data',
+    formField: null,
+    faqs: [
+      { q: 'What are journal lines?', a: 'Every accounting transaction has at least two sides: a debit and a credit. Journal lines show each side separately, which is how your accounting system records them.' },
+      { q: 'How is this different from the Transactions list?', a: 'The Transactions list shows your raw sales data from integrations. The Register shows the same data in accounting format — debits, credits, and account assignments.' },
+      { q: 'When will data appear here?', a: 'Journal lines are created when you sync summaries to your books. Import transactions → generate summaries → sync to books → register populates.' },
+      { q: 'Can I edit journal lines?', a: 'Not directly. To change how transactions are recorded, update your mapping rules in Settings. The register reflects your current mapping.' }
+    ]
+  },
+  'sales-expenses-reports': {
+    name: 'Sales & Expenses Reports',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '📈',
+    illustrationPrompt: 'Minimalist line-art illustration: a rising bar chart with a line graph overlay and a dollar sign. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Track your sales and expenses',
+    description: 'See where your revenue comes from and where it goes — broken down by platform, product, and time period.',
+    cta: 'Connect an integration',
+    ctaAction: 'navigate',
+    trustLine: 'Reports update automatically as you sync transactions',
+    formField: null,
+    faqs: [
+      { q: 'When will my reports show data?', a: 'Reports populate after you sync your first summary to your accounting system. The more data you sync, the more detailed your reports become.' },
+      { q: 'Can I filter by integration?', a: 'Yes. Once you have data, you can filter reports by platform (Stripe, Shopify, etc.), date range, product, and more.' },
+      { q: 'What\'s the difference from Business Insights?', a: 'These built-in reports cover basic sales and expense breakdowns. Synder Business Insights (separate product) offers advanced analytics, cohort analysis, and cross-platform KPIs.' },
+      { q: 'How far back can I see data?', a: 'As far back as your synced transactions go. Use the Import Historical Data feature to backfill older transactions.' }
+    ]
+  },
+  'manual-journals': {
+    name: 'Manual Journals',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '✏️',
+    illustrationPrompt: 'Minimalist line-art illustration: a document with a pencil writing an adjustment entry, with plus/minus signs. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Make manual adjustments',
+    description: 'Use journal entries to adjust summary amounts for specific days — like correcting a misclassified fee or recording an offline refund.',
+    cta: 'Create your first entry',
+    ctaAction: 'action',
+    trustLine: 'Adjustments only affect Synder summaries, not your books directly',
+    formField: null,
+    faqs: [
+      { q: 'When would I use a manual journal?', a: 'When you need to adjust an amount that Synder calculated differently than expected — for example, a refund processed outside your integration, or a fee that should be categorized differently.' },
+      { q: 'Will this change my accounting data?', a: 'Manual journals adjust Synder summaries. The changes will be reflected when you next sync those summaries to your books.' },
+      { q: 'Can I undo a manual journal?', a: 'Yes. You can delete any manual journal entry, which will reverse the adjustment in the affected summary.' }
+    ]
+  },
+  'ai-reports': {
+    name: 'AI Reports',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '🤖',
+    illustrationPrompt: 'Minimalist line-art illustration: a chat bubble with sparkle/star icons and a small data chart inside. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Ask questions about your data',
+    description: 'Get instant answers about your sales, fees, and transactions using natural language. Just type what you want to know.',
+    cta: '',
+    ctaAction: 'none',
+    trustLine: 'Powered by AI — results are generated from your synced data',
+    formField: null,
+    sampleQueries: ['Total sales this month', 'Top products by revenue', 'Fee breakdown by platform', 'Average order value trend'],
+    faqs: [
+      { q: 'What can I ask?', a: 'Anything about your synced data — sales totals, fee breakdowns, product performance, revenue trends, comparisons between periods or platforms.' },
+      { q: 'How accurate are the answers?', a: 'AI Reports query your actual synced transaction data. The numbers come from your books, not estimates. Complex questions may occasionally need rephrasing.' },
+      { q: 'Do I need to sync data first?', a: 'Yes. AI Reports analyze the transactions and summaries you\'ve already synced. The more data available, the better the insights.' },
+      { q: 'Can I export these reports?', a: 'You can copy results and share them. For formatted exports, use the Sales & Expenses Reports section.' }
+    ]
+  },
+  'transaction-verification': {
+    name: 'Transaction Verification',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '🔎',
+    illustrationPrompt: 'Minimalist line-art illustration: a checklist with checkmarks and a magnifying glass scanning the items. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Verify transactions before syncing',
+    description: 'Review flagged transactions that may need your attention — duplicates, missing data, or unusual amounts.',
+    cta: 'Learn how verification works',
+    ctaAction: 'link',
+    trustLine: 'Flagged items won\'t sync until you approve them',
+    formField: null,
+    faqs: [
+      { q: 'What gets flagged?', a: 'Synder flags transactions that might cause issues — potential duplicates, unusually large amounts, missing customer or product info, or transactions that don\'t match your mapping rules.' },
+      { q: 'Do I have to verify every transaction?', a: 'No. Only flagged transactions appear here. If everything looks clean, this page will be empty — that\'s a good sign.' },
+      { q: 'What happens if I skip verification?', a: 'Flagged transactions stay in a pending state and won\'t sync to your books until you review them. Unflagged transactions sync normally.' }
+    ]
+  },
+  'mapping': {
+    name: 'Mapping',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '🗺️',
+    illustrationPrompt: 'Minimalist line-art illustration: two columns with arrows connecting items between them — mapping source to destination. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Map your data to the right accounts',
+    description: 'Mapping rules tell Synder how to categorize your sales, fees, and products into the correct accounts in your books.',
+    cta: 'Review suggested mappings',
+    ctaAction: 'navigate',
+    trustLine: 'Synder pre-fills suggestions based on your accounting setup',
+    formField: null,
+    faqs: [
+      { q: 'What is mapping?', a: 'Mapping connects your integration data (products, fees, taxes) to the right accounts in your accounting system. For example: "Shopify sales → Sales Income account" or "Stripe fees → Bank Fees expense."' },
+      { q: 'Do I need to set up mapping manually?', a: 'Synder suggests mappings based on your accounting platform setup. You can review and adjust these suggestions, but most work out of the box.' },
+      { q: 'What happens if mapping is wrong?', a: 'Transactions will post to incorrect accounts. You can fix the mapping and re-sync affected summaries — no data is lost.' },
+      { q: 'Can I map products individually?', a: 'Yes. Product mapping (available on higher plans) lets you assign specific accounts to individual products or product categories.' }
+    ]
+  },
+  'groups': {
+    name: 'Groups',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '📁',
+    illustrationPrompt: 'Minimalist line-art illustration: folders being organized into labeled categories with tag icons. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Organize with groups',
+    description: 'Groups let you categorize transactions for more precise mapping — like splitting sales by region, channel, or product type.',
+    cta: 'Create a group',
+    ctaAction: 'action',
+    trustLine: 'Optional advanced feature — skip if your default mapping works fine',
+    formField: null,
+    faqs: [
+      { q: 'What are groups for?', a: 'Groups add an extra layer of organization. Instead of mapping all Shopify sales to one account, you could create groups by product category and map each to a different income account.' },
+      { q: 'Do I need to use groups?', a: 'No. Groups are optional and mainly useful for businesses that need granular reporting — like separating wholesale from retail sales, or tracking by location.' },
+      { q: 'How do groups affect syncing?', a: 'Groups influence how summaries are generated and which accounts transactions post to. They don\'t change the raw transaction data.' }
+    ]
+  },
+  'dimensions': {
+    name: 'Dimensions',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '📐',
+    illustrationPrompt: 'Minimalist line-art illustration: a cube with labeled faces/axes representing different data dimensions. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Add tracking dimensions',
+    description: 'Dimensions let you tag transactions with classes, locations, or departments from your accounting system for detailed reporting.',
+    cta: 'Set up dimensions',
+    ctaAction: 'navigate',
+    trustLine: 'Works with QuickBooks Classes, Locations, and Departments',
+    formField: null,
+    faqs: [
+      { q: 'What are dimensions?', a: 'Dimensions are tracking categories from your accounting system — like QuickBooks Classes or Locations. They let you tag every synced transaction for more detailed P&L and balance reports.' },
+      { q: 'Do I need to create them in Synder?', a: 'No. Dimensions pull from your accounting platform. You set them up in QuickBooks/Xero first, then configure which dimensions Synder should assign to transactions.' },
+      { q: 'Which accounting systems support dimensions?', a: 'QuickBooks Online (Classes, Locations), QuickBooks Desktop (Classes), Xero (Tracking Categories), and Sage Intacct (Dimensions, Departments, Locations).' }
+    ]
+  },
+  'import-history': {
+    name: 'Import History',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '📥',
+    illustrationPrompt: 'Minimalist line-art illustration: a download arrow going into a document/inbox with a clock icon. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Your import history',
+    description: 'Every import from your integrations is logged here — see what was fetched, when, and how many transactions came in.',
+    cta: 'Run your first import',
+    ctaAction: 'navigate',
+    trustLine: 'Imports fetch data — nothing syncs to your books until you approve',
+    formField: null,
+    faqs: [
+      { q: 'What counts as an import?', a: 'Each time Synder fetches new transactions from an integration (automatically or manually), it creates an import record with a timestamp and transaction count.' },
+      { q: 'Why would an import fail?', a: 'Common causes: the integration lost its connection (re-authorize), the platform API had a temporary outage, or a rate limit was hit. Failed imports can be retried.' },
+      { q: 'Can I import historical data?', a: 'Yes. Use the "Import Historical Data" option to backfill transactions from before you connected the integration.' }
+    ]
+  },
+  'smart-rules': {
+    name: 'Smart Rules',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '⚡',
+    illustrationPrompt: 'Minimalist line-art illustration: a friendly robot hand holding a lightning bolt, with small gear icons floating around. The robot hand should look helpful, not industrial. Blue monochrome (#0053CC), clean geometric style, 80x80px icon. Conveys automation + assistance.',
+    header: 'Let automation handle the repetitive work',
+    description: 'Smart Rules automatically categorize, split, or modify transactions based on conditions you define. Set them up once — they\'ll run on every new transaction, so you don\'t have to.',
+    cta: 'Create your first rule',
+    ctaAction: 'action',
+    trustLine: 'Only affects new transactions — your existing data stays untouched',
+    formField: null,
+    faqs: [
+      { q: 'What can Smart Rules do?', a: 'They automatically handle repetitive categorization tasks. Examples: categorize all Amazon purchases over $500 as "Equipment," split Shopify fees by percentage, or flag international transactions for review. You define the condition (IF) and the action (THEN).' },
+      { q: 'When should I create a rule?', a: 'Create a rule when you find yourself manually fixing the same type of transaction repeatedly. If you keep re-categorizing "Office Supplies" from a specific vendor, that\'s a perfect candidate for automation.' },
+      { q: 'Will rules change my past transactions?', a: 'No. Smart Rules only apply to new transactions that come in after you create the rule. Your historical data stays exactly as it is. To fix old transactions, use Manual Journals or re-import with updated mapping.' },
+      { q: 'Can I edit or delete a rule?', a: 'Yes, anytime. You can pause, edit, or delete rules. If you delete a rule, it stops applying to future transactions — but it doesn\'t undo any actions it already took.' },
+      { q: 'What if two rules conflict?', a: 'Rules run in the order you set. If two rules could apply to the same transaction, the first one in your list wins. You can drag to reorder rules anytime.' }
+    ]
+  },
+  'revenue-recognition': {
+    name: 'Revenue Recognition',
+    category: 'needs',
+    source: 'audit',
+    illustrationEmoji: '💰',
+    illustrationPrompt: 'Minimalist line-art illustration: a waterfall chart showing revenue being recognized over time periods with checkmarks. Blue monochrome, clean geometric style, 80x80px icon.',
+    header: 'Recognize revenue the right way',
+    description: 'Track when subscription revenue should be recognized under GAAP/ASC 606 — with waterfall reports by month, customer, or plan.',
+    cta: 'Connect Stripe to get started',
+    ctaAction: 'navigate',
+    trustLine: 'ASC 606 compliant — works with monthly, annual, and custom billing cycles',
+    formField: null,
+    faqs: [
+      { q: 'What is revenue recognition?', a: 'When you collect payment for a subscription upfront (e.g., annual plan), you can\'t count it all as revenue immediately. Revenue recognition spreads it across the service period — $1,200/year becomes $100/month.' },
+      { q: 'Do I need this?', a: 'If you have subscription or recurring revenue and need GAAP-compliant financials (for investors, auditors, or lenders), yes. If you\'re cash-basis and don\'t have subscriptions, you can skip this.' },
+      { q: 'Which integrations work?', a: 'Currently Stripe (automatic) and Excel imports (manual). More integrations are planned.' },
+      { q: 'What are waterfall reports?', a: 'A waterfall report shows how revenue from each month\'s invoices gets spread across future months. It\'s the standard format auditors and CFOs expect for ASC 606 reporting.' }
+    ]
+  }
+};
+
+let currentPageId = null;
+let customCounter = 0;
+
+// ====== PERSISTENCE ======
+function saveData() {
+  try {
+    localStorage.setItem('synder-empty-states', JSON.stringify(PAGES));
+    localStorage.setItem('synder-es-counter', customCounter);
+  } catch(e) {}
+}
+
+function loadData() {
+  try {
+    const saved = localStorage.getItem('synder-empty-states');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.assign(PAGES, parsed);
+    }
+    const cnt = localStorage.getItem('synder-es-counter');
+    if (cnt) customCounter = parseInt(cnt);
+  } catch(e) {}
+}
+
+// ====== RENDER SIDEBAR ======
+function renderSidebar() {
+  const list = document.getElementById('page-list');
+  list.innerHTML = '';
+
+  Object.entries(PAGES).forEach(([id, page]) => {
+    const div = document.createElement('div');
+    div.className = `page-item${currentPageId === id ? ' active' : ''}`;
+    div.onclick = () => selectPage(id);
+
+    let statusClass = 'empty';
+    if (page.category === 'reference') statusClass = 'reference';
+    else if (page._status === 'done') statusClass = 'done';
+    else if (page.header && page.header.trim()) statusClass = 'draft';
+
+    div.innerHTML = `
+      <span class="status ${statusClass}"></span>
+      <span class="page-name">${page.name}</span>
+    `;
+
+    list.appendChild(div);
+  });
+}
+
+// ====== SELECT PAGE ======
+function selectPage(id) {
+  currentPageId = id;
+  renderSidebar();
+  renderEditor();
+  renderPreview();
+}
+
+// ====== RENDER EDITOR ======
+function renderEditor() {
+  const editor = document.getElementById('editor');
+  const page = PAGES[currentPageId];
+  if (!page) return;
+
+  const isRef = page.category === 'reference';
+  editor.innerHTML = `
+    <div class="editor-header">
+      <div>
+        <h1>${page.name}</h1>
+      </div>
+      <div class="editor-actions">
+        ${page.category === 'custom' ? `<button class="btn btn-danger btn-sm" onclick="deletePage('${currentPageId}')">🗑 Delete</button>` : ''}
+      </div>
+    </div>
+
+    <!-- Illustration -->
+    <div class="field-group">
+      <h3>🎨 Illustration <button class="regen-btn" onclick="regenerate('illustrationPrompt')"><span class="regen-icon">🔄</span> Regenerate</button></h3>
+      <label>Prompt for Nana Banana</label>
+      <div class="illust-prompt">
+        <textarea rows="3" onchange="updateField('illustrationPrompt', this.value)">${esc(page.illustrationPrompt || '')}</textarea>
+        <div class="field-hint">Describe the illustration for the designer. Reference the style of existing Synder empty state icons.</div>
+      </div>
+    </div>
+
+    <!-- Header & Description -->
+    <div class="field-group">
+      <h3>📝 Copy</h3>
+
+      <label>Header <button class="gen-options-btn" onclick="generateOptions('header')"><span class="regen-icon">✨</span> Generate options</button></label>
+      <input type="text" id="field-header" value="${esc(page.header || '')}" onchange="updateField('header', this.value)" placeholder="Benefit-oriented headline">
+      <div class="field-hint">Lead with the benefit, not the feature name. E.g. "Reconcile transactions with ease" not "Transaction Reconciliation"</div>
+      <div id="options-header"></div>
+
+      <label style="margin-top:16px;">Description <button class="gen-options-btn" onclick="generateOptions('description')"><span class="regen-icon">✨</span> Generate options</button></label>
+      <textarea rows="3" id="field-description" onchange="updateField('description', this.value)" placeholder="What it does + why it matters">${esc(page.description || '')}</textarea>
+      <div class="field-hint">1-2 sentences. Explain what this page does and why the user should care.</div>
+      <div id="options-description"></div>
+
+      <label style="margin-top:16px;">CTA Button Text <button class="gen-options-btn" onclick="generateOptions('cta')"><span class="regen-icon">✨</span> Generate options</button></label>
+      <input type="text" id="field-cta" value="${esc(page.cta || '')}" onchange="updateField('cta', this.value)" placeholder="E.g. Start reconciling">
+      <div id="options-cta"></div>
+
+      <label style="margin-top:16px;">Trust / Reassurance Line <button class="gen-options-btn" onclick="generateOptions('trustLine')"><span class="regen-icon">✨</span> Generate options</button></label>
+      <input type="text" id="field-trustLine" value="${esc(page.trustLine || '')}" onchange="updateField('trustLine', this.value)" placeholder="E.g. Read-only comparison — no changes to your books">
+      <div class="field-hint">Addresses the user's fear. What won't break if they click the CTA?</div>
+      <div id="options-trustLine"></div>
+    </div>
+
+    <!-- Optional Form Field -->
+    <div class="field-group">
+      <h3>📋 Optional Form Field</h3>
+      <div style="display: flex; gap: 12px; align-items: end;">
+        <div style="flex:1;">
+          <label>Field Label</label>
+          <input type="text" value="${esc(page.formField?.label || '')}" onchange="updateFormField('label', this.value)" placeholder="Leave empty for no form field">
+        </div>
+        <div style="width:140px;">
+          <label>Type</label>
+          <select onchange="updateFormField('type', this.value)">
+            <option value="select"${page.formField?.type === 'select' ? ' selected' : ''}>Dropdown</option>
+            <option value="text"${page.formField?.type === 'text' ? ' selected' : ''}>Text input</option>
+            <option value="date"${page.formField?.type === 'date' ? ' selected' : ''}>Date picker</option>
+          </select>
+        </div>
+      </div>
+      <label>Placeholder</label>
+      <input type="text" value="${esc(page.formField?.placeholder || '')}" onchange="updateFormField('placeholder', this.value)" placeholder="E.g. Select...">
+    </div>
+
+    <!-- Sample Queries (for AI Reports type pages) -->
+    <div class="field-group">
+      <h3>💡 Sample Query Cards (optional)</h3>
+      <div class="field-hint" style="margin-bottom: 8px;">For pages where the CTA is a search/query input. Comma-separated.</div>
+      <input type="text" value="${esc((page.sampleQueries || []).join(', '))}" onchange="updateField('sampleQueries', this.value.split(',').map(s=>s.trim()).filter(Boolean))" placeholder="Total sales this month, Top products by revenue, ...">
+    </div>
+
+    <!-- FAQ -->
+    <div class="field-group">
+      <h3>❓ FAQ Accordions</h3>
+      <div class="faq-list" id="faq-list">
+        ${(page.faqs || []).map((faq, i) => `
+          <div class="faq-item">
+            <button class="faq-remove" onclick="removeFAQ(${i})">×</button>
+            <input type="text" value="${esc(faq.q)}" onchange="updateFAQ(${i}, 'q', this.value)" placeholder="Question">
+            <textarea rows="2" onchange="updateFAQ(${i}, 'a', this.value)" placeholder="Answer">${esc(faq.a)}</textarea>
+            <div class="faq-rationale">
+              <div class="faq-rationale-label">💡 Why this FAQ?</div>
+              <textarea rows="1" style="width:100%;border:1px solid #bbf7d0;border-radius:4px;padding:4px 6px;font-size:12px;font-family:inherit;background:white;resize:vertical;" onchange="updateFAQ(${i}, 'rationale', this.value)" placeholder="What user problem or confusion does this address?">${esc(faq.rationale || '')}</textarea>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <button class="add-faq-btn" onclick="addFAQ()">+ Add FAQ</button>
+      <button class="add-faq-btn" onclick="regenerate('faq')" style="margin-left: 8px;">🔄 Generate FAQ</button>
+    </div>
+
+    <!-- Notes -->
+    <div class="field-group">
+      <h3>📌 Internal Notes</h3>
+      <textarea rows="3" onchange="updateField('_notes', this.value)" placeholder="Notes for yourself or the team (won't appear in export)">${esc(page._notes || '')}</textarea>
+    </div>
+  `;
+}
+
+// ====== RENDER PREVIEW ======
+function renderPreview() {
+  const preview = document.getElementById('preview');
+  const page = PAGES[currentPageId];
+  if (!page) return;
+
+  const queries = (page.sampleQueries || []).map(q =>
+    `<div style="background: var(--gray-50); border: 1px solid var(--gray-200); border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--gray-600); cursor: pointer; text-align: left;">${esc(q)}</div>`
+  ).join('');
+
+  const formHtml = page.formField?.label ? `
+    <div style="text-align: left; width: 100%; margin-bottom: 16px;">
+      <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${esc(page.formField.label)} <span style="color: var(--red);">*</span></div>
+      <div style="border: 1px solid var(--gray-200); border-radius: 6px; padding: 8px 12px; color: var(--gray-400); font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+        ${esc(page.formField.placeholder || 'Select...')}
+        <span>▾</span>
+      </div>
+    </div>
+  ` : '';
+
+  preview.innerHTML = `
+    <div class="es-preview">
+      <div class="es-illustration">${page.illustrationEmoji || '📄'}</div>
+      <div class="es-header">${esc(page.header || 'Page title')}</div>
+      <div class="es-description">${esc(page.description || 'Description will appear here')}</div>
+      ${formHtml}
+      ${page.cta ? `<div class="es-cta">${esc(page.cta)}</div>` : ''}
+      ${page.trustLine ? `<div class="es-trust">${esc(page.trustLine)}</div>` : ''}
+      ${queries ? `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px;">${queries}</div>` : ''}
+      <div class="es-faq-list">
+        ${(page.faqs || []).map((faq, i) => `
+          <div class="es-faq-item" onclick="this.classList.toggle('open')">
+            <div class="es-faq-q">${esc(faq.q)}</div>
+            <div class="es-faq-a">${esc(faq.a)}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ====== FIELD UPDATES ======
+function updateField(field, value) {
+  PAGES[currentPageId][field] = value;
+  saveData();
+  renderPreview();
+}
+
+function updateFormField(key, value) {
+  const page = PAGES[currentPageId];
+  if (!page.formField) page.formField = {};
+  if (key === 'label' && !value.trim()) {
+    page.formField = null;
+  } else {
+    page.formField[key] = value;
+  }
+  saveData();
+  renderPreview();
+}
+
+function updateFAQ(index, key, value) {
+  PAGES[currentPageId].faqs[index][key] = value;
+  saveData();
+  renderPreview();
+}
+
+function addFAQ() {
+  if (!PAGES[currentPageId].faqs) PAGES[currentPageId].faqs = [];
+  PAGES[currentPageId].faqs.push({ q: '', a: '' });
+  saveData();
+  renderEditor();
+  renderPreview();
+}
+
+function removeFAQ(index) {
+  PAGES[currentPageId].faqs.splice(index, 1);
+  saveData();
+  renderEditor();
+  renderPreview();
+}
+
+function updateStatus(value) {
+  PAGES[currentPageId]._status = value || undefined;
+  saveData();
+  renderSidebar();
+}
+
+// ====== ADD / DELETE PAGES ======
+function addCustomPage() {
+  document.getElementById('newPageName').value = '';
+  document.getElementById('newPageUrl').value = '';
+  document.getElementById('newPageDescription').value = '';
+  document.getElementById('addPageModal').classList.add('show');
+  setTimeout(() => document.getElementById('newPageName').focus(), 100);
+}
+
+function closeAddPageModal() {
+  document.getElementById('addPageModal').classList.remove('show');
+}
+
+async function submitNewPage() {
+  const name = document.getElementById('newPageName').value.trim();
+  const url = document.getElementById('newPageUrl').value.trim();
+  const desc = document.getElementById('newPageDescription').value.trim();
+  if (!name) { document.getElementById('newPageName').style.borderColor = 'var(--red)'; return; }
+
+  closeAddPageModal();
+  customCounter++;
+  const id = 'custom-' + customCounter;
+  PAGES[id] = {
+    name: name,
+    category: 'custom',
+    source: 'custom',
+    sourceUrl: url || null,
+    illustrationEmoji: '📄',
+    illustrationPrompt: '',
+    header: '',
+    description: '',
+    cta: '',
+    ctaAction: 'navigate',
+    trustLine: '',
+    formField: null,
+    faqs: [],
+    _notes: [url ? 'Source: ' + url : '', desc ? 'Description: ' + desc : ''].filter(Boolean).join('\n')
+  };
+  saveData();
+  selectPage(id);
+
+  // Auto-generate all fields if we have a name
+  showToast('✨ Generating empty state for "' + name + '"...');
+  try {
+    const contextParts = [];
+    if (desc) contextParts.push('Feature description: ' + desc);
+    if (url) contextParts.push('Page URL: ' + url);
+    const context = contextParts.join('. ');
+    const fields = ['illustrationPrompt', 'header', 'description', 'cta', 'trustLine'];
+    const results = await Promise.all(fields.map(field =>
+      fetch('/api/regenerate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pageName: name, field, currentValue: '', context })
+      }).then(r => r.json()).catch(() => ({ result: '' }))
+    ));
+
+    fields.forEach((field, i) => {
+      if (results[i].result) PAGES[id][field] = results[i].result;
+    });
+
+    // Also generate 3 FAQs
+    for (let i = 0; i < 3; i++) {
+      try {
+        const faqResp = await fetch('/api/regenerate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pageName: name, field: 'faq', currentValue: '', context })
+        });
+        const faqData = await faqResp.json();
+        if (faqData.result) {
+          let raw = faqData.result.replace(/^```json?\s*/i, '').replace(/\s*```$/i, '').trim();
+          const faq = JSON.parse(raw);
+          if (!PAGES[id].faqs) PAGES[id].faqs = [];
+          PAGES[id].faqs.push(faq);
+        }
+      } catch(e) {}
+    }
+
+    saveData();
+    renderEditor();
+    renderPreview();
+    showToast('✅ Generated!');
+  } catch(e) {
+    showToast('Partial generation — edit manually');
+    renderEditor();
+    renderPreview();
+  }
+}
+
+function deletePage(id) {
+  if (!confirm(`Delete "${PAGES[id].name}"?`)) return;
+  delete PAGES[id];
+  currentPageId = null;
+  saveData();
+  renderSidebar();
+  document.getElementById('editor').innerHTML = '<div class="editor-empty"><div class="icon">🎨</div><p>Select a page from the sidebar</p></div>';
+  document.getElementById('preview').innerHTML = '<div style="text-align:center; color: var(--gray-400); padding-top: 60px;"><div style="font-size: 36px; margin-bottom: 8px;">👀</div><p>Preview will appear here</p></div>';
+}
+
+// ====== EXPORT ======
+function exportPage(id) {
+  const page = PAGES[id];
+  const md = pageToMarkdown(id, page);
+  document.getElementById('exportTitle').textContent = `Export: ${page.name}`;
+  document.getElementById('exportContent').textContent = md;
+  document.getElementById('exportModal').classList.add('show');
+}
+
+function exportAll() {
+  let md = '# Synder Empty States Spec\n\n';
+  md += `Generated: ${new Date().toISOString().split('T')[0]}\n\n`;
+  md += '---\n\n';
+
+  const cats = { reference: '## ✅ Reference (Shipped)', needs: '## ⚠️ Needs Empty State', custom: '## 📦 Custom Pages' };
+  Object.entries(cats).forEach(([cat, title]) => {
+    const pages = Object.entries(PAGES).filter(([,p]) => p.category === cat);
+    if (pages.length === 0) return;
+    md += title + '\n\n';
+    pages.forEach(([id, page]) => {
+      md += pageToMarkdown(id, page) + '\n---\n\n';
+    });
+  });
+
+  document.getElementById('exportTitle').textContent = 'Export All Pages';
+  document.getElementById('exportContent').textContent = md;
+  document.getElementById('exportModal').classList.add('show');
+}
+
+function exportMarkdown() {
+  exportAll();
+}
+
+function pageToMarkdown(id, page) {
+  let md = `### ${page.name}\n\n`;
+  if (page.illustrationPrompt) md += `**🎨 Illustration prompt:** ${page.illustrationPrompt}\n\n`;
+  md += `**Header:** ${page.header || '(empty)'}\n\n`;
+  md += `**Description:** ${page.description || '(empty)'}\n\n`;
+  if (page.cta) md += `**CTA:** [${page.cta}]\n\n`;
+  if (page.trustLine) md += `**Trust line:** ${page.trustLine}\n\n`;
+  if (page.formField?.label) md += `**Form field:** ${page.formField.label} (${page.formField.type || 'select'})\n\n`;
+  if (page.sampleQueries?.length) md += `**Sample queries:** ${page.sampleQueries.join(' · ')}\n\n`;
+  if (page.faqs?.length) {
+    md += '**FAQ:**\n';
+    page.faqs.forEach(f => {
+      md += `- **${f.q}**\n  ${f.a}\n`;
+    });
+    md += '\n';
+  }
+  return md;
+}
+
+function closeModal() {
+  document.getElementById('exportModal').classList.remove('show');
+}
+
+function copyExport() {
+  navigator.clipboard.writeText(document.getElementById('exportContent').textContent);
+  showToast('Copied to clipboard');
+}
+
+function copyPreviewHTML() {
+  const html = document.getElementById('preview').innerHTML;
+  navigator.clipboard.writeText(html);
+  showToast('Preview HTML copied');
+}
+
+// ====== GENERATE OPTIONS ======
+async function generateOptions(field) {
+  const page = PAGES[currentPageId];
+  if (!page) return;
+
+  const container = document.getElementById('options-' + field);
+  if (!container) return;
+
+  container.innerHTML = '<div class="options-panel loading" style="padding:12px;text-align:center;color:var(--gray-400);font-size:13px;">✨ Generating 3 options...</div>';
+
+  const context = page.description || page.header || '';
+  const currentValue = page[field] || '';
+
+  try {
+    const resp = await fetch('/api/generate-options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageName: page.name, field, currentValue, context })
+    });
+    const data = await resp.json();
+    if (data.error || !data.options) {
+      container.innerHTML = '<div style="color:var(--red);font-size:12px;padding:8px;">Failed to generate options</div>';
+      return;
+    }
+
+    // Store options on the page object
+    if (!page._options) page._options = {};
+    page._options[field] = data.options;
+
+    renderOptionsPanel(field, data.options, container);
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--red);font-size:12px;padding:8px;">Failed to generate options</div>';
+  }
+}
+
+function renderOptionsPanel(field, options, container) {
+  const page = PAGES[currentPageId];
+  const currentVal = page[field] || '';
+
+  const selectedIdx = options.findIndex(o => o.text === currentVal);
+
+  container.innerHTML = `
+    <div class="options-panel">
+      ${options.map((opt, i) => {
+        const isSelected = i === selectedIdx;
+        return `
+          <div class="option-item${isSelected ? ' selected' : ''}" onclick="selectOption('${field}', ${i})">
+            <input type="radio" name="opt-${field}" ${isSelected ? 'checked' : ''}>
+            <div class="option-text">
+              <div class="option-copy">${esc(opt.text)}</div>
+              <div class="option-reason">${esc(opt.reason)}</div>
+            </div>
+            ${opt.recommended ? '<span class="option-badge">★ Recommended</span>' : ''}
+          </div>
+        `;
+      }).join('')}
+      <div style="padding:8px 12px; border-top:1px solid var(--gray-200); display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary btn-sm" onclick="applyOption('${field}')" ${selectedIdx < 0 ? 'disabled style="opacity:0.4;pointer-events:none;"' : ''}>Apply</button>
+      </div>
+    </div>
+  `;
+}
+
+function selectOption(field, index) {
+  const page = PAGES[currentPageId];
+  if (!page._options?.[field]?.[index]) return;
+
+  // Store selected index without applying yet
+  if (!page._selectedOption) page._selectedOption = {};
+  page._selectedOption[field] = index;
+
+  // Re-render to show selection + enable Apply button
+  const container = document.getElementById('options-' + field);
+  if (container) {
+    // Temporarily set field to selected text so renderOptionsPanel highlights it
+    const opt = page._options[field][index];
+    const prev = page[field];
+    page[field] = opt.text;
+    renderOptionsPanel(field, page._options[field], container);
+    page[field] = prev; // restore — not applied yet
+  }
+}
+
+function applyOption(field) {
+  const page = PAGES[currentPageId];
+  const idx = page._selectedOption?.[field];
+  if (idx == null || !page._options?.[field]?.[idx]) return;
+
+  const opt = page._options[field][idx];
+  page[field] = opt.text;
+  saveData();
+
+  // Update the input/textarea
+  const input = document.getElementById('field-' + field);
+  if (input) input.value = opt.text;
+
+  // Re-render options panel and preview
+  const container = document.getElementById('options-' + field);
+  if (container) renderOptionsPanel(field, page._options[field], container);
+
+  renderPreview();
+  showToast('✅ Applied');
+}
+
+// ====== REGENERATE (AI) ======
+async function regenerate(field) {
+  const page = PAGES[currentPageId];
+  if (!page) return;
+
+  // Find and animate the clicked button
+  const btns = document.querySelectorAll('.regen-btn');
+  let btn = null;
+  btns.forEach(b => { if (b.onclick && b.onclick.toString().includes(`'${field}'`)) btn = b; });
+  // Fallback: find by matching text
+  if (!btn) btns.forEach(b => { if (b.textContent.includes('Generate FAQ') && field === 'faq') btn = b; });
+  
+  if (btn) btn.classList.add('loading');
+
+  const context = page.description || page.header || '';
+  const currentValue = field === 'faq' ? '' : (page[field] || '');
+
+  try {
+    const resp = await fetch('/api/regenerate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageName: page.name, field, currentValue, context })
+    });
+    const data = await resp.json();
+    if (data.error) { showToast('Error: ' + data.error); return; }
+
+    if (field === 'faq') {
+      try {
+        // Strip markdown code fences if present
+        let raw = data.result.replace(/^```json?\s*/i, '').replace(/\s*```$/i, '').trim();
+        const faq = JSON.parse(raw);
+        if (!page.faqs) page.faqs = [];
+        page.faqs.push(faq);
+      } catch(e) {
+        showToast('Failed to parse FAQ');
+        return;
+      }
+    } else {
+      page[field] = data.result;
+    }
+
+    saveData();
+    renderEditor();
+    renderPreview();
+    showToast('✨ Regenerated!');
+  } catch(e) {
+    showToast('Failed to generate');
+  } finally {
+    if (btn) btn.classList.remove('loading');
+  }
+}
+
+// ====== UTILS ======
+function esc(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ====== MIGRATE: Add rationale to existing FAQs ======
+function migrateRationale() {
+  const defaultRationales = {
+    'transaction-reconciliation': [
+      'New users don\'t understand the purpose — this explains the core value proposition upfront.',
+      'Users wonder how data gets compared — this clarifies the automation for Stripe and CSV fallback for others.',
+      'Users fear it will use up their sync balance — this removes a key blocker to trying the feature.',
+      'Users worry about unintended side effects — this addresses the #1 fear (changing their books).',
+      'Users who made a mistake want to know if it\'s reversible — this builds confidence.',
+      'Users confuse the two reconciliation types — this prevents them from using the wrong tool.'
+    ],
+    'balance-reconciliation': [
+      'Users land on an empty page with a dropdown and no explanation — they need to know what this tool does.',
+      'Two reconciliation pages cause confusion — users need to pick the right one.',
+      'The dropdown label is technical — users don\'t know which account to select.',
+      'Mismatched balances trigger anxiety — users need to know what to do next.',
+      'Users don\'t know how often to check — this sets expectations for their workflow.'
+    ],
+    'summaries': [
+      'Users see "Summaries" in the nav and don\'t know what it means — accounting jargon barrier.',
+      'Users wonder where summaries come from — this connects the import step to summaries.',
+      'Users fear auto-syncing will mess up their books — this clarifies they have control.',
+      'Users confuse transactions with summaries — this clarifies the data hierarchy.'
+    ],
+    'register': [
+      'Non-accountants don\'t know what journal lines are — this bridges the knowledge gap.',
+      'Two similar-sounding pages (Transactions vs Register) create confusion.',
+      'Users expect data immediately — this sets correct expectations about the workflow.',
+      'Users want to fix categorization — this points them to the right place (Settings).'
+    ],
+    'sales-expenses-reports': [
+      'Users see empty charts and think the feature is broken — this explains the prerequisite.',
+      'Power users want to slice data by platform — this confirms the capability.',
+      'Users confuse built-in reports with the Insights product — this prevents upsell confusion.',
+      'Users want to backfill historical data — this points to the right feature.'
+    ],
+    'manual-journals': [
+      'Users don\'t know when they\'d need this feature — this gives concrete examples.',
+      'Users fear manual entries will directly change their accounting — this clarifies the scope.',
+      'Users want reversibility — this builds confidence to try the feature.'
+    ],
+    'ai-reports': [
+      'Users face a blank query box with no idea what to type — sample patterns remove the cold-start problem.',
+      'Users wonder how accurate AI-generated numbers are — this builds trust by explaining the data source.',
+      'Users try the feature before having data — this prevents frustration from empty results.',
+      'Users want to share or export insights — this directs them to the right tool.'
+    ],
+    'transaction-verification': [
+      'Users don\'t know what triggers flags — this reduces anxiety about "what went wrong".',
+      'Users worry they have to check every single transaction — this clarifies it\'s exception-based.',
+      'Users are unsure what happens to flagged items — this explains the safety net.'
+    ],
+    'mapping': [
+      'Mapping is an accounting concept many ecommerce users haven\'t encountered — this makes it accessible.',
+      'Users dread manual configuration — this reassures them that defaults work out of the box.',
+      'Users worry about the consequences of wrong mapping — this reduces fear by showing it\'s fixable.',
+      'Users want granular control per product — this explains the upgrade path.'
+    ],
+    'groups': [
+      'Users see "Groups" in the nav with no context — this explains the use case.',
+      'Users aren\'t sure if they need this — this helps them self-select out if it doesn\'t apply.',
+      'Users worry groups will break their existing sync — this clarifies the scope.'
+    ],
+    'dimensions': [
+      'Dimensions is QBO-specific jargon — this translates it into plain language.',
+      'Users think they need to create dimensions in Synder — this prevents wasted effort.',
+      'Users on different accounting platforms wonder if it works for them.'
+    ],
+    'import-history': [
+      'Users don\'t understand what an "import" is in Synder\'s workflow — this defines it.',
+      'Failed imports cause confusion — this lists common causes and the fix.',
+      'Users want to sync older transactions — this points to the right feature.'
+    ],
+    'revenue-recognition': [
+      'Revenue recognition is complex accounting jargon — this explains it in plain terms.',
+      'Users without subscriptions wonder if they need this — this helps them self-select.',
+      'Users want to know which data sources work — this sets expectations.',
+      'Waterfall reports are unfamiliar to most users — this explains the format and audience.'
+    ]
+  };
+
+  Object.entries(PAGES).forEach(([id, page]) => {
+    if (!page.faqs) return;
+    const rationales = defaultRationales[id] || [];
+    page.faqs.forEach((faq, i) => {
+      if (!faq.rationale && rationales[i]) {
+        faq.rationale = rationales[i];
+      }
+    });
+  });
+  saveData();
+}
+
+// ====== INIT ======
+loadData();
+migrateRationale();
+renderSidebar();
+</script>
+</body>
+</html>

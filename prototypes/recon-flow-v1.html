@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reconciliation Flow Prototype — Synder</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; overflow: hidden; height: 100vh; }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 240px;
+    background: #fff; border-right: 1px solid #e8ecf0; z-index: 10;
+    display: flex; flex-direction: column; padding: 16px 0;
+    overflow-y: auto;
+  }
+  .sidebar-brand {
+    display: flex; align-items: center; gap: 10px; padding: 4px 16px 20px;
+    border-bottom: 1px solid #e8ecf0; margin-bottom: 12px;
+  }
+  .sidebar-brand .avatar {
+    width: 36px; height: 36px; border-radius: 50%; background: #4361ee;
+    color: #fff; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600;
+  }
+  .sidebar-brand .name { font-size: 14px; font-weight: 500; color: #333; }
+
+  .nav-section { padding: 4px 0; }
+  .nav-section-title {
+    font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase;
+    letter-spacing: 0.5px; padding: 8px 20px 4px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 10px; padding: 8px 20px;
+    font-size: 13.5px; color: #555; cursor: pointer; transition: all 0.15s;
+    text-decoration: none; position: relative;
+  }
+  .nav-item:hover { background: #f0f4ff; color: #4361ee; }
+  .nav-item.active { background: #eef2ff; color: #4361ee; font-weight: 600; }
+  .nav-item.active::before {
+    content: ''; position: absolute; left: 0; top: 4px; bottom: 4px;
+    width: 3px; background: #4361ee; border-radius: 0 3px 3px 0;
+  }
+  .nav-icon { width: 18px; text-align: center; font-size: 15px; }
+  .beta-badge {
+    font-size: 10px; background: #eef2ff; color: #4361ee; padding: 1px 6px;
+    border-radius: 4px; border: 1px solid #c7d2fe; font-weight: 500;
+  }
+
+  /* ===== Main Content ===== */
+  .main { margin-left: 240px; height: 100vh; position: relative; }
+
+  /* ===== Top bar ===== */
+  .topbar {
+    height: 52px; background: #fff; border-bottom: 1px solid #e8ecf0;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding: 0 24px; gap: 16px;
+  }
+  .topbar-balance { font-size: 13px; color: #666; }
+  .topbar-balance span { color: #4361ee; font-weight: 600; }
+  .topbar-icon {
+    width: 32px; height: 32px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; color: #4361ee;
+    cursor: pointer; font-size: 16px;
+  }
+  .topbar-icon:hover { background: #f0f4ff; }
+
+  /* ===== Base Page (behind overlays) ===== */
+  .base-page {
+    padding: 32px;
+  }
+  .base-page h1 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+  .base-page .subtitle { font-size: 14px; color: #777; margin-bottom: 24px; }
+  .account-selector {
+    display: flex; flex-direction: column; gap: 6px; max-width: 400px;
+  }
+  .account-selector label { font-size: 13px; font-weight: 600; }
+  .account-selector select {
+    padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px;
+    font-size: 14px; background: #fff; cursor: pointer;
+  }
+
+  /* ===== Full-Screen Overlay ===== */
+  .overlay {
+    position: fixed; top: 0; left: 240px; right: 0; bottom: 0;
+    background: #fff; z-index: 50;
+    display: none; flex-direction: column;
+    animation: slideUp 0.3s ease-out;
+  }
+  .overlay.visible { display: flex; }
+  @keyframes slideUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* Overlay Header */
+  .overlay-header {
+    height: 52px; min-height: 52px; border-bottom: 1px solid #e8ecf0;
+    display: flex; align-items: center; padding: 0 24px; gap: 16px;
+    background: #fff;
+  }
+  .overlay-close {
+    width: 32px; height: 32px; border: none; background: none;
+    cursor: pointer; font-size: 20px; color: #666; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .overlay-close:hover { background: #f3f4f6; }
+  .overlay-title { font-size: 15px; font-weight: 600; flex: 1; }
+  .overlay-actions { display: flex; gap: 8px; }
+
+  .btn {
+    padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+    cursor: pointer; border: 1px solid transparent; transition: all 0.15s;
+  }
+  .btn-outline { border-color: #d1d5db; background: #fff; color: #333; }
+  .btn-outline:hover { border-color: #4361ee; color: #4361ee; }
+  .btn-primary { background: #4361ee; color: #fff; border-color: #4361ee; }
+  .btn-primary:hover { background: #3651d4; }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* ===== Context Bar (Option C key element) ===== */
+  .context-bar {
+    height: 44px; min-height: 44px; background: #fef3c7; border-bottom: 1px solid #fcd34d;
+    display: flex; align-items: center; padding: 0 24px; gap: 16px;
+    font-size: 13px; color: #92400e;
+    animation: slideDown 0.3s ease-out;
+  }
+  @keyframes slideDown {
+    from { transform: translateY(-44px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  .context-bar .back-link {
+    color: #4361ee; font-weight: 600; cursor: pointer; text-decoration: none;
+    display: flex; align-items: center; gap: 4px; white-space: nowrap;
+  }
+  .context-bar .back-link:hover { text-decoration: underline; }
+  .context-bar .separator { color: #d4a017; margin: 0 4px; }
+  .context-bar .context-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .context-bar .context-item .label { color: #b45309; font-weight: 500; }
+  .context-bar .difference-badge {
+    background: #fee2e2; color: #dc2626; padding: 2px 10px; border-radius: 12px;
+    font-weight: 600; font-size: 12px;
+  }
+  .context-bar .auto-saved {
+    margin-left: auto; font-size: 11px; color: #a3a3a3; font-style: italic;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .context-bar .auto-saved .check { color: #22c55e; }
+
+  /* ===== Overlay Content ===== */
+  .overlay-content {
+    flex: 1; overflow-y: auto; padding: 24px 32px;
+  }
+  .overlay-content h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .overlay-content .meta { font-size: 13px; color: #888; margin-bottom: 24px; }
+
+  /* ===== Summary Cards (Balance Recon) ===== */
+  .summary-row {
+    display: flex; gap: 12px; margin-bottom: 24px; align-items: stretch;
+    flex-wrap: wrap;
+  }
+  .summary-card {
+    background: #fffbeb; border: 1px solid #fde68a; border-radius: 10px;
+    padding: 14px 18px; min-width: 160px;
+  }
+  .summary-card .card-label { font-size: 11px; color: #92400e; font-weight: 500; margin-bottom: 4px; }
+  .summary-card .card-value { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+
+  .formula-row {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  }
+  .formula-card {
+    background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 10px 14px; text-align: center;
+  }
+  .formula-card .card-label { font-size: 10px; color: #888; font-weight: 500; margin-bottom: 2px; }
+  .formula-card .card-value { font-size: 16px; font-weight: 600; }
+  .formula-op { font-size: 18px; color: #aaa; font-weight: 300; }
+
+  .difference-card {
+    background: #fff7ed; border: 2px solid #f97316; border-radius: 10px;
+    padding: 10px 18px; text-align: center; position: relative;
+  }
+  .difference-card .card-label { font-size: 10px; color: #ea580c; font-weight: 600; margin-bottom: 2px; }
+  .difference-card .card-value { font-size: 20px; font-weight: 700; color: #ea580c; }
+
+  /* ===== THE KEY CTA — Investigate link ===== */
+  .investigate-cta {
+    margin-top: 12px; padding: 12px 16px;
+    background: linear-gradient(135deg, #eef2ff 0%, #fef3c7 100%);
+    border: 1px solid #c7d2fe; border-radius: 10px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .investigate-cta:hover {
+    border-color: #4361ee; box-shadow: 0 2px 8px rgba(67, 97, 238, 0.15);
+    transform: translateY(-1px);
+  }
+  .investigate-cta .cta-icon {
+    width: 36px; height: 36px; background: #4361ee; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 16px; flex-shrink: 0;
+  }
+  .investigate-cta .cta-text { flex: 1; }
+  .investigate-cta .cta-title { font-size: 13px; font-weight: 600; color: #1e3a5f; }
+  .investigate-cta .cta-desc { font-size: 11.5px; color: #6b7280; margin-top: 1px; }
+  .investigate-cta .cta-arrow { font-size: 18px; color: #4361ee; }
+
+  /* ===== Transaction Table ===== */
+  .filters-row {
+    display: flex; gap: 12px; margin-bottom: 16px; align-items: flex-end;
+    flex-wrap: wrap;
+  }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .filter-group label { font-size: 11px; font-weight: 500; color: #888; }
+  .filter-group input, .filter-group select {
+    padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px;
+    font-size: 13px; min-width: 120px;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; padding: 10px 12px; font-weight: 600; font-size: 11px;
+    color: #888; text-transform: uppercase; letter-spacing: 0.3px;
+    border-bottom: 2px solid #e5e7eb; background: #fafbfc;
+  }
+  tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.1s; }
+  tbody tr:hover { background: #f8faff; }
+  tbody td { padding: 10px 12px; vertical-align: middle; }
+  .txn-id { color: #4361ee; font-size: 12px; font-family: monospace; }
+  .type-badge {
+    font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500;
+    display: inline-block;
+  }
+  .type-payment { background: #dcfce7; color: #166534; }
+  .type-expense { background: #fee2e2; color: #991b1b; }
+  .type-adjustment { background: #e0e7ff; color: #3730a3; }
+  .type-sale { background: #dbeafe; color: #1e40af; }
+  .amount { font-family: 'SF Mono', 'Monaco', monospace; font-size: 13px; text-align: right; }
+  .amount.debit { color: #1a1a2e; }
+  .amount.credit { color: #dc2626; }
+
+  input[type="checkbox"] { width: 16px; height: 16px; accent-color: #4361ee; cursor: pointer; }
+
+  .table-footer {
+    display: flex; justify-content: flex-end; align-items: center;
+    padding: 12px 0; font-size: 12px; color: #888;
+  }
+
+  /* ===== Transaction Recon Content ===== */
+  .txn-recon-setup {
+    max-width: 800px; margin: 0 auto;
+  }
+  .setup-columns {
+    display: grid; grid-template-columns: 1fr 1px 1fr; gap: 32px; margin-top: 24px;
+  }
+  .setup-divider { background: #e5e7eb; }
+  .setup-column h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #333; }
+  .form-field { margin-bottom: 16px; }
+  .form-field label {
+    display: block; font-size: 12px; font-weight: 600; color: #555;
+    margin-bottom: 6px;
+  }
+  .form-field label .required { color: #ef4444; }
+  .form-field input, .form-field select {
+    width: 100%; padding: 10px 12px; border: 1px solid #d1d5db;
+    border-radius: 8px; font-size: 14px;
+  }
+  .form-field .prefilled {
+    background: #f0fdf4; border-color: #86efac;
+  }
+  .prefilled-hint {
+    font-size: 11px; color: #16a34a; margin-top: 4px;
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  .date-range-row {
+    display: flex; gap: 12px; align-items: center; margin-bottom: 24px;
+  }
+  .date-range-row .dash { color: #aaa; }
+  .date-range-row input { flex: 1; }
+
+  /* ===== Pulse animation for CTA ===== */
+  .pulse-ring {
+    animation: pulse 2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0.2); }
+    50% { box-shadow: 0 0 0 6px rgba(67, 97, 238, 0); }
+  }
+
+  /* ===== Toast notification ===== */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: #1a1a2e;
+    color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px;
+    z-index: 100; display: none; align-items: center; gap: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    animation: fadeInUp 0.3s ease-out;
+  }
+  .toast.visible { display: flex; }
+  @keyframes fadeInUp {
+    from { transform: translateY(20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ===== Transitions ===== */
+  .fade-out {
+    animation: fadeOut 0.2s ease-in forwards;
+  }
+  @keyframes fadeOut {
+    to { opacity: 0; transform: translateY(10px); }
+  }
+
+  /* ===== Tooltip for difference ===== */
+  .info-tip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 16px; height: 16px; border-radius: 50%; background: #fed7aa;
+    color: #ea580c; font-size: 10px; font-weight: 700; cursor: help;
+    position: relative; margin-left: 4px;
+  }
+  .info-tip .tooltip {
+    display: none; position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%); background: #1a1a2e; color: #fff;
+    padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 400;
+    width: 260px; line-height: 1.5; z-index: 200;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  }
+  .info-tip .tooltip::after {
+    content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: #1a1a2e;
+  }
+  .info-tip:hover .tooltip { display: block; }
+  .tooltip-link { color: #93c5fd; text-decoration: underline; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="sidebar-brand">
+    <div class="avatar">DA</div>
+    <div class="name">Dasha Test Company</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-item"><span class="nav-icon">🔄</span> Mapping</div>
+    <div class="nav-item"><span class="nav-icon">📋</span> Summaries</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-title">Reconciliation</div>
+    <div class="nav-item active" id="nav-balance"><span class="nav-icon">⚖️</span> Balance reconciliation <span class="beta-badge">Beta</span></div>
+    <div class="nav-item" id="nav-txn"><span class="nav-icon">🔍</span> Transaction reconciliation <span class="beta-badge">Beta</span></div>
+    <div class="nav-item"><span class="nav-icon">📝</span> Manual Journals</div>
+    <div class="nav-item"><span class="nav-icon">📊</span> Chart of accounts</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-item"><span class="nav-icon">📦</span> Products and services</div>
+    <div class="nav-item"><span class="nav-icon">✨</span> AI reports</div>
+    <div class="nav-item"><span class="nav-icon">📈</span> Reporting</div>
+  </div>
+  <div class="nav-section" style="margin-top: auto; border-top: 1px solid #e8ecf0; padding-top: 8px;">
+    <div class="nav-item"><span class="nav-icon">⚙️</span> Settings</div>
+  </div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-balance">Balance: <span>1000</span></div>
+    <div class="topbar-icon">🔔</div>
+    <div class="topbar-icon">❓</div>
+    <div class="topbar-icon">👤</div>
+  </div>
+
+  <div class="base-page">
+    <h1>Reconciliation</h1>
+    <p class="subtitle">Reconcile Synder data with your original financial sources for full transparency and reliability.</p>
+    <div class="account-selector">
+      <label>Account</label>
+      <select id="account-select">
+        <option value="">Select...</option>
+        <option value="stripe">Stripe mzkt.by</option>
+        <option value="shopify">Shopify Changolivia</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ===== BALANCE RECONCILIATION OVERLAY ===== -->
+  <div class="overlay" id="balance-overlay">
+    <div class="overlay-header">
+      <button class="overlay-close" onclick="closeBalanceRecon()">✕</button>
+      <div class="overlay-title">Reconciliation</div>
+      <div class="overlay-actions">
+        <button class="btn btn-outline">Edit details</button>
+        <button class="btn btn-outline">Save for later ▾</button>
+      </div>
+    </div>
+    <div class="overlay-content">
+      <h2>Reconciliation</h2>
+      <p class="meta">Statement ending date: Mar 10, 2026 / Stripe mzkt.by</p>
+
+      <!-- Summary Cards -->
+      <div class="summary-row">
+        <div class="summary-card">
+          <div class="card-label">Statement ending balance</div>
+          <div class="card-value">$500.00</div>
+        </div>
+        <div class="summary-card">
+          <div class="card-label">Selected transactions balance ⓘ</div>
+          <div class="card-value">−$151.27</div>
+        </div>
+        <div class="formula-row">
+          <span class="formula-op">(</span>
+          <div class="formula-card">
+            <div class="card-label">Beginning balance</div>
+            <div class="card-value">−$151.27</div>
+          </div>
+          <span class="formula-op">+</span>
+          <div class="formula-card">
+            <div class="card-label">Debits (0)</div>
+            <div class="card-value">$0.00</div>
+          </div>
+          <span class="formula-op">—</span>
+          <div class="formula-card">
+            <div class="card-label">Credits (0)</div>
+            <div class="card-value">$0.00</div>
+          </div>
+          <span class="formula-op">)</span>
+        </div>
+        <div class="difference-card">
+          <div class="card-label">Difference
+            <span class="info-tip">i
+              <span class="tooltip">
+                This difference means your Synder records don't match your statement. 
+                To find which specific transactions are causing this, 
+                <span class="tooltip-link" onclick="openTxnRecon()">use Transaction Reconciliation</span>.
+              </span>
+            </span>
+          </div>
+          <div class="card-value">$651.27</div>
+        </div>
+      </div>
+
+      <!-- ===== THE KEY CTA ===== -->
+      <div class="investigate-cta pulse-ring" onclick="openTxnRecon()" id="investigate-cta">
+        <div class="cta-icon">🔍</div>
+        <div class="cta-text">
+          <div class="cta-title">Investigate mismatches in Transaction Reconciliation</div>
+          <div class="cta-desc">Compare individual transactions against Stripe to find the $651.27 discrepancy</div>
+        </div>
+        <div class="cta-arrow">→</div>
+      </div>
+
+      <!-- Transaction Table -->
+      <div style="margin-top: 24px;">
+        <div class="filters-row">
+          <div class="filter-group">
+            <label>Search</label>
+            <input type="text" placeholder="Search by transaction ID, contact...">
+          </div>
+          <div class="filter-group">
+            <label>Type</label>
+            <select><option>All</option></select>
+          </div>
+          <div class="filter-group">
+            <label>Selected status</label>
+            <select><option>All</option></select>
+          </div>
+          <button class="btn btn-primary btn-sm" style="margin-bottom: 1px;">Apply</button>
+          <button class="btn btn-outline btn-sm" style="margin-bottom: 1px;">Reset filters</button>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="width:36px"><input type="checkbox"></th>
+              <th>Date ↓</th>
+              <th>Transaction ID</th>
+              <th>Type</th>
+              <th>Contact</th>
+              <th>Memo</th>
+              <th style="text-align:right">Debit (USD)</th>
+              <th style="text-align:right">Credit (USD)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Mar 6, 2026</td>
+              <td><span class="txn-id">ch_3T84Z1...ZuKC</span></td>
+              <td><span class="type-badge type-payment">PAYMENT</span></td>
+              <td>Pamela Andersen</td>
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Payment for Invoice</td>
+              <td class="amount debit">$20.85</td>
+              <td class="amount credit">$0.00</td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Mar 6, 2026</td>
+              <td><span class="txn-id">ch_3T84Z1...ZuKC</span></td>
+              <td><span class="type-badge type-expense">EXPENSE</span></td>
+              <td>Stripe</td>
+              <td>Stripe processing fee</td>
+              <td class="amount debit">$0.00</td>
+              <td class="amount credit">$1.01</td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Mar 6, 2026</td>
+              <td><span class="txn-id">ch_3T84YM...v2Y8</span></td>
+              <td><span class="type-badge type-payment">PAYMENT</span></td>
+              <td>Pamela Andersen</td>
+              <td>Subscription creation</td>
+              <td class="amount debit">$30.00</td>
+              <td class="amount credit">$0.00</td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Mar 6, 2026</td>
+              <td><span class="txn-id">ch_3T84YM...v2Y8</span></td>
+              <td><span class="type-badge type-expense">EXPENSE</span></td>
+              <td>Stripe</td>
+              <td>Stripe processing fee</td>
+              <td class="amount debit">$0.00</td>
+              <td class="amount credit">$1.32</td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Feb 2, 2026</td>
+              <td><span class="txn-id">po_1SwAv7...3rb</span></td>
+              <td><span class="type-badge type-adjustment">ADJUSTMENT</span></td>
+              <td>—</td>
+              <td>STRIPE PAYOUT</td>
+              <td class="amount debit">$0.00</td>
+              <td class="amount credit">$21.61</td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Jan 30, 2026</td>
+              <td><span class="txn-id">po_1Sv5SE...txg</span></td>
+              <td><span class="type-badge type-adjustment">ADJUSTMENT</span></td>
+              <td>—</td>
+              <td>STRIPE PAYOUT</td>
+              <td class="amount debit">$0.00</td>
+              <td class="amount credit">$21.61</td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Jan 24, 2026</td>
+              <td><span class="txn-id">ch_3St8n0...7zc</span></td>
+              <td><span class="type-badge type-sale">SALE</span></td>
+              <td>Pamela Andersen</td>
+              <td>Subscription update</td>
+              <td class="amount debit">$22.56</td>
+              <td class="amount credit">$0.00</td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td>Jan 24, 2026</td>
+              <td><span class="txn-id">ch_3St8n0...7zc</span></td>
+              <td><span class="type-badge type-expense">EXPENSE</span></td>
+              <td>Stripe</td>
+              <td>Stripe processing fee</td>
+              <td class="amount debit">$0.00</td>
+              <td class="amount credit">$0.95</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="table-footer">Rows per page: 25 &nbsp; | &nbsp; 1–8 of 32</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== TRANSACTION RECONCILIATION OVERLAY ===== -->
+  <div class="overlay" id="txn-overlay">
+    <!-- Context Bar (THE KEY ELEMENT of Option C) -->
+    <div class="context-bar" id="context-bar">
+      <a class="back-link" onclick="backToBalanceRecon()">← Back to Balance Reconciliation</a>
+      <span class="separator">|</span>
+      <span class="context-item"><span class="label">Integration:</span> Stripe mzkt.by</span>
+      <span class="separator">|</span>
+      <span class="context-item"><span class="label">Period:</span> Jan 1 – Mar 10, 2026</span>
+      <span class="separator">|</span>
+      <span class="context-item"><span class="label">Difference:</span> <span class="difference-badge">$651.27</span></span>
+      <span class="auto-saved"><span class="check">✓</span> Balance recon auto-saved as draft</span>
+    </div>
+
+    <div class="overlay-header">
+      <button class="overlay-close" onclick="closeTxnRecon()">✕</button>
+      <div class="overlay-title">Transaction Reconciliation</div>
+      <div class="overlay-actions">
+        <button class="btn btn-primary" id="start-matching-btn" onclick="showMatchingView()">Start matching</button>
+      </div>
+    </div>
+    <div class="overlay-content">
+      <div class="txn-recon-setup">
+        <h2>Reconciliation details</h2>
+        <p class="meta">Compare transactions from your integration with your accounting records.</p>
+
+        <div class="form-field">
+          <label>Date range <span class="required">*</span></label>
+          <div class="date-range-row">
+            <input type="text" value="01/01/2026" class="prefilled">
+            <span class="dash">–</span>
+            <input type="text" value="03/10/2026" class="prefilled">
+          </div>
+          <div class="prefilled-hint">✓ Pre-filled from Balance Reconciliation</div>
+        </div>
+
+        <div class="setup-columns">
+          <div class="setup-column">
+            <h3>Accounting</h3>
+            <div class="form-field">
+              <label>Platform</label>
+              <input type="text" value="Dasha Test Company (Synder)" disabled style="background:#f9fafb;color:#666">
+            </div>
+            <div class="form-field">
+              <label>Automation mode <span class="required">*</span></label>
+              <select><option>Select...</option><option>Manual</option><option>Auto-match</option></select>
+            </div>
+          </div>
+          <div class="setup-divider"></div>
+          <div class="setup-column">
+            <h3>Integration</h3>
+            <div class="form-field">
+              <label>Integration <span class="required">*</span></label>
+              <select class="prefilled" style="background:#f0fdf4;border-color:#86efac;">
+                <option>Stripe mzkt.by</option>
+                <option>Shopify Changolivia</option>
+              </select>
+              <div class="prefilled-hint">✓ Pre-filled from Balance Reconciliation</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">
+  <span>💾</span> <span id="toast-text">Balance reconciliation saved as draft</span>
+</div>
+
+<script>
+  const accountSelect = document.getElementById('account-select');
+  const balanceOverlay = document.getElementById('balance-overlay');
+  const txnOverlay = document.getElementById('txn-overlay');
+  const toast = document.getElementById('toast');
+
+  // Select account → open Balance Recon
+  accountSelect.addEventListener('change', function() {
+    if (this.value) {
+      balanceOverlay.classList.add('visible');
+    }
+  });
+
+  function closeBalanceRecon() {
+    balanceOverlay.classList.remove('visible');
+    accountSelect.value = '';
+  }
+
+  // THE KEY TRANSITION: Balance Recon → Transaction Recon
+  function openTxnRecon() {
+    // Auto-save toast
+    showToast('💾 Balance reconciliation auto-saved as draft');
+    
+    // Transition: fade out balance, show txn
+    balanceOverlay.classList.add('fade-out');
+    setTimeout(() => {
+      balanceOverlay.classList.remove('visible', 'fade-out');
+      txnOverlay.classList.add('visible');
+      
+      // Highlight nav
+      document.getElementById('nav-balance').classList.remove('active');
+      document.getElementById('nav-txn').classList.add('active');
+    }, 200);
+  }
+
+  // Back to Balance Recon
+  function backToBalanceRecon() {
+    txnOverlay.classList.add('fade-out');
+    setTimeout(() => {
+      txnOverlay.classList.remove('visible', 'fade-out');
+      balanceOverlay.classList.add('visible');
+      
+      // Restore nav
+      document.getElementById('nav-txn').classList.remove('active');
+      document.getElementById('nav-balance').classList.add('active');
+      
+      showToast('✓ Resumed balance reconciliation from draft');
+    }, 200);
+  }
+
+  function closeTxnRecon() {
+    txnOverlay.classList.remove('visible');
+    document.getElementById('nav-txn').classList.remove('active');
+    document.getElementById('nav-balance').classList.add('active');
+    accountSelect.value = '';
+  }
+
+  function showMatchingView() {
+    showToast('🔄 Starting transaction matching...');
+  }
+
+  function showToast(text) {
+    document.getElementById('toast-text').textContent = text;
+    toast.classList.add('visible');
+    setTimeout(() => toast.classList.remove('visible'), 3000);
+  }
+
+  // Nav clicks
+  document.getElementById('nav-balance').addEventListener('click', function() {
+    if (txnOverlay.classList.contains('visible')) {
+      backToBalanceRecon();
+    } else {
+      accountSelect.value = 'stripe';
+      balanceOverlay.classList.add('visible');
+      this.classList.add('active');
+    }
+  });
+
+  document.getElementById('nav-txn').addEventListener('click', function() {
+    if (balanceOverlay.classList.contains('visible')) {
+      openTxnRecon();
+    } else {
+      // Direct open without context bar
+      document.getElementById('context-bar').style.display = 'none';
+      txnOverlay.classList.add('visible');
+      document.getElementById('nav-balance').classList.remove('active');
+      this.classList.add('active');
+    }
+  });
+</script>
+
+</body>
+</html>

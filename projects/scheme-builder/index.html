@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Transit Scheme Builder</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bus: #F5A623;
+  --trolley: #2D9B8A;
+  --metro: #E74C3C;
+  --bg: #f5f5f5;
+  --panel: #1a1a2e;
+  --panel-text: #e0e0e0;
+  --accent: #F5A623;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); height: 100vh; overflow: hidden; }
+.app { display: flex; height: 100vh; }
+
+.sidebar {
+  width: 320px; min-width: 320px;
+  background: var(--panel); color: var(--panel-text);
+  display: flex; flex-direction: column; overflow-y: auto;
+}
+.sidebar h1 { font-size: 18px; padding: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.sidebar h1 span { color: var(--accent); }
+.section { padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.08); }
+.section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #888; margin-bottom: 10px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 14px; border-radius: 6px; border: none;
+  font-size: 13px; cursor: pointer; transition: all 0.15s;
+}
+.btn-primary { background: var(--accent); color: #000; font-weight: 600; }
+.btn-primary:hover { background: #e69500; }
+.btn-secondary { background: rgba(255,255,255,0.1); color: var(--panel-text); }
+.btn-secondary:hover { background: rgba(255,255,255,0.18); }
+.btn-small { padding: 5px 10px; font-size: 12px; }
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
+
+select, input[type="number"] {
+  width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08); color: #fff; font-size: 13px; margin-top: 4px;
+}
+select option { background: #1a1a2e; color: #fff; }
+label { font-size: 13px; color: #bbb; display: block; margin-top: 10px; }
+label:first-child { margin-top: 0; }
+
+.route-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.route-item {
+  display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+  border-radius: 6px; background: rgba(255,255,255,0.05); font-size: 13px; cursor: pointer;
+}
+.route-item:hover { background: rgba(255,255,255,0.1); }
+.route-item.disabled { opacity: 0.35; }
+.route-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+.route-dot.bus { background: var(--bus); }
+.route-dot.trolleybus { background: var(--trolley); }
+.route-id { font-weight: 600; min-width: 36px; }
+.route-terminal { color: #888; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.upload-zone {
+  border: 2px dashed rgba(255,255,255,0.15); border-radius: 8px;
+  padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.2s;
+}
+.upload-zone:hover { border-color: var(--accent); }
+.upload-zone p { font-size: 12px; color: #666; margin-top: 6px; }
+input[type="file"] { display: none; }
+.format-help { font-size: 11px; color: #666; margin-top: 8px; line-height: 1.5; }
+.format-help code { background: rgba(255,255,255,0.08); padding: 1px 4px; border-radius: 3px; font-size: 10px; }
+
+.setting-row { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+.setting-row label { margin: 0; flex: 1; }
+.setting-row input[type="number"] { width: 70px; margin: 0; }
+.toggle { display: flex; align-items: center; gap: 8px; margin-top: 8px; cursor: pointer; font-size: 13px; color: #bbb; }
+.toggle input { accent-color: var(--accent); }
+
+.canvas-area { flex: 1; display: flex; flex-direction: column; }
+.toolbar {
+  display: flex; align-items: center; gap: 10px; padding: 10px 16px;
+  background: #fff; border-bottom: 1px solid #e0e0e0; flex-shrink: 0;
+}
+.toolbar .spacer { flex: 1; }
+.zoom-controls { display: flex; align-items: center; gap: 4px; }
+.zoom-controls button { width: 30px; height: 30px; border-radius: 6px; border: 1px solid #ddd; background: #fff; cursor: pointer; font-size: 16px; }
+.zoom-controls button:hover { background: #f0f0f0; }
+.zoom-label { font-size: 12px; color: #888; min-width: 44px; text-align: center; }
+
+.canvas-wrap {
+  flex: 1; overflow: hidden; position: relative; background: #fff;
+  background-image: radial-gradient(circle, #e8e8e8 1px, transparent 1px);
+  background-size: 20px 20px;
+  cursor: grab;
+}
+.canvas-wrap.grabbing { cursor: grabbing; }
+.canvas-wrap svg { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+.empty-state {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  flex-direction: column; gap: 12px; color: #aaa;
+}
+.empty-state .icon { font-size: 48px; }
+.empty-state p { font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <h1>🚌 <span>Scheme</span> Builder</h1>
+    <div class="section">
+      <div class="section-title">Data</div>
+      <div class="btn-group">
+        <button class="btn btn-primary" id="loadSample">Load Sample (Няміга)</button>
+      </div>
+      <div style="margin-top: 12px;">
+        <div class="upload-zone" id="uploadZone">
+          <div>📁 Upload route files</div>
+          <p>Multiple files OK — one route per file</p>
+        </div>
+        <div id="uploadedFiles" style="margin-top:8px;font-size:12px;color:#888;"></div>
+        <input type="file" id="fileInput" accept=".csv,.json,.txt,.xlsx,.xls" multiple>
+      </div>
+      <div class="format-help">
+        <strong>One file per route:</strong> just list stop names, one per line. Mark metro with <code>(M)</code> after the name.<br>
+        Route ID = filename. Files starting with T = trolleybus.<br>
+        <strong>Or CSV:</strong> <code>route_id,route_type,stop_order,stop_name,is_metro</code><br>
+        <strong>Or JSON:</strong> <code>{"routes":[...], "metroStops":[...]}</code>
+      </div>
+    </div>
+    <div class="section">
+      <div class="section-title">Focal Stop</div>
+      <select id="focalSelect" disabled><option value="">— Load data first —</option></select>
+    </div>
+    <div class="section">
+      <div class="section-title">Routes</div>
+      <div class="route-list" id="routeList"><span style="color:#666;font-size:12px;">No data loaded</span></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Display</div>
+      <div class="setting-row"><label>Stop spacing</label><input type="number" id="setSpacing" value="50" min="30" max="100" step="5"></div>
+      <div class="setting-row"><label>Column width</label><input type="number" id="setColWidth" value="220" min="120" max="400" step="10"></div>
+      <div class="setting-row"><label>Font size</label><input type="number" id="setFontSize" value="14" min="9" max="22" step="1"></div>
+      <div class="setting-row"><label>Line width</label><input type="number" id="setLineWidth" value="5" min="2" max="12" step="1"></div>
+      <div class="toggle"><input type="checkbox" id="setMetro" checked> Metro icons</div>
+      <div class="toggle"><input type="checkbox" id="setBadges" checked> Route badges</div>
+      <div class="toggle"><input type="checkbox" id="setTerminals" checked> Terminal badges</div>
+    </div>
+    <div class="section">
+      <div class="section-title">Export</div>
+      <div class="btn-group">
+        <button class="btn btn-secondary btn-small" id="exportSVG">⬇ SVG</button>
+        <button class="btn btn-secondary btn-small" id="exportPNG">⬇ PNG</button>
+      </div>
+    </div>
+  </aside>
+  <div class="canvas-area">
+    <div class="toolbar">
+      <span style="font-size:13px;color:#888;" id="infoLabel">No data</span>
+      <div class="spacer"></div>
+      <div class="zoom-controls">
+        <button id="zoomOut">−</button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button id="zoomIn">+</button>
+        <button id="zoomFit" title="Fit to view">⊡</button>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">🗺️</div>
+        <p>Load route data to generate a scheme</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script>
+// ================================================================
+// CONSTANTS & STATE
+// ================================================================
+const C = { bus: '#F5A623', trolleybus: '#2D9B8A', metro: '#E74C3C' };
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
+let state = {
+  routes: [], metroStops: new Set(), focalStop: null,
+  enabled: new Set(),
+  spacing: 50, colWidth: 220, fontSize: 14, lineWidth: 5,
+  showMetro: true, showBadges: true, showTerminals: true,
+};
+let svgInfo = null;
+
+// ================================================================
+// SAMPLE DATA
+// ================================================================
+const SAMPLE = {
+  routes: [
+    { id: 'A 2', type: 'bus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Станцыя метро Усход','Вул. Калінoўскага','Парк Чалюскінцаў','Вул. Сурганава','Мікрараён Уручча','Вул. Лагойскі тракт','Вул. Кіжаватава','Площча Якуба Коласа','Вул. Жукоўскага','Вул. Кальварыйская','Вул. Цімірaзева'] },
+    { id: 'A 27', type: 'bus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Станцыя метро Усход','Вул. Калінoўскага','Парк Чалюскінцаў','Вул. Сурганава','Мікрараён Уручча','Вул. Лагойскі тракт','Вул. Кіжаватава','Площча Якуба Коласа','Вул. Жукоўскага','Вул. Кальварыйская','Вул. Цімірaзева'] },
+    { id: 'A 47', type: 'bus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Вул. Кульман','Вул. Матусевіча','Вул. Прытыцкага','Парк Чалюскінцаў','Вул. Сурганава','Мікрараён Уручча','Вул. Лагойскі тракт','Вул. Кіжаватава','Площча Якуба Коласа','Вул. Жукоўскага','Вул. Кальварыйская','Вул. Цімірaзева'] },
+    { id: 'A 56', type: 'bus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Станцыя метро Усход','Вул. Калінoўскага','Парк Чалюскінцаў','Вул. Сурганава','Мікрараён Уручча','Вул. Лагойскі тракт','Вул. Кіжаватава','Площча Якуба Коласа','Вул. Жукоўскага','Вул. Кальварыйская','Вул. Цімірaзева'] },
+    { id: 'T 18', type: 'trolleybus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Станцыя метро Усход','Вул. Калінoўскага','Вул. Казінца','Вул. Свярдлова','Вул. Чырвоная','Парк Перамогі','Вул. Танка','Вул. Раманаўская Слабада'] },
+    { id: 'T 24', type: 'trolleybus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Станцыя метро Усход','Вул. Калінoўскага','Вул. Казінца','Вул. Свярдлова','Вул. Чырвоная','Парк Перамогі','Вул. Танка','Вул. Раманаўская Слабада'] },
+    { id: 'T 32', type: 'trolleybus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Станцыя метро Усход','Вул. Калінoўскага','Парк Чалюскінцаў','Вул. Сурганава','Мікрараён Уручча','Вул. Лагойскі тракт','Вул. Кіжаватава','Площча Якуба Коласа','Вул. Жукоўскага','Вул. Кальварыйская','Вул. Цімірaзева'] },
+    { id: 'T 1', type: 'trolleybus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Мікрараён Серабранка','Вул. Ванеева','Партызанскі праспект','Пл. Перамогі','Вул. Ангарская','Мікрараён Шабаны','Вул. Байкальская','Вул. Галадзеда','Малінаўка','Парк Дружбы народаў','Вул. Макаёнка','Вул. Філімонава','Вул. Карастаянавай','Вул. Заслаўская'] },
+    { id: 'T 76', type: 'trolleybus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Мікрараён Серабранка','Вул. Ванеева','Партызанскі праспект','Пл. Перамогі','Вул. Ангарская'] },
+    { id: 'T 87', type: 'trolleybus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Мікрараён Серабранка','Вул. Ванеева','Партызанскі праспект','Пл. Перамогі','Вул. Ангарская','Мікрараён Шабаны','Вул. Байкальская','Вул. Галадзеда','Малінаўка','Парк Дружбы народаў','Вул. Макаёнка','Вул. Філімонава','Вул. Карастаянавай','Вул. Заслаўская'] },
+    { id: 'A 2b', type: 'bus', stops: ['Вул. Янкі Купалы','Вул. М. Багдановіча','Тэатр юнага гледача','Оперны тэатр','Няміга','Гарадскі вал','Камароўскі рынак','Станцыя метро Усход','Вул. Калінoўскага','Вул. Шарановіча','Вул. Гарэцкага','Вул. Алібегава'] },
+  ],
+  metroStops: ['Няміга','Площча Незалежнасці','Площча Якуба Коласа','Пушкінская','Пл. Перамогі','Малінаўка','Станцыя метро Усход']
+};
+
+// ================================================================
+// PARSERS
+// ================================================================
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const h = lines[0].toLowerCase().split(',').map(s=>s.trim());
+  const iId=h.indexOf('route_id'), iType=h.indexOf('route_type'), iOrder=h.indexOf('stop_order'), iName=h.indexOf('stop_name'), iMet=h.indexOf('is_metro');
+  if(iId<0||iName<0) throw new Error('Need route_id & stop_name columns');
+  const rm={}, ms=new Set();
+  for(let i=1;i<lines.length;i++){
+    const c=lines[i].split(',').map(s=>s.trim()); if(c.length<2) continue;
+    const rid=c[iId], rt=(iType>=0?c[iType]:'bus').toLowerCase(), ord=iOrder>=0?+c[iOrder]:i, sn=c[iName];
+    if(!rm[rid]) rm[rid]={id:rid,type:rt==='trolleybus'?'trolleybus':'bus',stops:[]};
+    rm[rid].stops.push({order:ord,name:sn});
+    if(iMet>=0&&['yes','true','1'].includes(c[iMet].toLowerCase())) ms.add(sn);
+  }
+  return {routes:Object.values(rm).map(r=>{r.stops.sort((a,b)=>a.order-b.order);r.stops=r.stops.map(s=>s.name);return r}),metroStops:[...ms]};
+}
+function parseJSON(text) {
+  const d=JSON.parse(text); if(!d.routes) throw new Error('Need "routes" array');
+  return {routes:d.routes.map(r=>({id:r.id,type:(r.type||'bus').toLowerCase()==='trolleybus'?'trolleybus':'bus',stops:r.stops})),metroStops:d.metroStops||[]};
+}
+
+// ================================================================
+// TRIE BUILDER
+// ================================================================
+function buildTrie(routes, focal, enabled) {
+  const root = { stop: focal, routes:[], types:new Set(), children:[], isTerminal:false, terminalRoutes:[] };
+  for(const r of routes){
+    if(!enabled.has(r.id)) continue;
+    const idx = r.stops.indexOf(focal); if(idx<0) continue;
+    const rest = r.stops.slice(idx+1); if(!rest.length) continue;
+    let node = root; node.routes.push(r.id); node.types.add(r.type);
+    for(let i=0;i<rest.length;i++){
+      let child = node.children.find(c=>c.stop===rest[i]);
+      if(!child){ child={stop:rest[i],routes:[],types:new Set(),children:[],isTerminal:false,terminalRoutes:[]}; node.children.push(child); }
+      child.routes.push(r.id); child.types.add(r.type);
+      if(i===rest.length-1){ child.isTerminal=true; child.terminalRoutes.push(r.id); }
+      node=child;
+    }
+  }
+  return root;
+}
+
+// ================================================================
+// EXTRACT TRUNK + BRANCHES STRUCTURE
+// ================================================================
+function extractStructure(trieNode) {
+  const seg = { stops:[], branches:[] };
+  let cur = trieNode;
+  seg.stops.push({ name:cur.stop, routes:[...cur.routes], types:[...cur.types], isTerminal:cur.isTerminal, terminalRoutes:[...cur.terminalRoutes] });
+  while(cur.children.length > 0) {
+    if(cur.children.length === 1) {
+      cur = cur.children[0];
+    } else {
+      const sorted = [...cur.children].sort((a,b)=>b.routes.length - a.routes.length);
+      for(let i=1;i<sorted.length;i++){
+        seg.branches.push({ afterStopIndex: seg.stops.length-1, segment: extractStructure(sorted[i]) });
+      }
+      cur = sorted[0];
+    }
+    seg.stops.push({ name:cur.stop, routes:[...cur.routes], types:[...cur.types], isTerminal:cur.isTerminal, terminalRoutes:[...cur.terminalRoutes] });
+  }
+  return seg;
+}
+
+// ================================================================
+// LAYOUT ENGINE — vertical trunk, horizontal branches
+// ================================================================
+function computeLayout(structure) {
+  const SY = state.spacing;
+  const CW = state.colWidth;
+  const startX = 600; // will be shifted later
+  const startY = 90;
+
+  const nodes = []; // {stop, x, y, isMetro, isFocal, isTerminal, terminalRoutes, routes, types, labelSide}
+  const edges = []; // {x1, y1, x2, y2, routes, types}
+  const badges = []; // {x, y, routes, types}
+
+  // Track placed stops for merge detection (stop name → {x, y})
+  const placed = {};
+
+  function layoutSeg(seg, x, y, depth, parentDir, colIndex) {
+    let lastPlacedY = y;
+
+    for(let i=0; i<seg.stops.length; i++) {
+      const s = seg.stops[i];
+      const sy = y + i * SY;
+      const isMet = state.metroStops.has(s.name);
+
+      // Check if this stop already exists (routes merging back)
+      if(i > 0 && placed[s.name]) {
+        const target = placed[s.name];
+        // Draw merge connector: vertical down from last stop, horizontal to target, vertical to target
+        const prevY = y + (i-1) * SY;
+        const midY = Math.max(prevY + SY * 0.4, target.y - SY * 0.4);
+
+        // Vertical down from last branch stop
+        edges.push({ x1:x, y1:prevY, x2:x, y2:midY, routes:s.routes, types:s.types });
+        // Horizontal to target column
+        edges.push({ x1:x, y1:midY, x2:target.x, y2:midY, routes:s.routes, types:s.types });
+        // Vertical to target stop (if needed)
+        if(Math.abs(midY - target.y) > 2) {
+          edges.push({ x1:target.x, y1:midY, x2:target.x, y2:target.y, routes:s.routes, types:s.types });
+        }
+        // Don't place this stop or continue — branch has merged
+        break;
+      }
+
+      // Place the stop
+      placed[s.name] = { x, y: sy };
+      nodes.push({
+        stop: s.name, x, y: sy,
+        isMetro: isMet,
+        isFocal: depth===0 && i===0,
+        isTerminal: s.isTerminal && s.terminalRoutes.length>0,
+        terminalRoutes: s.terminalRoutes,
+        routes: s.routes, types: s.types,
+        labelSide: 'right',
+        depth
+      });
+
+      // Edge to next stop (vertical)
+      if(i < seg.stops.length - 1) {
+        // Check if next stop is a merge point — if so, don't draw normal edge
+        const nextS = seg.stops[i+1];
+        if(placed[nextS.name]) continue; // merge will handle the edge
+        edges.push({ x1:x, y1:sy, x2:x, y2:y+(i+1)*SY, routes:nextS.routes, types:nextS.types });
+      }
+      lastPlacedY = sy;
+    }
+
+    // Process branches
+    let leftCount = 0, rightCount = 0;
+    for(const br of seg.branches) {
+      const splitIdx = br.afterStopIndex;
+      const splitY = y + splitIdx * SY;
+
+      // Determine direction
+      let dir;
+      if(parentDir === 0) {
+        // Main trunk: check types of branch to decide direction
+        // Bus branches go left, trolleybus go right (like in the reference)
+        const branchTypes = new Set(br.segment.stops[0].types);
+        if(branchTypes.has('trolleybus') && !branchTypes.has('bus')) {
+          dir = rightCount <= leftCount ? 1 : -1;
+        } else if(branchTypes.has('bus') && !branchTypes.has('trolleybus')) {
+          dir = leftCount <= rightCount ? -1 : 1;
+        } else {
+          dir = leftCount <= rightCount ? -1 : 1;
+        }
+      } else {
+        // Sub-branches continue in parent direction
+        dir = parentDir;
+      }
+
+      const colOff = dir > 0 ? (rightCount + 1) : -(leftCount + 1);
+      const newColIndex = colIndex + colOff;
+      if(dir > 0) rightCount++; else leftCount++;
+
+      const branchX = x + colOff * CW;
+      const midY = splitY + SY * 0.4; // horizontal connector between stops (closer to split stop)
+      const branchY = splitY + SY; // first branch stop aligned with next trunk stop
+
+      // Vertical stub DOWN from trunk at split point to midY
+      edges.push({
+        x1: x, y1: splitY,
+        x2: x, y2: midY,
+        routes: br.segment.stops[0].routes,
+        types: br.segment.stops[0].types
+      });
+      // Horizontal connector between trunk stops (no labels here)
+      edges.push({
+        x1: x, y1: midY,
+        x2: branchX, y2: midY,
+        routes: br.segment.stops[0].routes,
+        types: br.segment.stops[0].types
+      });
+      // Vertical stub from horizontal connector down to first branch stop
+      edges.push({
+        x1: branchX, y1: midY,
+        x2: branchX, y2: branchY,
+        routes: br.segment.stops[0].routes,
+        types: br.segment.stops[0].types
+      });
+
+      // Route badges at branch point
+      const badgeX = dir > 0 ? x + 12 : x - 12;
+      badges.push({
+        x: badgeX, y: midY,
+        routes: br.segment.stops[0].routes,
+        types: br.segment.stops[0].types,
+        side: dir
+      });
+
+      // Recurse
+      layoutSeg(br.segment, branchX, branchY, depth+1, dir, newColIndex);
+    }
+  }
+
+  layoutSeg(structure, startX, startY, 0, 0, 0);
+
+  // Compute bounds & shift to ensure everything is visible
+  let minX = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const charW = state.fontSize * 0.52;
+  const maxChars = Math.floor(140 / charW);
+  for(const n of nodes) {
+    const nameLen = Math.min(n.stop.length, maxChars);
+    const labelW = nameLen * charW + 40;
+    minX = Math.min(minX, n.x - 40); // metro icon on left
+    maxX = Math.max(maxX, n.x + labelW); // labels on right
+    maxY = Math.max(maxY, n.y);
+  }
+  const pad = 60;
+  const shiftX = -minX + pad;
+  nodes.forEach(n => n.x += shiftX);
+  edges.forEach(e => { e.x1+=shiftX; e.x2+=shiftX; });
+  badges.forEach(b => b.x += shiftX);
+
+  return { nodes, edges, badges, width: maxX-minX+pad*2, height: maxY+pad*2+60 };
+}
+
+// ================================================================
+// SVG RENDERER
+// ================================================================
+function wrapText(text, maxChars) {
+  if(text.length <= maxChars) return [text];
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = '';
+  for(const w of words) {
+    if(cur && (cur.length + 1 + w.length) > maxChars) {
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = cur ? cur + ' ' + w : w;
+    }
+  }
+  if(cur) lines.push(cur);
+  return lines.length ? lines : [text];
+}
+
+function renderSVG(layout) {
+  const { nodes, edges, badges, width, height } = layout;
+  const LW = state.lineWidth;
+  const FS = state.fontSize;
+  const SY = state.spacing;
+  const ns = 'http://www.w3.org/2000/svg';
+
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('xmlns', ns);
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('width', width);
+  svg.setAttribute('height', height);
+
+  // White background
+  const bg = el('rect',{x:0,y:0,width,height,fill:'#fff'});
+  svg.appendChild(bg);
+
+  function el(tag, attrs={}) {
+    const e = document.createElementNS(ns, tag);
+    for(const[k,v] of Object.entries(attrs)) e.setAttribute(k,v);
+    return e;
+  }
+
+  function getTypes(types) {
+    const t = [...new Set(types)];
+    return t;
+  }
+  function isMixed(types) {
+    const t = getTypes(types);
+    return t.includes('bus') && t.includes('trolleybus');
+  }
+
+  // --- DRAW EDGES ---
+  const gEdges = el('g');
+
+  function makeEdgePath(e, type, isMix) {
+    const off = LW * 0.55;
+    const o = isMix ? (type === 'bus' ? -off : off) : 0;
+    const isV = e.x1 === e.x2;
+    // Vertical edges: offset in X. Horizontal edges: offset in Y.
+    const ox = isV ? o : 0;
+    const oy = isV ? 0 : o;
+    return `M ${e.x1+ox} ${e.y1+oy} L ${e.x2+ox} ${e.y2+oy}`;
+  }
+
+  for(const e of edges) {
+    const mixed = isMixed(e.types);
+    if(mixed) {
+      for(const type of ['bus','trolleybus']) {
+        gEdges.appendChild(el('path',{
+          d: makeEdgePath(e, type, true), stroke:C[type], 'stroke-width':LW,
+          'stroke-linecap':'round', fill:'none'
+        }));
+      }
+    } else {
+      const type = getTypes(e.types)[0] || 'bus';
+      gEdges.appendChild(el('path',{
+        d: makeEdgePath(e, type, false), stroke:C[type], 'stroke-width':LW,
+        'stroke-linecap':'round', fill:'none'
+      }));
+    }
+  }
+  svg.appendChild(gEdges);
+
+  // --- DRAW NODES & LABELS ---
+  const gNodes = el('g');
+  const focalNode = nodes.find(n=>n.isFocal);
+
+  for(const n of nodes) {
+    const color = C[getTypes(n.types)[0]] || C.bus;
+    const mixed = isMixed(n.types);
+    const r = n.isFocal ? 7 : (n.isTerminal ? 6 : 4);
+
+    // Stop dot
+    if(mixed) {
+      // Two half-dots or just use bus color for dot
+      gNodes.appendChild(el('circle',{cx:n.x,cy:n.y,r:r+1,fill:'#fff',stroke:C.trolleybus,'stroke-width':2}));
+      gNodes.appendChild(el('circle',{cx:n.x,cy:n.y,r:r-1,fill:'#fff',stroke:C.bus,'stroke-width':2}));
+    } else {
+      gNodes.appendChild(el('circle',{cx:n.x,cy:n.y,r,fill:'#fff',stroke:color,'stroke-width':n.isFocal?3:2}));
+    }
+
+    // Metro icon (left of line)
+    if(state.showMetro && n.isMetro) {
+      const mR = 9;
+      const mX = n.x - r - mR - 6;
+      const mY = n.y;
+      gNodes.appendChild(el('circle',{cx:mX,cy:mY,r:mR,fill:C.metro}));
+      const mt = el('text',{x:mX,y:mY+4,'text-anchor':'middle','font-size':11,'font-weight':'800','font-family':FONT,fill:'#fff'});
+      mt.textContent='M'; gNodes.appendChild(mt);
+    }
+
+    // Stop name (always on right, with word wrap)
+    const textX = n.x + r + 8;
+    const anchor = 'start';
+    const isBold = n.isMetro || n.isFocal || n.isTerminal;
+    const MAX_NAME_W = 140; // max width in px before wrapping
+    const charW = FS * 0.52;
+    const maxChars = Math.floor(MAX_NAME_W / charW);
+    const nameLines = wrapText(n.stop, maxChars);
+
+    const lineH = FS * 1.25;
+    const totalH = nameLines.length * lineH;
+    const startTextY = n.y - (totalH - lineH) / 2 + FS * 0.35;
+
+    for(let li = 0; li < nameLines.length; li++) {
+      const txt = el('text',{
+        x: textX, y: startTextY + li * lineH,
+        'text-anchor': anchor, 'font-size': FS,
+        'font-weight': isBold ? '700' : '400', 'font-family': FONT, fill: '#1a1a1a'
+      });
+      txt.textContent = nameLines[li];
+      gNodes.appendChild(txt);
+    }
+
+    // "Вы тут" badge for focal (above the stop)
+    if(n.isFocal) {
+      const bw=56, bh=22;
+      const bx = n.x - bw/2;
+      const by = n.y - r - bh - 8;
+      gNodes.appendChild(el('rect',{x:bx,y:by,width:bw,height:bh,rx:11,fill:C.trolleybus}));
+      const bt=el('text',{x:bx+bw/2,y:by+15,'text-anchor':'middle','font-size':12,'font-weight':'600','font-family':FONT,fill:'#fff'});
+      bt.textContent='Вы тут'; gNodes.appendChild(bt);
+    }
+
+    // Terminal badges
+    if(state.showTerminals && n.isTerminal && n.terminalRoutes.length > 0) {
+      const termY = n.y + 20;
+      n.terminalRoutes.forEach((rid, ti) => {
+        const tw = Math.max(rid.length * 10 + 16, 50);
+        const th = 26;
+        const tx = n.x - tw/2;
+        const ty = termY + ti * (th + 6);
+        const routeObj = state.routes.find(r=>r.id===rid);
+        const tc = routeObj ? C[routeObj.type] : C.bus;
+        gNodes.appendChild(el('rect',{x:tx,y:ty,width:tw,height:th,rx:5,fill:tc}));
+        const tt=el('text',{x:tx+tw/2,y:ty+18,'text-anchor':'middle','font-size':14,'font-weight':'700','font-family':FONT,fill:'#fff'});
+        tt.textContent=rid; gNodes.appendChild(tt);
+      });
+    }
+  }
+  svg.appendChild(gNodes);
+
+  // --- ROUTE BADGES AT TOP ---
+  if(state.showBadges && focalNode) {
+    const gBadges = el('g');
+    const activeRoutes = state.routes.filter(r=>state.enabled.has(r.id) && r.stops.includes(state.focalStop));
+    const trolleys = activeRoutes.filter(r=>r.type==='trolleybus');
+    const buses = activeRoutes.filter(r=>r.type==='bus');
+
+    let bx = focalNode.x - 10;
+    let by = focalNode.y - 30;
+
+    // Draw trolleybus route badges (row 1)
+    if(trolleys.length > 0) {
+      let rx = bx;
+      by -= 28;
+      for(const r of trolleys) {
+        const w = Math.max(r.id.length*8+12, 36);
+        gBadges.appendChild(el('rect',{x:rx,y:by,width:w,height:22,rx:4,fill:C.trolleybus}));
+        const t=el('text',{x:rx+w/2,y:by+16,'text-anchor':'middle','font-size':11,'font-weight':'700','font-family':FONT,fill:'#fff'});
+        t.textContent=r.id; gBadges.appendChild(t);
+        rx += w + 4;
+      }
+    }
+
+    // Draw bus route badges (row 2)
+    if(buses.length > 0) {
+      let rx = bx;
+      by -= 26;
+      for(const r of buses) {
+        const w = Math.max(r.id.length*8+12, 36);
+        gBadges.appendChild(el('rect',{x:rx,y:by,width:w,height:22,rx:4,fill:C.bus}));
+        const t=el('text',{x:rx+w/2,y:by+16,'text-anchor':'middle','font-size':11,'font-weight':'700','font-family':FONT,fill:'#fff'});
+        t.textContent=r.id; gBadges.appendChild(t);
+        rx += w + 4;
+      }
+    }
+
+    svg.appendChild(gBadges);
+
+    // --- ROUTE BADGES AT BRANCH POINTS ---
+    for(const b of badges) {
+      const gB = el('g');
+      // Group by type
+      const rObjs = b.routes.map(rid=>state.routes.find(r=>r.id===rid)).filter(Boolean);
+      let bx2 = b.side > 0 ? b.x + 8 : b.x;
+      let by2 = b.y - 14;
+
+      for(const r of rObjs) {
+        const w = Math.max(r.id.length*7+10, 30);
+        const rx = b.side > 0 ? bx2 : bx2 - w;
+        gB.appendChild(el('rect',{x:rx,y:by2,width:w,height:18,rx:3,fill:C[r.type],opacity:0.9}));
+        const t=el('text',{x:rx+w/2,y:by2+13,'text-anchor':'middle','font-size':10,'font-weight':'600','font-family':FONT,fill:'#fff'});
+        t.textContent=r.id; gB.appendChild(t);
+        bx2 += b.side > 0 ? (w+3) : 0;
+        if(b.side < 0) bx2 -= (w+3);
+      }
+      svg.appendChild(gB);
+    }
+  }
+
+  return svg;
+}
+
+// ================================================================
+// MAIN RENDER
+// ================================================================
+function render() {
+  const wrap = document.getElementById('canvasWrap');
+  const empty = document.getElementById('emptyState');
+
+  if(!state.routes.length || !state.focalStop) { empty.style.display='flex'; return; }
+  empty.style.display='none';
+
+  // Read settings
+  state.spacing = +document.getElementById('setSpacing').value || 50;
+  state.colWidth = +document.getElementById('setColWidth').value || 220;
+  state.fontSize = +document.getElementById('setFontSize').value || 14;
+  state.lineWidth = +document.getElementById('setLineWidth').value || 5;
+  state.showMetro = document.getElementById('setMetro').checked;
+  state.showBadges = document.getElementById('setBadges').checked;
+  state.showTerminals = document.getElementById('setTerminals').checked;
+
+  const trie = buildTrie(state.routes, state.focalStop, state.enabled);
+  const structure = extractStructure(trie);
+  const layout = computeLayout(structure);
+  const svg = renderSVG(layout);
+
+  svgInfo = { svg, width:layout.width, height:layout.height };
+  const old = wrap.querySelector('svg');
+  if(old) old.remove();
+  wrap.appendChild(svg);
+  applyTransform();
+
+  // Info
+  const rc = state.routes.filter(r=>state.enabled.has(r.id)&&r.stops.includes(state.focalStop)).length;
+  const sc = new Set();
+  state.routes.forEach(r=>{if(!state.enabled.has(r.id))return;const i=r.stops.indexOf(state.focalStop);if(i<0)return;r.stops.slice(i).forEach(s=>sc.add(s));});
+  document.getElementById('infoLabel').textContent=`${rc} routes · ${sc.size} stops`;
+}
+
+// ================================================================
+// DATA LOADING & UI
+// ================================================================
+function loadData(data) {
+  state.routes = data.routes;
+  state.metroStops = new Set(data.metroStops);
+  state.enabled = new Set(data.routes.map(r=>r.id));
+  const allStops = new Set(); data.routes.forEach(r=>r.stops.forEach(s=>allStops.add(s)));
+  const sel = document.getElementById('focalSelect');
+  sel.innerHTML='';
+  [...allStops].sort().forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o); });
+  sel.disabled=false;
+  state.focalStop = data.routes[0].stops[0];
+  sel.value = state.focalStop;
+  updateRouteList(); render();
+}
+
+function updateRouteList() {
+  const list = document.getElementById('routeList');
+  list.innerHTML='';
+  for(const r of state.routes){
+    if(!r.stops.includes(state.focalStop)) continue;
+    const en = state.enabled.has(r.id);
+    const item = document.createElement('div');
+    item.className='route-item'+(en?'':' disabled');
+    item.innerHTML=`<div class="route-dot ${r.type}"></div><span class="route-id">${r.id}</span><span class="route-terminal">→ ${r.stops[r.stops.length-1]}</span>`;
+    item.onclick=()=>{ if(state.enabled.has(r.id)) state.enabled.delete(r.id); else state.enabled.add(r.id); updateRouteList(); render(); };
+    list.appendChild(item);
+  }
+}
+
+// ================================================================
+// ZOOM & PAN
+// ================================================================
+let zoom=1, panX=0, panY=0, isPanning=false, lastM={x:0,y:0};
+function applyTransform(){
+  const svg=document.getElementById('canvasWrap').querySelector('svg');
+  if(svg) svg.style.transform=`translate(${panX}px,${panY}px) scale(${zoom})`;
+  document.getElementById('zoomLabel').textContent=Math.round(zoom*100)+'%';
+}
+function fitToView(){
+  if(!svgInfo)return;
+  const w=document.getElementById('canvasWrap');
+  const sx=w.clientWidth/svgInfo.width, sy=w.clientHeight/svgInfo.height;
+  zoom=Math.min(sx,sy,1.5)*0.85;
+  panX=(w.clientWidth-svgInfo.width*zoom)/2;
+  panY=Math.max(10,(w.clientHeight-svgInfo.height*zoom)/2);
+  applyTransform();
+}
+document.getElementById('canvasWrap').addEventListener('wheel',e=>{
+  e.preventDefault();
+  const d=e.deltaY>0?0.9:1.1, rect=e.currentTarget.getBoundingClientRect();
+  const mx=e.clientX-rect.left, my=e.clientY-rect.top;
+  const nz=Math.min(Math.max(zoom*d,0.1),5);
+  panX=mx-(mx-panX)*(nz/zoom); panY=my-(my-panY)*(nz/zoom); zoom=nz; applyTransform();
+},{passive:false});
+document.getElementById('canvasWrap').addEventListener('mousedown',e=>{isPanning=true;lastM={x:e.clientX,y:e.clientY};e.currentTarget.classList.add('grabbing');});
+window.addEventListener('mousemove',e=>{if(!isPanning)return;panX+=e.clientX-lastM.x;panY+=e.clientY-lastM.y;lastM={x:e.clientX,y:e.clientY};applyTransform();});
+window.addEventListener('mouseup',()=>{isPanning=false;document.getElementById('canvasWrap').classList.remove('grabbing');});
+document.getElementById('zoomIn').onclick=()=>{zoom=Math.min(zoom*1.2,5);applyTransform();};
+document.getElementById('zoomOut').onclick=()=>{zoom=Math.max(zoom*0.8,0.1);applyTransform();};
+document.getElementById('zoomFit').onclick=fitToView;
+
+// ================================================================
+// EVENT HANDLERS
+// ================================================================
+document.getElementById('loadSample').onclick=()=>{loadData(SAMPLE);setTimeout(fitToView,50);};
+document.getElementById('focalSelect').onchange=e=>{state.focalStop=e.target.value;state.enabled=new Set(state.routes.map(r=>r.id));updateRouteList();render();setTimeout(fitToView,50);};
+
+const uploadZone=document.getElementById('uploadZone'), fileInput=document.getElementById('fileInput');
+uploadZone.onclick=()=>fileInput.click();
+uploadZone.ondragover=e=>{e.preventDefault();uploadZone.style.borderColor=C.bus;};
+uploadZone.ondragleave=()=>{uploadZone.style.borderColor='';};
+uploadZone.ondrop=e=>{e.preventDefault();uploadZone.style.borderColor='';handleFiles(e.dataTransfer.files);};
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function parseXLSX(data) {
+  const wb = XLSX.read(data, { type: 'array' });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws);
+  if(!rows.length) throw new Error('Empty spreadsheet');
+
+  const routeMap = {};
+  const metroStops = new Set();
+  for(const row of rows) {
+    const rid = String(row.route_id || row.Route_ID || row.RouteID || row.id || '').trim();
+    const rtype = String(row.route_type || row.type || 'Bus').trim().toLowerCase();
+    const order = parseInt(row.stop_order || row.order || row.Stop_Order || 0);
+    const sname = String(row.stop_name || row.name || row.Stop_Name || '').trim();
+    const isMet = String(row.is_metro || row.metro || 'No').trim().toLowerCase();
+    if(!rid || !sname) continue;
+    if(!routeMap[rid]) routeMap[rid] = { id: rid, type: rtype.includes('trolley') ? 'trolleybus' : 'bus', stops: [] };
+    routeMap[rid].stops.push({ order, name: sname });
+    if(['yes','true','1','да'].includes(isMet)) metroStops.add(sname);
+  }
+  const routes = Object.values(routeMap).map(r => {
+    r.stops.sort((a,b) => a.order - b.order);
+    r.stops = r.stops.map(s => s.name);
+    return r;
+  });
+  return { routes, metroStops: [...metroStops] };
+}
+
+function parseRouteFile(filename, text) {
+  const trimmed = text.trim();
+
+  // JSON
+  if(trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try { return parseJSON(trimmed); } catch(e) {}
+  }
+
+  // CSV with header
+  const firstLine = trimmed.split('\n')[0].toLowerCase();
+  if(firstLine.includes('route_id') || firstLine.includes('stop_name') || firstLine.includes(',')) {
+    try { return parseCSV(trimmed); } catch(e) {}
+  }
+
+  // Simple stop list: one stop name per line
+  const lines = trimmed.split('\n').map(s=>s.trim()).filter(s=>s.length>0);
+  if(lines.length > 0) {
+    const routeId = filename.replace(/\.[^.]+$/,'');
+    const type = /^[Tt]/i.test(routeId) ? 'trolleybus' : 'bus';
+    const stops = [];
+    const metroStops = [];
+    for(const line of lines) {
+      let name = line.replace(/\s*[\(\[]\s*[Mm]\s*[\)\]]\s*$/, '').replace(/\s*\*\s*$/, '').trim();
+      const isMetro = name !== line.trim();
+      stops.push(name);
+      if(isMetro) metroStops.push(name);
+    }
+    return { routes: [{ id: routeId, type, stops }], metroStops };
+  }
+
+  throw new Error('Cannot parse: ' + filename);
+}
+
+function handleFiles(fileList) {
+  if(!fileList || fileList.length === 0) return;
+  const files = [...fileList];
+  const allRoutes = [];
+  const allMetro = new Set();
+  let loaded = 0;
+
+  // If existing data, keep it and add new routes
+  if(state.routes.length > 0) {
+    allRoutes.push(...state.routes);
+    state.metroStops.forEach(s => allMetro.add(s));
+  }
+
+  files.forEach(f => {
+    const reader = new FileReader();
+    const isExcel = /\.(xlsx?|xls)$/i.test(f.name);
+
+    reader.onload = e => {
+      console.log('File loaded:', f.name, 'isExcel:', isExcel, 'size:', e.target.result.byteLength || e.target.result.length);
+      try {
+        let data;
+        if(isExcel) {
+          data = parseXLSX(new Uint8Array(e.target.result));
+        } else {
+          data = parseRouteFile(f.name, e.target.result);
+        }
+        console.log('Parsed:', f.name, 'routes:', data.routes.length);
+        data.routes.forEach(r => {
+          const existing = allRoutes.findIndex(er => er.id === r.id);
+          if(existing >= 0) allRoutes[existing] = r;
+          else allRoutes.push(r);
+        });
+        (data.metroStops||[]).forEach(s => allMetro.add(s));
+      } catch(err) {
+        console.error('Error parsing ' + f.name + ':', err);
+      }
+      loaded++;
+      if(loaded === files.length) {
+        loadData({ routes: allRoutes, metroStops: [...allMetro] });
+        setTimeout(fitToView, 50);
+        document.getElementById('uploadedFiles').innerHTML =
+          files.map(f => '✅ ' + f.name).join('<br>') +
+          '<br><strong>' + allRoutes.length + ' routes loaded</strong>';
+      }
+    };
+
+    if(isExcel) reader.readAsArrayBuffer(f);
+    else reader.readAsText(f);
+  });
+}
+
+['setSpacing','setColWidth','setFontSize','setLineWidth'].forEach(id=>{document.getElementById(id).onchange=()=>{render();setTimeout(fitToView,50);};});
+['setMetro','setBadges','setTerminals'].forEach(id=>{document.getElementById(id).onchange=render;});
+
+// Export
+document.getElementById('exportSVG').onclick=()=>{
+  const svg=document.getElementById('canvasWrap').querySelector('svg');if(!svg)return;
+  const clone=svg.cloneNode(true);clone.style.transform='';
+  const blob=new Blob([new XMLSerializer().serializeToString(clone)],{type:'image/svg+xml'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`scheme-${state.focalStop||'export'}.svg`;a.click();
+};
+document.getElementById('exportPNG').onclick=()=>{
+  const svg=document.getElementById('canvasWrap').querySelector('svg');if(!svg)return;
+  const clone=svg.cloneNode(true);clone.style.transform='';
+  const str=new XMLSerializer().serializeToString(clone);
+  const canvas=document.createElement('canvas');const sc=2;
+  canvas.width=svgInfo.width*sc;canvas.height=svgInfo.height*sc;
+  const ctx=canvas.getContext('2d');ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+  const img=new Image();
+  img.onload=()=>{ctx.drawImage(img,0,0,canvas.width,canvas.height);const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download=`scheme-${state.focalStop||'export'}.png`;a.click();};
+  img.src='data:image/svg+xml;base64,'+btoa(unescape(encodeURIComponent(str)));
+};
+</script>
+</body>
+</html>

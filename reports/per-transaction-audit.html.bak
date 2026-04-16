@@ -1,0 +1,2639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Per Transaction Settings — UX & Copy Audit</title>
+  <style>
+    :root {
+      --blue:#2563eb;--blue-light:#eff6ff;--green:#16a34a;--green-light:#f0fdf4;
+      --orange:#ea580c;--orange-light:#fff7ed;--red:#dc2626;--red-light:#fef2f2;
+      --gray-50:#f9fafb;--gray-100:#f3f4f6;--gray-200:#e5e7eb;--gray-300:#d1d5db;
+      --gray-400:#9ca3af;--gray-500:#6b7280;--gray-600:#4b5563;--gray-700:#374151;
+      --gray-800:#1f2937;--gray-900:#111827;--yellow:#ca8a04;--yellow-light:#fefce8;
+      --purple:#7c3aed;--purple-light:#f5f3ff;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--gray-800);background:var(--gray-50);font-size:15px;line-height:1.6}
+    .header{background:white;border-bottom:1px solid var(--gray-200);padding:20px 40px;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .header-inner{max-width:1280px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    .header-title{font-size:18px;font-weight:700;color:var(--gray-900)}
+    .header-meta{font-size:12px;color:var(--gray-500);margin-top:2px}
+    .badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9999px;font-size:12px;font-weight:600;white-space:nowrap}
+    .badge-blue{background:var(--blue-light);color:var(--blue)}
+    .badge-green{background:var(--green-light);color:var(--green)}
+    .badge-orange{background:var(--orange-light);color:var(--orange)}
+    .badge-red{background:var(--red-light);color:var(--red)}
+    .badge-yellow{background:var(--yellow-light);color:var(--yellow)}
+    .badge-purple{background:var(--purple-light);color:var(--purple)}
+    .badge-gray{background:var(--gray-100);color:var(--gray-600)}
+    /* Sidebar layout */
+    .layout-wrapper{display:flex;min-height:calc(100vh - 64px)}
+    .sidebar{width:220px;min-width:220px;background:white;border-right:1px solid var(--gray-200);padding:16px 0;position:sticky;top:64px;height:calc(100vh - 64px);overflow-y:auto;flex-shrink:0}
+    .sidebar-group{margin-bottom:16px}
+    .sidebar-group-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--gray-400);padding:8px 20px 4px;margin:0}
+    .sidebar-item{display:block;padding:7px 20px;font-size:13px;font-weight:500;color:var(--gray-500);cursor:pointer;text-decoration:none;border-left:3px solid transparent;transition:all .12s}
+    .sidebar-item:hover{color:var(--gray-800);background:var(--gray-50)}
+    .sidebar-item.active{color:var(--blue);border-left-color:var(--blue);background:var(--blue-light);font-weight:600}
+    .sidebar-item.error-item{color:var(--red)}
+    .main-content{flex:1;min-width:0;padding:32px 40px 120px}
+    .container{max-width:none;margin:0;padding:0}
+    .section{margin-bottom:48px}
+    .section-title{font-size:20px;font-weight:700;color:var(--gray-900);margin-bottom:6px;display:flex;align-items:center;gap:10px}
+    .section-subtitle{color:var(--gray-500);margin-bottom:20px;font-size:14px}
+    .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-bottom:28px}
+    .stat-card{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:18px}
+    .stat-value{font-size:26px;font-weight:800;color:var(--gray-900);line-height:1;margin-bottom:5px}
+    .stat-label{font-size:12px;color:var(--gray-500)}
+    .stat-delta{font-size:12px;color:var(--green);font-weight:600;margin-top:3px}
+    .matrix-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .matrix-cell{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:20px}
+    .matrix-cell-header{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+    .matrix-cell-title{font-size:14px;font-weight:700}
+    .finding-item{display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--gray-100)}
+    .finding-item:last-child{border-bottom:none}
+    .finding-num{min-width:22px;height:22px;border-radius:50%;background:var(--gray-100);color:var(--gray-600);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:2px}
+    .finding-title{font-size:14px;font-weight:600;color:var(--gray-800);margin-bottom:3px}
+    .finding-desc{font-size:13px;color:var(--gray-500);line-height:1.5}
+    .finding-tags{display:flex;gap:5px;margin-top:5px;flex-wrap:wrap}
+    .strategy-card{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:22px;margin-bottom:14px}
+    .strategy-card h3{font-size:15px;font-weight:700;margin-bottom:11px;display:flex;align-items:center;gap:8px}
+    .strategy-card ul{padding-left:18px}
+    .strategy-card li{font-size:14px;color:var(--gray-600);margin-bottom:7px;line-height:1.55}
+    .strategy-card li code,.td-current code,.td-optA code,.td-optB code{background:var(--gray-100);padding:1px 5px;border-radius:4px;font-size:12px;color:var(--gray-700);font-family:'SF Mono','Fira Code',monospace}
+    .table-wrapper{overflow-x:auto;border-radius:12px;border:1px solid var(--gray-200);margin-bottom:24px}
+    table{width:100%;border-collapse:collapse;background:white;font-size:13px}
+    thead th{background:var(--gray-50);padding:11px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--gray-200);white-space:nowrap}
+    tbody td{padding:12px 14px;border-bottom:1px solid var(--gray-100);vertical-align:top;line-height:1.5}
+    tbody tr:last-child td{border-bottom:none}
+    tbody tr:hover td{background:var(--gray-50)}
+    .td-element{font-weight:600;color:var(--gray-700);font-size:12px}
+    .td-location{font-size:11px;color:var(--gray-400);margin-top:1px}
+    .problem{font-size:11px;color:var(--red);margin-top:4px}
+    .td-optA{color:var(--blue);font-weight:500}
+    .td-optB{color:var(--purple);font-weight:500}
+    .diff-note{font-size:11px;opacity:.65;margin-top:2px;font-weight:400}
+    .row-group-header td{background:var(--gray-50)!important;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-400);padding:7px 14px;border-bottom:1px solid var(--gray-200)}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    .alert{border-radius:10px;padding:13px 16px;margin-bottom:16px;font-size:14px;display:flex;gap:10px;align-items:flex-start}
+    .alert-yellow{background:var(--yellow-light);color:#713f12;border:1px solid #fde68a}
+    .alert-blue{background:var(--blue-light);color:#1e3a5f;border:1px solid #bfdbfe}
+    .alert-red{background:var(--red-light);color:#7f1d1d;border:1px solid #fecaca}
+    .alert-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+    tr.p-critical td{border-left:3px solid var(--red)}
+    tr.p-high td{border-left:3px solid var(--orange)}
+    tr.p-medium td{border-left:3px solid var(--yellow)}
+    ::-webkit-scrollbar{width:5px;height:5px}
+    ::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:3px}
+    .bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px;font-size:13px}
+    .bar-fill{height:11px;border-radius:6px;background:var(--blue);min-width:4px}
+    .bar-label{min-width:150px;font-weight:500}
+    .bar-count{min-width:60px;text-align:right;color:var(--gray-500);font-size:12px}
+    .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    .three-col{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+    @media(max-width:900px){
+      .main-content{padding:20px 16px 60px}
+      .header{padding:14px 16px}
+      .matrix-grid,.two-col,.three-col{grid-template-columns:1fr}
+      .stat-row{grid-template-columns:1fr 1fr}
+      .sidebar{display:none}
+    }
+    .footer-note{margin-top:40px;padding-top:20px;border-top:1px solid var(--gray-200);font-size:12px;color:var(--gray-400)}
+    .critical-card{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:20px;border-left:4px solid var(--red)}
+    .high-card{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:20px;border-left:4px solid var(--orange)}
+    .medium-card{background:white;border:1px solid var(--gray-200);border-radius:12px;padding:20px;border-left:4px solid var(--yellow)}
+    .td-approved{background:var(--green-light);min-height:40px;cursor:text;border:2px dashed var(--green);border-radius:6px;padding:8px 10px;font-size:13px;color:var(--gray-800);line-height:1.5;transition:all .15s}
+    .td-approved:empty::before{content:'Click to type approved copy…';color:var(--gray-400);font-style:italic}
+    .td-approved:focus{outline:none;border-color:var(--blue);border-style:solid;background:white;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+    .td-approved.has-content{border-style:solid;border-color:var(--green)}
+    .export-bar{position:fixed;bottom:0;left:0;right:0;background:white;border-top:1px solid var(--gray-200);padding:12px 40px;display:flex;align-items:center;justify-content:center;gap:12px;z-index:200;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
+    .export-btn{padding:8px 20px;border-radius:8px;border:1px solid var(--gray-200);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+    .export-btn:hover{background:var(--gray-100)}
+    .export-btn-primary{background:var(--green);color:white;border-color:var(--green)}
+    .export-btn-primary:hover{background:#15803d}
+    .export-status{font-size:12px;color:var(--gray-500)}
+    .copy-block{display:flex;flex-direction:column;gap:5px}
+    .copy-lbl{font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;letter-spacing:.05em}
+    .copy-txt{font-size:13px;color:var(--gray-700);line-height:1.5}
+    .copy-sub{font-size:12px;color:#1d4ed8;border-left:3px solid #bfdbfe;padding-left:8px;margin-top:2px;font-style:italic}
+    .copy-err{font-size:12px;color:var(--red);border-left:3px solid #fecaca;padding-left:8px;margin-top:2px}
+    .copy-upsell{font-size:12px;color:var(--orange);border-left:3px solid #fed7aa;padding-left:8px;margin-top:2px}
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div>
+      <div class="header-title">🔍 Per Transaction Settings — Full UX & Copy Audit</div>
+      <div class="header-meta">Synder · All 11 tabs · Dasha Research · March 2026</div>
+    </div>
+    <div style="display:flex;gap:7px;flex-wrap:wrap">
+      <span class="badge badge-red">20 UX findings</span>
+      <span class="badge badge-orange">60+ copy issues</span>
+      <span class="badge badge-red">9 error messages</span>
+      <span class="badge badge-blue">11 tabs covered</span>
+      <span class="badge badge-green">Real LogRocket data</span>
+    </div>
+  </div>
+</div>
+
+<div class="layout-wrapper">
+  <aside class="sidebar">
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">📊 Analysis</div>
+      <a class="sidebar-item active" onclick="switchTab('overview',this)" href="#">Overview</a>
+      <a class="sidebar-item" onclick="switchTab('ux',this)" href="#">UX Findings</a>
+      <a class="sidebar-item" onclick="switchTab('strategy',this)" href="#">Copy Strategy</a>
+      <a class="sidebar-item" onclick="switchTab('logrocket',this)" href="#">LogRocket Data</a>
+      <a class="sidebar-item error-item" onclick="switchTab('errors',this)" href="#">⚠️ Error Copy</a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-title">📝 Copy Audit</div>
+      <a class="sidebar-item" onclick="switchTab('page-level',this)" href="#">Page level</a>
+      <a class="sidebar-item" onclick="switchTab('general',this)" href="#">General</a>
+      <a class="sidebar-item" onclick="switchTab('sales',this)" href="#">Sales</a>
+      <a class="sidebar-item" onclick="switchTab('invoices',this)" href="#">Invoices</a>
+      <a class="sidebar-item" onclick="switchTab('products',this)" href="#">Products/Services</a>
+      <a class="sidebar-item" onclick="switchTab('product-mapping',this)" href="#">Product mapping</a>
+      <a class="sidebar-item" onclick="switchTab('taxes',this)" href="#">Taxes</a>
+      <a class="sidebar-item" onclick="switchTab('fees',this)" href="#">Fees</a>
+      <a class="sidebar-item" onclick="switchTab('app-fees',this)" href="#">Application Fees</a>
+      <a class="sidebar-item" onclick="switchTab('expenses',this)" href="#">Expenses</a>
+      <a class="sidebar-item" onclick="switchTab('payouts',this)" href="#">Payouts</a>
+      <a class="sidebar-item" onclick="switchTab('multicurrency',this)" href="#">Multicurrency</a>
+    </div>
+  </aside>
+
+  <div class="main-content">
+
+<!-- ══════════════════════════ OVERVIEW ══════════════════════════ -->
+<div id="tab-overview" class="tab-content active">
+
+  <div class="section">
+    <div class="alert alert-blue">
+      <div class="alert-icon">✅</div>
+      <div><strong>Scope:</strong> Full audit of all 11 sidebar tabs (General, Sales, Invoices, Products/Services, Product mapping, Taxes, Fees, Application Fees, Expenses, Payouts, Multicurrency) — Default transaction type. Screenshots, text content, LogRocket click data, and toggle/toast behavior captured live on <code>demo.synderapp.com</code>.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">📊 LogRocket — Tab Usage (last 30 days)</div>
+    <div class="section-subtitle">868 unique users visited settings last month. Here's where they go once inside.</div>
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-value">868</div><div class="stat-label">Unique users / month</div><div class="stat-delta">↑ +7% vs prior period</div></div>
+      <div class="stat-card"><div class="stat-value">~60</div><div class="stat-label">Unique users / day (avg)</div><div class="stat-delta">Peak: 101 (Mar 4)</div></div>
+      <div class="stat-card"><div class="stat-value">16,486</div><div class="stat-label">Total tab clicks tracked</div><div class="stat-delta">Across all 10 sidebar tabs</div></div>
+      <div class="stat-card"><div class="stat-value">Sales</div><div class="stat-label">#1 most-visited tab</div><div class="stat-delta">3,619 clicks — 22% of all</div></div>
+    </div>
+
+    <div class="strategy-card">
+      <h3>📈 Tab click ranking</h3>
+      <div style="margin-top:4px">
+        <div class="bar-row"><div class="bar-label">Sales</div><div class="bar-fill" style="width:220px"></div><div class="bar-count">3,619</div><span class="badge badge-red">🔥 #1</span></div>
+        <div class="bar-row"><div class="bar-label">Invoices</div><div class="bar-fill" style="width:178px"></div><div class="bar-count">2,938</div><span class="badge badge-orange">#2</span></div>
+        <div class="bar-row"><div class="bar-label">Products/Services</div><div class="bar-fill" style="width:163px"></div><div class="bar-count">2,685</div><span class="badge badge-orange">#3</span></div>
+        <div class="bar-row"><div class="bar-label">Taxes</div><div class="bar-fill" style="width:113px"></div><div class="bar-count">1,853</div><span class="badge badge-yellow">#4</span></div>
+        <div class="bar-row"><div class="bar-label">Fees</div><div class="bar-fill" style="width:103px"></div><div class="bar-count">1,701</div><span class="badge badge-yellow">#5</span></div>
+        <div class="bar-row"><div class="bar-label">Payouts</div><div class="bar-fill" style="width:85px"></div><div class="bar-count">1,395</div><span class="badge badge-gray">#6</span></div>
+        <div class="bar-row"><div class="bar-label">General</div><div class="bar-fill" style="width:60px"></div><div class="bar-count">984</div><span class="badge badge-gray">#7</span></div>
+        <div class="bar-row"><div class="bar-label">Expenses</div><div class="bar-fill" style="width:38px"></div><div class="bar-count">622</div><span class="badge badge-gray">#8</span></div>
+        <div class="bar-row"><div class="bar-label">Application Fees</div><div class="bar-fill" style="width:27px"></div><div class="bar-count">450</div><span class="badge badge-gray">#9</span></div>
+        <div class="bar-row"><div class="bar-label">Multicurrency</div><div class="bar-fill" style="width:26px"></div><div class="bar-count">439</div><span class="badge badge-gray">#10</span></div>
+      </div>
+      <p style="font-size:12px;color:var(--gray-400);margin-top:12px">⚠ Tab names may match elements elsewhere in the app; counts are directional. Sales + Invoices + Products/Services = 56% of all tab traffic.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">🚨 Top 3 Critical Issues</div>
+    <div class="three-col">
+      <div class="critical-card">
+        <div style="font-size:16px;font-weight:700;color:var(--red);margin-bottom:8px">🔥 On/Off vs Yes/No</div>
+        <p style="font-size:13px;color:var(--gray-600)">Payouts tab uses <strong>Yes/No</strong> toggles while every other tab uses <strong>On/Off</strong>. One page, two toggle paradigms. Payouts is the 6th most-visited tab — thousands of users hit this inconsistency every month.</p>
+      </div>
+      <div class="critical-card">
+        <div style="font-size:16px;font-weight:700;color:var(--red);margin-bottom:8px">🔥 Stacking toasts</div>
+        <p style="font-size:13px;color:var(--gray-600)">Toggling a single switch triggers <strong>3 stacked toast notifications</strong>: "Success. Settings of organization successfully updated." shown three times simultaneously. Severe feedback noise — breaks trust and readability.</p>
+      </div>
+      <div class="critical-card">
+        <div style="font-size:16px;font-weight:700;color:var(--red);margin-bottom:8px">🔥 Recommended = Off</div>
+        <p style="font-size:13px;color:var(--gray-600)">Auto-import and Auto-sync say "(recommended)" in their descriptions but ship as <strong>Off</strong> by default. Signals broken defaults at the exact moment users are configuring for the first time.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">🗺️ What's in each tab</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">General <span class="badge badge-gray" style="font-size:10px">#7</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Auto-import, Auto-sync, skip duplicates, multi-currency, auto-archive, location, payments without invoices, balance reserve, timezone</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Sales <span class="badge badge-red" style="font-size:10px">#1</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Clearing account, payment method, posting date, QB doc numbers, customer name priority, generic customer, applied balance account, discounts, payment method mapping</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Invoices <span class="badge badge-orange" style="font-size:10px">#2</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Apply payments to unpaid invoices, cancel sync on missing invoice, sync open invoices, sync zero invoices</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Products/Services <span class="badge badge-orange" style="font-size:10px">#3</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Product name type, fallback product, search priority, missing product handling, product type, income/expense accounts, product name from description</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Product mapping <span class="badge badge-gray" style="font-size:10px">—</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Manual product-to-account mapping table (no settings, just a mapper UI)</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Taxes <span class="badge badge-yellow" style="font-size:10px">#4</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Apply taxes toggle, default tax code dropdown, apply generic tax code toggle</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Fees <span class="badge badge-yellow" style="font-size:10px">#5</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Clearing account, vendor, category for Stripe fees</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Application Fees <span class="badge badge-gray" style="font-size:10px">#9</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Clearing account, category — Stripe-specific application fees</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Expenses <span class="badge badge-gray" style="font-size:10px">#8</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Clearing account, category, generic vendor toggle</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Payouts <span class="badge badge-gray" style="font-size:10px">#6</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Process payouts Yes/No, transfer funds to account</p>
+      </div>
+      <div class="strategy-card" style="margin:0;padding:16px">
+        <h3 style="font-size:13px">Multicurrency <span class="badge badge-gray" style="font-size:10px">#10</span></h3>
+        <p style="font-size:12px;color:var(--gray-500)">Instructional only — no controls. Directs users to Sales, Fees, Expenses tabs for currency config</p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /overview -->
+
+
+<!-- ══════════════════════════ UX FINDINGS ══════════════════════════ -->
+<div id="tab-ux" class="tab-content">
+
+  <div class="section">
+    <div class="section-title">🎯 UX Findings — Impact × Effort</div>
+    <div class="section-subtitle">20 findings. Fix in order. Green = do this sprint.</div>
+
+    <div class="matrix-grid">
+
+      <!-- HIGH IMPACT / LOW EFFORT -->
+      <div class="matrix-cell" style="border-top:3px solid var(--green)">
+        <div class="matrix-cell-header">
+          <span style="font-size:18px">🟢</span>
+          <div><div class="matrix-cell-title">High Impact · Low Effort</div><div style="font-size:12px;color:var(--gray-500)">Do this sprint</div></div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">1</div>
+          <div>
+            <div class="finding-title">On/Off vs Yes/No toggle paradigm</div>
+            <div class="finding-desc">Payouts tab uses "Yes/No" toggles; every other tab uses "On/Off." One settings page, two completely different toggle patterns. Change Payouts to On/Off — 1 line of code.</div>
+            <div class="finding-tags"><span class="badge badge-red">Critical</span><span class="badge badge-gray">Payouts</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">2</div>
+          <div>
+            <div class="finding-title">Triple-stacking toast notifications</div>
+            <div class="finding-desc">Toggling a single switch fires the same toast 3 times simultaneously: "Success. Settings of organization successfully updated." — shown triple-stacked. Should fire once, after save, with a shorter message.</div>
+            <div class="finding-tags"><span class="badge badge-red">Critical</span><span class="badge badge-gray">All tabs</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">3</div>
+          <div>
+            <div class="finding-title">Trailing period on toggle label</div>
+            <div class="finding-desc">"Process transactions in multiple currencies<strong>.</strong>" — period at end of a toggle label. Looks like a bug. Remove the period.</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">General</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">4</div>
+          <div>
+            <div class="finding-title">"Recommended" settings ship as Off</div>
+            <div class="finding-desc">Auto-import and Auto-sync say "(recommended)" in descriptions but default to Off. Either enable by default or remove "(recommended)" from the description and show it as a visual badge. Currently contradicts itself on first impression.</div>
+            <div class="finding-tags"><span class="badge badge-red">Critical</span><span class="badge badge-gray">General</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">5</div>
+          <div>
+            <div class="finding-title">Auto-sync dependency invisible</div>
+            <div class="finding-desc">Auto-sync only works if Auto-import is on — but there's no visual connection. Auto-sync toggle should be disabled/dimmed when Auto-import is Off, with an inline note: "Requires Auto-import to be enabled."</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">General</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">6</div>
+          <div>
+            <div class="finding-title">Toast copy is too long and repetitive</div>
+            <div class="finding-desc">Current: "Success. Settings of organization successfully updated." — 7 words, redundant ("Success" + "successfully"). Should be: "Settings saved" (2 words, done).</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">All tabs</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">7</div>
+          <div>
+            <div class="finding-title">Clearing account description reused for Expenses</div>
+            <div class="finding-desc">Fees, Application Fees, and Expenses tabs all say: "All synced transactions will be <strong>deposited</strong> here." — "deposited" is wrong for expenses (should be "recorded" or "posted"). Same copy block copy-pasted without adapting context.</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">Fees, App Fees, Expenses</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">8</div>
+          <div>
+            <div class="finding-title">Inconsistent info icons (ℹ️ vs ❓)</div>
+            <div class="finding-desc">Some settings use ℹ️ icon, some use ❓. Same function — pick one and use it everywhere. Trivial to fix.</div>
+            <div class="finding-tags"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">All tabs</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">9</div>
+          <div>
+            <div class="finding-title">"&gt;&gt;" link arrows throughout</div>
+            <div class="finding-desc">"Learn more &gt;&gt;", "Import historical data page&gt;&gt;", "Smart rules &gt;&gt;" — double chevrons are non-standard, look amateurish, and are inconsistently applied. Replace with single "→" throughout.</div>
+            <div class="finding-tags"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">All tabs</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">10</div>
+          <div>
+            <div class="finding-title">"Syncs left : 925" has extra space</div>
+            <div class="finding-desc">Global header shows "Syncs left : 925" — space before colon is a typo. Should be "Syncs left: 925".</div>
+            <div class="finding-tags"><span class="badge badge-gray">Low</span><span class="badge badge-gray">Header</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HIGH IMPACT / MEDIUM EFFORT -->
+      <div class="matrix-cell" style="border-top:3px solid var(--blue)">
+        <div class="matrix-cell-header">
+          <span style="font-size:18px">🔵</span>
+          <div><div class="matrix-cell-title">High Impact · Medium Effort</div><div style="font-size:12px;color:var(--gray-500)">Next sprint</div></div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">11</div>
+          <div>
+            <div class="finding-title">No first-time setup guidance</div>
+            <div class="finding-desc">Ignat notes "default settings are almost never okay." Zero onboarding signal exists — no setup checklist, no recommended settings prompt, no "start here" banner. Sales is the #1 most-visited tab, suggesting users go there first. A setup flow with 3–5 key settings would dramatically reduce support load.</div>
+            <div class="finding-tags"><span class="badge badge-red">Critical</span><span class="badge badge-gray">Page-level</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">12</div>
+          <div>
+            <div class="finding-title">No customization indicator on transaction type tabs</div>
+            <div class="finding-desc">Adjustment, Chargeback, Invoice etc. tabs have no indication if they've been customized vs. inheriting from Default. Users don't know if their changes are active. Add a "Customized" badge to modified tabs; show "Using Default" for unmodified ones.</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">Top tab bar</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">13</div>
+          <div>
+            <div class="finding-title">"Create additional settings" is cryptic</div>
+            <div class="finding-desc">Sounds like "add more setting fields" not "configure a new transaction type." Users don't understand this creates a new tab. Rename to "Add transaction type ▾" and add a tooltip: "Configure how a specific transaction type is handled differently from Default."</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">Top tab bar</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">14</div>
+          <div>
+            <div class="finding-title">Multicurrency tab has no controls</div>
+            <div class="finding-desc">The Multicurrency tab is purely instructional — it says "go to Sales, Fees, Expenses tabs to configure." But it's the 10th sidebar tab, suggesting users expect to configure currencies here. At minimum, deep-link to the relevant controls. Ideally, surface the currency fields directly on this tab.</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">Multicurrency</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">15</div>
+          <div>
+            <div class="finding-title">Location name has no placeholder or validation</div>
+            <div class="finding-desc">"Apply location" toggle is On by default but "Location name" dropdown shows no selection and no placeholder text. Users with the toggle On but no location selected will silently get no location applied. Needs: placeholder "Select a location…" + inline warning when toggle is On but no location is selected.</div>
+            <div class="finding-tags"><span class="badge badge-orange">High</span><span class="badge badge-gray">General</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">16</div>
+          <div>
+            <div class="finding-title">Taxes: Default tax code dropdown empty with no placeholder</div>
+            <div class="finding-desc">"Default tax code" dropdown appears empty with no placeholder. Users can't tell if no tax code is selected intentionally or if they need to choose one. Add "No default tax code" as explicit empty state, or "Select a tax code…" as placeholder.</div>
+            <div class="finding-tags"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Taxes</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">17</div>
+          <div>
+            <div class="finding-title">Product mapping: Update button with nothing to update</div>
+            <div class="finding-desc">Product mapping tab shows an "Update" button but has no editable settings on the page — only a "Map products" action. "Update" with nothing to update is confusing. Hide Update on this tab, or explain what it saves.</div>
+            <div class="finding-tags"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Product mapping</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- MEDIUM / LOW EFFORT -->
+      <div class="matrix-cell" style="border-top:3px solid var(--yellow)">
+        <div class="matrix-cell-header">
+          <span style="font-size:18px">🟡</span>
+          <div><div class="matrix-cell-title">Medium Impact · Low Effort</div><div style="font-size:12px;color:var(--gray-500)">Easy polish</div></div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">18</div>
+          <div>
+            <div class="finding-title">Invoices: 4 toggles with no section grouping</div>
+            <div class="finding-desc">Four toggles stacked flat with no subheadings. "Apply payments to unpaid invoices" and "Cancel sync on missing invoice" are logically related — group under "Invoice matching." "Sync open invoices" and "Sync zero invoices" are separate concerns.</div>
+            <div class="finding-tags"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Invoices</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">19</div>
+          <div>
+            <div class="finding-title">Taxes: Relationship between Default tax code and Apply generic tax code unclear</div>
+            <div class="finding-desc">Users don't know if "Default tax code" dropdown and "Apply generic tax code" toggle work together or independently. Neither description explains the relationship. Add a clarifying note: "When Apply generic tax code is on, the Default tax code above is applied to all transactions."</div>
+            <div class="finding-tags"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Taxes</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">20</div>
+          <div>
+            <div class="finding-title">Fees vs Application Fees: No explanation of difference</div>
+            <div class="finding-desc">"Fees" and "Application Fees" are adjacent tabs with nearly identical UI. No label explains that Application Fees is Stripe-specific (fees charged by platforms using Stripe Connect). Users can't tell them apart. Add a subtitle under "Application Fees": "Stripe Connect platforms only."</div>
+            <div class="finding-tags"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Sidebar</span></div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- MEDIUM / HIGH EFFORT -->
+      <div class="matrix-cell" style="border-top:3px solid var(--purple)">
+        <div class="matrix-cell-header">
+          <span style="font-size:18px">🟣</span>
+          <div><div class="matrix-cell-title">Medium Impact · High Effort</div><div style="font-size:12px;color:var(--gray-500)">Roadmap</div></div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">R1</div>
+          <div>
+            <div class="finding-title">Settings search</div>
+            <div class="finding-desc">With 11 tabs and dozens of settings, users can't find specific options. A search bar that highlights matching sections would be a major UX improvement for power users.</div>
+            <div class="finding-tags"><span class="badge badge-purple">Roadmap</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">R2</div>
+          <div>
+            <div class="finding-title">Quick-setup presets</div>
+            <div class="finding-desc">"E-commerce seller", "SaaS subscription", "Service business" presets that pre-fill common settings. Reduces time-to-correct-config from 30+ minutes to under 5.</div>
+            <div class="finding-tags"><span class="badge badge-purple">Roadmap</span></div>
+          </div>
+        </div>
+
+        <div class="finding-item">
+          <div class="finding-num">R3</div>
+          <div>
+            <div class="finding-title">Copy settings between integrations</div>
+            <div class="finding-desc">Users with multiple integrations need to replicate settings. "Apply to another integration" would prevent misconfiguration between Shopify + Stripe setups.</div>
+            <div class="finding-tags"><span class="badge badge-purple">Roadmap</span></div>
+          </div>
+        </div>
+
+      </div>
+
+    </div><!-- /matrix-grid -->
+  </div>
+</div><!-- /ux -->
+
+
+<!-- ══════════════════════════ COPY STRATEGY ══════════════════════════ -->
+<div id="tab-strategy" class="tab-content">
+  <div class="section">
+    <div class="section-title">📐 Copy Strategy</div>
+    <div class="section-subtitle">A unified system. Apply to all 11 tabs. Once consistent, users build mental models faster.</div>
+
+    <div class="alert alert-blue">
+      <div class="alert-icon">💡</div>
+      <div><strong>Core principle:</strong> Every description answers: <em>What does Synder do when this is on? Why does it matter?</em> — max 2 sentences. No preambles. No "from now on."</div>
+    </div>
+
+    <div class="two-col">
+      <div>
+        <div class="strategy-card">
+          <h3>🏷️ Toggle Labels</h3>
+          <ul>
+            <li>Noun phrase or short verb phrase. <strong>No period at end.</strong></li>
+            <li>Sentence case (capitalize first word only): <code>Auto-import</code>, <code>Skip duplicate transactions</code></li>
+            <li>Max 5 words. Longer belongs in the description.</li>
+            <li>❌ <code>Process transactions in multiple currencies.</code></li>
+            <li>✅ <code>Multi-currency support</code></li>
+            <li>❌ <code>Archive Pending transactions after set number of days</code></li>
+            <li>✅ <code>Auto-archive pending transactions</code></li>
+            <li>❌ <code>Skip synchronization of duplicated transactions</code></li>
+            <li>✅ <code>Skip duplicate transactions</code></li>
+          </ul>
+        </div>
+
+        <div class="strategy-card">
+          <h3>📋 Toggle Descriptions</h3>
+          <ul>
+            <li><strong>Positive framing always:</strong> describe what happens when ON.</li>
+            <li>Structure: <code>[What Synder does]. [Why it matters or what to watch out for.]</code></li>
+            <li>❌ Remove: <code>If you enable this setting,</code> / <code>If enabled,</code></li>
+            <li>❌ Remove: <code>from now on</code></li>
+            <li>❌ Remove: <code>(recommended)</code> from body — use a visual badge instead</li>
+            <li>✅ Start with Synder as subject: <code>Synder automatically fetches…</code></li>
+            <li>For settings that disable something: <code>When off, Synder skips…</code></li>
+          </ul>
+        </div>
+
+        <div class="strategy-card">
+          <h3>🔗 Links</h3>
+          <ul>
+            <li>Always: <code>Learn more →</code> (single arrow, lowercase)</li>
+            <li>Internal nav: <code>Import historical data →</code></li>
+            <li>❌ <code>Import historical data page&gt;&gt;</code></li>
+            <li>❌ <code>Smart rules &gt;&gt;</code></li>
+            <li>❌ <code>Learn more &gt;&gt;</code></li>
+            <li>❌ <code>here</code> as a link label (accessibility anti-pattern)</li>
+            <li>✅ <code>Learn how to enable multicurrency in QuickBooks →</code></li>
+          </ul>
+        </div>
+      </div>
+
+      <div>
+        <div class="strategy-card">
+          <h3>🔤 Terminology — Lock These Down</h3>
+          <ul>
+            <li><strong>The product:</strong> <code>Synder</code> always (not "the app", "App", "it", "the system")</li>
+            <li><strong>Accounting software:</strong> <code>your books</code> (generic term for any accounting platform — not "your company", "your accounting platform")</li>
+            <li><strong>Payment platform:</strong> <code>your payment platform</code> or the specific name (Stripe, Shopify)</li>
+            <li><strong>Import:</strong> fetching data from payment platform into Synder</li>
+            <li><strong>Sync:</strong> posting from Synder to books</li>
+            <li><strong>Post:</strong> the act of writing a transaction to books (not "deposit", not "apply")</li>
+            <li><strong>Smart Rules:</strong> Title Case, always (not "Smart rules", "smart rules")</li>
+            <li><strong>Enable / Disable:</strong> standard verbs for toggling features (not "turn on/off", "switch on/off")</li>
+            <li><strong>Click:</strong> for UI elements (not "press", "tap"). Use "Press" only for keyboard shortcuts.</li>
+          </ul>
+        </div>
+
+        <div class="strategy-card">
+          <h3>🔘 Toggle State Labels</h3>
+          <ul>
+            <li><strong>Universal standard: On / Off</strong> — no exceptions</li>
+            <li>❌ <code>Yes / No</code> (Payouts tab currently — fix this)</li>
+            <li>The toggle state should reflect the current state, not an action</li>
+            <li>"On" = feature is active, "Off" = feature is inactive</li>
+          </ul>
+        </div>
+
+        <div class="strategy-card">
+          <h3>🍞 Toast Messages</h3>
+          <ul>
+            <li>Fire <strong>once</strong> per save action. Current behavior: fires 3×.</li>
+            <li>✅ Success pattern: <code>{Action} {past participle}</code> — no period, no exclamation, no "successfully"</li>
+            <li>✅ Success: <code>Settings updated</code></li>
+            <li>❌ Error pattern: <code>Couldn't {verb} the {noun}.</code> — with period</li>
+            <li>❌ Error: <code>Couldn't save settings.</code></li>
+            <li>❌ <code>Success. Settings of organization successfully updated.</code> — too long, redundant</li>
+          </ul>
+        </div>
+
+        <div class="strategy-card">
+          <h3>✍️ Sentence-Level Rules</h3>
+          <ul>
+            <li>No comma after "Please": ❌ <code>Please, specify a category</code> → ✅ <code>Specify a category</code></li>
+            <li>No "press on" for UI interactions: ❌ <code>press on Gear icon</code> → ✅ <code>click the gear icon</code>. Use "click" for all UI elements; reserve "press" for keyboard shortcuts only.</li>
+            <li>Articles required: ❌ <code>To configure account</code> → ✅ <code>To configure an account</code></li>
+            <li>No "simple" (patronizing): ❌ <code>follow these simple steps</code> → ✅ <code>follow these steps</code></li>
+            <li>No "It is an option to": ❌ <code>It is an option to assign a location</code> → ✅ <code>Tags each transaction with a location</code></li>
+            <li>Footer: standardize <code>Terms of Service</code> (Title Case, matches Privacy Policy)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div><!-- /strategy -->
+
+
+<!-- ══════════════════════════ PAGE LEVEL ══════════════════════════ -->
+<div id="tab-page-level" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Page level</div>
+    <div class="section-subtitle">Settings from the page-level and global/structural elements</div>
+    <div class="alert alert-yellow"><div class="alert-icon">📌</div><div>Priority: <span style="color:var(--red);font-weight:700">■ Critical</span> · <span style="color:var(--orange);font-weight:700">■ High</span> · <span style="color:var(--yellow);font-weight:700">■ Medium</span></div></div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <tr class="p-medium">
+            <td><div class="td-element">Mode selector</div><div class="td-location">Top center</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Label</div><div class="copy-txt">Select synchronization mode</div></div></td>
+            <td><div class="problem">Verbose. "Select" is implied by the control.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Label</div><div class="copy-txt">Synchronization mode</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Label</div><div class="copy-txt">Sync mode</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <tr>
+            <td><div class="td-element">"How to change mode"</div><div class="td-location">Next to Summary radio</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Link text</div><div class="copy-txt">How to change mode</div></div></td>
+            <td><div class="problem">Vague — which mode?</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Link text</div><div class="copy-txt">How to switch to Per Transaction →</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Link text</div><div class="copy-txt">Switch modes →</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <tr class="p-high">
+            <td><div class="td-element">"Create additional settings"</div><div class="td-location">Top tab bar</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Button</div><div class="copy-txt">⚙ Create additional settings ▾</div></div></td>
+            <td><div class="problem">Sounds like adding form fields, not creating a new transaction type tab.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Button</div><div class="copy-txt">⚙ Add transaction type ▾</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Button</div><div class="copy-txt">+ Configure transaction type ▾</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <tr class="p-critical">
+            <td><div class="td-element">Save success toast</div><div class="td-location">Fires 3× on single toggle</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Toast</div><div class="copy-txt">Success. Settings of organization successfully updated.</div></div></td>
+            <td><div class="problem">🔴 Fires 3× simultaneously. "Successfully" redundant. Too long.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Toast</div><div class="copy-txt">Settings updated</div><div class="copy-err">Fix deduplication bug — fire once per save.</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Toast</div><div class="copy-txt">Settings updated</div><div class="copy-err">No period, no "successfully." Fix toast dedup bug.</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- GLOBAL / STRUCTURAL rows -->
+          <tr class="p-high">
+            <td><div class="td-element">Header: Syncs left</div><div class="td-location">Top bar, every page</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Text</div><div class="copy-txt">Syncs left : 925</div></div></td>
+            <td><div class="problem">Space before colon.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Text</div><div class="copy-txt">Syncs left: 925</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Text</div><div class="copy-txt">925 syncs remaining</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <tr>
+            <td><div class="td-element">Footer: Terms of service</div><div class="td-location">Footer, every page</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Text</div><div class="copy-txt">Terms of service</div></div></td>
+            <td><div class="problem">Sentence case. "Privacy Policy" next to it is Title Case.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Text</div><div class="copy-txt">Terms of Service</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Text</div><div class="copy-txt">Terms of Service</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /page-level -->
+
+
+<!-- ══════════════════════════ GENERAL ══════════════════════════ -->
+<div id="tab-general" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 General</div>
+    <div class="section-subtitle">Settings from the General settings tab</div>
+    <div class="alert alert-yellow"><div class="alert-icon">📌</div><div>Priority: <span style="color:var(--red);font-weight:700">■ Critical</span> · <span style="color:var(--orange);font-weight:700">■ High</span> · <span style="color:var(--yellow);font-weight:700">■ Medium</span></div></div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- 1. Auto-import -->
+          <tr class="p-high">
+            <td><div class="td-element">Auto-import</div><div class="td-location">Toggle</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-import</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">If you enable this setting (recommended), from now on, Synder will fetch all data from your payment/ecommerce platform. To get past data, please go to Import historical data page&gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">"If you enable this setting" preamble</div>
+              <div class="problem">"from now on" filler</div>
+              <div class="problem">"payment/ecommerce" slash</div>
+              <div class="problem">"page&gt;&gt;" bad link arrow</div>
+              <div class="problem">"(recommended)" in text, not badge</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-import <span class="badge badge-blue" style="font-size:10px">Recommended</span></div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder automatically fetches all new data from your payment or ecommerce platform. For past data, use Import historical data →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-import <span class="badge badge-blue" style="font-size:10px">Recommended</span></div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder automatically imports all new transactions from your payment platform. To import older transactions, use Import historical data →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 2. Auto-sync -->
+          <tr class="p-high">
+            <td><div class="td-element">Auto-sync</div><div class="td-location">Toggle + error state</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-sync</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">If enabled (recommended), from now on, all new transactions will be synced to your books automatically. If you disable Auto-import setting, Auto-sync won't work.</div>
+              <div class="copy-lbl">Error (Auto-import OFF)</div><div class="copy-err">Turn on auto-sync</div>
+            </div></td>
+            <td>
+              <div class="problem">"If enabled" preamble, "from now on" filler</div>
+              <div class="problem">Dependency buried in description</div>
+              <div class="problem">Error reads like a CTA, not status</div>
+              <div class="problem">No mention of Auto-import as blocker</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-sync <span class="badge badge-blue" style="font-size:10px">Recommended</span></div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">New transactions are automatically synced to your books. Requires Auto-import to be enabled.</div>
+              <div class="copy-lbl">Error (Auto-import OFF)</div><div class="copy-err">Auto-sync requires Auto-import to be enabled.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-sync <span class="badge badge-blue" style="font-size:10px">Recommended</span></div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder automatically posts each imported transaction to your books. Requires Auto-import to be enabled.</div>
+              <div class="copy-lbl">Error (Auto-import OFF)</div><div class="copy-err">Auto-sync is disabled because Auto-import is off. Enable Auto-import ↑ to use Auto-sync.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 3. Skip duplicate transactions -->
+          <tr class="p-medium">
+            <td><div class="td-element">Skip duplicate transactions</div><div class="td-location">Toggle · Plan-gated</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Skip synchronization of duplicated transactions</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">If enabled, the already existing transactions in your company will be skipped in the synchronization.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">Upgrade to use</div>
+            </div></td>
+            <td>
+              <div class="problem">Label too long, "duplicated" wrong form</div>
+              <div class="problem">"in your company" — should be "your books"</div>
+              <div class="problem">"If enabled" preamble</div>
+              <div class="problem">Upsell: no plan name, no link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Skip duplicate transactions</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Transactions already in your books won't be synced again.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">Duplicate detection is available on Medium plan and above. Upgrade plan →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Skip duplicate transactions</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder skips transactions that already exist in your books, preventing duplicate entries.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">Duplicate detection is available on Medium plan and above. Upgrade plan →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 4. Multi-currency -->
+          <tr class="p-critical">
+            <td><div class="td-element">Multi-currency support</div><div class="td-location">Toggle</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Process transactions in multiple currencies.</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">If disabled, Synder will only sync transactions matching your accounting platform home currency. Other transactions will be skipped.</div>
+            </div></td>
+            <td>
+              <div class="problem">🔴 Period at end of label</div>
+              <div class="problem">Label is a sentence, not noun phrase</div>
+              <div class="problem">Negative framing — describes Off state</div>
+              <div class="problem">"accounting platform" → "your books"</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Process transactions in multiple currencies</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder syncs transactions in all currencies. When off, only your home currency transactions are synced.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Multi-currency support</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder syncs transactions in all currencies. Disable to limit syncing to your books' home currency only.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 5. Archive Pending -->
+          <tr class="p-medium">
+            <td><div class="td-element">Auto-archive pending</div><div class="td-location">Toggle + sub-field</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Archive Pending transactions after set number of days</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">If enabled, Synder will automatically archive transactions that remain in Pending status for longer than the specified number of days.</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Number input: "Archive Pending transactions if they stay Pending for longer than ___ days after transaction date."</div>
+            </div></td>
+            <td>
+              <div class="problem">Label too long, inconsistent casing ("Pending")</div>
+              <div class="problem">"If enabled" preamble</div>
+              <div class="problem">Sub-field repeats label verbatim</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-archive pending transactions</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Automatically archives transactions that stay pending for more than the specified number of days.</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Archive pending transactions after ___ days</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Auto-archive pending transactions</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder archives transactions stuck in pending after a set number of days. Keeps your transaction list clean.</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Archive transactions still pending after ___ days</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 6. Apply location -->
+          <tr>
+            <td><div class="td-element">Apply location</div><div class="td-location">Toggle · Plan-gated</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply location</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">It is an option to assign a location to each transaction.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">This feature is available on higher plans. Upgrade plan</div>
+            </div></td>
+            <td>
+              <div class="problem">"It is an option to" — weak opener</div>
+              <div class="problem">Upsell: "higher plans" vague, no link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply location</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Assigns a location to each synced transaction.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">Location tagging is available on Medium plan and above. Upgrade plan →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply location</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Tags each transaction with a location in your books. Useful for multi-location businesses.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">Location tagging is available on Medium plan and above. Upgrade plan →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 7. Sync payments without invoices -->
+          <tr class="p-medium">
+            <td><div class="td-element">Payments without invoices</div><div class="td-location">Dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync payments without invoices as</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Use this setting to post your Stripe payments not linked to invoices as Deposits or Sales Receipts. You can then apply deposits to invoices manually. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">Label is a sentence fragment</div>
+              <div class="problem">"Use this setting to" preamble</div>
+              <div class="problem">Stripe-specific</div>
+              <div class="problem">"Learn more &gt;&gt;" bad link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Unlinked payments: post as</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Post payments not linked to invoices as Deposits or Sales Receipts. Deposits can be applied to invoices manually. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Payments without invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Chooses how Synder posts payments without a matching invoice. Deposits can be matched to invoices manually later. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 8. Balance Reserve account -->
+          <tr class="p-high">
+            <td><div class="td-element">Balance Reserve account</div><div class="td-location">Dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Balance Reserve account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Stripe reserves are funds that Stripe withholds/returns from/to a seller's payouts for various reasons. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">Label ambiguous</div>
+              <div class="problem">"withholds/returns from/to" slash notation</div>
+              <div class="problem">"various reasons" vague</div>
+              <div class="problem">"Learn more &gt;&gt;" bad link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Stripe Reserve hold account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Stripe reserves are funds Stripe withholds from or returns to seller payouts. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Reserve fund account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Stripe sometimes holds or returns portions of your payouts as a reserve. This account tracks those movements. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- 9. Timezone -->
+          <tr>
+            <td><div class="td-element">Timezone</div><div class="td-location">Text input</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Timezone</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">The imported transactions will be shown in the selected time zone. Make sure it matches the provider time zone for smooth reconciliation.</div>
+            </div></td>
+            <td>
+              <div class="problem">"Shown" misleading — affects dates</div>
+              <div class="problem">"provider" vague</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Timezone</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Transaction dates are recorded in this timezone. Match it to your payment platform's timezone for accurate reconciliation.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Timezone</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets the timezone for imported transaction dates. Should match your payment platform's timezone to avoid reconciliation mismatches.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /general -->
+
+
+<!-- ══════════════════════════ SALES ══════════════════════════ -->
+<div id="tab-sales" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Sales</div>
+    <div class="section-subtitle">Settings from the Sales settings tab — #1 most-visited (3,619 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- S1. Clearing account -->
+          <tr>
+            <td><div class="td-element">Clearing account</div><div class="td-location">Dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Clearing account represents the payment processor in your books. All synced transactions will be deposited here. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">"Learn more &gt;&gt;" bad link style</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">The clearing account represents your payment processor in your books. All synced transactions are posted here. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder posts all transactions through this clearing account, which represents your payment processor in your books. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S2. Payment Method -->
+          <tr>
+            <td><div class="td-element">Payment method</div><div class="td-location">Dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Payment Method</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">This Payment Method will be set for QuickBooks Sales Receipts, Refund Receipts, Payments and Expenses.</div>
+            </div></td>
+            <td>
+              <div class="problem">QB-specific, not platform-agnostic</div>
+              <div class="problem">"This Payment Method will be set" passive</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Payment method</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets the payment method on synced Sales Receipts, Refund Receipts, Payments, and Expenses.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Payment method</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder applies this payment method to all synced transactions in your books.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S3. Posting date -->
+          <tr class="p-medium">
+            <td><div class="td-element">Posting date</div><div class="td-location">Dropdown (Created / Balance)</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Posting date</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Select posting date for transactions: Balance transaction date (recommended) - when the amount hits your Stripe balance, or Created date - when transaction is created in Stripe. Learn more</div>
+            </div></td>
+            <td>
+              <div class="problem">"Select" preamble</div>
+              <div class="problem">Stripe-specific</div>
+              <div class="problem">Dash instead of em-dash</div>
+              <div class="problem">"Learn more" missing arrow</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Posting date</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Balance date (recommended) = when funds hit your Stripe balance. Created date = when the transaction was created in Stripe. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Posting date</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Controls when transactions are dated in your books. Balance date (recommended) posts when funds settle; Created date posts when the transaction originates. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S4. Enable QB Doc Numbers -->
+          <tr class="p-high">
+            <td><div class="td-element">QuickBooks Doc Numbers</div><div class="td-location">Toggle + error state</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Enable QuickBooks Doc Numbers</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">By enabling this configuration your transactions will follow the standard QuickBooks Doc Number sequence.</div>
+              <div class="copy-lbl">Error (when ON)</div><div class="copy-err">You should turn off custom transaction numbers in QuickBooks company. Please, go to Company Settings -&gt; Sales -&gt; Custom transaction numbers to disable this setting.</div>
+            </div></td>
+            <td>
+              <div class="problem">"Enable" verb in toggle label</div>
+              <div class="problem">"By enabling this configuration" preamble</div>
+              <div class="problem">Error: demanding tone, comma after "Please"</div>
+              <div class="problem">Error: "-&gt;" arrows, no link to QBO</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">QuickBooks Doc Numbers</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Transactions follow the standard QuickBooks Doc Number sequence.</div>
+              <div class="copy-lbl">Error (when ON)</div><div class="copy-err">Custom transaction numbers must be disabled in QuickBooks first. Go to QuickBooks → Settings → Sales → Custom transaction numbers. Learn how →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">QuickBooks doc number sequence</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder assigns sequential QuickBooks Doc Numbers to all synced transactions.</div>
+              <div class="copy-lbl">Error (when ON)</div><div class="copy-err">To use Synder's doc numbers, disable custom transaction numbers in QuickBooks: Settings → Sales → Custom transaction numbers → Off. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S5. Customer name search priority -->
+          <tr>
+            <td><div class="td-element">Customer name search priority</div><div class="td-location">Collapsible / drag-drop</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Customer name search priority</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Drag and drop the lines to set your custom order of fields to take a payer's name from.</div>
+            </div></td>
+            <td>
+              <div class="problem">"take a payer's name from" — awkward ending preposition</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Customer name search priority</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Drag to reorder which fields Synder uses to find the customer's name.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Customer name search priority</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets the priority for finding a customer name. Synder checks fields in this order when matching transactions to customers.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S6. Apply generic customer -->
+          <tr>
+            <td><div class="td-element">Generic customer</div><div class="td-location">Toggle + sub-field</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply generic customer</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">It is an option to assign a generic customer instead of sending over each customer on sales transaction individually.</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Generic customer input: "If the generic customer setting is 'ON', choose or type in a name to be used. All of your transactions will be synchronized under the default customer name."</div>
+            </div></td>
+            <td>
+              <div class="problem">"Apply" overloaded verb (also used in Apply location)</div>
+              <div class="problem">"It is an option to" opener</div>
+              <div class="problem">"sending over" informal</div>
+              <div class="problem">Sub-field: "If the generic customer setting is 'ON'" redundant</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Use generic customer name</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Uses a single generic customer name for all sales transactions instead of syncing each customer individually.</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Generic customer: "Select or enter a customer name. All transactions will be synced under this name."</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Generic customer name</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder uses one generic customer name for all transactions instead of creating individual customer records for each sale.</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Generic customer: "Enter the default customer name for all synced transactions."</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S7. Applied Balance Account -->
+          <tr>
+            <td><div class="td-element">Applied Balance Account</div><div class="td-location">Dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Applied Balance Account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Used to record Stripe customer applied balances when they reduce an invoice or payment total. Synder uses this account to create and map the 'Stripe applied balance' item.</div>
+            </div></td>
+            <td>
+              <div class="problem">Redundant — second sentence restates the first</div>
+              <div class="problem">Stripe-specific</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Applied Balance Account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Records customer credits applied to reduce an invoice or payment total. Synder maps these to a 'Stripe applied balance' item in your books.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Applied Balance Account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Tracks customer balance credits when they're applied to reduce invoices or payments. Synder creates a corresponding line item in your books.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S8. Sync discounts as products -->
+          <tr class="p-medium">
+            <td><div class="td-element">Sync discounts as products</div><div class="td-location">Toggle · Plan-gated</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync discounts as products</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Any discount will be synced as an additional product with default 'Stripe discount' name or discount name from the integration (if any).</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">This feature is available on higher plans. Upgrade plan</div>
+            </div></td>
+            <td>
+              <div class="problem">"if any" vague parenthetical</div>
+              <div class="problem">"from the integration" — which one?</div>
+              <div class="problem">Upsell shown as red text-danger — looks like error</div>
+              <div class="problem">Upsell: no plan name, no link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync discounts as products</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Discounts are synced as a separate line item, using the discount name from your payment platform or "Stripe discount" as default.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">Discount syncing is available on Medium plan and above. Upgrade plan →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync discounts as products</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder adds each discount as a product line item. The name comes from your payment platform, or defaults to "Stripe discount" if none is set.</div>
+              <div class="copy-lbl">Upsell</div><div class="copy-upsell">Discount syncing is available on Medium plan and above. Upgrade plan →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- S9. Payment method mapping -->
+          <tr>
+            <td><div class="td-element">Payment method mapping</div><div class="td-location">Table</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Payment method mapping</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt"><em>(none)</em></div>
+            </div></td>
+            <td>
+              <div class="problem">No description — users don't know what mapping does</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Payment method mapping</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Maps payment methods from your payment platform to your books.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Payment method mapping</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Match payment methods from your payment platform to the corresponding methods in your books. Synder uses this mapping for all synced transactions.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /sales -->
+
+
+<!-- ══════════════════════════ INVOICES ══════════════════════════ -->
+<div id="tab-invoices" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Invoices</div>
+    <div class="section-subtitle">Settings from the Invoices settings tab — #2 most-visited (2,938 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- I1. Apply payments to unpaid invoices -->
+          <tr>
+            <td><div class="td-element">Apply payments to unpaid invoices</div><div class="td-location">Toggle</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply payments to unpaid Invoice/Bill transactions</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Payment will be applied to the matching unpaid Invoice/Bill transaction.</div>
+            </div></td>
+            <td>
+              <div class="problem">"Invoice/Bill" slash inconsistency</div>
+              <div class="problem">"Applied to" vague</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply payments to unpaid invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder matches incoming payments to unpaid invoices or bills.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply payments to unpaid invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder automatically applies each payment to its matching open invoice or bill in your books.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- I2. Cancel sync on missing invoice -->
+          <tr class="p-high">
+            <td><div class="td-element">Cancel sync on missing invoice</div><div class="td-location">Toggle</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Cancel sync if there is no matching open invoice found for a payment</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">If you enable this setting, Synder will search across the existing invoices in your books and if the matching invoice doesn't exist, it will cancel synchronization.</div>
+            </div></td>
+            <td>
+              <div class="problem">Label is a full sentence — way too long for a toggle</div>
+              <div class="problem">"If you enable this setting" preamble</div>
+              <div class="problem">Long conditional sentence</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Cancel sync on missing invoice</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder checks for a matching open invoice before syncing. If none is found, the transaction is not synced.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Require matching invoice to sync</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder blocks syncing for any payment that doesn't have a matching open invoice in your books. Use this to prevent unmatched payments from creating new records.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- I3. Sync unpaid (open) invoices -->
+          <tr>
+            <td><div class="td-element">Sync unpaid invoices</div><div class="td-location">Toggle</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync unpaid (open) invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">This setting allows you to sync open invoices with your accounting system. Once received, the payment will be automatically attached to the corresponding invoice and the invoice will be marked as paid. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">"This setting allows you to" preamble</div>
+              <div class="problem">Subject switch mid-description</div>
+              <div class="problem">"Learn more &gt;&gt;" bad link</div>
+              <div class="problem">"accounting system" → "your books"</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync unpaid invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Syncs open invoices to your books. When a payment arrives, it's automatically matched to the invoice and marked as paid. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync unpaid invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder syncs unpaid invoices to your books. When a matching payment is received, the invoice is automatically marked as paid. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- I4. Sync zero invoices -->
+          <tr>
+            <td><div class="td-element">Sync zero invoices</div><div class="td-location">Toggle</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync zero invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Enable this setting to import and sync invoices where all line amounts are 0 and the totals are 0. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">"Enable this setting to" preamble</div>
+              <div class="problem">"all line amounts are 0 and totals are 0" redundant</div>
+              <div class="problem">"Learn more &gt;&gt;" bad link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync zero invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Imports and syncs invoices where all amounts are zero. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Sync zero invoices</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder imports invoices with a total of $0. Useful for free orders, trials, or fully discounted transactions. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /invoices -->
+
+
+<!-- ══════════════════════════ PRODUCTS/SERVICES ══════════════════════════ -->
+<div id="tab-products" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Products/Services</div>
+    <div class="section-subtitle">Settings from the Products/Services settings tab — #3 most-visited (2,685 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- P1. Record transactions with -->
+          <tr class="p-medium">
+            <td><div class="td-element">Record transactions with…</div><div class="td-location">Inline radio</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Record transactions with [Original/Common] product/service name and SKU (if any).</div>
+            </div></td>
+            <td>
+              <div class="problem">"product/service" slash notation</div>
+              <div class="problem">"(if any)" feels like legal boilerplate</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Record transactions using the [Original/Common] product or service name and SKU.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Use the [Original/Common] product name and SKU from your payment platform.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- P2. Missing product fallback -->
+          <tr>
+            <td><div class="td-element">Missing product fallback</div><div class="td-location">Inline dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">If the original product is missing in the sales platform, use [Stripe product] instead.</div>
+            </div></td>
+            <td>
+              <div class="problem">No major issue — functional copy</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">If the original product is missing, use [Stripe product] instead.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">When the product is missing from your payment platform, use [Stripe product] instead.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- P3. Product search info -->
+          <tr>
+            <td><div class="td-element">Product search info</div><div class="td-location">Static text</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">Synder will search for products in your accounting and automatically use them in transactions if found. Configure product search priority.</div>
+            </div></td>
+            <td>
+              <div class="problem">"your accounting" — should be "your books"</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">Synder searches for products in your books and automatically uses them in transactions. Configure product search priority.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">Synder automatically matches products from your payment platform to your books. Configure product search priority →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- P4. Matching product not found -->
+          <tr>
+            <td><div class="td-element">Matching product not found</div><div class="td-location">Inline dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">If the matching product is NOT found in accounting [Create new product / Cancel synchronization].</div>
+            </div></td>
+            <td>
+              <div class="problem">"NOT" in caps looks like a system error</div>
+              <div class="problem">"Cancel synchronization" verbose</div>
+              <div class="problem">"in accounting" → "in your books"</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">If no matching product is found: [Create new product / Cancel sync]</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">When the product isn't found in your books: [Create new product / Cancel sync]</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- P5. Created product should be -->
+          <tr>
+            <td><div class="td-element">Created product type</div><div class="td-location">Inline dropdowns</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Created product should be [Non-inventory/Service/Inventory] product with [income account] income, [expense account] expense account and original name/SKU (if any).</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Matching works automatically based on the product name or SKU.</div>
+            </div></td>
+            <td>
+              <div class="problem">Label is an entire sentence with multiple embedded controls</div>
+              <div class="problem">"(if any)" boilerplate</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">New products are created as [Non-inventory/Service/Inventory] with [income account] income and [expense account] expense account.</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Matching works automatically based on the product name or SKU.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Create as [Non-inventory/Service/Inventory] product with [income account] income and [expense account] expense account.</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder matches products by name or SKU automatically.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- P6. Get product name from description -->
+          <tr>
+            <td><div class="td-element">Product name from description</div><div class="td-location">Toggle</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Get product name from a description of transaction or order</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">When 'ON', Synder will be taking a product name from a description of transaction or order.</div>
+            </div></td>
+            <td>
+              <div class="problem">Label too long — verb phrase</div>
+              <div class="problem">"will be taking" — awkward future progressive</div>
+              <div class="problem">"'ON'" in quotes</div>
+              <div class="problem">Description repeats the label</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Use description as product name</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">When on, Synder uses the transaction or order description as the product name.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Product name from description</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder reads the product name from the transaction or order description instead of using the product field.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /products -->
+
+
+<!-- ══════════════════════════ PRODUCT MAPPING ══════════════════════════ -->
+<div id="tab-product-mapping" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Product mapping</div>
+    <div class="section-subtitle">Plan-gated tab — "This feature is available on higher plans. Upgrade plan"</div>
+    <div class="alert alert-yellow">
+      <div class="alert-icon">ℹ️</div>
+      <div>Product mapping is available on Medium plan and above. The entire tab shows the upsell message for users on lower plans. When accessible, it shows: "If your product names match between your sales integration and your accounting integration, Synder will match them automatically. You can map your products here if you want to override this or if names don't match."</div>
+    </div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <tr>
+            <td><div class="td-element">Product mapping tab</div><div class="td-location">Product mapping page</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Description</div><div class="copy-txt">If your product names match between your sales integration and your accounting integration, Synder will match them automatically. You can map your products here if you want to override this or if names don't match.</div>
+            </div></td>
+            <td>
+              <div class="problem">"integration" repeated</div>
+              <div class="problem">"here" vague link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder automatically matches products by name between your sales and accounting platforms. Map products manually here to override automatic matching or fix name mismatches.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder auto-matches products by name. Use this table to override matches or map products whose names differ between platforms.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /product-mapping -->
+
+
+<!-- ══════════════════════════ TAXES ══════════════════════════ -->
+<div id="tab-taxes" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Taxes</div>
+    <div class="section-subtitle">Settings from the Taxes settings tab — #4 most-visited (1,853 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- T1. Apply Taxes -->
+          <tr>
+            <td><div class="td-element">Apply taxes</div><div class="td-location">Toggle + sub-fields</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply Taxes</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Tax details of your transactions will be transferred over to your books, and QuickBooks will apply a tax code based on your Tax center settings. If you don't see any tax information imported to your books, have Synder apply taxes with Smart rules &gt;&gt;</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Shows "Sales tax settings" section with: Default tax code dropdown · Apply generic tax code toggle (both have no descriptions)</div>
+            </div></td>
+            <td>
+              <div class="problem">"Your books" ×2</div>
+              <div class="problem">QB-specific reference</div>
+              <div class="problem">"Smart rules &gt;&gt;" bad link, wrong casing</div>
+              <div class="problem">Sub-fields have zero descriptions</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply taxes</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Tax details are synced to your books using your Tax Center settings. If taxes aren't appearing, apply them with Smart Rules →</div>
+              <div class="copy-lbl">When enabled — Default tax code</div><div class="copy-sub">Applies the default tax code to all transactions that don't carry individual tax data.</div>
+              <div class="copy-lbl">When enabled — Apply generic tax code</div><div class="copy-sub">Applies the Default tax code above to all transactions, overriding per-transaction tax data.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Apply taxes</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder transfers tax details to your books. If taxes aren't showing up, use Smart Rules to apply them automatically →</div>
+              <div class="copy-lbl">When enabled — Default tax code</div><div class="copy-sub">Select a fallback tax code. Synder uses this when transactions don't include tax data.</div>
+              <div class="copy-lbl">When enabled — Apply generic tax code</div><div class="copy-sub">Uses the Default tax code for all transactions. Enable when your transactions don't carry individual tax data from your payment platform.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- T2. Smart Rules link -->
+          <tr>
+            <td><div class="td-element">Smart Rules link</div><div class="td-location">Bottom of Taxes tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Link text</div><div class="copy-txt">Need more flexibility with tax settings? Build a Smart Rule &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">"&gt;&gt;" bad link style</div>
+              <div class="problem">"Smart Rule" singular vs plural elsewhere</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Link text</div><div class="copy-txt">Need more flexibility? Build a Smart Rule →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Link text</div><div class="copy-txt">More complex tax rules? Use Smart Rules →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /taxes -->
+
+
+<!-- ══════════════════════════ FEES ══════════════════════════ -->
+<div id="tab-fees" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Fees</div>
+    <div class="section-subtitle">Settings from the Fees settings tab — #5 most-visited (1,701 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- F1. Clearing account (Fees) -->
+          <tr class="p-high">
+            <td><div class="td-element">Clearing account</div><div class="td-location">Dropdown · Fees tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Clearing account represents the payment processor in your books. All synced transactions will be deposited here. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">🔴 "Deposited" wrong for fees</div>
+              <div class="problem">Same copy reused from Sales without adapting</div>
+              <div class="problem">"Learn more &gt;&gt;" bad link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">The clearing account represents your payment processor in your books. All fee transactions are recorded here. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder routes fee transactions through this clearing account, which represents your payment processor in your books. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- F2. Vendor -->
+          <tr>
+            <td><div class="td-element">Vendor</div><div class="td-location">Dropdown · Fees tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Vendor</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">App will use this QuickBooks Vendor for Stripe fees. Select available vendor or type new one.</div>
+            </div></td>
+            <td>
+              <div class="problem">"App" as subject — should be "Synder"</div>
+              <div class="problem">QB-specific</div>
+              <div class="problem">"Type new one" informal</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Vendor</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder assigns this vendor to all Stripe fee transactions. Select an existing vendor or create a new one.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Vendor</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets the vendor used for Stripe fee transactions in your books. Select an existing vendor or enter a new name to create one.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- F3. Category (Fees) -->
+          <tr>
+            <td><div class="td-element">Category</div><div class="td-location">Dropdown · Fees tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Stripe fees are considered an expense. Please, specify a category to which Stripe fees will be applied.</div>
+              <div class="copy-lbl">Link</div><div class="copy-txt">Create Smart Rule to categorize Stripe fee automatically &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">Comma after "Please"</div>
+              <div class="problem">Passive voice ("will be applied")</div>
+              <div class="problem">Link: missing "a" before Smart Rule</div>
+              <div class="problem">"fee" should be "fees" (plural)</div>
+              <div class="problem">"&gt;&gt;" bad link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Specify the expense category for Stripe fees.</div>
+              <div class="copy-lbl">Link</div><div class="copy-txt">Auto-categorize fees with Smart Rules →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets the expense category where Synder posts Stripe fees in your books.</div>
+              <div class="copy-lbl">Link</div><div class="copy-txt">Categorize fees automatically with Smart Rules →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /fees -->
+
+
+<!-- ══════════════════════════ APPLICATION FEES ══════════════════════════ -->
+<div id="tab-app-fees" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Application Fees</div>
+    <div class="section-subtitle">Settings from the Application Fees settings tab — Stripe Connect platforms only (#9, 450 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- AF1. Clearing account (App Fees) -->
+          <tr>
+            <td><div class="td-element">Clearing account</div><div class="td-location">Dropdown · App Fees tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Clearing account represents the payment processor in your books. All synced transactions will be deposited here. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">"Deposited" wrong for application fees</div>
+              <div class="problem">Same copy as Sales/Fees</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">The clearing account represents your payment processor in your books. Application fee transactions are recorded here. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder records application fee transactions through this clearing account. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- AF2. Category (App Fees) -->
+          <tr>
+            <td><div class="td-element">Category</div><div class="td-location">Dropdown · App Fees tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Stripe application fees are considered an expense. Please, specify a category to which Stripe application fees will be applied.</div>
+            </div></td>
+            <td>
+              <div class="problem">Comma after "Please"</div>
+              <div class="problem">Same pattern as Fees tab</div>
+              <div class="problem">No explanation of what application fees are</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Specify the expense category for Stripe application fees.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets the expense category where Synder posts Stripe application fees. Application fees are charged by platforms using Stripe Connect.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /app-fees -->
+
+
+<!-- ══════════════════════════ EXPENSES ══════════════════════════ -->
+<div id="tab-expenses" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Expenses</div>
+    <div class="section-subtitle">Settings from the Expenses settings tab (#8, 622 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- E1. Clearing account (Expenses) -->
+          <tr class="p-high">
+            <td><div class="td-element">Clearing account</div><div class="td-location">Dropdown · Expenses tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Clearing account represents the payment processor in your books. All synced transactions will be deposited here. Learn more &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">🔴 "Deposited" wrong for expenses</div>
+              <div class="problem">Copy-pasted from Sales without adapting</div>
+              <div class="problem">"Learn more &gt;&gt;" bad link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">The clearing account represents your payment processor in your books. All expense transactions are recorded here. Learn more →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Clearing account</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder records expense transactions through this clearing account in your books. Learn more →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- E2. Category (Expenses) -->
+          <tr>
+            <td><div class="td-element">Category</div><div class="td-location">Dropdown · Expenses tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">It specifies the category to which Stripe expenses are applied.</div>
+              <div class="copy-lbl">Link</div><div class="copy-txt">Create Smart rule to categorize Stripe expenses automatically &gt;&gt;</div>
+            </div></td>
+            <td>
+              <div class="problem">"It" ambiguous subject</div>
+              <div class="problem">"Applied" vague</div>
+              <div class="problem">"Smart rule" lowercase r</div>
+              <div class="problem">"&gt;&gt;" bad link</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Specifies the expense category for Stripe expenses in your books.</div>
+              <div class="copy-lbl">Link</div><div class="copy-txt">Auto-categorize expenses with Smart Rules →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Category</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets which expense category Synder uses when posting Stripe expense transactions.</div>
+              <div class="copy-lbl">Link</div><div class="copy-txt">Categorize expenses automatically with Smart Rules →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- E3. Generic Vendor -->
+          <tr>
+            <td><div class="td-element">Generic vendor</div><div class="td-location">Toggle + sub-field</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Generic Vendor</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Enable this option to assign a generic vendor to each transaction instead of sending over each vendor on expense transaction individually. (E.g. Vendor name: Stripe)</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Generic Vendor Name input (default: Stripe): "Choose or type in a name to be used. All of your transactions will be synchronized under the generic vendor name."</div>
+            </div></td>
+            <td>
+              <div class="problem">Inconsistent with "Apply generic customer" on Sales tab</div>
+              <div class="problem">"Enable this option to" preamble</div>
+              <div class="problem">"Sending over" informal</div>
+              <div class="problem">"(E.g.)" in parentheses</div>
+              <div class="problem">Sub-field: "Choose or type in" informal</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Use generic vendor name</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Uses a single generic vendor name for all expense transactions instead of syncing individual vendors. E.g. "Stripe".</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Generic vendor name: "Select or enter the vendor name for all expense transactions."</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Generic vendor name</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder uses one generic vendor name for all expense transactions instead of creating individual vendor records. For example, "Stripe."</div>
+              <div class="copy-lbl">When enabled</div><div class="copy-sub">Generic vendor name: "Enter the default vendor name for all synced expense transactions."</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /expenses -->
+
+
+<!-- ══════════════════════════ PAYOUTS ══════════════════════════ -->
+<div id="tab-payouts" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Payouts</div>
+    <div class="section-subtitle">Settings from the Payouts settings tab (#6, 1,395 clicks/month) — critical Yes/No toggle inconsistency</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- PO1. Process payouts -->
+          <tr class="p-critical">
+            <td><div class="td-element">Process payouts</div><div class="td-location">Toggle · Uses Yes/No</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Process payouts — <strong>Yes / No</strong></div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">If 'No' app won't receive and synchronize payouts.</div>
+            </div></td>
+            <td>
+              <div class="problem">🔴 Only tab using Yes/No — all others use On/Off</div>
+              <div class="problem">"If 'No' app" reads as "no app" without comma</div>
+              <div class="problem">"App" not "Synder"</div>
+              <div class="problem">Negative framing</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Process payouts — <strong>On / Off</strong></div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">When on, Synder imports and syncs payout transactions.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Process payouts — <strong>On / Off</strong></div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder imports and posts payout transactions to your books. Disable to skip payout sync entirely.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- PO2. Transfer Funds To -->
+          <tr>
+            <td><div class="td-element">Transfer funds to</div><div class="td-location">Dropdown</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Transfer Funds To</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">App will transfer funds from sales bank account to this one for payout transactions.</div>
+            </div></td>
+            <td>
+              <div class="problem">"App" not "Synder"</div>
+              <div class="problem">"Sales bank account" — undefined reference</div>
+              <div class="problem">"This one" vague</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Transfer funds to</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Synder transfers payout funds from your sales clearing account to this account.</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Label</div><div class="copy-txt">Transfer funds to</div>
+              <div class="copy-lbl">Description</div><div class="copy-txt">Sets the destination account for payout transfers. Synder moves payout funds from your sales clearing account to this account.</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /payouts -->
+
+
+<!-- ══════════════════════════ MULTICURRENCY ══════════════════════════ -->
+<div id="tab-multicurrency" class="tab-content">
+  <div class="section">
+    <div class="section-title">📝 Multicurrency</div>
+    <div class="section-subtitle">Settings from the Multicurrency settings tab — instructional only (#10, 439 clicks/month)</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:14%">Element</th><th style="width:22%">Current Copy</th><th style="width:14%">Problems</th><th style="width:20%">Option A</th><th style="width:20%">Option B</th><th style="width:10%">✅ Approved</th></tr></thead>
+        <tbody>
+
+          <!-- MC1. Intro paragraph -->
+          <tr>
+            <td><div class="td-element">Intro paragraph</div><div class="td-location">Top of tab</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">Synder differentiates between your home currency (based on your company currency settings) and foreign currencies. Before you start syncing foreign currency transactions, make sure that multicurrency is enabled in your QuickBooks. Learn how to enable it here.</div>
+            </div></td>
+            <td>
+              <div class="problem">"here" as link label (accessibility)</div>
+              <div class="problem">"your QuickBooks" informal/possessive</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">Synder supports multiple currencies. Make sure multicurrency is enabled in QuickBooks before syncing foreign currency transactions. Learn how to enable multicurrency →</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">Synder syncs transactions in your home currency and foreign currencies. Before syncing multi-currency transactions, enable multicurrency in QuickBooks. Learn how to enable it →</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- MC2. Step instruction header -->
+          <tr>
+            <td><div class="td-element">Step instruction header</div><div class="td-location">Before steps</div></td>
+            <td><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">To set up additional currencies follow these simple steps:</div>
+            </div></td>
+            <td>
+              <div class="problem">"simple" patronizing</div>
+              <div class="problem">Missing comma before "follow"</div>
+            </td>
+            <td class="td-optA"><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">To set up additional currencies, follow these steps:</div>
+            </div></td>
+            <td class="td-optB"><div class="copy-block">
+              <div class="copy-lbl">Text</div><div class="copy-txt">Set up additional currencies:</div>
+            </div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- MC3. Step 1 -->
+          <tr>
+            <td><div class="td-element">Step 1</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Go to Sales and press on Gear</div></div></td>
+            <td><div class="problem">"press on" → "click." Missing article "the" before Gear.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Go to Sales and click the gear icon (⚙)</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Open the Sales tab and click the gear icon ⚙</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- MC4. Step 2 -->
+          <tr>
+            <td><div class="td-element">Step 2</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Choose currencies and Set up a Deposit account</div></div></td>
+            <td><div class="problem">"Set up" capitalized mid-sentence.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Choose currencies and set up a deposit account</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Select currencies and configure a deposit account for each</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- MC5. Step 2 — Deposit description -->
+          <tr>
+            <td><div class="td-element">Deposit account description</div><div class="td-location">In step illustration</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Description</div><div class="copy-txt">QuickBooks Sales Receipts, Refund Receipt and Payments will be deposited to this account. To configure account in other currencies press on Gear icon.</div></div></td>
+            <td>
+              <div class="problem">"Refund Receipt" should be "Refund Receipts" (plural)</div>
+              <div class="problem">Missing article "an" before "account"</div>
+              <div class="problem">"press on Gear icon" → "click the gear icon"</div>
+            </td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Description</div><div class="copy-txt">Sales Receipts, Refund Receipts, and Payments are deposited to this account. To configure accounts in other currencies, click the gear icon ⚙.</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Description</div><div class="copy-txt">Synder posts Sales Receipts, Refund Receipts, and Payments to this account. Click ⚙ to set up accounts for other currencies.</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- MC6. Step 3 -->
+          <tr>
+            <td><div class="td-element">Step 3</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Select Fee Bank/Credit account and Fee category</div></div></td>
+            <td><div class="problem">"Bank/Credit" slash notation</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Select a fee bank or credit account and fee category</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Choose the account and category for fees</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- MC7. Step 4 -->
+          <tr>
+            <td><div class="td-element">Step 4</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Choose Expense Bank/Credit account and Expense category</div></div></td>
+            <td><div class="problem">"Bank/Credit" slash notation</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Choose an expense bank or credit account and expense category</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Choose the account and category for expenses</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+          <!-- MC8. Step 5 -->
+          <tr>
+            <td><div class="td-element">Step 5</div></td>
+            <td><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Save your changes by clicking on Update</div></div></td>
+            <td><div class="problem">"clicking on" → "clicking." Redundant instruction.</div></td>
+            <td class="td-optA"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Click Update to save your changes</div></div></td>
+            <td class="td-optB"><div class="copy-block"><div class="copy-lbl">Step</div><div class="copy-txt">Click Update to save</div></div></td>
+            <td><div class="td-approved" contenteditable="true"></div></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div><!-- /multicurrency -->
+
+
+<!-- ══════════════════════════ LOGROCKET DATA ══════════════════════════ -->
+<div id="tab-logrocket" class="tab-content">
+  <div class="section">
+    <div class="section-title">📈 LogRocket Data</div>
+    <div class="section-subtitle">go.synder.com · Feb 11 – Mar 13, 2026 · 30-day window</div>
+
+    <div class="stat-row">
+      <div class="stat-card"><div class="stat-value">868</div><div class="stat-label">Unique users / month</div><div class="stat-delta">↑ +7% vs prior period</div></div>
+      <div class="stat-card"><div class="stat-value">~60</div><div class="stat-label">Daily unique users avg</div><div class="stat-delta">Range: 11–101/day</div></div>
+      <div class="stat-card"><div class="stat-value">565</div><div class="stat-label">Settings button clicks</div><div class="stat-delta">18.2 avg/day</div></div>
+      <div class="stat-card"><div class="stat-value">16,486</div><div class="stat-label">Sidebar tab clicks total</div><div class="stat-delta">All 10 tabs combined</div></div>
+    </div>
+
+    <div class="strategy-card">
+      <h3>🗂️ Tab rankings — full data</h3>
+      <table style="font-size:13px;border:none">
+        <thead><tr><th style="background:none;text-align:left;padding:6px 12px">Rank</th><th style="background:none;text-align:left;padding:6px 12px">Tab</th><th style="background:none;text-align:right;padding:6px 12px">Clicks (30d)</th><th style="background:none;text-align:left;padding:6px 12px">Share</th><th style="background:none;text-align:left;padding:6px 12px">Priority signal</th></tr></thead>
+        <tbody>
+          <tr><td style="padding:6px 12px;border:none">1</td><td style="padding:6px 12px;border:none"><strong>Sales</strong></td><td style="padding:6px 12px;text-align:right;border:none">3,619</td><td style="padding:6px 12px;border:none">22%</td><td style="padding:6px 12px;border:none"><span class="badge badge-red">Fix copy first</span></td></tr>
+          <tr style="background:var(--gray-50)"><td style="padding:6px 12px;border:none">2</td><td style="padding:6px 12px;border:none"><strong>Invoices</strong></td><td style="padding:6px 12px;text-align:right;border:none">2,938</td><td style="padding:6px 12px;border:none">18%</td><td style="padding:6px 12px;border:none"><span class="badge badge-orange">Long toggle labels critical</span></td></tr>
+          <tr><td style="padding:6px 12px;border:none">3</td><td style="padding:6px 12px;border:none"><strong>Products/Services</strong></td><td style="padding:6px 12px;text-align:right;border:none">2,685</td><td style="padding:6px 12px;border:none">16%</td><td style="padding:6px 12px;border:none"><span class="badge badge-orange">Complex inline flows</span></td></tr>
+          <tr style="background:var(--gray-50)"><td style="padding:6px 12px;border:none">4</td><td style="padding:6px 12px;border:none"><strong>Taxes</strong></td><td style="padding:6px 12px;text-align:right;border:none">1,853</td><td style="padding:6px 12px;border:none">11%</td><td style="padding:6px 12px;border:none"><span class="badge badge-yellow">Missing generic tax description</span></td></tr>
+          <tr><td style="padding:6px 12px;border:none">5</td><td style="padding:6px 12px;border:none"><strong>Fees</strong></td><td style="padding:6px 12px;text-align:right;border:none">1,701</td><td style="padding:6px 12px;border:none">10%</td><td style="padding:6px 12px;border:none"><span class="badge badge-yellow">"Please, specify" error</span></td></tr>
+          <tr style="background:var(--gray-50)"><td style="padding:6px 12px;border:none">6</td><td style="padding:6px 12px;border:none"><strong>Payouts</strong></td><td style="padding:6px 12px;text-align:right;border:none">1,395</td><td style="padding:6px 12px;border:none">8%</td><td style="padding:6px 12px;border:none"><span class="badge badge-red">Yes/No toggle — fix now</span></td></tr>
+          <tr><td style="padding:6px 12px;border:none">7</td><td style="padding:6px 12px;border:none">General</td><td style="padding:6px 12px;text-align:right;border:none">984</td><td style="padding:6px 12px;border:none">6%</td><td style="padding:6px 12px;border:none"><span class="badge badge-gray">Landing tab — auto-loaded</span></td></tr>
+          <tr style="background:var(--gray-50)"><td style="padding:6px 12px;border:none">8</td><td style="padding:6px 12px;border:none">Expenses</td><td style="padding:6px 12px;text-align:right;border:none">622</td><td style="padding:6px 12px;border:none">4%</td><td style="padding:6px 12px;border:none"><span class="badge badge-gray">Lower priority</span></td></tr>
+          <tr><td style="padding:6px 12px;border:none">9</td><td style="padding:6px 12px;border:none">Application Fees</td><td style="padding:6px 12px;text-align:right;border:none">450</td><td style="padding:6px 12px;border:none">3%</td><td style="padding:6px 12px;border:none"><span class="badge badge-gray">Niche use case</span></td></tr>
+          <tr style="background:var(--gray-50)"><td style="padding:6px 12px;border:none">10</td><td style="padding:6px 12px;border:none">Multicurrency</td><td style="padding:6px 12px;text-align:right;border:none">439</td><td style="padding:6px 12px;border:none">3%</td><td style="padding:6px 12px;border:none"><span class="badge badge-gray">Instructional-only tab</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="strategy-card">
+      <h3>💡 Key Takeaways</h3>
+      <ul>
+        <li><strong>Sales + Invoices + Products = 56%</strong> of all tab traffic. Fix these three first.</li>
+        <li><strong>General ranks #7</strong> despite being the landing tab — users don't click it because they land there automatically. But the copy issues here are seen by everyone on first load.</li>
+        <li><strong>Payouts ranks #6</strong> with 1,395 clicks/month — the Yes/No toggle inconsistency is hitting a lot of users.</li>
+        <li><strong>Settings usage growing 7–9% MoM</strong> — fixing issues now has compounding benefit as user base expands.</li>
+      </ul>
+    </div>
+  </div>
+</div><!-- /logrocket -->
+
+
+<!-- ══════════════════════════ ERROR COPY ══════════════════════════ -->
+<div id="tab-errors" class="tab-content">
+  <div class="section">
+    <div class="section-title">⚠️ Error & Warning Messages — Full Catalog</div>
+    <div class="section-subtitle">Every error, warning, validation, and upsell message found across Settings (per-transaction mode). Tested March 18, 2026.</div>
+
+    <div class="alert alert-red">
+      <div class="alert-icon">🔥</div>
+      <div><strong>Critical finding:</strong> The Update button is permanently blocked by a loading state that never resolves. 29 hidden spinners in the DOM prevent saving across ALL tabs. This is the #1 issue to fix.</div>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--red)">1</div>
+        <div class="stat-label">Critical blocking bug</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">9</div>
+        <div class="stat-label">Distinct error messages</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">2</div>
+        <div class="stat-label">Upsell/gating messages</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value">3</div>
+        <div class="stat-label">Upsell/gating messages</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 1: Update Unavailable -->
+  <div class="section">
+    <div class="critical-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--red)">🔴 1. "Update unavailable" — Permanent Save Blocker</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-red">Critical</span><span class="badge badge-gray">Popover</span><span class="badge badge-gray">All 11 tabs</span></div>
+        </div>
+      </div>
+      <div style="background:var(--red-light);border:1px solid #fecaca;border-radius:8px;padding:14px 18px;font-family:'SF Mono','Fira Code',monospace;font-size:14px;color:#991b1b;margin:12px 0">"Update unavailable: wait until your settings page is loaded and try again."</div>
+      <div class="two-col">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Trigger</div>
+          <p style="font-size:13px;color:var(--gray-600)">Clicking the <strong>Update</strong> button on any settings tab. The page embeds 29 hidden spinner elements (<code>fa-spinner fa-spin</code>) across form fields. A JS check blocks saves while any spinner exists in the DOM — but since the spinners' parent elements have <code>class="hidden"</code>, they're invisible yet still counted. The loading state never resolves.</p>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">UX Impact</div>
+          <ul style="font-size:13px;color:var(--gray-600);padding-left:16px">
+            <li><strong>100% save failure rate</strong> — users can change any setting but never save</li>
+            <li>Message implies user should "wait" — but there's nothing to wait for</li>
+            <li>No timeout, no retry, no help link, no progress indicator</li>
+            <li>Appears as a small Bootstrap popover — easy to miss entirely</li>
+            <li>Users may think their settings <em>did</em> save and leave confused when nothing changes</li>
+          </ul>
+        </div>
+      </div>
+      <div class="table-wrapper" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Current Copy</th><th>Option A — Minimal</th><th>Option B — Full Rework</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-critical">
+              <td style="font-family:monospace;font-size:12px;color:var(--red)">Update unavailable: wait until your settings page is loaded and try again.</td>
+              <td>Settings are still loading. Please wait a moment and try again. <a>Refresh page</a></td>
+              <td>Some settings haven't loaded yet. You can save what's ready now or <a>refresh the page</a> to reload everything.</td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:var(--green-light);border:1px solid #86efac;border-radius:8px;padding:12px 16px;font-size:13px;color:#14532d;margin-top:12px">
+        <strong>Engineering fix:</strong> The JS check should count only <strong>visible</strong> spinners (check <code>offsetParent !== null</code> or parent visibility). The hidden spinners with <code>class="hidden"</code> parents should not block saves. Also add a 10-second timeout with a graceful fallback message.
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 2: Auto-sync disabled -->
+  <div class="section">
+    <div class="high-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--orange)">🟠 2. "Turn on auto-sync" — Silent Dependency Block</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-orange">High</span><span class="badge badge-gray">Inline label</span><span class="badge badge-gray">General tab</span></div>
+        </div>
+      </div>
+      <div style="background:var(--orange-light);border:1px solid #fed7aa;border-radius:8px;padding:14px 18px;font-family:'SF Mono','Fira Code',monospace;font-size:14px;color:#9a3412;margin:12px 0">"Turn on auto-sync"</div>
+      <div class="two-col">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Trigger</div>
+          <p style="font-size:13px;color:var(--gray-600)">Toggle <strong>Auto-import</strong> to OFF. The Auto-sync On/Off toggle is replaced by this label. There's a <code>.no-sync-title</code> element that shows "Turn on auto-sync" — but it doesn't explain <em>why</em> Auto-sync is disabled or what to do about it.</p>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">UX Impact</div>
+          <ul style="font-size:13px;color:var(--gray-600);padding-left:16px">
+            <li>Reads like a CTA button label, not a status explanation</li>
+            <li>Zero mention of Auto-import being the blocker</li>
+            <li>The original helper text ("If you disable Auto-import setting, Auto-sync won't work") disappears in this state</li>
+            <li>User can't connect the dots without scrolling up to check Auto-import</li>
+          </ul>
+        </div>
+      </div>
+      <div class="table-wrapper" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Current Copy</th><th>Option A</th><th>Option B</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-high">
+              <td style="font-family:monospace;font-size:12px;color:var(--orange)">Turn on auto-sync</td>
+              <td>Auto-sync requires Auto-import to be enabled.</td>
+              <td>Auto-sync is disabled because Auto-import is off. <a>Enable Auto-import ↑</a> to use Auto-sync.</td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 3 & 4: Upsell messages -->
+  <div class="section">
+    <div class="high-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--orange)">🟠 3 & 4. Inconsistent Upsell / Plan-Gating Messages</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-orange">High</span><span class="badge badge-gray">Inline upsell</span><span class="badge badge-gray">General + Product mapping</span></div>
+        </div>
+      </div>
+      <div class="two-col" style="margin:12px 0">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:6px">GENERAL TAB → APPLY LOCATION</div>
+          <div style="background:var(--orange-light);border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;font-family:monospace;font-size:13px;color:#9a3412">"Upgrade to use"</div>
+          <p style="font-size:12px;color:var(--gray-500);margin-top:6px">Next to toggle. No plan name. No price. No link to pricing.</p>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:6px">PRODUCT MAPPING TAB</div>
+          <div style="background:var(--orange-light);border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;font-family:monospace;font-size:13px;color:#9a3412">"This feature is available on higher plans. Upgrade plan"</div>
+          <p style="font-size:12px;color:var(--gray-500);margin-top:6px">Replaces entire tab. "Higher plans" is vague. Different wording than Apply location.</p>
+        </div>
+      </div>
+      <div class="table-wrapper" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Where</th><th>Current Copy</th><th>Standardized Fix</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-high">
+              <td>Apply location (General)</td>
+              <td style="font-family:monospace;font-size:12px;color:var(--orange)">Upgrade to use</td>
+              <td>Available on Medium plan and above. <a>Upgrade plan →</a></td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+            <tr class="p-high">
+              <td>Product mapping (entire tab)</td>
+              <td style="font-family:monospace;font-size:12px;color:var(--orange)">This feature is available on higher plans. Upgrade plan</td>
+              <td>Product mapping is available on Medium plan and above. <a>Upgrade plan →</a></td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="background:var(--green-light);border:1px solid #86efac;border-radius:8px;padding:12px 16px;font-size:13px;color:#14532d;margin-top:12px">
+        <strong>Pattern to standardize:</strong> Create one reusable upsell component: <code>[Feature] is available on [Plan Name] and above. Upgrade plan →</code> — use it everywhere a feature is plan-gated.
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 5: Sync discounts upsell -->
+  <div class="section">
+    <div class="high-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--orange)">🟠 5. "Sync discounts as products" — Upsell Error on Toggle</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-orange">High</span><span class="badge badge-gray">Inline error (red text)</span><span class="badge badge-gray">Sales tab</span></div>
+        </div>
+      </div>
+      <div style="background:var(--red-light);border:1px solid #fecaca;border-radius:8px;padding:14px 18px;font-family:'SF Mono','Fira Code',monospace;font-size:13px;color:#991b1b;margin:12px 0">"This feature is available on higher plans. Upgrade plan"</div>
+      <div class="two-col">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Trigger</div>
+          <p style="font-size:13px;color:var(--gray-600)">Toggle <strong>Sync discounts as products</strong> to ON. Red text appears immediately below the toggle, same as Apply location upsell. The toggle is clickable but the feature is plan-gated.</p>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">UX Impact</div>
+          <ul style="font-size:13px;color:var(--gray-600);padding-left:16px">
+            <li>Same vague upsell as Product mapping and Apply location — 3 places, 2 different messages</li>
+            <li>Shown as red <code>text-danger</code> — looks like a real error, not a plan upgrade prompt</li>
+            <li>Toggle still flips to ON visually, even though the feature won't work</li>
+            <li>"Upgrade plan" — no plan name, no link</li>
+          </ul>
+        </div>
+      </div>
+      <div class="table-wrapper" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Current Copy</th><th>Standardized Fix</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-high">
+              <td style="font-family:monospace;font-size:12px;color:var(--red)">This feature is available on higher plans. Upgrade plan</td>
+              <td>Discount syncing is available on Medium plan and above. <a>Upgrade plan →</a></td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 6: QBO Doc Numbers Warning -->
+  <div class="section">
+    <div class="high-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--orange)">🟠 6. QuickBooks Doc Numbers — Inline Warning on Toggle</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-orange">High</span><span class="badge badge-gray">Inline error (red text)</span><span class="badge badge-gray">Sales tab</span></div>
+        </div>
+      </div>
+      <div style="background:var(--red-light);border:1px solid #fecaca;border-radius:8px;padding:14px 18px;font-family:'SF Mono','Fira Code',monospace;font-size:13px;color:#991b1b;margin:12px 0">"You should turn off custom transaction numbers in QuickBooks company. Please, go to Company Settings -&gt; Sales -&gt; Custom transaction numbers to disable this setting."</div>
+      <div class="two-col">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Trigger</div>
+          <p style="font-size:13px;color:var(--gray-600)">Toggle <strong>Enable QuickBooks Doc Numbers</strong> to ON. The red text error appears immediately below the toggle — no save required. It persists even after toggling back off, visible on the Sales tab until page reload.</p>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">UX Impact</div>
+          <ul style="font-size:13px;color:var(--gray-600);padding-left:16px">
+            <li>"You should turn off" — demanding tone, not helpful</li>
+            <li>"Please, go to Company Settings -&gt; Sales -&gt;" — unnecessary comma after Please, and uses <code>-&gt;</code> arrows instead of breadcrumb-style navigation</li>
+            <li>Tells user to go to QBO but provides no link</li>
+            <li>User doesn't know if this blocks syncing or is just a recommendation</li>
+            <li>Error persists visually even after toggling back — confusing</li>
+          </ul>
+        </div>
+      </div>
+      <div class="table-wrapper" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Current Copy</th><th>Option A</th><th>Option B</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-high">
+              <td style="font-family:monospace;font-size:12px;color:var(--red)">You should turn off custom transaction numbers in QuickBooks company. Please, go to Company Settings -&gt; Sales -&gt; Custom transaction numbers to disable this setting.</td>
+              <td>Custom transaction numbers must be disabled in QuickBooks first. Go to QuickBooks &gt; Settings &gt; Sales &gt; Custom transaction numbers. <a>Learn how →</a></td>
+              <td>To use Synder's doc numbers, disable custom transaction numbers in QuickBooks: <strong>Settings → Sales → Custom transaction numbers → Off</strong>. <a>Open QuickBooks settings →</a></td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 7: QBO Classes Warning -->
+  <div class="section">
+    <div class="medium-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--yellow)">🟡 7. QuickBooks Classes Warning (Hidden in DOM)</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Inline warning</span><span class="badge badge-gray">Sales tab (hidden)</span></div>
+        </div>
+      </div>
+      <div style="background:var(--yellow-light);border:1px solid #fde68a;border-radius:8px;padding:14px 18px;font-family:'SF Mono','Fira Code',monospace;font-size:13px;color:#713f12;margin:12px 0">"Warning: The classes feature is enabled in QuickBooks, however, there are no actual classes found in your QuickBooks company. Please create the required classes in QuickBooks to proceed."</div>
+      <div class="two-col">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">Trigger</div>
+          <p style="font-size:13px;color:var(--gray-600)">Present in the DOM but hidden by default. Surfaced when QuickBooks has the "classes" feature enabled but no classes have been created. Found inside the Sales tab settings area with a spinner element.</p>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">UX Impact</div>
+          <ul style="font-size:13px;color:var(--gray-600);padding-left:16px">
+            <li>"Classes" is QBO jargon — no explanation for non-accountants</li>
+            <li>"Please create the required classes" — no link, no instructions</li>
+            <li>"To proceed" — proceed with what? Saving? Syncing?</li>
+            <li>If surfaced, it blocks configuration without actionable guidance</li>
+          </ul>
+        </div>
+      </div>
+      <div class="table-wrapper" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Current Copy</th><th>Option A</th><th>Option B</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-medium">
+              <td style="font-family:monospace;font-size:12px;color:#713f12">Warning: The classes feature is enabled in QuickBooks, however, there are no actual classes found in your QuickBooks company. Please create the required classes in QuickBooks to proceed.</td>
+              <td>QuickBooks Classes is enabled but no classes exist yet. Create classes in QuickBooks to continue. <a>Learn how →</a></td>
+              <td>Your QuickBooks company has Classes enabled but none are set up yet. <a>Create classes in QuickBooks →</a> or <a>disable Classes in QBO settings</a> to continue syncing.</td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 8: Apply Taxes helper text mismatch -->
+  <div class="section">
+    <div class="medium-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--yellow)">🟡 8. "Apply Taxes" — Helper Text Changes Between States</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Helper text mismatch</span><span class="badge badge-gray">Taxes tab</span></div>
+        </div>
+      </div>
+      <div class="two-col" style="margin:12px 0">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:6px">WHEN ON (DEFAULT)</div>
+          <div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:13px;color:#1e3a5f">"Tax details of your transactions will be recorded as an additional product line in QuickBooks."</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);margin-bottom:6px">WHEN OFF</div>
+          <div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:8px;padding:10px 14px;font-size:13px;color:#1e3a5f">"Tax details of your transactions will be transferred over to your books, and QuickBooks will apply a tax code based on your Tax center settings. If you don't see any tax information imported to your books, have Synder apply taxes with Smart rules &gt;&gt;"</div>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--gray-600);margin-top:8px"><strong>Problem:</strong> The helper text describes what happens when the setting is in its <em>opposite</em> state. When ON it says what happens when ON. When OFF it says what happens when OFF. This is actually correct behavior — but it's the <strong>only</strong> toggle in the entire settings page that does this. Every other toggle shows the same helper text regardless of state. This inconsistency is confusing.</p>
+      <div class="table-wrapper" style="margin-top:12px">
+        <table>
+          <thead><tr><th>State</th><th>Current Copy</th><th>Suggestion</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-medium">
+              <td><span class="badge badge-green">ON</span></td>
+              <td style="font-size:12px">Tax details of your transactions will be recorded as an additional product line in QuickBooks.</td>
+              <td style="font-size:12px">When enabled, Synder records tax details as a product line in QuickBooks. <a>Learn more →</a></td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+            <tr class="p-medium">
+              <td><span class="badge badge-gray">OFF</span></td>
+              <td style="font-size:12px">Tax details of your transactions will be transferred over to your books, and QuickBooks will apply a tax code based on your Tax center settings…</td>
+              <td style="font-size:12px">When disabled, QuickBooks applies tax codes from your Tax Center settings. Not seeing taxes? Try a <a>Smart Rule</a>.</td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Error 9: Process payouts Yes/No -->
+  <div class="section">
+    <div class="medium-card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--yellow)">🟡 9. "Process payouts" — Uses Yes/No Instead of On/Off</div>
+          <div style="display:flex;gap:5px;margin-top:6px"><span class="badge badge-yellow">Medium</span><span class="badge badge-gray">Toggle labels</span><span class="badge badge-gray">Payouts tab</span></div>
+        </div>
+      </div>
+      <div style="background:var(--yellow-light);border:1px solid #fde68a;border-radius:8px;padding:14px 18px;font-family:'SF Mono','Fira Code',monospace;font-size:13px;color:#713f12;margin:12px 0">"If 'No' app won't receive and synchronize payouts."</div>
+      <div class="two-col">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">What's happening</div>
+          <p style="font-size:13px;color:var(--gray-600)">The Process payouts toggle uses <strong>Yes/No</strong> labels on the toggle buttons, while every other toggle in all 11 tabs uses <strong>On/Off</strong>. The helper text also references "No" instead of "disabled" or "off".</p>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--gray-400);text-transform:uppercase;margin-bottom:6px">UX Impact</div>
+          <ul style="font-size:13px;color:var(--gray-600);padding-left:16px">
+            <li>Inconsistent with 15+ other toggles that use On/Off</li>
+            <li>Helper says "If 'No' <strong>app</strong>" — also uses "app" instead of "Synder"</li>
+            <li>Two consistency issues in one line</li>
+          </ul>
+        </div>
+      </div>
+      <div class="table-wrapper" style="margin-top:16px">
+        <table>
+          <thead><tr><th>Current Copy</th><th>Fix</th><th style="width:20%">✅ Approved</th></tr></thead>
+          <tbody>
+            <tr class="p-medium">
+              <td style="font-family:monospace;font-size:12px;color:#713f12">If "No" app won't receive and synchronize payouts.</td>
+              <td>When disabled, Synder won't import or sync payouts from this integration.</td>
+              <td><div class="td-approved" contenteditable="true"></div></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary Priority Table -->
+  <div class="section">
+    <div class="section-title">📋 Error Copy — Priority Action List</div>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th>#</th><th>Error</th><th>Severity</th><th>Effort</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr class="p-critical">
+            <td>1</td>
+            <td><strong>"Update unavailable"</strong> — save blocker</td>
+            <td><span class="badge badge-red">Critical</span></td>
+            <td><span class="badge badge-yellow">Medium</span></td>
+            <td>Fix JS spinner check to ignore hidden elements. Add 10s timeout + fallback. Rewrite copy.</td>
+          </tr>
+          <tr class="p-high">
+            <td>2</td>
+            <td><strong>"Turn on auto-sync"</strong> — no context</td>
+            <td><span class="badge badge-orange">High</span></td>
+            <td><span class="badge badge-green">Very Low</span></td>
+            <td>Replace with dependency explanation. 5-min text change.</td>
+          </tr>
+          <tr class="p-high">
+            <td>3</td>
+            <td><strong>"Upgrade to use"</strong> — vague upsell</td>
+            <td><span class="badge badge-orange">High</span></td>
+            <td><span class="badge badge-green">Low</span></td>
+            <td>Standardize: "[Feature] available on [Plan]. Upgrade plan →"</td>
+          </tr>
+          <tr class="p-high">
+            <td>4</td>
+            <td><strong>"Higher plans. Upgrade plan"</strong> — vague upsell</td>
+            <td><span class="badge badge-orange">High</span></td>
+            <td><span class="badge badge-green">Low</span></td>
+            <td>Same standardized component as #3.</td>
+          </tr>
+          <tr class="p-high">
+            <td>5</td>
+            <td><strong>"Sync discounts" upsell</strong> — same vague message, red text</td>
+            <td><span class="badge badge-orange">High</span></td>
+            <td><span class="badge badge-green">Very Low</span></td>
+            <td>Use same standardized upsell component as #3 and #4.</td>
+          </tr>
+          <tr class="p-high">
+            <td>6</td>
+            <td><strong>QBO Doc Numbers warning</strong> — harsh tone, no link</td>
+            <td><span class="badge badge-orange">High</span></td>
+            <td><span class="badge badge-green">Very Low</span></td>
+            <td>Rewrite: neutral tone, add breadcrumb path, link to QBO settings.</td>
+          </tr>
+          <tr class="p-medium">
+            <td>7</td>
+            <td><strong>QBO Classes warning</strong> — hidden, no guidance</td>
+            <td><span class="badge badge-yellow">Medium</span></td>
+            <td><span class="badge badge-green">Low</span></td>
+            <td>Add link to QBO class setup. Explain in plain English.</td>
+          </tr>
+          <tr class="p-medium">
+            <td>8</td>
+            <td><strong>Apply Taxes helper</strong> — text changes per state (unique)</td>
+            <td><span class="badge badge-yellow">Medium</span></td>
+            <td><span class="badge badge-green">Low</span></td>
+            <td>Either make all toggles state-aware, or standardize to static text.</td>
+          </tr>
+          <tr class="p-medium">
+            <td>9</td>
+            <td><strong>Process payouts</strong> — Yes/No + "app"</td>
+            <td><span class="badge badge-yellow">Medium</span></td>
+            <td><span class="badge badge-green">Very Low</span></td>
+            <td>Change toggle to On/Off, replace "app" with "Synder".</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="alert alert-yellow" style="margin-top:16px">
+      <div class="alert-icon">⚡</div>
+      <div><strong>Quick wins:</strong> Items #2, #3, #4, #5, #6, and #9 are pure text changes — no engineering work beyond copy updates. Can be shipped in one PR. Six fixes, one commit.</div>
+    </div>
+  </div>
+
+</div><!-- /errors -->
+
+<div class="footer-note">
+  Generated by Dasha — UX Research Assistant · Full audit: 11/11 tabs captured live on demo.synderapp.com · LogRocket data: Feb 11–Mar 13, 2026 · Error copy audit: March 18, 2026
+</div>
+
+</div><!-- /container -->
+
+  </div><!-- /main-content -->
+</div><!-- /layout-wrapper -->
+
+<div class="export-bar">
+  <span class="export-status" id="save-status">Auto-saves to server</span>
+  <button class="export-btn" onclick="copyShareUrl()" id="share-btn">🔗 Copy Share URL</button>
+  <button class="export-btn export-btn-primary" onclick="saveToServer(true)">💾 Save Now</button>
+  <button class="export-btn" onclick="exportApproved()">📋 Export Markdown</button>
+  <button class="export-btn" onclick="clearAll()">🗑 Clear All</button>
+</div>
+<script>
+function copyShareUrl() {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const btn = document.getElementById('share-btn');
+    btn.textContent = '✅ URL Copied!';
+    setTimeout(() => { btn.textContent = '🔗 Copy Share URL'; }, 2000);
+  });
+}
+</script>
+
+<script>
+function switchTab(id, el) {
+  event.preventDefault();
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.sidebar-item').forEach(t => t.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  if (el) el.classList.add('active');
+  document.querySelector('.main-content').scrollTo({top:0, behavior:'smooth'});
+}
+
+// Auto-save approved copy to localStorage
+const REPORT_ID = 'per-transaction-audit';
+const STORAGE_KEY = 'synder-audit-approved-v1';
+const API_BASE = window.location.origin;
+let _saveTimeout = null;
+let _lastSavedHash = '';
+
+function getApprovedCells() {
+  return document.querySelectorAll('.td-approved');
+}
+
+function getCellKey(cell, i) {
+  // Try to get a meaningful key from the row
+  const tr = cell.closest('tr');
+  const element = tr?.querySelector('.td-element');
+  if (element) return element.textContent.trim().replace(/\s+/g, '_').substring(0, 60);
+  // For error copy tab, use the first cell
+  const firstCell = tr?.querySelector('td');
+  if (firstCell && firstCell !== cell) {
+    const text = firstCell.textContent.trim().substring(0, 40).replace(/\s+/g, '_');
+    if (text) return text;
+  }
+  return 'cell_' + i;
+}
+
+function collectApproved() {
+  const data = {};
+  getApprovedCells().forEach((cell, i) => {
+    const key = getCellKey(cell, i);
+    if (cell.textContent.trim()) {
+      data[key] = cell.innerHTML;
+      cell.classList.add('has-content');
+    } else {
+      cell.classList.remove('has-content');
+    }
+  });
+  return data;
+}
+
+// Save to server
+async function saveToServer(showStatus = true) {
+  const approved = collectApproved();
+  const hash = JSON.stringify(approved);
+  if (hash === _lastSavedHash) return; // No changes
+
+  try {
+    const res = await fetch(`${API_BASE}/api/save/${REPORT_ID}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved, meta: { title: document.title } })
+    });
+    const result = await res.json();
+    _lastSavedHash = hash;
+
+    if (showStatus) {
+      const status = document.getElementById('save-status');
+      status.textContent = '✅ Saved to server · ' + new Date().toLocaleTimeString();
+      status.style.color = '#16a34a';
+      setTimeout(() => { status.textContent = 'Auto-saves to server'; status.style.color = ''; }, 3000);
+    }
+  } catch (e) {
+    // Fallback to localStorage
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(approved));
+    if (showStatus) {
+      const status = document.getElementById('save-status');
+      status.textContent = '⚠️ Server unavailable — saved locally';
+      status.style.color = '#ea580c';
+    }
+  }
+}
+
+// Load from server (fallback to localStorage)
+async function loadAll() {
+  let data = {};
+  try {
+    const res = await fetch(`${API_BASE}/api/load/${REPORT_ID}`);
+    const result = await res.json();
+    data = result.approved || {};
+    if (result.updatedAt) {
+      const status = document.getElementById('save-status');
+      status.textContent = 'Last saved: ' + new Date(result.updatedAt).toLocaleString();
+    }
+  } catch (e) {
+    // Fallback to localStorage
+    try { data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); } catch(e2) {}
+  }
+
+  // Apply loaded data to cells
+  getApprovedCells().forEach((cell, i) => {
+    const key = getCellKey(cell, i);
+    if (data[key]) {
+      cell.innerHTML = data[key];
+      cell.classList.add('has-content');
+    } else if (data[i]) {
+      cell.innerHTML = data[i];
+      cell.classList.add('has-content');
+    }
+  });
+
+  _lastSavedHash = JSON.stringify(collectApproved());
+}
+
+// Auto-save with debounce
+function scheduleAutoSave() {
+  clearTimeout(_saveTimeout);
+  _saveTimeout = setTimeout(() => saveToServer(true), 1500);
+}
+
+function exportApproved() {
+  // Download from server API
+  window.open(`${API_BASE}/api/export/${REPORT_ID}`, '_blank');
+}
+
+function clearAll() {
+  if (!confirm('Clear all approved copy? This cannot be undone.')) return;
+  getApprovedCells().forEach(cell => {
+    cell.innerHTML = '';
+    cell.classList.remove('has-content');
+  });
+  saveToServer(true);
+}
+
+// Attach listeners
+document.addEventListener('DOMContentLoaded', () => {
+  loadAll();
+  getApprovedCells().forEach(cell => {
+    cell.addEventListener('input', scheduleAutoSave);
+  });
+
+  // Show share URL
+  const shareUrl = window.location.href;
+  const status = document.getElementById('save-status');
+  if (status) {
+    status.title = 'Share this URL with developers: ' + shareUrl;
+  }
+});
+</script>
+</body>
+</html>

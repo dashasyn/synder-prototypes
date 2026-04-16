@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Group Conditions — Interactive Prototype</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #1a1a1a; padding: 24px; line-height: 1.5; }
+  
+  .prototype-nav { display: flex; gap: 8px; margin-bottom: 24px; }
+  .prototype-nav button { padding: 10px 20px; border: 1px solid #ddd; background: #fff; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 500; transition: all 0.15s; }
+  .prototype-nav button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .prototype-nav button:hover:not(.active) { background: #f0f4ff; border-color: #2563eb; }
+  
+  .screen { display: none; max-width: 900px; margin: 0 auto; }
+  .screen.active { display: block; }
+  
+  .card { background: #fff; border: 1px solid #e2e2e2; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+  .card-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .card-subtitle { font-size: 13px; color: #666; margin-bottom: 20px; }
+  
+  .section-num { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; background: #2563eb; color: #fff; border-radius: 50%; font-size: 12px; font-weight: 600; }
+  
+  /* Form fields */
+  .field-group { margin-bottom: 20px; }
+  .field-label { font-size: 13px; font-weight: 500; color: #555; margin-bottom: 6px; display: flex; align-items: center; gap: 4px; }
+  .field-label .required { color: #ef4444; }
+  
+  /* Radio toggle */
+  .radio-toggle { display: flex; gap: 0; margin-bottom: 8px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; width: fit-content; }
+  .radio-toggle label { padding: 8px 16px; font-size: 13px; cursor: pointer; transition: all 0.15s; border-right: 1px solid #ddd; user-select: none; display: flex; align-items: center; gap: 6px; }
+  .radio-toggle label:last-child { border-right: none; }
+  .radio-toggle input { display: none; }
+  .radio-toggle input:checked + span { color: #2563eb; font-weight: 600; }
+  .radio-toggle label:has(input:checked) { background: #eff4ff; }
+  .radio-toggle label:hover:not(:has(input:checked)) { background: #f9fafb; }
+  .radio-toggle label:has(input:disabled) { opacity: 0.45; cursor: not-allowed; position: relative; }
+  
+  .radio-dot { width: 16px; height: 16px; border: 2px solid #ccc; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+  .radio-toggle input:checked ~ .radio-dot { border-color: #2563eb; }
+  .radio-toggle input:checked ~ .radio-dot::after { content: ''; width: 8px; height: 8px; background: #2563eb; border-radius: 50%; }
+  
+  /* Dropdown */
+  select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; min-width: 200px; background: #fff; cursor: pointer; }
+  select:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  
+  /* Multi-select dropdown */
+  .multiselect { position: relative; min-width: 300px; display: inline-block; }
+  .multiselect-trigger { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 38px; }
+  .multiselect-trigger:hover { border-color: #aaa; }
+  .multiselect-trigger.open { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); border-radius: 8px 8px 0 0; }
+  .multiselect-trigger .arrow { font-size: 10px; color: #999; transition: transform 0.2s; }
+  .multiselect-trigger.open .arrow { transform: rotate(180deg); }
+  .multiselect-pills { display: flex; flex-wrap: wrap; gap: 4px; flex: 1; }
+  .multiselect-pill { background: #eff4ff; color: #2563eb; padding: 2px 8px; border-radius: 4px; font-size: 12px; display: flex; align-items: center; gap: 4px; }
+  .multiselect-pill .remove { cursor: pointer; font-size: 14px; line-height: 1; opacity: 0.6; }
+  .multiselect-pill .remove:hover { opacity: 1; }
+  .multiselect-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid #2563eb; border-top: none; border-radius: 0 0 8px 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 100; display: none; max-height: 280px; overflow-y: auto; }
+  .multiselect-dropdown.open { display: block; }
+  .multiselect-search { padding: 8px 12px; border-bottom: 1px solid #eee; }
+  .multiselect-search input { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; }
+  .multiselect-search input:focus { outline: none; border-color: #2563eb; }
+  .multiselect-bulk { display: flex; gap: 12px; padding: 8px 12px; border-bottom: 1px solid #eee; }
+  .multiselect-bulk a { font-size: 12px; color: #2563eb; cursor: pointer; text-decoration: none; }
+  .multiselect-bulk a:hover { text-decoration: underline; }
+  .multiselect-option { padding: 8px 12px; display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; transition: background 0.1s; }
+  .multiselect-option:hover { background: #f5f8ff; }
+  .multiselect-option input[type="checkbox"] { width: 16px; height: 16px; accent-color: #2563eb; cursor: pointer; }
+  .multiselect-option .icon { width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .icon-stripe { background: #635bff; }
+  .icon-shopify { background: #96bf48; }
+  .icon-amazon { background: #ff9900; }
+  .icon-paypal { background: #003087; }
+  .icon-square { background: #1a1a1a; }
+  
+  /* Dropdown appear animation */
+  .dropdown-appear { animation: dropdownSlide 0.15s ease-out; }
+  @keyframes dropdownSlide { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+  
+  /* Cross-field error */
+  .cross-field-error { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #dc2626; display: flex; align-items: center; gap: 8px; margin-top: -8px; margin-bottom: 16px; }
+  .cross-field-error .icon { font-size: 16px; }
+  .cross-field-error.hidden { display: none; }
+  
+  /* Info hint */
+  .field-hint { font-size: 12px; color: #2563eb; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+  .field-hint.hidden { display: none; }
+  .field-hint .icon { font-size: 14px; }
+  
+  /* Success state */
+  .field-success { font-size: 12px; color: #16a34a; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+  .field-success.hidden { display: none; }
+
+  /* Conditions row area */
+  .conditions-area { border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; background: #fafafa; margin-top: 12px; }
+  .conditions-header { font-size: 13px; color: #888; margin-bottom: 12px; }
+  .condition-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .condition-row select { min-width: 120px; font-size: 13px; padding: 6px 10px; }
+  .condition-row input[type="text"] { padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; min-width: 160px; }
+  .condition-row input[type="text"]:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .icon-btn { width: 32px; height: 32px; border: 1px solid #ddd; border-radius: 6px; background: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; color: #666; transition: all 0.15s; }
+  .icon-btn:hover { background: #f5f5f5; border-color: #aaa; }
+  .icon-btn.danger:hover { background: #fef2f2; border-color: #fca5a5; color: #dc2626; }
+  
+  .add-links { display: flex; gap: 16px; margin-top: 12px; }
+  .add-links a { font-size: 13px; color: #2563eb; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 4px; }
+  .add-links a:hover { text-decoration: underline; }
+  
+  /* Row layout */
+  .fields-row { display: flex; gap: 16px; align-items: flex-start; }
+  .fields-row .field-group { flex: 1; }
+  
+  /* Top bar */
+  .top-bar { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; margin-bottom: 16px; border-bottom: 1px solid #eee; }
+  .top-bar-left { display: flex; align-items: center; gap: 12px; }
+  .close-btn { width: 32px; height: 32px; border: none; background: none; font-size: 20px; cursor: pointer; color: #666; border-radius: 6px; display: flex; align-items: center; justify-content: center; }
+  .close-btn:hover { background: #f5f5f5; }
+  .top-bar h2 { font-size: 18px; font-weight: 600; }
+  .btn-primary { padding: 8px 20px; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-primary:disabled { background: #93b4f5; cursor: not-allowed; }
+  .btn-outline { padding: 8px 20px; background: #fff; color: #2563eb; border: 1px solid #2563eb; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+  .btn-outline:hover { background: #eff4ff; }
+  
+  /* Preview area */
+  .preview-area { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin-top: 16px; }
+  .preview-header { padding: 12px 16px; background: #f9fafb; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+  .preview-header h4 { font-size: 14px; font-weight: 500; }
+  .preview-row { padding: 10px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; font-size: 13px; }
+  .preview-row:last-child { border-bottom: none; }
+  .preview-row .date { color: #888; min-width: 100px; }
+  .preview-row .desc { flex: 1; }
+  .preview-row .amount { font-weight: 500; color: #16a34a; }
+  .preview-empty { padding: 32px; text-align: center; color: #999; font-size: 14px; }
+  .match-count { background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .preview-warning { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; font-size: 12px; color: #92400e; margin: 8px 16px; display: flex; align-items: center; gap: 6px; }
+  
+  /* Annotations */
+  .annotation { background: #fffbeb; border: 1px solid #fde68a; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; }
+  .annotation-title { font-weight: 600; color: #92400e; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+  .annotation p { color: #78716c; }
+
+  /* Name input */
+  .name-input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; width: 100%; }
+  .name-input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+  .name-input.error { border-color: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.1); }
+
+  /* Rule summary */
+  .rule-summary { background: #f0f4ff; border: 1px solid #c7d7fe; border-radius: 8px; padding: 12px 16px; margin-top: 16px; font-size: 13px; color: #1e40af; }
+  .rule-summary-title { font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #3b82f6; margin-bottom: 4px; }
+
+  /* Disabled overlay for toggle */
+  .toggle-disabled-tooltip { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 12px; white-space: nowrap; z-index: 10; }
+  .toggle-disabled-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #1a1a1a; }
+  label:has(input:disabled):hover .toggle-disabled-tooltip { display: block; }
+  label:has(input:disabled) { position: relative; }
+</style>
+</head>
+<body>
+
+<div class="prototype-nav">
+  <button class="active" onclick="showScreen('screen1')">1. Integration Selector</button>
+  <button onclick="showScreen('screen2')">2. Type/Subtype Logic</button>
+  <button onclick="showScreen('screen3')">3. Full Form</button>
+</div>
+
+<!-- SCREEN 1: Integration Selector -->
+<div id="screen1" class="screen active">
+  <div class="annotation">
+    <div class="annotation-title">💡 Prototype Note</div>
+    <p>This shows the "All vs Specific" toggle pattern for Integration selection. "All" means current + future integrations. "Specific" reveals multi-select with search and bulk controls.</p>
+  </div>
+  
+  <div class="card">
+    <div class="card-title"><span class="section-num">2</span> Group conditions</div>
+    <div class="card-subtitle">Define which transactions this group captures</div>
+    
+    <div class="field-group">
+      <div class="field-label">Integration <span class="required">*</span></div>
+      <div class="radio-toggle">
+        <label><input type="radio" name="integ-mode" value="all" checked onchange="toggleIntegration()"><span>All integrations</span><div class="radio-dot"></div></label>
+        <label><input type="radio" name="integ-mode" value="specific" onchange="toggleIntegration()"><span>Specific integrations</span><div class="radio-dot"></div></label>
+      </div>
+      <div class="field-hint" id="integ-all-hint">
+        <span class="icon">ℹ️</span> Applies to all current and future integrations
+      </div>
+      
+      <div id="integ-multiselect" class="multiselect" style="display:none; margin-top: 8px;">
+        <div class="multiselect-trigger" onclick="toggleDropdown('integ')">
+          <div class="multiselect-pills" id="integ-pills">
+            <span style="color:#999; font-size:13px;">Select integrations...</span>
+          </div>
+          <span class="arrow">▼</span>
+        </div>
+        <div class="multiselect-dropdown" id="integ-dropdown">
+          <div class="multiselect-search">
+            <input type="text" placeholder="Search integrations..." oninput="filterIntegrations(this.value)">
+          </div>
+          <div class="multiselect-bulk">
+            <a onclick="bulkSelect('integ', true)">Select all</a>
+            <a onclick="bulkSelect('integ', false)">Deselect all</a>
+          </div>
+          <div id="integ-options">
+            <label class="multiselect-option"><input type="checkbox" value="stripe" onchange="updatePills('integ')"><span class="icon icon-stripe">S</span> Eczema Honey Co (Stripe)</label>
+            <label class="multiselect-option"><input type="checkbox" value="shopify" onchange="updatePills('integ')"><span class="icon icon-shopify">S</span> Online Store (Shopify)</label>
+            <label class="multiselect-option"><input type="checkbox" value="amazon" onchange="updatePills('integ')"><span class="icon icon-amazon">a</span> My great bread (Amazon)</label>
+            <label class="multiselect-option"><input type="checkbox" value="paypal" onchange="updatePills('integ')"><span class="icon icon-paypal">P</span> Eczema Honey (PayPal)</label>
+            <label class="multiselect-option"><input type="checkbox" value="square" onchange="updatePills('integ')"><span class="icon icon-square">□</span> Retail POS (Square)</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 2: Type/Subtype Logic -->
+<div id="screen2" class="screen">
+  <div class="annotation">
+    <div class="annotation-title">💡 Prototype Note</div>
+    <p>Cross-field validation: you can't set both to "All". When one is "All", the other must be specific. The invalid combination is prevented — "All" radio becomes disabled when the other field is already "All".</p>
+  </div>
+  
+  <div class="card">
+    <div class="card-title"><span class="section-num">2</span> Group conditions</div>
+    <div class="card-subtitle">Define which transactions this group captures</div>
+    
+    <div class="fields-row">
+      <div class="field-group">
+        <div class="field-label">Account type <span class="required">*</span></div>
+        <div class="radio-toggle" id="type-toggle">
+          <label>
+            <input type="radio" name="type-mode" value="all" onchange="updateTypeSubtype()">
+            <span>All types</span>
+            <div class="radio-dot"></div>
+            <div class="toggle-disabled-tooltip">Can't be "All" — subtype is already "All"</div>
+          </label>
+          <label>
+            <input type="radio" name="type-mode" value="specific" checked onchange="updateTypeSubtype()">
+            <span>Specific type</span>
+            <div class="radio-dot"></div>
+          </label>
+        </div>
+        <div id="type-select-wrap">
+          <select id="type-select" onchange="updateTypeSubtype()">
+            <option value="">Select type...</option>
+            <option value="bank">Bank</option>
+            <option value="clearing">Clearing</option>
+            <option value="expense">Expense</option>
+            <option value="income">Income</option>
+            <option value="other-asset">Other Current Assets</option>
+            <option value="equity">Equity</option>
+          </select>
+        </div>
+        <div class="field-hint hidden" id="type-hint">
+          <span class="icon">ℹ️</span> <span id="type-hint-text"></span>
+        </div>
+      </div>
+      
+      <div class="field-group">
+        <div class="field-label">Account subtype <span class="required">*</span></div>
+        <div class="radio-toggle" id="subtype-toggle">
+          <label>
+            <input type="radio" name="subtype-mode" value="all" onchange="updateTypeSubtype()">
+            <span>All subtypes</span>
+            <div class="radio-dot"></div>
+            <div class="toggle-disabled-tooltip">Can't be "All" — type is already "All"</div>
+          </label>
+          <label>
+            <input type="radio" name="subtype-mode" value="specific" checked onchange="updateTypeSubtype()">
+            <span>Specific subtype</span>
+            <div class="radio-dot"></div>
+          </label>
+        </div>
+        <div id="subtype-select-wrap">
+          <select id="subtype-select" onchange="updateTypeSubtype()">
+            <option value="">Select subtype...</option>
+            <option value="ar">Accounts Receivable</option>
+            <option value="checking">Checking</option>
+            <option value="savings">Savings</option>
+            <option value="inventory">Inventory</option>
+            <option value="cogs">Cost of Goods Sold</option>
+          </select>
+        </div>
+        <div class="field-hint hidden" id="subtype-hint">
+          <span class="icon">ℹ️</span> <span id="subtype-hint-text"></span>
+        </div>
+      </div>
+    </div>
+    
+    <div class="cross-field-error hidden" id="cross-error">
+      <span class="icon">⚠️</span>
+      <span id="cross-error-text"></span>
+    </div>
+
+    <div class="rule-summary" id="type-rule-summary" style="display:none;">
+      <div class="rule-summary-title">📋 Current selection</div>
+      <div id="type-rule-text"></div>
+    </div>
+  </div>
+
+  <!-- State table -->
+  <div class="card" style="margin-top: 16px;">
+    <div class="card-title">Validation state table</div>
+    <div class="card-subtitle">All possible combinations and their validity</div>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px;">
+      <thead>
+        <tr style="border-bottom: 2px solid #e5e7eb;">
+          <th style="text-align: left; padding: 8px;">Account Type</th>
+          <th style="text-align: left; padding: 8px;">Account Subtype</th>
+          <th style="text-align: left; padding: 8px;">Valid?</th>
+          <th style="text-align: left; padding: 8px;">Behavior</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr style="border-bottom: 1px solid #f0f0f0;">
+          <td style="padding: 8px;">Select...</td><td style="padding: 8px;">Select...</td>
+          <td style="padding: 8px;">❌</td><td style="padding: 8px; color: #666;">Both fields required on save</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0f0f0; background: #f0fff4;">
+          <td style="padding: 8px;">Bank</td><td style="padding: 8px;">Select...</td>
+          <td style="padding: 8px;">✅</td><td style="padding: 8px; color: #666;">Subtype optional when type is specific</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0f0f0; background: #f0fff4;">
+          <td style="padding: 8px;">Bank</td><td style="padding: 8px;">All subtypes</td>
+          <td style="padding: 8px;">✅</td><td style="padding: 8px; color: #666;">Valid — type is specific</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0f0f0; background: #f0fff4;">
+          <td style="padding: 8px;">Bank</td><td style="padding: 8px;">Checking</td>
+          <td style="padding: 8px;">✅</td><td style="padding: 8px; color: #666;">Both specified — most precise</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0f0f0; background: #f0fff4;">
+          <td style="padding: 8px;">All types</td><td style="padding: 8px;">Checking</td>
+          <td style="padding: 8px;">✅</td><td style="padding: 8px; color: #666;">Valid — subtype is specific</td>
+        </tr>
+        <tr style="border-bottom: 1px solid #f0f0f0; background: #fff5f5;">
+          <td style="padding: 8px;">All types</td><td style="padding: 8px;">All subtypes</td>
+          <td style="padding: 8px;">🚫</td><td style="padding: 8px; color: #dc2626; font-weight: 500;">Prevented — "All" is disabled on second field</td>
+        </tr>
+        <tr style="background: #f0fff4;">
+          <td style="padding: 8px;">All types</td><td style="padding: 8px;">Select...</td>
+          <td style="padding: 8px;">❌</td><td style="padding: 8px; color: #666;">Hint shown: "Specify a subtype"</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- SCREEN 3: Full Form -->
+<div id="screen3" class="screen">
+  <div class="top-bar">
+    <div class="top-bar-left">
+      <button class="close-btn">✕</button>
+      <h2>Group</h2>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn-outline">How to reconcile</button>
+      <button class="btn-primary" id="save-btn" onclick="validateForm()">Update group</button>
+    </div>
+  </div>
+
+  <!-- Section 1: Name -->
+  <div class="card">
+    <div class="card-title"><span class="section-num">1</span> Group name</div>
+    <div class="field-group" style="margin-top: 12px;">
+      <div class="field-label">Group <span class="required">*</span></div>
+      <input type="text" class="name-input" id="group-name" placeholder="e.g. Amazon delivery fees" oninput="clearNameError()">
+      <div class="field-hint hidden" id="name-error" style="color: #dc2626;"><span class="icon">⚠️</span> <span id="name-error-text"></span></div>
+    </div>
+  </div>
+
+  <!-- Section 2: Conditions -->
+  <div class="card">
+    <div class="card-title"><span class="section-num">2</span> Group conditions</div>
+    <div class="card-subtitle">Define which transactions this group captures</div>
+
+    <!-- Transaction type -->
+    <div class="field-group">
+      <div class="field-label">Transaction <span class="required">*</span></div>
+      <select id="full-transaction">
+        <option value="">Select...</option>
+        <option value="expense">Expense</option>
+        <option value="sales">Sales</option>
+        <option value="refunds">Refunds</option>
+        <option value="adjustments">Adjustments</option>
+      </select>
+    </div>
+
+    <!-- Type / Subtype row -->
+    <div class="fields-row">
+      <div class="field-group">
+        <div class="field-label">Account type <span class="required">*</span></div>
+        <div class="radio-toggle">
+          <label><input type="radio" name="full-type-mode" value="all" onchange="updateFullForm()"><span>All types</span><div class="radio-dot"></div><div class="toggle-disabled-tooltip">Can't be "All" — subtype is already "All"</div></label>
+          <label><input type="radio" name="full-type-mode" value="specific" checked onchange="updateFullForm()"><span>Specific type</span><div class="radio-dot"></div></label>
+        </div>
+        <select id="full-type" onchange="updateFullForm()" style="margin-top: 4px;">
+          <option value="">Select type...</option>
+          <option value="bank">Bank</option>
+          <option value="clearing">Clearing</option>
+          <option value="expense">Expense</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <div class="field-label">Account subtype <span class="required">*</span></div>
+        <div class="radio-toggle">
+          <label><input type="radio" name="full-subtype-mode" value="all" onchange="updateFullForm()"><span>All subtypes</span><div class="radio-dot"></div><div class="toggle-disabled-tooltip">Can't be "All" — type is already "All"</div></label>
+          <label><input type="radio" name="full-subtype-mode" value="specific" checked onchange="updateFullForm()"><span>Specific subtype</span><div class="radio-dot"></div></label>
+        </div>
+        <select id="full-subtype" onchange="updateFullForm()" style="margin-top: 4px;">
+          <option value="">Select subtype...</option>
+          <option value="ar">Accounts Receivable</option>
+          <option value="checking">Checking</option>
+          <option value="savings">Savings</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="cross-field-error hidden" id="full-cross-error">
+      <span class="icon">⚠️</span>
+      <span id="full-cross-error-text"></span>
+    </div>
+
+    <!-- Integration -->
+    <div class="field-group">
+      <div class="field-label">Integration <span class="required">*</span></div>
+      <div class="radio-toggle">
+        <label><input type="radio" name="full-integ" value="all" checked onchange="toggleFullInteg()"><span>All integrations</span><div class="radio-dot"></div></label>
+        <label><input type="radio" name="full-integ" value="specific" onchange="toggleFullInteg()"><span>Specific integrations</span><div class="radio-dot"></div></label>
+      </div>
+      <div class="field-hint" id="full-integ-hint">
+        <span class="icon">ℹ️</span> Applies to all current and future integrations
+      </div>
+      <div id="full-integ-select" style="display:none; margin-top: 8px;">
+        <select multiple style="min-height: 80px; width: 300px;">
+          <option>Eczema Honey Co (Stripe)</option>
+          <option>Online Store (Shopify)</option>
+          <option>My great bread (Amazon)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Additional conditions -->
+    <div class="conditions-area">
+      <div class="conditions-header">Additional conditions</div>
+      <div id="full-conditions">
+        <div class="condition-row">
+          <select style="min-width: 60px;"><option>and</option><option>or</option></select>
+          <select><option value="">Field...</option><option>Memo</option><option>Description</option><option>Amount</option><option>Contact name</option></select>
+          <select><option value="">Operator...</option><option>contains</option><option>is equal</option><option>is not equal</option><option>is empty</option><option>less than</option><option>greater than</option></select>
+          <input type="text" placeholder="Value...">
+          <button class="icon-btn" title="Duplicate">📋</button>
+          <button class="icon-btn danger" title="Delete">🗑</button>
+        </div>
+      </div>
+      <div class="add-links">
+        <a onclick="addCondition()">+ Add condition</a>
+        <a onclick="alert('Adds a nested condition set (group of conditions)')">+ Add condition set</a>
+      </div>
+    </div>
+
+    <!-- Rule summary -->
+    <div class="rule-summary" style="margin-top: 16px;">
+      <div class="rule-summary-title">📋 Rule summary (auto-generated)</div>
+      <div id="full-rule-summary">Match <strong>all transactions</strong> across <strong>all integrations</strong> where additional conditions are met.</div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="card">
+    <div class="card-title" style="justify-content: space-between;"><span>3. Preview</span> <button class="btn-outline" onclick="runPreview()" style="padding: 6px 16px; font-size: 13px;">▶ Preview</button></div>
+    <div class="preview-area" id="full-preview">
+      <div class="preview-empty">Set your conditions above and click Preview to see matching transactions.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Screen navigation
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.prototype-nav button').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// Close dropdowns on outside click
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.multiselect')) {
+    document.querySelectorAll('.multiselect-dropdown').forEach(d => { d.classList.remove('open'); });
+    document.querySelectorAll('.multiselect-trigger').forEach(t => { t.classList.remove('open'); });
+  }
+});
+
+// Integration toggle (Screen 1)
+function toggleIntegration() {
+  const mode = document.querySelector('input[name="integ-mode"]:checked').value;
+  const ms = document.getElementById('integ-multiselect');
+  const hint = document.getElementById('integ-all-hint');
+  if (mode === 'all') {
+    ms.style.display = 'none';
+    hint.classList.remove('hidden');
+  } else {
+    ms.style.display = 'block';
+    hint.classList.add('hidden');
+  }
+}
+
+// Multiselect dropdown toggle
+function toggleDropdown(prefix) {
+  const dd = document.getElementById(prefix + '-dropdown');
+  const trigger = dd.previousElementSibling;
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open');
+  trigger.classList.toggle('open');
+  if (!isOpen) dd.classList.add('dropdown-appear');
+}
+
+// Bulk select/deselect
+function bulkSelect(prefix, selectAll) {
+  const checks = document.querySelectorAll('#' + prefix + '-options input[type="checkbox"]');
+  checks.forEach(c => { if (c.closest('.multiselect-option').style.display !== 'none') c.checked = selectAll; });
+  updatePills(prefix);
+}
+
+// Filter integrations search
+function filterIntegrations(query) {
+  const options = document.querySelectorAll('#integ-options .multiselect-option');
+  query = query.toLowerCase();
+  options.forEach(opt => {
+    const text = opt.textContent.toLowerCase();
+    opt.style.display = text.includes(query) ? '' : 'none';
+  });
+}
+
+// Update pills display
+function updatePills(prefix) {
+  const pills = document.getElementById(prefix + '-pills');
+  const checks = document.querySelectorAll('#' + prefix + '-options input[type="checkbox"]:checked');
+  if (checks.length === 0) {
+    pills.innerHTML = '<span style="color:#999; font-size:13px;">Select integrations...</span>';
+    return;
+  }
+  const names = { stripe: 'Stripe', shopify: 'Shopify', amazon: 'Amazon', paypal: 'PayPal', square: 'Square' };
+  pills.innerHTML = '';
+  checks.forEach(c => {
+    const pill = document.createElement('span');
+    pill.className = 'multiselect-pill';
+    pill.innerHTML = (names[c.value] || c.value) + ' <span class="remove" onclick="event.stopPropagation(); this.closest(\'.multiselect-pill\').remove(); document.querySelector(\'#' + prefix + '-options input[value=' + c.value + ']\').checked = false; updatePills(\'' + prefix + '\');">×</span>';
+    pills.appendChild(pill);
+  });
+}
+
+// Type/Subtype logic (Screen 2)
+function updateTypeSubtype() {
+  const typeMode = document.querySelector('input[name="type-mode"]:checked')?.value;
+  const subtypeMode = document.querySelector('input[name="subtype-mode"]:checked')?.value;
+  const typeSelect = document.getElementById('type-select-wrap');
+  const subtypeSelect = document.getElementById('subtype-select-wrap');
+  const crossError = document.getElementById('cross-error');
+  const typeHint = document.getElementById('type-hint');
+  const subtypeHint = document.getElementById('subtype-hint');
+  const ruleSummary = document.getElementById('type-rule-summary');
+  const ruleText = document.getElementById('type-rule-text');
+
+  // Show/hide selects
+  typeSelect.style.display = typeMode === 'specific' ? '' : 'none';
+  subtypeSelect.style.display = subtypeMode === 'specific' ? '' : 'none';
+
+  // Disable "All" on the other when one is "All"
+  const typeAllRadio = document.querySelector('input[name="type-mode"][value="all"]');
+  const subtypeAllRadio = document.querySelector('input[name="subtype-mode"][value="all"]');
+  
+  typeAllRadio.disabled = subtypeMode === 'all';
+  subtypeAllRadio.disabled = typeMode === 'all';
+
+  // Hints
+  crossError.classList.add('hidden');
+  typeHint.classList.add('hidden');
+  subtypeHint.classList.add('hidden');
+
+  if (typeMode === 'all') {
+    document.getElementById('subtype-hint-text').textContent = 'Subtype is required when type is "All"';
+    subtypeHint.classList.remove('hidden');
+  }
+  if (subtypeMode === 'all') {
+    document.getElementById('type-hint-text').textContent = 'Type is required when subtype is "All"';
+    typeHint.classList.remove('hidden');
+  }
+
+  // Build rule summary
+  const typeVal = typeMode === 'all' ? 'all types' : (document.getElementById('type-select').value || '(not selected)');
+  const subtypeVal = subtypeMode === 'all' ? 'all subtypes' : (document.getElementById('subtype-select').value || '(not selected)');
+  ruleText.innerHTML = 'Match transactions in <strong>' + typeVal + '</strong> with <strong>' + subtypeVal + '</strong>';
+  ruleSummary.style.display = '';
+}
+
+// Full form (Screen 3)
+function updateFullForm() {
+  const typeMode = document.querySelector('input[name="full-type-mode"]:checked')?.value;
+  const subtypeMode = document.querySelector('input[name="full-subtype-mode"]:checked')?.value;
+  const typeSelect = document.getElementById('full-type');
+  const subtypeSelect = document.getElementById('full-subtype');
+  const crossError = document.getElementById('full-cross-error');
+
+  typeSelect.style.display = typeMode === 'specific' ? '' : 'none';
+  subtypeSelect.style.display = subtypeMode === 'specific' ? '' : 'none';
+
+  const typeAllRadio = document.querySelector('input[name="full-type-mode"][value="all"]');
+  const subtypeAllRadio = document.querySelector('input[name="full-subtype-mode"][value="all"]');
+  typeAllRadio.disabled = subtypeMode === 'all';
+  subtypeAllRadio.disabled = typeMode === 'all';
+
+  crossError.classList.add('hidden');
+
+  // Update rule summary
+  const txn = document.getElementById('full-transaction').value || 'all transactions';
+  const type = typeMode === 'all' ? 'all types' : (typeSelect.value || '...');
+  const subtype = subtypeMode === 'all' ? 'all subtypes' : (subtypeSelect.value || '...');
+  const integ = document.querySelector('input[name="full-integ"]:checked').value === 'all' ? 'all integrations' : 'specific integrations';
+  document.getElementById('full-rule-summary').innerHTML = 
+    'Match <strong>' + txn + '</strong> in <strong>' + type + '</strong> / <strong>' + subtype + '</strong> across <strong>' + integ + '</strong> where additional conditions are met.';
+}
+
+function toggleFullInteg() {
+  const mode = document.querySelector('input[name="full-integ"]:checked').value;
+  document.getElementById('full-integ-select').style.display = mode === 'specific' ? '' : 'none';
+  document.getElementById('full-integ-hint').style.display = mode === 'all' ? '' : 'none';
+  updateFullForm();
+}
+
+function addCondition() {
+  const container = document.getElementById('full-conditions');
+  const row = document.createElement('div');
+  row.className = 'condition-row';
+  row.innerHTML = `
+    <select style="min-width:60px;"><option>and</option><option>or</option></select>
+    <select><option value="">Field...</option><option>Memo</option><option>Description</option><option>Amount</option><option>Contact name</option></select>
+    <select><option value="">Operator...</option><option>contains</option><option>is equal</option><option>is not equal</option><option>is empty</option><option>less than</option><option>greater than</option></select>
+    <input type="text" placeholder="Value...">
+    <button class="icon-btn" title="Duplicate">📋</button>
+    <button class="icon-btn danger" title="Delete" onclick="this.closest('.condition-row').remove()">🗑</button>
+  `;
+  container.appendChild(row);
+}
+
+function clearNameError() {
+  document.getElementById('group-name').classList.remove('error');
+  document.getElementById('name-error').classList.add('hidden');
+}
+
+function validateForm() {
+  let valid = true;
+  const name = document.getElementById('group-name');
+  if (!name.value.trim()) {
+    name.classList.add('error');
+    document.getElementById('name-error').classList.remove('hidden');
+    document.getElementById('name-error-text').textContent = 'Group name is required';
+    valid = false;
+  }
+  if (name.value.trim().toLowerCase() === 'amazon delivery fees') {
+    name.classList.add('error');
+    document.getElementById('name-error').classList.remove('hidden');
+    document.getElementById('name-error-text').textContent = 'This name is already in use. View existing groups →';
+    valid = false;
+  }
+  if (valid) alert('✅ Group saved successfully!');
+}
+
+function runPreview() {
+  const preview = document.getElementById('full-preview');
+  const txn = document.getElementById('full-transaction').value;
+  if (!txn) {
+    preview.innerHTML = '<div class="preview-warning">⚠️ Transaction type not selected — showing partial matches only</div>' + getSampleRows();
+  } else {
+    preview.innerHTML = '<div class="preview-header"><h4>Matching transactions</h4><span class="match-count">3 matches</span></div>' + getSampleRows();
+  }
+}
+
+function getSampleRows() {
+  return `
+    <div class="preview-row"><span class="date">Jan 20, 2026</span><span class="desc">Bank, Online Sales — Stripe clearing</span><span class="amount">$86.44 USD</span></div>
+    <div class="preview-row"><span class="date">Jan 18, 2026</span><span class="desc">Fees, Online Sales — Stripe fees</span><span class="amount">$22.56 USD</span></div>
+    <div class="preview-row"><span class="date">Jan 15, 2026</span><span class="desc">Clearing, Online Sales — PayPal clearing</span><span class="amount">$60.00 USD</span></div>
+  `;
+}
+
+// Initialize
+updateTypeSubtype();
+updateFullForm();
+</script>
+</body>
+</html>
