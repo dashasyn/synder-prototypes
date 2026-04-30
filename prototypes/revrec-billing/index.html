@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Synder — RevRec Billing (Prototype v1)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --ink-900:#0F1420; --ink-700:#1A1D24; --ink-500:#4B5563; --ink-400:#6B7280;
+  --ink-300:#9CA3AF; --ink-200:#D1D5DB; --ink-100:#E5E7EB; --ink-50:#F3F4F6;
+  --bg:#F5F7FA; --card:#FFFFFF; --sidebar:#FFFFFF;
+  --blue-700:#003B8E; --blue-600:#0053CC; --blue-500:#1B7BEA; --blue-100:#E6EEFB; --blue-50:#F2F7FE;
+  --green-700:#0B7A3E; --green-100:#E3F7EA; --green-50:#EFFAF2;
+  --amber-700:#8A5A00; --amber-100:#FFF4D6; --amber-50:#FFFBEC;
+  --red-700:#B0201C; --red-100:#FDE7E6; --red-50:#FEF2F2;
+  --purple-700:#5A21B5; --purple-100:#EDE3FB; --purple-50:#F7F2FE;
+  --radius:12px; --radius-sm:8px;
+  --shadow:0 1px 2px rgba(15,20,32,.04), 0 4px 12px rgba(15,20,32,.04);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:var(--bg);color:var(--ink-700);font-family:'Inter',-apple-system,sans-serif;line-height:1.45;font-size:14px;}
+a{color:var(--blue-600);text-decoration:none;} a:hover{text-decoration:underline;}
+button{font-family:inherit;font-size:inherit;cursor:pointer;border:0;background:none;}
+
+/* Switcher */
+.switcher{position:sticky;top:0;z-index:50;background:#0F1420;color:#fff;padding:10px 20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:12px;}
+.switcher .title{font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#9fb4d4;}
+.switcher .pills{display:flex;gap:6px;}
+.pill{background:#1B2235;color:#c9d3e4;border:1px solid #263049;padding:6px 12px;border-radius:999px;font-weight:600;line-height:1;}
+.pill.active{background:#1B7BEA;border-color:#1B7BEA;color:#fff;}
+.switcher .note{color:#7f93b4;margin-left:auto;}
+
+/* App shell */
+.app{display:grid;grid-template-columns:240px 1fr;min-height:calc(100vh - 40px);}
+.sidebar{background:var(--sidebar);border-right:1px solid var(--ink-100);padding:16px 0;}
+.org{display:flex;align-items:center;gap:10px;padding:8px 16px 20px;}
+.org .avatar{width:32px;height:32px;border-radius:50%;background:#1B7BEA;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;}
+.org .name{font-weight:600;color:var(--ink-700);}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;color:var(--ink-500);font-weight:500;cursor:pointer;}
+.nav-item:hover{background:var(--ink-50);}
+.nav-item.active{background:var(--blue-50);color:var(--blue-600);font-weight:600;border-left:3px solid var(--blue-600);padding-left:13px;}
+.nav-item.sub{padding-left:48px;font-size:13px;}
+.nav-item.sub.active{padding-left:45px;}
+.nav-ico{width:16px;height:16px;opacity:.7;}
+
+/* Top bar */
+.topbar{display:flex;justify-content:flex-end;align-items:center;gap:16px;padding:12px 28px;border-bottom:1px solid var(--ink-100);background:#fff;}
+.syncs-left{font-size:13px;color:var(--ink-500);}
+.syncs-left b{color:var(--blue-600);font-weight:700;}
+.topbar .iconbtn{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--ink-400);}
+.topbar .iconbtn:hover{background:var(--ink-50);}
+
+/* Content */
+.content{padding:28px 36px 80px;max-width:1200px;}
+.breadcrumb{color:var(--ink-500);font-size:13px;margin-bottom:8px;}
+.breadcrumb a{color:var(--ink-500);}
+.breadcrumb a:hover{color:var(--blue-600);}
+h1{font-size:24px;font-weight:700;color:var(--ink-900);margin-bottom:4px;}
+.page-sub{color:var(--ink-500);margin-bottom:24px;font-size:14px;}
+
+/* Current package card */
+.current-card{background:var(--card);border:1px solid var(--ink-100);border-radius:var(--radius);padding:24px;margin-bottom:24px;box-shadow:var(--shadow);}
+.current-grid{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:32px;align-items:start;}
+.stat-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-400);margin-bottom:6px;}
+.stat-value{font-size:24px;font-weight:700;color:var(--ink-900);line-height:1.2;}
+.stat-sub{font-size:13px;color:var(--ink-500);margin-top:4px;}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;}
+.badge.active{background:var(--green-100);color:var(--green-700);}
+.badge.trial{background:var(--blue-100);color:var(--blue-700);}
+.badge.grand{background:var(--purple-100);color:var(--purple-700);}
+.card-actions{display:flex;flex-direction:column;gap:8px;min-width:160px;}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:var(--radius-sm);font-weight:600;font-size:14px;line-height:1;transition:all .15s;}
+.btn.primary{background:var(--blue-600);color:#fff;}
+.btn.primary:hover{background:var(--blue-700);}
+.btn.secondary{background:#fff;color:var(--ink-700);border:1px solid var(--ink-200);}
+.btn.secondary:hover{background:var(--ink-50);}
+.btn.ghost{color:var(--ink-500);}
+.btn.ghost:hover{color:var(--ink-700);background:var(--ink-50);}
+.btn.disabled,.btn:disabled{opacity:.45;cursor:not-allowed;}
+.btn.danger-ghost{color:var(--red-700);background:#fff;border:1px solid var(--red-100);}
+.btn.danger-ghost:hover{background:var(--red-50);}
+
+/* Auto-upgrade row */
+.toggle-row{display:flex;align-items:center;gap:14px;padding:16px 0 0;border-top:1px solid var(--ink-100);margin-top:20px;}
+.switch{position:relative;width:42px;height:24px;background:var(--ink-200);border-radius:999px;cursor:pointer;transition:background .2s;flex-shrink:0;}
+.switch.on{background:var(--blue-600);}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.switch.on::after{transform:translateX(18px);}
+.toggle-copy{flex:1;}
+.toggle-copy .label{font-weight:600;color:var(--ink-900);margin-bottom:2px;}
+.toggle-copy .desc{font-size:13px;color:var(--ink-500);}
+
+/* Billing history section */
+.section-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;}
+.section-head h2{font-size:16px;font-weight:700;color:var(--ink-900);}
+.section-head .hint{font-size:13px;color:var(--ink-500);}
+
+.table-card{background:var(--card);border:1px solid var(--ink-100);border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow);}
+table{width:100%;border-collapse:collapse;}
+thead th{text-align:left;padding:14px 20px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-500);border-bottom:1px solid var(--ink-100);background:var(--ink-50);}
+thead th .tip{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--ink-200);color:#fff;font-size:10px;font-weight:700;margin-left:6px;cursor:help;}
+tbody td{padding:16px 20px;border-bottom:1px solid var(--ink-100);font-size:14px;color:var(--ink-700);vertical-align:middle;}
+tbody tr:last-child td{border-bottom:0;}
+tbody tr:hover{background:var(--ink-50);}
+.period-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:10px;vertical-align:middle;}
+.period-dot.trial{background:var(--green-700);}
+.period-dot.historical{background:var(--amber-700);}
+.period-dot.ongoing{background:var(--purple-700);}
+.drill{color:var(--blue-600);font-weight:500;cursor:pointer;}
+.drill:hover{text-decoration:underline;}
+.paused-count{color:var(--red-700);font-weight:500;}
+.paused-count.zero{color:var(--ink-400);font-weight:400;}
+.package-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:6px;background:var(--ink-50);border:1px solid var(--ink-100);font-size:13px;font-weight:500;color:var(--ink-700);}
+.package-chip.trial{background:var(--green-50);border-color:var(--green-100);color:var(--green-700);}
+.package-chip.historical{background:var(--amber-50);border-color:var(--amber-100);color:var(--amber-700);}
+.warn-ico{display:inline-block;width:16px;height:16px;color:var(--amber-700);vertical-align:middle;margin-left:6px;cursor:help;}
+
+/* Pagination */
+.pagination{display:flex;justify-content:flex-end;align-items:center;gap:16px;padding:12px 20px;border-top:1px solid var(--ink-100);color:var(--ink-500);font-size:13px;}
+.page-btn{width:28px;height:28px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--ink-500);}
+.page-btn:hover{background:var(--ink-50);}
+.page-btn.active{background:var(--blue-600);color:#fff;}
+
+/* Modal */
+.modal-scrim{position:fixed;inset:0;background:rgba(15,20,32,.5);z-index:100;display:none;align-items:center;justify-content:center;padding:40px;}
+.modal-scrim.open{display:flex;}
+.modal{background:#fff;border-radius:var(--radius);max-width:640px;width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 40px rgba(0,0,0,.2);}
+.modal-head{padding:20px 24px;border-bottom:1px solid var(--ink-100);display:flex;justify-content:space-between;align-items:center;}
+.modal-head h3{font-size:18px;font-weight:700;color:var(--ink-900);}
+.modal-close{width:32px;height:32px;border-radius:8px;color:var(--ink-400);}
+.modal-close:hover{background:var(--ink-50);color:var(--ink-700);}
+.modal-body{padding:24px;}
+.modal-foot{padding:16px 24px;border-top:1px solid var(--ink-100);display:flex;justify-content:flex-end;gap:8px;}
+
+/* Package selector */
+.pkg-intro{background:var(--blue-50);border:1px solid var(--blue-100);border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:20px;font-size:13px;color:var(--ink-700);}
+.pkg-intro b{color:var(--blue-700);}
+.pkg-list{display:flex;flex-direction:column;gap:10px;}
+.pkg{display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border:1px solid var(--ink-200);border-radius:var(--radius-sm);cursor:pointer;transition:all .15s;}
+.pkg:hover:not(.disabled){border-color:var(--blue-600);background:var(--blue-50);}
+.pkg.selected{border-color:var(--blue-600);background:var(--blue-50);box-shadow:0 0 0 3px rgba(27,123,234,.12);}
+.pkg.recommended{position:relative;border-color:var(--blue-600);}
+.pkg.disabled{opacity:.45;cursor:not-allowed;}
+.pkg .label{font-weight:600;color:var(--ink-900);}
+.pkg .sub{font-size:12px;color:var(--ink-500);margin-top:2px;}
+.pkg .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;border-radius:999px;background:var(--blue-100);color:var(--blue-700);}
+.pkg .tag.current{background:var(--ink-100);color:var(--ink-500);}
+.pkg .tag.below{background:var(--red-100);color:var(--red-700);}
+
+/* Cancel explanation */
+.cancel-note{background:var(--amber-50);border:1px solid var(--amber-100);border-radius:var(--radius-sm);padding:14px 16px;font-size:13px;color:var(--amber-700);display:flex;gap:10px;}
+.cancel-note b{color:var(--ink-900);display:block;margin-bottom:4px;}
+
+/* State notes */
+.notes{margin-top:40px;padding:20px 24px;background:#fff;border:1px dashed var(--ink-200);border-radius:var(--radius);font-size:13px;color:var(--ink-500);}
+.notes h4{font-size:13px;color:var(--ink-900);font-weight:700;margin-bottom:8px;}
+.notes ul{padding-left:18px;}
+.notes li{margin:4px 0;}
+
+/* Legend */
+.legend{display:flex;gap:18px;align-items:center;font-size:12px;color:var(--ink-500);margin-bottom:10px;}
+.legend span{display:inline-flex;align-items:center;gap:6px;}
+</style>
+</head>
+<body>
+
+<div class="switcher">
+  <span class="title">State:</span>
+  <div class="pills">
+    <button class="pill active" onclick="setState('active')">Active subscription</button>
+    <button class="pill" onclick="setState('trial')">Trial</button>
+    <button class="pill" onclick="setState('grandfathered')">Grandfathered</button>
+  </div>
+  <span class="note">Prototype v1 · copy-first · {placeholders} indicate dynamic values</span>
+</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="org">
+      <div class="avatar">LA</div>
+      <div class="name">Lara Croft</div>
+    </div>
+    <div class="nav-item">📊 Control panel</div>
+    <div class="nav-item">🔄 Transactions</div>
+    <div class="nav-item">🧩 Smart rules</div>
+    <div class="nav-item">🛒 Invoicing</div>
+    <div class="nav-item">✨ AI reports</div>
+    <div class="nav-item">📈 Reporting</div>
+    <div class="nav-item active">💲 Revenue recognition</div>
+    <div class="nav-item sub">Subscriptions</div>
+    <div class="nav-item sub">One-time invoices</div>
+    <div class="nav-item sub active">Reports</div>
+    <div class="nav-item sub">Configuration</div>
+    <div class="nav-item">⚙️ Settings</div>
+    <div class="nav-item">📝 Release notes</div>
+    <div class="nav-item">🧰 Custom development</div>
+  </aside>
+
+  <div>
+    <div class="topbar">
+      <span class="syncs-left">Syncs left: <b>1,000</b></span>
+      <button class="iconbtn">?</button>
+      <button class="iconbtn">👤</button>
+    </div>
+
+    <main class="content">
+      <div class="breadcrumb"><a href="#">← Back to Manage subscription</a></div>
+      <h1>RevRec billing</h1>
+      <p class="page-sub" id="pageSub">Your RevRec package, billing cycle, and history of past periods.</p>
+
+      <!-- CURRENT PACKAGE CARD -->
+      <section class="current-card">
+        <div class="current-grid">
+          <div>
+            <div class="stat-label">Current package</div>
+            <div class="stat-value" id="curPkg">2,000 subscriptions</div>
+            <div class="stat-sub">
+              <span class="badge active" id="curBadge">● Active</span>
+              <span style="margin-left:6px;">Monthly · $200.00 / month</span>
+            </div>
+          </div>
+          <div>
+            <div class="stat-label">Next billing date</div>
+            <div class="stat-value" id="nextDate">Jun 12, 2025</div>
+            <div class="stat-sub">18 days from now</div>
+          </div>
+          <div>
+            <div class="stat-label">This period usage</div>
+            <div class="stat-value">1,280 <span style="color:var(--ink-400);font-weight:500;font-size:16px;">/ 2,000 used</span></div>
+            <div class="stat-sub">Projected: ~1,450 by next billing</div>
+          </div>
+          <div class="card-actions">
+            <button class="btn primary" onclick="openModal('upgrade')">Upgrade package</button>
+            <button class="btn secondary" onclick="openModal('downgrade')">Downgrade package</button>
+            <button class="btn danger-ghost disabled" onclick="openModal('cancel')">Cancel subscription</button>
+          </div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="switch on" onclick="this.classList.toggle('on')"></div>
+          <div class="toggle-copy">
+            <div class="label">Auto-upgrade to the next package when usage exceeds your limit</div>
+            <div class="desc">No interruption to processing. If off, new subscriptions are paused once you use up your plan + buffer.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- BILLING HISTORY -->
+      <div class="section-head">
+        <h2>Billing history</h2>
+        <span class="hint">Click a billable count to see the subscriptions in that period.</span>
+      </div>
+
+      <div class="legend">
+        <span><span class="period-dot ongoing"></span> Ongoing periods</span>
+        <span><span class="period-dot historical"></span> Historical (pre-platform)</span>
+        <span><span class="period-dot trial"></span> Trial</span>
+      </div>
+
+      <div class="table-card">
+        <table>
+          <thead>
+            <tr>
+              <th>Period</th>
+              <th>Billable subscriptions<span class="tip" title="Subscriptions counted as billable in this period. A subscription is billable the first time it has a qualifying event.">?</span></th>
+              <th>Paused subscriptions<span class="tip" title="Snapshot of subscriptions paused during this period. If you upgraded later, they were already counted here.">?</span></th>
+              <th>Package<span class="tip" title="The package active during this period.">?</span></th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr>
+              <td><span class="period-dot ongoing"></span> Apr 20 – May 19, 2025</td>
+              <td><span class="drill">1,600</span></td>
+              <td><span class="paused-count zero">0</span></td>
+              <td><span class="package-chip">2,000</span></td>
+            </tr>
+            <tr>
+              <td><span class="period-dot ongoing"></span> Mar 15 – Apr 14, 2025</td>
+              <td><span class="drill">2,800</span></td>
+              <td><span class="paused-count zero">0</span></td>
+              <td><span class="package-chip">2,000 + 1×500 booster</span></td>
+            </tr>
+            <tr>
+              <td><span class="period-dot ongoing"></span> Feb 15 – Mar 14, 2025</td>
+              <td><span class="drill">2,400</span></td>
+              <td><span class="paused-count">400 paused</span><span class="warn-ico" title="This period had paused subscriptions. Deferred revenue data is incomplete for those subs.">⚠</span></td>
+              <td><span class="package-chip">2,000</span></td>
+            </tr>
+            <tr>
+              <td><span class="period-dot ongoing"></span> Jan 15 – Feb 14, 2025</td>
+              <td><span class="drill">1,600</span></td>
+              <td><span class="paused-count zero">0</span></td>
+              <td><span class="package-chip">2,000</span></td>
+            </tr>
+            <tr>
+              <td><span class="period-dot historical"></span> Jan 1, 2022 – Jan 14, 2025</td>
+              <td><span class="drill">20,000</span></td>
+              <td><span class="paused-count zero">0</span></td>
+              <td><span class="package-chip historical">Historical (invoiced by sales)</span></td>
+            </tr>
+            <tr>
+              <td><span class="period-dot trial"></span> Dec 17 – Dec 31, 2021</td>
+              <td><span class="drill">1,800</span></td>
+              <td><span class="paused-count zero">0</span></td>
+              <td><span class="package-chip trial">Trial</span></td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination">
+          <span>Rows per page: 10 ▾</span>
+          <span>1–6 of 6</span>
+          <div style="display:flex;gap:2px;">
+            <button class="page-btn">«</button>
+            <button class="page-btn">‹</button>
+            <button class="page-btn active">1</button>
+            <button class="page-btn">›</button>
+            <button class="page-btn">»</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="notes">
+        <h4>Copy decisions applied (v2 sheet)</h4>
+        <ul>
+          <li><b>Tier → Package</b> across all user-facing copy.</li>
+          <li><b>Grace limit → Plan + buffer</b>. Buffer explained in toggle description.</li>
+          <li><b>Autocharge → Auto-upgrade</b>. Old toggle copy was conceptually wrong (it wasn't about charging, it was about package upgrades).</li>
+          <li><b>Cancel subscription</b> is grayed out per Jira spec. Click shows Account Manager modal.</li>
+          <li><b>Date format:</b> <code>Jun 12, 2025</code> everywhere (not <code>11/06/2021</code>).</li>
+          <li><b>Billable counts are drill-downs</b> (blue, underlined on hover) — open the subscriptions list for that period.</li>
+          <li><b>Row types color-coded</b>: 🟢 Trial, 🟠 Historical, 🟣 Ongoing. Legend added above the table.</li>
+          <li><b>Warning icon</b> next to periods with paused subs, with tooltip.</li>
+          <li><b>"Additional packages" column removed</b> — booster info moved inline into the Package column chip (e.g. "2,000 + 1×500 booster").</li>
+        </ul>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- UPGRADE MODAL -->
+<div class="modal-scrim" id="modalUpgrade">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Upgrade package</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pkg-intro">
+        Your projected usage for <b>Jun 12, 2025</b> is <b>~1,450 subscriptions</b>. We've pre-selected the smallest package that fits.
+      </div>
+      <div class="pkg-list">
+        <div class="pkg"><div><div class="label">500</div><div class="sub">$50 / month</div></div><span class="tag below">Below current usage</span></div>
+        <div class="pkg"><div><div class="label">1,000</div><div class="sub">$100 / month</div></div><span class="tag below">Below current usage</span></div>
+        <div class="pkg"><div><div class="label">1,500</div><div class="sub">$150 / month</div></div><span class="tag below">Below projected</span></div>
+        <div class="pkg"><div><div class="label">2,000</div><div class="sub">$200 / month</div></div><span class="tag current">Current</span></div>
+        <div class="pkg selected recommended"><div><div class="label">2,500</div><div class="sub">$240 / month</div></div><span class="tag">Recommended</span></div>
+        <div class="pkg"><div><div class="label">5,000</div><div class="sub">$450 / month</div></div></div>
+        <div class="pkg"><div><div class="label">10,000</div><div class="sub">$850 / month</div></div></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary">Confirm upgrade</button>
+    </div>
+  </div>
+</div>
+
+<!-- DOWNGRADE MODAL -->
+<div class="modal-scrim" id="modalDowngrade">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Downgrade package</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="pkg-intro">
+        You're currently using <b>1,280 subscriptions</b>. Packages below this are disabled — downgrading would pause new subscriptions.
+      </div>
+      <div class="pkg-list">
+        <div class="pkg disabled"><div><div class="label">500</div><div class="sub">$50 / month</div></div><span class="tag below">Below current usage</span></div>
+        <div class="pkg disabled"><div><div class="label">1,000</div><div class="sub">$100 / month</div></div><span class="tag below">Below current usage</span></div>
+        <div class="pkg"><div><div class="label">1,500</div><div class="sub">$150 / month</div></div></div>
+        <div class="pkg"><div><div class="label">2,000</div><div class="sub">$200 / month</div></div><span class="tag current">Current</span></div>
+      </div>
+      <p style="margin-top:14px;font-size:13px;color:var(--ink-500);">The new package takes effect on your next billing date (<b>Jun 12, 2025</b>).</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary">Confirm downgrade</button>
+    </div>
+  </div>
+</div>
+
+<!-- CANCEL MODAL -->
+<div class="modal-scrim" id="modalCancel">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Cancel RevRec subscription</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="cancel-note">
+        <span style="font-size:20px;">ℹ️</span>
+        <div>
+          <b>RevRec can't be fully canceled from here.</b>
+          Because deferred revenue data is tied to your accounting books, cancellation requires a short sync-down process with your Account Manager.
+        </div>
+      </div>
+      <p style="margin:18px 0 8px;font-size:14px;">Your Account Manager will:</p>
+      <ul style="padding-left:20px;color:var(--ink-500);font-size:13px;line-height:1.7;">
+        <li>Export your historical RevRec schedules</li>
+        <li>Confirm the last billing period</li>
+        <li>Downgrade your package to the smallest available tier, or schedule a clean close-out</li>
+      </ul>
+    </div>
+    <div class="modal-foot">
+      <button class="btn ghost" onclick="closeModal()">Not now</button>
+      <button class="btn primary">Schedule a call</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function openModal(which){
+  document.getElementById('modalUpgrade').classList.toggle('open', which==='upgrade');
+  document.getElementById('modalDowngrade').classList.toggle('open', which==='downgrade');
+  document.getElementById('modalCancel').classList.toggle('open', which==='cancel');
+}
+function closeModal(){
+  document.querySelectorAll('.modal-scrim').forEach(m=>m.classList.remove('open'));
+}
+document.querySelectorAll('.modal-scrim').forEach(m=>{
+  m.addEventListener('click', e=>{ if(e.target===m) closeModal(); });
+});
+
+function setState(state){
+  document.querySelectorAll('.switcher .pill').forEach(p=>p.classList.remove('active'));
+  event.target.classList.add('active');
+  const badge = document.getElementById('curBadge');
+  const pkg = document.getElementById('curPkg');
+  const date = document.getElementById('nextDate');
+  const sub = document.getElementById('pageSub');
+
+  if(state==='trial'){
+    badge.className='badge trial'; badge.textContent='● Trial · 8 days left';
+    pkg.textContent='Trial (unlimited)';
+    date.textContent='—';
+    sub.textContent='You\'re on a RevRec trial. Pick a package before your trial ends to keep processing.';
+  } else if(state==='grandfathered'){
+    badge.className='badge grand'; badge.textContent='● Grandfathered';
+    pkg.textContent='Unlimited';
+    date.textContent='—';
+    sub.textContent='You\'re on a grandfathered plan — no usage limits or charges apply.';
+  } else {
+    badge.className='badge active'; badge.textContent='● Active';
+    pkg.textContent='2,000 subscriptions';
+    date.textContent='Jun 12, 2025';
+    sub.textContent='Your RevRec package, billing cycle, and history of past periods.';
+  }
+}
+</script>
+</body>
+</html>

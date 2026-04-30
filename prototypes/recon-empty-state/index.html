@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transaction Reconciliation — Empty State Variants</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0053CC;
+    --primary-hover: #003E99;
+    --primary-10: #E0EBFD;
+    --primary-5: #F2F6FC;
+    --white: #fff;
+    --g5: #F7F8FA;
+    --g10: #EFF1F5;
+    --g20: #DFE4EC;
+    --g30: #B4BBCB;
+    --g50: #6B778C;
+    --g70: #424B5F;
+    --g90: #1A1B24;
+    --green: #1F8940;
+    --green-l: #ECFDDC;
+    --beta: #FF9500;
+    --shadow-1: 0 1px 3px rgba(26,27,36,.08), 0 1px 2px rgba(26,27,36,.04);
+    --shadow-2: 0 4px 12px rgba(26,27,36,.10), 0 2px 4px rgba(26,27,36,.04);
+    --shadow-3: 0 12px 32px rgba(26,27,36,.16), 0 4px 8px rgba(26,27,36,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--g5); color: var(--g90); font-family: 'Roboto', -apple-system, system-ui, sans-serif; font-size: 14px; line-height: 20px; -webkit-font-smoothing: antialiased; }
+  button, input, select { font-family: inherit; }
+  button { cursor: pointer; }
+
+  /* PROTO TOP BAR */
+  .proto-bar { position: sticky; top: 0; z-index: 200; background: #1a1b24; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .proto-bar h1 { font-size: 14px; font-weight: 700; margin: 0; letter-spacing: .3px; }
+  .proto-bar h1 span { color: var(--g30); font-weight: 400; }
+  .proto-bar .spacer { flex: 1; }
+  .proto-bar .seg { display: inline-flex; background: rgba(255,255,255,.08); border-radius: 6px; padding: 3px; flex-wrap: wrap; }
+  .proto-bar .seg button { background: transparent; color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: 500; transition: all .15s; white-space: nowrap; }
+  .proto-bar .seg button:hover { background: rgba(255,255,255,.08); }
+  .proto-bar .seg button.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-1); }
+
+  /* SYNDER APP CHROME (mock) */
+  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; background: var(--white); }
+  .sidebar { background: #F7F8FA; border-right: 1px solid var(--g20); padding: 16px 0; }
+  .sidebar .org { display: flex; align-items: center; gap: 10px; padding: 6px 16px 16px; border-bottom: 1px solid var(--g20); }
+  .sidebar .org-pill { width: 32px; height: 32px; border-radius: 50%; background: #E91E63; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  .sidebar .org-name { font-weight: 500; color: var(--g90); flex: 1; font-size: 13px; }
+  .sidebar .org-arrow { color: var(--g50); }
+  .sidebar nav { padding: 12px 0; display: flex; flex-direction: column; gap: 2px; }
+  .sidebar nav a { display: flex; align-items: center; gap: 12px; padding: 8px 16px; color: var(--g70); font-size: 13px; font-weight: 500; text-decoration: none; }
+  .sidebar nav a .ic { width: 18px; height: 18px; color: var(--g50); display:inline-flex; }
+  .sidebar nav a:hover { background: var(--g10); }
+  .sidebar nav a.active { background: var(--primary); color: #fff; border-radius: 0 18px 18px 0; margin-right: 0; position: relative; }
+  .sidebar nav a.active .ic { color: #fff; }
+  .sidebar nav a .beta-tag { background: #FF9500; color: #fff; font-size: 9px; padding: 2px 5px; border-radius: 3px; font-weight: 700; margin-left: auto; letter-spacing: .3px; }
+  .sidebar nav a .chev { margin-left: auto; color: inherit; opacity: .6; }
+
+  .main { display: flex; flex-direction: column; min-width: 0; }
+  .topbar { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 18px 32px; border-bottom: 1px solid var(--g20); background: #fff; }
+  .topbar .syncs { color: var(--g50); font-size: 13px; }
+  .topbar .syncs b { color: var(--primary); font-weight: 700; }
+  .topbar .ic-btn { width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: var(--primary); cursor: pointer; }
+  .topbar .ic-btn:hover { background: var(--primary-5); }
+
+  .canvas { flex: 1; padding: 64px 24px; display: flex; justify-content: center; align-items: flex-start; }
+  .empty { width: 100%; max-width: 640px; text-align: center; }
+  .empty .illu { width: 140px; height: 140px; margin: 0 auto 24px; background: var(--primary-5); border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .empty .illu svg { width: 80px; height: 80px; color: var(--primary); }
+  .empty h2 { font-size: 24px; line-height: 32px; font-weight: 700; margin: 0 0 12px; color: var(--g90); }
+  .empty .sub { color: var(--g50); font-size: 14px; line-height: 22px; max-width: 440px; margin: 0 auto 24px; }
+  .btn-primary { background: var(--primary); color: #fff; border: 0; padding: 10px 22px; border-radius: 4px; font-weight: 500; font-size: 14px; transition: background .15s; }
+  .btn-primary:hover { background: var(--primary-hover); }
+  .btn-outline { background: #fff; color: var(--primary); border: 1px solid var(--g20); padding: 10px 22px; border-radius: 4px; font-weight: 500; font-size: 14px; }
+  .btn-outline:hover { border-color: var(--primary); background: var(--primary-5); }
+  .empty .trust { color: var(--g50); font-size: 13px; margin-top: 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .empty .trust svg { width: 14px; height: 14px; color: var(--green); }
+
+  /* FAQ */
+  .faq { margin-top: 48px; text-align: left; display: flex; flex-direction: column; gap: 8px; }
+  .faq details { background: var(--g5); border-radius: 6px; border: 1px solid transparent; transition: border-color .15s; }
+  .faq details[open] { border-color: var(--g20); background: #fff; }
+  .faq summary { padding: 14px 18px; font-weight: 500; color: var(--g90); cursor: pointer; display: flex; align-items: center; gap: 12px; list-style: none; font-size: 14px; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::before { content: ''; width: 14px; height: 14px; background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B778C' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>") center/contain no-repeat; transition: transform .15s; }
+  .faq details[open] summary::before { transform: rotate(180deg); }
+  .faq .faq-body { padding: 0 18px 16px 44px; color: var(--g70); font-size: 14px; line-height: 22px; }
+  .faq-body p { margin: 0 0 10px; }
+  .faq-body p:last-child { margin-bottom: 0; }
+
+  /* video player (placeholder) */
+  .video {
+    position: relative; aspect-ratio: 16/9; width: 100%;
+    background: linear-gradient(135deg, #002A66 0%, #0053CC 50%, #003E99 100%);
+    border-radius: 12px; overflow: hidden; cursor: pointer; box-shadow: var(--shadow-2);
+    background-size: cover; background-position: center;
+  }
+  .video::before {
+    content: ''; position: absolute; inset: 0; background:
+      radial-gradient(circle at 25% 30%, rgba(255,255,255,.15) 0%, transparent 40%),
+      radial-gradient(circle at 75% 70%, rgba(255,255,255,.08) 0%, transparent 50%);
+  }
+  .video .play {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 76px; height: 76px; border-radius: 50%; background: rgba(255,255,255,.95);
+    display: flex; align-items: center; justify-content: center; transition: transform .15s, background .15s;
+    box-shadow: 0 6px 20px rgba(0,0,0,.3);
+  }
+  .video:hover .play { transform: translate(-50%, -50%) scale(1.06); background: #fff; }
+  .video .play svg { width: 30px; height: 30px; margin-left: 4px; color: var(--primary); }
+  .video .duration {
+    position: absolute; bottom: 12px; right: 12px;
+    background: rgba(0,0,0,.6); color: #fff; padding: 3px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;
+  }
+  .video .label-tag {
+    position: absolute; top: 14px; left: 14px;
+    background: rgba(255,255,255,.18); color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; letter-spacing: .4px; backdrop-filter: blur(8px);
+    text-transform: uppercase; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .video .frame-mock {
+    position: absolute; left: 18%; top: 22%; right: 18%; bottom: 22%;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px; backdrop-filter: blur(2px);
+  }
+  .video .frame-mock::before, .video .frame-mock::after {
+    content: ''; position: absolute; left: 12%; height: 4px; background: rgba(255,255,255,.18); border-radius: 2px;
+  }
+  .video .frame-mock::before { top: 16%; right: 50%; }
+  .video .frame-mock::after { top: 30%; right: 12%; height: 3px; }
+
+  /* V4: split layout */
+  .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 32px; align-items: center; background: linear-gradient(180deg, #F7F8FA 0%, #EFF4FB 100%); padding: 32px; border-radius: 12px; border: 1px solid var(--g20); text-align: left; max-width: 880px; }
+  .split .video { aspect-ratio: 16/9; }
+  .split-text h2 { font-size: 24px; line-height: 32px; font-weight: 700; margin: 0 0 12px; color: var(--g90); }
+  .split-text .sub { color: var(--g50); font-size: 14px; line-height: 22px; margin: 0 0 18px; }
+  .split-text .bullets { margin: 0 0 22px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .split-text .bullets li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--g70); }
+  .split-text .bullets li svg { width: 16px; height: 16px; color: var(--green); flex-shrink: 0; margin-top: 3px; }
+  .split-text .actions { display: flex; gap: 12px; align-items: center; }
+  .split-text .trust { color: var(--g50); font-size: 13px; margin-top: 12px; display: inline-flex; align-items: center; gap: 6px; }
+  .split-text .trust svg { width: 14px; height: 14px; color: var(--green); }
+
+  /* V5: extra button row */
+  .btn-row { display: inline-flex; gap: 10px; }
+  .btn-secondary-link {
+    background: transparent; border: 0; color: var(--primary); padding: 10px 16px; border-radius: 4px;
+    font-weight: 500; font-size: 14px; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-secondary-link:hover { background: var(--primary-5); }
+  .btn-secondary-link svg { width: 16px; height: 16px; }
+
+  /* V3: floating popup */
+  .video-popup {
+    position: fixed; right: 24px; bottom: 24px;
+    width: 320px; background: #fff; border-radius: 12px;
+    box-shadow: var(--shadow-3); border: 1px solid var(--g20); overflow: hidden; z-index: 50;
+    animation: pop-in .25s ease-out;
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .video-popup .pop-head { display: flex; align-items: center; padding: 10px 12px 8px; }
+  .video-popup .pop-head .pop-title { flex: 1; font-size: 13px; font-weight: 600; color: var(--g90); }
+  .video-popup .pop-head .pop-close { background: none; border: 0; color: var(--g50); padding: 2px; border-radius: 4px; }
+  .video-popup .pop-head .pop-close:hover { background: var(--g10); color: var(--g90); }
+  .video-popup .video { aspect-ratio: 16/9; border-radius: 0; box-shadow: none; }
+  .video-popup .pop-foot { padding: 10px 12px; font-size: 12px; color: var(--g50); }
+
+  /* Comparison view */
+  .compare { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; padding: 32px; }
+  .compare .card { background: #fff; border: 1px solid var(--g20); border-radius: 8px; overflow: hidden; }
+  .compare .card-head { padding: 12px 16px; border-bottom: 1px solid var(--g20); background: var(--g5); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--g90); font-size: 14px; }
+  .compare .card-head .tag { background: var(--primary-10); color: var(--primary); padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; }
+  .compare .card-body { padding: 24px; }
+  .compare iframe { width: 100%; height: 720px; border: 0; }
+
+  /* notes */
+  .note-bar { background: #FFF8E1; border-bottom: 1px solid #F4D58D; padding: 10px 24px; font-size: 13px; color: #8B6914; display: flex; align-items: center; gap: 10px; }
+  .note-bar .label { background: #FFC107; color: #5D4200; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+
+  .hide { display: none !important; }
+
+  /* V6 — Best variant tweaks */
+  .proto-bar .seg button[data-mode="v6"] { background: linear-gradient(135deg,#FFB300,#FF6B00); color:#fff; box-shadow: var(--shadow-1); }
+  .proto-bar .seg button[data-mode="v6"].active { background: linear-gradient(135deg,#FFB300,#FF6B00); box-shadow: var(--shadow-2); }
+  .video.v6-still { background: linear-gradient(135deg,#001A40 0%, #002A66 50%, #0053CC 100%); }
+  .video.v6-still .frame-mock { background: rgba(255,255,255,.10); border-color: rgba(255,255,255,.18); }
+  .video.v6-still .hover-title {
+    position: absolute; left: 0; right: 0; bottom: 0;
+    padding: 14px 18px;
+    background: linear-gradient(180deg, transparent, rgba(0,0,0,.55));
+    color: #fff; font-size: 13px; font-weight: 500; letter-spacing: .2px;
+    opacity: 0; transition: opacity .2s ease-out;
+    text-align: left;
+  }
+  .video.v6-still:hover .hover-title { opacity: 1; }
+  .split-text .bullets li.accountant svg { color: var(--green); }
+  .split-text .trust-under-cta {
+    display: inline-flex; align-items: center; gap: 6px;
+    color: var(--g50); font-size: 13px; margin-top: 12px;
+  }
+  .split-text .trust-under-cta svg { width: 14px; height: 14px; color: var(--green); }
+
+  /* Modal video */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); display: none; align-items: center; justify-content: center; z-index: 300; padding: 24px; }
+  .modal-overlay.open { display: flex; }
+  .modal-overlay .modal { width: min(960px, 100%); aspect-ratio: 16/9; background: #000; border-radius: 12px; position: relative; overflow: hidden; }
+  .modal-overlay .modal-close { position: absolute; top: -40px; right: 0; background: none; border: 0; color: #fff; font-size: 28px; cursor: pointer; }
+  .modal-overlay iframe { width: 100%; height: 100%; border: 0; }
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <h1>Transaction Reconciliation <span>· Empty State Variants</span></h1>
+  <div class="spacer"></div>
+  <div class="seg" id="modeSwitcher">
+    <button data-mode="v1" class="active">V1 · Current</button>
+    <button data-mode="v2">V2 · Replace illustration</button>
+    <button data-mode="v3">V3 · Corner popup</button>
+    <button data-mode="v4">V4 · Split layout</button>
+    <button data-mode="v5">V5 · Add button</button>
+    <button data-mode="v6">V6 · Best ★</button>
+    <button data-mode="compare">Side-by-side</button>
+  </div>
+</div>
+
+<div class="note-bar" id="noteBar">
+  <span class="label">NOTE</span>
+  <span id="noteText">Production today. Video is hidden inside the first FAQ ("Why should I use it?").</span>
+</div>
+
+<!-- Single-variant view -->
+<div class="app" id="appView">
+  <aside class="sidebar">
+    <div class="org">
+      <div class="org-pill">DT</div>
+      <div class="org-name">Dasha Test Co</div>
+      <div class="org-arrow">▼</div>
+    </div>
+    <nav>
+      <a href="#"><span class="ic">▦</span>Control panel</a>
+      <a href="#"><span class="ic">⇄</span>Transactions <span class="chev">▾</span></a>
+      <a href="#" class="active"><span class="ic">⊟</span>Transaction reconciliation <span class="beta-tag">BETA</span></a>
+      <a href="#"><span class="ic">⚙</span>Smart rules <span class="chev">▾</span></a>
+      <a href="#"><span class="ic">🛒</span>Invoicing <span class="chev">▾</span></a>
+      <a href="#"><span class="ic">✦</span>AI reports</a>
+      <a href="#"><span class="ic">📊</span>Reporting <span class="chev">▾</span></a>
+      <a href="#"><span class="ic">$</span>Revenue recognition</a>
+      <a href="#"><span class="ic">⚙</span>Settings</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="syncs">Syncs left: <b>1000</b></div>
+      <div class="ic-btn">🔔</div>
+      <div class="ic-btn">?</div>
+      <div class="ic-btn">👤</div>
+    </div>
+
+    <div class="canvas" id="canvas">
+      <!-- V1 — Current -->
+      <section class="empty" data-variant="v1">
+        <div class="illu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="9" height="14" rx="1"/>
+            <rect x="12" y="7" width="9" height="14" rx="1"/>
+            <circle cx="11" cy="11" r="3"/>
+            <path d="M14 13l3 3"/>
+          </svg>
+        </div>
+        <h2>Reconcile transactions with ease</h2>
+        <p class="sub">Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+        <button class="btn-primary">Set up reconciliation</button>
+        <div class="trust">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Read-only comparison — no changes to your books
+        </div>
+        <div class="faq">
+          <details>
+            <summary>Why should I use it?</summary>
+            <div class="faq-body">
+              <p>Reconciliation helps you catch missing transactions, duplicates, and mismatches between your sales platforms and your accounting software.</p>
+              <p style="background: #FFF8E1; padding: 8px 12px; border-radius: 4px;">📺 <em>Video lives here today — most users never expand this FAQ to see it.</em></p>
+            </div>
+          </details>
+          <details>
+            <summary>Automated reconciliation</summary>
+            <div class="faq-body"><p>Synder pulls data from your integrations and matches it to your accounting records automatically.</p></div>
+          </details>
+          <details>
+            <summary>No sync balance changes</summary>
+            <div class="faq-body"><p>Reconciliation is read-only — running it doesn't modify any of your synced transactions.</p></div>
+          </details>
+          <details>
+            <summary>Will it change anything in my books?</summary>
+            <div class="faq-body"><p>No. This is a comparison only. Your books stay as they are.</p></div>
+          </details>
+          <details>
+            <summary>Can I undo and re-run a reconciliation?</summary>
+            <div class="faq-body"><p>Yes. You can delete a reconciliation and create a new one any time.</p></div>
+          </details>
+        </div>
+      </section>
+
+      <!-- V2 — Replace illustration with video -->
+      <section class="empty hide" data-variant="v2">
+        <div class="video" onclick="openModal()" style="margin-bottom: 28px; max-width: 520px; margin-left: auto; margin-right: auto;">
+          <span class="label-tag">▶ 1 min overview</span>
+          <div class="frame-mock"></div>
+          <div class="play">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+          <div class="duration">1:08</div>
+        </div>
+        <h2>Reconcile transactions with ease</h2>
+        <p class="sub">Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+        <button class="btn-primary">Set up reconciliation</button>
+        <div class="trust">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Read-only comparison — no changes to your books
+        </div>
+        <div class="faq">
+          <details><summary>Automated reconciliation</summary><div class="faq-body"><p>Synder pulls data from your integrations and matches it to your accounting records automatically.</p></div></details>
+          <details><summary>No sync balance changes</summary><div class="faq-body"><p>Reconciliation is read-only — running it doesn't modify any of your synced transactions.</p></div></details>
+          <details><summary>Will it change anything in my books?</summary><div class="faq-body"><p>No. This is a comparison only.</p></div></details>
+          <details><summary>Can I undo and re-run a reconciliation?</summary><div class="faq-body"><p>Yes. You can delete a reconciliation and create a new one any time.</p></div></details>
+        </div>
+      </section>
+
+      <!-- V3 — Corner popup -->
+      <section class="empty hide" data-variant="v3">
+        <div class="illu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="9" height="14" rx="1"/>
+            <rect x="12" y="7" width="9" height="14" rx="1"/>
+            <circle cx="11" cy="11" r="3"/>
+            <path d="M14 13l3 3"/>
+          </svg>
+        </div>
+        <h2>Reconcile transactions with ease</h2>
+        <p class="sub">Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+        <button class="btn-primary">Set up reconciliation</button>
+        <div class="trust">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Read-only comparison — no changes to your books
+        </div>
+        <div class="faq">
+          <details><summary>Why should I use it?</summary><div class="faq-body"><p>Catch missing transactions, duplicates, and mismatches between platforms.</p></div></details>
+          <details><summary>Automated reconciliation</summary><div class="faq-body"><p>Synder pulls data automatically.</p></div></details>
+          <details><summary>No sync balance changes</summary><div class="faq-body"><p>Read-only.</p></div></details>
+        </div>
+      </section>
+
+      <!-- V4 — Split layout -->
+      <section class="empty hide" data-variant="v4" style="max-width: 920px;">
+        <div class="split">
+          <div class="video" onclick="openModal()">
+            <span class="label-tag">▶ 1 min overview</span>
+            <div class="frame-mock"></div>
+            <div class="play">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <div class="duration">1:08</div>
+          </div>
+          <div class="split-text">
+            <h2>Reconcile transactions with ease</h2>
+            <p class="sub">Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+            <ul class="bullets">
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Catch missing & duplicate transactions</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Match Stripe / Shopify against QuickBooks or Xero</li>
+              <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Read-only — never touches your books</li>
+            </ul>
+            <div class="actions">
+              <button class="btn-primary">Set up reconciliation</button>
+            </div>
+          </div>
+        </div>
+        <div class="faq" style="margin-top: 32px;">
+          <details><summary>Automated reconciliation</summary><div class="faq-body"><p>Synder pulls data from your integrations and matches it to your accounting records automatically.</p></div></details>
+          <details><summary>Will it change anything in my books?</summary><div class="faq-body"><p>No. Read-only.</p></div></details>
+          <details><summary>Can I undo and re-run a reconciliation?</summary><div class="faq-body"><p>Yes. You can delete and re-run any time.</p></div></details>
+        </div>
+      </section>
+
+      <!-- V6 — Best variant: split layout + accountant headline + trust line restored + clean video still -->
+      <section class="empty hide" data-variant="v6" style="max-width: 920px;">
+        <div class="split">
+          <div class="video v6-still" onclick="openModal()">
+            <span class="label-tag">▶ 1 min overview</span>
+            <div class="frame-mock"></div>
+            <div class="play">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </div>
+            <div class="duration">1:08</div>
+            <div class="hover-title">How reconciliation works in Synder</div>
+          </div>
+          <div class="split-text">
+            <h2>Match transactions to your books</h2>
+            <p class="sub">Catch what slips through — missing entries, duplicates, fee mismatches — between your sales platforms and accounting.</p>
+            <ul class="bullets">
+              <li class="accountant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Find missing transactions and duplicates</li>
+              <li class="accountant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Spot fee and amount mismatches</li>
+              <li class="accountant"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg> Match Stripe / Shopify against QuickBooks or Xero</li>
+            </ul>
+            <div class="actions">
+              <button class="btn-primary">Set up reconciliation</button>
+            </div>
+            <div class="trust-under-cta">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              Read-only — never touches your books
+            </div>
+          </div>
+        </div>
+        <div class="faq" style="margin-top: 32px;">
+          <details><summary>Automated reconciliation</summary><div class="faq-body"><p>Synder pulls data from your integrations and matches it to your accounting records automatically.</p></div></details>
+          <details><summary>What discrepancies will I see?</summary><div class="faq-body"><p>Missing transactions, duplicates, and amount or fee mismatches between your sales platform and your books.</p></div></details>
+          <details><summary>Will it change anything in my books?</summary><div class="faq-body"><p>No. Reconciliation is read-only — running it doesn't modify any of your synced transactions.</p></div></details>
+          <details><summary>Can I undo and re-run a reconciliation?</summary><div class="faq-body"><p>Yes. You can delete a reconciliation and create a new one any time.</p></div></details>
+        </div>
+      </section>
+
+      <!-- V5 — Add button -->
+      <section class="empty hide" data-variant="v5">
+        <div class="illu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="9" height="14" rx="1"/>
+            <rect x="12" y="7" width="9" height="14" rx="1"/>
+            <circle cx="11" cy="11" r="3"/>
+            <path d="M14 13l3 3"/>
+          </svg>
+        </div>
+        <h2>Reconcile transactions with ease</h2>
+        <p class="sub">Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+        <div class="btn-row">
+          <button class="btn-primary">Set up reconciliation</button>
+          <button class="btn-secondary-link" onclick="openModal()">
+            <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 8.5v7l6-3.5z"/></svg>
+            Watch 1-min overview
+          </button>
+        </div>
+        <div class="trust">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          Read-only comparison — no changes to your books
+        </div>
+        <div class="faq">
+          <details><summary>Automated reconciliation</summary><div class="faq-body"><p>Synder pulls data from your integrations and matches it to your accounting records automatically.</p></div></details>
+          <details><summary>No sync balance changes</summary><div class="faq-body"><p>Read-only — running it doesn't modify any of your synced transactions.</p></div></details>
+          <details><summary>Will it change anything in my books?</summary><div class="faq-body"><p>No.</p></div></details>
+          <details><summary>Can I undo and re-run a reconciliation?</summary><div class="faq-body"><p>Yes. You can delete and re-run any time.</p></div></details>
+        </div>
+      </section>
+
+    </div>
+  </main>
+</div>
+
+<!-- V3 floating popup (rendered as overlay over the canvas) -->
+<aside class="video-popup hide" id="videoPopup">
+  <div class="pop-head">
+    <div class="pop-title">See how it works</div>
+    <button class="pop-close" onclick="document.getElementById('videoPopup').classList.add('hide')">✕</button>
+  </div>
+  <div class="video" onclick="openModal()">
+    <div class="frame-mock"></div>
+    <div class="play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></div>
+    <div class="duration">1:08</div>
+  </div>
+  <div class="pop-foot">1-min overview · Watch how reconciliation works</div>
+</aside>
+
+<!-- Modal player -->
+<div class="modal-overlay" id="modal" onclick="closeModalBg(event)">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div style="background: linear-gradient(135deg,#002A66,#0053CC); width:100%;height:100%; display:flex; align-items:center; justify-content:center; color:#fff; flex-direction: column; gap: 12px;">
+      <div style="width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </div>
+      <div style="font-size: 16px; opacity: .85;">[ Synder reconciliation video would play here ]</div>
+      <div style="font-size: 13px; opacity: .55;">Replace with real video URL in production</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const sw = document.getElementById('modeSwitcher');
+  const buttons = sw.querySelectorAll('button');
+  const variants = document.querySelectorAll('[data-variant]');
+  const popup = document.getElementById('videoPopup');
+  const noteText = document.getElementById('noteText');
+  const noteBar = document.getElementById('noteBar');
+
+  const notes = {
+    v1: 'Production today. Video is hidden inside the first FAQ ("Why should I use it?").',
+    v2: 'Replace illustration with video. Same vertical flow, video earns the prime real estate that the decorative illustration currently wastes.',
+    v3: 'Floating popup (bottom-right). Easy to dismiss / banner-blindness risk — included for comparison.',
+    v4: 'Split hero layout. Video on the left, value prop + CTA on the right. Adds 3 benefit bullets to anchor the video.',
+    v5: 'Two-button approach. Smallest change, A/B-testable in a day. Risk: secondary "Watch video" button can siphon clicks from the primary CTA.',
+    v6: 'Best variant — split layout (Viktor pick) + accountant-task headline (Sarah pick) + read-only trust line restored under CTA + FAQ trimmed to 4 (no "Why should I use it?") + clean video still (no duplicated title on the frame).',
+  };
+
+  buttons.forEach(b => b.addEventListener('click', () => {
+    buttons.forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    const mode = b.dataset.mode;
+    if (mode === 'compare') {
+      noteBar.style.display = 'none';
+      document.getElementById('appView').classList.add('hide');
+      document.getElementById('compareView')?.classList.remove('hide');
+      return;
+    }
+    noteBar.style.display = '';
+    noteText.textContent = notes[mode];
+    document.getElementById('appView').classList.remove('hide');
+    document.getElementById('compareView')?.classList.add('hide');
+    variants.forEach(v => v.classList.add('hide'));
+    document.querySelector(`[data-variant="${mode}"]`)?.classList.remove('hide');
+    popup.classList.toggle('hide', mode !== 'v3');
+  }));
+
+  function openModal() { document.getElementById('modal').classList.add('open'); }
+  function closeModal() { document.getElementById('modal').classList.remove('open'); }
+  function closeModalBg(e) { if (e.target.id === 'modal') closeModal(); }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+</script>
+
+</body>
+</html>

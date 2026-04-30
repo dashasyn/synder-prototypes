@@ -134,6 +134,28 @@
 - **Settings wired:** Clearing account, income/fee/bank accounts, generic customer (+name picker), track fees, include taxes, default product
 - **Data:** 10 Stripe transactions (Pamela Anderson, Marcus Reid, etc.) Jan–Mar 2026
 
+### Filtering Options Prototype (2026-04-30)
+- **Status:** ✅ v1 live
+- **Location:** `reports/filtering-options/index.html`
+- **Live URL:** `/filtering-options/index.html` (via reports server + CF tunnel)
+- **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Interactive prototypes with tab navigation between variants.
+- **Variants:**
+  1. **Current** — Full filter bar with all filters visible (5 dropdowns + actions)
+  2. **Popular + Sheet** — Quick filter chips for common filters, "All Filters" button opens side sheet with full filter set
+  3. **Chips (Stripe style)** — Each filter is a dropdown chip, applied filters shown as removable chips with "Add filter" option
+  4. **Button + Chips** — Single "Filters" button with badge count, applied filters displayed as chips next to button
+- **Features:**
+  - Tab navigation between all 4 variants
+  - Interactive sheet panel (variant 2)
+  - Clickable chips and filter buttons
+  - Mock data table in all variants
+  - Responsive design
+- **Design decisions:**
+  - Consistent Synder styling (colors, typography, shadows)
+  - Material Icons for actions
+  - Status badges (Synced/Pending/Failed) with color coding
+  - Compact filter bar height (64px) for variants 2-4 vs current (variable)
+
 ---
 
 ## 📋 Completed / Reference

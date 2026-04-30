@@ -97,6 +97,7 @@
 - Report: `reports/onboarding-deep-dive/index.html`
 
 ## Lessons & Preferences
+- **Minimize Figma API calls** — always use cache, batch node IDs, reuse cached PNG renders. Never re-fetch the same nodes. (See `memory/feedback_figma_tokens.md`)
 - Always restart gateway after config changes — don't ask
 - Don't assume platform switching is possible — org is locked to one accounting platform
 - Never save browser storage state after a failed login — only after confirming dashboard URL
