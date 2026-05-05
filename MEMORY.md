@@ -81,6 +81,14 @@
   - Served via reports server + Cloudflare tunnel
   - As of 2026-03-19: v2.3, vertical trunk layout with rounded branch connectors working
 
+- **Grunddatenversorgung (Transit Data Manager)** — Transport Information Management System prototype
+  - **URL:** https://dashasyn.github.io/synder-prototypes/projects/grunddatenversorgung/
+  - **Location:** `projects/grunddatenversorgung/index.html`
+  - **Features:** 4 screens (Fahrplansuche, Export Overview, Station Config with Basic Rules + Stations tabs, Route Planner)
+  - **Theme:** White with blue buttons (#0053CC)
+  - **Built:** 2025-05-05 — Complete with audio players, display configs, rule management
+  - **Backup:** `index-backup-20260505-1239.html` saved in same folder
+
 ## GitHub Hub
 - **Prototypes & published reports:** https://dashasyn.github.io/synder-prototypes/
 - This is where all HTML audit reports and prototypes are hosted
