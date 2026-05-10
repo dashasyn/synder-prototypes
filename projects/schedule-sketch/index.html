@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="be">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hybrid Schedule — Concept Sketch</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  background: #d4d4d4;
+  padding: 32px 16px 64px;
+  color: #111;
+  line-height: 1.4;
+}
+
+h1.page-title {
+  text-align: center;
+  font-size: 13px;
+  color: #888;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  font-weight: 400;
+}
+
+.sign {
+  background: #fff;
+  max-width: 940px;
+  margin: 0 auto;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 32px rgba(0,0,0,.25);
+}
+
+/* ── Stop header ─────────────────────────────── */
+.stop-header {
+  background: #1a1a2e;
+  color: #fff;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.stop-icon {
+  width: 38px; height: 38px;
+  background: #FFD600;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 22px; color: #1a1a2e;
+  flex-shrink: 0;
+}
+.stop-name  { font-size: 20px; font-weight: 700; letter-spacing: -.01em; }
+.stop-meta  { font-size: 12px; color: #7788bb; margin-top: 3px; }
+
+/* ── Section dividers ────────────────────────── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 20px;
+  background: #f4f4f4;
+  border-top: 1px solid #e0e0e0;
+  border-bottom: 1px solid #e0e0e0;
+}
+.section-dot {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.section-hint {
+  margin-left: auto;
+  font-size: 10px;
+  color: #aaa;
+}
+
+/* ── Route badge ─────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  font-weight: 800;
+  font-size: 14px;
+  padding: 3px 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  letter-spacing: -.01em;
+}
+.badge-bus   { background: #FFD600; color: #111; }
+.badge-troll { background: #00695C; color: #fff; }
+
+/* ── Interval chips ──────────────────────────── */
+.chip {
+  display: inline-block;
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip-freq   { background: #EEF4FF; color: #1a4cc0; }  /* avg ≤ 12 min */
+.chip-mod    { background: #FEF3C7; color: #92400e; }  /* avg 12–22 min */
+.chip-rare   { background: #FEE2E2; color: #991b1b; }  /* avg > 22 min */
+
+/* ════════════════════════════════════════════════
+   SECTION 1 — INTERVAL TABLE
+   ════════════════════════════════════════════════ */
+.interval-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.interval-table thead th {
+  background: #f9f9f9;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #999;
+  border-bottom: 1px solid #eee;
+  text-align: center;
+}
+.interval-table thead th.left { text-align: left; padding-left: 20px; }
+
+/* Route name cell spans 2 rows */
+.td-route {
+  padding: 10px 10px 10px 20px;
+  vertical-align: middle;
+  width: 230px;
+  border-right: 1px solid #f0f0f0;
+}
+.route-inner { display: flex; align-items: center; gap: 10px; }
+.route-dir   { font-size: 11px; color: #555; line-height: 1.35; }
+
+.td-day {
+  font-size: 10px;
+  font-weight: 700;
+  color: #bbb;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  text-align: center;
+  vertical-align: middle;
+  width: 40px;
+  border-right: 1px solid #f4f4f4;
+}
+.td-time {
+  font-size: 12px;
+  color: #666;
+  padding: 4px 10px;
+  text-align: center;
+  vertical-align: middle;
+  width: 50px;
+}
+.td-interval {
+  padding: 4px 6px;
+  text-align: center;
+  vertical-align: middle;
+}
+.td-last {
+  font-size: 12px;
+  color: #666;
+  padding: 4px 10px;
+  text-align: center;
+  vertical-align: middle;
+  width: 50px;
+  border-left: 1px solid #f4f4f4;
+}
+
+tr.wd { background: #fff; }
+tr.we { background: #fafafa; }
+tr.sep td { padding: 0; }
+tr.sep td div { height: 1px; background: #eee; margin: 0 16px; }
+
+/* ════════════════════════════════════════════════
+   SECTION 2 — KURSBUCHTAFEL (exact times)
+   ════════════════════════════════════════════════ */
+.kursbuch-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+.kb-block {
+  padding: 16px 18px 18px 20px;
+  border-right: 1px solid #eee;
+}
+.kb-block:last-child { border-right: none; }
+
+.kb-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.kb-direction {
+  font-size: 11px;
+  color: #444;
+  line-height: 1.45;
+  padding-top: 2px;
+}
+
+.kb-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.kb-col-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: #aaa;
+  margin-bottom: 5px;
+}
+.kb-rows { display: flex; flex-direction: column; gap: 1px; }
+.kb-row  { display: flex; align-items: baseline; gap: 0; }
+
+.kb-hour {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111;
+  min-width: 24px;
+  text-align: right;
+  padding-right: 7px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.kb-sep {
+  color: #ccc;
+  padding-right: 6px;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.kb-mins { font-size: 13px; color: #333; }
+.kb-min  {
+  display: inline-block;
+  min-width: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Legend ──────────────────────────────────── */
+.legend {
+  padding: 9px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  background: #f9f9f9;
+  border-top: 1px solid #eee;
+  font-size: 11px;
+  color: #888;
+}
+.leg-item { display: flex; align-items: center; gap: 5px; }
+.leg-spacer { margin-left: auto; }
+</style>
+</head>
+<body>
+
+<h1 class="page-title">Hybrid schedule format — concept sketch · Dasha 2026</h1>
+
+<div class="sign">
+
+  <!-- ── Stop header ──────────────────────────── -->
+  <div class="stop-header">
+    <div class="stop-icon">A</div>
+    <div>
+      <div class="stop-name">д/с «Вяснянка»</div>
+      <div class="stop-meta">7 маршрутаў &nbsp;·&nbsp; зона 2</div>
+    </div>
+  </div>
+
+
+  <!-- ══════════════════════════════════════════
+       SECTION 1 — INTERVAL ROUTES
+       ══════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-dot" style="background:#1a4cc0;"></div>
+    <span class="section-label" style="color:#1a4cc0;">Маршруты з інтэрвалам</span>
+    <span class="section-hint">хвілін паміж аўтобусамі</span>
+  </div>
+
+  <table class="interval-table" cellspacing="0">
+    <thead>
+      <tr>
+        <th class="left" style="width:230px;">Маршрут</th>
+        <th style="width:40px;"></th>
+        <th style="width:50px;">Першы</th>
+        <th>06–09</th>
+        <th>09–15</th>
+        <th>15–19</th>
+        <th>19–24</th>
+        <th style="width:50px;">Апошні</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- A 1 -->
+      <tr class="wd">
+        <td class="td-route" rowspan="2">
+          <div class="route-inner">
+            <span class="badge badge-bus">A 1</span>
+            <span class="route-dir">д/с «Вяснянка»<br>→ Кірава</span>
+          </div>
+        </td>
+        <td class="td-day">буд.</td>
+        <td class="td-time">5:33</td>
+        <td class="td-interval"><span class="chip chip-freq">6–14</span></td>
+        <td class="td-interval"><span class="chip chip-mod">7–20</span></td>
+        <td class="td-interval"><span class="chip chip-mod">5–17</span></td>
+        <td class="td-interval"><span class="chip chip-mod">9–22</span></td>
+        <td class="td-last">0:05</td>
+      </tr>
+      <tr class="we">
+        <td class="td-day">вых.</td>
+        <td class="td-time">5:43</td>
+        <td class="td-interval"><span class="chip chip-mod">10–17</span></td>
+        <td class="td-interval"><span class="chip chip-mod">8–21</span></td>
+        <td class="td-interval"><span class="chip chip-mod">7–20</span></td>
+        <td class="td-interval"><span class="chip chip-mod">10–23</span></td>
+        <td class="td-last">23:50</td>
+      </tr>
+
+      <tr class="sep"><td colspan="8"><div></div></td></tr>
+
+      <!-- T 10 -->
+      <tr class="wd">
+        <td class="td-route" rowspan="2">
+          <div class="route-inner">
+            <span class="badge badge-troll">T 10</span>
+            <span class="route-dir">д/с «Вяснянка»<br>→ д/с «Малінаўка-4»</span>
+          </div>
+        </td>
+        <td class="td-day">буд.</td>
+        <td class="td-time">6:03</td>
+        <td class="td-interval"><span class="chip chip-freq">6–11</span></td>
+        <td class="td-interval"><span class="chip chip-freq">6–15</span></td>
+        <td class="td-interval"><span class="chip chip-freq">4–16</span></td>
+        <td class="td-interval"><span class="chip chip-mod">14–19</span></td>
+        <td class="td-last">23:37</td>
+      </tr>
+      <tr class="we">
+        <td class="td-day">вых.</td>
+        <td class="td-time">6:03</td>
+        <td class="td-interval"><span class="chip chip-mod">15–18</span></td>
+        <td class="td-interval"><span class="chip chip-mod">14–19</span></td>
+        <td class="td-interval"><span class="chip chip-mod">14–20</span></td>
+        <td class="td-interval"><span class="chip chip-mod">18–20</span></td>
+        <td class="td-last">23:37</td>
+      </tr>
+
+      <tr class="sep"><td colspan="8"><div></div></td></tr>
+
+      <!-- A 44 -->
+      <tr class="wd">
+        <td class="td-route" rowspan="2">
+          <div class="route-inner">
+            <span class="badge badge-bus">A 44</span>
+            <span class="route-dir">Ст. «Ждановічы»<br>→ д/с «Карастаянавай»</span>
+          </div>
+        </td>
+        <td class="td-day">буд.</td>
+        <td class="td-time">6:31</td>
+        <td class="td-interval"><span class="chip chip-rare">12–52</span></td>
+        <td class="td-interval"><span class="chip chip-rare">16–40</span></td>
+        <td class="td-interval"><span class="chip chip-rare">12–33</span></td>
+        <td class="td-interval"><span class="chip chip-rare">16–42</span></td>
+        <td class="td-last">0:33</td>
+      </tr>
+      <tr class="we">
+        <td class="td-day">вых.</td>
+        <td class="td-time">6:27</td>
+        <td class="td-interval"><span class="chip chip-rare">16–35</span></td>
+        <td class="td-interval"><span class="chip chip-rare">14–35</span></td>
+        <td class="td-interval"><span class="chip chip-rare">14–39</span></td>
+        <td class="td-interval"><span class="chip chip-rare">21–44</span></td>
+        <td class="td-last">0:33</td>
+      </tr>
+
+      <tr class="sep"><td colspan="8"><div></div></td></tr>
+
+      <!-- A 119c -->
+      <tr class="wd">
+        <td class="td-route" rowspan="2">
+          <div class="route-inner">
+            <span class="badge badge-bus">A 119с</span>
+            <span class="route-dir">Аквапарк<br>→ Кірава</span>
+          </div>
+        </td>
+        <td class="td-day">буд.</td>
+        <td class="td-time">7:06</td>
+        <td class="td-interval"><span class="chip chip-mod">17–20</span></td>
+        <td class="td-interval"><span class="chip chip-rare">23–26</span></td>
+        <td class="td-interval"><span class="chip chip-mod">18–22</span></td>
+        <td class="td-interval"><span class="chip chip-rare">23–25</span></td>
+        <td class="td-last">23:06</td>
+      </tr>
+      <tr class="we">
+        <td class="td-day">вых.</td>
+        <td class="td-time">8:54</td>
+        <td class="td-interval"><span class="chip chip-rare">23–25</span></td>
+        <td class="td-interval"><span class="chip chip-rare">23–27</span></td>
+        <td class="td-interval"><span class="chip chip-rare">20–23</span></td>
+        <td class="td-interval"><span class="chip chip-rare">28–30</span></td>
+        <td class="td-last">22:19</td>
+      </tr>
+
+      <tr class="sep"><td colspan="8"><div></div></td></tr>
+
+      <!-- A 133 -->
+      <tr class="wd">
+        <td class="td-route" rowspan="2">
+          <div class="route-inner">
+            <span class="badge badge-bus">A 133</span>
+            <span class="route-dir">д/с «Вяснянка»<br>→ д/с «Карбышава»</span>
+          </div>
+        </td>
+        <td class="td-day">буд.</td>
+        <td class="td-time">6:02</td>
+        <td class="td-interval"><span class="chip chip-mod">18–20</span></td>
+        <td class="td-interval"><span class="chip chip-rare">22–27</span></td>
+        <td class="td-interval"><span class="chip chip-mod">19–22</span></td>
+        <td class="td-interval"><span class="chip chip-rare">21–25</span></td>
+        <td class="td-last">0:04</td>
+      </tr>
+      <tr class="we">
+        <td class="td-day">вых.</td>
+        <td class="td-time">6:02</td>
+        <td class="td-interval"><span class="chip chip-rare">21–28</span></td>
+        <td class="td-interval"><span class="chip chip-rare">21–29</span></td>
+        <td class="td-interval"><span class="chip chip-rare">21–23</span></td>
+        <td class="td-interval"><span class="chip chip-rare">26–30</span></td>
+        <td class="td-last">21:55</td>
+      </tr>
+
+    </tbody>
+  </table>
+
+
+  <!-- ══════════════════════════════════════════
+       SECTION 2 — KURSBUCHTAFEL (exact times)
+       ══════════════════════════════════════════ -->
+  <div class="section-header">
+    <div class="section-dot" style="background:#166534;"></div>
+    <span class="section-label" style="color:#166534;">Расклад адпраўлення</span>
+    <span class="section-hint">гадзіна · хвіліны адпраўлення</span>
+  </div>
+
+  <div class="kursbuch-wrap">
+
+    <!-- A 44д -->
+    <div class="kb-block">
+      <div class="kb-header">
+        <span class="badge badge-bus">A 44д</span>
+        <div class="kb-direction">РКМЦ → д/с «Карастаянавай»</div>
+      </div>
+      <div class="kb-cols">
+        <div>
+          <div class="kb-col-label">Будні</div>
+          <div class="kb-rows">
+            <div class="kb-row"><span class="kb-hour">8</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">13</span></span></div>
+            <div class="kb-row"><span class="kb-hour">9</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">18</span></span></div>
+            <div class="kb-row"><span class="kb-hour">10</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">21</span></span></div>
+            <div class="kb-row"><span class="kb-hour">11</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">25</span></span></div>
+            <div class="kb-row"><span class="kb-hour">12</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">42</span></span></div>
+            <div class="kb-row"><span class="kb-hour">14</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">02</span></span></div>
+            <div class="kb-row"><span class="kb-hour">15</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">00</span></span></div>
+            <div class="kb-row"><span class="kb-hour">16</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">05</span></span></div>
+            <div class="kb-row"><span class="kb-hour">17</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">22</span></span></div>
+            <div class="kb-row"><span class="kb-hour">18</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">35</span></span></div>
+            <div class="kb-row"><span class="kb-hour">19</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">39</span></span></div>
+            <div class="kb-row"><span class="kb-hour">20</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">39</span></span></div>
+          </div>
+        </div>
+        <div>
+          <div class="kb-col-label">Субота</div>
+          <div class="kb-rows">
+            <div class="kb-row"><span class="kb-hour">8</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">18</span></span></div>
+            <div class="kb-row"><span class="kb-hour">10</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">07</span></span></div>
+            <div class="kb-row"><span class="kb-hour">12</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">29</span></span></div>
+            <div class="kb-row"><span class="kb-hour">14</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">15</span></span></div>
+            <div class="kb-row"><span class="kb-hour">16</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">05</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- A 136 -->
+    <div class="kb-block">
+      <div class="kb-header">
+        <span class="badge badge-bus">A 136</span>
+        <div class="kb-direction">Аздараўленчы цэнтр «Ждановічы»<br>→ д/с «Карастаянавай»</div>
+      </div>
+      <div class="kb-cols">
+        <div>
+          <div class="kb-col-label">Будні</div>
+          <div class="kb-rows">
+            <div class="kb-row"><span class="kb-hour">6</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">09</span><span class="kb-min">56</span></span></div>
+            <div class="kb-row"><span class="kb-hour">7</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">45</span></span></div>
+            <div class="kb-row"><span class="kb-hour">8</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">36</span><span class="kb-min">49</span></span></div>
+            <div class="kb-row"><span class="kb-hour">9</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">03</span><span class="kb-min">44</span></span></div>
+            <div class="kb-row"><span class="kb-hour">11</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">14</span></span></div>
+            <div class="kb-row"><span class="kb-hour">13</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">14</span></span></div>
+            <div class="kb-row"><span class="kb-hour">16</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">14</span></span></div>
+            <div class="kb-row"><span class="kb-hour">17</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">34</span><span class="kb-min">56</span></span></div>
+            <div class="kb-row"><span class="kb-hour">18</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">29</span></span></div>
+            <div class="kb-row"><span class="kb-hour">19</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">30</span></span></div>
+            <div class="kb-row"><span class="kb-hour">20</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">14</span><span class="kb-min">58</span></span></div>
+            <div class="kb-row"><span class="kb-hour">22</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">24</span></span></div>
+          </div>
+        </div>
+        <div>
+          <div class="kb-col-label">Выхадны</div>
+          <div class="kb-rows">
+            <div class="kb-row"><span class="kb-hour">6</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">14</span><span class="kb-min">59</span></span></div>
+            <div class="kb-row"><span class="kb-hour">8</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">34</span></span></div>
+            <div class="kb-row"><span class="kb-hour">9</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">04</span><span class="kb-min">46</span></span></div>
+            <div class="kb-row"><span class="kb-hour">12</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">14</span></span></div>
+            <div class="kb-row"><span class="kb-hour">16</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">34</span></span></div>
+            <div class="kb-row"><span class="kb-hour">17</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">34</span></span></div>
+            <div class="kb-row"><span class="kb-hour">19</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">31</span></span></div>
+            <div class="kb-row"><span class="kb-hour">20</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">14</span><span class="kb-min">58</span></span></div>
+            <div class="kb-row"><span class="kb-hour">22</span><span class="kb-sep">|</span><span class="kb-mins"><span class="kb-min">24</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+
+  <!-- ── Legend ──────────────────────────────── -->
+  <div class="legend">
+    <div class="leg-item"><span class="badge badge-bus"  style="font-size:11px;padding:1px 6px;">A</span> аўтобус</div>
+    <div class="leg-item"><span class="badge badge-troll" style="font-size:11px;padding:1px 6px;">T</span> тралейбус</div>
+    <div class="leg-spacer"></div>
+    <div class="leg-item"><span class="chip chip-freq" style="font-size:11px;">5–12</span> часта — проста падыдзіце</div>
+    <div class="leg-item"><span class="chip chip-mod"  style="font-size:11px;">13–22</span> умерана</div>
+    <div class="leg-item"><span class="chip chip-rare" style="font-size:11px;">23+</span> рэдка — плануйце загадзя</div>
+  </div>
+
+</div>
+</body>
+</html>
