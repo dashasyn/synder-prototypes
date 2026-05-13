@@ -93,17 +93,14 @@ function parseInterval(rows) {
 // RENDERER
 // ═══════════════════════════════════════════════
 
-function renderStop(stopName, routes) {
+function renderStop(stopName, routes, showStopName = true) {
   const cards = routes.map((r, i) =>
     (i > 0 ? '<div class="route-separator"></div>' : '') + renderRoute(r)
   ).join('');
-  return `
-    <div class="schedule-sign">
-      <div class="stop-header">
-        <div class="stop-name">${esc(stopName || 'Прыпынак')}</div>
-      </div>
-      ${cards}
-    </div>`;
+  const header = showStopName
+    ? `<div class="stop-header"><div class="stop-name">${esc(stopName || 'Прыпынак')}</div></div>`
+    : '';
+  return `<div class="schedule-sign">${header}${cards}</div>`;
 }
 
 function renderRoute(r) {
@@ -416,6 +413,7 @@ function syncButtons() {
 
 function generatePreview() {
   const stopName = document.getElementById('stop-name').value.trim();
+  const showStopName = document.getElementById('show-stop-name').checked;
 
   const routes = Array.from(uploadedFiles.values()).sort((a, b) => {
     if (a.type !== b.type) return a.type === 'bus' ? -1 : 1;
@@ -425,7 +423,7 @@ function generatePreview() {
   });
 
   const preview = document.getElementById('preview');
-  preview.innerHTML = renderStop(stopName, routes);
+  preview.innerHTML = renderStop(stopName, routes, showStopName);
   preview.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
