@@ -354,8 +354,10 @@ function init() {
   });
 
   const showStopNameToggle = document.getElementById('show-stop-name');
+  const toggleLabel = document.querySelector('.toggle-label');
   const stopNameField = document.getElementById('stop-name-field');
   showStopNameToggle.addEventListener('change', () => {
+    toggleLabel.classList.toggle('checked', showStopNameToggle.checked);
     stopNameField.style.display = showStopNameToggle.checked ? '' : 'none';
   });
 
