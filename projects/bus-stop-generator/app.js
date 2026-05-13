@@ -94,18 +94,15 @@ function parseInterval(rows) {
 // ═══════════════════════════════════════════════
 
 function renderStop(stopName, routes) {
-  const count = routes.length;
-  const suffix = count === 1 ? 'маршрут' : count < 5 ? 'маршруты' : 'маршрутаў';
+  const cards = routes.map((r, i) =>
+    (i > 0 ? '<div class="route-separator"></div>' : '') + renderRoute(r)
+  ).join('');
   return `
     <div class="schedule-sign">
       <div class="stop-header">
-        <div class="stop-icon">А</div>
-        <div>
-          <div class="stop-name">${esc(stopName || 'Прыпынак')}</div>
-          <div class="stop-meta">${count} ${suffix}</div>
-        </div>
+        <div class="stop-name">${esc(stopName || 'Прыпынак')}</div>
       </div>
-      ${routes.map(renderRoute).join('')}
+      ${cards}
     </div>`;
 }
 
@@ -121,6 +118,12 @@ function renderRoute(r) {
         </div>
       </div>
       <table class="sched-table">
+        <colgroup>
+          <col class="col-edge">
+          <col class="col-band"><col class="col-band">
+          <col class="col-band"><col class="col-band">
+          <col class="col-edge">
+        </colgroup>
         ${renderSection(r, 'weekday')}
         ${renderSection(r, 'weekend')}
       </table>
@@ -128,26 +131,32 @@ function renderRoute(r) {
 }
 
 function renderSection(r, dayType) {
-  const isWD    = dayType === 'weekday';
-  const label   = isWD ? 'Будні' : 'Выходныя';
-  const first   = isWD ? r.firstWeekday : r.firstWeekend;
-  const last    = isWD ? r.lastWeekday  : r.lastWeekend;
-  const sched   = isWD ? r.schedule.weekday : r.schedule.weekend;
+  const isWD  = dayType === 'weekday';
+  const label = isWD ? 'Будні' : 'Выходныя';
+  const first = isWD ? r.firstWeekday : r.firstWeekend;
+  const last  = isWD ? r.lastWeekday  : r.lastWeekend;
+  const sched = isWD ? r.schedule.weekday : r.schedule.weekend;
 
   return r.format === 'interval'
     ? renderIntervalSection(label, sched, first, last)
     : renderExactSection(label, sched, first, last);
 }
 
+function timeParts(t) {
+  const m = String(t).match(/^(\d+):(\d+)$/);
+  if (!m) return `<span class="td-edge-hour">${esc(t)}</span>`;
+  return `<span class="td-edge-hour">${m[1]}:</span><span class="td-edge-min">${m[2]}</span>`;
+}
+
 function renderIntervalSection(label, sched, first, last) {
   const bandCells = BANDS.map(b => {
     const v = sched[b.key];
-    if (!v) return `<td class="td-band"><span class="int-empty">—</span></td>`;
-    return `<td class="td-band">
+    if (!v) return `<td class="td-interval"><div class="int-wrap"><span class="int-value">—</span></div></td>`;
+    return `<td class="td-interval">
       <div class="int-wrap">
-        <span class="int-prefix">Кожны</span>
+        <span class="int-label">Кожны</span>
         <span class="int-value">${esc(v)}</span>
-        <span class="int-unit">хвіліны</span>
+        <span class="int-label">хвіліны</span>
       </div>
     </td>`;
   }).join('');
@@ -155,51 +164,53 @@ function renderIntervalSection(label, sched, first, last) {
   return `
     <tr class="tr-section"><td colspan="6">${label}</td></tr>
     <tr class="tr-bands">
-      <td class="th-edge">Першы</td>
+      <td class="td-edge-hd">Першы</td>
       ${BANDS.map(b => `<td>${b.label}</td>`).join('')}
-      <td class="th-edge">Апошні</td>
+      <td class="td-edge-hd">Апошні</td>
     </tr>
     <tr class="tr-data">
-      <td class="td-edge">${esc(first)}</td>
+      <td class="td-edge">${timeParts(first)}</td>
       ${bandCells}
-      <td class="td-edge">${esc(last)}</td>
+      <td class="td-edge">${timeParts(last)}</td>
     </tr>`;
 }
 
 function renderExactSection(label, hourData, first, last) {
-  // Build a map: hour → minutes[]
   const map = {};
   (hourData || []).forEach(h => { map[h.hour] = h.minutes; });
 
-  // Each row = the nth hour across all 4 bands
   let rows = '';
   for (let i = 0; i < MAX_ROWS; i++) {
-    const cells = BANDS.map(band => {
+    const edgeFirst = i === 0 ? `<td class="td-edge">${timeParts(first)}</td>` : '<td class="td-edge"></td>';
+    const edgeLast  = i === 0 ? `<td class="td-edge">${timeParts(last)}</td>`  : '<td class="td-edge"></td>';
+
+    const bandCells = BANDS.map(band => {
       const hour = band.hours[i];
       if (hour === undefined) return '<td class="td-exact"></td>';
-
       const mins = map[hour];
-      if (!mins || mins.length === 0) {
-        // Hour exists in timetable but no departures
-        return `<td class="td-exact"><span class="ha">${hour}</span></td>`;
-      }
+      if (!mins || mins.length === 0) return `<td class="td-exact"></td>`;
 
       const minsHtml = mins
         .map(m => `<span class="mn">${String(m).padStart(2, '0')}</span>`)
         .join('');
 
-      return `<td class="td-exact"><span class="ha">${hour}</span>${minsHtml}</td>`;
+      return `<td class="td-exact">
+        <div class="hour-row">
+          <span class="ha">${hour}</span>
+          <div class="mins-wrap">${minsHtml}</div>
+        </div>
+      </td>`;
     }).join('');
 
-    rows += `<tr class="tr-data${i % 2 === 1 ? ' odd' : ''}">${cells}</tr>`;
+    rows += `<tr class="tr-data${i % 2 === 1 ? ' alt' : ''}">${edgeFirst}${bandCells}${edgeLast}</tr>`;
   }
 
   return `
     <tr class="tr-section"><td colspan="6">${label}</td></tr>
     <tr class="tr-bands">
-      <td class="th-edge">Першы<span class="time-sub">${esc(first)}</span></td>
+      <td class="td-edge-hd">Першы</td>
       ${BANDS.map(b => `<td>${b.label}</td>`).join('')}
-      <td class="th-edge">Апошні<span class="time-sub">${esc(last)}</span></td>
+      <td class="td-edge-hd">Апошні</td>
     </tr>
     ${rows}`;
 }
