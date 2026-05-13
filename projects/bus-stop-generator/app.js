@@ -154,7 +154,7 @@ function renderIntervalSection(label, sched, first, last) {
     if (!v) return `<td class="td-interval"><div class="int-wrap"><span class="int-value">—</span></div></td>`;
     return `<td class="td-interval">
       <div class="int-wrap">
-        <span class="int-label">Кожны</span>
+        <span class="int-label">Кожная</span>
         <span class="int-value">${esc(v)}</span>
         <span class="int-label">хвіліны</span>
       </div>
@@ -164,9 +164,9 @@ function renderIntervalSection(label, sched, first, last) {
   return `
     <tr class="tr-section"><td colspan="6">${label}</td></tr>
     <tr class="tr-bands">
-      <td class="td-edge-hd">Першы</td>
+      <td class="td-edge-hd">Перш.</td>
       ${BANDS.map(b => `<td>${b.label}</td>`).join('')}
-      <td class="td-edge-hd">Апошні</td>
+      <td class="td-edge-hd">Апош.</td>
     </tr>
     <tr class="tr-data">
       <td class="td-edge">${timeParts(first)}</td>
@@ -196,7 +196,7 @@ function renderExactSection(label, hourData, first, last) {
 
       return `<td class="td-exact">
         <div class="hour-row">
-          <span class="ha">${hour}</span>
+          <span class="ha">${String(hour).padStart(2, '0')}</span>
           <div class="mins-wrap">${minsHtml}</div>
         </div>
       </td>`;
@@ -208,9 +208,9 @@ function renderExactSection(label, hourData, first, last) {
   return `
     <tr class="tr-section"><td colspan="6">${label}</td></tr>
     <tr class="tr-bands">
-      <td class="td-edge-hd">Першы</td>
+      <td class="td-edge-hd">Перш.</td>
       ${BANDS.map(b => `<td>${b.label}</td>`).join('')}
-      <td class="td-edge-hd">Апошні</td>
+      <td class="td-edge-hd">Апош.</td>
     </tr>
     ${rows}`;
 }
