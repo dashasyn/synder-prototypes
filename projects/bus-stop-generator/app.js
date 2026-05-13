@@ -145,15 +145,23 @@ function timeParts(t) {
   return `<div class="td-edge-wrap"><span class="td-edge-hour">${m[1]}:</span><span class="td-edge-min">${m[2]}</span></div>`;
 }
 
+function khvilinEnding(v) {
+  const nums = String(v).match(/\d+/g);
+  if (!nums) return 'хвілін';
+  const n = parseInt(nums[nums.length - 1], 10);
+  const d = n % 10, t = n % 100;
+  return (d >= 2 && d <= 4 && !(t >= 11 && t <= 14)) ? 'хвіліны' : 'хвілін';
+}
+
 function renderIntervalSection(label, sched, first, last) {
   const bandCells = BANDS.map(b => {
     const v = sched[b.key];
     if (!v) return `<td class="td-interval"><div class="int-wrap"><span class="int-value">—</span></div></td>`;
     return `<td class="td-interval">
       <div class="int-wrap">
-        <span class="int-label">Кожная</span>
+        <span class="int-label">Кожныя</span>
         <span class="int-value">${esc(v)}</span>
-        <span class="int-label">хвіліны</span>
+        <span class="int-label">${khvilinEnding(v)}</span>
       </div>
     </td>`;
   }).join('');
