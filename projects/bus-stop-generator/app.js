@@ -353,6 +353,12 @@ function init() {
     if (e.key === 'Enter') generatePreview();
   });
 
+  const showStopNameToggle = document.getElementById('show-stop-name');
+  const stopNameField = document.getElementById('stop-name-field');
+  showStopNameToggle.addEventListener('change', () => {
+    stopNameField.style.display = showStopNameToggle.checked ? '' : 'none';
+  });
+
   previewBtn.addEventListener('click', generatePreview);
   printBtn.addEventListener('click', () => window.print());
 
