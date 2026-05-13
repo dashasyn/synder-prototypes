@@ -362,7 +362,16 @@ function init() {
   });
 
   previewBtn.addEventListener('click', generatePreview);
-  printBtn.addEventListener('click', () => window.print());
+  printBtn.addEventListener('click', () => {
+    const ZOOM = 2.3;
+    const CM_PER_PX = 2.54 / 96;
+    const preview = document.getElementById('preview');
+    const heightCm = (preview.scrollHeight * ZOOM * CM_PER_PX + 1).toFixed(1);
+    let s = document.getElementById('_print_size');
+    if (!s) { s = document.createElement('style'); s.id = '_print_size'; document.head.appendChild(s); }
+    s.textContent = `@media print { @page { size: 40cm ${heightCm}cm; margin: 0; } }`;
+    window.print();
+  });
 
   document.getElementById('dl-exact').addEventListener('click', dlExact);
   document.getElementById('dl-interval').addEventListener('click', dlInterval);
