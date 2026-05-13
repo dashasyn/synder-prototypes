@@ -144,8 +144,8 @@ function renderSection(r, dayType) {
 
 function timeParts(t) {
   const m = String(t).match(/^(\d+):(\d+)$/);
-  if (!m) return `<span class="td-edge-hour">${esc(t)}</span>`;
-  return `<span class="td-edge-hour">${m[1]}:</span><span class="td-edge-min">${m[2]}</span>`;
+  if (!m) return `<div class="td-edge-wrap"><span class="td-edge-hour">${esc(t)}</span></div>`;
+  return `<div class="td-edge-wrap"><span class="td-edge-hour">${m[1]}:</span><span class="td-edge-min">${m[2]}</span></div>`;
 }
 
 function renderIntervalSection(label, sched, first, last) {
