@@ -22,10 +22,10 @@ async function parseFile(file) {
   const wb = XLSX.read(new Uint8Array(buf), { type: 'array' });
 
   const infoWS = wb.Sheets['Маршрут'];
-  if (!infoWS) throw new Error(`Ліст "Маршрут" не знойдзены`);
+  if (!infoWS) throw new Error(`Лист "Маршрут" не найден`);
 
   const schedWS = wb.Sheets['Расклад'];
-  if (!schedWS) throw new Error(`Ліст "Расклад" не знойдзены`);
+  if (!schedWS) throw new Error(`Лист "Расклад" не найден`);
 
   // Key-value info sheet
   const infoRows = XLSX.utils.sheet_to_json(infoWS, { header: 1, defval: '' });
@@ -303,7 +303,7 @@ function dlInterval() {
 
 function dlTroll() {
   const info = [
-    ['Нумар',          'Т10'],
+    ['Нумар',          '10'],
     ['Від',            'тралейбус'],
     ['Адкуль',         'д/с «Вяснянка»'],
     ['Куды',           'д/с «Малінаўка-4»'],
@@ -321,7 +321,7 @@ function dlTroll() {
     ['15-19',  '4–16',  '14–20'],
     ['19-24',  '14–19', '18–20'],
   ];
-  XLSX.writeFile(makeWB(info, sched), 'маршрут_Т10_тралейбус.xlsx');
+  XLSX.writeFile(makeWB(info, sched), 'маршрут_10_тралейбус.xlsx');
 }
 
 // ═══════════════════════════════════════════════
@@ -389,7 +389,7 @@ function init() {
 async function handleFiles(files) {
   const xlsxFiles = files.filter(f => f.name.endsWith('.xlsx'));
   if (xlsxFiles.length === 0) {
-    showError('Толькі файлы .xlsx');
+    showError('Только файлы .xlsx');
     return;
   }
 
