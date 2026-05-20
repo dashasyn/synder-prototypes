@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Synder Dashboard Prototype · Per Transaction</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../synder-design-system.css">
+<style>
+  body { background: #FAFAFA; font-family: 'Roboto', sans-serif; color: #1A1B24; margin: 0; }
+
+  /* Layout */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 230px; background: #F6F6F6; border-right: 1px solid #E5E5E5; flex-shrink: 0; }
+  .main { flex: 1; display: flex; flex-direction: column; }
+
+  /* Sidebar */
+  .org-switch { display: flex; align-items: center; padding: 14px 16px; gap: 10px; border-bottom: 1px solid #E5E5E5; cursor: pointer; }
+  .org-avatar { width: 32px; height: 32px; border-radius: 50%; background: #D64273; color: white; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 12px; }
+  .org-name { font-size: 14px; color: #1A1B24; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org-caret { color: #6B778C; }
+  .nav { padding: 8px 0; }
+  .nav-item { display: flex; align-items: center; padding: 9px 16px; font-size: 14px; color: #2F303A; cursor: pointer; gap: 12px; }
+  .nav-item:hover { background: rgba(0,83,204,0.06); }
+  .nav-item.active { background: #E3EEFF; color: #0053CC; font-weight: 500; border-left: 3px solid #0053CC; padding-left: 13px; }
+  .nav-item .icon { width: 18px; height: 18px; flex-shrink: 0; }
+  .nav-item .chevron { margin-left: auto; color: #6B778C; font-size: 11px; }
+  .nav-item .beta { font-size: 10px; background: #E3F2FD; color: #0053CC; padding: 1px 6px; border-radius: 3px; margin-left: 4px; }
+  .nav-divider { height: 1px; background: #E5E5E5; margin: 8px 16px; }
+
+  /* Topbar */
+  .topbar { display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; height: 59px; border-bottom: 1px solid #E5E5E5; background: #FFF; gap: 16px; }
+  .syncs-left { display: flex; align-items: center; gap: 6px; font-size: 14px; color: #1A1B24; }
+  .syncs-left .num { color: #0053CC; font-weight: 700; border-bottom: 1px solid #0053CC; padding-bottom: 1px; }
+  .topbar-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: #0053CC; cursor: pointer; }
+
+  /* Page */
+  .page { padding: 24px 32px; max-width: 1240px; }
+  .welcome-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; gap: 16px; flex-wrap: wrap; }
+  .welcome-text { font-size: 22px; font-weight: 400; color: #1A1B24; }
+  .welcome-text .period-link { color: #0053CC; cursor: pointer; border-bottom: 1px dashed #0053CC; padding-bottom: 1px; }
+  .welcome-text .period-link:hover { color: #428BCA; }
+
+  /* Status headline */
+  .status-headline { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 6px; margin-bottom: 20px; font-size: 15px; font-weight: 500; }
+  .status-headline.success { background: #E8F5E9; color: #1F8940; }
+  .status-headline.attention { background: #FFF3E0; color: #A65A00; border: 1px solid #FFD4A8; }
+  .status-headline .status-icon { font-size: 18px; }
+  .status-headline a { color: inherit; text-decoration: underline; margin-left: auto; font-size: 14px; }
+
+  /* Period select */
+  .period-select { position: relative; }
+  .period-btn { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border: 1px solid #C8C7CC; background: #FFF; border-radius: 4px; font-size: 14px; cursor: pointer; color: #2F303A; }
+  .period-btn:hover { border-color: #0053CC; }
+  .period-dropdown { display: none; position: absolute; top: 100%; right: 0; margin-top: 4px; background: #FFF; border: 1px solid #C8C7CC; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.08); min-width: 180px; z-index: 10; }
+  .period-dropdown.open { display: block; }
+  .period-option { padding: 8px 14px; font-size: 14px; cursor: pointer; }
+  .period-option:hover { background: #F6F6F6; }
+  .period-option.selected { color: #0053CC; font-weight: 500; }
+
+  /* Stat cards */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+  .stat-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 6px; padding: 20px; cursor: pointer; transition: box-shadow 0.15s, border-color 0.15s; }
+  .stat-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-color: #C8C7CC; }
+  .stat-card.warning { border-color: #FFD4A8; background: #FFF8F0; }
+  .stat-card.warning:hover { border-color: #E18013; }
+  .stat-label { font-size: 13px; color: #6B778C; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+  .stat-value { font-size: 32px; font-weight: 400; color: #1A1B24; margin-bottom: 4px; line-height: 1.1; }
+  .stat-value.warning { color: #E18013; }
+  .stat-sub { font-size: 13px; color: #6B778C; margin-bottom: 12px; }
+  .stat-link { font-size: 14px; color: #0053CC; }
+  .stat-link:hover { text-decoration: underline; }
+
+  /* Two-column grid */
+  .grid { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .panel { background: #FFF; border: 1px solid #E5E5E5; border-radius: 6px; padding: 20px; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .panel-title { font-size: 18px; font-weight: 500; color: #1A1B24; display: flex; align-items: center; gap: 6px; }
+
+  /* Tooltip */
+  .tooltip-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #818EA5; color: #6B778C; font-size: 10px; font-weight: 500; cursor: help; position: relative; }
+  .tooltip-icon:hover .tooltip { display: block; }
+  .tooltip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 8px; background: #2F303A; color: #FFF; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 400; width: 240px; white-space: normal; z-index: 100; line-height: 1.5; }
+  .tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #2F303A; }
+
+  /* Customization table */
+  .custom-row { display: grid; grid-template-columns: 1.6fr 1fr 1fr; align-items: center; padding: 14px 0; border-bottom: 1px solid #F0F0F0; gap: 16px; }
+  .custom-row:last-child { border-bottom: none; }
+  .custom-row.at-cap { background: linear-gradient(90deg, #FFF8F0 0%, transparent 100%); margin: 0 -12px; padding: 14px 12px; border-radius: 6px; border-bottom: none; position: relative; }
+  .custom-row.at-cap::before { content: ''; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; background: #E18013; border-radius: 2px; }
+  .custom-name { font-size: 14px; color: #1A1B24; display: flex; align-items: center; gap: 6px; }
+  .custom-count { font-size: 14px; color: #2F303A; font-weight: 500; }
+  .custom-count.at-cap { color: #E18013; display: inline-flex; align-items: center; gap: 6px; }
+  .custom-count .at-cap-badge { background: #E18013; color: #FFF; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
+  .custom-cta { display: flex; justify-content: flex-end; }
+
+  /* Buttons */
+  .btn { padding: 7px 14px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: opacity 0.15s, background 0.15s; }
+  .btn-primary { background: #0053CC; color: #FFF; }
+  .btn-primary:hover { background: #003C99; }
+  .btn-warning { background: #E18013; color: #FFF; }
+  .btn-warning:hover { background: #B5660F; }
+  .btn-ghost { background: transparent; color: #0053CC; border: 1px solid #0053CC; }
+  .btn-ghost:hover { background: rgba(0,83,204,0.06); }
+  .btn-text { background: transparent; color: #0053CC; padding: 7px 0; }
+  .btn-text:hover { text-decoration: underline; }
+
+  /* Health checklist */
+  .health-list { list-style: none; padding: 0; margin: 0; }
+  .health-item { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #F0F0F0; gap: 12px; }
+  .health-item:last-child { border-bottom: none; }
+  .health-icon { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; font-weight: 700; }
+  .health-icon.ok { background: #E8F5E9; color: #1F8940; }
+  .health-icon.error { background: #FDEDE9; color: #A72222; }
+  .health-icon.warn { background: #FFF3E0; color: #E18013; }
+  .health-text { flex: 1; font-size: 14px; color: #1A1B24; }
+  .health-text .subtext { font-size: 12px; color: #6B778C; margin-top: 2px; }
+  .health-fix { font-size: 13px; color: #0053CC; cursor: pointer; }
+  .health-fix:hover { text-decoration: underline; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1A1B24; color: #FFF; padding: 12px 18px; border-radius: 6px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px); transition: all 0.2s; pointer-events: none; z-index: 1000; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Demo state switcher */
+  .demo-switcher { position: fixed; bottom: 24px; left: 24px; background: #FFF; border: 1px solid #C8C7CC; border-radius: 8px; padding: 12px 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); z-index: 100; }
+  .demo-switcher-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6B778C; font-weight: 500; margin-bottom: 8px; }
+  .demo-switcher-buttons { display: flex; gap: 6px; }
+  .demo-btn { padding: 6px 12px; font-size: 12px; border: 1px solid #C8C7CC; background: #FFF; border-radius: 4px; cursor: pointer; color: #2F303A; }
+  .demo-btn.active { background: #0053CC; color: #FFF; border-color: #0053CC; }
+  .demo-btn:hover:not(.active) { background: #F6F6F6; }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="org-switch">
+      <div class="org-avatar">PE</div>
+      <div class="org-name">Per transaction t...</div>
+      <span class="org-caret">▾</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active">
+        <span class="icon">▦</span> Control panel
+      </div>
+      <div class="nav-item">
+        <span class="icon">⇄</span> Transactions <span class="chevron">▾</span>
+      </div>
+      <div class="nav-item">
+        <span class="icon">📄</span> Transaction reconciliation <span class="beta">Beta</span>
+      </div>
+      <div class="nav-item">
+        <span class="icon">⚡</span> Smart rules <span class="chevron">▾</span>
+      </div>
+      <div class="nav-item">
+        <span class="icon">🛒</span> Invoicing <span class="chevron">▾</span>
+      </div>
+      <div class="nav-item">
+        <span class="icon">✦</span> AI reports
+      </div>
+      <div class="nav-item">
+        <span class="icon">📈</span> Reporting <span class="chevron">▾</span>
+      </div>
+      <div class="nav-item">
+        <span class="icon">📅</span> Revenue recognition
+      </div>
+      <div class="nav-divider"></div>
+      <div class="nav-item">
+        <span class="icon">⚙</span> Settings
+      </div>
+      <div class="nav-item">
+        <span class="icon">●</span> AI Agents
+      </div>
+      <div class="nav-item">
+        <span class="icon">★</span> What's New
+      </div>
+      <div class="nav-item">
+        <span class="icon">▤</span> Custom development
+      </div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="syncs-left">Syncs left : <span class="num">1000</span></div>
+      <div class="topbar-icon" title="Notifications">🔔</div>
+      <div class="topbar-icon" title="Help">?</div>
+      <div class="topbar-icon" title="Profile">👤</div>
+    </div>
+
+    <!-- Page -->
+    <div class="page">
+      <!-- Welcome + period -->
+      <div class="welcome-row">
+        <div class="welcome-text">Hi Dasha, here is an overview for <span class="period-link" id="periodLink">this month ↗</span></div>
+        <div class="period-select">
+          <button class="period-btn" id="periodBtn">
+            <span id="periodLabel">This month</span> ▾
+          </button>
+          <div class="period-dropdown" id="periodDropdown">
+            <div class="period-option selected" data-period="This month">This month</div>
+            <div class="period-option" data-period="Last month">Last month</div>
+            <div class="period-option" data-period="Last 3 months">Last 3 months</div>
+            <div class="period-option" data-period="This year">This year</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status headline -->
+      <div class="status-headline attention" id="statusHeadline">
+        <span class="status-icon">⚠</span>
+        <span id="statusText">3 items need your attention</span>
+        <a href="#" onclick="scrollToIssues(); return false;">See details</a>
+      </div>
+
+      <!-- Sync overview stat cards -->
+      <div class="stats">
+        <div class="stat-card" onclick="showToast('Opening Transactions → Synced')">
+          <div class="stat-label">Transactions synced</div>
+          <div class="stat-value" id="statSynced">2,847</div>
+          <div class="stat-sub">All sync types</div>
+          <a class="stat-link" href="#" onclick="event.stopPropagation(); showToast('Opening all transactions'); return false;">View all transactions →</a>
+        </div>
+        <div class="stat-card" onclick="showToast('Opening sales analytics')">
+          <div class="stat-label">USD synced</div>
+          <div class="stat-value" id="statUsd">$124,350</div>
+          <div class="stat-sub">Gross volume</div>
+          <a class="stat-link" href="#" onclick="event.stopPropagation(); showToast('Opening sales analytics'); return false;">View sales analytics →</a>
+        </div>
+        <div class="stat-card warning" id="issuesCard" onclick="showToast('Opening Issues panel')">
+          <div class="stat-label">Issues need attention</div>
+          <div class="stat-value warning" id="statIssues">3</div>
+          <div class="stat-sub">Failed + rolled back</div>
+          <a class="stat-link" href="#" onclick="event.stopPropagation(); showToast('Opening issues'); return false;">View all issues →</a>
+        </div>
+      </div>
+
+      <!-- Two columns -->
+      <div class="grid">
+        <!-- Customizations -->
+        <div class="panel">
+          <div class="panel-header">
+            <div class="panel-title">
+              Customizations
+              <span class="tooltip-icon">?
+                <span class="tooltip">What Synder can customize for your account: what you're using and what's available.</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Smart Rules -->
+          <div class="custom-row">
+            <div class="custom-name">
+              Auto-categorization rules
+              <span class="tooltip-icon">?
+                <span class="tooltip">Rules that apply classes, locations, categories, products, or taxes to synced transactions based on if-then conditions.</span>
+              </span>
+            </div>
+            <div class="custom-count">3 of 10</div>
+            <div class="custom-cta">
+              <button class="btn btn-ghost" onclick="showToast('Opening CSM contact channel')">Get it set up</button>
+            </div>
+          </div>
+
+          <!-- Custom Import Modifications - AT CAP -->
+          <div class="custom-row at-cap" id="customImportRow">
+            <div class="custom-name">
+              Custom import logic
+              <span class="tooltip-icon">?
+                <span class="tooltip">Custom logic applied to transactions during import. Handles complex tax calculations, currency conversions, or conditional routing.</span>
+              </span>
+            </div>
+            <div class="custom-count at-cap">
+              1 of 1
+              <span class="at-cap-badge">At cap</span>
+            </div>
+            <div class="custom-cta">
+              <button class="btn btn-warning" onclick="showToast('Opening billing page → upgrade plan')">Upgrade plan</button>
+            </div>
+          </div>
+
+          <!-- Custom Settings -->
+          <div class="custom-row">
+            <div class="custom-name">
+              Account behaviors
+              <span class="tooltip-icon">?
+                <span class="tooltip">Account-level behaviors that adjust how transactions are processed, including tax treatments, payout grouping, transaction matching, and sync exceptions.</span>
+              </span>
+            </div>
+            <div class="custom-count">4 enabled</div>
+            <div class="custom-cta">
+              <button class="btn btn-ghost" onclick="showToast('Opening CSM contact channel')">Get it set up</button>
+            </div>
+          </div>
+
+          <!-- E-commerce -->
+          <div class="custom-row">
+            <div class="custom-name">
+              Order details from store
+              <span class="tooltip-icon">?
+                <span class="tooltip">Adds order details to payment transactions from connected e-commerce platforms, including products, customers, taxes, and shipping.</span>
+              </span>
+            </div>
+            <div class="custom-count">2 enabled</div>
+            <div class="custom-cta">
+              <button class="btn btn-ghost" onclick="showToast('Opening Settings → Integrations')">Manage integrations</button>
+            </div>
+          </div>
+
+          <!-- RevRec -->
+          <div class="custom-row">
+            <div class="custom-name">
+              Revenue recognition
+              <span class="tooltip-icon">?
+                <span class="tooltip">Recognizes subscription revenue as it's earned across the service period. GAAP/ASC 606 compliant.</span>
+              </span>
+            </div>
+            <div class="custom-count">342 of 1,000 active subscriptions</div>
+            <div class="custom-cta">
+              <button class="btn btn-primary" onclick="showToast('Opening Revenue recognition reports')">Go to RevRec</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account health -->
+        <div class="panel" id="healthPanel">
+          <div class="panel-header">
+            <div class="panel-title">
+              Account health
+              <span class="tooltip-icon">?
+                <span class="tooltip">Quick checks across your integrations, sync settings, and data quality.</span>
+              </span>
+            </div>
+          </div>
+
+          <ul class="health-list" id="healthList">
+            <li class="health-item">
+              <div class="health-icon ok">✓</div>
+              <div class="health-text">
+                Auto-sync is active
+                <div class="subtext">Last sync 12 min ago</div>
+              </div>
+            </li>
+            <li class="health-item">
+              <div class="health-icon ok">✓</div>
+              <div class="health-text">
+                QuickBooks Online connected
+                <div class="subtext">All permissions granted</div>
+              </div>
+            </li>
+            <li class="health-item">
+              <div class="health-icon error">✗</div>
+              <div class="health-text">
+                Stripe connection needs reconnection
+                <div class="subtext">Auto-sync suspended 3 days ago</div>
+              </div>
+              <a class="health-fix" onclick="showToast('Opening Stripe reconnect flow')">Fix →</a>
+            </li>
+            <li class="health-item">
+              <div class="health-icon warn">!</div>
+              <div class="health-text">
+                2 transactions missing tax code
+                <div class="subtext">Will sync once resolved</div>
+              </div>
+              <a class="health-fix" onclick="showToast('Opening transactions filtered by missing tax')">Review →</a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast">Action triggered</div>
+
+<!-- Demo state switcher -->
+<div class="demo-switcher">
+  <div class="demo-switcher-title">Demo State</div>
+  <div class="demo-switcher-buttons">
+    <button class="demo-btn active" onclick="setState('attention')">3 issues</button>
+    <button class="demo-btn" onclick="setState('clean')">All good</button>
+    <button class="demo-btn" onclick="setState('multicap')">Multi at-cap</button>
+  </div>
+</div>
+
+<script>
+  // Toast
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // Period selector
+  const periodBtn = document.getElementById('periodBtn');
+  const periodDropdown = document.getElementById('periodDropdown');
+  const periodLabel = document.getElementById('periodLabel');
+  const periodLink = document.getElementById('periodLink');
+  periodBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    periodDropdown.classList.toggle('open');
+  });
+  periodLink.addEventListener('click', () => {
+    periodDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', () => periodDropdown.classList.remove('open'));
+  document.querySelectorAll('.period-option').forEach(opt => {
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.querySelectorAll('.period-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      const val = opt.dataset.period;
+      periodLabel.textContent = val;
+      periodLink.firstChild.textContent = val.toLowerCase() + ' ';
+      periodDropdown.classList.remove('open');
+      // Mock different data per period
+      const data = {
+        'This month':    { synced: '2,847',  usd: '$124,350',   issues: 3 },
+        'Last month':    { synced: '3,204',  usd: '$148,920',   issues: 0 },
+        'Last 3 months': { synced: '9,116',  usd: '$412,605',   issues: 5 },
+        'This year':     { synced: '24,830', usd: '$1,184,720', issues: 12 }
+      };
+      const d = data[val];
+      document.getElementById('statSynced').textContent = d.synced;
+      document.getElementById('statUsd').textContent = d.usd;
+      document.getElementById('statIssues').textContent = d.issues;
+      updateStatusBar(d.issues);
+      showToast('Showing data for ' + val);
+    });
+  });
+
+  function updateStatusBar(issuesCount) {
+    const headline = document.getElementById('statusHeadline');
+    const text = document.getElementById('statusText');
+    const card = document.getElementById('issuesCard');
+    if (issuesCount === 0) {
+      headline.className = 'status-headline success';
+      headline.querySelector('.status-icon').textContent = '✓';
+      text.textContent = 'Everything is in good shape';
+      card.classList.remove('warning');
+      document.getElementById('statIssues').classList.remove('warning');
+    } else {
+      headline.className = 'status-headline attention';
+      headline.querySelector('.status-icon').textContent = '⚠';
+      text.textContent = issuesCount + ' item' + (issuesCount === 1 ? '' : 's') + ' need your attention';
+      card.classList.add('warning');
+      document.getElementById('statIssues').classList.add('warning');
+    }
+  }
+
+  // State switcher
+  function setState(state) {
+    document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+
+    const importRow = document.getElementById('customImportRow');
+    const importCount = importRow.querySelector('.custom-count');
+    const importBtn = importRow.querySelector('button');
+    const healthList = document.getElementById('healthList');
+
+    if (state === 'clean') {
+      document.getElementById('statSynced').textContent = '3,204';
+      document.getElementById('statUsd').textContent = '$148,920';
+      document.getElementById('statIssues').textContent = '0';
+      updateStatusBar(0);
+
+      // Reset import row to normal
+      importRow.classList.remove('at-cap');
+      importCount.innerHTML = '0 of 1';
+      importCount.classList.remove('at-cap');
+      importBtn.className = 'btn btn-ghost';
+      importBtn.textContent = 'Get it set up';
+
+      // Clean health list
+      healthList.innerHTML = `
+        <li class="health-item"><div class="health-icon ok">✓</div><div class="health-text">Auto-sync is active<div class="subtext">Last sync 4 min ago</div></div></li>
+        <li class="health-item"><div class="health-icon ok">✓</div><div class="health-text">QuickBooks Online connected<div class="subtext">All permissions granted</div></div></li>
+        <li class="health-item"><div class="health-icon ok">✓</div><div class="health-text">Stripe connected<div class="subtext">Syncing normally</div></div></li>
+        <li class="health-item"><div class="health-icon ok">✓</div><div class="health-text">All transactions have tax codes<div class="subtext">No data quality issues</div></div></li>
+      `;
+    } else if (state === 'multicap') {
+      document.getElementById('statSynced').textContent = '8,420';
+      document.getElementById('statUsd').textContent = '$386,140';
+      document.getElementById('statIssues').textContent = '1';
+      updateStatusBar(1);
+
+      importRow.classList.add('at-cap');
+      importCount.innerHTML = '5 of 5 <span class="at-cap-badge">At cap</span>';
+      importCount.classList.add('at-cap');
+      importBtn.className = 'btn btn-warning';
+      importBtn.textContent = 'Upgrade plan';
+
+      // Set Smart Rules to at-cap too
+      const rows = document.querySelectorAll('.custom-row');
+      const smartRow = rows[0];
+      smartRow.classList.add('at-cap');
+      const smartCount = smartRow.querySelector('.custom-count');
+      smartCount.innerHTML = '10 of 10 <span class="at-cap-badge">At cap</span>';
+      smartCount.classList.add('at-cap');
+      smartRow.querySelector('button').className = 'btn btn-warning';
+      smartRow.querySelector('button').textContent = 'Upgrade plan';
+    } else {
+      // attention - default
+      document.getElementById('statSynced').textContent = '2,847';
+      document.getElementById('statUsd').textContent = '$124,350';
+      document.getElementById('statIssues').textContent = '3';
+      updateStatusBar(3);
+
+      importRow.classList.add('at-cap');
+      importCount.innerHTML = '1 of 1 <span class="at-cap-badge">At cap</span>';
+      importCount.classList.add('at-cap');
+      importBtn.className = 'btn btn-warning';
+      importBtn.textContent = 'Upgrade plan';
+
+      // Reset Smart Rules to normal
+      const rows = document.querySelectorAll('.custom-row');
+      const smartRow = rows[0];
+      smartRow.classList.remove('at-cap');
+      const smartCount = smartRow.querySelector('.custom-count');
+      smartCount.innerHTML = '3 of 10';
+      smartCount.classList.remove('at-cap');
+      smartRow.querySelector('button').className = 'btn btn-ghost';
+      smartRow.querySelector('button').textContent = 'Get it set up';
+
+      // Restore health list with issues
+      healthList.innerHTML = `
+        <li class="health-item"><div class="health-icon ok">✓</div><div class="health-text">Auto-sync is active<div class="subtext">Last sync 12 min ago</div></div></li>
+        <li class="health-item"><div class="health-icon ok">✓</div><div class="health-text">QuickBooks Online connected<div class="subtext">All permissions granted</div></div></li>
+        <li class="health-item"><div class="health-icon error">✗</div><div class="health-text">Stripe connection needs reconnection<div class="subtext">Auto-sync suspended 3 days ago</div></div><a class="health-fix" onclick="showToast('Opening Stripe reconnect flow')">Fix →</a></li>
+        <li class="health-item"><div class="health-icon warn">!</div><div class="health-text">2 transactions missing tax code<div class="subtext">Will sync once resolved</div></div><a class="health-fix" onclick="showToast('Opening transactions filtered by missing tax')">Review →</a></li>
+      `;
+    }
+  }
+
+  function scrollToIssues() {
+    document.getElementById('healthPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+</script>
+</body>
+</html>
