@@ -613,7 +613,8 @@
   }
 
   .kanton-chip:hover { border-color: #2563EB; color: #2563EB; }
-  .kanton-chip.selected { background: #EFF6FF; border-color: #2563EB; color: #2563EB; }
+  .kanton-chip.selected { background: #2563EB; color: white; border-color: #2563EB; }
+  .kanton-chip.selected.rpv-highlight { background: #2563EB; color: white; }
 
   .wizard-actions {
     display: flex;
@@ -983,6 +984,86 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%239CA3AF' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 10px center; padding-right: 30px;
   }
+
+  /* ── CASCADE FILTER ENHANCEMENTS ─────────────────────────── */
+  .tu-option-disabled {
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .tu-option-disabled span { text-decoration: line-through; }
+
+  .kanton-chip.rpv-highlight {
+    border-color: #93C5FD;
+    background: #EFF6FF;
+  }
+  .kanton-chip.rpv-out { opacity: 0.45; }
+
+  .line-chips-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 8px;
+    border: 1px solid #D1D5DB;
+    border-radius: 6px;
+    background: white;
+    min-height: 42px;
+    align-content: flex-start;
+  }
+
+  .line-chip {
+    padding: 4px 10px;
+    background: #F3F4F6;
+    border: 1px solid #D1D5DB;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.12s;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .line-chip:hover { border-color: #2563EB; color: #2563EB; background: #EFF6FF; }
+  .line-chip.selected { background: #2563EB; border-color: #2563EB; color: white; }
+  .line-chip.no-filter-line { font-style: italic; background: white; color: #6B7280; border-style: dashed; }
+  .line-chip.no-filter-line.selected { background: #EFF6FF; border-color: #2563EB; color: #2563EB; border-style: solid; }
+
+  .lines-subtitle {
+    font-size: 11px;
+    color: #6B7280;
+    margin-top: 5px;
+    font-style: italic;
+    display: none;
+  }
+  .lines-subtitle.visible { display: block; }
+
+  /* ── FILTER COUNT BADGE ──────────────────────────────────── */
+  .step-num-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .step-badge {
+    position: absolute;
+    top: -5px;
+    right: -8px;
+    min-width: 16px;
+    height: 16px;
+    background: #2563EB;
+    color: white;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0 3px;
+    line-height: 1;
+    border: 1.5px solid white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  }
+
+  .step-badge.visible { display: flex; }
 </style>
 </head>
 <body>
@@ -1134,7 +1215,10 @@
         <span data-i18n="step_time_period">Time Period</span>
       </div>
       <div class="wizard-step" id="step-indicator-2">
-        <div class="step-num">2</div>
+        <div class="step-num-wrap">
+          <div class="step-num">2</div>
+          <span class="step-badge" id="step2-badge"></span>
+        </div>
         <span data-i18n="step_scope">Scope</span>
       </div>
       <div class="wizard-step" id="step-indicator-3">
@@ -1230,7 +1314,7 @@
 
                     <!-- Bahn Normalspur parent -->
                     <div class="tree-parent" onclick="toggleTree('bahn-ns-children', this)">
-                      <input type="checkbox" id="bahn-ns" checked onchange="updateAutoName()" onclick="event.stopPropagation()">
+                      <input type="checkbox" id="bahn-ns" checked onchange="handleBahnNsChange()" onclick="event.stopPropagation()">
                       <label for="bahn-ns" style="cursor:pointer; flex:1;" onclick="event.stopPropagation()">Bahn Normalspur</label>
                       <div class="tree-toggle" id="bahn-ns-toggle">
                         <span class="material-icons" style="font-size:16px;">chevron_right</span>
@@ -1238,28 +1322,28 @@
                     </div>
                     <div class="tree-children" id="bahn-ns-children">
                       <div class="tree-child">
-                        <input type="checkbox" id="bahn-agglom" onchange="updateAutoName()">
+                        <input type="checkbox" id="bahn-agglom" onchange="handleSubTypeChange()">
                         <label for="bahn-agglom" style="cursor:pointer;">Bahn Nsp Agglom.</label>
                       </div>
                       <div class="tree-child">
-                        <input type="checkbox" id="bahn-ueberl" onchange="updateAutoName()">
+                        <input type="checkbox" id="bahn-ueberl" onchange="handleSubTypeChange()">
                         <label for="bahn-ueberl" style="cursor:pointer;">Bahn Nsp Überl./RV</label>
                       </div>
                       <div class="tree-child">
-                        <input type="checkbox" id="schnellzuege" onchange="updateAutoName()">
+                        <input type="checkbox" id="schnellzuege" onchange="handleSubTypeChange()">
                         <label for="schnellzuege" style="cursor:pointer;">Schnellzüge</label>
                       </div>
                     </div>
 
                     <!-- Bus -->
                     <div class="tree-parent" style="border-top: 1px solid #F3F4F6;">
-                      <input type="checkbox" id="vm-bus" checked onchange="updateAutoName()">
+                      <input type="checkbox" id="vm-bus" checked onchange="handleModeChange()">
                       <label for="vm-bus" style="cursor:pointer; flex:1;">Bus</label>
                     </div>
 
                     <!-- Tram -->
                     <div class="tree-parent" style="border-top: 1px solid #F3F4F6;">
-                      <input type="checkbox" id="vm-tram" onchange="updateAutoName()">
+                      <input type="checkbox" id="vm-tram" onchange="handleModeChange()">
                       <label for="vm-tram" style="cursor:pointer; flex:1;">Tram</label>
                     </div>
 
@@ -1278,30 +1362,10 @@
                     </div>
                     <div class="custom-select-dropdown" id="tu-dropdown">
                       <div class="dropdown-search">
-                        <input type="text" placeholder="TU suchen..." oninput="filterTU(this.value)" id="tu-search">
+                        <input type="text" data-i18n-placeholder="tu_search_placeholder" placeholder="Search TU..." oninput="filterTU(this.value)" id="tu-search">
                       </div>
                       <div id="tu-options">
-                        <div class="dropdown-option" onclick="toggleTU('BLS AG', this)">
-                          <input type="checkbox" id="tu-bls"> <span>BLS AG</span>
-                        </div>
-                        <div class="dropdown-option" onclick="toggleTU('CJ', this)">
-                          <input type="checkbox" id="tu-cj"> <span>CJ — Chemins de fer du Jura</span>
-                        </div>
-                        <div class="dropdown-option" onclick="toggleTU('REGIONALPS SA', this)">
-                          <input type="checkbox" id="tu-reg"> <span>REGIONALPS SA</span>
-                        </div>
-                        <div class="dropdown-option" onclick="toggleTU('SBB', this)">
-                          <input type="checkbox" id="tu-sbb"> <span>SBB — Schweizerische Bundesbahnen</span>
-                        </div>
-                        <div class="dropdown-option" onclick="toggleTU('SOB', this)">
-                          <input type="checkbox" id="tu-sob"> <span>SOB — Schweizerische Südostbahn</span>
-                        </div>
-                        <div class="dropdown-option" onclick="toggleTU('TPF', this)">
-                          <input type="checkbox" id="tu-tpf"> <span>TPF — Transports publics fribourgeois</span>
-                        </div>
-                        <div class="dropdown-option" onclick="toggleTU('ZVV', this)">
-                          <input type="checkbox" id="tu-zvv"> <span>ZVV — Zürcher Verkehrsverbund</span>
-                        </div>
+                        <!-- populated by renderTUOptions() -->
                       </div>
                     </div>
                   </div>
@@ -1319,11 +1383,13 @@
               </div>
 
               <!-- Lines -->
-              <div class="filter-row" style="padding: 14px 20px;">
-                <div class="filter-label" data-i18n="filter_lines">Lines</div>
+              <div class="filter-row" style="padding: 14px 20px; align-items: flex-start;">
+                <div class="filter-label" style="padding-top: 9px;" data-i18n="filter_lines">Lines</div>
                 <div class="filter-control">
                   <input type="text" class="form-input" id="filter-linien"
                     placeholder="e.g. IC 1, RE 4, Bus 10" oninput="updateAutoName()">
+                  <div class="line-chips-area" id="line-chips-area" style="display:none;"></div>
+                  <div class="lines-subtitle" id="lines-subtitle" data-i18n="lines_subtitle_active">Showing lines for selected operators</div>
                 </div>
               </div>
 
@@ -1776,6 +1842,71 @@
      JAVASCRIPT
 ══════════════════════════════════════════════════════════ -->
 <script>
+  // ── Data model ───────────────────────────────────────────────
+  const DATA = {
+    rpv: {
+      "Tarifverbund A": {
+        cantons: ["ZH","AG","SH","TG","ZG"],
+        tu: ["SBB","ZVV","SOB"]
+      },
+      "Tarifverbund B": {
+        cantons: ["BE","SO","FR","VS","NE","JU"],
+        tu: ["SBB","BLS","TPF","CJ"]
+      },
+      "Tarifverbund C": {
+        cantons: ["GR","SG","GL","AI","AR","TI","SZ","UR"],
+        tu: ["SBB","REGIONALPS SA","SOB"]
+      }
+    },
+    modes: {
+      "bahn-ns":  ["SBB","BLS","SOB","CJ","REGIONALPS SA"],
+      "vm-bus":   ["ZVV","TPF","CJ","REGIONALPS SA","BLS"],
+      "vm-tram":  ["ZVV","TPF"]
+    },
+    cantonTU: {
+      "ZH": ["SBB","ZVV","SOB"],
+      "AG": ["SBB","BLS","ZVV"],
+      "SH": ["SBB","ZVV"],
+      "TG": ["SBB","SOB"],
+      "ZG": ["SBB","ZVV","SOB"],
+      "BE": ["SBB","BLS","TPF"],
+      "SO": ["SBB","BLS"],
+      "FR": ["SBB","TPF"],
+      "VS": ["SBB","BLS","REGIONALPS SA"],
+      "NE": ["SBB","TPF","CJ"],
+      "JU": ["SBB","CJ"],
+      "GR": ["SBB","REGIONALPS SA"],
+      "SG": ["SBB","SOB"],
+      "GL": ["SOB"],
+      "AI": ["SOB"],
+      "AR": ["SOB"],
+      "TI": ["SBB","REGIONALPS SA"],
+      "SZ": ["SBB","SOB"],
+      "UR": ["SBB"]
+    },
+    tuLines: {
+      "SBB":           ["IC 1","IC 5","IC 8","IR 13","IR 15","IR 17","RE 1","RE 3","S 3"],
+      "BLS":           ["RE 7","RE 3","S 1","S 5","S 6","S 44"],
+      "ZVV":           ["S 2","S 8","S 14","S 24","Bus 46","Bus 72","Bus 83"],
+      "SOB":           ["IR 27","RE 8","S 26"],
+      "TPF":           ["RE 7","Bus 10","Bus 20","Bus 536"],
+      "CJ":            ["RE 23","Bus 60"],
+      "REGIONALPS SA": ["RE 1","Bus 70"]
+    }
+  };
+
+  const ALL_TU = [
+    { id: "BLS",           label: "BLS AG" },
+    { id: "CJ",            label: "CJ — Chemins de fer du Jura" },
+    { id: "REGIONALPS SA", label: "REGIONALPS SA" },
+    { id: "SBB",           label: "SBB — Schweizerische Bundesbahnen" },
+    { id: "SOB",           label: "SOB — Schweizerische Südostbahn" },
+    { id: "TPF",           label: "TPF — Transports publics fribourgeois" },
+    { id: "ZVV",           label: "ZVV — Zürcher Verkehrsverbund" }
+  ];
+
+  const ALL_CANTONS = ['AG','AI','AR','BE','BL','BS','FR','GE','GL','GR','JU','LU','NE','NW','OW','SG','SH','SO','SZ','TG','TI','UR','VD','VS','ZG','ZH'];
+
   // ── Language ─────────────────────────────────────────────────
   let lang = 'en';
 
@@ -1897,6 +2028,9 @@
       success_msg: 'Evaluation started successfully!',
       eval_count_one: 'evaluation',
       eval_count_many: 'evaluations',
+      lines_subtitle_active: 'Showing lines for selected operators',
+      line_no_filter: 'All lines',
+      tu_search_placeholder: 'Search TU...',
     },
     de: {
       nav_new_eval: 'Neue Auswertung',
@@ -2015,6 +2149,9 @@
       success_msg: 'Auswertung erfolgreich gestartet!',
       eval_count_one: 'Auswertung',
       eval_count_many: 'Auswertungen',
+      lines_subtitle_active: 'Zeigt Linien für ausgewählte Betreiber',
+      line_no_filter: 'Alle Linien',
+      tu_search_placeholder: 'TU suchen...',
     }
   };
 
@@ -2078,10 +2215,13 @@
     selectedType: 'trip_failures',
     selectedPeriod: 'last_30',
     rpvValue: 'rpv_all',
+    rpv: null,
     dateFrom: '',
     dateTo: '',
     selectedTU: [],
-    selectedKantone: [],
+    selectedCantons: [],
+    selectedLines: [],
+    activeModes: ['bahn-ns', 'vm-bus'],
     currentStep: 1
   };
 
@@ -2103,9 +2243,37 @@
   function startWizard(typeKey) {
     state.selectedType = typeKey;
     state.currentStep = 1;
+    state.rpv = null;
+    state.rpvValue = 'rpv_all';
+    state.selectedTU = [];
+    state.selectedCantons = [];
+    state.selectedLines = [];
+    state.activeModes = ['bahn-ns', 'vm-bus'];
+
     document.getElementById('wizard-title').textContent = t(typeKey);
+    document.getElementById('rpv-value').textContent = t('rpv_all');
+
+    // Reset RPV radio
+    document.querySelectorAll('input[name="rpv"]').forEach((r, i) => r.checked = i === 0);
+
+    // Reset mode checkboxes
+    document.getElementById('bahn-ns').checked = true;
+    document.getElementById('bahn-ns').indeterminate = false;
+    document.getElementById('bahn-agglom').checked = false;
+    document.getElementById('bahn-ueberl').checked = false;
+    document.getElementById('schnellzuege').checked = false;
+    document.getElementById('vm-bus').checked = true;
+    document.getElementById('vm-tram').checked = false;
+
+    // Reset text inputs
+    const linienEl = document.getElementById('filter-linien');
+    if (linienEl) linienEl.value = '';
+    const haltEl = document.getElementById('filter-haltestellen');
+    if (haltEl) haltEl.value = '';
+
     goToStep(1);
     showView('wizard');
+    updateCascade();
     updateAutoName();
     document.getElementById('success-banner').classList.remove('visible');
     const runBtn = document.getElementById('run-btn');
@@ -2184,12 +2352,18 @@
       parts.push(state.selectedTU.join(', '));
     }
 
-    if (state.selectedKantone.length > 0) {
-      parts.push(t('canton_label') + ' ' + state.selectedKantone.join(', '));
+    if (state.selectedCantons.length > 0) {
+      parts.push(t('canton_label') + ' ' + state.selectedCantons.join(', '));
     }
 
-    const linien = document.getElementById('filter-linien');
-    if (linien && linien.value.trim()) parts.push(t('filter_lines') + ': ' + linien.value.trim());
+    if (state.selectedTU.length > 0) {
+      if (state.selectedLines.length > 0) {
+        parts.push(t('filter_lines') + ': ' + state.selectedLines.join(', '));
+      }
+    } else {
+      const linien = document.getElementById('filter-linien');
+      if (linien && linien.value.trim()) parts.push(t('filter_lines') + ': ' + linien.value.trim());
+    }
 
     if (parts.length === 0) return ', ' + t('all_lines');
     return ', ' + parts.join(', ');
@@ -2220,20 +2394,30 @@
 
     let hasFilters = false;
 
+    if (state.rpv !== null) {
+      chipsContainer.innerHTML += `<span class="filter-chip">RPV: ${state.rpv}</span>`;
+      hasFilters = true;
+    }
+
     if (state.selectedTU.length > 0) {
       chipsContainer.innerHTML += `<span class="filter-chip">TU: ${state.selectedTU.join(', ')}</span>`;
       hasFilters = true;
     }
 
-    if (state.selectedKantone.length > 0) {
-      chipsContainer.innerHTML += `<span class="filter-chip">${t('chip_cantons')}: ${state.selectedKantone.join(', ')}</span>`;
+    if (state.selectedCantons.length > 0) {
+      chipsContainer.innerHTML += `<span class="filter-chip">${t('chip_cantons')}: ${state.selectedCantons.join(', ')}</span>`;
       hasFilters = true;
     }
 
-    const linien = document.getElementById('filter-linien').value.trim();
-    if (linien) {
-      chipsContainer.innerHTML += `<span class="filter-chip">${t('filter_lines')}: ${linien}</span>`;
+    if (state.selectedTU.length > 0 && state.selectedLines.length > 0) {
+      chipsContainer.innerHTML += `<span class="filter-chip">${t('filter_lines')}: ${state.selectedLines.join(', ')}</span>`;
       hasFilters = true;
+    } else {
+      const linien = document.getElementById('filter-linien').value.trim();
+      if (linien) {
+        chipsContainer.innerHTML += `<span class="filter-chip">${t('filter_lines')}: ${linien}</span>`;
+        hasFilters = true;
+      }
     }
 
     const halt = document.getElementById('filter-haltestellen').value.trim();
@@ -2298,14 +2482,17 @@
 
     if (name === 'rpv') {
       state.rpvValue = value;
+      state.rpv = value === 'rpv_all' ? null : value;
       document.getElementById('rpv-value').textContent = value === 'rpv_all' ? t('rpv_all') : value;
+      dd.classList.remove('open');
+      optionEl.closest('.custom-select-wrapper').querySelector('.custom-select-trigger').classList.remove('open');
+      updateCascade();
     } else {
       document.getElementById(name + '-value').textContent = value;
+      dd.classList.remove('open');
+      optionEl.closest('.custom-select-wrapper').querySelector('.custom-select-trigger').classList.remove('open');
+      updateAutoName();
     }
-
-    dd.classList.remove('open');
-    optionEl.closest('.custom-select-wrapper').querySelector('.custom-select-trigger').classList.remove('open');
-    updateAutoName();
   }
 
   // TU multi-select
@@ -2347,24 +2534,22 @@
   }
 
   // ── Kantone ─────────────────────────────────────────────────
-  const KANTONE = ['AG','BE','BL','BS','FR','GE','GR','LU','NE','SG','SO','TG','TI','VD','VS','ZG','ZH'];
-
   function initKantone() {
     const grid = document.getElementById('kanton-grid');
     grid.innerHTML = '';
-    KANTONE.forEach(k => {
+    ALL_CANTONS.forEach(k => {
       const chip = document.createElement('div');
       chip.className = 'kanton-chip';
       chip.textContent = k;
-      chip.dataset.kanton = k;
+      chip.dataset.canton = k;
       chip.onclick = function() {
         this.classList.toggle('selected');
         if (this.classList.contains('selected')) {
-          if (!state.selectedKantone.includes(k)) state.selectedKantone.push(k);
+          if (!state.selectedCantons.includes(k)) state.selectedCantons.push(k);
         } else {
-          state.selectedKantone = state.selectedKantone.filter(c => c !== k);
+          state.selectedCantons = state.selectedCantons.filter(c => c !== k);
         }
-        updateAutoName();
+        updateCascade();
       };
       grid.appendChild(chip);
     });
@@ -2465,9 +2650,213 @@
     }
   }
 
+  // ── Transport mode handlers ──────────────────────────────────
+  function handleModeChange() {
+    state.activeModes = [];
+    const bahnNs = document.getElementById('bahn-ns');
+    if (bahnNs.checked || bahnNs.indeterminate) state.activeModes.push('bahn-ns');
+    if (document.getElementById('vm-bus').checked) state.activeModes.push('vm-bus');
+    if (document.getElementById('vm-tram').checked) state.activeModes.push('vm-tram');
+    updateCascade();
+  }
+
+  function handleBahnNsChange() {
+    const parent = document.getElementById('bahn-ns');
+    ['bahn-agglom', 'bahn-ueberl', 'schnellzuege'].forEach(id => {
+      document.getElementById(id).checked = parent.checked;
+    });
+    handleModeChange();
+  }
+
+  function handleSubTypeChange() {
+    const subtypes = ['bahn-agglom', 'bahn-ueberl', 'schnellzuege'];
+    const parent = document.getElementById('bahn-ns');
+    const checkedCount = subtypes.filter(id => document.getElementById(id).checked).length;
+    if (checkedCount === 0) {
+      parent.checked = false;
+      parent.indeterminate = false;
+    } else if (checkedCount === subtypes.length) {
+      parent.checked = true;
+      parent.indeterminate = false;
+    } else {
+      parent.checked = false;
+      parent.indeterminate = true;
+    }
+    handleModeChange();
+  }
+
+  // ── Cascade engine ────────────────────────────────────────────
+  function updateCascade() {
+    // Step 1: Determine allowed TUs from all active filters
+    let allowedTU = new Set(ALL_TU.map(tu => tu.id));
+
+    // RPV filter
+    if (state.rpv !== null) {
+      const rpvTUs = new Set(DATA.rpv[state.rpv].tu);
+      allowedTU = new Set([...allowedTU].filter(id => rpvTUs.has(id)));
+    }
+
+    // Transport mode filter
+    if (state.activeModes.length > 0) {
+      let modeTUs = new Set();
+      state.activeModes.forEach(modeId => {
+        if (DATA.modes[modeId]) DATA.modes[modeId].forEach(tu => modeTUs.add(tu));
+      });
+      allowedTU = new Set([...allowedTU].filter(id => modeTUs.has(id)));
+    }
+
+    // Canton filter — union of TUs per selected canton
+    if (state.selectedCantons.length > 0) {
+      let cantonTUs = new Set();
+      state.selectedCantons.forEach(c => {
+        if (DATA.cantonTU[c]) DATA.cantonTU[c].forEach(tu => cantonTUs.add(tu));
+      });
+      if (cantonTUs.size > 0) {
+        allowedTU = new Set([...allowedTU].filter(id => cantonTUs.has(id)));
+      }
+    }
+
+    // Auto-uncheck TUs that became disallowed
+    state.selectedTU = state.selectedTU.filter(id => allowedTU.has(id));
+
+    renderTUOptions(allowedTU);
+    updateCantonGrid();
+    renderLineChips();
+    updateTULabel();
+    updateFilterBadge();
+    updateAutoName();
+  }
+
+  function updateFilterBadge() {
+    const badge = document.getElementById('step2-badge');
+    if (!badge) return;
+    let count = 0;
+    if (state.rpv !== null) count++;
+    count += state.selectedTU.length;
+    count += state.selectedCantons.length;
+    if (state.selectedLines.length > 0) count++;
+    if (state.activeModes.length < 3) count++;
+    badge.textContent = count;
+    badge.classList.toggle('visible', count > 0);
+  }
+
+  function renderTUOptions(allowedTU) {
+    const container = document.getElementById('tu-options');
+    const searchInput = document.getElementById('tu-search');
+    if (searchInput) searchInput.value = '';
+    container.innerHTML = '';
+
+    ALL_TU.forEach(tu => {
+      const isAllowed = allowedTU.has(tu.id);
+      const isChecked = state.selectedTU.includes(tu.id);
+
+      const div = document.createElement('div');
+      div.className = 'dropdown-option' + (isAllowed ? '' : ' tu-option-disabled');
+
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = 'tu-' + tu.id.toLowerCase().replace(/\s+/g, '-');
+      cb.checked = isChecked && isAllowed;
+
+      const label = document.createElement('span');
+      label.textContent = tu.label;
+
+      div.appendChild(cb);
+      div.appendChild(label);
+
+      if (isAllowed) {
+        div.addEventListener('click', function(e) {
+          // If the click landed on the checkbox itself, it already toggled natively
+          if (e.target !== cb) cb.checked = !cb.checked;
+          if (cb.checked) {
+            if (!state.selectedTU.includes(tu.id)) state.selectedTU.push(tu.id);
+          } else {
+            state.selectedTU = state.selectedTU.filter(id => id !== tu.id);
+          }
+          updateTULabel();
+          updateCascade();
+          e.stopPropagation();
+        });
+      }
+
+      container.appendChild(div);
+    });
+  }
+
+  function updateCantonGrid() {
+    const rpvCantons = state.rpv !== null ? new Set(DATA.rpv[state.rpv].cantons) : null;
+    document.querySelectorAll('#kanton-grid .kanton-chip').forEach(chip => {
+      const canton = chip.dataset.canton;
+      chip.classList.remove('rpv-highlight', 'rpv-out');
+      if (rpvCantons !== null) {
+        chip.classList.add(rpvCantons.has(canton) ? 'rpv-highlight' : 'rpv-out');
+      }
+      chip.classList.toggle('selected', state.selectedCantons.includes(canton));
+    });
+  }
+
+  function renderLineChips() {
+    const textInput = document.getElementById('filter-linien');
+    const chipsArea = document.getElementById('line-chips-area');
+    const subtitle = document.getElementById('lines-subtitle');
+    if (!textInput || !chipsArea || !subtitle) return;
+
+    if (state.selectedTU.length === 0) {
+      textInput.style.display = '';
+      chipsArea.style.display = 'none';
+      subtitle.classList.remove('visible');
+      return;
+    }
+
+    // Collect lines from selected TUs, deduplicated
+    const allLines = [];
+    state.selectedTU.forEach(tuId => {
+      if (DATA.tuLines[tuId]) {
+        DATA.tuLines[tuId].forEach(line => {
+          if (!allLines.includes(line)) allLines.push(line);
+        });
+      }
+    });
+    allLines.sort();
+
+    textInput.style.display = 'none';
+    chipsArea.style.display = 'flex';
+    subtitle.classList.add('visible');
+    chipsArea.innerHTML = '';
+
+    // "All lines" chip (no filter)
+    const noFilter = document.createElement('div');
+    noFilter.className = 'line-chip no-filter-line' + (state.selectedLines.length === 0 ? ' selected' : '');
+    noFilter.textContent = t('line_no_filter');
+    noFilter.addEventListener('click', function() {
+      state.selectedLines = [];
+      renderLineChips();
+      updateAutoName();
+    });
+    chipsArea.appendChild(noFilter);
+
+    // Individual line chips
+    allLines.forEach(line => {
+      const chip = document.createElement('div');
+      chip.className = 'line-chip' + (state.selectedLines.includes(line) ? ' selected' : '');
+      chip.textContent = line;
+      chip.addEventListener('click', function() {
+        if (state.selectedLines.includes(line)) {
+          state.selectedLines = state.selectedLines.filter(l => l !== line);
+        } else {
+          state.selectedLines.push(line);
+        }
+        renderLineChips();
+        updateAutoName();
+      });
+      chipsArea.appendChild(chip);
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────
   function init() {
     initKantone();
+    updateCascade();
 
     const today = new Date();
     const thirtyDaysAgo = new Date(today);
