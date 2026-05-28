@@ -1073,7 +1073,7 @@
   <div class="global-filter-bar">
     <div class="gf-field">
       <label class="gf-label">Search</label>
-      <input class="gf-input" type="text" placeholder="Search…">
+      <input class="gf-input" type="text" id="gf-search-discrepancy" placeholder="Search…">
     </div>
     <div class="gf-field">
       <label class="gf-label">Date range</label>
@@ -1085,11 +1085,11 @@
     </div>
     <div class="gf-field">
       <label class="gf-label">Amount</label>
-      <input class="gf-input gf-input-amount" type="text" placeholder="Amount">
+      <input class="gf-input gf-input-amount" type="text" id="gf-amount-discrepancy" placeholder="Amount">
     </div>
     <div class="gf-actions">
-      <button class="btn-apply">Apply</button>
-      <button class="btn-reset">Reset filters</button>
+      <button class="btn-apply" onclick="applyGlobalFilter('discrepancy')">Apply</button>
+      <button class="btn-reset" onclick="resetGlobalFilter('discrepancy')">Reset filters</button>
     </div>
   </div>
   <div class="matches-table-wrap">
@@ -1172,10 +1172,14 @@
     <div class="selection-toolbar" id="toolbar-synder">
       <span><span class="sel-count" id="sel-count-synder">0</span> selected</span>
       <div class="toolbar-divider"></div>
-      <button class="btn-toolbar-match disabled" id="btn-match-synder" onclick="handleMatchClick('synder')">Match</button>
+      <span class="tooltip-wrap">
+        <button class="btn-toolbar-match disabled" id="btn-match-synder" onclick="handleMatchClick('synder')">Match</button>
+        <span class="tooltip-text" id="tt-match-synder">Select at least one row on each side</span>
+      </span>
       <button class="btn-toolbar-ignore" onclick="ignoreSelected('synder')">Ignore</button>
       <button class="btn-toolbar-clear" onclick="clearSelection('synder')">Clear</button>
     </div>
+    <div class="toolbar-one-side-hint" id="hint-synder">Select at least one row in Missing in Integration to enable Match.</div>
 
     <div class="data-table-wrap">
       <table id="table-synder">
@@ -1224,10 +1228,14 @@
     <div class="selection-toolbar" id="toolbar-integration">
       <span><span class="sel-count" id="sel-count-integration">0</span> selected</span>
       <div class="toolbar-divider"></div>
-      <button class="btn-toolbar-match disabled" id="btn-match-integration" onclick="handleMatchClick('integration')">Match</button>
+      <span class="tooltip-wrap">
+        <button class="btn-toolbar-match disabled" id="btn-match-integration" onclick="handleMatchClick('integration')">Match</button>
+        <span class="tooltip-text" id="tt-match-integration">Select at least one row on each side</span>
+      </span>
       <button class="btn-toolbar-ignore" onclick="ignoreSelected('integration')">Ignore</button>
       <button class="btn-toolbar-clear" onclick="clearSelection('integration')">Clear</button>
     </div>
+    <div class="toolbar-one-side-hint" id="hint-integration">Select at least one row in Missing in Synder to enable Match.</div>
 
     <div class="data-table-wrap">
       <table id="table-integration">
@@ -1264,6 +1272,7 @@
     <div class="modal-title" id="modal-error-title">Error</div>
     <div class="modal-body" id="modal-error-body"></div>
     <div class="modal-footer">
+      <button class="btn btn-outlined" onclick="clearAndRetry()">Clear &amp; retry</button>
       <button class="btn btn-primary" onclick="closeModal('modal-error-overlay')">OK</button>
     </div>
   </div>
@@ -1421,6 +1430,7 @@ function resetFilters(side) {
 const globalFilter = {
   'matched':           { search: '', amount: '' },
   'matched-manually':  { search: '', amount: '' },
+  'discrepancy':       { search: '', amount: '' },
   'ignored':           { search: '', amount: '' },
 };
 
@@ -1429,7 +1439,9 @@ function applyGlobalFilter(tab) {
   const a = document.getElementById('gf-amount-' + tab);
   globalFilter[tab].search = s ? s.value.trim() : '';
   globalFilter[tab].amount = a ? a.value.trim() : '';
+  if (tab === 'matched')          renderAutoMatched();
   if (tab === 'matched-manually') renderManualMatches();
+  if (tab === 'discrepancy')      renderDiscrepancy();
   if (tab === 'ignored')          renderIgnored();
 }
 
@@ -1440,7 +1452,9 @@ function resetGlobalFilter(tab) {
   const a = document.getElementById('gf-amount-' + tab);
   if (s) s.value = '';
   if (a) a.value = '';
+  if (tab === 'matched')          renderAutoMatched();
   if (tab === 'matched-manually') renderManualMatches();
+  if (tab === 'discrepancy')      renderDiscrepancy();
   if (tab === 'ignored')          renderIgnored();
 }
 
@@ -1532,10 +1546,24 @@ function renderIgnored() {
   synderRows.forEach(r => { if (ignored.synder.has(r.id)) sessionAll.push({ ...r, source: 'synder', session: true }); });
   integrationRows.forEach(r => { if (ignored.integration.has(r.id)) sessionAll.push({ ...r, source: 'integration', session: true }); });
 
+  const f = globalFilter['ignored'] || { search: '', amount: '' };
+  const q = (f.search || '').toLowerCase();
+  const amtQ = (f.amount || '').trim();
+  const matches = r => {
+    if (q) {
+      const hay = `${r.primaryId} ${r.type} ${r.display}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (amtQ) {
+      const n = parseFloat(amtQ.replace(/[^0-9.\-]/g, ''));
+      if (!isNaN(n) && Math.abs(Math.abs(r.amount) - Math.abs(n)) > 0.009) return false;
+    }
+    return true;
+  };
   const allRows = [
     ...preIgnoredRows.map(r => ({ ...r, session: false })),
     ...sessionAll
-  ];
+  ].filter(matches);
 
   if (allRows.length === 0) {
     list.innerHTML = `
@@ -1588,17 +1616,34 @@ function renderAutoMatched() {
       <td style="color:var(--text-sec)">${r.count}</td>
     </tr>`).join('');
   const chip = document.getElementById('count-matched');
-  if (chip) chip.textContent = autoMatchedRecords.length;
+  if (chip) chip.textContent = rows.length;
 }
 
 function renderDiscrepancy() {
   const tbody = document.querySelector('#panel-discrepancy .matches-table tbody');
   if (!tbody) return;
-  if (discrepancyRecords.length === 0) {
+  const f = globalFilter['discrepancy'] || { search: '', amount: '' };
+  const q = (f.search || '').toLowerCase();
+  const amtQ = (f.amount || '').trim();
+  const rows = discrepancyRecords.filter(r => {
+    if (q) {
+      const hay = `${r.matchingId} ${r.types} ${r.totalAmount} ${r.reason || ''}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    if (amtQ) {
+      const n = parseFloat(amtQ.replace(/[^0-9.\-]/g, ''));
+      const recAmt = parseFloat((r.totalAmount || '').replace(/[^0-9.\-]/g, ''));
+      if (!isNaN(n) && !isNaN(recAmt) && Math.abs(Math.abs(recAmt) - Math.abs(n)) > 0.009) return false;
+    }
+    return true;
+  });
+  if (rows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="5" class="no-results">No results found</td></tr>';
+    const chip = document.getElementById('count-discrepancy');
+    if (chip) chip.textContent = 0;
     return;
   }
-  tbody.innerHTML = discrepancyRecords.map(r => `
+  tbody.innerHTML = rows.map(r => `
     <tr>
       <td class="td-date">${r.date}</td>
       <td class="td-id">${r.matchingId}</td>
@@ -1607,7 +1652,7 @@ function renderDiscrepancy() {
       <td style="color:var(--text-sec)">${r.count}</td>
     </tr>`).join('');
   const chip = document.getElementById('count-discrepancy');
-  if (chip) chip.textContent = discrepancyRecords.length;
+  if (chip) chip.textContent = rows.length;
 }
 
 function renderAll() {
@@ -1619,6 +1664,8 @@ function renderAll() {
   renderAutoMatched();
   renderDiscrepancy();
   updateTabCounter();
+  updateToolbar('synder');
+  updateToolbar('integration');
 }
 
 function visibleCount(side, rows) {
@@ -1708,6 +1755,8 @@ function updateToolbar(side) {
   const tableEl  = document.getElementById('table-' + side);
   const countEl  = document.getElementById('sel-count-' + side);
   const matchBtn = document.getElementById('btn-match-' + side);
+  const hint     = document.getElementById('hint-' + side);
+  const tt       = document.getElementById('tt-match-' + side);
 
   countEl.textContent = count;
 
@@ -1715,9 +1764,12 @@ function updateToolbar(side) {
     toolbar.classList.add('visible');
     tableEl.classList.add('toolbar-active');
     matchBtn.classList.toggle('disabled', otherCt === 0);
+    if (hint) hint.classList.toggle('visible', otherCt === 0);
+    if (tt) tt.style.display = (otherCt === 0) ? '' : 'none';
   } else {
     toolbar.classList.remove('visible');
     tableEl.classList.remove('toolbar-active');
+    if (hint) hint.classList.remove('visible');
   }
 
   const otherMatchBtn = document.getElementById('btn-match-' + other);
@@ -1743,7 +1795,7 @@ function handleMatchClick(side) {
   if (allCurrencies.size > 1) {
     showErrorModal(
       'Currencies differ',
-      `<p style="margin-bottom:10px;">All rows must be in the same currency.</p>
+      `<p style="margin-bottom:10px;">Currencies differ — all rows must be in the same currency.</p>
        <p>Found: <strong>${[...allCurrencies].join(', ')}</strong>.</p>`
     );
     return;
@@ -1764,7 +1816,8 @@ function handleMatchClick(side) {
   if (delta > 0.009) {
     showErrorModal(
       'Amounts don\'t balance',
-      `<div class="detail-row"><span class="detail-label">Synder side</span><span class="detail-value">${fmt(sTotal)}</span></div>
+      `<p style="margin-bottom:10px;">Amounts don't balance — accounting side: <strong>${fmt(sTotal)}</strong>, integration side: <strong>${fmt(iTotal)}</strong>, delta: <strong>${sym}${Math.abs(delta).toFixed(2)} ${currency}</strong>.</p>
+       <div class="detail-row"><span class="detail-label">Accounting side</span><span class="detail-value">${fmt(sTotal)}</span></div>
        <div class="detail-row"><span class="detail-label">Integration side</span><span class="detail-value">${fmt(iTotal)}</span></div>
        <div class="detail-row"><span class="detail-label">Delta</span><span class="delta-value">${sym}${Math.abs(delta).toFixed(2)} ${currency}</span></div>`
     );
@@ -1802,11 +1855,18 @@ function unmatch(matchId) {
   const idx = manualMatches.findIndex(m => m.id === matchId);
   if (idx === -1) return;
   const match = manualMatches[idx];
-  match.synderIds.forEach(id => { removed.synder.delete(id); selected.synder.delete(id); });
-  match.integrationIds.forEach(id => { removed.integration.delete(id); selected.integration.delete(id); });
+  let restored = 0;
+  match.synderIds.forEach(id => {
+    if (!ignored.synder.has(id)) { removed.synder.delete(id); restored++; }
+    selected.synder.delete(id);
+  });
+  match.integrationIds.forEach(id => {
+    if (!ignored.integration.has(id)) { removed.integration.delete(id); restored++; }
+    selected.integration.delete(id);
+  });
   manualMatches.splice(idx, 1);
   renderAll();
-  showToast(`Match removed. ${match.synderIds.length + match.integrationIds.length} rows returned to Not matched.`);
+  showToast(`Match removed. ${restored} rows returned to Not matched.`);
 }
 
 // ─── IGNORE ──────────────────────────────────────────────────────────────────
@@ -1819,13 +1879,17 @@ function ignoreRow(side, id) {
   renderAll();
   updateToolbar(side);
   updateToolbar(side === 'synder' ? 'integration' : 'synder');
+  showToast('Transaction ignored. View in Ignored tab.');
 }
 
 function ignoreSelected(side) {
+  const other = side === 'synder' ? 'integration' : 'synder';
   selected[side].forEach(id => { removed[side].add(id); ignored[side].add(id); });
   selected[side].clear();
   renderAll();
   updateToolbar(side);
+  updateToolbar(other);
+  showToast('Rows ignored. View in Ignored tab.');
 }
 
 function restoreIgnored(side, id) {
@@ -1840,6 +1904,12 @@ function showErrorModal(title, bodyHTML) {
   document.getElementById('modal-error-title').textContent = title;
   document.getElementById('modal-error-body').innerHTML = bodyHTML;
   document.getElementById('modal-error-overlay').classList.add('visible');
+}
+
+function clearAndRetry() {
+  clearSelection('synder');
+  clearSelection('integration');
+  closeModal('modal-error-overlay');
 }
 
 function closeModal(id) {
