@@ -270,7 +270,10 @@
     }
     .btn-reset:hover { border-color: var(--text-sec); color: var(--text); }
 
-    /* ─── SELECTION TOOLBAR ─── */
+    /* ─── SELECTION TOOLBAR (replaces thead when active) ─── */
+    .selection-toolbar-wrap {
+      /* wrapper sits in the same flow position as thead */
+    }
     .selection-toolbar {
       display: none;
       align-items: center;
@@ -284,6 +287,18 @@
       min-height: 40px;
     }
     .selection-toolbar.visible { display: flex; }
+    /* hint shown when only one side has selection */
+    .toolbar-one-side-hint {
+      display: none;
+      font-size: 12px;
+      color: rgba(0,0,0,0.6);
+      font-style: italic;
+      margin-top: 4px;
+      padding: 0 16px 6px;
+      background: var(--blue-bg);
+      border-bottom: 1px solid #bbdefb;
+    }
+    .toolbar-one-side-hint.visible { display: block; }
     .sel-count { font-weight: 600; margin-right: 4px; }
     .toolbar-divider { width: 1px; height: 18px; background: #90caf9; margin: 0 4px; }
     .btn-toolbar-match {
@@ -370,6 +385,8 @@
     }
     thead th:first-child { width: 36px; padding-left: 16px; }
     thead th:last-child { width: 80px; text-align: right; padding-right: 16px; }
+    /* Hide thead when toolbar is active */
+    table.toolbar-active thead { display: none; }
     tbody tr {
       border-bottom: 1px solid #f0f0f0;
       height: 52px;
@@ -408,6 +425,7 @@
     }
     .amount-negative { color: var(--red); }
     .amount-positive { color: var(--green); }
+    /* currency-tag kept for USD only; EUR is plain text */
     .currency-tag {
       display: inline-block;
       font-size: 10px;
@@ -418,7 +436,13 @@
       vertical-align: middle;
     }
     .currency-usd { background: #e3f2fd; color: var(--blue); }
-    .currency-eur { background: #fff3e0; color: var(--orange); }
+    /* EUR plain text — no badge */
+    .currency-plain {
+      font-size: 11px;
+      font-weight: 400;
+      color: var(--text-sec);
+      margin-left: 4px;
+    }
 
     /* checkbox */
     input[type="checkbox"] {
@@ -644,7 +668,7 @@
         <span class="badge badge-finished">Finished</span>
         <span class="badge badge-warning">Not reconciled</span>
       </div>
-      <div class="recon-subtitle">mzkt.by (Stripe) / Jan 1–31, 2026</div>
+      <div class="recon-subtitle">mzkt.by (Stripe) / Jan 1–31, 2026 · <span id="recon-not-matched-count">50</span> not matched</div>
     </div>
     <div class="recon-actions">
       <button class="btn btn-ghost" onclick="alert('Process log coming soon')">
@@ -692,7 +716,7 @@
       </div>
     </div>
 
-    <!-- Selection toolbar for Synder side -->
+    <!-- Selection toolbar for Synder side (replaces thead when active) -->
     <div class="selection-toolbar" id="toolbar-synder">
       <span><span class="sel-count" id="sel-count-synder">0</span> selected</span>
       <div class="toolbar-divider"></div>
@@ -703,6 +727,8 @@
       <button class="btn-toolbar-ignore" onclick="ignoreSelected('synder')">Ignore</button>
       <button class="btn-toolbar-clear" onclick="clearSelection('synder')">Clear</button>
     </div>
+    <!-- One-side-only hint for Synder -->
+    <div class="toolbar-one-side-hint" id="hint-synder">Also select at least one row from the other table to enable Match.</div>
 
     <div class="data-table-wrap">
       <table id="table-synder">
@@ -747,7 +773,7 @@
       </div>
     </div>
 
-    <!-- Selection toolbar for Integration side -->
+    <!-- Selection toolbar for Integration side (replaces thead when active) -->
     <div class="selection-toolbar" id="toolbar-integration">
       <span><span class="sel-count" id="sel-count-integration">0</span> selected</span>
       <div class="toolbar-divider"></div>
@@ -758,6 +784,8 @@
       <button class="btn-toolbar-ignore" onclick="ignoreSelected('integration')">Ignore</button>
       <button class="btn-toolbar-clear" onclick="clearSelection('integration')">Clear</button>
     </div>
+    <!-- One-side-only hint for Integration -->
+    <div class="toolbar-one-side-hint" id="hint-integration">Also select at least one row from the other table to enable Match.</div>
 
     <div class="data-table-wrap">
       <table id="table-integration">
@@ -777,7 +805,7 @@
     </div>
 
     <div class="pagination">
-      <span id="integration-count-label">Showing 1–7 of 7</span>
+      <span id="integration-count-label">Showing 1–8 of 8</span>
       <div class="pagination-btns">
         <button class="page-btn">‹</button>
         <button class="page-btn active">1</button>
@@ -847,7 +875,15 @@
       <div class="scenario-label"><span class="scenario-icon">🔒</span>One side only</div>
       <div class="scenario-steps">
         Check any row on <strong>one side only</strong><br>
-        → Match button is <strong>disabled</strong> (hover for tooltip)
+        → Match button is <strong>disabled</strong>, hint appears below toolbar
+      </div>
+    </div>
+    <div class="scenario">
+      <div class="scenario-label"><span class="scenario-icon">✅</span>Scenario 5: Payout match</div>
+      <div class="scenario-steps">
+        Check <strong>Synder row 2</strong> (Jan 29, -$21.61)<br>
+        + <strong>Integration payout row</strong> (Jan 29, po_1Suj0D...stripe, -$21.61)<br>
+        → Click <strong>Match</strong> → Match succeeds
       </div>
     </div>
   </div>
@@ -868,19 +904,23 @@ const synderRows = [
 ];
 
 const integrationRows = [
-  { id: 'i1', date: 'Jan 24, 2026', primaryId: 'txn_3St8n0ABC',  secondaryId: '$21.61',  type: 'charge',               amount:  21.61, currency: 'USD', sign: '+', display: '+$21.61 USD' },
-  { id: 'i2', date: 'Jan 20, 2026', primaryId: 'txn_3Ss2XO...E5', secondaryId: '$20.00',  type: '(created by Stripe CLI)', amount: 20.00, currency: 'USD', sign: '+', display: '+$20.00 USD' },
-  { id: 'i3', date: 'Jan 18, 2026', primaryId: 'txn_3SpPWh...rU', secondaryId: '$300.00', type: 'Subscription creation', amount: 300.00, currency: 'USD', sign: '+', display: '+$300.00 USD' },
-  { id: 'i4', date: 'Jan 17, 2026', primaryId: 'txn_3SpPhv...no', secondaryId: '$130.00', type: 'Subscription creation', amount: 130.00, currency: 'USD', sign: '+', display: '+$130.00 USD' },
-  { id: 'i5', date: 'Jan 16, 2026', primaryId: 'txn_3Ss23C...9a', secondaryId: '$300.00', type: 'Payment for Invoice',   amount: 300.00, currency: 'USD', sign: '+', display: '+$300.00 USD' },
-  { id: 'i6', date: 'Jan 15, 2026', primaryId: 'txn_3SpPi0...8z', secondaryId: '$200.00', type: 'Subscription creation', amount: 200.00, currency: 'USD', sign: '+', display: '+$200.00 USD' },
-  { id: 'i7', date: 'Jan 10, 2026', primaryId: 'txn_3Ss2KJ...6I', secondaryId: '$20.00',  type: '(created by Stripe CLI)', amount: 20.00, currency: 'USD', sign: '+', display: '+$20.00 USD' },
+  { id: 'i1', date: 'Jan 24, 2026', primaryId: 'txn_3St8n0ABC',    secondaryId: '$21.61',  type: 'charge',                  amount:  21.61, currency: 'USD', sign: '+', display: '+$21.61 USD' },
+  { id: 'i2', date: 'Jan 20, 2026', primaryId: 'txn_3Ss2XO...E5',  secondaryId: '$20.00',  type: '(created by Stripe CLI)',  amount:  20.00, currency: 'USD', sign: '+', display: '+$20.00 USD' },
+  { id: 'i3', date: 'Jan 18, 2026', primaryId: 'txn_3SpPWh...rU',  secondaryId: '$300.00', type: 'Subscription creation',    amount: 300.00, currency: 'USD', sign: '+', display: '+$300.00 USD' },
+  { id: 'i4', date: 'Jan 17, 2026', primaryId: 'txn_3SpPhv...no',  secondaryId: '$130.00', type: 'Subscription creation',    amount: 130.00, currency: 'USD', sign: '+', display: '+$130.00 USD' },
+  { id: 'i5', date: 'Jan 16, 2026', primaryId: 'txn_3Ss23C...9a',  secondaryId: '$300.00', type: 'Payment for Invoice',      amount: 300.00, currency: 'USD', sign: '+', display: '+$300.00 USD' },
+  { id: 'i6', date: 'Jan 15, 2026', primaryId: 'txn_3SpPi0...8z',  secondaryId: '$200.00', type: 'Subscription creation',    amount: 200.00, currency: 'USD', sign: '+', display: '+$200.00 USD' },
+  { id: 'i7', date: 'Jan 10, 2026', primaryId: 'txn_3Ss2KJ...6I',  secondaryId: '$20.00',  type: '(created by Stripe CLI)',  amount:  20.00, currency: 'USD', sign: '+', display: '+$20.00 USD' },
+  { id: 'i8', date: 'Jan 29, 2026', primaryId: 'po_1Suj0D...stripe', secondaryId: 'txn_1Suj0E...stripe', type: 'payout',     amount: -21.61, currency: 'USD', sign: '-', display: '-$21.61 USD' },
 ];
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 
 const selected = { synder: new Set(), integration: new Set() };
 const removed  = { synder: new Set(), integration: new Set() };
+
+// Track total matched rows for tab counter (start at 50)
+let notMatchedCount = 50;
 
 // ─── RENDER ──────────────────────────────────────────────────────────────────
 
@@ -894,14 +934,17 @@ function renderTable(side, rows) {
     tr.id = 'row-' + row.id;
     tr.className = [isRemoved ? 'removed' : '', isSelected ? 'selected' : ''].join(' ').trim();
     const amtClass = row.sign === '-' ? 'amount-negative' : 'amount-positive';
-    const currClass = row.currency === 'EUR' ? 'currency-eur' : 'currency-usd';
+    // Fix 6: EUR uses plain text, USD keeps badge
+    const currencyHtml = row.currency === 'EUR'
+      ? `<span class="currency-plain">${row.currency}</span>`
+      : `<span class="currency-tag currency-usd">${row.currency}</span>`;
     tr.innerHTML = `
       <td><input type="checkbox" data-side="${side}" data-id="${row.id}" onchange="onCheckboxChange(this)" ${isSelected ? 'checked' : ''}></td>
       <td class="td-date">${row.date}</td>
       <td class="td-id" title="${row.primaryId}">${row.primaryId}</td>
       <td class="td-id" title="${row.secondaryId}">${row.secondaryId}</td>
       <td class="td-type">${row.type}</td>
-      <td class="td-amount ${amtClass}">${row.display} <span class="currency-tag ${currClass}">${row.currency}</span></td>
+      <td class="td-amount ${amtClass}">${row.display} ${currencyHtml}</td>
       <td>
         <div class="row-actions">
           <button class="btn-ignore-row" onclick="ignoreRow('${side}', '${row.id}')">Ignore</button>
@@ -922,6 +965,11 @@ function updateCountLabels() {
   const iCount = integrationRows.length - removed.integration.size;
   document.getElementById('synder-count-label').textContent = `Showing 1–${sCount} of ${sCount}`;
   document.getElementById('integration-count-label').textContent = `Showing 1–${iCount} of ${iCount}`;
+}
+
+function updateTabCounter() {
+  document.getElementById('tab-count').textContent = `(${notMatchedCount})`;
+  document.getElementById('recon-not-matched-count').textContent = notMatchedCount;
 }
 
 // ─── SELECTION LOGIC ────────────────────────────────────────────────────────
@@ -977,8 +1025,10 @@ function updateToolbar(side) {
   const count   = selected[side].size;
   const other   = side === 'synder' ? 'integration' : 'synder';
   const otherCt = selected[other].size;
-  const toolbar = document.getElementById('toolbar-' + side);
-  const countEl = document.getElementById('sel-count-' + side);
+  const toolbar  = document.getElementById('toolbar-' + side);
+  const tableEl  = document.getElementById('table-' + side);
+  const hintEl   = document.getElementById('hint-' + side);
+  const countEl  = document.getElementById('sel-count-' + side);
   const matchBtn = document.getElementById('btn-match-' + side);
   const tooltipEl = document.getElementById('tooltip-' + side);
 
@@ -986,28 +1036,42 @@ function updateToolbar(side) {
 
   if (count > 0) {
     toolbar.classList.add('visible');
+    // Toolbar replaces thead — hide thead via class on table
+    tableEl.classList.add('toolbar-active');
+
     // Match is active only if BOTH sides have selection
     if (otherCt > 0) {
       matchBtn.classList.remove('disabled');
       tooltipEl.style.display = 'none';
+      // Hide one-side hint
+      hintEl.classList.remove('visible');
     } else {
       matchBtn.classList.add('disabled');
       tooltipEl.style.display = '';
+      // Show one-side hint
+      hintEl.classList.add('visible');
     }
   } else {
     toolbar.classList.remove('visible');
+    tableEl.classList.remove('toolbar-active');
+    hintEl.classList.remove('visible');
   }
 
-  // Also update the other side's Match button state (when this side changes)
-  const otherMatchBtn  = document.getElementById('btn-match-' + other);
-  const otherTooltipEl = document.getElementById('tooltip-' + other);
+  // Also update the other side's Match button state and hint
+  const otherMatchBtn   = document.getElementById('btn-match-' + other);
+  const otherTooltipEl  = document.getElementById('tooltip-' + other);
+  const otherHintEl     = document.getElementById('hint-' + other);
+  const otherToolbar    = document.getElementById('toolbar-' + other);
   if (otherMatchBtn) {
     if (otherCt > 0 && count > 0) {
       otherMatchBtn.classList.remove('disabled');
       if (otherTooltipEl) otherTooltipEl.style.display = 'none';
+      if (otherHintEl) otherHintEl.classList.remove('visible');
     } else if (otherCt > 0) {
       otherMatchBtn.classList.add('disabled');
       if (otherTooltipEl) otherTooltipEl.style.display = '';
+      // other side has selection but this side is now empty — show hint on other
+      if (otherHintEl) otherHintEl.classList.add('visible');
     }
   }
 }
@@ -1076,6 +1140,10 @@ function handleMatchClick(side) {
       removed.integration.add(id);
       selected.integration.delete(id);
     });
+
+    // Update tab counter: subtract the number of rows removed from each side (count pairs)
+    notMatchedCount = Math.max(0, notMatchedCount - totalRows);
+    updateTabCounter();
 
     renderAll();
     clearSelection('synder');
