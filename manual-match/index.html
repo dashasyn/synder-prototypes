@@ -1343,6 +1343,27 @@ const integrationRows = [
   { id: 'i25', date: 'Jan 2, 2026',  primaryId: 'po_1StAlKEUR',      secondaryId: 'txn_1StAlK...stripe', type: 'payout',       amount: -50.00,  currency: 'EUR', sign: '-', display: '-€50.00 EUR'  },
 ];
 
+const autoMatchedRecords = [
+  { id: 'am1', seq: 1, date: 'Jan 15, 2026', matchingId: 'AUTO-001', totalAmount: '+$412.50 USD', types: 'charge, payout', count: '4 (2+2)' },
+  { id: 'am2', seq: 2, date: 'Jan 12, 2026', matchingId: 'AUTO-002', totalAmount: '-$85.50 USD',  types: 'payout',         count: '2 (1+1)' },
+  { id: 'am3', seq: 3, date: 'Jan 8, 2026',  matchingId: 'AUTO-003', totalAmount: '+$240.00 USD', types: 'charge',         count: '2 (1+1)' },
+  { id: 'am4', seq: 4, date: 'Jan 5, 2026',  matchingId: 'AUTO-004', totalAmount: '-€50.00 EUR',  types: 'payout',         count: '2 (1+1)' },
+  { id: 'am5', seq: 5, date: 'Jan 3, 2026',  matchingId: 'AUTO-005', totalAmount: '+$99.99 USD',  types: 'charge',         count: '2 (1+1)' },
+];
+
+const discrepancyRecords = [
+  { id: 'dr1', date: 'Jan 25, 2026', matchingId: 'DISC-001', totalAmount: '+$42.00 USD',  types: 'charge',                reason: 'Date mismatch (±1 day)',      count: '2 (1+1)' },
+  { id: 'dr2', date: 'Jan 20, 2026', matchingId: 'DISC-002', totalAmount: '+$175.00 USD', types: 'Subscription creation', reason: 'Description mismatch',        count: '2 (1+1)' },
+  { id: 'dr3', date: 'Jan 17, 2026', matchingId: 'DISC-003', totalAmount: '+$30.00 USD',  types: 'charge',                reason: 'Secondary ID differs',        count: '2 (1+1)' },
+];
+
+const preIgnoredRows = [
+  { id: 'pi1', source: 'synder',       date: 'Jan 25, 2026', primaryId: 'ch_3StZt1...test',   type: 'charge', display: '+$0.01 USD',   sign: '+' },
+  { id: 'pi2', source: 'integration',  date: 'Jan 22, 2026', primaryId: 'txn_3Ss2XO...CLI',   type: '(created by Stripe CLI)', display: '+$1.00 USD',   sign: '+' },
+  { id: 'pi3', source: 'synder',       date: 'Jan 18, 2026', primaryId: 'po_1StMdup...gelb',  type: 'payout', display: '-$21.61 USD',  sign: '-' },
+  { id: 'pi4', source: 'integration',  date: 'Jan 10, 2026', primaryId: 'txn_3Ss2KJ...test',  type: '(created by Stripe CLI)', display: '+$20.00 USD',  sign: '+' },
+];
+
 // ─── STATE ───────────────────────────────────────────────────────────────────
 
 const selected = { synder: new Set(), integration: new Set() };
@@ -1461,86 +1482,132 @@ function renderTable(side, rows) {
 }
 
 function renderManualMatches() {
-  const list = document.getElementById('manual-matches-list');
-  if (manualMatches.length === 0) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">🔗</div>
-        <div class="empty-state-title">No manual matches yet</div>
-        <div class="empty-state-text">Matches you create on the <strong>Not matched</strong> tab will appear here.</div>
-      </div>`;
+  const tbody = document.getElementById('tbody-matched-manually');
+  const pageInfo = document.getElementById('matched-manually-page-info');
+  if (!tbody) return;
+  const f = globalFilter['matched-manually'] || { search: '', amount: '' };
+  let rows = manualMatches;
+  if (f.search) {
+    const q = f.search.toLowerCase();
+    rows = rows.filter(m => {
+      const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
+      const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
+      return sRows.some(r => r.primaryId.toLowerCase().includes(q) || r.type.toLowerCase().includes(q)) ||
+             iRows.some(r => r.primaryId.toLowerCase().includes(q) || r.type.toLowerCase().includes(q));
+    });
+  }
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No results found</td></tr>';
+    if (pageInfo) pageInfo.textContent = '0–0 of 0';
+    document.getElementById('count-matched-manually').textContent = manualMatches.length;
     return;
   }
-  list.innerHTML = manualMatches.map(match => {
-    const sRows = match.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
-    const iRows = match.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
-    const currency = sRows[0] ? sRows[0].currency : '';
+  tbody.innerHTML = rows.map(m => {
+    const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
+    const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
+    const allRows = [...sRows, ...iRows];
+    const currency = sRows[0] ? sRows[0].currency : (iRows[0] ? iRows[0].currency : '');
     const sym = currency === 'EUR' ? '€' : '$';
-    const sTotal = sRows.reduce((s, r) => s + r.amount, 0);
-    const iTotal = iRows.reduce((s, r) => s + r.amount, 0);
-    const fmtTotal = v => (v >= 0 ? '+' : '') + sym + Math.abs(v).toFixed(2);
-    return `
-      <div class="match-card">
-        <div class="match-card-header">
-          <span>Match #${match.seq} &mdash; ${sRows.length}:${iRows.length}</span>
-          <div style="display:flex;align-items:center;gap:12px">
-            <span class="match-card-header-meta">${match.createdAt} · ${currency}</span>
-            <button class="btn-unmatch" onclick="unmatch('${match.id}')">Unmatch</button>
-          </div>
-        </div>
-        <div class="match-card-body">
-          <div class="match-card-side">
-            <div class="match-card-side-title">Synder (${sRows.length} · ${fmtTotal(sTotal)})</div>
-            ${sRows.map(r => `
-              <div class="match-row">
-                <div class="match-row-meta" title="${r.primaryId}">${r.date} · ${r.primaryId}</div>
-                <div class="match-row-amount ${r.sign === '-' ? 'amount-negative' : 'amount-positive'}">${r.display}</div>
-              </div>`).join('')}
-          </div>
-          <div class="match-card-side">
-            <div class="match-card-side-title">Integration (${iRows.length} · ${fmtTotal(iTotal)})</div>
-            ${iRows.map(r => `
-              <div class="match-row">
-                <div class="match-row-meta" title="${r.primaryId}">${r.date} · ${r.primaryId}</div>
-                <div class="match-row-amount ${r.sign === '-' ? 'amount-negative' : 'amount-positive'}">${r.display}</div>
-              </div>`).join('')}
-          </div>
-        </div>
-      </div>`;
+    const total = allRows.reduce((s, r) => s + r.amount, 0);
+    const fmtTotal = (total >= 0 ? '+' : '') + sym + Math.abs(total).toFixed(2) + ' ' + currency;
+    const types = [...new Set(allRows.map(r => r.type))].join(', ');
+    const count = `${m.synderIds.length + m.integrationIds.length} (${m.synderIds.length}+${m.integrationIds.length})`;
+    const matchingId = 'MAN-' + String(m.seq).padStart(3, '0');
+    return `<tr>
+      <td class="td-date">${m.createdAt}</td>
+      <td class="td-id">${matchingId}</td>
+      <td class="td-amount">${fmtTotal}</td>
+      <td class="td-type">${types}</td>
+      <td style="color:var(--text-sec)">${count}</td>
+      <td><button class="btn-unmatch" onclick="unmatch('${m.id}')">Unmatch</button></td>
+    </tr>`;
   }).join('');
+  if (pageInfo) pageInfo.textContent = `1–${rows.length} of ${rows.length}`;
+  document.getElementById('count-matched-manually').textContent = manualMatches.length;
 }
 
 function renderIgnored() {
   const list = document.getElementById('ignored-list');
-  const all = [];
-  synderRows.forEach(r => { if (ignored.synder.has(r.id)) all.push({ ...r, source: 'synder' }); });
-  integrationRows.forEach(r => { if (ignored.integration.has(r.id)) all.push({ ...r, source: 'integration' }); });
+  const sessionAll = [];
+  synderRows.forEach(r => { if (ignored.synder.has(r.id)) sessionAll.push({ ...r, source: 'synder', session: true }); });
+  integrationRows.forEach(r => { if (ignored.integration.has(r.id)) sessionAll.push({ ...r, source: 'integration', session: true }); });
 
-  if (all.length === 0) {
+  const allRows = [
+    ...preIgnoredRows.map(r => ({ ...r, session: false })),
+    ...sessionAll
+  ];
+
+  if (allRows.length === 0) {
     list.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">⏷</div>
+        <div class="empty-state-icon">&#x23F7;</div>
         <div class="empty-state-title">No ignored transactions</div>
         <div class="empty-state-text">Rows you mark as Ignore will appear here.</div>
       </div>`;
     return;
   }
   list.innerHTML = `
-    <table class="ignored-table">
-      <thead><tr>
-        <th>Source</th><th>Date</th><th>Primary ID</th><th>Type</th><th>Amount</th><th></th>
-      </tr></thead>
-      <tbody>${all.map(r => `
-        <tr>
-          <td><span class="source-badge ${r.source === 'synder' ? 'source-synder' : 'source-integration'}">${r.source === 'synder' ? 'Synder' : 'Integration'}</span></td>
-          <td class="td-date">${r.date}</td>
-          <td class="td-id" title="${r.primaryId}">${r.primaryId}</td>
-          <td class="td-type">${r.type}</td>
-          <td class="td-amount ${r.sign === '-' ? 'amount-negative' : 'amount-positive'}">${r.display}</td>
-          <td><button class="btn-restore" onclick="restoreIgnored('${r.source}', '${r.id}')">Restore</button></td>
-        </tr>`).join('')}
-      </tbody>
-    </table>`;
+    <div class="matches-table-wrap" style="padding:0 0 24px">
+      <table class="matches-table">
+        <thead><tr>
+          <th>Source</th><th>Date</th><th>Primary ID</th><th>Type</th><th>Amount</th><th></th>
+        </tr></thead>
+        <tbody>${allRows.map(r => `
+          <tr>
+            <td><span class="source-badge ${r.source === 'synder' ? 'source-synder' : 'source-integration'}">${r.source === 'synder' ? 'Synder' : 'Integration'}</span></td>
+            <td class="td-date">${r.date}</td>
+            <td class="td-id" title="${r.primaryId}">${r.primaryId}</td>
+            <td class="td-type">${r.type}</td>
+            <td class="td-amount ${r.sign === '-' ? 'amount-negative' : 'amount-positive'}">${r.display}</td>
+            <td>${r.session ? `<button class="btn-restore" onclick="restoreIgnored('${r.source}', '${r.id}')">Restore</button>` : ''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function renderAutoMatched() {
+  const tbody = document.getElementById('tbody-matched-auto');
+  if (!tbody) return;
+  const f = globalFilter['matched'] || { search: '', amount: '' };
+  const rows = autoMatchedRecords.filter(r => {
+    if (!f.search) return true;
+    const q = f.search.toLowerCase();
+    return r.matchingId.toLowerCase().includes(q) || r.types.toLowerCase().includes(q) || r.totalAmount.toLowerCase().includes(q);
+  });
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-results">No results found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td class="td-date">${r.date}</td>
+      <td class="td-id">${r.matchingId}</td>
+      <td class="td-amount">${r.totalAmount}</td>
+      <td class="td-type">${r.types}</td>
+      <td style="color:var(--text-sec)">${r.count}</td>
+    </tr>`).join('');
+  const chip = document.getElementById('count-matched');
+  if (chip) chip.textContent = autoMatchedRecords.length;
+}
+
+function renderDiscrepancy() {
+  const tbody = document.querySelector('#panel-discrepancy .matches-table tbody');
+  if (!tbody) return;
+  if (discrepancyRecords.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" class="no-results">No results found</td></tr>';
+    return;
+  }
+  tbody.innerHTML = discrepancyRecords.map(r => `
+    <tr>
+      <td class="td-date">${r.date}</td>
+      <td class="td-id">${r.matchingId}</td>
+      <td class="td-amount">${r.totalAmount}</td>
+      <td class="td-type">${r.types} <span style="color:var(--orange);font-size:11px;margin-left:6px">&#9888; ${r.reason}</span></td>
+      <td style="color:var(--text-sec)">${r.count}</td>
+    </tr>`).join('');
+  const chip = document.getElementById('count-discrepancy');
+  if (chip) chip.textContent = discrepancyRecords.length;
 }
 
 function renderAll() {
@@ -1549,6 +1616,8 @@ function renderAll() {
   updateCountLabels();
   renderManualMatches();
   renderIgnored();
+  renderAutoMatched();
+  renderDiscrepancy();
   updateTabCounter();
 }
 
@@ -1567,10 +1636,12 @@ function updateCountLabels() {
 
 function updateTabCounter() {
   const notMatched   = (synderRows.length - removed.synder.size) + (integrationRows.length - removed.integration.size);
-  const ignoredTotal = ignored.synder.size + ignored.integration.size;
-  document.getElementById('count-not-matched').textContent       = `(${notMatched})`;
-  document.getElementById('count-matched-manually').textContent  = `(${manualMatches.length})`;
-  document.getElementById('count-ignored').textContent           = `(${ignoredTotal})`;
+  const ignoredTotal = ignored.synder.size + ignored.integration.size + preIgnoredRows.length;
+  document.getElementById('count-not-matched').textContent       = notMatched;
+  document.getElementById('count-matched-manually').textContent  = manualMatches.length;
+  document.getElementById('count-ignored').textContent           = ignoredTotal;
+  document.getElementById('count-discrepancy').textContent       = discrepancyRecords.length;
+  document.getElementById('count-matched').textContent           = autoMatchedRecords.length;
   document.getElementById('recon-not-matched-count').textContent = notMatched;
 }
 
@@ -1671,8 +1742,8 @@ function handleMatchClick(side) {
 
   if (allCurrencies.size > 1) {
     showErrorModal(
-      'Currencies don\'t match',
-      `<p style="margin-bottom:10px;">All selected rows must be in the same currency.</p>
+      'Currencies differ',
+      `<p style="margin-bottom:10px;">All rows must be in the same currency.</p>
        <p>Found: <strong>${[...allCurrencies].join(', ')}</strong>.</p>`
     );
     return;
