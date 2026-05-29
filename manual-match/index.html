@@ -1419,7 +1419,10 @@
     <div class="selection-toolbar" id="toolbar-synder">
       <span><span class="sel-count" id="sel-count-synder">0</span> selected</span>
       <div class="toolbar-divider"></div>
-      <button class="btn-toolbar-create-je" onclick="handleCreateJEClick()">Create journal entry</button>
+      <span class="tooltip-wrap">
+        <button class="btn-toolbar-create-je" onclick="handleCreateJEClick()">Create journal entry</button>
+        <span class="tooltip-text">Creates a manual accounting entry in your books to balance these transactions</span>
+      </span>
       <div class="toolbar-divider"></div>
       <span class="tooltip-wrap">
         <button class="btn-toolbar-match disabled" id="btn-match-synder" onclick="handleMatchClick('synder')">Match</button>
@@ -1583,7 +1586,7 @@
     </div>
     <div class="je-notice">
       <span style="font-size:15px;flex-shrink:0;margin-top:1px">ⓘ</span>
-      <span>Only one journal entry can be created per reconciliation. Include all needed transactions.</span>
+      <span>Only one journal entry per matching session. To change it, delete this one and create a new one.</span>
     </div>
     <div class="je-section-title">Entry lines</div>
     <table class="je-lines-table">
@@ -1618,8 +1621,8 @@
 <!-- MODAL: Only one JE per reconciliation -->
 <div class="modal-overlay" id="modal-one-je-overlay">
   <div class="modal">
-    <div class="modal-title">You can have only one journal entry per reconciliation</div>
-    <div class="modal-body">You already have a journal entry for this reconciliation. To add more transactions, delete the existing entry first and create a new one.</div>
+    <div class="modal-title">You can have only one journal entry per matching session</div>
+    <div class="modal-body">A journal entry already exists for this matching session. Delete it first, then create a new one with all the transactions you need.</div>
     <div class="modal-footer">
       <button class="btn btn-primary" onclick="closeModal('modal-one-je-overlay')">Got it</button>
     </div>
@@ -1638,7 +1641,10 @@
 <div class="modal-overlay" id="modal-delete-je-overlay">
   <div class="modal">
     <div class="modal-title">Delete journal entry?</div>
-    <div class="modal-body">The journal entry will be deleted from your books and Synder. All linked transactions will return to Not matched. This cannot be undone.</div>
+    <div class="modal-body">This journal entry will be removed from your books. All linked transactions will go back to Not matched so you can rework them.</div>
+    <div id="modal-delete-closed-period" style="display:none;margin-top:10px;padding:10px 12px;background:#fff8e1;border:1px solid #ffe082;border-radius:4px;font-size:13px;color:#7c5c00">
+      ⚠️ This entry falls within a closed accounting period. Deleting it may affect your reconciled books — check with your accountant if unsure.
+    </div>
     <div class="modal-footer">
       <button class="btn btn-outlined" onclick="closeModal('modal-delete-je-overlay')">Cancel</button>
       <button class="btn btn-primary" style="background:var(--red);border-color:var(--red)" onclick="confirmDeleteJE()">Delete journal entry</button>
@@ -1953,8 +1959,8 @@ function renderTable(side, rows) {
       const elig = jeIsEligible(row);
       const tooltip = jeEligibilityTooltip(row);
       const jeMenuItem = elig
-        ? `<button class="row-dropdown-item" onclick="event.stopPropagation();openSingleRowJE('${row.id}')">Create journal entry</button>`
-        : `<button class="row-dropdown-item disabled" disabled>${'Create journal entry'}</button><span class="row-dropdown-tooltip-text">${tooltip}</span>`;
+        ? `<button class="row-dropdown-item" onclick="event.stopPropagation();openSingleRowJE('${row.id}')" title="Creates a manual accounting entry in your books">Create journal entry</button>`
+        : `<button class="row-dropdown-item disabled" disabled>Create journal entry</button><span class="row-dropdown-tooltip-text">${tooltip}</span>`;
       lastCells = `
         <td style="text-align:center"><span class="info-icon">ⓘ</span></td>
         <td style="text-align:right;padding-right:8px">
@@ -1969,7 +1975,14 @@ function renderTable(side, rows) {
     } else {
       lastCells = `
         <td style="text-align:center"><span class="info-icon">ⓘ</span></td>
-        <td style="text-align:right"><a class="disc-ignore-link" href="#" onclick="event.preventDefault();ignoreRow('${side}','${row.id}')">Ignore</a></td>`;
+        <td style="text-align:right;padding-right:8px">
+          <div class="row-menu-wrap">
+            <button class="btn-row-dots" onclick="toggleRowMenu(event,'rdm-${row.id}')">⋯</button>
+            <div class="row-dropdown" id="rdm-${row.id}">
+              <button class="row-dropdown-item" onclick="event.stopPropagation();ignoreRow('${side}','${row.id}')">Ignore</button>
+            </div>
+          </div>
+        </td>`;
     }
     tr.innerHTML = `
       <td><input type="checkbox" data-side="${side}" data-id="${row.id}" onchange="onCheckboxChange(this)" ${isSelected ? 'checked' : ''}></td>
@@ -2634,16 +2647,17 @@ function genDocNumber() {
 }
 
 function buildTokenDesc(row) {
+  // Human-readable for display; stored as tokenized key internally
   const parts = [];
   if (row.date) {
     try {
       const d = new Date(row.date);
-      if (!isNaN(d)) parts.push('date:' + d.toISOString().slice(0,10));
-    } catch(e) { parts.push('date:' + row.date); }
+      if (!isNaN(d)) parts.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }));
+    } catch(e) { parts.push(row.date); }
   }
-  if (row.primaryId && row.primaryId.trim()) parts.push('p_id:' + row.primaryId.trim());
-  if (row.secondaryId && row.secondaryId.trim()) parts.push('s_id:' + row.secondaryId.trim());
-  return parts.join(' ');
+  const ids = [row.primaryId, row.secondaryId].filter(x => x && x.trim() && x !== '—');
+  if (ids.length) parts.push(ids.join(' / '));
+  return parts.join(' · ');
 }
 
 function handleCreateJEClick() {
@@ -2869,6 +2883,14 @@ function updateJETabCounter() {
 
 function openDeleteJE(jeId) {
   jePendingDeleteId = jeId;
+  const je = journalEntries.find(j => j.id === jeId);
+  const banner = document.getElementById('modal-delete-closed-period');
+  if (banner && je && je.date) {
+    const jeDate = new Date(je.date);
+    const now = new Date();
+    const isClosedPeriod = jeDate < new Date(now.getFullYear(), now.getMonth(), 1);
+    banner.style.display = isClosedPeriod ? 'block' : 'none';
+  }
   document.getElementById('modal-delete-je-overlay').classList.add('visible');
 }
 
