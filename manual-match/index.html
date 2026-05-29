@@ -1330,6 +1330,7 @@
 <!-- TABS -->
 <div class="tabs-bar">
   <div class="tab" data-tab="matched" onclick="switchTab(this)">Matched <span class="tab-chip tab-chip-green" id="count-matched">0</span></div>
+  <div class="tab" data-tab="matched-manually" onclick="switchTab(this)">Matched manually <span class="tab-chip tab-chip-blue" id="count-matched-manually">0</span></div>
   <div class="tab" data-tab="discrepancy" onclick="switchTab(this)">Discrepancy <span class="tab-chip tab-chip-orange" id="count-discrepancy">0</span></div>
   <div class="tab active" data-tab="not-matched" onclick="switchTab(this)">Not matched <span class="tab-chip tab-chip-red" id="count-not-matched">50</span></div>
   <div class="tab" data-tab="ignored" onclick="switchTab(this)">Ignored <span class="tab-chip tab-chip-grey" id="count-ignored">0</span></div>
@@ -1372,16 +1373,69 @@
           <th>Date <span class="th-sort">↓</span></th>
           <th>Types</th>
           <th>Count</th>
-          <th style="width:80px">Type</th>
         </tr>
       </thead>
       <tbody id="tbody-matched-auto">
-        <tr><td colspan="7" class="no-results">No results found</td></tr>
+        <tr><td colspan="6" class="no-results">No results found</td></tr>
       </tbody>
     </table>
     <div class="matches-footer">
       <span class="rows-per-page">Rows per page: <select><option>25</option><option>50</option><option>100</option></select></span>
       <span class="page-info">0–0 of 0</span>
+      <div class="pagination-btns">
+        <button class="page-btn">|◁</button>
+        <button class="page-btn">◀</button>
+        <button class="page-btn">▶</button>
+        <button class="page-btn">▷|</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Matched manually -->
+<div class="tab-panel" id="panel-matched-manually">
+  <div class="global-filter-bar">
+    <div class="gf-field">
+      <label class="gf-label">Search</label>
+      <input class="gf-input" type="text" id="gf-search-matched-manually" placeholder="Search…">
+    </div>
+    <div class="gf-field">
+      <label class="gf-label">Date range</label>
+      <div class="gf-date-row">
+        <input class="gf-date" type="text" placeholder="Start" readonly>
+        <span class="gf-dash">–</span>
+        <input class="gf-date" type="text" placeholder="End" readonly>
+      </div>
+    </div>
+    <div class="gf-field">
+      <label class="gf-label">Amount</label>
+      <input class="gf-input gf-input-amount" type="text" id="gf-amount-matched-manually" placeholder="Amount">
+    </div>
+    <div class="gf-actions">
+      <button class="btn-apply" onclick="applyGlobalFilter('matched-manually')">Apply</button>
+      <button class="btn-reset" onclick="resetGlobalFilter('matched-manually')">Reset filters</button>
+    </div>
+  </div>
+  <div class="matches-table-wrap">
+    <table class="matches-table" id="matches-table-matched-manually">
+      <thead>
+        <tr>
+          <th style="width:40px"></th>
+          <th>Matching ID <span class="th-sort">↓</span></th>
+          <th>Total amount <span class="th-sort">↓</span></th>
+          <th>Date matched <span class="th-sort">↓</span></th>
+          <th>Types</th>
+          <th style="text-align:right">Count</th>
+          <th style="width:80px"></th>
+        </tr>
+      </thead>
+      <tbody id="tbody-matched-manually">
+        <tr><td colspan="7" class="no-results">No results found</td></tr>
+      </tbody>
+    </table>
+    <div class="matches-footer">
+      <span class="rows-per-page">Rows per page: <select><option>25</option><option>50</option><option>100</option></select></span>
+      <span class="page-info" id="matched-manually-page-info">0–0 of 0</span>
       <div class="pagination-btns">
         <button class="page-btn">|◁</button>
         <button class="page-btn">◀</button>
@@ -2178,36 +2232,12 @@ function toggleManualGroup(id) {
   detail.style.display = isOpen ? '' : 'none';
 }
 
-function renderMatchedTab() {
+function renderAutoMatched() {
   const tbody = document.getElementById('tbody-matched-auto');
   if (!tbody) return;
   const f = globalFilter['matched'] || { search: '', amount: '' };
 
-  // Build combined list: auto records + manual matches
-  const autoRows = autoMatchedRecords.map(r => ({ ...r, matchType: 'auto' }));
-  const manualRows = manualMatches.map(m => {
-    const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
-    const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
-    const allR = [...sRows, ...iRows];
-    const currency = sRows[0] ? sRows[0].currency : (iRows[0] ? iRows[0].currency : 'USD');
-    const sym = currency === 'EUR' ? '€' : '$';
-    const total = allR.reduce((s, r) => s + r.amount, 0);
-    return {
-      id: m.id,
-      matchType: m.matchType || 'manual',
-      matchingId: 'MAN-' + String(m.seq).padStart(3, '0'),
-      totalAmount: (total >= 0 ? '+' : '') + sym + Math.abs(total).toFixed(2) + ' ' + currency,
-      date: m.createdAt,
-      types: [...new Set(allR.map(r => r.type))].join(', '),
-      count: sRows.length + iRows.length,
-      accountingRows: sRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display })),
-      integrationRows: iRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display })),
-      isManual: true,
-      matchObj: m
-    };
-  });
-
-  let rows = [...autoRows, ...manualRows];
+  let rows = autoMatchedRecords;
   if (f.search) {
     const q = f.search.toLowerCase();
     rows = rows.filter(r => r.matchingId.toLowerCase().includes(q) || r.types.toLowerCase().includes(q) || r.totalAmount.toLowerCase().includes(q));
@@ -2217,6 +2247,72 @@ function renderMatchedTab() {
   if (chip) chip.textContent = rows.length;
 
   if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No results found</td></tr>';
+    return;
+  }
+
+  function subTableRows(subRows) {
+    return subRows.map(sr => `
+      <tr>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sr.primaryId}</td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sr.secondaryId}</td>
+        <td>${sr.date}</td>
+        <td>${sr.type}</td>
+        <td>${sr.amount}</td>
+        <td></td>
+      </tr>`).join('');
+  }
+
+  function subTable(label, subRows) {
+    return `<div class="mg-side">
+      <div class="mg-side-header">${label} (${subRows.length})</div>
+      <table class="mg-sub-table">
+        <thead><tr><th>Primary ID</th><th>Secondary ID</th><th>Date</th><th>Transaction type</th><th>Amount</th><th></th></tr></thead>
+        <tbody>${subTableRows(subRows)}</tbody>
+      </table>
+    </div>`;
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr class="mg-row" data-id="${r.id}" onclick="toggleMatchGroup('${r.id}')">
+      <td><span class="mg-chevron">▸</span></td>
+      <td class="td-id">${r.matchingId}</td>
+      <td class="td-amount">${r.totalAmount}</td>
+      <td class="td-date">${r.date}</td>
+      <td class="td-type">${r.types}</td>
+      <td style="color:var(--text-sec)">${r.count}</td>
+    </tr>
+    <tr class="mg-detail" id="detail-${r.id}" style="display:none">
+      <td colspan="6">
+        <div class="mg-split">
+          ${subTable('Accounting rows', r.accountingRows)}
+          <div class="mg-divider"></div>
+          ${subTable('Integration rows', r.integrationRows)}
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function renderManualMatches() {
+  const tbody = document.getElementById('tbody-matched-manually');
+  if (!tbody) return;
+  const f = globalFilter['matched-manually'] || { search: '', amount: '' };
+
+  let matches = manualMatches;
+  if (f.search) {
+    const q = f.search.toLowerCase();
+    matches = matches.filter(m => {
+      const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
+      const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
+      const types = [...new Set([...sRows, ...iRows].map(r => r.type))].join(', ').toLowerCase();
+      return ('MAN-' + String(m.seq).padStart(3, '0')).toLowerCase().includes(q) || types.includes(q);
+    });
+  }
+
+  const chip = document.getElementById('count-matched-manually');
+  if (chip) chip.textContent = matches.length;
+
+  if (matches.length === 0) {
     tbody.innerHTML = '<tr><td colspan="7" class="no-results">No results found</td></tr>';
     return;
   }
@@ -2243,37 +2339,39 @@ function renderMatchedTab() {
     </div>`;
   }
 
-  function typeBadge(t) {
-    if (t === 'auto') return '<span class="badge-match-type badge-auto">Auto</span>';
-    if (t === 'ai')   return '<span class="badge-match-type badge-ai">AI</span>';
-    return '<span class="badge-match-type badge-manually">Manually</span>';
-  }
-
-  tbody.innerHTML = rows.map(r => {
-    const unmatchBtn = r.isManual ? `<td onclick="event.stopPropagation()" style="text-align:right"><button class="btn-unmatch" onclick="unmatch('${r.id}')">Unmatch</button></td>` : `<td></td>`;
-    const detailId = r.isManual ? `man-detail-${r.id}` : `detail-${r.id}`;
+  tbody.innerHTML = matches.map(m => {
+    const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
+    const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
+    const allR = [...sRows, ...iRows];
+    const currency = sRows[0] ? sRows[0].currency : (iRows[0] ? iRows[0].currency : 'USD');
+    const sym = currency === 'EUR' ? '€' : '$';
+    const total = allR.reduce((s, r) => s + r.amount, 0);
+    const totalStr = (total >= 0 ? '+' : '') + sym + Math.abs(total).toFixed(2) + ' ' + currency;
+    const types = [...new Set(allR.map(r => r.type))].join(', ');
+    const matchingId = 'MAN-' + String(m.seq).padStart(3, '0');
+    const aRows = sRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display }));
+    const iRowsMapped = iRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display }));
     return `
-    <tr class="mg-row" data-id="${r.id}" onclick="toggleMatchGroup('${r.id}')">
+    <tr class="mg-row" data-id="${m.id}" onclick="toggleManualMatchGroup('${m.id}')">
       <td><span class="mg-chevron">▸</span></td>
-      <td class="td-id">${r.matchingId}</td>
-      <td class="td-amount">${r.totalAmount}</td>
-      <td class="td-date">${r.date}</td>
-      <td class="td-type">${r.types}</td>
-      <td style="color:var(--text-sec)">${r.count}</td>
-      <td>${typeBadge(r.matchType)}</td>
+      <td class="td-id">${matchingId}</td>
+      <td class="td-amount">${totalStr}</td>
+      <td class="td-date">${m.createdAt}</td>
+      <td class="td-type">${types}</td>
+      <td style="color:var(--text-sec);text-align:right">${allR.length}</td>
+      <td onclick="event.stopPropagation()" style="text-align:right"><button class="btn-unmatch" onclick="unmatch('${m.id}')">Unmatch</button></td>
     </tr>
-    <tr class="mg-detail" id="${detailId}" style="display:none">
+    <tr class="mg-detail" id="man-detail-${m.id}" style="display:none">
       <td colspan="7">
         <div class="mg-split">
-          ${subTable('Accounting rows', r.accountingRows)}
+          ${subTable('Accounting rows', aRows)}
           <div class="mg-divider"></div>
-          ${subTable('Integration rows', r.integrationRows)}
+          ${subTable('Integration rows', iRowsMapped)}
         </div>
       </td>
     </tr>`;
   }).join('');
 }
-function renderManualMatches() { renderMatchedTab(); }
 
 function renderIgnored() {
   const list = document.getElementById('ignored-list');
@@ -2349,7 +2447,13 @@ function toggleMatchGroup(id) {
   detail.style.display = isOpen ? '' : 'none';
 }
 
-function renderAutoMatched() { renderMatchedTab(); }
+function toggleManualMatchGroup(id) {
+  const row = document.querySelector(`.mg-row[data-id="${id}"]`);
+  const detail = document.getElementById(`man-detail-${id}`);
+  if (!row || !detail) return;
+  const isOpen = row.classList.toggle('open');
+  detail.style.display = isOpen ? '' : 'none';
+}
 
 function toggleDiscGroup(id) {
   const row = document.querySelector(`.disc-row[data-id="${id}"]`);
