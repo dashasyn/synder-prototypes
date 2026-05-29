@@ -1193,6 +1193,11 @@
     }
     .variant-pill:hover:not(.active) { background: #1e2028; color: #e0e0e6; }
 
+    /* ─── VARIANT VISIBILITY ─── */
+    body.variant-b .variant-a-only { display: none !important; }
+    .variant-b-only { display: none; }
+    body.variant-b .variant-b-only { display: table-cell; }
+
     /* ─── MATCH CONSOLE (compact) ─── */
     .match-console {
       position: fixed;
@@ -1327,7 +1332,7 @@
 <!-- TABS -->
 <div class="tabs-bar">
   <div class="tab" data-tab="matched" onclick="switchTab(this)">Matched <span class="tab-chip tab-chip-green" id="count-matched">0</span></div>
-  <div class="tab" data-tab="matched-manually" onclick="switchTab(this)">Matched manually <span class="tab-chip tab-chip-blue" id="count-matched-manually">0</span></div>
+  <div class="tab variant-a-only" data-tab="matched-manually" onclick="switchTab(this)">Matched manually <span class="tab-chip tab-chip-blue" id="count-matched-manually">0</span></div>
   <div class="tab" data-tab="discrepancy" onclick="switchTab(this)">Discrepancy <span class="tab-chip tab-chip-orange" id="count-discrepancy">0</span></div>
   <div class="tab active" data-tab="not-matched" onclick="switchTab(this)">Not matched <span class="tab-chip tab-chip-red" id="count-not-matched">50</span></div>
   <div class="tab" data-tab="ignored" onclick="switchTab(this)">Ignored <span class="tab-chip tab-chip-grey" id="count-ignored">0</span></div>
@@ -1370,6 +1375,7 @@
           <th>Date <span class="th-sort">↓</span></th>
           <th>Types</th>
           <th>Count</th>
+          <th class="variant-b-only" style="width:90px">Match type</th>
         </tr>
       </thead>
       <tbody id="tbody-matched-auto">
@@ -1390,7 +1396,7 @@
 </div>
 
 <!-- Matched manually -->
-<div class="tab-panel" id="panel-matched-manually">
+<div class="tab-panel variant-a-only" id="panel-matched-manually">
   <div class="global-filter-bar">
     <div class="gf-field">
       <label class="gf-label">Search</label>
@@ -2235,6 +2241,8 @@ function toggleManualGroup(id) {
 }
 
 function renderAutoMatched() {
+  if (currentVariant === 'b') { renderUnifiedMatched(); return; }
+
   const tbody = document.getElementById('tbody-matched-auto');
   if (!tbody) return;
   const f = globalFilter['matched'] || { search: '', amount: '' };
@@ -2286,6 +2294,95 @@ function renderAutoMatched() {
     </tr>
     <tr class="mg-detail" id="detail-${r.id}" style="display:none">
       <td colspan="6">
+        <div class="mg-split">
+          ${subTable('Accounting rows', r.accountingRows)}
+          <div class="mg-divider"></div>
+          ${subTable('Integration rows', r.integrationRows)}
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function renderUnifiedMatched() {
+  const tbody = document.getElementById('tbody-matched-auto');
+  if (!tbody) return;
+  const f = globalFilter['matched'] || { search: '', amount: '' };
+
+  const autoRows = autoMatchedRecords.map(r => ({ ...r, matchType: 'auto' }));
+  const manualRows = manualMatches.map(m => {
+    const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
+    const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
+    const allR = [...sRows, ...iRows];
+    const currency = sRows[0] ? sRows[0].currency : (iRows[0] ? iRows[0].currency : 'USD');
+    const sym = currency === 'EUR' ? '€' : '$';
+    const total = allR.reduce((s, r) => s + r.amount, 0);
+    return {
+      id: m.id,
+      matchType: m.matchType || 'manual',
+      matchingId: 'MAN-' + String(m.seq).padStart(3, '0'),
+      totalAmount: (total >= 0 ? '+' : '') + sym + Math.abs(total).toFixed(2) + ' ' + currency,
+      date: m.createdAt,
+      types: [...new Set(allR.map(r => r.type))].join(', '),
+      count: String(allR.length),
+      accountingRows: sRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display })),
+      integrationRows: iRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display })),
+    };
+  });
+
+  let rows = [...autoRows, ...manualRows];
+  if (f.search) {
+    const q = f.search.toLowerCase();
+    rows = rows.filter(r => r.matchingId.toLowerCase().includes(q) || r.types.toLowerCase().includes(q) || r.totalAmount.toLowerCase().includes(q));
+  }
+
+  const chip = document.getElementById('count-matched');
+  if (chip) chip.textContent = rows.length;
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="7" class="no-results">No results found</td></tr>';
+    return;
+  }
+
+  function subTableRows(subRows) {
+    return subRows.map(sr => `
+      <tr>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sr.primaryId}</td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sr.secondaryId}</td>
+        <td>${sr.date}</td>
+        <td>${sr.type}</td>
+        <td>${sr.amount}</td>
+        <td></td>
+      </tr>`).join('');
+  }
+
+  function subTable(label, subRows) {
+    return `<div class="mg-side">
+      <div class="mg-side-header">${label} (${subRows.length})</div>
+      <table class="mg-sub-table">
+        <thead><tr><th>Primary ID</th><th>Secondary ID</th><th>Date</th><th>Transaction type</th><th>Amount</th><th></th></tr></thead>
+        <tbody>${subTableRows(subRows)}</tbody>
+      </table>
+    </div>`;
+  }
+
+  function typeBadge(t) {
+    if (t === 'auto') return '<span class="badge-match-type badge-auto">Auto</span>';
+    if (t === 'ai')   return '<span class="badge-match-type badge-ai">AI</span>';
+    return '<span class="badge-match-type badge-manually">Manually</span>';
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr class="mg-row" data-id="${r.id}" onclick="toggleMatchGroup('${r.id}')">
+      <td><span class="mg-chevron">▸</span></td>
+      <td class="td-id">${r.matchingId}</td>
+      <td class="td-amount">${r.totalAmount}</td>
+      <td class="td-date">${r.date}</td>
+      <td class="td-type">${r.types}</td>
+      <td style="color:var(--text-sec)">${r.count}</td>
+      <td>${typeBadge(r.matchType)}</td>
+    </tr>
+    <tr class="mg-detail" id="detail-${r.id}" style="display:none">
+      <td colspan="7">
         <div class="mg-split">
           ${subTable('Accounting rows', r.accountingRows)}
           <div class="mg-divider"></div>
@@ -3218,6 +3315,16 @@ function switchVariant(v) {
   if (console_) console_.style.display = 'none';
   document.body.style.paddingBottom = '';
   document.body.classList.toggle('variant-b', v === 'b');
+
+  // In variant B, "Matched manually" tab doesn't exist — redirect to "Matched"
+  const activeTab = document.querySelector('.tab.active');
+  if (v === 'b' && activeTab && activeTab.dataset.tab === 'matched-manually') {
+    const matchedTab = document.querySelector('.tab[data-tab="matched"]');
+    if (matchedTab) switchTab(matchedTab);
+  }
+
+  // Re-render matched tab so type badges appear/disappear correctly
+  renderAutoMatched();
 
   updateMatchConsole();
 }
