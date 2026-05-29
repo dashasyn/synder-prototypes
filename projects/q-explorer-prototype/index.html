@@ -1062,6 +1062,20 @@
   .action-icon.danger { color: #9CA3AF; }
   .action-icon.danger:hover { background: #FEF2F2; color: #DC2626; }
   .action-icon .material-icons { font-size: 18px; }
+  .action-icon:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
+  #view-reports-list tr[data-status="in_progress"] .action-icon,
+  #view-reports-list tr[data-status="running"] .action-icon {
+    opacity: 0.35; cursor: not-allowed; pointer-events: none;
+  }
+
+  .table-empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: #9CA3AF;
+  }
+  .table-empty-state .material-icons { font-size: 36px; display: block; margin-bottom: 8px; }
+  .table-empty-state p { font-size: 14px; }
+
 
   .action-link {
     color: #2563EB;
@@ -1447,7 +1461,7 @@
     <!-- Header -->
     <div class="page-header">
       <div class="page-header-left">
-        <button class="btn-back" onclick="showView('type-selection')">
+        <button class="btn-back" onclick="wizardBack()">
           <span class="material-icons">arrow_back</span>
           <span data-i18n="btn_back">Back</span>
         </button>
@@ -1740,7 +1754,7 @@
           </div>
 
           <!-- Scheduling -->
-          <div class="schedule-section">
+          <div class="schedule-section" id="schedule-section">
             <div class="schedule-toggle-row" onclick="toggleSchedule()">
               <input type="checkbox" id="schedule-checkbox" onclick="event.stopPropagation(); toggleSchedule()">
               <div style="flex:1;">
@@ -1830,6 +1844,10 @@
             <button class="btn btn-primary" id="run-btn" onclick="runNow()">
               <span class="material-icons">play_arrow</span>
               <span data-i18n="btn_run_now">Run Now</span>
+            </button>
+            <button class="btn btn-primary" id="save-schedule-btn" onclick="saveScheduleChanges()" style="display:none">
+              <span class="material-icons">save</span>
+              <span data-i18n="btn_save_schedule">Save Changes</span>
             </button>
           </div>
 
@@ -2359,6 +2377,10 @@
         </div>
 
             </div><!-- /reports-container -->
+      <div id="reports-empty" style="display:none" class="table-empty-state">
+        <span class="material-icons">search_off</span>
+        <p data-i18n="empty_no_evals">No evaluations found</p>
+      </div>
 
     </div>
   </div>
@@ -2423,6 +2445,12 @@
             </tr>
           </thead>
           <tbody id="sched-tbody">
+            <tr id="sched-empty-row" style="display:none">
+              <td colspan="6" class="table-empty-state">
+                <span class="material-icons">search_off</span>
+                <p data-i18n="empty_no_schedules">No scheduled reports found</p>
+              </td>
+            </tr>
             <tr data-name="Fahrtausfälle DPM – Wöchentlich" data-freq="weekly" data-status="active">
               <td class="report-name">Fahrtausfälle DPM – Wöchentlich</td>
               <td><span class="badge badge-blue" data-i18n="freq_weekly_mon">Weekly (Monday)</span></td>
@@ -2668,6 +2696,9 @@
       btn_next: 'Next',
       btn_back: 'Back',
       badge_scheduled: 'Scheduled',
+      btn_save_schedule: 'Save Changes',
+      empty_no_evals: 'No evaluations found',
+      empty_no_schedules: 'No scheduled reports found',
 
       step2_title: 'Narrow Scope',
       step2_subtitle: 'All filters are optional. Without restrictions, all data will be evaluated.',
@@ -2827,6 +2858,9 @@
       btn_next: 'Weiter',
       btn_back: 'Zurück',
       badge_scheduled: 'Geplant',
+      btn_save_schedule: 'Änderungen speichern',
+      empty_no_evals: 'Keine Auswertungen gefunden',
+      empty_no_schedules: 'Keine geplanten Berichte gefunden',
 
       step2_title: 'Filterbereich einschränken',
       step2_subtitle: 'Alle Filter sind optional. Ohne Einschränkung werden alle Daten ausgewertet.',
@@ -3032,7 +3066,8 @@
     selectedStops: [],
     selectedDays: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'],
     nameManuallyEdited: false,
-    currentStep: 1
+    currentStep: 1,
+    isEditingSchedule: false
   };
 
   // ── Navigation ──────────────────────────────────────────────
@@ -3071,6 +3106,10 @@
 
     document.getElementById('wizard-title').textContent = t('type_' + typeKey);
     document.getElementById('wizard-scheduled-badge').style.display = 'none';
+    state.isEditingSchedule = false;
+    document.getElementById('run-btn').style.display = '';
+    document.getElementById('save-schedule-btn').style.display = 'none';
+    document.getElementById('schedule-section').style.display = '';
 
     // Reset RPV
     updateRPVLabel();
@@ -3336,6 +3375,9 @@
         }
         if (remaining === 0) group.style.display = 'none';
       }
+      const anyGroupVisible = [...document.querySelectorAll('.report-group')].some(g => g.style.display !== 'none');
+      const reportsEmpty = document.getElementById('reports-empty');
+      if (reportsEmpty) reportsEmpty.style.display = anyGroupVisible ? 'none' : 'block';
       showToast(lang === 'en' ? 'Evaluation deleted' : 'Auswertung gelöscht');
     }, 300);
   }
@@ -3371,8 +3413,27 @@
     };
     const type = Object.keys(typeMap).find(k => name.startsWith(k)) ? typeMap[Object.keys(typeMap).find(k => name.startsWith(k))] : 'punctuality';
     startWizard(type);
+    state.isEditingSchedule = true;
     document.getElementById('wizard-title').textContent = name;
     document.getElementById('wizard-scheduled-badge').style.display = '';
+    document.getElementById('run-btn').style.display = 'none';
+    document.getElementById('save-schedule-btn').style.display = '';
+    document.getElementById('schedule-section').style.display = 'none';
+  }
+
+  function wizardBack() {
+    if (state.isEditingSchedule) {
+      showView('scheduled');
+      state.isEditingSchedule = false;
+    } else {
+      showView('type-selection');
+    }
+  }
+
+  function saveScheduleChanges() {
+    showView('scheduled');
+    showToast(lang === 'en' ? 'Schedule updated' : 'Zeitplan aktualisiert');
+    state.isEditingSchedule = false;
   }
 
   // ── Clear filter ─────────────────────────────────────────────
@@ -3851,6 +3912,9 @@
     const countEl = document.getElementById('reports-count');
     if (countEl) countEl.textContent = totalVisible + ' ' + (totalVisible !== 1 ? t('eval_count_many') : t('eval_count_one'));
 
+    const emptyEl = document.getElementById('reports-empty');
+    if (emptyEl) emptyEl.style.display = totalVisible === 0 ? 'block' : 'none';
+
     const hasSearch = query.length > 0;
     const hasStatus = statusFilter !== 'all';
     const hasPeriod = periodFilter !== 'all';
@@ -3914,6 +3978,10 @@
     document.getElementById('sched-freq-wrapper').classList.toggle('has-value', hasFreq);
     document.getElementById('sched-status-wrapper').classList.toggle('has-value', hasStat);
     document.getElementById('sched-clear-all').style.display = (hasSearch || hasFreq || hasStat) ? 'inline-block' : 'none';
+
+    const anyVisible = [...document.querySelectorAll('#sched-tbody tr:not(#sched-empty-row)')].some(r => r.style.display !== 'none');
+    const schedEmpty = document.getElementById('sched-empty-row');
+    if (schedEmpty) schedEmpty.style.display = anyVisible ? 'none' : '';
   }
 
   function clearSchedSearch() {
@@ -3962,7 +4030,12 @@
       const row = link.closest('tr');
       row.style.transition = 'opacity 0.3s';
       row.style.opacity = '0';
-      setTimeout(() => row.remove(), 300);
+      setTimeout(() => {
+        row.remove();
+        const anySchedVisible = [...document.querySelectorAll('#sched-tbody tr:not(#sched-empty-row)')].some(r => r.style.display !== 'none');
+        const schedEmpty = document.getElementById('sched-empty-row');
+        if (schedEmpty) schedEmpty.style.display = anySchedVisible ? 'none' : '';
+      }, 300);
     }
   }
 
