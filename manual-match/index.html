@@ -2105,10 +2105,23 @@ function handleMatchClick(side) {
   const allCurrencies = new Set([...sCurrencies, ...iCurrencies]);
 
   if (allCurrencies.size > 1) {
+    // Find dominant currency (most common across all selected rows)
+    const allSelected = [
+      ...sSel.map(id => { const r = synderRows.find(r => r.id === id); return { primaryId: r.primaryId, currency: r.currency, side: 'Accounting' }; }),
+      ...iSel.map(id => { const r = integrationRows.find(r => r.id === id); return { primaryId: r.primaryId, currency: r.currency, side: 'Integration' }; }),
+    ];
+    const currCount = {};
+    allSelected.forEach(r => { currCount[r.currency] = (currCount[r.currency] || 0) + 1; });
+    const dominant = Object.entries(currCount).sort((a, b) => b[1] - a[1])[0][0];
+    const offRows = allSelected.filter(r => r.currency !== dominant);
+    const offList = offRows.map(r =>
+      `<li style="margin:4px 0"><code style="background:#f3f4f6;padding:2px 5px;border-radius:3px;font-size:12px">${r.primaryId}</code> — <strong>${r.currency}</strong> (${r.side})</li>`
+    ).join('');
     showErrorModal(
       'Currencies differ',
-      `<p style="margin-bottom:10px;">Currencies differ — all rows must be in the same currency.</p>
-       <p>Found: <strong>${[...allCurrencies].join(', ')}</strong>.</p>`
+      `<p style="margin-bottom:10px;">All selected rows must be in the same currency. Expected <strong>${dominant}</strong>, but the following row${offRows.length > 1 ? 's differ' : ' differs'}:</p>
+       <ul style="margin:0 0 10px 16px;padding:0">${offList}</ul>
+       <p style="color:var(--text-sec);font-size:12px">Remove or deselect the highlighted row${offRows.length > 1 ? 's' : ''} to proceed.</p>`
     );
     return;
   }
