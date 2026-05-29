@@ -1562,9 +1562,13 @@
   <div class="je-sheet-header">
     <span class="je-sheet-title">Journal entry details</span>
     <div class="je-sheet-actions">
-      <button class="btn btn-outlined" onclick="closeJESheet()">Cancel</button>
-      <button class="btn btn-primary" id="btn-post-je" onclick="handlePostJE()">Post to books</button>
+      <button class="btn btn-outlined" onclick="cancelJESheet()">Cancel</button>
+      <button class="btn btn-primary" id="btn-post-je" onclick="openPostConfirm()">Save to QBO</button>
     </div>
+  </div>
+  <div class="je-notice" style="border-radius:0;border-left:none;border-right:none;border-top:none">
+    <span style="font-size:15px;flex-shrink:0;margin-top:1px">ⓘ</span>
+    <span>Only one journal entry per matching session. To change it, delete this one and create a new one.</span>
   </div>
   <div class="je-totals-bar">
     <div class="je-total-block">
@@ -1575,6 +1579,9 @@
       <span class="je-total-label">Total credit</span>
       <span class="je-total-value" id="je-total-credit">0.00 USD</span>
     </div>
+  </div>
+  <div id="je-balance-msg" style="display:none;padding:8px 20px;background:var(--red-light);color:var(--red);font-size:12px;border-bottom:1px solid #f5b8b8">
+    Debit and credit totals must match before saving to QBO.
   </div>
   <div class="je-sheet-body">
     <div class="je-field-row">
@@ -1592,10 +1599,6 @@
         <label class="je-label">Currency</label>
         <input class="je-input" type="text" id="je-currency" disabled>
       </div>
-    </div>
-    <div class="je-notice">
-      <span style="font-size:15px;flex-shrink:0;margin-top:1px">ⓘ</span>
-      <span>Only one journal entry per matching session. To change it, delete this one and create a new one.</span>
     </div>
     <div class="je-section-title">Entry lines</div>
     <table class="je-lines-table">
@@ -1652,11 +1655,35 @@
     <div class="modal-title">Delete journal entry?</div>
     <div class="modal-body">This journal entry will be removed from your books. All linked transactions will go back to Not matched so you can rework them.</div>
     <div id="modal-delete-closed-period" style="display:none;margin-top:10px;padding:10px 12px;background:#FFF1DD;border:1px solid #F0C67A;border-radius:4px;font-size:13px;color:#CB7515">
-      ⚠️ This entry falls within a closed accounting period. Deleting it may affect your reconciled books — check with your accountant if unsure.
+      ⚠️ This entry is from a past period that may already be filed or locked. Deleting it could change numbers your accountant has already reviewed — ask them first if you're not sure.
     </div>
     <div class="modal-footer">
       <button class="btn btn-outlined" onclick="closeModal('modal-delete-je-overlay')">Cancel</button>
       <button class="btn btn-primary" style="background:var(--red);border-color:var(--red)" onclick="confirmDeleteJE()">Delete journal entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Save to QBO confirmation -->
+<div class="modal-overlay" id="modal-post-confirm-overlay">
+  <div class="modal">
+    <div class="modal-title">Save journal entry to QuickBooks?</div>
+    <div class="modal-body">This will add the entry to your QuickBooks books. If you need to change it later, you can delete it from the Journal entry tab and create a new one.</div>
+    <div class="modal-footer">
+      <button class="btn btn-outlined" onclick="closeModal('modal-post-confirm-overlay')">Go back</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-post-confirm-overlay');handlePostJE()">Save to QBO</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Discard changes confirmation -->
+<div class="modal-overlay" id="modal-discard-je-overlay">
+  <div class="modal">
+    <div class="modal-title">Discard changes?</div>
+    <div class="modal-body">Your edits to this journal entry will not be saved.</div>
+    <div class="modal-footer">
+      <button class="btn btn-outlined" onclick="closeModal('modal-discard-je-overlay')">Keep editing</button>
+      <button class="btn btn-primary" style="background:var(--red);border-color:var(--red)" onclick="closeModal('modal-discard-je-overlay');closeJESheet()">Discard</button>
     </div>
   </div>
 </div>
@@ -2771,10 +2798,27 @@ function openJESheet(eligibleIds) {
   document.getElementById('je-sheet').classList.add('open');
 }
 
+let jeFormDirty = false;
+
 function closeJESheet() {
   document.getElementById('je-overlay').classList.remove('open');
   document.getElementById('je-sheet').classList.remove('open');
   jeFormRows = [];
+  jeFormDirty = false;
+}
+
+function cancelJESheet() {
+  if (jeFormDirty) {
+    document.getElementById('modal-discard-je-overlay').classList.add('visible');
+  } else {
+    closeJESheet();
+  }
+}
+
+function openPostConfirm() {
+  const postBtn = document.getElementById('btn-post-je');
+  if (postBtn && postBtn.disabled) return;
+  document.getElementById('modal-post-confirm-overlay').classList.add('visible');
 }
 
 function renderJELines() {
@@ -2793,10 +2837,10 @@ function renderJELines() {
         <td></td>`;
     } else {
       tr.innerHTML = `
-        <td><input class="je-input-sm" type="text" value="${row.account}" oninput="jeFormRows[${idx}].account=this.value"></td>
-        <td><input class="je-input-sm" type="text" value="${row.desc}" oninput="jeFormRows[${idx}].desc=this.value"></td>
-        <td><input class="je-input-sm" type="text" style="text-align:right" value="${row.debit > 0 ? row.debit.toFixed(2) : ''}" oninput="jeFormRows[${idx}].debit=parseFloat(this.value)||0;updateJETotals()"></td>
-        <td><input class="je-input-sm" type="text" style="text-align:right" value="${row.credit > 0 ? row.credit.toFixed(2) : ''}" oninput="jeFormRows[${idx}].credit=parseFloat(this.value)||0;updateJETotals()"></td>
+        <td><input class="je-input-sm" type="text" value="${row.account}" oninput="jeFormDirty=true;jeFormRows[${idx}].account=this.value"></td>
+        <td><input class="je-input-sm" type="text" value="${row.desc}" oninput="jeFormDirty=true;jeFormRows[${idx}].desc=this.value"></td>
+        <td><input class="je-input-sm" type="text" style="text-align:right" value="${row.debit > 0 ? row.debit.toFixed(2) : ''}" oninput="jeFormDirty=true;jeFormRows[${idx}].debit=parseFloat(this.value)||0;updateJETotals()"></td>
+        <td><input class="je-input-sm" type="text" style="text-align:right" value="${row.credit > 0 ? row.credit.toFixed(2) : ''}" oninput="jeFormDirty=true;jeFormRows[${idx}].credit=parseFloat(this.value)||0;updateJETotals()"></td>
         <td>${row.removable ? `<button class="je-btn-remove" onclick="removeJELine(${idx})">×</button>` : ''}</td>`;
     }
     tbody.appendChild(tr);
@@ -2814,16 +2858,20 @@ function updateJETotals() {
   if (cEl) { cEl.textContent = tc.toFixed(2) + ' ' + CLEARING_CURRENCY; cEl.className = 'je-total-value ' + (ok ? 'balanced' : 'unbalanced'); }
   const postBtn = document.getElementById('btn-post-je');
   if (postBtn) { postBtn.disabled = !ok; postBtn.style.opacity = ok ? '' : '0.5'; postBtn.style.cursor = ok ? '' : 'not-allowed'; }
+  const balanceMsg = document.getElementById('je-balance-msg');
+  if (balanceMsg) balanceMsg.style.display = ok ? 'none' : 'block';
 }
 
 function addJELine() {
   jeExtraSeq++;
+  jeFormDirty = true;
   jeFormRows.push({ id: 'extra-'+jeExtraSeq, isClearing: false, removable: true,
     account: '', desc: '', debit: 0, credit: 0 });
   renderJELines();
 }
 
 function removeJELine(idx) {
+  jeFormDirty = true;
   jeFormRows.splice(idx, 1);
   renderJELines();
 }
@@ -2836,7 +2884,7 @@ function handlePostJE() {
   const docNumber   = document.getElementById('je-doc-number').value;
   const date        = document.getElementById('je-date').value;
   const memo        = document.getElementById('je-memo').value;
-  const totalAmount = jeFormRows.filter(r => r.isClearing).reduce((s,r) => s + r.debit + r.credit, 0);
+  const totalAmount = jeFormRows.filter(r => r.isClearing).reduce((s,r) => s + (r.debit || 0), 0);
 
   closeJESheet();
   document.getElementById('modal-je-posting-overlay').classList.add('visible');
