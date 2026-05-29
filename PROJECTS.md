@@ -5,6 +5,42 @@
 
 ## 🔧 Active Projects
 
+### Manual Match Prototype (2026-05-29)
+- **Status:** ✅ v1 complete — 2 validator rounds done
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/manual-match/
+- **Location:** `manual-match/index.html`
+- **Jira:** SD-17432 — Create accounting entries from Not Matched view
+- **Figma:** node 21970-412440 in Daily_summary file
+- **Features built:**
+  - Not matched tab (accounting side): per-row ⋯ menu with "Create journal entry" (eligibility-gated)
+  - Bulk toolbar: "Create journal entry" button when accounting rows selected
+  - Partial eligibility modal (proceed with eligible subset)
+  - One-JE-per-session enforcement modal
+  - JE sidesheet: clearing lines (Stripe Clearing, locked/grey), editable income lines, debit/credit totals, balance validation
+  - Save to QBO: confirmation modal before posting, spinner, success toast
+  - Discard changes confirmation on Cancel (dirty-form tracking)
+  - Journal entry tab: table with DocNumber, date, memo, amount, View/Delete actions
+  - Delete JE: closed-period soft warning, transactions return to Not matched
+  - Currency mismatch error: lists specific off-currency rows by Primary ID + side
+- **Design:** Synder design tokens (Roboto, #0053CC, #DFE4EC, #F7F8FA)
+- **Validator findings resolved:**
+  - Round 1: copy/tone (CLR), accounting terminology (DOM), UX consistency
+  - Round 2: Amount double-count bug, Save to QBO rename + confirmation, balance message, notice placement, Discard changes dialog, plain-language closed-period warning, Stripe Clearing label
+
+### Validator Pipeline — Prototype Review System (2026-05-29)
+- **Status:** ✅ Infrastructure built, ready to use
+- **Purpose:** Automated prototype QA using 4 parallel validator subagents
+- **Validators:**
+  - `personas/validators/ux-validator.md` — usability issues (max 5)
+  - `personas/validators/domain-validator.md` — accounting correctness (max 3)
+  - `personas/validators/clarity-validator.md` — business owner clarity (max 3)
+  - `personas/validators/fidelity-validator.md` — vs. reference accuracy (max 5)
+- **Protocol:** `personas/VALIDATOR_PROTOCOL.md` — full orchestrator instructions
+- **Task template:** `personas/TASK_BRIEF.md` — fill this for every new task
+- **Design rules:** `DESIGN_RULES.md` — Synder component/spacing/color rules
+- **How to trigger:** "Build prototype: [name]" + filled Task Brief
+- **Loop:** max 3 iterations, Ignat decides on Critical/High findings only
+
 ### Pricing Page Prototype (2026-04-15)
 - **Status:** ✅ v1 live
 - **Location:** `reports/pricing-prototype/index.html`
