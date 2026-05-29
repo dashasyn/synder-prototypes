@@ -1071,16 +1071,17 @@
     <table class="matches-table" id="matches-table-matched-manually">
       <thead>
         <tr>
-          <th>Date <span class="th-sort">↓</span></th>
+          <th style="width:40px"></th>
           <th>Matching ID <span class="th-sort">↓</span></th>
           <th>Total amount <span class="th-sort">↓</span></th>
-          <th>Types <span class="th-sort">↓</span></th>
-          <th>Count</th>
-          <th></th>
+          <th>Date matched <span class="th-sort">↓</span></th>
+          <th>Types</th>
+          <th style="text-align:right">Count</th>
+          <th style="width:80px"></th>
         </tr>
       </thead>
       <tbody id="tbody-matched-manually">
-        <tr><td colspan="6" class="no-results">No results found</td></tr>
+        <tr><td colspan="7" class="no-results">No results found</td></tr>
       </tbody>
     </table>
     <div class="matches-footer">
@@ -1219,12 +1220,12 @@
         <thead>
           <tr>
             <th><input type="checkbox" id="check-all-synder" onchange="toggleAll('synder', this.checked)"></th>
-            <th>Date</th>
             <th>Primary ID</th>
             <th>Secondary ID</th>
-            <th>Type</th>
+            <th>Transaction type</th>
             <th>Amount</th>
-            <th></th>
+            <th style="width:32px"></th>
+            <th style="width:60px"></th>
           </tr>
         </thead>
         <tbody id="tbody-synder"></tbody>
@@ -1275,12 +1276,13 @@
         <thead>
           <tr>
             <th><input type="checkbox" id="check-all-integration" onchange="toggleAll('integration', this.checked)"></th>
-            <th>Date</th>
+            <th>Date <span class="th-sort">↓</span></th>
             <th>Primary ID</th>
             <th>Secondary ID</th>
-            <th>Type</th>
+            <th>Transaction type</th>
             <th>Amount</th>
-            <th></th>
+            <th style="width:32px"></th>
+            <th style="width:60px"></th>
           </tr>
         </thead>
         <tbody id="tbody-integration"></tbody>
@@ -1627,23 +1629,26 @@ function renderTable(side, rows) {
       isSelected ? 'selected' : ''
     ].join(' ').trim();
     const amtClass = row.sign === '-' ? 'amount-negative' : 'amount-positive';
+    const dateCell = side === 'integration' ? `<td class="td-date">${row.date}</td>` : '';
     tr.innerHTML = `
       <td><input type="checkbox" data-side="${side}" data-id="${row.id}" onchange="onCheckboxChange(this)" ${isSelected ? 'checked' : ''}></td>
-      <td class="td-date">${row.date}</td>
+      ${dateCell}
       <td class="td-id" title="${row.primaryId}">${row.primaryId}</td>
       <td class="td-id" title="${row.secondaryId}">${row.secondaryId}</td>
       <td class="td-type">${row.type}</td>
       <td class="td-amount ${amtClass}">${row.display}</td>
-      <td>
-        <div class="row-menu-wrap">
-          <button class="btn-row-dots" onclick="toggleRowMenu(event, 'menu-${row.id}')">⋮</button>
-          <div class="row-dropdown" id="menu-${row.id}">
-            <button class="row-dropdown-item" onclick="ignoreRow('${side}', '${row.id}')">Ignore</button>
-          </div>
-        </div>
-      </td>`;
+      <td style="text-align:center"><span class="info-icon">ⓘ</span></td>
+      <td style="text-align:right"><a class="disc-ignore-link" href="#" onclick="event.preventDefault();ignoreRow('${side}', '${row.id}')">Ignore</a></td>`;
     tbody.appendChild(tr);
   });
+}
+
+function toggleManualGroup(id) {
+  const row = document.querySelector(`.mg-row[data-id="${id}"]`);
+  const detail = document.getElementById(`man-detail-${id}`);
+  if (!row || !detail) return;
+  const isOpen = row.classList.toggle('open');
+  detail.style.display = isOpen ? '' : 'none';
 }
 
 function renderManualMatches() {
@@ -1662,11 +1667,40 @@ function renderManualMatches() {
     });
   }
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="no-results">No results found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="no-results">No results found</td></tr>';
     if (pageInfo) pageInfo.textContent = '0–0 of 0';
     document.getElementById('count-matched-manually').textContent = manualMatches.length;
     return;
   }
+
+  function manSubRows(subRows) {
+    return subRows.map(sr => `
+      <tr>
+        <td class="td-pid" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sr.primaryId}</td>
+        <td style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${sr.secondaryId}</td>
+        <td>${sr.date}</td>
+        <td>${sr.type}</td>
+        <td>${sr.display}</td>
+        <td><span class="info-icon">ⓘ</span></td>
+      </tr>`).join('');
+  }
+
+  function manSubTable(label, subRows) {
+    return `
+      <div class="mg-side">
+        <div class="mg-side-header">${label} (${subRows.length})</div>
+        <table class="mg-sub-table">
+          <thead>
+            <tr>
+              <th>Primary ID</th><th>Secondary ID</th><th>Date</th>
+              <th>Transaction type</th><th>Amount</th><th>Description</th>
+            </tr>
+          </thead>
+          <tbody>${manSubRows(subRows)}</tbody>
+        </table>
+      </div>`;
+  }
+
   tbody.innerHTML = rows.map(m => {
     const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
     const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
@@ -1678,13 +1712,26 @@ function renderManualMatches() {
     const types = [...new Set(allRows.map(r => r.type))].join(', ');
     const count = `${m.synderIds.length + m.integrationIds.length} (${m.synderIds.length}+${m.integrationIds.length})`;
     const matchingId = 'MAN-' + String(m.seq).padStart(3, '0');
-    return `<tr>
-      <td class="td-date">${m.createdAt}</td>
+    return `
+    <tr class="mg-row" data-id="${m.id}" onclick="toggleManualGroup('${m.id}')">
+      <td><span class="mg-chevron">▸</span></td>
       <td class="td-id">${matchingId}</td>
       <td class="td-amount">${fmtTotal}</td>
+      <td class="td-date">${m.createdAt}</td>
       <td class="td-type">${types}</td>
-      <td style="color:var(--text-sec)">${count}</td>
-      <td><button class="btn-unmatch" onclick="unmatch('${m.id}')">Unmatch</button></td>
+      <td style="color:var(--text-sec);text-align:right">${count}</td>
+      <td style="text-align:right" onclick="event.stopPropagation()">
+        <button class="btn-unmatch" onclick="unmatch('${m.id}')">Unmatch</button>
+      </td>
+    </tr>
+    <tr class="mg-detail" id="man-detail-${m.id}" style="display:none">
+      <td colspan="7">
+        <div class="mg-split">
+          ${manSubTable('Accounting rows', sRows)}
+          <div class="mg-divider"></div>
+          ${manSubTable('Integration rows', iRows)}
+        </div>
+      </td>
     </tr>`;
   }).join('');
   if (pageInfo) pageInfo.textContent = `1–${rows.length} of ${rows.length}`;
