@@ -1516,10 +1516,12 @@ const discrepancyRecords = [
 ];
 
 const preIgnoredRows = [
-  { id: 'pi1', source: 'synder',       date: 'Jan 25, 2026', primaryId: 'ch_3StZt1...test',   type: 'charge', display: '+$0.01 USD',   sign: '+' },
-  { id: 'pi2', source: 'integration',  date: 'Jan 22, 2026', primaryId: 'txn_3Ss2XO...CLI',   type: '(created by Stripe CLI)', display: '+$1.00 USD',   sign: '+' },
-  { id: 'pi3', source: 'synder',       date: 'Jan 18, 2026', primaryId: 'po_1StMdup...gelb',  type: 'payout', display: '-$21.61 USD',  sign: '-' },
-  { id: 'pi4', source: 'integration',  date: 'Jan 10, 2026', primaryId: 'txn_3Ss2KJ...test',  type: '(created by Stripe CLI)', display: '+$20.00 USD',  sign: '+' },
+  { id: 'pi1', source: 'synder',      date: 'Jan 25, 2026', primaryId: 'ch_3StZt1E4pygkgelb1ESq8sWp',  secondaryId: 'txn_3StZt1E4pygkgelb1ES...', type: 'charge',  display: '+$0.01 USD',   sign: '+' },
+  { id: 'pi2', source: 'integration', date: 'Jan 22, 2026', primaryId: 'txn_3Ss2XOE4pygkgelb1CLItest', secondaryId: 'txn_3Ss2XOE4pygkgelb1CL...', type: 'Payment', display: '+$1.00 USD',   sign: '+' },
+  { id: 'pi3', source: 'synder',      date: 'Jan 18, 2026', primaryId: 'po_1StMdup4pygkgelb1ESq8sWp',  secondaryId: 'txn_1StMdup4pygkgelb1ES...', type: 'payout',  display: '-$21.61 USD',  sign: '-' },
+  { id: 'pi4', source: 'integration', date: 'Jan 10, 2026', primaryId: 'txn_3Ss2KJE4pygkgelbKJtest',   secondaryId: 'txn_3Ss2KJE4pygkgelbKJt...', type: 'Payment', display: '+$20.00 USD',  sign: '+' },
+  { id: 'pi5', source: 'synder',      date: 'Jan 8, 2026',  primaryId: 'ch_3Qai9EE4pygkgelb1ESq8sWp',  secondaryId: 'txn_3Qai9EE4pygkgelb1ES...', type: 'Payment', display: '+$90,000.00 USD', sign: '+' },
+  { id: 'pi6', source: 'integration', date: 'Jan 5, 2026',  primaryId: 'ch_3Aa1bBc2dDe3fFg4hHi5jJ',    secondaryId: 'txn_3Aa1bBc2dDe3fFg4hHi...', type: 'Payment', display: '+$42,500.00 USD', sign: '+' },
 ];
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
@@ -1692,15 +1694,15 @@ function renderManualMatches() {
 function renderIgnored() {
   const list = document.getElementById('ignored-list');
   const sessionAll = [];
-  synderRows.forEach(r => { if (ignored.synder.has(r.id)) sessionAll.push({ ...r, source: 'synder', session: true }); });
-  integrationRows.forEach(r => { if (ignored.integration.has(r.id)) sessionAll.push({ ...r, source: 'integration', session: true }); });
+  synderRows.forEach(r => { if (ignored.synder.has(r.id)) sessionAll.push({ ...r, secondaryId: r.secondaryId || '—', session: true }); });
+  integrationRows.forEach(r => { if (ignored.integration.has(r.id)) sessionAll.push({ ...r, secondaryId: r.secondaryId || '—', session: true }); });
 
   const f = globalFilter['ignored'] || { search: '', amount: '' };
   const q = (f.search || '').toLowerCase();
   const amtQ = (f.amount || '').trim();
   const matches = r => {
     if (q) {
-      const hay = `${r.primaryId} ${r.type} ${r.display}`.toLowerCase();
+      const hay = `${r.primaryId} ${r.secondaryId || ''} ${r.type} ${r.display}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     if (amtQ) {
@@ -1727,16 +1729,28 @@ function renderIgnored() {
     <div class="matches-table-wrap" style="padding:0 0 24px">
       <table class="matches-table">
         <thead><tr>
-          <th>Source</th><th>Date</th><th>Primary ID</th><th>Type</th><th>Amount</th><th></th>
+          <th style="width:36px"></th>
+          <th>Primary ID</th>
+          <th>Secondary ID</th>
+          <th>Date <span class="th-sort">↓</span></th>
+          <th>Transaction type</th>
+          <th style="text-align:right">Amount</th>
+          <th style="width:32px"></th>
+          <th style="width:80px"></th>
         </tr></thead>
         <tbody>${allRows.map(r => `
           <tr>
-            <td><span class="source-badge ${r.source === 'synder' ? 'source-synder' : 'source-integration'}">${r.source === 'synder' ? 'Synder' : 'Integration'}</span></td>
+            <td style="text-align:center"><input type="checkbox"></td>
+            <td class="td-id" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${r.primaryId}">${r.primaryId}</td>
+            <td class="td-id" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.secondaryId || '—'}</td>
             <td class="td-date">${r.date}</td>
-            <td class="td-id" title="${r.primaryId}">${r.primaryId}</td>
             <td class="td-type">${r.type}</td>
-            <td class="td-amount ${r.sign === '-' ? 'amount-negative' : 'amount-positive'}">${r.display}</td>
-            <td>${r.session ? `<button class="btn-restore" onclick="restoreIgnored('${r.source}', '${r.id}')">Restore</button>` : ''}</td>
+            <td class="td-amount ${r.sign === '-' ? 'amount-negative' : 'amount-positive'}" style="text-align:right">${r.display}</td>
+            <td style="text-align:center"><span class="info-icon">ⓘ</span></td>
+            <td style="text-align:right">${r.session
+              ? `<a class="disc-ignore-link" href="#" onclick="event.preventDefault();restoreIgnored('${r.source}','${r.id}')">Unignore</a>`
+              : `<a class="disc-ignore-link" href="#" onclick="event.preventDefault()">Unignore</a>`
+            }</td>
           </tr>`).join('')}
         </tbody>
       </table>
