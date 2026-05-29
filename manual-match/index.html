@@ -695,7 +695,7 @@
     .tooltip-wrap:hover .tooltip-text { display: block; }
 
     /* ─── DATA TABLE ─── */
-    .data-table-wrap { overflow-x: auto; }
+    .data-table-wrap { overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 360px); min-height: 200px; }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -716,6 +716,7 @@
     thead th:last-child { width: 80px; text-align: right; padding-right: 16px; }
     /* Hide thead when toolbar is active */
     table.toolbar-active thead { display: none; }
+    thead th { position: sticky; top: 0; background: var(--surface); z-index: 5; box-shadow: 0 1px 0 var(--border-light); }
     tbody tr {
       border-bottom: 1px solid var(--border-light);
       height: 48px;
@@ -992,8 +993,8 @@
     .je-sheet {
       position: fixed;
       top: 0;
-      right: -620px;
-      width: 580px;
+      right: -820px;
+      width: 800px;
       height: 100vh;
       background: var(--surface);
       box-shadow: -4px 0 24px rgba(0,0,0,0.15);
@@ -1080,12 +1081,21 @@
     .je-lines-table td { padding: 7px 10px; border-bottom: 1px solid var(--border-light); vertical-align: middle; }
     .je-lines-table tr:last-child td { border-bottom: none; }
     .je-line-clearing td { background: var(--bg); }
-    .je-cell-account-locked { font-size: 14px; color: var(--disabled); }
-    .je-cell-desc-locked {
-      font-family: 'Courier New', monospace;
+    .je-select-locked {
       font-size: 14px;
-      color: var(--disabled);
-      max-width: 180px;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 3px 8px;
+      width: 100%;
+      cursor: not-allowed;
+      font-family: inherit;
+    }
+    .je-cell-desc-locked {
+      font-size: 14px;
+      color: var(--text-sec);
+      max-width: 220px;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -1605,6 +1615,7 @@
 
     <!-- Selection toolbar for Synder side (replaces thead when active) -->
     <div class="selection-toolbar" id="toolbar-synder">
+      <input type="checkbox" id="toolbar-all-synder" title="Select / deselect all" onchange="toggleAll('synder', this.checked)" style="cursor:pointer;width:16px;height:16px;flex-shrink:0">
       <span><span class="sel-count" id="sel-count-synder">0</span> selected<span id="sel-amount-synder"></span></span>
       <div class="toolbar-divider"></div>
       <span class="tooltip-wrap">
@@ -1666,6 +1677,7 @@
 
     <!-- Selection toolbar for Integration side (replaces thead when active) -->
     <div class="selection-toolbar" id="toolbar-integration">
+      <input type="checkbox" id="toolbar-all-integration" title="Select / deselect all" onchange="toggleAll('integration', this.checked)" style="cursor:pointer;width:16px;height:16px;flex-shrink:0">
       <span><span class="sel-count" id="sel-count-integration">0</span> selected<span id="sel-amount-integration"></span></span>
       <div class="toolbar-divider"></div>
       <span class="tooltip-wrap">
@@ -1771,10 +1783,6 @@
       <button class="btn btn-primary" id="btn-post-je" onclick="openPostConfirm()">Save to QBO</button>
     </div>
   </div>
-  <div class="je-notice" style="border-radius:0;border-left:none;border-right:none;border-top:none">
-    <span style="font-size:15px;flex-shrink:0;margin-top:1px">ⓘ</span>
-    <span>Only one journal entry per matching session. To change it, delete this one and create a new one.</span>
-  </div>
   <div class="je-totals-bar">
     <div class="je-total-block">
       <span class="je-total-label">Total debit</span>
@@ -1875,7 +1883,7 @@
     <div class="modal-title">Save journal entry to QuickBooks?</div>
     <div class="modal-body">This will add the entry to your QuickBooks books. If you need to change it later, you can delete it from the Journal entry tab and create a new one.</div>
     <div class="modal-footer">
-      <button class="btn btn-outlined" onclick="closeModal('modal-post-confirm-overlay')">Go back</button>
+      <button class="btn btn-outlined" onclick="closeModal('modal-post-confirm-overlay')">Cancel</button>
       <button class="btn btn-primary" onclick="closeModal('modal-post-confirm-overlay');handlePostJE()">Save to QBO</button>
     </div>
   </div>
@@ -2671,6 +2679,15 @@ function updateToolbar(side) {
 
   countEl.textContent = count;
 
+  // Sync select-all checkbox in toolbar
+  const allChk = document.getElementById('toolbar-all-' + side);
+  if (allChk) {
+    const rows = side === 'synder' ? synderRows : integrationRows;
+    const visibleIds = rows.filter(r => !removed[side].has(r.id)).map(r => r.id);
+    allChk.checked = count > 0 && count >= visibleIds.length;
+    allChk.indeterminate = count > 0 && count < visibleIds.length;
+  }
+
   // Selected total amount
   const amountEl = document.getElementById('sel-amount-' + side);
   if (amountEl) {
@@ -3058,7 +3075,7 @@ function renderJELines() {
     if (row.isClearing) {
       tr.className = 'je-line-clearing';
       tr.innerHTML = `
-        <td class="je-cell-account-locked">${row.account}</td>
+        <td><select class="je-select-locked" disabled><option>${row.account}</option></select></td>
         <td><span class="je-cell-desc-locked" title="${row.desc}">${row.desc}</span></td>
         <td class="je-cell-amount">${row.debit > 0 ? row.debit.toFixed(2) : ''}</td>
         <td class="je-cell-amount">${row.credit > 0 ? row.credit.toFixed(2) : ''}</td>
