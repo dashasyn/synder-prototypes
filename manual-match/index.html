@@ -2673,7 +2673,9 @@ function updateTabCounter() {
   document.getElementById('count-matched-manually').textContent  = manualMatches.length;
   document.getElementById('count-ignored').textContent           = ignoredTotal;
   document.getElementById('count-discrepancy').textContent       = discrepancyRecords.length;
-  document.getElementById('count-matched').textContent           = autoMatchedRecords.length;
+  document.getElementById('count-matched').textContent           = currentVariant === 'b'
+    ? autoMatchedRecords.length + manualMatches.length
+    : autoMatchedRecords.length;
   document.getElementById('recon-not-matched-count').textContent = notMatched;
 }
 
@@ -2791,8 +2793,10 @@ function updateToolbar(side) {
 // ─── MATCH ───────────────────────────────────────────────────────────────────
 
 function handleMatchClick(side) {
-  const btn = document.getElementById('btn-match-' + side);
-  if (btn.classList.contains('disabled')) return;
+  const btn = currentVariant === 'b'
+    ? document.getElementById('mc-match-btn')
+    : document.getElementById('btn-match-' + side);
+  if (!btn || btn.disabled || btn.classList.contains('disabled')) return;
 
   const sSel = [...selected.synder];
   const iSel = [...selected.integration];
@@ -3351,8 +3355,12 @@ function updateMatchConsole() {
   const iRows = iSel.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
   const sTotal = sRows.reduce((s, r) => s + r.amount, 0);
   const iTotal = iRows.reduce((s, r) => s + r.amount, 0);
-  const delta = Math.abs(sTotal + iTotal);
-  const balanced = delta < 0.005;
+  const allNeg = sTotal < 0 && iTotal < 0;
+  const allPos = sTotal > 0 && iTotal > 0;
+  const delta = (allNeg || allPos)
+    ? Math.abs(Math.abs(sTotal) - Math.abs(iTotal))
+    : Math.abs(sTotal + iTotal);
+  const balanced = delta < 0.009;
 
   const fmtAmt = (v, sym) => sym + Math.abs(v).toFixed(2) + ' USD';
 
