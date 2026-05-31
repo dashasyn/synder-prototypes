@@ -1197,6 +1197,9 @@
     body.variant-b .variant-a-only { display: none !important; }
     .variant-b-only { display: none; }
     body.variant-b .variant-b-only { display: table-cell; }
+    /* In variant B, toolbars show per-column actions only — Match is in the floating console */
+    body.variant-b .btn-toolbar-match,
+    body.variant-b .tooltip-wrap:has(.btn-toolbar-match) { display: none !important; }
 
     /* ─── MATCH CONSOLE (compact) ─── */
     .match-console {
@@ -1689,8 +1692,6 @@
   </div>
   <div class="mc-actions">
     <button class="btn btn-primary" id="mc-match-btn" disabled onclick="handleMatchClick('synder')">Match</button>
-    <button class="btn btn-outlined" id="mc-je-btn" disabled onclick="handleCreateJEClick()">Create journal entry</button>
-    <button class="btn btn-outlined" id="mc-ignore-btn" onclick="ignoreSelected('synder')">Ignore</button>
   </div>
 </div>
 </div><!-- end #panel-not-matched -->
@@ -2773,19 +2774,18 @@ function updateToolbar(side) {
     }
   }
 
-  if (count > 0 && currentVariant !== 'b') {
+  if (count > 0) {
     toolbar.classList.add('visible');
     tableEl.classList.add('toolbar-active');
-    matchBtn.classList.toggle('disabled', otherCt === 0);
-    if (tt) tt.style.display = (otherCt === 0) ? '' : 'none';
+    if (currentVariant !== 'b') {
+      matchBtn.classList.toggle('disabled', otherCt === 0);
+      if (tt) tt.style.display = (otherCt === 0) ? '' : 'none';
+      const otherMatchBtn = document.getElementById('btn-match-' + other);
+      if (otherMatchBtn && otherCt > 0) otherMatchBtn.classList.toggle('disabled', count === 0);
+    }
   } else {
     toolbar.classList.remove('visible');
     tableEl.classList.remove('toolbar-active');
-  }
-
-  const otherMatchBtn = document.getElementById('btn-match-' + other);
-  if (otherMatchBtn && otherCt > 0) {
-    otherMatchBtn.classList.toggle('disabled', count === 0);
   }
 
   updateMatchConsole();
@@ -3299,18 +3299,7 @@ function switchVariant(v) {
   document.getElementById('variant-btn-a').classList.toggle('active', v === 'a');
   document.getElementById('variant-btn-b').classList.toggle('active', v === 'b');
 
-  const toolbarS = document.getElementById('toolbar-synder');
-  const toolbarI = document.getElementById('toolbar-integration');
-
-  if (v === 'b') {
-    // Hide toolbars in Variant B regardless of selection state
-    if (toolbarS) { toolbarS.classList.remove('visible'); document.getElementById('table-synder')?.classList.remove('toolbar-active'); }
-    if (toolbarI) { toolbarI.classList.remove('visible'); document.getElementById('table-integration')?.classList.remove('toolbar-active'); }
-  } else {
-    // Restore toolbar state based on current selection
-    updateToolbar('synder');
-    updateToolbar('integration');
-  }
+  // Toolbars update via updateToolbar after clearSelection below
 
   // Clear selection when switching variants — no carryover
   clearSelection('synder');
@@ -3341,9 +3330,9 @@ function updateMatchConsole() {
 
   const sSel = [...selected.synder];
   const iSel = [...selected.integration];
-  const anySelected = sSel.length > 0 || iSel.length > 0;
+  const bothSelected = sSel.length > 0 && iSel.length > 0;
 
-  if (!anySelected) {
+  if (!bothSelected) {
     console_.style.display = 'none';
     document.body.style.paddingBottom = '';
     return;
@@ -3375,12 +3364,7 @@ function updateMatchConsole() {
   }
 
   const matchBtn = document.getElementById('mc-match-btn');
-  const jeBtn    = document.getElementById('mc-je-btn');
-
-  // Match: needs both sides selected and balanced
-  if (matchBtn) matchBtn.disabled = !(sSel.length > 0 && iSel.length > 0 && balanced);
-  // JE: needs accounting rows selected, no integration rows
-  if (jeBtn) jeBtn.disabled = !(sSel.length > 0 && iSel.length === 0);
+  if (matchBtn) matchBtn.disabled = !balanced;
 }
 
 // ─── AI MATCH ────────────────────────────────────────────────────────────────
