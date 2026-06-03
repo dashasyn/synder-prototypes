@@ -676,51 +676,79 @@ function editNode(type, branchId) {
   const panel = document.getElementById('epBody');
   const title = document.getElementById('epTitle');
 
+  const TOP_FIELDS = ['Contact','Currency','Reference','Due date','Txn date','Total Amount','Balance','Line'];
+  const LINE_SUB = ['Amount','Description','Item Details','Qty','Tracking Category 1','Tracking Category 2','Tracking Category 3'];
+  const CURRENT_ACT_FIELDS = ['Reference','Currency','Due date','Contact','Description','Txn date'];
+  const LINE_ACT_FIELDS = ['Tracking Category 1','Tracking Category 2','Tracking Category 3','Description','Item Details','Qty','Amount'];
+
   if (type === 'if') {
     title.innerHTML = `<span style="color:${HEX[ci]};font-weight:600;">Branch ${i+1}</span> · IF Condition`;
     const c = b.condition;
+    const isLine = c.field1 === 'Line';
+    const isDate = ['Due date','Txn date'].includes(c.field1);
+    const isNum = ['Total Amount','Balance'].includes(c.field1) || (isLine && ['Amount','Qty'].includes(c.field2));
+    const isTracking = isLine && (c.field2||'').startsWith('Tracking');
+    const strOps = ['Contains','Equals','Not equals','Starts with','Ends with','Is empty','Is not empty'];
+    const numOps = ['Equals','Greater than','Less than','Greater than or equal','Less than or equal','Is empty'];
+    const dateOps = ['Equals','Before','After','Is empty','Is not empty'];
+    const opList = isDate ? dateOps : isNum ? numOps : strOps;
     panel.innerHTML = `
       <div class="ep-field-group">
         <div class="ep-label">Field</div>
-        <select class="ep-select">${opts(['Shipping address','Product name','Description','Memo','Currency','Customer','Customer memo','Total amount'], c.field1)}</select>
-        <select class="ep-select">${opts(['Region','City','Country','Full address','Zip code'], c.field2)}</select>
+        <select class="ep-select" id="condField1">${opts(TOP_FIELDS, c.field1)}</select>
+        ${isLine ? `<select class="ep-select" id="condField2">${opts(LINE_SUB, c.field2)}</select>` : ''}
       </div>
       <div class="ep-field-group">
         <div class="ep-label">Operator</div>
-        <select class="ep-select">${opts(['Contains','Equals','Starts with','Ends with','Is empty','Is not empty'], c.op)}</select>
+        <select class="ep-select" id="condOp">${opts(opList, c.op)}</select>
       </div>
+      ${!c.op || (c.op !== 'Is empty' && c.op !== 'Is not empty') ? `
       <div class="ep-field-group">
-        <div class="ep-label">Value(s)</div>
-        <input class="ep-input val" value=${c.val} placeholder="Enter value…" />
-        <div class="ep-or">OR</div>
-        <input class="ep-input val" value=${c.orVal||''} placeholder="Alternative value (optional)…" />
-        <div class="ep-add-or"><span class="material-icons" style="font-size:12px">add</span> Add another OR value</div>
-      </div>
+        <div class="ep-label">${isTracking ? 'Category option' : 'Value(s)'}</div>
+        <input class="ep-input val" id="condVal" value="${c.val||''}" placeholder="${isDate?'YYYY-MM-DD':isNum?'0.00':isTracking?'e.g. Auckland, Dept A…':'Enter value…'}" />
+        ${!isTracking ? `<div class="ep-or">OR</div>
+        <input class="ep-input val" id="condOrVal" value="${c.orVal||''}" placeholder="Alternative value (optional)…" />` : ''}
+      </div>` : ''}
+      ${isTracking ? `<p class="ep-action-note" style="color:#5580CC;background:#E3EDFF;padding:6px 8px;border-radius:4px;">Tracking Categories are dropdowns in Xero — enter the exact option name from your Xero config.</p>` : ''}
       <div class="ep-divider"></div>
       <button class="ep-submit" onclick="applyCondition(${branchId})">Apply condition</button>
-      <p class="ep-action-note" style="margin-top:8px;">If this condition is NOT met, the branch is skipped. Other branches are evaluated next.</p>
+      <p class="ep-action-note" style="margin-top:8px;">NO path skips this branch and evaluates the next one.</p>
     `;
   } else {
     title.innerHTML = `<span style="color:${HEX[ci]};font-weight:600;">Branch ${i+1}</span> · THEN Action`;
     const a = b.action;
+    const isXero = a.type === 'Xero Action';
+    const isLine = a.scope === 'Update line';
+    const fieldOpts = isXero ? (isLine ? LINE_ACT_FIELDS : CURRENT_ACT_FIELDS) : [];
+    const isTracking = isXero && isLine && (a.field||'').startsWith('Tracking');
     panel.innerHTML = `
       <div class="ep-field-group">
         <div class="ep-label">Action type</div>
-        <select class="ep-select">${opts(['QuickBooks action','Email notification','SMS notification','Post to URL'], a.type)}</select>
+        <select class="ep-select" id="actType">${opts(['Xero Action','Email','SMS','Voice','Post to URL'], a.type)}</select>
+      </div>
+      ${isXero ? `
+      <div class="ep-field-group">
+        <div class="ep-label">Entity</div>
+        <select class="ep-select" id="actEntity">${opts(['Invoice','Bill','Credit Note','Payment'], a.txType||'Invoice')}</select>
       </div>
       <div class="ep-field-group">
-        <div class="ep-label">Transaction</div>
-        <select class="ep-select">${opts(['Invoice','Sales Receipt','Payment','Refund Receipt','Expense'], a.txType)}</select>
-        <select class="ep-select">${opts(['Update current','Update line'], a.scope)}</select>
+        <div class="ep-label">Scope</div>
+        <select class="ep-select" id="actScope">${opts(['Update current','Update line'], a.scope||'Update current')}</select>
+        ${isLine ? '<p class="ep-action-note" style="margin-top:4px;">Line-level update — applies to each matching line item.</p>' : ''}
       </div>
       <div class="ep-field-group">
         <div class="ep-label">Set field</div>
-        <select class="ep-select">${opts(['Transaction Tax code','Class','Location','Description','Customer','Service date','Memo'], a.field)}</select>
+        <select class="ep-select" id="actField">${opts(fieldOpts, a.field)}</select>
+        ${isTracking ? '<p class="ep-action-note" style="color:#5580CC;margin-top:4px;">Tracking Category — must match an existing option in Xero.</p>' : ''}
       </div>
       <div class="ep-field-group">
         <div class="ep-label">To value</div>
-        <input class="ep-input val" value="${a.val}" placeholder="Select from your QuickBooks data…" />
-      </div>
+        <input class="ep-input val" id="actVal" value="${a.val||''}" placeholder="${isTracking?'Category option name…':'Enter value…'}" />
+      </div>` : `
+      <div class="ep-field-group">
+        <div class="ep-label">${a.type==='Post to URL'?'Webhook URL':'Recipient'}</div>
+        <input class="ep-input val" id="actVal" value="${a.val||''}" placeholder="${a.type==='Post to URL'?'https://your-webhook.example.com':a.type==='Email'?'email@example.com':'Phone number…'}" />
+      </div>`}
       <div class="ep-divider"></div>
       <button class="ep-submit" onclick="applyAction(${branchId})">Apply action</button>
     `;
@@ -736,7 +764,7 @@ function editTrigger() {
   document.getElementById('epBody').innerHTML = `
     <div class="ep-field-group">
       <div class="ep-label">Transaction type</div>
-      <select class="ep-select">${opts(['Invoice','Sales Receipt','Payment','Refund Receipt','Expense','Journal Entry','Deposit','Transfer','Customer','Product or Service'], 'Invoice')}</select>
+      <select class="ep-select">${opts(['Invoice','Bill','Credit Note','Payment','Contact','Item'], trigger.entity||'Invoice')}</select>
     </div>
     <div class="ep-field-group">
       <div class="ep-label">Event</div>
@@ -771,8 +799,8 @@ function addLane(asFallback) {
   const newBranch = {
     id, name: asFallback ? 'Default (catch-all)' : 'Branch ' + id,
     isFallback: !!asFallback,
-    condition: asFallback ? null : { field1: 'Shipping address', field2: 'Region', op: 'Equals', val: '', orVal: '' },
-    action: { type: 'QuickBooks action', txType: trigger.entity || 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: '' }
+    condition: asFallback ? null : { field1: 'Contact', field2: '', op: 'Equals', val: '', orVal: '' },
+    action: { type: 'Xero Action', txType: trigger.entity || 'Invoice', scope: 'Update current', field: 'Reference', val: '' }
   };
   const fallIdx = branches.findIndex(b => b.isFallback);
   if (!asFallback && fallIdx >= 0) branches.splice(fallIdx, 0, newBranch);
@@ -815,13 +843,12 @@ function deleteLaneConfirm(id) {
 function applyCondition(id) {
   const b = branches.find(x => x.id === id);
   if (!b) return;
-  const selects = document.querySelectorAll('#epBody .ep-select');
-  const inputs = document.querySelectorAll('#epBody .ep-input.val');
-  if (selects[0]) b.condition.field1 = selects[0].value;
-  if (selects[1]) b.condition.field2 = selects[1].value;
-  if (selects[2]) b.condition.op = selects[2].value;
-  if (inputs[0]) b.condition.val = inputs[0].value;
-  if (inputs[1]) b.condition.orVal = inputs[1].value;
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (g('condField1') !== null) b.condition.field1 = g('condField1');
+  if (g('condField2') !== null) b.condition.field2 = g('condField2');
+  if (g('condOp') !== null) b.condition.op = g('condOp');
+  if (g('condVal') !== null) b.condition.val = g('condVal');
+  if (g('condOrVal') !== null) b.condition.orVal = g('condOrVal');
   renderBranches();
   const btn = document.querySelector('#epBody .ep-submit');
   if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
@@ -830,13 +857,12 @@ function applyCondition(id) {
 function applyAction(id) {
   const b = branches.find(x => x.id === id);
   if (!b) return;
-  const selects = document.querySelectorAll('#epBody .ep-select');
-  const inputs = document.querySelectorAll('#epBody .ep-input.val');
-  if (selects[0]) b.action.type = selects[0].value;
-  if (selects[1]) b.action.txType = selects[1].value;
-  if (selects[2]) b.action.scope = selects[2].value;
-  if (selects[3]) b.action.field = selects[3].value;
-  if (inputs[0]) b.action.val = inputs[0].value;
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (g('actType') !== null) b.action.type = g('actType');
+  if (g('actEntity') !== null) b.action.txType = g('actEntity');
+  if (g('actScope') !== null) b.action.scope = g('actScope');
+  if (g('actField') !== null) b.action.field = g('actField');
+  if (g('actVal') !== null) b.action.val = g('actVal');
   renderBranches();
   const btn = document.querySelector('#epBody .ep-submit');
   if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
@@ -885,17 +911,18 @@ function opts(arr, sel) {
 let pendingAiRule = null;
 
 const AI_FIELD_MAP = [
-  { keys: ['shipping state','shipping region','region','state'], field1:'Shipping address', field2:'Region' },
-  { keys: ['shipping city','city'], field1:'Shipping address', field2:'City' },
-  { keys: ['shipping country','country'], field1:'Shipping address', field2:'Country' },
-  { keys: ['zip','postal code','zip code'], field1:'Shipping address', field2:'Postal code' },
-  { keys: ['product name','product','sku','item'], field1:'Product name', field2:'Name' },
-  { keys: ['email','email address'], field1:'Customer memo', field2:null },
-  { keys: ['customer name','customer'], field1:'Customer', field2:'Name' },
-  { keys: ['description','desc'], field1:'Description', field2:null },
-  { keys: ['memo'], field1:'Memo', field2:null },
+  { keys: ['tracking category 1','tracking 1','tracking cat 1'], field1:'Line', field2:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2','tracking cat 2'], field1:'Line', field2:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3','tracking cat 3'], field1:'Line', field2:'Tracking Category 3' },
+  { keys: ['line amount','line qty','line description','line item'], field1:'Line', field2:'Amount' },
+  { keys: ['product','item details','item','sku'], field1:'Line', field2:'Item Details' },
+  { keys: ['reference','ref'], field1:'Reference', field2:null },
   { keys: ['currency'], field1:'Currency', field2:null },
-  { keys: ['total','amount','total amount'], field1:'Total amount', field2:null },
+  { keys: ['due date','due'], field1:'Due date', field2:null },
+  { keys: ['contact name','contact','customer','email'], field1:'Contact', field2:null },
+  { keys: ['description','desc'], field1:'Line', field2:'Description' },
+  { keys: ['total amount','total','balance','amount'], field1:'Total Amount', field2:null },
+  { keys: ['txn date','transaction date','date'], field1:'Txn date', field2:null },
 ];
 
 const AI_OP_MAP = [
@@ -909,14 +936,16 @@ const AI_OP_MAP = [
 ];
 
 const AI_ACTION_MAP = [
-  { keys: ['tax code','tax','sales tax'], field:'Transaction Tax code' },
-  { keys: ['class'], field:'Class' },
-  { keys: ['location'], field:'Location' },
+  { keys: ['tracking category 1','tracking 1'], field:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2'], field:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3'], field:'Tracking Category 3' },
+  { keys: ['reference','ref'], field:'Reference' },
+  { keys: ['currency'], field:'Currency' },
+  { keys: ['due date'], field:'Due date' },
+  { keys: ['contact name','contact','customer'], field:'Contact' },
   { keys: ['description','desc'], field:'Description' },
-  { keys: ['customer name','customer'], field:'Customer' },
-  { keys: ['memo'], field:'Memo' },
-  { keys: ['service date','date'], field:'Service date' },
-  { keys: ['product','product or service','item'], field:'Product or Service' },
+  { keys: ['item details','product','item'], field:'Item Details' },
+  { keys: ['qty','quantity'], field:'Qty' },
 ];
 
 function parseRuleText(text) {
@@ -953,7 +982,7 @@ function parseRuleText(text) {
   return {
     name: branchName,
     condition: { field1: condField.field1, field2: condField.field2||'', op: condOp, val: valStr, orVal: '' },
-    action: { type: 'QuickBooks action', txType: trigger.entity||'Invoice', scope: 'Update current', field: actionField, val: actionVal }
+    action: { type: 'Xero Action', txType: trigger.entity||'Invoice', scope: 'Update current', field: actionField, val: actionVal }
   };
 }
 

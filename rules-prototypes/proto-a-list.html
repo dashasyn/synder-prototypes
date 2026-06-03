@@ -652,16 +652,11 @@ body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background
       <select id="triggerEntity" style="width:100%;padding:8px 10px;border:1px solid #E0E0E0;border-radius:4px;font-size:13px;font-family:Roboto,sans-serif;outline:none;" onchange="this.style.borderColor='#0053CC'">
         <option value="">Select entity…</option>
         <option value="Invoice">Invoice</option>
-        <option value="Sales Receipt">Sales Receipt</option>
+        <option value="Bill">Bill</option>
+        <option value="Credit Note">Credit Note</option>
         <option value="Payment">Payment</option>
-        <option value="Refund Receipt">Refund Receipt</option>
-        <option value="Expense">Expense</option>
-        <option value="Journal Entry">Journal Entry</option>
-        <option value="Deposit">Deposit</option>
-        <option value="Transfer">Transfer</option>
-        <option value="Customer">Customer</option>
-        <option value="Product or Service">Product or Service</option>
-        <option value="Vendor">Vendor</option>
+        <option value="Contact">Contact</option>
+        <option value="Item">Item</option>
       </select>
     </div>
     <div style="margin-bottom:20px;">
@@ -824,31 +819,36 @@ function renderEditor() {
 
 function renderIfCard(b) {
   const c = b.condition;
-  const FIELDS = ['Shipping address','Product name','Description','Memo','Currency','Customer','Customer memo','Billing address','Total amount','Txn date'];
-  const SUBFIELDS = {
-    'Shipping address': ['Region','City','Country','Line 1','Postal code'],
-    'Billing address': ['Region','City','Country','Line 1','Postal code'],
-    'Product name': ['Name','SKU'],
-    'Customer': ['Name','Email'],
-    default: ['Value']
-  };
-  const subOpts = (SUBFIELDS[c.field1] || SUBFIELDS.default);
+  const TOP_FIELDS = ['Contact','Currency','Reference','Due date','Txn date','Total Amount','Balance','Line'];
+  const LINE_SUBFIELDS = ['Amount','Description','Item Details','Qty','Tracking Category 1','Tracking Category 2','Tracking Category 3'];
+  const STRING_OPS = ['Contains','Equals','Not equals','Starts with','Ends with','Is empty','Is not empty'];
+  const NUM_OPS = ['Equals','Greater than','Less than','Greater than or equal','Less than or equal','Is empty'];
+  const DATE_OPS = ['Equals','Before','After','Is empty','Is not empty'];
+  const isLine = c.field1 === 'Line';
+  const isDate = ['Due date','Txn date'].includes(c.field1);
+  const isNum = ['Total Amount','Balance','Amount','Qty'].includes(c.field1) || (isLine && ['Amount','Qty'].includes(c.field2));
+  const ops = isDate ? DATE_OPS : isNum ? NUM_OPS : STRING_OPS;
+  const isTracking = isLine && (c.field2||'').startsWith('Tracking');
   return `
     <div class="flow-card if-card">
       <div class="flow-card-body">
         <div class="condition-builder">
           <div class="field-row">
-            <select class="field-select" onchange="updateCondition(${b.id},'field1',this.value);renderEditor()">${optSel(FIELDS, c.field1)}</select>
-            <span class="arrow-chip material-icons" style="font-size:14px">chevron_right</span>
-            <select class="field-select" onchange="updateCondition(${b.id},'field2',this.value)">${optSel(subOpts, c.field2)}</select>
-            <select class="field-select" onchange="updateCondition(${b.id},'op',this.value)">${optSel(['Contains','Equals','Not equals','Starts with','Ends with','Is empty','Is not empty'], c.op)}</select>
+            <select class="field-select" onchange="updateCondition(${b.id},'field1',this.value);updateCondition(${b.id},'field2','');renderEditor()">${optSel(TOP_FIELDS, c.field1)}</select>
+            ${isLine ? `<span class="arrow-chip material-icons" style="font-size:14px">chevron_right</span>
+            <select class="field-select" onchange="updateCondition(${b.id},'field2',this.value);renderEditor()">${optSel(LINE_SUBFIELDS, c.field2)}</select>` : ''}
+            <select class="field-select" onchange="updateCondition(${b.id},'op',this.value)">${optSel(ops, c.op)}</select>
           </div>
+          ${isTracking ? `
+          <div class="field-row" style="align-items:center;gap:6px;margin-top:4px;">
+            <span style="font-size:11px;color:#888;">Category option:</span>
+            <input class="field-select val-input" value="${c.val||''}" placeholder="e.g. Auckland, Department A…" style="min-width:160px" oninput="updateCondition(${b.id},'val',this.value)" />
+          </div>` : (c.op !== 'Is empty' && c.op !== 'Is not empty') ? `
           <div class="field-row">
-            <input class="field-select val-input" value="${c.val}" placeholder="Enter value…" style="min-width:120px" oninput="updateCondition(${b.id},'val',this.value)" />
+            <input class="field-select val-input" value="${c.val||''}" placeholder="${isDate ? 'YYYY-MM-DD' : isNum ? '0.00' : 'Enter value…'}" style="min-width:130px" oninput="updateCondition(${b.id},'val',this.value)" />
             <span class="or-separator">OR</span>
             <input class="field-select val-input" value="${c.orVal||''}" placeholder="Alternative…" style="min-width:80px" oninput="updateCondition(${b.id},'orVal',this.value)" />
-            <button class="add-or-btn" onclick="this.style.display='none'">+ OR</button>
-          </div>
+          </div>` : ''}
           <div style="margin-top:8px;">
             <button class="btn btn-outline" style="font-size:12px;padding:5px 14px;" onclick="flashSaved(this)">
               <span class="material-icons" style="font-size:14px;vertical-align:-3px">check_circle_outline</span> Apply condition
@@ -862,25 +862,46 @@ function renderIfCard(b) {
 
 function renderThenCard(b) {
   const a = b.action;
-  const TX_TYPES = ['Invoice','Sales Receipt','Payment','Refund Receipt','Expense','Journal Entry','Deposit'];
-  const FIELDS_BY_SCOPE = ['Transaction Tax code','Class','Location','Description','Customer','Service date','Memo','Product or Service'];
+  const ACTION_TYPES = ['Xero Action','Email','SMS','Voice','Post to URL'];
+  const XERO_ENTITIES = ['Invoice','Bill','Credit Note','Payment'];
+  const CURRENT_FIELDS = ['Reference','Currency','Due date','Contact','Description','Txn date'];
+  const LINE_FIELDS = ['Tracking Category 1','Tracking Category 2','Tracking Category 3','Description','Item Details','Qty','Amount'];
+  const isXero = a.type === 'Xero Action';
+  const isLine = a.scope === 'Update line';
+  const fieldOpts = isXero ? (isLine ? LINE_FIELDS : CURRENT_FIELDS) : [];
+  const isTracking = isXero && isLine && (a.field||'').startsWith('Tracking');
   return `
     <div class="flow-card then-card">
       <div class="flow-card-body">
         <div class="action-builder">
           <div class="action-row">
-            <select class="field-select" onchange="updateAction(${b.id},'type',this.value);renderEditor()">${optSel(['QuickBooks action','Email notification','SMS notification','Post to URL'], a.type)}</select>
+            <select class="field-select" onchange="updateAction(${b.id},'type',this.value);renderEditor()">${optSel(ACTION_TYPES, a.type)}</select>
+            ${isXero ? `
             <span class="arrow-chip material-icons" style="font-size:14px">chevron_right</span>
-            <select class="field-select" onchange="updateAction(${b.id},'txType',this.value)">${optSel(TX_TYPES, a.txType)}</select>
+            <select class="field-select" onchange="updateAction(${b.id},'txType',this.value)">${optSel(XERO_ENTITIES, a.txType||'Invoice')}</select>
             <span class="arrow-chip material-icons" style="font-size:14px">chevron_right</span>
-            <select class="field-select" onchange="updateAction(${b.id},'scope',this.value)">${optSel(['Update current','Update line'], a.scope)}</select>
+            <select class="field-select" onchange="updateAction(${b.id},'scope',this.value);renderEditor()">${optSel(['Update current','Update line'], a.scope||'Update current')}</select>` : ''}
           </div>
-          <div class="action-row">
+          ${isXero ? `
+          <div class="action-row" style="margin-top:6px;">
             <span class="action-key">Set</span>
-            <select class="field-select" style="min-width:160px" onchange="updateAction(${b.id},'field',this.value)">${optSel(FIELDS_BY_SCOPE, a.field)}</select>
+            <select class="field-select" style="min-width:180px" onchange="updateAction(${b.id},'field',this.value);renderEditor()">${optSel(fieldOpts, a.field)}</select>
+            ${!isTracking ? `
             <span class="action-arrow material-icons" style="font-size:14px">arrow_forward</span>
-            <input class="field-select val-input" value="${a.val}" placeholder="Enter value or select from QB…" style="min-width:150px" oninput="updateAction(${b.id},'val',this.value)" />
+            <input class="field-select val-input" value="${a.val||''}" placeholder="Enter value…" style="min-width:140px" oninput="updateAction(${b.id},'val',this.value)" />` : `
+            <span class="action-arrow material-icons" style="font-size:14px">arrow_forward</span>
+            <input class="field-select val-input" value="${a.val||''}" placeholder="Category option value…" style="min-width:140px" oninput="updateAction(${b.id},'val',this.value)" />
+            <span style="font-size:11px;color:#888;margin-left:4px" title="Tracking Categories are dropdowns in Xero — the value must match an existing option">ⓘ dropdown</span>`}
           </div>
+          ${isTracking ? `<div style="font-size:11px;color:#5580CC;background:#E3EDFF;padding:6px 8px;border-radius:4px;margin-top:6px;">
+            <strong>Tracking Categories</strong> in Xero are line-level dropdowns. Set the option value that matches your Xero tracking category configuration.
+          </div>` : ''}` : `
+          <div class="action-row" style="margin-top:6px;">
+            ${a.type==='Email'||a.type==='SMS'||a.type==='Voice' ? `
+            <input class="field-select val-input" value="${a.val||''}" placeholder="${a.type==='Email'?'Recipient email…':a.type==='SMS'?'Phone number…':'Phone number…'}" style="min-width:200px" oninput="updateAction(${b.id},'val',this.value)" />` :
+            a.type==='Post to URL' ? `
+            <input class="field-select val-input" value="${a.val||''}" placeholder="https://your-webhook.example.com" style="min-width:280px" oninput="updateAction(${b.id},'val',this.value)" />` : ''}
+          </div>`}
           <div style="margin-top:8px;">
             <button class="btn btn-outline" style="font-size:12px;padding:5px 14px;" onclick="flashSaved(this)">
               <span class="material-icons" style="font-size:14px;vertical-align:-3px">check_circle_outline</span> Apply action
@@ -937,8 +958,8 @@ function addBranch(asFallback) {
   const name = asFallback ? 'Default (catch-all)' : 'Branch ' + id;
   branches.push({
     id, name, enabled: true, isFallback: !!asFallback,
-    condition: asFallback ? null : { field1: 'Shipping address', field2: 'Region', op: 'Equals', val: '', orVal: '' },
-    action: { type: 'QuickBooks action', txType: trigger.entity || 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: '' }
+    condition: asFallback ? null : { field1: 'Contact', field2: '', op: 'Equals', val: '', orVal: '' },
+    action: { type: 'Xero Action', txType: trigger.entity || 'Invoice', scope: 'Update current', field: 'Reference', val: '' }
   });
   renderSidebar();
   selectBranch(id);
@@ -1012,17 +1033,18 @@ function applyTrigger() {
 let pendingAiRule = null;
 
 const AI_FIELD_MAP = [
-  { keys: ['shipping state','shipping region','region','state'], field1:'Shipping address', field2:'Region' },
-  { keys: ['shipping city','city'], field1:'Shipping address', field2:'City' },
-  { keys: ['shipping country','country'], field1:'Shipping address', field2:'Country' },
-  { keys: ['zip','postal code','zip code'], field1:'Shipping address', field2:'Postal code' },
-  { keys: ['product name','product','sku','item'], field1:'Product name', field2:'Name' },
-  { keys: ['email','email address'], field1:'Customer memo', field2:null },
-  { keys: ['customer name','customer'], field1:'Customer', field2:'Name' },
-  { keys: ['description','desc'], field1:'Description', field2:null },
-  { keys: ['memo'], field1:'Memo', field2:null },
+  { keys: ['tracking category 1','tracking 1','tracking cat 1'], field1:'Line', field2:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2','tracking cat 2'], field1:'Line', field2:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3','tracking cat 3'], field1:'Line', field2:'Tracking Category 3' },
+  { keys: ['line amount','line qty','line description','line item'], field1:'Line', field2:'Amount' },
+  { keys: ['product','item details','item','sku'], field1:'Line', field2:'Item Details' },
+  { keys: ['reference','ref'], field1:'Reference', field2:null },
   { keys: ['currency'], field1:'Currency', field2:null },
-  { keys: ['total','amount','total amount'], field1:'Total amount', field2:null },
+  { keys: ['due date','due'], field1:'Due date', field2:null },
+  { keys: ['contact name','contact','customer','email'], field1:'Contact', field2:null },
+  { keys: ['description','desc'], field1:'Line', field2:'Description' },
+  { keys: ['total amount','total','balance','amount'], field1:'Total Amount', field2:null },
+  { keys: ['txn date','transaction date','date'], field1:'Txn date', field2:null },
 ];
 
 const AI_OP_MAP = [
@@ -1036,14 +1058,16 @@ const AI_OP_MAP = [
 ];
 
 const AI_ACTION_MAP = [
-  { keys: ['tax code','tax','sales tax'], field:'Transaction Tax code' },
-  { keys: ['class'], field:'Class' },
-  { keys: ['location'], field:'Location' },
+  { keys: ['tracking category 1','tracking 1'], field:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2'], field:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3'], field:'Tracking Category 3' },
+  { keys: ['reference','ref'], field:'Reference' },
+  { keys: ['currency'], field:'Currency' },
+  { keys: ['due date'], field:'Due date' },
+  { keys: ['contact name','contact','customer'], field:'Contact' },
   { keys: ['description','desc'], field:'Description' },
-  { keys: ['customer name','customer'], field:'Customer' },
-  { keys: ['memo'], field:'Memo' },
-  { keys: ['service date','date'], field:'Service date' },
-  { keys: ['product','product or service','item'], field:'Product or Service' },
+  { keys: ['item details','product','item'], field:'Item Details' },
+  { keys: ['qty','quantity'], field:'Qty' },
 ];
 
 function parseRuleText(text) {
@@ -1126,7 +1150,7 @@ function parseRuleText(text) {
       orVal: ''
     },
     action: {
-      type: 'QuickBooks action',
+      type: 'Xero Action',
       txType: trigger.entity || 'Invoice',
       scope: 'Update current',
       field: actionField,
