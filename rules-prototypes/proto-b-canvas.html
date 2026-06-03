@@ -325,6 +325,10 @@ body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background
 .bottom-bar.panel-closed { left: 0; }
 .save-hint { flex: 1; font-size: 12px; color: #BDBDBD; }
 
+.ai-chip { background:#F0F5FF;border:1px solid #BAD0F7;color:#0053CC;border-radius:12px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:Roboto,sans-serif;transition:0.1s; }
+.ai-chip:hover { background:#E3EDFF;border-color:#0053CC; }
+@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
 /* Proto label */
 .proto-label {
   position: fixed; bottom: 60px; right: 16px;
@@ -417,6 +421,7 @@ body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background
       <span class="fork-label">Branch Fork</span>
       <span class="fork-count" id="forkCount">4 branches</span>
       <span class="fork-exec-mode" id="forkExecMode" onclick="toggleExecMode()" title="Click to toggle execution mode">First match</span>
+      <div class="fork-add-btn" onclick="openAiModal()" title="Describe rule in plain language" style="background:linear-gradient(135deg,#0053CC,#7B1FA2);color:white;border:none;">✨ AI</div>
       <div class="fork-add-btn" onclick="addLane(false)" title="Add new branch">+ Branch</div>
       <div class="fork-add-btn" onclick="addLane(true)" title="Add catch-all branch" style="background:#F5F5F5;color:#888;font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer;margin-left:4px;">+ Default</div>
     </div>
@@ -446,6 +451,54 @@ body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background
   <button class="btn btn-ghost">Back</button>
   <button class="btn btn-outline">Save Rule</button>
   <button class="btn btn-primary">Save &amp; Close Rule</button>
+</div>
+
+<!-- AI Rule Builder Modal -->
+<div id="aiModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:10px;width:480px;max-width:95vw;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0053CC,#7B1FA2);padding:18px 20px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:22px">✨</span>
+      <div>
+        <div style="font-size:15px;font-weight:600;color:white">Build rule with AI</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.75)">Describe what you want — get a ready-to-edit branch</div>
+      </div>
+      <span onclick="closeAiModal()" style="margin-left:auto;color:rgba(255,255,255,0.7);cursor:pointer;font-size:22px;line-height:1">×</span>
+    </div>
+    <div id="aiState1" style="padding:20px;">
+      <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:500">Describe your rule in plain language</div>
+      <textarea id="aiInput" placeholder='e.g. "Apply CA tax if customer ships to California"&#10;"Set class to Services if product name contains Support"&#10;"Change customer name to John if email has john.com"'
+        style="width:100%;height:90px;padding:10px;border:1.5px solid #E0E0E0;border-radius:6px;font-size:13px;font-family:Roboto,sans-serif;resize:none;outline:none;line-height:1.5"
+        oninput="this.style.borderColor='#0053CC'"></textarea>
+      <div style="margin:10px 0 16px;display:flex;flex-wrap:wrap;gap:6px;">
+        <div style="font-size:11px;color:#888;width:100%;margin-bottom:2px">Try an example:</div>
+        <button onclick="setAiExample(this)" class="ai-chip">Apply CA tax if shipping state is California</button>
+        <button onclick="setAiExample(this)" class="ai-chip">Set class to Services if product contains Support</button>
+        <button onclick="setAiExample(this)" class="ai-chip">Change customer to John if email has john.com</button>
+        <button onclick="setAiExample(this)" class="ai-chip">Set description to Online Sale if memo is empty</button>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeAiModal()" style="padding:9px 16px;background:white;border:1px solid #E0E0E0;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;">Cancel</button>
+        <button onclick="generateAiRule()" style="padding:9px 18px;background:linear-gradient(135deg,#0053CC,#7B1FA2);color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;font-weight:500;">✨ Generate rule</button>
+      </div>
+    </div>
+    <div id="aiState2" style="display:none;padding:40px 20px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:12px;animation:spin 1.5s linear infinite;display:inline-block">✨</div>
+      <div style="font-size:14px;color:#555;font-weight:500" id="aiLoadingText">Parsing your rule…</div>
+      <div style="font-size:12px;color:#BDBDBD;margin-top:4px">Identifying fields, operators, and actions</div>
+    </div>
+    <div id="aiState3" style="display:none;padding:20px;">
+      <div style="font-size:12px;color:#2E7D32;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+        <span style="background:#E8F5E9;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">✓</span>
+        Rule generated — review before adding
+      </div>
+      <div id="aiPreview" style="background:#F8F9FF;border:1.5px solid #BAD0F7;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+      <div style="font-size:11px;color:#888;margin-bottom:16px;">You can edit any field after adding the branch.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="aiBack()" style="padding:9px 16px;background:white;border:1px solid #E0E0E0;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;">← Try again</button>
+        <button onclick="applyAiRule()" style="padding:9px 18px;background:#0053CC;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;font-weight:500;">Add as branch →</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <div class="proto-label">Prototype B · Canvas Fork</div>
@@ -826,6 +879,145 @@ function renderExecMode() {
 function opts(arr, sel) {
   return arr.map(v => `<option${v===sel?' selected':''}>${v}</option>`).join('');
 }
+
+// ── AI RULE BUILDER ──────────────────────────────────────────
+
+let pendingAiRule = null;
+
+const AI_FIELD_MAP = [
+  { keys: ['shipping state','shipping region','region','state'], field1:'Shipping address', field2:'Region' },
+  { keys: ['shipping city','city'], field1:'Shipping address', field2:'City' },
+  { keys: ['shipping country','country'], field1:'Shipping address', field2:'Country' },
+  { keys: ['zip','postal code','zip code'], field1:'Shipping address', field2:'Postal code' },
+  { keys: ['product name','product','sku','item'], field1:'Product name', field2:'Name' },
+  { keys: ['email','email address'], field1:'Customer memo', field2:null },
+  { keys: ['customer name','customer'], field1:'Customer', field2:'Name' },
+  { keys: ['description','desc'], field1:'Description', field2:null },
+  { keys: ['memo'], field1:'Memo', field2:null },
+  { keys: ['currency'], field1:'Currency', field2:null },
+  { keys: ['total','amount','total amount'], field1:'Total amount', field2:null },
+];
+
+const AI_OP_MAP = [
+  { keys: ['contains','has','includes','with'], op:'Contains' },
+  { keys: ['not equals','is not','!='], op:'Not equals' },
+  { keys: ['equals','is','='], op:'Equals' },
+  { keys: ['starts with','begins with','starts'], op:'Starts with' },
+  { keys: ['ends with','ends'], op:'Ends with' },
+  { keys: ['is empty','is blank','is missing'], op:'Is empty' },
+  { keys: ['is not empty','is set','is filled'], op:'Is not empty' },
+];
+
+const AI_ACTION_MAP = [
+  { keys: ['tax code','tax','sales tax'], field:'Transaction Tax code' },
+  { keys: ['class'], field:'Class' },
+  { keys: ['location'], field:'Location' },
+  { keys: ['description','desc'], field:'Description' },
+  { keys: ['customer name','customer'], field:'Customer' },
+  { keys: ['memo'], field:'Memo' },
+  { keys: ['service date','date'], field:'Service date' },
+  { keys: ['product','product or service','item'], field:'Product or Service' },
+];
+
+function parseRuleText(text) {
+  const t = text.toLowerCase().trim();
+  let condText = '', actionText = '';
+  const ifIdx = t.lastIndexOf(' if ');
+  if (ifIdx >= 0) {
+    actionText = t.slice(0, ifIdx).trim();
+    condText = t.slice(ifIdx + 4).trim();
+  } else {
+    const whenIdx = t.lastIndexOf(' when ');
+    if (whenIdx >= 0) { actionText = t.slice(0, whenIdx).trim(); condText = t.slice(whenIdx + 6).trim(); }
+    else { condText = t; actionText = ''; }
+  }
+  let condField = AI_FIELD_MAP[0], condOp = 'Contains', condVal = '';
+  for (const f of AI_FIELD_MAP) { if (f.keys.some(k => condText.includes(k))) { condField = f; break; } }
+  for (const o of AI_OP_MAP) { if (o.keys.some(k => condText.includes(k))) { condOp = o.op; break; } }
+  const opWords = ['contains','has','includes','equals','is not','is','starts with','ends with','begins with','with'];
+  let valStr = '';
+  for (const op of opWords) {
+    const opIdx = condText.indexOf(op);
+    if (opIdx >= 0) { valStr = condText.slice(opIdx + op.length).trim().replace(/^(the|a|an|value|text)\s+/gi,'').replace(/"/g,'').trim(); break; }
+  }
+  if (!valStr) { const quoted = condText.match(/"([^"]+)"/); valStr = quoted ? quoted[1] : condText.split(/\s+/).slice(-1)[0]; }
+  let actionField = 'Transaction Tax code', actionVal = '';
+  for (const a of AI_ACTION_MAP) { if (a.keys.some(k => actionText.includes(k))) { actionField = a.field; break; } }
+  const toMatch = actionText.match(/(?:to|=|:)\s+(.+)$/i);
+  if (toMatch) { actionVal = toMatch[1].replace(/"/g,'').trim(); }
+  else {
+    const parts = actionText.split(/(?:change|set|update|assign|apply)\s+/i).filter(Boolean);
+    if (parts.length > 0) { const words = parts[parts.length-1].trim().split(/\s+/); actionVal = words.slice(-1)[0] || ''; }
+  }
+  const branchName = valStr ? (valStr.charAt(0).toUpperCase() + valStr.slice(1)).split('.')[0] : 'AI Branch';
+  return {
+    name: branchName,
+    condition: { field1: condField.field1, field2: condField.field2||'', op: condOp, val: valStr, orVal: '' },
+    action: { type: 'QuickBooks action', txType: trigger.entity||'Invoice', scope: 'Update current', field: actionField, val: actionVal }
+  };
+}
+
+function openAiModal() {
+  document.getElementById('aiModal').style.display = 'flex';
+  document.getElementById('aiState1').style.display = 'block';
+  document.getElementById('aiState2').style.display = 'none';
+  document.getElementById('aiState3').style.display = 'none';
+  document.getElementById('aiInput').value = '';
+  setTimeout(() => document.getElementById('aiInput').focus(), 100);
+}
+function closeAiModal() { document.getElementById('aiModal').style.display = 'none'; pendingAiRule = null; }
+function setAiExample(btn) { document.getElementById('aiInput').value = btn.textContent; document.getElementById('aiInput').style.borderColor = '#0053CC'; }
+function aiBack() { document.getElementById('aiState3').style.display = 'none'; document.getElementById('aiState1').style.display = 'block'; }
+
+const AI_LOADING_MSGS = ['Parsing your rule…','Identifying condition fields…','Mapping to Synder fields…','Building IF → THEN structure…','Almost ready…'];
+
+function generateAiRule() {
+  const text = document.getElementById('aiInput').value.trim();
+  if (!text) { document.getElementById('aiInput').focus(); return; }
+  document.getElementById('aiState1').style.display = 'none';
+  document.getElementById('aiState2').style.display = 'block';
+  let msgIdx = 0;
+  const msgEl = document.getElementById('aiLoadingText');
+  const msgInterval = setInterval(() => { msgEl.textContent = AI_LOADING_MSGS[++msgIdx % AI_LOADING_MSGS.length]; }, 400);
+  setTimeout(() => {
+    clearInterval(msgInterval);
+    pendingAiRule = parseRuleText(text);
+    const c = pendingAiRule.condition, a = pendingAiRule.action;
+    const fieldLabel = [c.field1, c.field2].filter(Boolean).join(' › ');
+    document.getElementById('aiState2').style.display = 'none';
+    document.getElementById('aiState3').style.display = 'block';
+    const inputText = document.getElementById('aiInput').value.trim();
+    document.getElementById('aiPreview').innerHTML = `
+      <div style="font-size:11px;color:#888;margin-bottom:8px;font-style:italic;">"${inputText}"</div>
+      <div style="margin-bottom:10px;">
+        <span style="font-size:10px;font-weight:700;color:#E65100;text-transform:uppercase;background:#FFF3E0;padding:2px 6px;border-radius:3px;margin-right:6px">IF</span>
+        <strong>${fieldLabel}</strong> <span style="color:#888;font-style:italic;margin:0 4px">${c.op.toLowerCase()}</span>
+        <span style="color:#0053CC;font-weight:600">"${c.val||'…'}"</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:10px;padding-left:8px;">
+        <div style="width:2px;height:16px;background:#C8E6C9"></div>
+        <span style="font-size:10px;font-weight:700;color:#2E7D32;background:#E8F5E9;padding:2px 8px;border-radius:10px;border:1px solid #C8E6C9">YES</span>
+      </div>
+      <div>
+        <span style="font-size:10px;font-weight:700;color:#1B5E20;text-transform:uppercase;background:#E8F5E9;padding:2px 6px;border-radius:3px;margin-right:6px">THEN</span>
+        Set <strong>${a.field}</strong> <span style="color:#888;margin:0 4px">→</span>
+        <span style="color:#2E7D32;font-weight:600">"${a.val||'…'}"</span>
+      </div>
+      ${!c.val||!a.val ? '<div style="margin-top:10px;font-size:11px;color:#F57C00;background:#FFF3E0;padding:6px 8px;border-radius:4px;">⚠ Some values couldn\'t be detected — fill them in after adding.</div>' : ''}
+    `;
+  }, 1800);
+}
+
+function applyAiRule() {
+  if (!pendingAiRule) return;
+  const id = nextId++;
+  branches.push({ id, name: pendingAiRule.name, isFallback: false, condition: pendingAiRule.condition, action: pendingAiRule.action });
+  closeAiModal();
+  renderBranches();
+  editNode('if', id);
+}
+
+// ── END AI RULE BUILDER ──────────────────────────────────────
 
 // Init
 renderBranches();
