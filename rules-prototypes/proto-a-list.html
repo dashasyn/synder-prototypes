@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Rules — Branch List View (Prototype A)</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background: #F6F6F6; height: 100vh; overflow: hidden; }
+
+/* ── TOP NAV ── */
+.topnav {
+  height: 56px;
+  background: white;
+  border-bottom: 1px solid #C8C7CC;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  position: relative;
+  z-index: 50;
+}
+.logo { font-size: 16px; font-weight: 700; color: #0053CC; display: flex; align-items: center; gap: 6px; }
+.logo-icon { width: 28px; height: 28px; }
+.nav-divider { width: 1px; height: 20px; background: #E0E0E0; }
+.nav-breadcrumb { font-size: 13px; color: #888; display: flex; align-items: center; gap: 6px; }
+.nav-breadcrumb span { color: #222; font-weight: 500; }
+.nav-badge { padding: 2px 8px; background: #FFF3CD; color: #856404; border-radius: 10px; font-size: 11px; font-weight: 500; margin-left: 4px; }
+.nav-badge.new { background: #D4EDDA; color: #155724; }
+.spacer { flex: 1; }
+.nav-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; padding: 0 8px; }
+.toggle { width: 36px; height: 20px; background: #0053CC; border-radius: 10px; position: relative; cursor: pointer; }
+.toggle::after { content: ''; width: 16px; height: 16px; background: white; border-radius: 50%; position: absolute; top: 2px; right: 2px; }
+.btn { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; font-family: Roboto, sans-serif; font-weight: 500; }
+.btn-primary { background: #0053CC; color: white; }
+.btn-primary:hover { background: #0047B3; }
+.btn-outline { background: white; color: #0053CC; border: 1px solid #0053CC; }
+.btn-outline:hover { background: #F0F5FF; }
+.btn-ghost { background: transparent; color: #555; border: 1px solid #E0E0E0; }
+.btn-ghost:hover { background: #F5F5F5; }
+
+/* ── LAYOUT ── */
+.layout { display: flex; height: calc(100vh - 56px); }
+
+/* ── LEFT SIDEBAR ── */
+.sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: white;
+  border-right: 1px solid #C8C7CC;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-top { padding: 14px 14px 0; flex-shrink: 0; }
+
+.rule-name-input {
+  width: 100%;
+  font-size: 15px;
+  font-weight: 500;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 4px 0;
+  background: transparent;
+  outline: none;
+  color: #1a1a1a;
+  margin-bottom: 12px;
+}
+.rule-name-input:focus { border-bottom-color: #0053CC; }
+
+/* Trigger block */
+.trigger-block {
+  background: #F0F5FF;
+  border: 1px solid #BAD0F7;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+.trigger-block:hover { background: #E5EFFF; }
+.trigger-label { font-size: 10px; font-weight: 600; letter-spacing: 0.8px; text-transform: uppercase; color: #5580CC; margin-bottom: 4px; }
+.trigger-value { font-size: 13px; color: #0053CC; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.trigger-dot { width: 8px; height: 8px; background: #0053CC; border-radius: 50%; flex-shrink: 0; }
+.trigger-edit { margin-left: auto; font-size: 11px; color: #888; }
+
+/* Execution mode */
+.exec-row { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+.exec-label { font-size: 11px; color: #666; white-space: nowrap; }
+.exec-select {
+  flex: 1;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid #E0E0E0;
+  border-radius: 4px;
+  background: white;
+  color: #333;
+  cursor: pointer;
+  outline: none;
+}
+.exec-select:focus { border-color: #0053CC; }
+.info-icon { color: #BDBDBD; font-size: 16px; cursor: help; }
+
+.branches-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 14px 6px;
+  flex-shrink: 0;
+}
+.branches-title { font-size: 11px; font-weight: 600; letter-spacing: 0.6px; text-transform: uppercase; color: #888; flex: 1; }
+.branches-count { font-size: 11px; color: #BDBDBD; }
+
+/* Branch list */
+.branch-list { flex: 1; overflow-y: auto; padding: 0 8px; }
+
+.branch-item {
+  display: flex;
+  align-items: stretch;
+  border: 1.5px solid #E8E8E8;
+  border-radius: 7px;
+  background: white;
+  margin-bottom: 5px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  position: relative;
+  overflow: hidden;
+}
+.branch-item:hover { border-color: #BAD0F7; }
+.branch-item.active { border-color: #0053CC; box-shadow: 0 0 0 1px #0053CC20; }
+.branch-item.fallback-item { border-style: dashed; border-color: #E0E0E0; }
+.branch-item.fallback-item.active { border-color: #0053CC; border-style: solid; }
+.branch-item.disabled { opacity: 0.55; }
+
+.branch-color-bar {
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 5px 0 0 5px;
+}
+
+.branch-main { padding: 9px 10px 9px 0; flex: 1; min-width: 0; padding-left: 10px; }
+
+.branch-top { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.drag-handle { color: #D0D0D0; font-size: 18px; cursor: grab; flex-shrink: 0; line-height: 1; user-select: none; }
+.drag-handle:active { cursor: grabbing; }
+.branch-num {
+  width: 18px; height: 18px; border-radius: 50%;
+  font-size: 10px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.branch-name { font-size: 13px; font-weight: 500; color: #1a1a1a; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.branch-item.active .branch-name { color: #0053CC; }
+
+.branch-summary { font-size: 11px; color: #999; line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 24px; }
+.branch-summary strong { color: #666; font-weight: 500; }
+
+.branch-controls { display: flex; align-items: center; gap: 0; padding: 6px 6px; flex-shrink: 0; }
+.branch-toggle-wrap { width: 28px; height: 16px; border-radius: 8px; background: #4CAF50; position: relative; cursor: pointer; flex-shrink: 0; }
+.branch-toggle-wrap::after { content:''; width: 12px; height: 12px; background: white; border-radius: 50%; position: absolute; top: 2px; right: 2px; transition: 0.15s; }
+.branch-toggle-wrap.off { background: #BDBDBD; }
+.branch-toggle-wrap.off::after { right: auto; left: 2px; }
+.branch-del { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; border-radius: 4px; color: #CCC; cursor: pointer; font-size: 15px; transition: 0.1s; }
+.branch-del:hover { background: #FFEBEE; color: #F44336; }
+
+/* Add branch */
+.add-branch-area { padding: 6px 8px 10px; flex-shrink: 0; }
+.add-branch-btn {
+  width: 100%;
+  padding: 9px;
+  border: 1.5px dashed #BAD0F7;
+  border-radius: 6px;
+  background: transparent;
+  color: #0053CC;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: Roboto, sans-serif;
+  font-weight: 500;
+  transition: 0.12s;
+}
+.add-branch-btn:hover { background: #F0F5FF; border-color: #0053CC; }
+
+/* Recipes link */
+.recipes-link {
+  padding: 8px 14px 12px;
+  font-size: 12px;
+  color: #888;
+  text-align: center;
+  flex-shrink: 0;
+  border-top: 1px solid #F0F0F0;
+}
+.recipes-link a { color: #0053CC; text-decoration: none; font-weight: 500; }
+.recipes-link a:hover { text-decoration: underline; }
+
+/* ── MAIN EDITOR ── */
+.main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+
+.main-header {
+  background: white;
+  border-bottom: 1px solid #E8E8E8;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.main-header-branch-badge {
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.main-header-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: #1a1a1a;
+  flex: 1;
+}
+.main-header input {
+  font-size: 16px;
+  font-weight: 500;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  outline: none;
+  color: #1a1a1a;
+  flex: 1;
+  font-family: Roboto, sans-serif;
+}
+.main-header input:focus { border-bottom-color: #0053CC; }
+
+.main-content { padding: 20px 24px; flex: 1; }
+.editor-wrap { max-width: 680px; }
+
+/* Info callout */
+.callout {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 14px;
+  background: #E3EDFF;
+  border: 1px solid #BAD0F7;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #1A4A9C;
+  margin-bottom: 18px;
+}
+.callout .material-icons { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+
+/* Flow nodes */
+.flow-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #BDBDBD;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.flow-section-label::after { content: ''; flex: 1; height: 1px; background: #F0F0F0; }
+
+.flow-card {
+  background: white;
+  border: 1.5px solid #E0E0E0;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 6px;
+  transition: border-color 0.12s;
+}
+.flow-card:hover { border-color: #BAD0F7; }
+.flow-card.if-card { border-left: 3px solid #FF9800; }
+.flow-card.then-card { border-left: 3px solid #4CAF50; }
+.flow-card.or-card { border-left: 3px solid #FF9800; border-left-style: dashed; background: #FFFDF5; }
+
+.flow-card-header {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid #F5F5F5;
+  cursor: pointer;
+}
+.flow-card-header:hover { background: #FAFAFA; }
+
+.fc-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 3px;
+  text-transform: uppercase;
+}
+.fc-badge.if { background: #FFF3E0; color: #E65100; }
+.fc-badge.or { background: #FFF8E1; color: #F9A825; font-style: italic; }
+.fc-badge.then { background: #E8F5E9; color: #1B5E20; }
+.fc-desc { font-size: 13px; color: #333; flex: 1; }
+.fc-desc .field { font-weight: 500; color: #1a1a1a; }
+.fc-desc .op { color: #888; font-style: italic; margin: 0 3px; }
+.fc-desc .val { font-weight: 600; color: #0053CC; }
+.fc-desc .action-type { color: #888; font-size: 12px; }
+.fc-edit { color: #BDBDBD; font-size: 13px; cursor: pointer; }
+.fc-edit:hover { color: #0053CC; }
+.fc-expand { color: #BDBDBD; font-size: 18px; cursor: pointer; transition: transform 0.15s; }
+.fc-expand.open { transform: rotate(180deg); }
+
+.flow-card-body { padding: 12px 14px; }
+
+.condition-builder { display: flex; flex-direction: column; gap: 8px; }
+.field-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.field-select {
+  padding: 6px 10px;
+  border: 1px solid #E0E0E0;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #FAFAFA;
+  color: #333;
+  outline: none;
+  cursor: pointer;
+  font-family: Roboto, sans-serif;
+}
+.field-select:focus { border-color: #0053CC; }
+.field-select.val-input { background: #F0F5FF; border-color: #BAD0F7; color: #0053CC; font-weight: 500; }
+.arrow-chip { font-size: 11px; color: #BDBDBD; }
+.or-separator { font-size: 11px; font-weight: 700; color: #F9A825; padding: 0 6px; }
+.add-or-btn { font-size: 11px; color: #0053CC; cursor: pointer; padding: 3px 6px; border-radius: 3px; border: 1px dashed #BAD0F7; background: transparent; font-family: Roboto, sans-serif; }
+.add-or-btn:hover { background: #F0F5FF; }
+
+.action-builder { display: flex; flex-direction: column; gap: 8px; }
+.action-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.action-key { font-size: 13px; color: #555; }
+.action-arrow { font-size: 11px; color: #BDBDBD; margin: 0 2px; }
+.action-val-chip {
+  padding: 4px 10px;
+  background: #E8F5E9;
+  color: #1B5E20;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Connector */
+.connector {
+  display: flex; flex-direction: column; align-items: center;
+  height: 32px; gap: 0; margin: 0 auto; width: fit-content;
+  position: relative;
+}
+.conn-line { width: 2px; background: #E0E0E0; flex: 1; }
+.conn-badge {
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.conn-badge.yes { background: #E8F5E9; color: #2E7D32; border: 1px solid #C8E6C9; }
+
+/* Section gap */
+.section-gap { height: 18px; }
+
+/* Add condition/action buttons */
+.add-flow-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 6px 12px;
+  border: 1.5px dashed #E0E0E0;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #999;
+  cursor: pointer;
+  background: transparent;
+  font-family: Roboto, sans-serif;
+  margin-top: 4px;
+  transition: 0.12s;
+}
+.add-flow-btn:hover { border-color: #0053CC; color: #0053CC; }
+
+/* Empty branch state */
+.empty-state {
+  text-align: center;
+  padding: 60px 24px;
+  color: #BDBDBD;
+}
+.empty-state .material-icons { font-size: 48px; margin-bottom: 12px; display: block; }
+.empty-state p { font-size: 14px; color: #999; }
+
+/* No branch selected */
+.no-branch-selected {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #BDBDBD;
+  gap: 12px;
+  padding: 40px;
+}
+.no-branch-selected .material-icons { font-size: 40px; }
+.no-branch-selected p { font-size: 14px; color: #999; text-align: center; }
+
+/* Bottom bar */
+.bottom-bar {
+  background: white;
+  border-top: 1px solid #E8E8E8;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.save-hint { font-size: 12px; color: #BDBDBD; flex: 1; }
+
+/* Prototype label */
+.proto-label {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  background: #1a1a1a;
+  color: #FFE082;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  z-index: 200;
+  font-weight: 500;
+}
+
+/* Branch colors */
+.color-blue { background: #0053CC; }
+.color-purple { background: #7B1FA2; }
+.color-teal { background: #00796B; }
+.color-orange { background: #E65100; }
+.color-grey { background: #9E9E9E; }
+
+.num-blue { background: #E3EDFF; color: #0053CC; }
+.num-purple { background: #F3E5F5; color: #7B1FA2; }
+.num-teal { background: #E0F2F1; color: #00796B; }
+.num-orange { background: #FFF3E0; color: #E65100; }
+.num-grey { background: #F5F5F5; color: #9E9E9E; }
+
+/* Tooltip */
+.tooltip-wrap { position: relative; display: inline-flex; }
+.tooltip-wrap:hover .tooltip-box { opacity: 1; pointer-events: none; }
+.tooltip-box {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  font-size: 11px;
+  padding: 5px 10px;
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+  z-index: 100;
+}
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="topnav">
+  <div class="logo">
+    <svg class="logo-icon" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="20" fill="#0053CC"/><path d="M12 20c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><circle cx="20" cy="20" r="3" fill="white"/></svg>
+    synder
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-breadcrumb">
+    Smart Rules <span class="material-icons" style="font-size:14px;color:#ccc">chevron_right</span>
+    <span>Rules</span> <span class="material-icons" style="font-size:14px;color:#ccc">chevron_right</span>
+    <span>Create Rule</span>
+    <span class="nav-badge new">Prototype A · List View</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav-toggle">
+    <div class="toggle"></div>
+    Active
+  </div>
+  <button class="btn btn-outline" onclick="alert('Paste rule')">Paste rule</button>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <input class="rule-name-input" value="US Sales Tax by State" placeholder="Rule name…" />
+
+      <!-- Trigger -->
+      <div class="trigger-block" onclick="alert('Edit trigger')">
+        <div class="trigger-label">Trigger</div>
+        <div class="trigger-value">
+          <div class="trigger-dot"></div>
+          Invoice · Created
+          <span class="trigger-edit">Edit ›</span>
+        </div>
+      </div>
+
+      <!-- Execution mode -->
+      <div class="exec-row">
+        <span class="exec-label">When multiple branches match:</span>
+        <div class="tooltip-wrap">
+          <span class="material-icons info-icon">help_outline</span>
+          <div class="tooltip-box">First match stops; Run all executes every matching branch</div>
+        </div>
+      </div>
+      <div class="exec-row" style="margin-top:4px;margin-bottom:14px;">
+        <select class="exec-select" id="execMode" onchange="updateExecMode()">
+          <option value="first">First match wins (stop at first)</option>
+          <option value="all">Run all matching branches</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="branches-header">
+      <span class="branches-title">Branches</span>
+      <span class="branches-count" id="branchCount">4 branches</span>
+    </div>
+
+    <div class="branch-list" id="branchList">
+      <!-- rendered by JS -->
+    </div>
+
+    <div class="add-branch-area">
+      <button class="add-branch-btn" onclick="addBranch()">
+        <span class="material-icons" style="font-size:16px">add</span>
+        Add branch
+      </button>
+    </div>
+
+    <div class="recipes-link">
+      Or start from a <a href="#">Recipe</a> — pre-built multi-branch rules
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main" id="mainArea">
+    <div class="no-branch-selected" id="noBranchMsg">
+      <span class="material-icons">account_tree</span>
+      <p>Select a branch to edit its<br>conditions and actions</p>
+    </div>
+    <div id="branchEditor" style="display:none; flex-direction:column; height:100%;">
+      <div class="main-header" id="editorHeader"></div>
+      <div class="main-content">
+        <div class="editor-wrap" id="editorBody"></div>
+      </div>
+      <div class="bottom-bar">
+        <span class="save-hint">Changes save automatically</span>
+        <button class="btn btn-ghost">Back</button>
+        <button class="btn btn-outline">Save Rule</button>
+        <button class="btn btn-primary">Save &amp; Close</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="proto-label">Prototype A · Branch List</div>
+
+<script>
+const COLORS = ['color-blue','color-purple','color-teal','color-orange','color-grey'];
+const NUM_COLORS = ['num-blue','num-purple','num-teal','num-orange','num-grey'];
+const HEX = ['#0053CC','#7B1FA2','#00796B','#E65100','#9E9E9E'];
+
+let branches = [
+  {
+    id: 1, name: 'California', enabled: true, isFallback: false,
+    condition: { field1: 'Shipping address', field2: 'Region', op: 'Contains', val: '"California"', orVal: '"CA"' },
+    action: { type: 'QuickBooks action', txType: 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: 'CA Sales Tax 9.5%' }
+  },
+  {
+    id: 2, name: 'New York', enabled: true, isFallback: false,
+    condition: { field1: 'Shipping address', field2: 'Region', op: 'Contains', val: '"New York"', orVal: '"NY"' },
+    action: { type: 'QuickBooks action', txType: 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: 'NY Sales Tax 8%' }
+  },
+  {
+    id: 3, name: 'Texas', enabled: true, isFallback: false,
+    condition: { field1: 'Shipping address', field2: 'Region', op: 'Contains', val: '"Texas"', orVal: '"TX"' },
+    action: { type: 'QuickBooks action', txType: 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: 'TX Sales Tax 6.25%' }
+  },
+  {
+    id: 4, name: 'Default (catch-all)', enabled: true, isFallback: true,
+    condition: null,
+    action: { type: 'QuickBooks action', txType: 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: 'US Default 0%' }
+  }
+];
+
+let selectedId = null;
+let nextId = 5;
+
+function colorIdx(b) {
+  return branches.indexOf(b) % COLORS.length;
+}
+
+function renderSidebar() {
+  const list = document.getElementById('branchList');
+  document.getElementById('branchCount').textContent = branches.length + ' branch' + (branches.length !== 1 ? 'es' : '');
+  list.innerHTML = '';
+  branches.forEach((b, i) => {
+    const ci = i % COLORS.length;
+    const div = document.createElement('div');
+    div.className = 'branch-item' + (selectedId === b.id ? ' active' : '') + (b.isFallback ? ' fallback-item' : '') + (!b.enabled ? ' disabled' : '');
+    div.innerHTML = `
+      <div class="branch-color-bar ${COLORS[ci]}" style="background:${HEX[ci]}"></div>
+      <div class="branch-main">
+        <div class="branch-top">
+          <span class="drag-handle material-icons">drag_indicator</span>
+          <span class="branch-num ${NUM_COLORS[ci]}">${i+1}</span>
+          <span class="branch-name">${b.name}</span>
+        </div>
+        <div class="branch-summary">
+          ${b.isFallback
+            ? '<em>No condition — always matches last</em>'
+            : `<strong>IF</strong> ${b.condition.field1} › ${b.condition.field2} ${b.condition.op} ${b.condition.val} → <strong>${b.action.val}</strong>`
+          }
+        </div>
+      </div>
+      <div class="branch-controls">
+        <div class="branch-toggle-wrap ${b.enabled ? '' : 'off'}" onclick="event.stopPropagation();toggleBranch(${b.id})"></div>
+        <div class="branch-del" onclick="event.stopPropagation();deleteBranch(${b.id})" title="Delete this branch">
+          <span class="material-icons" style="font-size:15px">close</span>
+        </div>
+      </div>
+    `;
+    div.addEventListener('click', () => selectBranch(b.id));
+    list.appendChild(div);
+  });
+}
+
+function selectBranch(id) {
+  selectedId = id;
+  renderSidebar();
+  renderEditor();
+  document.getElementById('noBranchMsg').style.display = 'none';
+  document.getElementById('branchEditor').style.display = 'flex';
+}
+
+function renderEditor() {
+  const b = branches.find(x => x.id === selectedId);
+  if (!b) return;
+  const i = branches.indexOf(b);
+  const ci = i % COLORS.length;
+
+  // Header
+  document.getElementById('editorHeader').innerHTML = `
+    <span class="main-header-branch-badge" style="background:${HEX[ci]}22;color:${HEX[ci]}">Branch ${i+1}</span>
+    <input value="${b.name}" placeholder="Branch name…" oninput="renameBranch(${b.id}, this.value)" />
+    <div class="tooltip-wrap">
+      <span class="material-icons" style="color:#BDBDBD;font-size:18px;cursor:help">info_outline</span>
+      <div class="tooltip-box">This branch runs independently — deleting it won't affect other branches</div>
+    </div>
+  `;
+
+  // Body
+  const body = document.getElementById('editorBody');
+  if (b.isFallback) {
+    body.innerHTML = `
+      <div class="callout">
+        <span class="material-icons">info</span>
+        <div>This is the <strong>catch-all fallback</strong>. It has no condition and always matches if no earlier branch did. Keep it last in the list.</div>
+      </div>
+      <div class="flow-section-label">THEN · Action</div>
+      ${renderThenCard(b)}
+      <div style="height:12px"></div>
+      <button class="add-flow-btn"><span class="material-icons" style="font-size:14px">add</span> Add another action</button>
+    `;
+  } else {
+    body.innerHTML = `
+      <div class="callout">
+        <span class="material-icons">account_tree</span>
+        <div>This branch is <strong>independent</strong>. Editing or deleting it has no effect on other branches. Branches are evaluated in order — <em>${document.getElementById('execMode').value === 'first' ? 'first match stops' : 'all matches run'}</em>.</div>
+      </div>
+      <div class="flow-section-label">IF · Condition</div>
+      ${renderIfCard(b)}
+      <div style="height:6px"></div>
+      <button class="add-flow-btn"><span class="material-icons" style="font-size:14px">add</span> Add another condition (AND)</button>
+
+      <div style="height:14px"></div>
+      <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:14px;">
+        <div style="width:2px;height:16px;background:#E0E0E0;"></div>
+        <span style="font-size:11px;font-weight:700;color:#4CAF50;background:#E8F5E9;padding:2px 10px;border-radius:10px;border:1px solid #C8E6C9;">YES</span>
+        <div style="width:2px;height:16px;background:#E0E0E0;"></div>
+      </div>
+
+      <div class="flow-section-label">THEN · Action</div>
+      ${renderThenCard(b)}
+      <div style="height:12px"></div>
+      <button class="add-flow-btn"><span class="material-icons" style="font-size:14px">add</span> Add another action</button>
+
+      <div style="height:24px"></div>
+      <div style="font-size:12px;color:#BDBDBD;display:flex;align-items:center;gap:6px;">
+        <span class="material-icons" style="font-size:14px">block</span>
+        NO path — transaction skips this branch and continues to the next one
+      </div>
+    `;
+  }
+}
+
+function renderIfCard(b) {
+  const c = b.condition;
+  return `
+    <div class="flow-card if-card">
+      <div class="flow-card-body">
+        <div class="condition-builder">
+          <div class="field-row">
+            <select class="field-select">${optSel(['Shipping address','Product name','Description','Memo','Currency','Customer','Customer memo','Billing address','Total amount','Txn date'], c.field1)}</select>
+            <span class="arrow-chip material-icons" style="font-size:14px">chevron_right</span>
+            <select class="field-select">${optSel(['Region','City','Country','Full address'], c.field2)}</select>
+            <select class="field-select">${optSel(['Contains','Equals','Starts with','Ends with','Is empty','Is not empty'], c.op)}</select>
+          </div>
+          <div class="field-row">
+            <input class="field-select val-input" value=${c.val} style="min-width:120px" />
+            <span class="or-separator">OR</span>
+            <input class="field-select val-input" value=${c.orVal} style="min-width:80px" />
+            <button class="add-or-btn">+ OR</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderThenCard(b) {
+  const a = b.action;
+  return `
+    <div class="flow-card then-card">
+      <div class="flow-card-body">
+        <div class="action-builder">
+          <div class="action-row">
+            <select class="field-select">${optSel(['QuickBooks action','Email notification','SMS notification','Post to URL'], a.type)}</select>
+            <span class="arrow-chip material-icons" style="font-size:14px">chevron_right</span>
+            <select class="field-select">${optSel(['Invoice','Sales Receipt','Payment','Refund Receipt','Expense'], a.txType)}</select>
+            <span class="arrow-chip material-icons" style="font-size:14px">chevron_right</span>
+            <select class="field-select">${optSel(['Update current','Update line'], a.scope)}</select>
+          </div>
+          <div class="action-row">
+            <span class="action-key">Set</span>
+            <select class="field-select" style="min-width:160px">${optSel(['Transaction Tax code','Class','Location','Description','Customer','Service date','Memo'], a.field)}</select>
+            <span class="action-arrow material-icons" style="font-size:14px">arrow_forward</span>
+            <input class="field-select val-input" value="${a.val}" style="min-width:150px" />
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function optSel(arr, sel) {
+  return arr.map(v => `<option${v===sel?' selected':''}>${v}</option>`).join('');
+}
+
+function toggleBranch(id) {
+  const b = branches.find(x => x.id === id);
+  if (b) b.enabled = !b.enabled;
+  renderSidebar();
+}
+
+function deleteBranch(id) {
+  if (branches.length <= 1) { alert('A rule needs at least one branch.'); return; }
+  const b = branches.find(x => x.id === id);
+  const confirmed = confirm(`Delete branch "${b.name}"?\n\nOnly this branch will be removed. Other branches are not affected.`);
+  if (!confirmed) return;
+  branches = branches.filter(x => x.id !== id);
+  if (selectedId === id) {
+    selectedId = null;
+    document.getElementById('noBranchMsg').style.display = 'flex';
+    document.getElementById('branchEditor').style.display = 'none';
+  }
+  renderSidebar();
+}
+
+function renameBranch(id, name) {
+  const b = branches.find(x => x.id === id);
+  if (b) { b.name = name; renderSidebar(); }
+}
+
+function addBranch() {
+  const names = ['New Branch','My Branch','Custom Branch','Extra Branch','Branch'];
+  const name = names[Math.floor(Math.random()*names.length)] + ' ' + nextId;
+  branches.push({
+    id: nextId++, name, enabled: true, isFallback: false,
+    condition: { field1: 'Shipping address', field2: 'Region', op: 'Contains', val: '"..."', orVal: '' },
+    action: { type: 'QuickBooks action', txType: 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: '...' }
+  });
+  renderSidebar();
+  selectBranch(nextId - 1);
+}
+
+function updateExecMode() {
+  if (selectedId) renderEditor();
+}
+
+// Init
+renderSidebar();
+selectBranch(1);
+</script>
+</body>
+</html>

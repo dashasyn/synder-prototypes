@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Rules — Canvas Fork View (Prototype B)</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background: #F0F0F0; height: 100vh; overflow: hidden; }
+
+/* ── TOP NAV ── */
+.topnav {
+  height: 56px; background: white; border-bottom: 1px solid #C8C7CC;
+  display: flex; align-items: center; padding: 0 16px; gap: 12px; z-index: 50; position: relative;
+}
+.logo { font-size: 16px; font-weight: 700; color: #0053CC; display: flex; align-items: center; gap: 6px; }
+.nav-divider { width: 1px; height: 20px; background: #E0E0E0; }
+.nav-breadcrumb { font-size: 13px; color: #888; display: flex; align-items: center; gap: 6px; }
+.nav-breadcrumb span { color: #222; font-weight: 500; }
+.nav-badge { padding: 2px 8px; background: #E3EDFF; color: #0053CC; border-radius: 10px; font-size: 11px; font-weight: 500; margin-left: 4px; }
+.spacer { flex: 1; }
+.btn { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; font-family: Roboto, sans-serif; font-weight: 500; }
+.btn-primary { background: #0053CC; color: white; }
+.btn-primary:hover { background: #0047B3; }
+.btn-outline { background: white; color: #0053CC; border: 1px solid #0053CC; }
+.btn-outline:hover { background: #F0F5FF; }
+.btn-ghost { background: transparent; color: #555; border: 1px solid #E0E0E0; }
+.nav-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
+.toggle { width: 36px; height: 20px; background: #0053CC; border-radius: 10px; position: relative; cursor: pointer; flex-shrink: 0; }
+.toggle::after { content:''; width:16px; height:16px; background:white; border-radius:50%; position:absolute; top:2px; right:2px; }
+
+/* ── LAYOUT ── */
+.layout { display: flex; height: calc(100vh - 56px); }
+
+/* ── LEFT PANEL (editor) ── */
+.edit-panel {
+  width: 280px; min-width: 280px;
+  background: white;
+  border-right: 1px solid #C8C7CC;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s;
+}
+.edit-panel.collapsed { width: 0; min-width: 0; }
+
+.ep-header {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid #F0F0F0;
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.ep-title { font-size: 13px; font-weight: 500; flex: 1; }
+.ep-close { color: #BDBDBD; cursor: pointer; font-size: 18px; }
+.ep-close:hover { color: #555; }
+.ep-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+
+.ep-body { padding: 14px; overflow-y: auto; flex: 1; }
+
+.ep-field-group { margin-bottom: 14px; }
+.ep-label { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; color: #888; text-transform: uppercase; margin-bottom: 5px; }
+.ep-select, .ep-input {
+  width: 100%; padding: 7px 10px; border: 1px solid #E0E0E0; border-radius: 4px;
+  font-size: 13px; background: #FAFAFA; color: #333; outline: none;
+  font-family: Roboto, sans-serif; margin-bottom: 5px;
+}
+.ep-select:focus, .ep-input:focus { border-color: #0053CC; }
+.ep-input.val { background: #F0F5FF; border-color: #BAD0F7; color: #0053CC; font-weight: 500; }
+.ep-or { font-size: 11px; font-weight: 700; color: #F9A825; margin: 4px 0; }
+.ep-add-or { font-size: 11px; color: #0053CC; cursor: pointer; padding: 3px 0; display: inline-flex; align-items: center; gap: 3px; }
+.ep-add-or:hover { text-decoration: underline; }
+.ep-divider { height: 1px; background: #F0F0F0; margin: 12px 0; }
+.ep-action-note { font-size: 11px; color: #888; margin-top: 4px; }
+
+.ep-submit { width: 100%; padding: 9px; background: #0053CC; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; font-family: Roboto, sans-serif; font-weight: 500; margin-top: 8px; }
+.ep-submit:hover { background: #0047B3; }
+
+/* ── CANVAS ── */
+.canvas-wrap {
+  flex: 1; overflow: auto; padding: 40px 40px 80px;
+  display: flex; flex-direction: column; align-items: center;
+  position: relative;
+}
+
+/* Canvas controls */
+.canvas-controls {
+  position: absolute; top: 12px; right: 16px;
+  display: flex; gap: 4px;
+}
+.ctrl-btn {
+  width: 32px; height: 32px; background: white; border: 1px solid #E0E0E0;
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 18px; color: #555;
+}
+.ctrl-btn:hover { background: #F5F5F5; }
+
+/* Trigger node */
+.trigger-node {
+  background: white;
+  border: 2px solid #0053CC;
+  border-radius: 10px;
+  padding: 14px 20px;
+  text-align: center;
+  min-width: 180px;
+  box-shadow: 0 2px 8px rgba(0,83,204,0.15);
+  cursor: pointer;
+  position: relative;
+  z-index: 5;
+}
+.trigger-node:hover { box-shadow: 0 4px 12px rgba(0,83,204,0.25); }
+.trigger-node-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #0053CC; text-transform: uppercase; margin-bottom: 4px; }
+.trigger-node-value { font-size: 14px; font-weight: 500; color: #1a1a1a; }
+.trigger-node-sub { font-size: 12px; color: #888; margin-top: 2px; }
+.trigger-node-edit { font-size: 11px; color: #BDBDBD; margin-top: 6px; cursor: pointer; }
+.trigger-node-edit:hover { color: #0053CC; }
+
+/* Vertical connector from trigger to fork */
+.v-connector { width: 2px; background: #C8C7CC; height: 32px; margin: 0 auto; }
+
+/* Fork node */
+.fork-node {
+  background: white;
+  border: 2px solid #9C27B0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  cursor: default;
+  position: relative;
+  z-index: 5;
+}
+.fork-icon { color: #9C27B0; font-size: 18px; }
+.fork-label { font-size: 12px; font-weight: 600; color: #9C27B0; }
+.fork-count { font-size: 11px; color: #BDBDBD; }
+.fork-add-btn {
+  width: 24px; height: 24px;
+  background: #F3E5F5; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px; color: #9C27B0;
+  border: 1.5px dashed #CE93D8;
+  margin-left: 4px;
+}
+.fork-add-btn:hover { background: #E1BEE7; }
+.fork-exec-mode { font-size: 10px; color: #9C27B0; background: #F3E5F5; padding: 2px 8px; border-radius: 10px; cursor: pointer; }
+.fork-exec-mode:hover { background: #E1BEE7; }
+
+/* Branches row connector */
+.branches-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 0;
+}
+
+/* The horizontal line and branches */
+.branches-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0;
+  position: relative;
+  width: 100%;
+}
+
+/* Each branch lane */
+.branch-lane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 200px;
+  max-width: 240px;
+  flex: 1;
+  padding: 0 8px;
+  position: relative;
+}
+
+.lane-top-line { width: 2px; height: 24px; background: #C8C7CC; }
+.lane-num-badge {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  z-index: 5;
+}
+.lane-delete {
+  position: absolute;
+  top: 28px;
+  right: 10px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #E0E0E0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 13px; color: #CCC;
+  z-index: 10;
+}
+.lane-delete:hover { background: #FFEBEE; color: #F44336; border-color: #FFCDD2; }
+
+.lane-drag { cursor: grab; position: absolute; top: 28px; left: 10px; color: #CCC; font-size: 18px; z-index: 10; }
+.lane-drag:active { cursor: grabbing; }
+
+/* Flow nodes in lane */
+.canvas-node {
+  background: white;
+  border: 1.5px solid #E0E0E0;
+  border-radius: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  position: relative;
+}
+.canvas-node:hover { border-color: #BAD0F7; box-shadow: 0 2px 8px rgba(0,83,204,0.1); }
+.canvas-node.selected { border-color: #0053CC; box-shadow: 0 0 0 2px rgba(0,83,204,0.15); }
+.canvas-node.if-node { border-top: 3px solid #FF9800; }
+.canvas-node.then-node { border-top: 3px solid #4CAF50; }
+.canvas-node.empty-node { border-style: dashed; background: #FAFAFA; }
+.canvas-node.fallback-node { border-top: 3px solid #9E9E9E; background: #FAFAFA; }
+
+.cn-type-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.cn-type-label.if { color: #E65100; }
+.cn-type-label.then { color: #1B5E20; }
+.cn-type-label.any { color: #9E9E9E; }
+
+.cn-content { font-size: 12px; color: #333; line-height: 1.4; }
+.cn-field { font-weight: 500; color: #1a1a1a; }
+.cn-op { color: #888; font-style: italic; }
+.cn-val { font-weight: 600; color: #0053CC; }
+.cn-action-val { font-weight: 600; color: #2E7D32; }
+.cn-empty { font-size: 12px; color: #BDBDBD; font-style: italic; }
+.cn-edit-hint { font-size: 10px; color: #BDBDBD; margin-top: 4px; }
+
+/* NO indicator */
+.no-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 700; color: #999;
+  background: #F5F5F5; padding: 2px 6px; border-radius: 3px;
+  margin-top: 5px;
+}
+
+/* YES connector between IF and THEN */
+.yes-connector {
+  display: flex; flex-direction: column; align-items: center; height: 40px;
+}
+.yes-line { width: 2px; flex: 1; background: #C8E6C9; }
+.yes-badge {
+  font-size: 10px; font-weight: 700; color: #2E7D32;
+  background: #E8F5E9; padding: 1px 7px; border-radius: 10px;
+  border: 1px solid #C8E6C9;
+}
+
+/* Add branch lane */
+.add-lane {
+  min-width: 180px;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0 8px;
+}
+.add-lane-inner {
+  width: 100%;
+  border: 2px dashed #E0E0E0;
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+  color: #BDBDBD;
+  cursor: pointer;
+  margin-top: 50px;
+  transition: 0.12s;
+}
+.add-lane-inner:hover { border-color: #9C27B0; color: #9C27B0; background: #FAF0FF; }
+.add-lane-inner .material-icons { font-size: 24px; display: block; margin: 0 auto 4px; }
+.add-lane-inner span { font-size: 12px; font-weight: 500; }
+
+/* Horizontal line spanning branches */
+.h-line-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  height: 2px;
+  margin: 0;
+}
+.h-line-actual {
+  position: absolute;
+  height: 2px;
+  background: #C8C7CC;
+  top: 0;
+}
+
+/* Execution mode bar */
+.exec-bar {
+  background: #F3E5F5;
+  border: 1px solid #CE93D8;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #6A1B9A;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.exec-bar select {
+  font-size: 12px; border: none; background: transparent; color: #6A1B9A;
+  font-weight: 600; cursor: pointer; outline: none; font-family: Roboto, sans-serif;
+}
+.exec-bar .material-icons { font-size: 16px; }
+
+/* Bottom bar */
+.bottom-bar {
+  position: fixed; bottom: 0; left: 280px; right: 0;
+  background: white; border-top: 1px solid #E8E8E8;
+  padding: 10px 24px; display: flex; align-items: center; gap: 8px;
+  z-index: 20;
+}
+.bottom-bar.panel-closed { left: 0; }
+.save-hint { flex: 1; font-size: 12px; color: #BDBDBD; }
+
+/* Proto label */
+.proto-label {
+  position: fixed; bottom: 60px; right: 16px;
+  background: #1a1a1a; color: #FFE082; font-size: 11px;
+  padding: 4px 10px; border-radius: 12px; z-index: 200; font-weight: 500;
+}
+
+/* Colors */
+.c1 { background:#0053CC; color:white; }
+.c2 { background:#7B1FA2; color:white; }
+.c3 { background:#00796B; color:white; }
+.c4 { background:#E65100; color:white; }
+.c5 { background:#9E9E9E; color:white; }
+.bc1 { background:#E3EDFF; color:#0053CC; }
+.bc2 { background:#F3E5F5; color:#7B1FA2; }
+.bc3 { background:#E0F2F1; color:#00796B; }
+.bc4 { background:#FFF3E0; color:#E65100; }
+.bc5 { background:#F5F5F5; color:#9E9E9E; }
+.hex1 { border-color: #0053CC; }
+.hex2 { border-color: #7B1FA2; }
+.hex3 { border-color: #00796B; }
+.hex4 { border-color: #E65100; }
+.hex5 { border-color: #9E9E9E; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="topnav">
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="20" fill="#0053CC"/><path d="M12 20c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><circle cx="20" cy="20" r="3" fill="white"/></svg>
+    synder
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-breadcrumb">
+    Smart Rules <span class="material-icons" style="font-size:14px;color:#ccc">chevron_right</span>
+    <span>Rules</span> <span class="material-icons" style="font-size:14px;color:#ccc">chevron_right</span>
+    <span>Create Rule</span>
+    <span class="nav-badge">Prototype B · Canvas Fork</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav-toggle">
+    <div class="toggle"></div>
+    Active
+  </div>
+  <button class="btn btn-ghost" style="margin-right:4px" onclick="togglePanel()">
+    <span class="material-icons" style="font-size:16px;vertical-align:middle">tune</span>
+  </button>
+  <button class="btn btn-outline" style="margin-right:4px">Paste rule</button>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT EDIT PANEL -->
+  <div class="edit-panel" id="editPanel">
+    <div class="ep-header">
+      <span class="material-icons" style="color:#BDBDBD;font-size:18px">edit</span>
+      <span class="ep-title" id="epTitle">Select a block to edit</span>
+      <span class="material-icons ep-close" onclick="closePanel()">close</span>
+    </div>
+    <div class="ep-body" id="epBody">
+      <p style="font-size:13px;color:#999;text-align:center;margin-top:20px;">Click any IF or THEN block on the canvas to edit it here.</p>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <div class="canvas-controls">
+      <div class="ctrl-btn" onclick="alert('Zoom in')"><span class="material-icons" style="font-size:18px">add</span></div>
+      <div class="ctrl-btn" onclick="alert('Zoom out')"><span class="material-icons" style="font-size:18px">remove</span></div>
+      <div class="ctrl-btn" onclick="alert('Fit to screen')"><span class="material-icons" style="font-size:18px">fit_screen</span></div>
+    </div>
+
+    <!-- Trigger node -->
+    <div class="trigger-node" onclick="editTrigger()">
+      <div class="trigger-node-label">Start when</div>
+      <div class="trigger-node-value">Invoice</div>
+      <div class="trigger-node-sub">Created</div>
+      <div class="trigger-node-edit">Click to edit trigger ›</div>
+    </div>
+
+    <!-- Vertical line to fork -->
+    <div class="v-connector"></div>
+
+    <!-- Fork node -->
+    <div class="fork-node">
+      <span class="material-icons fork-icon">call_split</span>
+      <span class="fork-label">Branch Fork</span>
+      <span class="fork-count" id="forkCount">4 branches</span>
+      <span class="fork-exec-mode" id="forkExecMode" onclick="toggleExecMode()" title="Click to toggle execution mode">First match</span>
+      <div class="fork-add-btn" onclick="addLane()" title="Add new branch">+</div>
+    </div>
+
+    <!-- Branches container -->
+    <div class="branches-container">
+      <div class="v-connector" style="height:16px"></div>
+
+      <!-- Execution mode explanation -->
+      <div class="exec-bar">
+        <span class="material-icons">info_outline</span>
+        <span>Execution: </span>
+        <select id="execModeSelect" onchange="renderExecMode()">
+          <option value="first">First match wins — stops at first matching branch</option>
+          <option value="all">Run all — executes every matching branch</option>
+        </select>
+      </div>
+
+      <div class="branches-row" id="branchesRow"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar" id="bottomBar">
+  <span class="save-hint">Branches are independent — delete or reorder any without affecting others</span>
+  <button class="btn btn-ghost">Back</button>
+  <button class="btn btn-outline">Save Rule</button>
+  <button class="btn btn-primary">Save &amp; Close Rule</button>
+</div>
+
+<div class="proto-label">Prototype B · Canvas Fork</div>
+
+<script>
+const CNUM = ['c1','c2','c3','c4','c5'];
+const BCNUM = ['bc1','bc2','bc3','bc4','bc5'];
+const HEX = ['#0053CC','#7B1FA2','#00796B','#E65100','#9E9E9E'];
+
+let branches = [
+  {
+    id:1, name:'California', isFallback:false,
+    condition:{field1:'Shipping address',field2:'Region',op:'Contains',val:'"California"',orVal:'"CA"'},
+    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'CA Sales Tax 9.5%'}
+  },
+  {
+    id:2, name:'New York', isFallback:false,
+    condition:{field1:'Shipping address',field2:'Region',op:'Contains',val:'"New York"',orVal:'"NY"'},
+    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'NY Sales Tax 8%'}
+  },
+  {
+    id:3, name:'Texas', isFallback:false,
+    condition:{field1:'Shipping address',field2:'Region',op:'Contains',val:'"Texas"',orVal:'"TX"'},
+    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'TX Sales Tax 6.25%'}
+  },
+  {
+    id:4, name:'Default', isFallback:true,
+    condition:null,
+    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'US Default 0%'}
+  }
+];
+let nextId = 5;
+let selectedNode = null;
+let panelOpen = true;
+let execMode = 'first';
+
+function renderBranches() {
+  const row = document.getElementById('branchesRow');
+  document.getElementById('forkCount').textContent = branches.length + ' branch' + (branches.length!==1?'es':'');
+  row.innerHTML = '';
+
+  branches.forEach((b, i) => {
+    const ci = i % CNUM.length;
+    const lane = document.createElement('div');
+    lane.className = 'branch-lane';
+    lane.id = 'lane-' + b.id;
+
+    // Color dot as header
+    lane.innerHTML = `
+      <div class="lane-top-line"></div>
+      <span class="material-icons lane-drag" title="Drag to reorder">drag_indicator</span>
+      <div class="lane-num-badge ${CNUM[ci]}">${i+1}</div>
+      <div class="lane-delete" onclick="deleteLane(${b.id})" title="Delete this branch (others unaffected)">
+        <span class="material-icons" style="font-size:13px">close</span>
+      </div>
+
+      <!-- Branch name label -->
+      <div style="font-size:11px;font-weight:600;color:${HEX[ci]};margin-bottom:8px;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="editBranchName(${b.id})">${b.name}</div>
+    `;
+
+    if (b.isFallback) {
+      // Fallback branch — no condition
+      const fallCard = document.createElement('div');
+      fallCard.className = 'canvas-node fallback-node';
+      fallCard.innerHTML = `
+        <div class="cn-type-label any">Any / Default</div>
+        <div class="cn-content cn-empty">No condition — catch-all fallback. Runs if no earlier branch matched.</div>
+      `;
+      lane.appendChild(fallCard);
+    } else {
+      // IF node
+      const ifNode = document.createElement('div');
+      ifNode.className = 'canvas-node if-node' + (selectedNode === 'if-'+b.id ? ' selected' : '');
+      ifNode.innerHTML = `
+        <div class="cn-type-label if">IF · Condition</div>
+        <div class="cn-content">
+          <span class="cn-field">${b.condition.field1} › ${b.condition.field2}</span><br>
+          <span class="cn-op">${b.condition.op}</span>
+          <span class="cn-val">${b.condition.val}</span>
+          ${b.condition.orVal ? `<span class="cn-op"> OR </span><span class="cn-val">${b.condition.orVal}</span>` : ''}
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+          <span class="no-badge"><span class="material-icons" style="font-size:10px">block</span>NO → skip</span>
+        </div>
+      `;
+      ifNode.addEventListener('click', () => editNode('if', b.id));
+      lane.appendChild(ifNode);
+
+      // YES connector
+      const yesConn = document.createElement('div');
+      yesConn.className = 'yes-connector';
+      yesConn.innerHTML = `<div class="yes-line"></div><span class="yes-badge">YES</span><div class="yes-line"></div>`;
+      lane.appendChild(yesConn);
+    }
+
+    // THEN node
+    const thenNode = document.createElement('div');
+    thenNode.className = 'canvas-node then-node' + (selectedNode === 'then-'+b.id ? ' selected' : '');
+    thenNode.innerHTML = `
+      <div class="cn-type-label then">THEN · Action</div>
+      <div class="cn-content">
+        <span class="cn-field">${b.action.field}</span><br>
+        <span class="cn-op">→ </span><span class="cn-action-val">${b.action.val}</span>
+      </div>
+      <div class="cn-edit-hint">Click to edit</div>
+    `;
+    thenNode.addEventListener('click', () => editNode('then', b.id));
+    lane.appendChild(thenNode);
+
+    row.appendChild(lane);
+  });
+
+  // Add lane button
+  const addLaneEl = document.createElement('div');
+  addLaneEl.className = 'add-lane';
+  addLaneEl.innerHTML = `
+    <div style="width:2px;height:24px;background:#E0E0E0;"></div>
+    <div class="add-lane-inner" onclick="addLane()">
+      <span class="material-icons">add</span>
+      <span>Add branch</span>
+    </div>
+  `;
+  row.appendChild(addLaneEl);
+
+  // Draw horizontal line connecting all lanes
+  drawHLine();
+}
+
+function drawHLine() {
+  // The horizontal line is handled by CSS layout
+}
+
+function editNode(type, branchId) {
+  const b = branches.find(x => x.id === branchId);
+  const i = branches.indexOf(b);
+  const ci = i % CNUM.length;
+  selectedNode = type + '-' + branchId;
+  renderBranches();
+
+  // Open panel
+  panelOpen = true;
+  document.getElementById('editPanel').classList.remove('collapsed');
+  document.getElementById('bottomBar').classList.remove('panel-closed');
+
+  const panel = document.getElementById('epBody');
+  const title = document.getElementById('epTitle');
+
+  if (type === 'if') {
+    title.innerHTML = `<span style="color:${HEX[ci]};font-weight:600;">Branch ${i+1}</span> · IF Condition`;
+    const c = b.condition;
+    panel.innerHTML = `
+      <div class="ep-field-group">
+        <div class="ep-label">Field</div>
+        <select class="ep-select">${opts(['Shipping address','Product name','Description','Memo','Currency','Customer','Customer memo','Total amount'], c.field1)}</select>
+        <select class="ep-select">${opts(['Region','City','Country','Full address','Zip code'], c.field2)}</select>
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">Operator</div>
+        <select class="ep-select">${opts(['Contains','Equals','Starts with','Ends with','Is empty','Is not empty'], c.op)}</select>
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">Value(s)</div>
+        <input class="ep-input val" value=${c.val} placeholder="Enter value…" />
+        <div class="ep-or">OR</div>
+        <input class="ep-input val" value=${c.orVal||''} placeholder="Alternative value (optional)…" />
+        <div class="ep-add-or"><span class="material-icons" style="font-size:12px">add</span> Add another OR value</div>
+      </div>
+      <div class="ep-divider"></div>
+      <button class="ep-submit">Apply condition</button>
+      <p class="ep-action-note" style="margin-top:8px;">If this condition is NOT met, the branch is skipped. Other branches are evaluated next.</p>
+    `;
+  } else {
+    title.innerHTML = `<span style="color:${HEX[ci]};font-weight:600;">Branch ${i+1}</span> · THEN Action`;
+    const a = b.action;
+    panel.innerHTML = `
+      <div class="ep-field-group">
+        <div class="ep-label">Action type</div>
+        <select class="ep-select">${opts(['QuickBooks action','Email notification','SMS notification','Post to URL'], a.type)}</select>
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">Transaction</div>
+        <select class="ep-select">${opts(['Invoice','Sales Receipt','Payment','Refund Receipt','Expense'], a.txType)}</select>
+        <select class="ep-select">${opts(['Update current','Update line'], a.scope)}</select>
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">Set field</div>
+        <select class="ep-select">${opts(['Transaction Tax code','Class','Location','Description','Customer','Service date','Memo'], a.field)}</select>
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">To value</div>
+        <input class="ep-input val" value="${a.val}" placeholder="Select from your QuickBooks data…" />
+      </div>
+      <div class="ep-divider"></div>
+      <button class="ep-submit">Apply action</button>
+    `;
+  }
+}
+
+function editTrigger() {
+  panelOpen = true;
+  document.getElementById('editPanel').classList.remove('collapsed');
+  selectedNode = null;
+  renderBranches();
+  document.getElementById('epTitle').textContent = 'Trigger';
+  document.getElementById('epBody').innerHTML = `
+    <div class="ep-field-group">
+      <div class="ep-label">Transaction type</div>
+      <select class="ep-select">${opts(['Invoice','Sales Receipt','Payment','Refund Receipt','Expense','Journal Entry','Deposit','Transfer','Customer','Product or Service'], 'Invoice')}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">Event</div>
+      <select class="ep-select">${opts(['Created','Paid','Sent','Payment reminder'], 'Created')}</select>
+    </div>
+    <div class="ep-divider"></div>
+    <button class="ep-submit">Apply trigger</button>
+  `;
+}
+
+function editBranchName(id) {
+  const b = branches.find(x => x.id === id);
+  const newName = prompt('Branch name:', b.name);
+  if (newName && newName.trim()) { b.name = newName.trim(); renderBranches(); }
+}
+
+function deleteLane(id) {
+  if (branches.length <= 1) { alert('A rule needs at least one branch.'); return; }
+  const b = branches.find(x => x.id === id);
+  const confirmed = confirm(`Delete branch "${b.name}"?\n\nOnly this branch will be removed. The other ${branches.length-1} branch${branches.length-1!==1?'es':''} are not affected.`);
+  if (!confirmed) return;
+  branches = branches.filter(x => x.id !== id);
+  if (selectedNode && selectedNode.endsWith('-'+id)) { selectedNode = null; }
+  renderBranches();
+}
+
+function addLane() {
+  const newBranch = {
+    id: nextId++, name: 'New Branch', isFallback: false,
+    condition: { field1: 'Shipping address', field2: 'Region', op: 'Contains', val: '"..."', orVal: '' },
+    action: { type: 'QuickBooks action', txType: 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: '...' }
+  };
+  // Insert before fallback if exists
+  const fallIdx = branches.findIndex(b => b.isFallback);
+  if (fallIdx >= 0) branches.splice(fallIdx, 0, newBranch);
+  else branches.push(newBranch);
+  renderBranches();
+  editNode('if', newBranch.id);
+}
+
+function togglePanel() {
+  panelOpen = !panelOpen;
+  document.getElementById('editPanel').classList.toggle('collapsed', !panelOpen);
+  document.getElementById('bottomBar').classList.toggle('panel-closed', !panelOpen);
+}
+
+function closePanel() {
+  panelOpen = false;
+  document.getElementById('editPanel').classList.add('collapsed');
+  document.getElementById('bottomBar').classList.add('panel-closed');
+  selectedNode = null;
+  renderBranches();
+}
+
+function toggleExecMode() {
+  execMode = execMode === 'first' ? 'all' : 'first';
+  document.getElementById('execModeSelect').value = execMode;
+  renderExecMode();
+}
+
+function renderExecMode() {
+  execMode = document.getElementById('execModeSelect').value;
+  document.getElementById('forkExecMode').textContent = execMode === 'first' ? 'First match' : 'Run all';
+}
+
+function opts(arr, sel) {
+  return arr.map(v => `<option${v===sel?' selected':''}>${v}</option>`).join('');
+}
+
+// Init
+renderBranches();
+</script>
+</body>
+</html>
