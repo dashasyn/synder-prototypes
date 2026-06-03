@@ -394,16 +394,17 @@ body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background
   <!-- CANVAS -->
   <div class="canvas-wrap" id="canvasWrap">
     <div class="canvas-controls">
-      <div class="ctrl-btn" onclick="alert('Zoom in')"><span class="material-icons" style="font-size:18px">add</span></div>
-      <div class="ctrl-btn" onclick="alert('Zoom out')"><span class="material-icons" style="font-size:18px">remove</span></div>
-      <div class="ctrl-btn" onclick="alert('Fit to screen')"><span class="material-icons" style="font-size:18px">fit_screen</span></div>
+      <div class="ctrl-btn" onclick="zoomCanvas(0.15)" title="Zoom in"><span class="material-icons" style="font-size:18px">add</span></div>
+      <div class="ctrl-btn" id="zoomLabel" style="font-size:11px;color:#888;width:auto;padding:0 8px;cursor:default" title="Current zoom">100%</div>
+      <div class="ctrl-btn" onclick="zoomCanvas(-0.15)" title="Zoom out"><span class="material-icons" style="font-size:18px">remove</span></div>
+      <div class="ctrl-btn" onclick="resetZoom()" title="Reset zoom"><span class="material-icons" style="font-size:18px">fit_screen</span></div>
     </div>
 
     <!-- Trigger node -->
-    <div class="trigger-node" onclick="editTrigger()">
+    <div class="trigger-node" id="triggerNode" onclick="editTrigger()">
       <div class="trigger-node-label">Start when</div>
-      <div class="trigger-node-value">Invoice</div>
-      <div class="trigger-node-sub">Created</div>
+      <div class="trigger-node-value" id="triggerNodeValue">Invoice</div>
+      <div class="trigger-node-sub" id="triggerNodeSub">Created</div>
       <div class="trigger-node-edit">Click to edit trigger ›</div>
     </div>
 
@@ -416,7 +417,8 @@ body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background
       <span class="fork-label">Branch Fork</span>
       <span class="fork-count" id="forkCount">4 branches</span>
       <span class="fork-exec-mode" id="forkExecMode" onclick="toggleExecMode()" title="Click to toggle execution mode">First match</span>
-      <div class="fork-add-btn" onclick="addLane()" title="Add new branch">+</div>
+      <div class="fork-add-btn" onclick="addLane(false)" title="Add new branch">+ Branch</div>
+      <div class="fork-add-btn" onclick="addLane(true)" title="Add catch-all branch" style="background:#F5F5F5;color:#888;font-size:10px;padding:2px 6px;border-radius:4px;cursor:pointer;margin-left:4px;">+ Default</div>
     </div>
 
     <!-- Branches container -->
@@ -453,37 +455,33 @@ const CNUM = ['c1','c2','c3','c4','c5'];
 const BCNUM = ['bc1','bc2','bc3','bc4','bc5'];
 const HEX = ['#0053CC','#7B1FA2','#00796B','#E65100','#9E9E9E'];
 
-let branches = [
-  {
-    id:1, name:'California', isFallback:false,
-    condition:{field1:'Shipping address',field2:'Region',op:'Contains',val:'"California"',orVal:'"CA"'},
-    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'CA Sales Tax 9.5%'}
-  },
-  {
-    id:2, name:'New York', isFallback:false,
-    condition:{field1:'Shipping address',field2:'Region',op:'Contains',val:'"New York"',orVal:'"NY"'},
-    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'NY Sales Tax 8%'}
-  },
-  {
-    id:3, name:'Texas', isFallback:false,
-    condition:{field1:'Shipping address',field2:'Region',op:'Contains',val:'"Texas"',orVal:'"TX"'},
-    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'TX Sales Tax 6.25%'}
-  },
-  {
-    id:4, name:'Default', isFallback:true,
-    condition:null,
-    action:{type:'QuickBooks action',txType:'Invoice',scope:'Update current',field:'Transaction Tax code',val:'US Default 0%'}
-  }
-];
-let nextId = 5;
+let branches = [];
+let nextId = 1;
 let selectedNode = null;
-let panelOpen = true;
+let panelOpen = false;
 let execMode = 'first';
+let canvasZoom = 1.0;
+let trigger = { entity: 'Invoice', event: 'Created' };
 
 function renderBranches() {
   const row = document.getElementById('branchesRow');
-  document.getElementById('forkCount').textContent = branches.length + ' branch' + (branches.length!==1?'es':'');
+  const forkCount = document.getElementById('forkCount');
+  if (forkCount) forkCount.textContent = branches.length + ' branch' + (branches.length!==1?'es':'');
   row.innerHTML = '';
+
+  if (branches.length === 0) {
+    row.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;padding:32px 24px;background:white;border:2px dashed #E0E0E0;border-radius:8px;min-width:240px;">
+        <span class="material-icons" style="font-size:40px;color:#BDBDBD;margin-bottom:10px">account_tree</span>
+        <p style="font-size:14px;font-weight:500;color:#555;margin-bottom:6px;text-align:center">No branches yet</p>
+        <p style="font-size:12px;color:#999;margin-bottom:16px;text-align:center;max-width:200px">Each branch is an independent IF→THEN path. Add the first one.</p>
+        <button onclick="addLane()" style="padding:8px 18px;background:#0053CC;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;font-weight:500;display:flex;align-items:center;gap:6px;">
+          <span class="material-icons" style="font-size:16px">add</span> Add first branch
+        </button>
+      </div>
+    `;
+    return;
+  }
 
   branches.forEach((b, i) => {
     const ci = i % CNUM.length;
@@ -561,9 +559,12 @@ function renderBranches() {
   addLaneEl.className = 'add-lane';
   addLaneEl.innerHTML = `
     <div style="width:2px;height:24px;background:#E0E0E0;"></div>
-    <div class="add-lane-inner" onclick="addLane()">
+    <div class="add-lane-inner" onclick="addLane(false)">
       <span class="material-icons">add</span>
       <span>Add branch</span>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:#BDBDBD;cursor:pointer;text-align:center;" onclick="addLane(true)">
+      + Default (catch-all)
     </div>
   `;
   row.appendChild(addLaneEl);
@@ -573,7 +574,38 @@ function renderBranches() {
 }
 
 function drawHLine() {
-  // The horizontal line is handled by CSS layout
+  setTimeout(() => {
+    const row = document.getElementById('branchesRow');
+    if (!row) return;
+    const lanes = row.querySelectorAll('.branch-lane');
+    if (lanes.length < 2) return;
+
+    const rowRect = row.getBoundingClientRect();
+    const firstLane = lanes[0];
+    const lastLane = lanes[lanes.length - 1];
+    const firstRect = firstLane.getBoundingClientRect();
+    const lastRect = lastLane.getBoundingClientRect();
+
+    const left = firstRect.left - rowRect.left + firstRect.width / 2;
+    const right = lastRect.left - rowRect.left + lastRect.width / 2;
+
+    let hLine = row.querySelector('.h-line-dynamic');
+    if (!hLine) {
+      hLine = document.createElement('div');
+      hLine.className = 'h-line-dynamic';
+      row.insertBefore(hLine, row.firstChild);
+    }
+    Object.assign(hLine.style, {
+      position: 'absolute',
+      top: '0',
+      left: left + 'px',
+      width: (right - left) + 'px',
+      height: '2px',
+      background: '#C8C7CC',
+      pointerEvents: 'none',
+      zIndex: '1'
+    });
+  }, 0);
 }
 
 function editNode(type, branchId) {
@@ -612,7 +644,7 @@ function editNode(type, branchId) {
         <div class="ep-add-or"><span class="material-icons" style="font-size:12px">add</span> Add another OR value</div>
       </div>
       <div class="ep-divider"></div>
-      <button class="ep-submit">Apply condition</button>
+      <button class="ep-submit" onclick="applyCondition(${branchId})">Apply condition</button>
       <p class="ep-action-note" style="margin-top:8px;">If this condition is NOT met, the branch is skipped. Other branches are evaluated next.</p>
     `;
   } else {
@@ -637,7 +669,7 @@ function editNode(type, branchId) {
         <input class="ep-input val" value="${a.val}" placeholder="Select from your QuickBooks data…" />
       </div>
       <div class="ep-divider"></div>
-      <button class="ep-submit">Apply action</button>
+      <button class="ep-submit" onclick="applyAction(${branchId})">Apply action</button>
     `;
   }
 }
@@ -658,7 +690,7 @@ function editTrigger() {
       <select class="ep-select">${opts(['Created','Paid','Sent','Payment reminder'], 'Created')}</select>
     </div>
     <div class="ep-divider"></div>
-    <button class="ep-submit">Apply trigger</button>
+    <button class="ep-submit" onclick="saveTrigger()">Apply trigger</button>
   `;
 }
 
@@ -669,33 +701,107 @@ function editBranchName(id) {
 }
 
 function deleteLane(id) {
-  if (branches.length <= 1) { alert('A rule needs at least one branch.'); return; }
   const b = branches.find(x => x.id === id);
-  const confirmed = confirm(`Delete branch "${b.name}"?\n\nOnly this branch will be removed. The other ${branches.length-1} branch${branches.length-1!==1?'es':''} are not affected.`);
-  if (!confirmed) return;
+  if (!b) return;
+  if (branches.length <= 1) {
+    if (!confirm('This is the last branch. Deleting it will leave the rule empty. Continue?')) return;
+  } else if (!confirm(`Delete branch "${b.name}"?\n\nOnly this branch will be removed. The other ${branches.length-1} branch${branches.length-1!==1?'es':''} are not affected.`)) {
+    return;
+  }
   branches = branches.filter(x => x.id !== id);
-  if (selectedNode && selectedNode.endsWith('-'+id)) { selectedNode = null; }
+  if (selectedNode && selectedNode.endsWith('-'+id)) { selectedNode = null; closePanel(); }
   renderBranches();
 }
 
-function addLane() {
+function addLane(asFallback) {
+  const id = nextId++;
   const newBranch = {
-    id: nextId++, name: 'New Branch', isFallback: false,
-    condition: { field1: 'Shipping address', field2: 'Region', op: 'Contains', val: '"..."', orVal: '' },
-    action: { type: 'QuickBooks action', txType: 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: '...' }
+    id, name: asFallback ? 'Default (catch-all)' : 'Branch ' + id,
+    isFallback: !!asFallback,
+    condition: asFallback ? null : { field1: 'Shipping address', field2: 'Region', op: 'Equals', val: '', orVal: '' },
+    action: { type: 'QuickBooks action', txType: trigger.entity || 'Invoice', scope: 'Update current', field: 'Transaction Tax code', val: '' }
   };
-  // Insert before fallback if exists
   const fallIdx = branches.findIndex(b => b.isFallback);
-  if (fallIdx >= 0) branches.splice(fallIdx, 0, newBranch);
+  if (!asFallback && fallIdx >= 0) branches.splice(fallIdx, 0, newBranch);
   else branches.push(newBranch);
   renderBranches();
-  editNode('if', newBranch.id);
+  if (asFallback) editNode('then', id);
+  else editNode('if', id);
 }
 
 function togglePanel() {
   panelOpen = !panelOpen;
   document.getElementById('editPanel').classList.toggle('collapsed', !panelOpen);
   document.getElementById('bottomBar').classList.toggle('panel-closed', !panelOpen);
+}
+
+function zoomCanvas(delta) {
+  canvasZoom = Math.round(Math.min(2.0, Math.max(0.4, canvasZoom + delta)) * 10) / 10;
+  document.getElementById('branchesRow').style.transform = `scale(${canvasZoom})`;
+  document.getElementById('branchesRow').style.transformOrigin = 'top center';
+  document.getElementById('zoomLabel').textContent = Math.round(canvasZoom * 100) + '%';
+}
+
+function resetZoom() {
+  canvasZoom = 1.0;
+  document.getElementById('branchesRow').style.transform = 'none';
+  document.getElementById('zoomLabel').textContent = '100%';
+}
+
+function deleteLaneConfirm(id) {
+  const b = branches.find(x => x.id === id);
+  if (!confirm(`Delete branch "${b.name}"?\n\nOnly this branch will be removed. The other ${branches.length-1} branch${branches.length-1!==1?'es':''} are not affected.`)) return;
+  branches = branches.filter(x => x.id !== id);
+  if (selectedNode && selectedNode.endsWith('-'+id)) {
+    selectedNode = null;
+    closePanel();
+  }
+  renderBranches();
+}
+
+function applyCondition(id) {
+  const b = branches.find(x => x.id === id);
+  if (!b) return;
+  const selects = document.querySelectorAll('#epBody .ep-select');
+  const inputs = document.querySelectorAll('#epBody .ep-input.val');
+  if (selects[0]) b.condition.field1 = selects[0].value;
+  if (selects[1]) b.condition.field2 = selects[1].value;
+  if (selects[2]) b.condition.op = selects[2].value;
+  if (inputs[0]) b.condition.val = inputs[0].value;
+  if (inputs[1]) b.condition.orVal = inputs[1].value;
+  renderBranches();
+  const btn = document.querySelector('#epBody .ep-submit');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
+}
+
+function applyAction(id) {
+  const b = branches.find(x => x.id === id);
+  if (!b) return;
+  const selects = document.querySelectorAll('#epBody .ep-select');
+  const inputs = document.querySelectorAll('#epBody .ep-input.val');
+  if (selects[0]) b.action.type = selects[0].value;
+  if (selects[1]) b.action.txType = selects[1].value;
+  if (selects[2]) b.action.scope = selects[2].value;
+  if (selects[3]) b.action.field = selects[3].value;
+  if (inputs[0]) b.action.val = inputs[0].value;
+  renderBranches();
+  const btn = document.querySelector('#epBody .ep-submit');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
+}
+
+function saveTrigger() {
+  const entity = document.getElementById('epBody').querySelector('select:nth-child(1)');
+  const event = document.getElementById('epBody').querySelector('select:nth-child(2)');
+  const selects = document.querySelectorAll('#epBody .ep-select');
+  if (selects[0]) trigger.entity = selects[0].value;
+  if (selects[1]) trigger.event = selects[1].value;
+  const nodeVal = document.getElementById('triggerNodeValue');
+  const nodeSub = document.getElementById('triggerNodeSub');
+  if (nodeVal) nodeVal.textContent = trigger.entity;
+  if (nodeSub) nodeSub.textContent = trigger.event;
+  renderBranches();
+  const btn = document.querySelector('#epBody .ep-submit');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
 }
 
 function closePanel() {
