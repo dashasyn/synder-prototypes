@@ -726,7 +726,7 @@ function editNode(type, branchId) {
     panel.innerHTML = `
       <div class="ep-field-group">
         <div class="ep-label">Action type</div>
-        <select class="ep-select" id="actType">${opts(['Xero Action','Email','SMS','Voice','Post to URL'], a.type)}</select>
+        <select class="ep-select" id="actType" onchange="refreshActionPanel()">${opts(['Xero Action','Email','SMS','Voice','Post to URL'], a.type)}</select>
       </div>
       ${isXero ? `
       <div class="ep-field-group">
@@ -840,6 +840,47 @@ function deleteLaneConfirm(id) {
     closePanel();
   }
   renderBranches();
+}
+
+function refreshActionPanel() {
+  const type = document.getElementById('actType')?.value || 'Xero Action';
+  const isXero = type === 'Xero Action';
+  const scope = document.getElementById('actScope')?.value || 'Update current';
+  const isLine = scope === 'Update line';
+  const fieldOpts = isXero ? (isLine ? LINE_ACT_FIELDS : CURRENT_ACT_FIELDS) : [];
+  const xeroHtml = isXero ? `
+    <div class="ep-field-group">
+      <div class="ep-label">Entity</div>
+      <select class="ep-select" id="actEntity">${opts(['Invoice','Bill','Credit Note','Payment'], 'Invoice')}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">Scope</div>
+      <select class="ep-select" id="actScope" onchange="refreshActionPanel()">${opts(['Update current','Update line'], scope)}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">Set field</div>
+      <select class="ep-select" id="actField">${opts(fieldOpts, '')}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">To value</div>
+      <input class="ep-input val" id="actVal" value="" placeholder="Enter value…" />
+    </div>` : `
+    <div class="ep-field-group">
+      <div class="ep-label">${type==='Post to URL'?'Webhook URL':'Recipient'}</div>
+      <input class="ep-input val" id="actVal" value="" placeholder="${type==='Post to URL'?'https://your-webhook.example.com':type==='Email'?'email@example.com':'Phone number…'}" />
+    </div>`;
+  const typeDiv = document.getElementById('actType')?.closest('.ep-field-group');
+  if (!typeDiv) return;
+  // Replace everything after the type row up to the divider
+  const divider = typeDiv.parentElement.querySelector('.ep-divider');
+  const submitBtn = typeDiv.parentElement.querySelector('.ep-submit');
+  // Remove old dynamic fields
+  let next = typeDiv.nextElementSibling;
+  while (next && next !== divider) { const tmp = next.nextElementSibling; next.remove(); next = tmp; }
+  // Insert new fields before divider
+  const tmp = document.createElement('div');
+  tmp.innerHTML = xeroHtml;
+  while (tmp.firstChild) divider.parentElement.insertBefore(tmp.firstChild, divider);
 }
 
 function refreshCondPanel() {
