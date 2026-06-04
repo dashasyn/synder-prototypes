@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prototype C · Simple Rule Builder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Roboto', sans-serif;
+  background: #F5F6F8;
+  color: #1A1A2E;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── TOP NAV ── */
+.top-nav {
+  background: white;
+  border-bottom: 1px solid #E0E4EA;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.nav-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.nav-breadcrumb {
+  font-size: 13px;
+  color: #6B7280;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nav-breadcrumb span { color: #1A1A2E; font-weight: 500; }
+
+.nav-badge {
+  font-size: 11px;
+  color: #7B1FA2;
+  background: #F3E5F5;
+  border: 1px solid #CE93D8;
+  border-radius: 4px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.nav-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #374151;
+  flex-shrink: 0;
+}
+
+.toggle-track {
+  width: 36px;
+  height: 20px;
+  background: #0053CC;
+  border-radius: 10px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.toggle-track.off { background: #D0D5DD; }
+
+.toggle-thumb {
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: left 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle-track:not(.off) .toggle-thumb { left: 18px; }
+
+/* ── MAIN CONTENT ── */
+.main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px 16px 80px;
+}
+
+.rule-form {
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── RULE NAME ── */
+.rule-name-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 16px;
+  border: 1px solid #E0E4EA;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: 'Roboto', sans-serif;
+  font-weight: 500;
+  color: #1A1A2E;
+  background: white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.rule-name-input::placeholder { color: #9CA3AF; font-weight: 400; }
+.rule-name-input:focus { outline: none; border-color: #0053CC; box-shadow: 0 0 0 3px rgba(0,83,204,0.12); }
+
+/* ── SECTION CARD ── */
+.section-card {
+  background: white;
+  border: 1px solid #E0E4EA;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  overflow: hidden;
+}
+
+.section-card.trigger { border-left: 3px solid #9CA3AF; }
+.section-card.condition { border-left: 3px solid #0053CC; }
+.section-card.action { border-left: 3px solid #2E7D32; }
+.section-card.ai { border-left: 3px solid #7B1FA2; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 16px 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.section-card.trigger .section-header { color: #6B7280; }
+.section-card.condition .section-header { color: #0053CC; }
+.section-card.action .section-header { color: #2E7D32; }
+.section-card.ai .section-header { color: #7B1FA2; }
+
+.section-body { padding: 10px 16px 14px; }
+
+/* ── FIELD ROW ── */
+.field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.field-row + .field-row { margin-top: 8px; }
+
+.row-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 20px;
+  text-align: center;
+}
+
+.row-label {
+  font-size: 13px;
+  color: #6B7280;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.rule-select {
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid #D0D5DD;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Roboto', sans-serif;
+  background: white;
+  color: #1A1A2E;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 28px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.rule-select:focus { outline: none; border-color: #0053CC; box-shadow: 0 0 0 3px rgba(0,83,204,0.12); }
+
+.rule-input {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #D0D5DD;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Roboto', sans-serif;
+  color: #1A1A2E;
+  flex: 1;
+  min-width: 120px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.rule-input::placeholder { color: #9CA3AF; }
+.rule-input:focus { outline: none; border-color: #0053CC; box-shadow: 0 0 0 3px rgba(0,83,204,0.12); }
+
+.rule-input.warning { border-color: #F59E0B; background: #FFFBEB; }
+
+/* ── OR LABEL ── */
+.or-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #9CA3AF;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* ── AND BADGE ── */
+.and-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #0053CC;
+  background: #EEF4FF;
+  border: 1px solid #C7D9FF;
+  border-radius: 4px;
+  padding: 2px 8px;
+  margin: 6px 0 2px 28px;
+}
+
+/* ── ADD CONDITION ── */
+.add-condition-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #0053CC;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: opacity 0.15s;
+}
+
+.add-condition-btn:hover { opacity: 0.7; }
+.add-condition-btn:disabled { color: #9CA3AF; cursor: not-allowed; opacity: 1; }
+
+/* ── REMOVE CONDITION ── */
+.remove-cond-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid #E0E4EA;
+  background: white;
+  color: #9CA3AF;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.remove-cond-btn:hover { border-color: #EF4444; color: #EF4444; }
+
+/* ── ACTION ── */
+.action-sub-row {
+  margin-top: 8px;
+  padding-left: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.action-arrow {
+  font-size: 13px;
+  color: #9CA3AF;
+  flex-shrink: 0;
+}
+
+/* ── AI BUILDER ── */
+.ai-textarea {
+  width: 100%;
+  min-height: 68px;
+  padding: 10px 12px;
+  border: 1px solid #D0D5DD;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Roboto', sans-serif;
+  color: #1A1A2E;
+  resize: vertical;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  line-height: 1.5;
+}
+
+.ai-textarea::placeholder { color: #9CA3AF; }
+.ai-textarea:focus { outline: none; border-color: #7B1FA2; box-shadow: 0 0 0 3px rgba(123,31,162,0.12); }
+
+.ai-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ai-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.ai-chip {
+  font-size: 12px;
+  color: #7B1FA2;
+  background: #F9F0FF;
+  border: 1px solid #CE93D8;
+  border-radius: 12px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.ai-chip:hover { background: #EDE0FF; }
+
+.ai-generate-btn {
+  height: 36px;
+  padding: 0 18px;
+  background: #7B1FA2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+
+.ai-generate-btn:hover { background: #6A1B9A; }
+.ai-generate-btn:disabled { background: #CE93D8; cursor: not-allowed; }
+
+/* ── AI SPINNER ── */
+.ai-thinking {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #7B1FA2;
+  margin-top: 8px;
+}
+
+.ai-thinking.active { display: flex; }
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #E9D5FF;
+  border-top-color: #7B1FA2;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── HIGHLIGHT FLASH ── */
+.flash-highlight {
+  transition: background-color 0.4s ease;
+}
+
+.flash-highlight.active {
+  background-color: #E8F0FE !important;
+  border-color: #0053CC !important;
+}
+
+/* ── FOOTER BUTTONS ── */
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.btn-save {
+  background: #0053CC;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0 24px;
+  height: 38px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'Roboto', sans-serif;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-save:hover { background: #0046AD; }
+
+.btn-cancel {
+  background: transparent;
+  border: 1px solid #D0D5DD;
+  color: #555;
+  border-radius: 6px;
+  padding: 0 20px;
+  height: 38px;
+  font-size: 14px;
+  font-family: 'Roboto', sans-serif;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.btn-cancel:hover { border-color: #9CA3AF; background: #F9FAFB; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #1A1A2E;
+  color: white;
+  font-size: 13px;
+  font-family: 'Roboto', sans-serif;
+  padding: 10px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  opacity: 0;
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+  z-index: 999;
+  white-space: nowrap;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── PAGE FOOTER ── */
+.page-footer {
+  text-align: center;
+  padding: 16px;
+  font-size: 12px;
+  color: #C0C6D0;
+  letter-spacing: 0.03em;
+}
+</style>
+</head>
+<body>
+
+<nav class="top-nav">
+  <a class="nav-logo" href="#">
+    <svg width="90" height="22" viewBox="0 0 90 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="22" height="22" rx="5" fill="#0053CC"/>
+      <path d="M6 11C6 8.24 8.24 6 11 6C12.66 6 14.13 6.8 15.07 8.04L13.32 9.4C12.79 8.69 11.95 8.25 11 8.25C9.48 8.25 8.25 9.48 8.25 11C8.25 12.52 9.48 13.75 11 13.75C11.95 13.75 12.79 13.31 13.32 12.6L15.07 13.96C14.13 15.2 12.66 16 11 16C8.24 16 6 13.76 6 11Z" fill="white"/>
+      <text x="27" y="15.5" font-family="Roboto, sans-serif" font-size="13" font-weight="600" fill="#1A1A2E">synder</text>
+    </svg>
+  </a>
+  <div class="nav-breadcrumb">Smart Rules &rsaquo; Rules &rsaquo; <span>Create Rule</span></div>
+  <div class="nav-badge">Prototype C &middot; Simple</div>
+  <div class="nav-toggle">
+    <div class="toggle-track" id="activeToggle" onclick="toggleActive()">
+      <div class="toggle-thumb"></div>
+    </div>
+    <span id="toggleLabel">Active</span>
+  </div>
+</nav>
+
+<main class="main">
+  <div class="rule-form" id="ruleForm">
+
+    <input type="text" class="rule-name-input" id="ruleName" placeholder="Rule name…" oninput="rule.name = this.value">
+
+    <div class="section-card trigger">
+      <div class="section-header">
+        <span>⚡</span> Trigger
+      </div>
+      <div class="section-body">
+        <div class="field-row">
+          <span class="row-icon">⚡</span>
+          <span class="row-label">When</span>
+          <select class="rule-select" id="triggerEntity" onchange="rule.trigger.entity = this.value"></select>
+          <span class="row-label">is</span>
+          <select class="rule-select" id="triggerEvent" onchange="rule.trigger.event = this.value"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card condition">
+      <div class="section-header">
+        <span>🔀</span> IF Condition
+      </div>
+      <div class="section-body" id="conditionsBody"></div>
+    </div>
+
+    <div class="section-card action">
+      <div class="section-header">
+        <span>✓</span> Then Action
+      </div>
+      <div class="section-body" id="actionBody"></div>
+    </div>
+
+    <div class="section-card ai">
+      <div class="section-header">
+        <span>✨</span> AI Builder
+      </div>
+      <div class="section-body">
+        <div style="font-size:13px; color:#4B5563; margin-bottom:8px;">Describe this rule in plain English</div>
+        <textarea class="ai-textarea" id="aiText" placeholder="e.g. set Contact to Amazon EU if the contact name contains amazon"></textarea>
+        <div class="ai-thinking" id="aiThinking">
+          <div class="spinner"></div>
+          <span id="aiThinkingMsg">Parsing your rule…</span>
+        </div>
+        <div class="ai-footer-row">
+          <div class="ai-chips">
+            <div class="ai-chip" onclick="fillChip(0)">set Contact to Amazon EU if contact contains amazon</div>
+            <div class="ai-chip" onclick="fillChip(1)">send email if total amount is greater than 1000</div>
+            <div class="ai-chip" onclick="fillChip(2)">set Reference to INV-2024 if currency equals USD</div>
+          </div>
+          <button class="ai-generate-btn" id="aiGenerateBtn" onclick="generateFromAI()">
+            <span>✨</span> Generate rule →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-footer">
+      <button class="btn-cancel" onclick="resetForm()">Cancel</button>
+      <button class="btn-save" onclick="saveRule()">Save Rule</button>
+    </div>
+
+  </div>
+</main>
+
+<div class="page-footer">Prototype C · Simple IF-THEN</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const TRIGGER_ENTITIES = ['Invoice','Bill','Credit Note','Payment','Contact','Item'];
+const TRIGGER_EVENTS = ['Created','Paid','Sent','Payment reminder'];
+
+const COND_FIELDS = ['Contact','Currency','Reference','Due date','Txn date','Total Amount','Balance','Line'];
+const LINE_SUBS = ['Amount','Description','Item Details','Qty','Tracking Category 1','Tracking Category 2','Tracking Category 3'];
+
+const STR_OPS = ['Contains','Equals','Not equals','Starts with','Ends with','Is empty','Is not empty'];
+const NUM_OPS = ['Equals','Greater than','Less than','Greater than or equal','Less than or equal','Is empty'];
+const DATE_OPS = ['Equals','Before','After','Is empty','Is not empty'];
+
+const CURR_FIELDS = ['Reference','Currency','Due date','Contact','Description','Txn date'];
+const LINE_FIELDS = ['Tracking Category 1','Tracking Category 2','Tracking Category 3','Description','Item Details','Qty','Amount'];
+
+const ACTION_TYPES = ['Xero Action','Email','SMS','Voice','Post to URL'];
+const XERO_TX_TYPES = ['Invoice','Bill','Credit Note','Payment'];
+const XERO_SCOPES = ['Update current','Update line'];
+const XERO_CURR_FIELDS = ['Reference','Currency','Due date','Contact','Description','Txn date'];
+const XERO_LINE_FIELDS = ['Tracking Category 1','Tracking Category 2','Tracking Category 3','Description','Item Details','Qty','Amount'];
+
+function getOpsForField(field1) {
+  if (field1 === 'Total Amount' || field1 === 'Balance') return NUM_OPS;
+  if (field1 === 'Due date' || field1 === 'Txn date') return DATE_OPS;
+  return STR_OPS;
+}
+
+let rule = {
+  name: '',
+  trigger: { entity: 'Invoice', event: 'Created' },
+  conditions: [
+    { field1: 'Contact', field2: '', op: 'Contains', val: '', orVal: '' }
+  ],
+  action: { type: 'Xero Action', txType: 'Invoice', scope: 'Update current', field: 'Reference', val: '' }
+};
+
+let isActive = true;
+
+function toggleActive() {
+  isActive = !isActive;
+  const track = document.getElementById('activeToggle');
+  const label = document.getElementById('toggleLabel');
+  track.classList.toggle('off', !isActive);
+  label.textContent = isActive ? 'Active' : 'Inactive';
+}
+
+function makeSelect(options, selected, onchange, extraClass) {
+  const sel = document.createElement('select');
+  sel.className = 'rule-select' + (extraClass ? ' ' + extraClass : '');
+  options.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt;
+    o.textContent = opt;
+    if (opt === selected) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', onchange);
+  return sel;
+}
+
+function makeInput(placeholder, value, oninput, extraClass) {
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'rule-input' + (extraClass ? ' ' + extraClass : '');
+  inp.placeholder = placeholder;
+  inp.value = value || '';
+  inp.addEventListener('input', oninput);
+  return inp;
+}
+
+function renderTrigger() {
+  const entitySel = document.getElementById('triggerEntity');
+  const eventSel = document.getElementById('triggerEvent');
+  entitySel.innerHTML = '';
+  eventSel.innerHTML = '';
+  TRIGGER_ENTITIES.forEach(e => {
+    const o = document.createElement('option');
+    o.value = e; o.textContent = e;
+    if (e === rule.trigger.entity) o.selected = true;
+    entitySel.appendChild(o);
+  });
+  TRIGGER_EVENTS.forEach(e => {
+    const o = document.createElement('option');
+    o.value = e; o.textContent = e;
+    if (e === rule.trigger.event) o.selected = true;
+    eventSel.appendChild(o);
+  });
+}
+
+function renderConditions() {
+  const body = document.getElementById('conditionsBody');
+  body.innerHTML = '';
+
+  rule.conditions.forEach((cond, i) => {
+    if (i > 0) {
+      const badge = document.createElement('div');
+      badge.className = 'and-badge';
+      badge.textContent = 'AND';
+      body.appendChild(badge);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'field-row';
+    row.dataset.condIndex = i;
+
+    const icon = document.createElement('span');
+    icon.className = 'row-icon';
+    icon.textContent = '🔀';
+    row.appendChild(icon);
+
+    const f1Sel = makeSelect(COND_FIELDS, cond.field1, function() {
+      rule.conditions[i].field1 = this.value;
+      const ops = getOpsForField(this.value);
+      rule.conditions[i].op = ops[0];
+      if (this.value !== 'Line') rule.conditions[i].field2 = '';
+      renderConditions();
+    });
+    row.appendChild(f1Sel);
+
+    if (cond.field1 === 'Line') {
+      const f2Sel = makeSelect(LINE_SUBS, cond.field2 || LINE_SUBS[0], function() {
+        rule.conditions[i].field2 = this.value;
+      });
+      row.appendChild(f2Sel);
+    }
+
+    const ops = getOpsForField(cond.field1);
+    const opSel = makeSelect(ops, cond.op, function() {
+      rule.conditions[i].op = this.value;
+    });
+    row.appendChild(opSel);
+
+    const valInp = makeInput('value…', cond.val, function() {
+      rule.conditions[i].val = this.value;
+    });
+    row.appendChild(valInp);
+
+    const orLabel = document.createElement('span');
+    orLabel.className = 'or-label';
+    orLabel.textContent = 'or';
+    row.appendChild(orLabel);
+
+    const orInp = makeInput('alt value…', cond.orVal, function() {
+      rule.conditions[i].orVal = this.value;
+    });
+    row.appendChild(orInp);
+
+    if (i > 0) {
+      const rmBtn = document.createElement('button');
+      rmBtn.className = 'remove-cond-btn';
+      rmBtn.innerHTML = '&times;';
+      rmBtn.title = 'Remove condition';
+      rmBtn.addEventListener('click', function() {
+        rule.conditions.splice(i, 1);
+        renderConditions();
+      });
+      row.appendChild(rmBtn);
+    }
+
+    body.appendChild(row);
+  });
+
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-condition-btn';
+  addBtn.disabled = rule.conditions.length >= 3;
+  addBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6.5" stroke="#0053CC"/><path d="M7 4v6M4 7h6" stroke="#0053CC" stroke-width="1.4" stroke-linecap="round"/></svg> Add AND condition';
+  addBtn.addEventListener('click', function() {
+    if (rule.conditions.length < 3) {
+      rule.conditions.push({ field1: 'Contact', field2: '', op: 'Contains', val: '', orVal: '' });
+      renderConditions();
+    }
+  });
+  body.appendChild(addBtn);
+}
+
+function renderAction() {
+  const body = document.getElementById('actionBody');
+  body.innerHTML = '';
+
+  const typeRow = document.createElement('div');
+  typeRow.className = 'field-row';
+
+  const icon = document.createElement('span');
+  icon.className = 'row-icon';
+  icon.textContent = '✓';
+  typeRow.appendChild(icon);
+
+  const typeSel = makeSelect(ACTION_TYPES, rule.action.type, function() {
+    rule.action.type = this.value;
+    if (this.value === 'Xero Action') {
+      rule.action.txType = rule.action.txType || 'Invoice';
+      rule.action.scope = rule.action.scope || 'Update current';
+      rule.action.field = rule.action.field || 'Reference';
+      rule.action.val = rule.action.val || '';
+    }
+    renderAction();
+  });
+  typeRow.appendChild(typeSel);
+  body.appendChild(typeRow);
+
+  if (rule.action.type === 'Xero Action') {
+    const xeroRow1 = document.createElement('div');
+    xeroRow1.className = 'action-sub-row';
+
+    const txSel = makeSelect(XERO_TX_TYPES, rule.action.txType, function() {
+      rule.action.txType = this.value;
+    });
+    xeroRow1.appendChild(txSel);
+
+    const scopeSel = makeSelect(XERO_SCOPES, rule.action.scope, function() {
+      rule.action.scope = this.value;
+      const fields = this.value === 'Update line' ? XERO_LINE_FIELDS : XERO_CURR_FIELDS;
+      rule.action.field = fields[0];
+      renderAction();
+    });
+    xeroRow1.appendChild(scopeSel);
+    body.appendChild(xeroRow1);
+
+    const xeroRow2 = document.createElement('div');
+    xeroRow2.className = 'action-sub-row';
+
+    const setLabel = document.createElement('span');
+    setLabel.className = 'row-label';
+    setLabel.textContent = 'Set';
+    xeroRow2.appendChild(setLabel);
+
+    const fieldOptions = rule.action.scope === 'Update line' ? XERO_LINE_FIELDS : XERO_CURR_FIELDS;
+    const fieldSel = makeSelect(fieldOptions, rule.action.field, function() {
+      rule.action.field = this.value;
+    });
+    xeroRow2.appendChild(fieldSel);
+
+    const arrow = document.createElement('span');
+    arrow.className = 'action-arrow';
+    arrow.textContent = '→';
+    xeroRow2.appendChild(arrow);
+
+    const valInp = makeInput('value…', rule.action.val, function() {
+      rule.action.val = this.value;
+    });
+    xeroRow2.appendChild(valInp);
+
+    body.appendChild(xeroRow2);
+
+  } else if (rule.action.type === 'Email') {
+    const subRow = document.createElement('div');
+    subRow.className = 'action-sub-row';
+    const inp = makeInput('email@example.com', rule.action.val, function() {
+      rule.action.val = this.value;
+    });
+    subRow.appendChild(inp);
+    body.appendChild(subRow);
+
+  } else if (rule.action.type === 'SMS' || rule.action.type === 'Voice') {
+    const subRow = document.createElement('div');
+    subRow.className = 'action-sub-row';
+    const inp = makeInput('+1 555 000 0000', rule.action.val, function() {
+      rule.action.val = this.value;
+    });
+    subRow.appendChild(inp);
+    body.appendChild(subRow);
+
+  } else if (rule.action.type === 'Post to URL') {
+    const subRow = document.createElement('div');
+    subRow.className = 'action-sub-row';
+    const inp = makeInput('https://…', rule.action.val, function() {
+      rule.action.val = this.value;
+    });
+    subRow.appendChild(inp);
+    body.appendChild(subRow);
+  }
+}
+
+function renderAll() {
+  renderTrigger();
+  renderConditions();
+  renderAction();
+  document.getElementById('ruleName').value = rule.name;
+}
+
+const AI_FIELD_MAP = [
+  { keys: ['tracking category 1','tracking 1','tracking cat 1'], field1:'Line', field2:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2','tracking cat 2'], field1:'Line', field2:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3','tracking cat 3'], field1:'Line', field2:'Tracking Category 3' },
+  { keys: ['line amount','line qty','line description','line item'], field1:'Line', field2:'Amount' },
+  { keys: ['product','item details','item','sku'], field1:'Line', field2:'Item Details' },
+  { keys: ['reference','ref'], field1:'Reference', field2:null },
+  { keys: ['currency'], field1:'Currency', field2:null },
+  { keys: ['due date','due'], field1:'Due date', field2:null },
+  { keys: ['contact name','contact','customer','email'], field1:'Contact', field2:null },
+  { keys: ['description','desc'], field1:'Line', field2:'Description' },
+  { keys: ['total amount','total','balance','amount'], field1:'Total Amount', field2:null },
+  { keys: ['txn date','transaction date','date'], field1:'Txn date', field2:null },
+];
+const AI_OP_MAP = [
+  { keys: ['contains','has','includes','with'], op:'Contains' },
+  { keys: ['equals','is','=','=='], op:'Equals' },
+  { keys: ['not equals','is not','!='], op:'Not equals' },
+  { keys: ['starts with','begins with','starts'], op:'Starts with' },
+  { keys: ['ends with','ends'], op:'Ends with' },
+  { keys: ['greater than','>'], op:'Greater than' },
+  { keys: ['less than','<'], op:'Less than' },
+  { keys: ['before'], op:'Before' },
+  { keys: ['after'], op:'After' },
+  { keys: ['is empty','is blank'], op:'Is empty' },
+  { keys: ['is not empty','is set'], op:'Is not empty' },
+];
+const AI_ACTION_MAP = [
+  { keys: ['tracking category 1','tracking 1'], field:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2'], field:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3'], field:'Tracking Category 3' },
+  { keys: ['reference','ref'], field:'Reference' },
+  { keys: ['currency'], field:'Currency' },
+  { keys: ['due date'], field:'Due date' },
+  { keys: ['contact name','contact','customer'], field:'Contact' },
+  { keys: ['description','desc'], field:'Description' },
+  { keys: ['item details','product','item'], field:'Item Details' },
+  { keys: ['qty','quantity'], field:'Qty' },
+];
+
+function matchKey(text, keys) {
+  const t = text.toLowerCase();
+  return keys.some(k => t.includes(k.toLowerCase()));
+}
+
+function parseAI(text) {
+  const t = text.toLowerCase().trim();
+  let condPart = '', actionPart = '';
+
+  const ifThenMatch = t.match(/^(.+?)\s+if\s+(.+)$/i);
+  const thenIfMatch = t.match(/^if\s+(.+?)\s+then\s+(.+)$/i);
+  const sendIfMatch = t.match(/^(send\s+\w+)\s+if\s+(.+)$/i);
+
+  if (ifThenMatch) {
+    actionPart = ifThenMatch[1].trim();
+    condPart = ifThenMatch[2].trim();
+  } else if (thenIfMatch) {
+    condPart = thenIfMatch[1].trim();
+    actionPart = thenIfMatch[2].trim();
+  } else if (sendIfMatch) {
+    actionPart = sendIfMatch[1].trim();
+    condPart = sendIfMatch[2].trim();
+  } else {
+    condPart = t;
+    actionPart = '';
+  }
+
+  let condField1 = 'Contact', condField2 = null, condOp = 'Contains', condVal = '⚠ unknown';
+  let actionType = 'Xero Action', actionField = 'Reference', actionVal = '⚠ unknown';
+
+  for (const fm of AI_FIELD_MAP) {
+    if (matchKey(condPart, fm.keys)) {
+      condField1 = fm.field1;
+      condField2 = fm.field2 || null;
+      break;
+    }
+  }
+
+  for (const om of AI_OP_MAP) {
+    if (matchKey(condPart, om.keys)) {
+      condOp = om.op;
+      break;
+    }
+  }
+
+  const opWords = ['contains','equals','is not','is','not equals','starts with','ends with','greater than','less than','before','after','is empty','is not empty'];
+  let extractedVal = null;
+  for (const op of opWords) {
+    const idx = condPart.toLowerCase().indexOf(op);
+    if (idx !== -1) {
+      const after = condPart.slice(idx + op.length).trim();
+      if (after.length > 0) { extractedVal = after; break; }
+    }
+  }
+  if (extractedVal) condVal = extractedVal;
+
+  if (actionPart) {
+    if (matchKey(actionPart, ['send email','email'])) {
+      actionType = 'Email';
+      const emailMatch = actionPart.match(/[\w.+-]+@[\w-]+\.[a-z]{2,}/i);
+      actionVal = emailMatch ? emailMatch[0] : '⚠ unknown';
+    } else if (matchKey(actionPart, ['sms','text message'])) {
+      actionType = 'SMS';
+      actionVal = '⚠ unknown';
+    } else if (matchKey(actionPart, ['voice','call'])) {
+      actionType = 'Voice';
+      actionVal = '⚠ unknown';
+    } else if (matchKey(actionPart, ['post to url','webhook','url','http'])) {
+      actionType = 'Post to URL';
+      const urlMatch = actionPart.match(/https?:\/\/[^\s]+/i);
+      actionVal = urlMatch ? urlMatch[0] : '⚠ unknown';
+    } else {
+      actionType = 'Xero Action';
+      for (const am of AI_ACTION_MAP) {
+        if (matchKey(actionPart, am.keys)) {
+          actionField = am.field;
+          break;
+        }
+      }
+      const toIdx = actionPart.toLowerCase().indexOf(' to ');
+      if (toIdx !== -1) {
+        const after = actionPart.slice(toIdx + 4).trim();
+        if (after.length > 0) actionVal = after;
+      }
+    }
+  }
+
+  return { condField1, condField2, condOp, condVal, actionType, actionField, actionVal };
+}
+
+const THINKING_MSGS = ['Parsing your rule…','Identifying fields…','Mapping to Xero fields…'];
+
+function generateFromAI() {
+  const text = document.getElementById('aiText').value.trim();
+  if (!text) { showToast('Please enter a rule description first'); return; }
+
+  const btn = document.getElementById('aiGenerateBtn');
+  const thinking = document.getElementById('aiThinking');
+  const thinkingMsg = document.getElementById('aiThinkingMsg');
+  btn.disabled = true;
+  thinking.classList.add('active');
+
+  let step = 0;
+  thinkingMsg.textContent = THINKING_MSGS[0];
+  const interval = setInterval(function() {
+    step++;
+    if (step < THINKING_MSGS.length) {
+      thinkingMsg.textContent = THINKING_MSGS[step];
+    }
+  }, 450);
+
+  setTimeout(function() {
+    clearInterval(interval);
+    thinking.classList.remove('active');
+    btn.disabled = false;
+
+    const parsed = parseAI(text);
+
+    rule.conditions = [{
+      field1: parsed.condField1,
+      field2: parsed.condField2 || (parsed.condField1 === 'Line' ? LINE_SUBS[0] : ''),
+      op: parsed.condOp,
+      val: parsed.condVal,
+      orVal: ''
+    }];
+
+    if (parsed.actionType === 'Xero Action') {
+      rule.action = {
+        type: 'Xero Action',
+        txType: rule.action.txType || 'Invoice',
+        scope: 'Update current',
+        field: parsed.actionField,
+        val: parsed.actionVal
+      };
+    } else {
+      rule.action = { type: parsed.actionType, val: parsed.actionVal };
+    }
+
+    renderConditions();
+    renderAction();
+    flashFields();
+
+  }, 1500);
+}
+
+function flashFields() {
+  const inputs = document.querySelectorAll('.rule-select, .rule-input');
+  inputs.forEach(function(el) {
+    el.classList.add('flash-highlight', 'active');
+    setTimeout(function() {
+      el.classList.remove('active');
+    }, 400);
+    setTimeout(function() {
+      el.classList.remove('flash-highlight');
+    }, 900);
+  });
+}
+
+const CHIP_TEXTS = [
+  'set Contact to Amazon EU if contact contains amazon',
+  'send email if total amount is greater than 1000',
+  'set Reference to INV-2024 if currency equals USD'
+];
+
+function fillChip(i) {
+  document.getElementById('aiText').value = CHIP_TEXTS[i];
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 2000);
+}
+
+function saveRule() {
+  showToast('Rule saved!');
+}
+
+function resetForm() {
+  rule = {
+    name: '',
+    trigger: { entity: 'Invoice', event: 'Created' },
+    conditions: [
+      { field1: 'Contact', field2: '', op: 'Contains', val: '', orVal: '' }
+    ],
+    action: { type: 'Xero Action', txType: 'Invoice', scope: 'Update current', field: 'Reference', val: '' }
+  };
+  document.getElementById('aiText').value = '';
+  renderAll();
+}
+
+renderAll();
+</script>
+</body>
+</html>
