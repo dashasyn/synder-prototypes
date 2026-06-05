@@ -1212,20 +1212,21 @@
     .matching-bar {
       display: flex;
       align-items: center;
-      gap: 10px;
-      background: #F8F9FA;
-      border-bottom: 1px solid #E5E7EB;
+      gap: 12px;
+      background: #F0FDF4;
+      border-bottom: 1px solid #86EFAC;
       padding: 10px 24px;
       position: relative;
       overflow: hidden;
     }
+    .matching-bar-icon { font-size: 16px; flex-shrink: 0; }
     .matching-bar-label {
-      font-size: 13px;
-      font-weight: 600;
-      color: #374151;
+      font-size: 14px;
+      color: #166534;
       flex: 1;
       white-space: nowrap;
     }
+    .matching-bar-label strong { font-weight: 600; }
     .btn-match-ai {
       background: #16A34A;
       color: #fff;
@@ -1242,20 +1243,23 @@
     .btn-match-ai:hover:not(:disabled) { background: #15803D; }
     .btn-match-ai:disabled { opacity: 0.5; cursor: not-allowed; }
     .btn-match-selected {
-      background: var(--blue);
-      color: #fff;
-      border: none;
+      background: rgba(0,83,204,0.12);
+      color: #0053CC;
+      border: 1px solid rgba(0,83,204,0.25);
       border-radius: 6px;
-      padding: 7px 18px;
+      padding: 6px 16px;
       font-size: 14px;
       font-weight: 500;
       cursor: not-allowed;
       font-family: inherit;
       white-space: nowrap;
-      opacity: 0.35;
+      opacity: 0.55;
       transition: background 0.15s, opacity 0.15s;
     }
     .btn-match-selected.active {
+      background: var(--blue);
+      color: #fff;
+      border-color: var(--blue);
       opacity: 1;
       cursor: pointer;
     }
@@ -1648,9 +1652,13 @@
 <div class="tab-panel active" id="panel-not-matched">
 <!-- MATCHING BAR -->
 <div class="matching-bar" id="matching-bar">
-  <span class="matching-bar-label" id="matching-bar-label">Matching</span>
-  <button class="btn-match-ai" id="btn-ai-match" onclick="runAIMatching()">✨ Match with AI</button>
-  <button class="btn-match-selected" id="btn-match-selected" onclick="handleMatchClick('synder')">Match</button>
+  <span class="matching-bar-icon">✨</span>
+  <span class="matching-bar-label" id="matching-bar-label"><strong>AI matching available</strong> — <span id="ai-banner-count">8</span> potential matches found for your unmatched transactions.</span>
+  <button class="btn-match-ai" id="btn-ai-match" onclick="runAIMatching()">Match with AI</button>
+  <span class="tooltip-wrap">
+    <button class="btn-match-selected" id="btn-match-selected" onclick="handleMatchClick('synder')">Match</button>
+    <span class="tooltip-text" id="match-btn-tooltip">Select rows on both sides to match manually</span>
+  </span>
   <div class="ai-progress-bar-wrap" id="ai-progress-wrap" style="position:absolute;bottom:0;left:0;right:0;margin:0;border-radius:0"></div>
 </div>
 <!-- MAIN TWO-COLUMN LAYOUT -->
@@ -3399,16 +3407,25 @@ document.addEventListener('keydown', e => {
 
 function updateMatchConsole() {
   const btn = document.getElementById('btn-match-selected');
+  const tip = document.getElementById('match-btn-tooltip');
   if (!btn) return;
   const sCount = selected.synder.size;
   const iCount = selected.integration.size;
+  const onlyOne = (sCount > 0) !== (iCount > 0);
   const bothSelected = sCount > 0 && iCount > 0;
   if (bothSelected) {
     btn.classList.add('active');
     btn.textContent = `Match  ${sCount} ↔ ${iCount}`;
+    if (tip) tip.style.display = 'none';
   } else {
     btn.classList.remove('active');
     btn.textContent = 'Match';
+    if (tip) {
+      tip.style.display = '';
+      tip.textContent = onlyOne
+        ? `Also select rows on the ${sCount > 0 ? 'integration' : 'accounting'} side`
+        : 'Select rows on both sides to match manually';
+    }
   }
 }
 
@@ -3491,12 +3508,12 @@ async function runAIMatching() {
     applied++;
     rowsCount += p.sIds.length + p.iIds.length;
     progressBar.style.width = Math.round((applied / validPairs.length) * 100) + '%';
-    if (barLabel) barLabel.textContent = `Matching ${applied} of ${validPairs.length}…`;
+    if (barLabel) barLabel.innerHTML = `<strong>AI matching</strong> — Matched ${applied} of ${validPairs.length}…`;
   }
 
   await new Promise(r => setTimeout(r, 200));
   await new Promise(r => setTimeout(r, 180));
-  if (barLabel) barLabel.textContent = 'Matching';
+  if (aiBtn) aiBtn.textContent = 'Match with AI';
   activityLog.push({ time: new Date(), text: `AI matched ${applied} pair${applied !== 1 ? 's' : ''} (${rowsCount} rows).` });
   renderAll();
   clearSelection('synder');
@@ -3517,13 +3534,14 @@ function updateAIBannerCount() {
       sRows.every(r => !removed.synder.has(r.id)) && iRows.every(r => !removed.integration.has(r.id));
   }).length;
   const aiBtn = document.getElementById('btn-ai-match');
-  if (!aiBtn) return;
+  const countEl = document.getElementById('ai-banner-count');
+  const label = document.getElementById('matching-bar-label');
+  if (countEl) countEl.textContent = remaining;
   if (remaining === 0) {
-    aiBtn.textContent = '✓ AI matching done';
-    aiBtn.disabled = true;
+    if (aiBtn) { aiBtn.textContent = '✓ AI matching done'; aiBtn.disabled = true; }
+    if (label) label.innerHTML = '<strong>All AI matches applied</strong> — use manual matching to continue.';
   } else {
-    aiBtn.textContent = `✨ Match with AI (${remaining})`;
-    aiBtn.disabled = false;
+    if (aiBtn) { aiBtn.textContent = 'Match with AI'; aiBtn.disabled = false; }
   }
 }
 </script>
