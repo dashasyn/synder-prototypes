@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synder Smart Rules – Proto D</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Roboto,sans-serif;background:#F5F7FA;display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:14px;color:#212121}
+
+/* ── Header ── */
+.header{background:#fff;border-bottom:1px solid #E0E0E0;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+.header-title{font-size:15px;font-weight:500}
+.rule-name{border:1px solid #E0E0E0;border-radius:6px;padding:5px 10px;font-size:13px;outline:none;width:220px}
+.rule-name:focus{border-color:#0053CC}
+.btn{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:background .15s}
+.btn-primary{background:#0053CC;color:#fff}.btn-primary:hover{background:#0044AA}
+.btn-secondary{background:#fff;color:#0053CC;border:1px solid #0053CC}.btn-secondary:hover{background:#EEF3FF}
+.btn-ghost{background:none;color:#616161;border:1px solid #E0E0E0}.btn-ghost:hover{background:#F5F5F5}
+.btn-sm{padding:4px 10px;font-size:12px}
+.ml-auto{margin-left:auto}
+.btn-row{display:flex;gap:8px}
+
+/* ── Layout ── */
+.workspace{display:flex;flex:1;overflow:hidden}
+.sidebar{width:300px;min-width:300px;background:#fff;border-right:1px solid #E0E0E0;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+.canvas-area{flex:1;overflow:auto;padding:40px 48px}
+
+/* ── Sidebar ── */
+.sb-section{padding:16px;border-bottom:1px solid #F5F5F5}
+.sb-label{font-size:11px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.sb-hint{font-size:13px;color:#9E9E9E;text-align:center;padding:32px 16px;line-height:1.5}
+.form-group{margin-bottom:12px}
+.form-label{font-size:12px;color:#616161;margin-bottom:4px;display:block}
+select,.text-input{width:100%;padding:7px 10px;border:1px solid #E0E0E0;border-radius:6px;font-size:13px;color:#212121;background:#fff;outline:none;-webkit-appearance:none;appearance:none}
+select:focus,.text-input:focus{border-color:#0053CC}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='%239E9E9E'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.or-divider{text-align:center;font-size:11px;font-weight:700;color:#BDBDBD;margin:4px 0;letter-spacing:.5px}
+.or-values-list{display:flex;flex-direction:column;gap:4px}
+.or-value-row{display:flex;gap:4px;align-items:center}
+.or-value-row .text-input{flex:1}
+.remove-or{background:none;border:none;color:#BDBDBD;cursor:pointer;font-size:18px;line-height:1;padding:0 2px}.remove-or:hover{color:#F44336}
+.add-or-btn{font-size:12px;color:#0053CC;background:none;border:none;cursor:pointer;padding:2px 0;text-align:left}.add-or-btn:hover{text-decoration:underline}
+
+/* ── Canvas cards ── */
+.tree-node{display:flex;align-items:flex-start;gap:0}
+.tree-column{display:flex;flex-direction:column;align-items:center;gap:0}
+
+.card{background:#fff;border:1px solid #E0E0E0;border-radius:8px;padding:11px 14px;min-width:200px;max-width:270px;cursor:pointer;position:relative;transition:box-shadow .15s}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.card.selected{box-shadow:0 0 0 2px #0053CC}
+.card.trigger-card{border-left:4px solid #757575}
+.card.condition-card{border-left:4px solid #0053CC}
+.card.action-card{border-left:4px solid #2E7D32}
+.card.empty-card{border:2px dashed #BDBDBD;background:#FAFAFA;cursor:pointer;min-height:56px;display:flex;align-items:center;justify-content:center;color:#BDBDBD;font-size:12px;transition:all .15s}
+.card.empty-card:hover{border-color:#0053CC;color:#0053CC;background:#EEF3FF}
+.card.chooser-card{border:2px dashed #0053CC;background:#EEF3FF;padding:8px;min-width:200px}
+
+.card-type-label{font-size:10px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.card-main{font-size:13px;font-weight:500;color:#212121;line-height:1.35}
+.card-detail{font-size:12px;color:#616161;margin-top:2px;line-height:1.35}
+.or-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.or-tag{background:#EEF3FF;color:#0053CC;font-size:11px;padding:1px 6px;border-radius:3px}
+.del-btn{position:absolute;top:6px;right:6px;background:none;border:none;color:#E0E0E0;cursor:pointer;font-size:16px;line-height:1}.del-btn:hover{color:#F44336}
+
+/* ── Path buttons on condition cards ── */
+.path-btns{display:flex;gap:6px;margin-top:8px}
+.path-btn{font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;border:none;cursor:pointer;transition:all .15s}
+.path-btn.yes{background:#E8F5E9;color:#2E7D32}.path-btn.yes:hover,.path-btn.yes.active{background:#2E7D32;color:#fff}
+.path-btn.no{background:#FFF3E0;color:#E65100}.path-btn.no:hover,.path-btn.no.active{background:#E65100;color:#fff}
+
+/* ── Connectors ── */
+.conn-v{width:2px;height:28px;background:#BDBDBD;align-self:center}
+.conn-h{height:2px;width:28px;background:#BDBDBD;align-self:flex-start;margin-top:28px;flex-shrink:0}
+.path-label{font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;color:#fff;margin-bottom:4px;display:inline-block;align-self:flex-start}
+.path-label.yes-lbl{background:#2E7D32}
+.path-label.no-lbl{background:#E65100}
+
+/* ── Chooser card ── */
+.chooser-btns{display:flex;gap:8px;justify-content:center}
+.chooser-btn{padding:6px 14px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.chooser-btn.cond{background:#EEF3FF;color:#0053CC;border:1px solid #C5D8FF}.chooser-btn.cond:hover{background:#0053CC;color:#fff}
+.chooser-btn.act{background:#E8F5E9;color:#2E7D32;border:1px solid #B2DFB8}.chooser-btn.act:hover{background:#2E7D32;color:#fff}
+
+/* ── Error bar ── */
+.error-bar{background:#FFF3E0;border-top:1px solid #FFCC80;padding:7px 20px;font-size:12px;color:#E65100;flex-shrink:0;display:none}
+.error-bar.show{display:block}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title">Create New Rule</div>
+  <input class="rule-name" id="ruleName" type="text" value="New Rule" />
+  <div class="ml-auto btn-row">
+    <button class="btn btn-ghost" onclick="history.back()">← Back</button>
+    <button class="btn btn-secondary" onclick="saveRule()">Save Rule</button>
+    <button class="btn btn-primary" onclick="saveRule()">Save &amp; Close</button>
+  </div>
+</div>
+
+<!-- Workspace -->
+<div class="workspace">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <!-- content injected by renderSidebar() -->
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas-area" id="canvas">
+    <!-- content injected by renderCanvas() -->
+  </div>
+</div>
+
+<!-- Error bar -->
+<div class="error-bar" id="errorBar">
+  ⚠️ Each Condition block must have at least one Action block.
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// DATA
+// ──────────────────────────────────────────────────────────────
+const ENTITIES = ['Customer','Deposit','Expense','Invoice','Journal Entry','Payment','Product or Service','Refund Receipt','Sales Receipt','Transfer','Vendor'];
+const EVENTS = {
+  'Invoice': ['Created','Paid','Payment reminder','Sent'],
+  'Customer': ['Created','Updated','Deleted'],
+  'Payment': ['Created','Voided'],
+  'Expense': ['Created','Updated'],
+};
+const DEFAULT_EVENTS = ['Created','Updated','Deleted'];
+
+const FIELDS = {
+  'Invoice': {
+    'Balance':              {type:'number', sub:null},
+    'Billing address':      {type:'text',   sub:null},
+    'Class':                {type:'text',   sub:null},
+    'Currency':             {type:'text',   sub:null},
+    'Customer':             {type:'object', sub:{'Balance':'number','Billing address':'text','Company name':'text','Display name':'text','Email':'text','Phone':'text','Preferred delivery method':'text','Shipping address':'text'}},
+    'Customer memo':        {type:'text',   sub:null},
+    'Due date':             {type:'date',   sub:null},
+    'Line: Amount':         {type:'number', sub:null},
+    'Line: Class':          {type:'text',   sub:null},
+    'Line: Description':    {type:'text',   sub:null},
+    'Line: Product or Service': {type:'text', sub:null},
+    'Line: Qty':            {type:'number', sub:null},
+    'Line: Service Date':   {type:'date',   sub:null},
+    'Location':             {type:'text',   sub:null},
+    'Memo':                 {type:'text',   sub:null},
+    'Number':               {type:'text',   sub:null},
+    'Ship via':             {type:'text',   sub:null},
+    'Shipping address':     {type:'text',   sub:null},
+    'Shipping date':        {type:'date',   sub:null},
+    'Terms':                {type:'text',   sub:null},
+    'Total amount':         {type:'number', sub:null},
+    'Tracking no.':         {type:'text',   sub:null},
+    'Txn date':             {type:'date',   sub:null},
+  }
+};
+const TEXT_OPS   = ['Contains','Equals','Not equals','Set','Not set'];
+const NUMBER_OPS = ['Equals','Greater','Greater or equals','Less','Less or equals','Not equals','Set','Not set'];
+const DATE_OPS   = ['Equals','Before','After','Set','Not set'];
+const NO_VALUE_OPS = ['Set','Not set'];
+
+const ACTION_TYPES = ['Email','SMS','Voice','QuickBooks action','Post to URL'];
+const EMAIL_RECIPIENTS = ['Company owner','Customer','Vendor','Employee','Other'];
+const QB_ENTITY_ACTIONS = ['Update current','Update line'];
+const QB_FIELDS = {
+  'Update current': ['Class','Location','Customer','Terms','Memo','Message to customer'],
+  'Update line':    ['Service date','Item','Description','Class','Tax'],
+};
+
+// ──────────────────────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────────────────────
+let state = {
+  trigger: {entity:'Invoice', event:'Created'},
+  nodes: {},          // id -> node
+  rootId: null,
+  idCounter: 1,
+  sidebar: {mode:'trigger', nodeId:null}, // mode: trigger|condition|action|select-block|chooser
+  pendingSlot: null,  // {parentId, path:'yes'|'no'} — where new block will land
+  editBuffer: {},     // temp edits before save
+};
+
+function createNode(type, overrides={}) {
+  const id = 'n' + (state.idCounter++);
+  const node = {id, type, yesChild:null, noChild:null, ...overrides};
+  if (type === 'condition') {
+    Object.assign(node, {field:'', subField:'', operand:'', values:[''], ...overrides});
+  }
+  if (type === 'action') {
+    Object.assign(node, {actionType:'', recipient:'', qbEntity:'', qbAction:'', qbFieldValues:{}, urlTarget:'', ...overrides});
+  }
+  state.nodes[id] = node;
+  return id;
+}
+
+// Init: create trigger node
+function init() {
+  state.rootId = createNode('trigger');
+  state.nodes[state.rootId].entity = state.trigger.entity;
+  state.nodes[state.rootId].event  = state.trigger.event;
+  state.sidebar = {mode:'trigger', nodeId:state.rootId};
+  render();
+}
+
+// ──────────────────────────────────────────────────────────────
+// HELPERS
+// ──────────────────────────────────────────────────────────────
+function getFieldType(entity, field, subField) {
+  const fieldDef = (FIELDS[entity]||{})[field];
+  if (!fieldDef) return 'text';
+  if (fieldDef.sub && subField) return fieldDef.sub[subField] || 'text';
+  return fieldDef.type || 'text';
+}
+
+function getOperands(type) {
+  if (type==='number') return NUMBER_OPS;
+  if (type==='date')   return DATE_OPS;
+  return TEXT_OPS;
+}
+
+function needsValue(op) { return !NO_VALUE_OPS.includes(op); }
+
+function deleteNode(id) {
+  // Remove from parent's yesChild/noChild
+  for (const nid in state.nodes) {
+    const n = state.nodes[nid];
+    if (n.yesChild === id) n.yesChild = null;
+    if (n.noChild  === id) n.noChild  = null;
+  }
+  // Recursively delete subtree
+  const node = state.nodes[id];
+  if (!node) return;
+  if (node.yesChild) deleteNode(node.yesChild);
+  if (node.noChild)  deleteNode(node.noChild);
+  delete state.nodes[id];
+  if (state.sidebar.nodeId === id) state.sidebar = {mode:'select-block', nodeId:null};
+}
+
+function hasErrors() {
+  for (const id in state.nodes) {
+    const n = state.nodes[id];
+    if (n.type === 'condition') {
+      // Must have at least one action somewhere in its subtree
+      if (!hasActionInSubtree(id)) return true;
+    }
+  }
+  return false;
+}
+function hasActionInSubtree(id) {
+  const n = state.nodes[id];
+  if (!n) return false;
+  if (n.type === 'action') return true;
+  return hasActionInSubtree(n.yesChild) || hasActionInSubtree(n.noChild);
+}
+
+// ──────────────────────────────────────────────────────────────
+// SIDEBAR
+// ──────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const sb = document.getElementById('sidebar');
+  const {mode, nodeId} = state.sidebar;
+  let html = '';
+
+  if (mode === 'trigger') {
+    const node = state.nodes[nodeId] || {};
+    const entity = node.entity || state.trigger.entity;
+    const evts = EVENTS[entity] || DEFAULT_EVENTS;
+    html = `
+      <div class="sb-section">
+        <div class="sb-label">Select trigger</div>
+        <div class="form-group">
+          <label class="form-label">Entity</label>
+          <select onchange="onTriggerEntity(this.value)">
+            ${ENTITIES.map(e=>`<option ${e===entity?'selected':''}>${e}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Event</label>
+          <select onchange="onTriggerEvent(this.value)">
+            ${evts.map(e=>`<option ${e===node.event?'selected':''}>${e}</option>`).join('')}
+          </select>
+        </div>
+        <div style="font-size:12px;color:#9E9E9E;margin-top:4px">A trigger is the event that starts your workflow</div>
+      </div>
+      <div style="padding:16px;border-top:1px solid #F5F5F5;margin-top:auto">
+        <div class="sb-label" style="margin-bottom:6px">Next step</div>
+        <div style="font-size:12px;color:#616161;margin-bottom:10px">Add a condition to filter when the rule runs, or add an action to always run.</div>
+        <div class="btn-row">
+          <button class="btn btn-secondary btn-sm" onclick="addBlockAfterTrigger('condition')">+ Condition</button>
+          <button class="btn btn-sm" style="background:#E8F5E9;color:#2E7D32;border:1px solid #B2DFB8" onclick="addBlockAfterTrigger('action')">+ Action</button>
+        </div>
+      </div>`;
+  }
+
+  else if (mode === 'condition') {
+    const node = state.nodes[nodeId];
+    if (!node) { renderSidebarHint(); return; }
+    const entity = state.trigger.entity;
+    const fields = Object.keys(FIELDS[entity] || {});
+    const fieldDef = (FIELDS[entity]||{})[node.field];
+    const hasSubFields = fieldDef && fieldDef.sub;
+    const effectiveType = getFieldType(entity, node.field, node.subField);
+    const ops = getOperands(effectiveType);
+    const showValue = needsValue(node.operand);
+
+    html = `
+      <div class="sb-section">
+        <div class="sb-label">Create / Edit Condition</div>
+        <div class="form-group">
+          <label class="form-label">Field</label>
+          <select onchange="onCondField(${JSON.stringify(nodeId)},this.value)">
+            <option value="">Select field…</option>
+            ${fields.map(f=>`<option ${f===node.field?'selected':''}>${f}</option>`).join('')}
+          </select>
+        </div>
+        ${hasSubFields ? `
+        <div class="form-group">
+          <label class="form-label">Sub-field</label>
+          <select onchange="onCondSubField(${JSON.stringify(nodeId)},this.value)">
+            <option value="">Select sub-field…</option>
+            ${Object.keys(fieldDef.sub).map(f=>`<option ${f===node.subField?'selected':''}>${f}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${node.field ? `
+        <div class="form-group">
+          <label class="form-label">Condition</label>
+          <select onchange="onCondOperand(${JSON.stringify(nodeId)},this.value)">
+            <option value="">Select…</option>
+            ${ops.map(o=>`<option ${o===node.operand?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${showValue && node.operand ? `
+        <div class="form-group">
+          <label class="form-label">Value <span style="color:#9E9E9E;font-weight:400">(OR values)</span></label>
+          <div class="or-values-list" id="orValuesList">
+            ${(node.values||['']).map((v,i)=>`
+              <div>
+                ${i>0?'<div class="or-divider">OR</div>':''}
+                <div class="or-value-row">
+                  <input class="text-input" type="text" value="${v}" oninput="onCondValue(${JSON.stringify(nodeId)},${i},this.value)" placeholder="Enter value…" />
+                  ${i>0?`<button class="remove-or" onclick="removeOrValue(${JSON.stringify(nodeId)},${i})">×</button>`:''}
+                </div>
+              </div>`).join('')}
+          </div>
+          <button class="add-or-btn" onclick="addOrValue(${JSON.stringify(nodeId)})" style="margin-top:6px">+ Add OR value</button>
+        </div>` : ''}
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn btn-primary btn-sm" onclick="saveCondition(${JSON.stringify(nodeId)})">Apply</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Cancel</button>
+        </div>
+      </div>
+      ${node.field && node.operand ? `
+      <div class="sb-section">
+        <div class="sb-label">Next step</div>
+        <div style="font-size:12px;color:#616161;margin-bottom:10px">Choose what happens on YES or NO path.</div>
+        <div style="display:flex;gap:8px;flex-direction:column">
+          ${!node.yesChild ? `<div><span style="font-size:11px;font-weight:700;color:#2E7D32">YES path</span><div class="btn-row" style="margin-top:4px"><button class="btn btn-sm" style="background:#E8F5E9;color:#2E7D32;border:1px solid #B2DFB8" onclick="openSlot(${JSON.stringify(nodeId)},'yes','condition')">+ Condition</button><button class="btn btn-sm" style="background:#E8F5E9;color:#2E7D32;border:1px solid #B2DFB8" onclick="openSlot(${JSON.stringify(nodeId)},'yes','action')">+ Action</button></div></div>` : ''}
+          ${!node.noChild ? `<div><span style="font-size:11px;font-weight:700;color:#E65100">NO path</span><div class="btn-row" style="margin-top:4px"><button class="btn btn-sm" style="background:#FFF3E0;color:#E65100;border:1px solid #FFCC80" onclick="openSlot(${JSON.stringify(nodeId)},'no','condition')">+ Condition</button><button class="btn btn-sm" style="background:#FFF3E0;color:#E65100;border:1px solid #FFCC80" onclick="openSlot(${JSON.stringify(nodeId)},'no','action')">+ Action</button></div></div>` : ''}
+        </div>
+      </div>` : ''}`;
+  }
+
+  else if (mode === 'action') {
+    const node = state.nodes[nodeId];
+    if (!node) { renderSidebarHint(); return; }
+    const entity = state.trigger.entity;
+    html = `
+      <div class="sb-section">
+        <div class="sb-label">Create / Edit Action</div>
+        <div class="form-group">
+          <label class="form-label">Action type</label>
+          <select onchange="onActionType(${JSON.stringify(nodeId)},this.value)">
+            <option value="">Select action…</option>
+            ${ACTION_TYPES.map(t=>`<option ${t===node.actionType?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        ${node.actionType === 'Email' ? `
+        <div class="form-group">
+          <label class="form-label">Recipient</label>
+          <select onchange="onActionField(${JSON.stringify(nodeId)},'recipient',this.value)">
+            <option value="">Select recipient…</option>
+            ${EMAIL_RECIPIENTS.map(r=>`<option ${r===node.recipient?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        ${node.recipient==='Other'?`<div class="form-group"><label class="form-label">Email address</label><input class="text-input" type="text" value="${node.customEmail||''}" placeholder="Enter email…" oninput="onActionField(${JSON.stringify(nodeId)},'customEmail',this.value)" /></div>`:''}` : ''}
+        ${node.actionType === 'SMS' ? `
+        <div class="form-group">
+          <label class="form-label">Recipient</label>
+          <select onchange="onActionField(${JSON.stringify(nodeId)},'recipient',this.value)">
+            <option value="">Select recipient…</option>
+            ${EMAIL_RECIPIENTS.map(r=>`<option ${r===node.recipient?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${node.actionType === 'Voice' ? `
+        <div class="form-group">
+          <label class="form-label">Recipient</label>
+          <select onchange="onActionField(${JSON.stringify(nodeId)},'recipient',this.value)">
+            <option value="">Select recipient…</option>
+            ${EMAIL_RECIPIENTS.map(r=>`<option ${r===node.recipient?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${node.actionType === 'QuickBooks action' ? `
+        <div class="form-group">
+          <label class="form-label">Entity</label>
+          <select onchange="onActionField(${JSON.stringify(nodeId)},'qbEntity',this.value)">
+            <option value="">${entity}</option>
+            <option selected>${entity}</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Action</label>
+          <select onchange="onActionField(${JSON.stringify(nodeId)},'qbAction',this.value)">
+            <option value="">Select action…</option>
+            ${QB_ENTITY_ACTIONS.map(a=>`<option ${a===node.qbAction?'selected':''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        ${node.qbAction ? `
+        <div class="form-group">
+          <label class="form-label">Fields to update</label>
+          ${QB_FIELDS[node.qbAction].map(f=>`
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <input type="checkbox" id="qbf_${f.replace(/\s/g,'_')}" ${(node.qbFieldValues||{})[f]!==undefined?'checked':''} onchange="onQbField(${JSON.stringify(nodeId)},${JSON.stringify(f)},this.checked)">
+              <label for="qbf_${f.replace(/\s/g,'_')}" style="font-size:13px">${f}</label>
+            </div>`).join('')}
+        </div>` : ''}` : ''}
+        ${node.actionType === 'Post to URL' ? `
+        <div class="form-group">
+          <label class="form-label">URL</label>
+          <input class="text-input" type="text" value="${node.urlTarget||''}" placeholder="https://…" oninput="onActionField(${JSON.stringify(nodeId)},'urlTarget',this.value)" />
+        </div>` : ''}
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn btn-primary btn-sm" onclick="saveAction(${JSON.stringify(nodeId)})">Apply</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  else {
+    html = `<div class="sb-hint">Click a block on the canvas to edit it, or add blocks using the + buttons.</div>`;
+  }
+
+  sb.innerHTML = html;
+}
+
+// ──────────────────────────────────────────────────────────────
+// CANVAS
+// ──────────────────────────────────────────────────────────────
+function renderCanvas() {
+  const canvas = document.getElementById('canvas');
+  if (!state.rootId) { canvas.innerHTML = ''; return; }
+  canvas.innerHTML = '';
+  const el = renderNode(state.rootId);
+  if (el) canvas.appendChild(el);
+
+  // Error bar
+  const eb = document.getElementById('errorBar');
+  if (eb) eb.className = 'error-bar' + (hasErrors() ? ' show' : '');
+}
+
+function renderNode(id) {
+  if (!id) return null;
+  const node = state.nodes[id];
+  if (!node) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'tree-node';
+  wrap.style.alignItems = 'flex-start';
+
+  // Left: vertical stack (YES chain going down)
+  const col = document.createElement('div');
+  col.className = 'tree-column';
+
+  const card = makeCard(node);
+  col.appendChild(card);
+
+  // YES child (below)
+  if (node.type !== 'action') {
+    if (node.yesChild) {
+      const connV = makeConnV();
+      col.appendChild(connV);
+      const childEl = renderNode(node.yesChild);
+      if (childEl) col.appendChild(childEl);
+    } else if (node.type === 'condition') {
+      // Check if there's a pending slot here for YES
+      if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
+        col.appendChild(makeConnV());
+        col.appendChild(makeChooser(id, 'yes'));
+      }
+    }
+  }
+
+  wrap.appendChild(col);
+
+  // NO child (right)
+  if (node.type === 'condition') {
+    if (node.noChild) {
+      const connH = makeConnH();
+      wrap.appendChild(connH);
+      const noCol = document.createElement('div');
+      noCol.className = 'tree-column';
+      const noLbl = document.createElement('div');
+      noLbl.className = 'path-label no-lbl';
+      noLbl.textContent = 'NO';
+      noCol.appendChild(noLbl);
+      const noEl = renderNode(node.noChild);
+      if (noEl) noCol.appendChild(noEl);
+      wrap.appendChild(noCol);
+    } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'no') {
+      wrap.appendChild(makeConnH());
+      const noCol = document.createElement('div');
+      noCol.className = 'tree-column';
+      const noLbl = document.createElement('div');
+      noLbl.className = 'path-label no-lbl';
+      noLbl.textContent = 'NO';
+      noCol.appendChild(noLbl);
+      noCol.appendChild(makeChooser(id, 'no'));
+      wrap.appendChild(noCol);
+    }
+  }
+
+  return wrap;
+}
+
+function makeCard(node) {
+  const div = document.createElement('div');
+  const isSelected = state.sidebar.nodeId === node.id;
+
+  if (node.type === 'trigger') {
+    div.className = 'card trigger-card' + (isSelected ? ' selected' : '');
+    div.innerHTML = `
+      <div class="card-type-label">Start when</div>
+      <div class="card-main">${node.entity || '—'} ${node.event || ''}</div>`;
+    div.addEventListener('click', () => { state.sidebar = {mode:'trigger', nodeId:node.id}; render(); });
+  }
+
+  else if (node.type === 'condition') {
+    const valDisplay = (node.values||[]).filter(Boolean).join(', ');
+    const fieldLabel = node.subField ? `${node.field}: ${node.subField}` : node.field;
+    div.className = 'card condition-card' + (isSelected ? ' selected' : '');
+    div.innerHTML = `
+      <button class="del-btn" title="Delete">×</button>
+      <div class="card-type-label">IF</div>
+      <div class="card-main">${fieldLabel || '…'}</div>
+      ${node.operand ? `<div class="card-detail">${node.operand}${valDisplay ? '' : ''}</div>` : ''}
+      ${valDisplay ? `<div class="or-tags">${(node.values||[]).filter(Boolean).map(v=>`<span class="or-tag">${v}</span>`).join('')}</div>` : ''}
+      <div class="path-btns">
+        <button class="path-btn yes${node.yesChild?'':''}" onclick="event.stopPropagation();onPathBtn(event,'${node.id}','yes')">YES ↓</button>
+        <button class="path-btn no${node.noChild?'':''}" onclick="event.stopPropagation();onPathBtn(event,'${node.id}','no')">NO →</button>
+      </div>`;
+    div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); deleteNode(node.id); render(); });
+    div.addEventListener('click', () => { state.sidebar = {mode:'condition', nodeId:node.id}; render(); });
+  }
+
+  else if (node.type === 'action') {
+    div.className = 'card action-card' + (isSelected ? ' selected' : '');
+    let detail = '';
+    if (node.actionType==='Email'||node.actionType==='SMS'||node.actionType==='Voice') detail = node.recipient || '';
+    if (node.actionType==='QuickBooks action') detail = `${node.qbEntity||state.trigger.entity} · ${node.qbAction||''}`;
+    if (node.actionType==='Post to URL') detail = node.urlTarget || '';
+    div.innerHTML = `
+      <button class="del-btn" title="Delete">×</button>
+      <div class="card-type-label">THEN</div>
+      <div class="card-main">${node.actionType || '…'}</div>
+      ${detail ? `<div class="card-detail">${detail}</div>` : ''}`;
+    div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); deleteNode(node.id); render(); });
+    div.addEventListener('click', () => { state.sidebar = {mode:'action', nodeId:node.id}; render(); });
+  }
+
+  return div;
+}
+
+function makeConnV() {
+  const d = document.createElement('div');
+  d.className = 'conn-v';
+  return d;
+}
+function makeConnH() {
+  const d = document.createElement('div');
+  d.className = 'conn-h';
+  return d;
+}
+
+function makeChooser(parentId, path) {
+  const div = document.createElement('div');
+  div.className = 'card chooser-card';
+  div.innerHTML = `
+    <div style="font-size:11px;font-weight:600;color:#9E9E9E;margin-bottom:8px;text-align:center">Add block</div>
+    <div class="chooser-btns">
+      <button class="chooser-btn cond" onclick="addBlock('${parentId}','${path}','condition')">+ Condition</button>
+      <button class="chooser-btn act"  onclick="addBlock('${parentId}','${path}','action')">+ Action</button>
+    </div>`;
+  return div;
+}
+
+// ──────────────────────────────────────────────────────────────
+// INTERACTIONS
+// ──────────────────────────────────────────────────────────────
+function onTriggerEntity(val) {
+  const node = state.nodes[state.sidebar.nodeId];
+  if (!node) return;
+  const evts = EVENTS[val] || DEFAULT_EVENTS;
+  node.entity = val;
+  node.event = evts[0];
+  state.trigger.entity = val;
+  state.trigger.event = evts[0];
+  render();
+}
+function onTriggerEvent(val) {
+  const node = state.nodes[state.sidebar.nodeId];
+  if (!node) return;
+  node.event = val;
+  state.trigger.event = val;
+}
+
+function onPathBtn(e, nodeId, path) {
+  e.stopPropagation();
+  const node = state.nodes[nodeId];
+  if (!node) return;
+  const childId = path === 'yes' ? node.yesChild : node.noChild;
+  if (childId) {
+    // Already has a child — select it
+    state.sidebar = {mode: state.nodes[childId].type === 'action' ? 'action' : 'condition', nodeId: childId};
+    render(); return;
+  }
+  // Toggle pending slot
+  if (state.pendingSlot && state.pendingSlot.parentId === nodeId && state.pendingSlot.path === path) {
+    state.pendingSlot = null;
+  } else {
+    state.pendingSlot = {parentId: nodeId, path};
+  }
+  state.sidebar = {mode:'condition', nodeId};
+  render();
+}
+
+function addBlock(parentId, path, type) {
+  const newId = createNode(type);
+  const parent = state.nodes[parentId];
+  if (!parent) return;
+  if (path === 'yes') parent.yesChild = newId;
+  else parent.noChild = newId;
+  state.pendingSlot = null;
+  state.sidebar = {mode: type, nodeId: newId};
+  render();
+}
+
+function addBlockAfterTrigger(type) {
+  const triggerNode = state.nodes[state.rootId];
+  if (!triggerNode) return;
+  const newId = createNode(type);
+  triggerNode.yesChild = newId;
+  state.sidebar = {mode: type, nodeId: newId};
+  render();
+}
+
+function openSlot(parentId, path, type) {
+  state.pendingSlot = {parentId, path};
+  addBlock(parentId, path, type);
+}
+
+function onCondField(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.field = val;
+  n.subField = '';
+  n.operand = '';
+  n.values = [''];
+  render();
+}
+function onCondSubField(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.subField = val;
+  n.operand = '';
+  n.values = [''];
+  render();
+}
+function onCondOperand(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.operand = val;
+  if (!needsValue(val)) n.values = [''];
+  render();
+}
+function onCondValue(nodeId, idx, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.values[idx] = val;
+}
+function addOrValue(nodeId) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.values.push('');
+  render();
+}
+function removeOrValue(nodeId, idx) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.values.splice(idx, 1);
+  if (n.values.length === 0) n.values = [''];
+  render();
+}
+function saveCondition(nodeId) {
+  // Already live-edited on state, just close or move focus
+  state.pendingSlot = null;
+  render();
+}
+
+function onActionType(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.actionType = val;
+  n.recipient = ''; n.qbEntity = state.trigger.entity; n.qbAction = ''; n.qbFieldValues = {}; n.urlTarget = '';
+  render();
+}
+function onActionField(nodeId, key, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n[key] = val;
+  render();
+}
+function onQbField(nodeId, field, checked) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  if (!n.qbFieldValues) n.qbFieldValues = {};
+  if (checked) n.qbFieldValues[field] = '';
+  else delete n.qbFieldValues[field];
+}
+function saveAction(nodeId) {
+  state.pendingSlot = null;
+  render();
+}
+
+function clearSidebar() {
+  state.sidebar = {mode:'none', nodeId:null};
+  render();
+}
+
+function saveRule() {
+  alert('Rule saved! (prototype)');
+}
+
+// ──────────────────────────────────────────────────────────────
+// RENDER ORCHESTRATOR
+// ──────────────────────────────────────────────────────────────
+function render() {
+  renderCanvas();
+  renderSidebar();
+}
+
+// Start
+init();
+</script>
+</body>
+</html>
