@@ -906,6 +906,8 @@
       opacity: 1;
     }
     .toast-icon { color: #69f0ae; font-size: 16px; }
+    .toast.error { background: #c62828; }
+    .toast.error .toast-icon { color: #fff; }
 
     /* ─── ROW DOTS MENU ─── */
     .row-menu-wrap {
@@ -1418,16 +1420,12 @@
       <div class="recon-subtitle">mzkt.by (Stripe) / Jan 1–31, 2026 · <span id="recon-not-matched-count">50</span> not matched</div>
     </div>
     <div class="recon-actions">
-      <button class="btn btn-ghost" onclick="alert('Process log coming soon')">
+      <button class="btn btn-ghost" id="btn-process-log" onclick="openProcessLog()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         Process log
       </button>
-      <button class="btn btn-ghost" id="btn-process-log" onclick="openProcessLog()">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-        Journal entry <span class="tab-chip tab-chip-grey" id="pl-count" style="margin-left:2px">0</span>
-      </button>
       <button class="btn btn-outlined" onclick="alert('Export options coming soon')">
-        Export CSV
+        Export
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
     </div>
@@ -1539,11 +1537,11 @@
           <th style="width:40px"></th>
           <th>Matching ID <span class="th-sort">↓</span></th>
           <th>Total amount <span class="th-sort">↓</span></th>
-          <th>Date matched <span class="th-sort">↓</span></th>
+          <th>Date <span class="th-sort">↓</span></th>
           <th>Types</th>
           <th style="text-align:right">Count</th>
           <th style="width:110px">Match type</th>
-          <th style="width:160px">Matched by</th>
+          <th style="width:160px">Match by</th>
           <th style="width:90px"></th>
         </tr>
       </thead>
@@ -1653,13 +1651,13 @@
 <!-- MATCHING BAR -->
 <div class="matching-bar" id="matching-bar">
   <span class="matching-bar-icon">✨</span>
-  <span class="matching-bar-label" id="matching-bar-label"><strong>AI matching available</strong> — <span id="ai-banner-count">8</span> potential matches found for your unmatched transactions.</span>
+  <span class="matching-bar-label" id="matching-bar-label"><span id="ai-banner-count">8</span> potential matches found — match manually or let AI handle it</span>
   <span class="tooltip-wrap">
     <button class="btn-match-ai" id="btn-ai-match" onclick="runAIMatching()">Match with AI</button>
     <span class="tooltip-text tooltip-text-below">Automatically find and create matches — no selection needed</span>
   </span>
   <span class="tooltip-wrap">
-    <button class="btn-match-selected" id="btn-match-selected" onclick="handleMatchClick('synder')">Match</button>
+    <button class="btn-match-selected" id="btn-match-selected" onclick="handleMatchClick('synder')">Match manually</button>
     <span class="tooltip-text tooltip-text-below" id="match-btn-tooltip">Select rows on both sides to match manually</span>
   </span>
   <div class="ai-progress-bar-wrap" id="ai-progress-wrap" style="position:absolute;bottom:0;left:0;right:0;margin:0;border-radius:0"></div>
@@ -1690,11 +1688,11 @@
       <div class="toolbar-divider"></div>
       <span class="tooltip-wrap">
         <button class="btn-toolbar-create-je" onclick="handleCreateJEClick()">Create journal entry</button>
-        <span class="tooltip-text">Record a manual accounting entry in your books to account for selected transactions — useful when no matching transaction exists on the other side</span>
+        <span class="tooltip-text">Record a manual accounting entry in your books to account for selected transactions — useful when no matching transaction exists on the other side.</span>
       </span>
       <span class="tooltip-wrap">
         <button class="btn-toolbar-ignore" onclick="ignoreSelected('synder')">Ignore</button>
-        <span class="tooltip-text">Mark as intentionally unmatched — transactions move to the Ignored tab and won't block reconciliation completion</span>
+        <span class="tooltip-text">Mark as intentionally unmatched — transactions move to the Ignored tab and won't block reconciliation completion.</span>
       </span>
       <span class="tooltip-wrap">
         <button class="btn-toolbar-clear" onclick="clearSelection('synder')">Clear</button>
@@ -1754,7 +1752,7 @@
       <div class="toolbar-divider"></div>
       <span class="tooltip-wrap">
         <button class="btn-toolbar-ignore" onclick="ignoreSelected('integration')">Ignore</button>
-        <span class="tooltip-text">Mark as intentionally unmatched — transactions move to the Ignored tab and won't block reconciliation completion</span>
+        <span class="tooltip-text">Mark as intentionally unmatched — transactions move to the Ignored tab and won't block reconciliation completion.</span>
       </span>
       <span class="tooltip-wrap">
         <button class="btn-toolbar-clear" onclick="clearSelection('integration')">Clear</button>
@@ -2279,6 +2277,12 @@ function renderTable(side, rows) {
   tbody.innerHTML = '';
   const q   = search[side];
   const amtQ = amountFilter[side];
+  const visibleRows = rows.filter(r => !removed[side].has(r.id) && rowMatchesSearch(r, q, amtQ));
+  if (visibleRows.length === 0) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="8" class="no-results">No results found</td>';
+    tbody.appendChild(tr);
+  }
   rows.forEach(row => {
     const isRemoved     = removed[side].has(row.id);
     const isSelected    = selected[side].has(row.id);
@@ -2897,7 +2901,7 @@ function handleMatchClick(side) {
     const dominant = Object.entries(currCount).sort((a, b) => b[1] - a[1])[0][0];
     const offRows = allSelected.filter(r => r.currency !== dominant);
     const offList = offRows.map(r =>
-      `<li style="margin:4px 0"><code style="background:#f3f4f6;padding:2px 5px;border-radius:3px;font-size:14px">${r.primaryId}</code> — <strong>${r.currency}</strong> (${r.side === 'synder' ? 'Accounting' : 'Integration'})</li>`
+      `<li style="margin:4px 0"><code style="background:#f3f4f6;padding:2px 5px;border-radius:3px;font-size:14px">${r.primaryId}</code> — <strong>${r.currency}</strong> (${r.side})</li>`
     ).join('');
     showErrorModal(
       'Currencies differ',
@@ -2953,7 +2957,7 @@ function handleMatchClick(side) {
     clearSelection('integration');
 
     const total = sSel.length + iSel.length;
-    showToast(`Match created. ${total} rows moved to Custom matches.`);
+    showToast('Successfully matched. Transactions were moved to Custom matches tab.');
   }, 800);
 }
 
@@ -2988,7 +2992,7 @@ function ignoreRow(side, id) {
   updateToolbar(side);
   updateToolbar(side === 'synder' ? 'integration' : 'synder');
   updateMatchConsole();
-  showToast('Transaction ignored. View in Ignored tab.');
+  showToast('Successfully ignored. Transactions were moved to Ignored tab.');
 }
 
 function ignoreSelected(side) {
@@ -2999,7 +3003,7 @@ function ignoreSelected(side) {
   updateToolbar(side);
   updateToolbar(other);
   updateMatchConsole();
-  showToast('Rows ignored. View in Ignored tab.');
+  showToast('Successfully ignored. Transactions were moved to Ignored tab.');
 }
 
 function restoreIgnored(side, id) {
@@ -3027,9 +3031,17 @@ function closeModal(id) {
   document.getElementById(id).classList.remove('visible');
 }
 
-function showToast(msg) {
+function showToast(msg, type) {
   const toast = document.getElementById('toast');
+  const icon  = toast.querySelector('.toast-icon');
   document.getElementById('toast-msg').textContent = msg;
+  toast.classList.remove('error');
+  if (type === 'error') {
+    toast.classList.add('error');
+    if (icon) icon.textContent = '!';
+  } else {
+    if (icon) icon.textContent = '✓';
+  }
   toast.classList.add('visible');
   setTimeout(() => toast.classList.remove('visible'), 3500);
 }
@@ -3432,18 +3444,14 @@ function updateMatchConsole() {
   const bothSelected = sCount > 0 && iCount > 0;
   if (bothSelected) {
     btn.classList.add('active');
-    btn.textContent = `Match ${sCount}-${iCount}`;
+    btn.textContent = `Match manually ${sCount}-${iCount}`;
     if (tip) {
-      if (sCount !== iCount) {
-        tip.style.display = '';
-        tip.textContent = 'Unequal counts are OK — Synder will group them into one match';
-      } else {
-        tip.style.display = 'none';
-      }
+      tip.style.display = '';
+      tip.textContent = 'Match selected transactions together.';
     }
   } else {
     btn.classList.remove('active');
-    btn.textContent = 'Match';
+    btn.textContent = 'Match manually';
     if (tip) {
       tip.style.display = '';
       tip.textContent = onlyOne
@@ -3545,7 +3553,7 @@ async function runAIMatching() {
   updateAIBannerCount();
   progressWrap.classList.remove('visible');
   progressBar.style.width = '0%';
-  showToast(`AI matched ${applied} pair${applied !== 1 ? 's' : ''}. View in Custom matches.`);
+  showToast('Successfully matched. Transactions were moved to Custom matches tab.');
 }
 
 function applyAIMatches() { runAIMatching(); } // legacy shim
