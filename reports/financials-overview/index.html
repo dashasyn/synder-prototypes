@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — Synder</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Roboto',sans-serif;background:#F5F6FA;color:#1A1A2E;font-size:14px;line-height:1.5}
+a{text-decoration:none;color:inherit}
+
+/* Layout */
+.layout{display:flex;min-height:100vh}
+
+/* Sidebar */
+.sidebar{width:224px;background:#fff;border-right:1px solid #E0E4EC;flex-shrink:0;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sidebar-logo{padding:14px 18px;display:flex;align-items:center;gap:8px;border-bottom:1px solid #E0E4EC}
+.logo-mark{width:28px;height:28px;background:#0053CC;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:14px}
+.logo-text{font-size:16px;font-weight:700;color:#0053CC;letter-spacing:-0.3px}
+.nav{padding:8px 0;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 18px;cursor:pointer;color:#555;font-size:13px;transition:background .12s;white-space:nowrap}
+.nav-item:hover{background:#F0F4FF;color:#0053CC}
+.nav-item.active{background:#EEF3FF;color:#0053CC;font-weight:500}
+.nav-item svg{flex-shrink:0;opacity:.7}
+.nav-item.active svg{opacity:1}
+.nav-item .chevron{margin-left:auto;opacity:.5;transition:transform .2s}
+.nav-subitems{border-left:2px solid #E0E4EC;margin-left:28px}
+.nav-sub{display:flex;align-items:center;padding:7px 14px;cursor:pointer;font-size:12.5px;color:#666;transition:all .12s;border-left:2px solid transparent;margin-left:-2px}
+.nav-sub:hover{color:#0053CC;background:#F5F8FF}
+.nav-sub.active{color:#0053CC;font-weight:500;border-left-color:#0053CC;background:#EEF3FF}
+
+/* Main */
+.main{flex:1;display:flex;flex-direction:column;min-width:0}
+
+/* Topbar */
+.topbar{background:#fff;border-bottom:1px solid #E0E4EC;padding:0 24px;height:54px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+.org-btn{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;cursor:pointer;padding:5px 8px;border-radius:6px;transition:background .12s}
+.org-btn:hover{background:#F5F5F5}
+.org-avatar{width:26px;height:26px;background:#0053CC;border-radius:6px;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.topbar-sep{flex:1}
+.topbar-syncs{font-size:12px;color:#888;white-space:nowrap}
+.topbar-syncs strong{color:#0053CC}
+
+/* Content */
+.content{flex:1;padding:24px 28px;overflow-y:auto}
+
+/* Page header */
+.page-header{display:flex;align-items:center;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+.page-title{font-size:22px;font-weight:500;flex:1;min-width:0}
+.report-count{font-size:12px;color:#888;background:#F0F0F0;padding:2px 8px;border-radius:10px;display:none;white-space:nowrap}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:all .15s;font-family:'Roboto',sans-serif;white-space:nowrap}
+.btn svg{flex-shrink:0}
+.btn-ghost{background:#fff;border:1px solid #D8DCE6;color:#444}
+.btn-ghost:hover{border-color:#0053CC;color:#0053CC}
+.btn-ghost.editing{background:#EEF3FF;border-color:#0053CC;color:#0053CC}
+.btn-primary{background:#0053CC;color:#fff}
+.btn-primary:hover{background:#0042A8}
+.btn-primary:disabled{background:#B8CEEE;cursor:not-allowed;pointer-events:none}
+
+/* Reports grid */
+.reports-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:20px;align-items:start}
+
+/* Report card */
+.report-card{background:#fff;border:1px solid #E0E4EC;border-radius:10px;overflow:hidden;transition:box-shadow .2s,border-color .2s,transform .15s,opacity .15s;position:relative}
+.report-card:hover{box-shadow:0 3px 16px rgba(0,0,0,.07)}
+.card-header{display:flex;align-items:flex-start;padding:16px 18px 10px;gap:10px}
+.card-icon{width:22px;height:22px;flex-shrink:0;margin-top:1px}
+.card-title{flex:1;min-width:0}
+.card-title h3{font-size:13.5px;font-weight:500;color:#1A1A2E;margin-bottom:2px}
+.card-title p{font-size:11.5px;color:#999}
+.card-delete{display:none;width:24px;height:24px;background:#FF3B30;color:#fff;border:none;border-radius:50%;cursor:pointer;font-size:15px;line-height:1;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;transition:background .12s}
+.card-delete:hover{background:#d32f2f}
+.card-body{padding:4px 18px 14px;height:228px;position:relative}
+.card-footer{padding:10px 18px;border-top:1px solid #F2F2F2;display:flex;align-items:center;gap:6px;font-size:11px;color:#aaa}
+.platform-dot{width:6px;height:6px;border-radius:50%;background:#0053CC;display:inline-block;flex-shrink:0}
+
+/* Edit mode */
+.edit-mode .report-card{border-color:#C5D3EE}
+.edit-mode .card-delete{display:flex}
+.edit-mode .report-count{display:block}
+.add-slot{display:none;border:2px dashed #C8D4EA;border-radius:10px;min-height:180px;cursor:pointer;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#9AADCC;transition:all .15s;background:transparent}
+.add-slot:hover{border-color:#0053CC;color:#0053CC;background:#F5F8FF}
+.edit-mode .add-slot{display:flex}
+.slot-circle{width:40px;height:40px;border-radius:50%;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:22px;line-height:1}
+.slot-text{font-size:13px;font-weight:500}
+.slot-sub{font-size:11.5px;color:#b0b8cc}
+
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(15,20,40,.45);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.overlay.open{display:flex}
+.modal{background:#fff;border-radius:12px;width:880px;max-width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,.22)}
+.modal-header{padding:18px 22px 14px;border-bottom:1px solid #E8EBF2;display:flex;align-items:center;gap:12px}
+.modal-header h2{font-size:17px;font-weight:500;flex:1}
+.search-wrap{position:relative;flex:0 0 260px}
+.search-wrap input{width:100%;padding:7px 12px 7px 34px;border:1px solid #D8DCE6;border-radius:6px;font-size:13px;font-family:'Roboto',sans-serif;outline:none;color:#333;background:#fff}
+.search-wrap input:focus{border-color:#0053CC;box-shadow:0 0 0 2px rgba(0,83,204,.1)}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#bbb;pointer-events:none}
+.modal-x{width:30px;height:30px;background:#F3F4F6;border:none;border-radius:6px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;color:#666;flex-shrink:0}
+.modal-x:hover{background:#E8E8E8}
+.modal-body{display:flex;flex:1;overflow:hidden;min-height:0}
+.modal-cats{width:150px;border-right:1px solid #E8EBF2;padding:10px 0;flex-shrink:0;overflow-y:auto}
+.cat-btn{width:100%;padding:8px 14px;cursor:pointer;font-size:13px;color:#555;background:none;border:none;border-left:2px solid transparent;text-align:left;display:flex;align-items:center;gap:6px;font-family:'Roboto',sans-serif;transition:all .12s}
+.cat-btn:hover{background:#F5F7FF;color:#0053CC}
+.cat-btn.active{background:#EEF3FF;color:#0053CC;font-weight:500;border-left-color:#0053CC}
+.cat-btn .badge{margin-left:auto;font-size:10.5px;background:#EAECF0;color:#777;padding:1px 6px;border-radius:10px}
+.cat-btn.active .badge{background:#CCDCf4;color:#0053CC}
+.tpl-area{flex:1;overflow-y:auto;padding:16px}
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.tpl-card{border:1px solid #E0E4EC;border-radius:8px;padding:14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:all .15s}
+.tpl-card:hover{border-color:#0053CC;box-shadow:0 2px 10px rgba(0,83,204,.1)}
+.tpl-type{display:flex;align-items:center;gap:5px;font-size:11px;color:#999}
+.tpl-type svg{width:14px;height:14px;flex-shrink:0}
+.tpl-name{font-size:13px;font-weight:500;color:#1A1A2E;line-height:1.3}
+.tpl-desc{font-size:11.5px;color:#999;line-height:1.45;flex:1}
+.tpl-use{margin-top:2px;padding:6px;background:#0053CC;color:#fff;border:none;border-radius:5px;font-size:12px;font-weight:500;cursor:pointer;font-family:'Roboto',sans-serif;transition:background .12s;width:100%}
+.tpl-use:hover{background:#0042A8}
+.no-results{grid-column:1/-1;padding:48px;text-align:center;color:#bbb;font-size:13px}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:#1A1A2E;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;z-index:200;opacity:0;transition:all .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div class="layout">
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">S</div>
+    <span class="logo-text">synder</span>
+  </div>
+  <nav class="nav">
+    <div class="nav-item">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      Transactions
+      <svg class="chevron" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </div>
+    <div class="nav-item">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+      Smart rules
+    </div>
+    <div class="nav-item active">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Financials
+      <svg class="chevron" width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="transform:rotate(90deg)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+    </div>
+    <div class="nav-subitems">
+      <div class="nav-sub active">Reports</div>
+      <div class="nav-sub">Profit and loss</div>
+      <div class="nav-sub">Balance sheet</div>
+    </div>
+    <div class="nav-item">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      Settings
+    </div>
+    <div class="nav-item">
+      <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2"/></svg>
+      AI Agents
+    </div>
+  </nav>
+</aside>
+
+<!-- Main -->
+<div class="main" id="mainArea">
+
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="org-btn">
+      <div class="org-avatar">Da</div>
+      <span>Dasha Test Company</span>
+      <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+    </div>
+    <div class="topbar-sep"></div>
+    <span class="topbar-syncs">Syncs left: <strong>1,000</strong></span>
+  </header>
+
+  <!-- Content -->
+  <main class="content">
+    <div class="page-header">
+      <h1 class="page-title">Reports</h1>
+      <span class="report-count" id="reportCount">3 / 6</span>
+
+      <button class="btn btn-ghost" id="dateBtn">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" stroke-width="2"/><line x1="16" y1="2" x2="16" y2="6" stroke-width="2"/><line x1="8" y1="2" x2="8" y2="6" stroke-width="2"/><line x1="3" y1="10" x2="21" y2="10" stroke-width="2"/></svg>
+        Jan – Jun 2026
+      </button>
+
+      <button class="btn btn-ghost" id="customizeBtn" onclick="toggleEdit()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        <span id="customizeLbl">Customize</span>
+      </button>
+
+      <button class="btn btn-primary" id="addBtn" onclick="openModal()">
+        <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19" stroke-width="2.5"/><line x1="5" y1="12" x2="19" y2="12" stroke-width="2.5"/></svg>
+        Add report
+      </button>
+    </div>
+
+    <!-- Grid -->
+    <div class="reports-grid" id="grid">
+
+      <!-- Card 1: Gross Sales -->
+      <div class="report-card" id="c1">
+        <div class="card-header">
+          <svg class="card-icon" viewBox="0 0 22 22" fill="none" stroke="#0053CC" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><polyline points="2,16 7,9 12,12 17,5 20,8"/></svg>
+          <div class="card-title">
+            <h3>Gross Sales — Monthly trend</h3>
+            <p>Total income from payments and subscriptions</p>
+          </div>
+          <button class="card-delete" onclick="removeCard('c1')" title="Remove report">×</button>
+        </div>
+        <div class="card-body"><canvas id="ch1"></canvas></div>
+        <div class="card-footer">
+          <span class="platform-dot"></span> Stripe (mzkt.by) &nbsp;·&nbsp; Shopify (Changolivia)
+          <span style="margin-left:auto">Jan – Jun 2026</span>
+        </div>
+      </div>
+
+      <!-- Card 2: Income vs Expenses -->
+      <div class="report-card" id="c2">
+        <div class="card-header">
+          <svg class="card-icon" viewBox="0 0 22 22" fill="none"><rect x="2" y="11" width="4" height="9" fill="#0053CC" rx="1.5"/><rect x="8" y="7" width="4" height="13" fill="#4CAF50" rx="1.5"/><rect x="14" y="4" width="4" height="16" fill="#0053CC" opacity=".35" rx="1.5"/><rect x="14" y="11" width="4" height="9" fill="#EF5350" opacity=".55" rx="1.5"/></svg>
+          <div class="card-title">
+            <h3>Income vs Expenses</h3>
+            <p>Monthly comparison — mini P&amp;L view</p>
+          </div>
+          <button class="card-delete" onclick="removeCard('c2')" title="Remove report">×</button>
+        </div>
+        <div class="card-body"><canvas id="ch2"></canvas></div>
+        <div class="card-footer">
+          <span class="platform-dot"></span> Stripe (mzkt.by)
+          <span style="margin-left:auto">Jan – Jun 2026</span>
+        </div>
+      </div>
+
+      <!-- Card 3: Top customers -->
+      <div class="report-card" id="c3">
+        <div class="card-header">
+          <svg class="card-icon" viewBox="0 0 22 22" fill="none"><rect x="2" y="4" width="18" height="2.5" rx="1.2" fill="#0053CC"/><rect x="2" y="9.5" width="13" height="2.5" rx="1.2" fill="#0053CC" opacity=".6"/><rect x="2" y="15" width="9" height="2.5" rx="1.2" fill="#0053CC" opacity=".35"/></svg>
+          <div class="card-title">
+            <h3>Top customers by revenue</h3>
+            <p>Highest-value customers this period</p>
+          </div>
+          <button class="card-delete" onclick="removeCard('c3')" title="Remove report">×</button>
+        </div>
+        <div class="card-body"><canvas id="ch3"></canvas></div>
+        <div class="card-footer">
+          <span class="platform-dot"></span> Stripe (mzkt.by)
+          <span style="margin-left:auto">Jan – Jun 2026</span>
+        </div>
+      </div>
+
+      <!-- Add slot -->
+      <div class="add-slot" id="addSlot" onclick="openModal()">
+        <div class="slot-circle">+</div>
+        <span class="slot-text">Add report</span>
+        <span class="slot-sub" id="slotSub">3 more slots available</span>
+      </div>
+
+    </div><!-- /grid -->
+  </main>
+</div><!-- /main -->
+</div><!-- /layout -->
+
+<!-- Template gallery modal -->
+<div class="overlay" id="overlay" onclick="overlayClick(event)">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Add report</h2>
+      <div class="search-wrap">
+        <svg class="search-icon" width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" stroke-width="2"/><path d="M21 21l-4.35-4.35" stroke-width="2" stroke-linecap="round"/></svg>
+        <input type="search" id="searchInput" placeholder="Search templates…" oninput="filterTpls(this.value)">
+      </div>
+      <button class="modal-x" onclick="closeModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-cats" id="catSidebar"></div>
+      <div class="tpl-area">
+        <div class="tpl-grid" id="tplGrid"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─────────────────── DATA ───────────────────
+
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun'];
+
+// Stripe (mzkt.by): subscription payments + invoice payments
+// Jan: Anna Karenina 4×$22.56 + Pamela early sub = $204
+// Feb: Pamela 4×$30 sub + invoice payments = $183
+// Mar: 5 subs (confirmed Mar 6,14,21,28) + invoice $20.85 = $171
+// Apr: 4×$30 confirmed = $120
+// May: 4×$30 = $120
+// Jun 1–11: 2×$30 = $60
+const stripeIncome = [204, 183, 171, 120, 120, 60];
+
+// Shopify (Changolivia): daily summaries — estimated from 245 total txns pattern
+const shopifyIncome = [318, 274, 392, 287, 341, 168];
+
+// Combined
+const totalIncome = stripeIncome.map((v,i)=>v + shopifyIncome[i]);
+
+// Stripe fees (~2.9%+$0.30 per txn)
+const stripeFees = stripeIncome.map(v => parseFloat((v * 0.035).toFixed(2)));
+
+// Top customers from Stripe mzkt.by (real names observed + estimated totals)
+const topCustomers = {
+  labels: ['Pamela Andersen','Anna Karenina','James R. Miller','Sophie Chen','Marcus Webb'],
+  stripe: [480, 90, 67, 54, 38],
+};
+
+// ─────────────────── CHARTS ───────────────────
+
+Chart.defaults.font.family = "'Roboto', sans-serif";
+Chart.defaults.font.size = 11.5;
+Chart.defaults.color = '#999';
+
+function buildCharts() {
+
+  // Chart 1 — Line: Gross Sales
+  new Chart(document.getElementById('ch1'), {
+    type: 'line',
+    data: {
+      labels: MONTHS,
+      datasets: [
+        {
+          label: 'Stripe',
+          data: stripeIncome,
+          borderColor: '#0053CC',
+          backgroundColor: 'rgba(0,83,204,.08)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: false,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: '#0053CC',
+        },
+        {
+          label: 'Shopify',
+          data: shopifyIncome,
+          borderColor: '#4CAF50',
+          backgroundColor: 'rgba(76,175,80,.08)',
+          borderWidth: 2,
+          tension: 0.4,
+          fill: false,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: '#4CAF50',
+          borderDash: [4,3],
+        },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top',labels:{font:{size:11},boxWidth:10,padding:14,color:'#666'}},
+        tooltip:{callbacks:{label:c=>` $${c.raw.toFixed(0)}`}}
+      },
+      scales:{
+        y:{beginAtZero:true,ticks:{callback:v=>'$'+v,maxTicksLimit:5},grid:{color:'#F2F2F2'},border:{display:false}},
+        x:{ticks:{color:'#aaa'},grid:{display:false},border:{display:false}}
+      }
+    }
+  });
+
+  // Chart 2 — Stacked bar: Income vs Expenses
+  new Chart(document.getElementById('ch2'), {
+    type: 'bar',
+    data: {
+      labels: MONTHS,
+      datasets: [
+        {
+          label: 'Income',
+          data: stripeIncome,
+          backgroundColor: 'rgba(0,83,204,.72)',
+          borderRadius: {topLeft:3,topRight:3},
+          borderSkipped: false,
+          stack: 'a',
+        },
+        {
+          label: 'Expenses',
+          data: stripeFees,
+          backgroundColor: 'rgba(239,83,80,.65)',
+          borderRadius: {topLeft:3,topRight:3},
+          borderSkipped: false,
+          stack: 'b',
+        }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top',labels:{font:{size:11},boxWidth:10,padding:14,color:'#666'}},
+        tooltip:{callbacks:{label:c=>` ${c.dataset.label}: $${c.raw.toFixed(2)}`}}
+      },
+      scales:{
+        y:{beginAtZero:true,ticks:{callback:v=>'$'+v,maxTicksLimit:5},grid:{color:'#F2F2F2'},border:{display:false}},
+        x:{ticks:{color:'#aaa'},grid:{display:false},border:{display:false}}
+      }
+    }
+  });
+
+  // Chart 3 — Horizontal bar: Top customers
+  new Chart(document.getElementById('ch3'), {
+    type: 'bar',
+    data: {
+      labels: topCustomers.labels,
+      datasets: [{
+        label: 'Revenue',
+        data: topCustomers.stripe,
+        backgroundColor: ['rgba(0,83,204,.82)','rgba(0,83,204,.62)','rgba(0,83,204,.44)','rgba(0,83,204,.3)','rgba(0,83,204,.18)'],
+        borderRadius: 3,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{display:false},
+        tooltip:{callbacks:{label:c=>` $${c.raw.toFixed(0)}`}}
+      },
+      scales:{
+        x:{beginAtZero:true,ticks:{callback:v=>'$'+v,maxTicksLimit:5},grid:{color:'#F2F2F2'},border:{display:false}},
+        y:{ticks:{color:'#555',font:{size:12}},grid:{display:false},border:{display:false}}
+      }
+    }
+  });
+}
+
+// ─────────────────── TEMPLATES ───────────────────
+
+const TEMPLATES = [
+  {id:'t01',name:'Gross Sales (total)',desc:'Total income for the selected period at a glance',type:'table',cat:'sales'},
+  {id:'t02',name:'Gross Sales (monthly trend)',desc:'How your sales volume shifts month by month',type:'line',cat:'sales'},
+  {id:'t03',name:'Average Order Value (total)',desc:'What customers spend per order on average',type:'table',cat:'sales'},
+  {id:'t04',name:'Average Order Value (monthly)',desc:'How average order value changes over time',type:'line',cat:'sales'},
+  {id:'t05',name:'Top 5 products by revenue',desc:'Your best-performing products this period',type:'bar',cat:'sales'},
+  {id:'t06',name:'Sales by channel',desc:'How revenue splits across Shopify, Stripe, and more',type:'pie',cat:'sales'},
+  {id:'t07',name:'Channels — monthly side-by-side',desc:'Compare channel performance month by month',type:'stacked',cat:'sales'},
+  {id:'t08',name:'Top 5 customers by revenue',desc:'Your highest-value customers this period',type:'bar',cat:'customers'},
+  {id:'t09',name:'Sales by shipping country',desc:'Where your customers are located',type:'pie',cat:'customers'},
+  {id:'t10',name:'Gateway Fees (total)',desc:'Total payment processing costs for the period',type:'table',cat:'expenses'},
+  {id:'t11',name:'Gateway Fees (monthly trend)',desc:'How processing fees grow with your volume',type:'line',cat:'expenses'},
+  {id:'t12',name:'Top 5 expense accounts',desc:'Where the money went — by account',type:'table',cat:'expenses'},
+  {id:'t13',name:'Income vs Expenses (monthly)',desc:'Your mini P&L — income and costs side by side',type:'stacked',cat:'expenses'},
+  {id:'t14',name:'Refunds by product',desc:'Which products drive the most refunds',type:'table',cat:'refunds'},
+  {id:'t15',name:'Refunds (monthly trend)',desc:'How refund volume changes over time',type:'line',cat:'refunds'},
+  {id:'t16',name:'Tax summary',desc:'Tax collected per rate — ready for your accountant',type:'table',cat:'tax'},
+];
+
+const CATS = [
+  {id:'all',label:'All'},
+  {id:'sales',label:'Sales'},
+  {id:'customers',label:'Customers'},
+  {id:'expenses',label:'Expenses'},
+  {id:'refunds',label:'Refunds'},
+  {id:'tax',label:'Tax'},
+];
+
+const TYPE_META = {
+  line:   {label:'Monthly trend',   icon:'<polyline points="2,10 5,6 8,8 12,3 14,5" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" fill="none"/>'},
+  bar:    {label:'Ranking',         icon:'<rect x="1" y="7" width="3" height="7" rx=".5" fill="currentColor" opacity=".4"/><rect x="5.5" y="4.5" width="3" height="9.5" rx=".5" fill="currentColor" opacity=".65"/><rect x="10" y="2" width="3" height="12" rx=".5" fill="currentColor"/>'},
+  table:  {label:'Summary table',   icon:'<rect x="1" y="1.5" width="12" height="11" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><line x1="1" y1="5" x2="13" y2="5" stroke="currentColor" stroke-width="1.2"/><line x1="1" y1="8.5" x2="13" y2="8.5" stroke="currentColor" stroke-width="1.2"/><line x1="5" y1="5" x2="5" y2="12.5" stroke="currentColor" stroke-width="1.2"/>'},
+  pie:    {label:'Distribution',    icon:'<circle cx="7" cy="7" r="6" fill="#e8f0fe"/><path d="M7 7 L13 7 A6 6 0 0 0 7 1 Z" fill="currentColor"/><path d="M7 7 L7 1 A6 6 0 0 1 13 7 Z" fill="currentColor" opacity=".5"/>'},
+  stacked:{label:'Comparison',      icon:'<rect x="1" y="5" width="3" height="9" rx=".5" fill="currentColor" opacity=".35"/><rect x="1" y="8" width="3" height="6" rx=".5" fill="currentColor" opacity=".75"/><rect x="5.5" y="3" width="3" height="11" rx=".5" fill="currentColor" opacity=".35"/><rect x="5.5" y="7" width="3" height="7" rx=".5" fill="currentColor" opacity=".75"/><rect x="10" y="1.5" width="3" height="12.5" rx=".5" fill="currentColor" opacity=".35"/><rect x="10" y="6" width="3" height="8" rx=".5" fill="currentColor" opacity=".75"/>'},
+};
+
+function typeIcon(type) {
+  const m = TYPE_META[type] || TYPE_META.bar;
+  return `<svg width="14" height="14" viewBox="0 0 14 14" style="color:#0053CC">${m.icon}</svg>`;
+}
+
+let activeCat = 'all';
+let searchQ = '';
+
+function renderCats() {
+  const sb = document.getElementById('catSidebar');
+  sb.innerHTML = CATS.map(c => {
+    const count = c.id === 'all' ? TEMPLATES.length : TEMPLATES.filter(t=>t.cat===c.id).length;
+    return `<button class="cat-btn${activeCat===c.id?' active':''}" onclick="setCat('${c.id}',this)">
+      ${c.label}<span class="badge">${count}</span>
+    </button>`;
+  }).join('');
+}
+
+function renderTpls() {
+  const grid = document.getElementById('tplGrid');
+  const list = TEMPLATES.filter(t=>{
+    const catOk = activeCat==='all' || t.cat===activeCat;
+    const qOk = !searchQ || t.name.toLowerCase().includes(searchQ) || t.desc.toLowerCase().includes(searchQ);
+    return catOk && qOk;
+  });
+  if (!list.length) {
+    grid.innerHTML = `<div class="no-results">No templates match your search.</div>`;
+    return;
+  }
+  const m = TYPE_META;
+  grid.innerHTML = list.map(t=>`
+    <div class="tpl-card">
+      <div class="tpl-type">${typeIcon(t.type)} ${m[t.type]?.label||t.type}</div>
+      <div class="tpl-name">${t.name}</div>
+      <div class="tpl-desc">${t.desc}</div>
+      <button class="tpl-use" onclick="useTpl('${t.id}','${t.name.replace(/'/,"\\'")}','${t.type}')">Use this template</button>
+    </div>
+  `).join('');
+}
+
+function setCat(id, el) {
+  activeCat = id;
+  document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  renderTpls();
+}
+
+function filterTpls(q) {
+  searchQ = q.toLowerCase().trim();
+  renderTpls();
+}
+
+// ─────────────────── MODAL ───────────────────
+
+const MAX = 6;
+let cardCount = 3;
+
+function openModal() {
+  if (cardCount >= MAX) {
+    toast('You\'ve reached the 6-report limit. Remove a report to add another.');
+    return;
+  }
+  searchQ = '';
+  activeCat = 'all';
+  document.getElementById('searchInput').value = '';
+  renderCats();
+  renderTpls();
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeModal() { document.getElementById('overlay').classList.remove('open'); }
+function overlayClick(e) { if (e.target===document.getElementById('overlay')) closeModal(); }
+
+function useTpl(id, name, type) {
+  closeModal();
+  const grid = document.getElementById('grid');
+  const slot = document.getElementById('addSlot');
+  const cid = 'dyn_'+Date.now();
+
+  const iconSvgs = {
+    line:'<svg class="card-icon" viewBox="0 0 22 22" fill="none" stroke="#0053CC" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><polyline points="2,16 7,9 12,12 17,5 20,8"/></svg>',
+    bar:'<svg class="card-icon" viewBox="0 0 22 22" fill="none"><rect x="2" y="10" width="4" height="10" fill="#0053CC" rx="1.5"/><rect x="8" y="6" width="4" height="14" fill="#0053CC" opacity=".6" rx="1.5"/><rect x="14" y="3" width="4" height="17" fill="#0053CC" opacity=".35" rx="1.5"/></svg>',
+    table:'<svg class="card-icon" viewBox="0 0 22 22" fill="none" stroke="#0053CC" stroke-width="1.6"><rect x="2" y="3" width="18" height="16" rx="2"/><line x1="2" y1="9" x2="20" y2="9"/><line x1="2" y1="14" x2="20" y2="14"/><line x1="8" y1="9" x2="8" y2="19"/></svg>',
+    pie:'<svg class="card-icon" viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="8" fill="#EEF3FF"/><path d="M11 11 L19 11 A8 8 0 0 0 11 3 Z" fill="#0053CC"/><path d="M11 11 L11 3 A8 8 0 0 1 19 11 Z" fill="#0053CC" opacity=".5"/></svg>',
+    stacked:'<svg class="card-icon" viewBox="0 0 22 22" fill="#0053CC"><rect x="2" y="9" width="4" height="11" rx="1" opacity=".35"/><rect x="2" y="13" width="4" height="7" rx="1" opacity=".8"/><rect x="8" y="6" width="4" height="14" rx="1" opacity=".35"/><rect x="8" y="10" width="4" height="10" rx="1" opacity=".8"/><rect x="14" y="3" width="4" height="17" rx="1" opacity=".35"/><rect x="14" y="8" width="4" height="12" rx="1" opacity=".8"/></svg>',
+  };
+
+  const div = document.createElement('div');
+  div.className = 'report-card';
+  div.id = cid;
+  div.style.cssText = 'opacity:0;transform:scale(.97);transition:all .22s';
+  div.innerHTML = `
+    <div class="card-header">
+      ${iconSvgs[type]||iconSvgs.bar}
+      <div class="card-title">
+        <h3>${name}</h3>
+        <p>Added from templates</p>
+      </div>
+      <button class="card-delete" onclick="removeCard('${cid}')" title="Remove report">×</button>
+    </div>
+    <div class="card-body" style="display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#c8d0e0">
+      <svg width="36" height="36" fill="none" stroke="currentColor" viewBox="0 0 24 24" opacity=".5"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <span style="font-size:12px">Loading data…</span>
+    </div>
+    <div class="card-footer">
+      <span class="platform-dot"></span> All integrations
+      <span style="margin-left:auto">Jan – Jun 2026</span>
+    </div>`;
+  grid.insertBefore(div, slot);
+  requestAnimationFrame(()=>{ div.style.opacity='1'; div.style.transform='scale(1)'; });
+
+  cardCount++;
+  updateState();
+  toast(`"${name}" added`);
+}
+
+// ─────────────────── EDIT MODE ───────────────────
+
+let editMode = false;
+
+function toggleEdit() {
+  editMode = !editMode;
+  document.getElementById('mainArea').classList.toggle('edit-mode', editMode);
+  const lbl = document.getElementById('customizeLbl');
+  const btn = document.getElementById('customizeBtn');
+  if (editMode) {
+    lbl.textContent = 'Done';
+    btn.classList.add('editing');
+  } else {
+    lbl.textContent = 'Customize';
+    btn.classList.remove('editing');
+  }
+  updateState();
+}
+
+function removeCard(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.style.transition = 'all .18s';
+  el.style.opacity = '0';
+  el.style.transform = 'scale(.96)';
+  setTimeout(()=>{ el.remove(); cardCount--; updateState(); }, 190);
+  toast('Report removed');
+}
+
+function updateState() {
+  const countEl = document.getElementById('reportCount');
+  countEl.textContent = `${cardCount} / ${MAX}`;
+  const addBtn = document.getElementById('addBtn');
+  const slot = document.getElementById('addSlot');
+  const sub = document.getElementById('slotSub');
+  const rem = MAX - cardCount;
+  if (cardCount >= MAX) {
+    addBtn.disabled = true;
+    addBtn.title = 'You\'ve reached the 6-report limit. Remove a report to add more.';
+  } else {
+    addBtn.disabled = false;
+    addBtn.title = '';
+  }
+  if (sub) sub.textContent = rem + ' more slot' + (rem!==1?'s':'') + ' available';
+}
+
+// ─────────────────── TOAST ───────────────────
+
+let toastT;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastT);
+  toastT = setTimeout(()=>el.classList.remove('show'), 3000);
+}
+
+// ─────────────────── INIT ───────────────────
+
+buildCharts();
+renderCats();
+renderTpls();
+</script>
+</body>
+</html>
