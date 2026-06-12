@@ -515,12 +515,37 @@ function renderSidebar() {
 // ──────────────────────────────────────────────────────────────
 // CANVAS
 // ──────────────────────────────────────────────────────────────
+function mk(tag, css) {
+  const el = document.createElement(tag);
+  if (css) el.style.cssText = css;
+  return el;
+}
+
+function alignConnectors() {
+  // Measure each card's height and use it to center H-connectors and NO columns
+  const cardHeights = {};
+  document.querySelectorAll('.card[data-nid]').forEach(c => {
+    cardHeights[c.dataset.nid] = c.offsetHeight;
+  });
+  document.querySelectorAll('.conn-h[data-align-card]').forEach(el => {
+    const h = cardHeights[el.dataset.alignCard] || 80;
+    el.style.marginTop = Math.max(0, Math.round(h / 2 - 1)) + 'px';
+  });
+  document.querySelectorAll('.no-col[data-align-card]').forEach(el => {
+    const h = cardHeights[el.dataset.alignCard] || 80;
+    const firstChild = el.firstElementChild;
+    const childH = firstChild ? firstChild.offsetHeight : 56;
+    el.style.marginTop = Math.max(0, Math.round(h / 2 - childH / 2)) + 'px';
+  });
+}
+
 function renderCanvas() {
   const canvas = document.getElementById('canvas');
   if (!state.rootId) { canvas.innerHTML = ''; return; }
   canvas.innerHTML = '';
   const el = renderNode(state.rootId);
   if (el) canvas.appendChild(el);
+  requestAnimationFrame(alignConnectors);
 
   // Error bar cleared on any canvas update (only shown on failed save)
   const eb = document.getElementById('errorBar');
@@ -532,60 +557,68 @@ function renderNode(id) {
   const node = state.nodes[id];
   if (!node) return null;
 
-  // Action nodes: just the card, no branches
+  // Action nodes: just the card
   if (node.type === 'action') {
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
+    const wrap = mk('div', 'display:flex;flex-direction:column;align-items:center;');
     wrap.appendChild(makeCard(node));
     return wrap;
   }
 
-  // Trigger / condition: outer column holds branch-row + YES subtree
-  const outer = document.createElement('div');
-  outer.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
+  // YES wrapper: card + V-connector + YES subtree, all centered under the card
+  const yesWrap = mk('div', 'display:flex;flex-direction:column;align-items:center;');
+  yesWrap.appendChild(makeCard(node));
 
-  // Branch row: [card] [H-connector] [NO-column], vertically center-aligned
-  const row = document.createElement('div');
-  row.style.cssText = 'display:flex;align-items:center;';
-  row.appendChild(makeCard(node));
-
-  if (node.type === 'condition') {
-    row.appendChild(makeConnH());
-    const noCol = document.createElement('div');
-    noCol.style.cssText = 'display:flex;flex-direction:column;align-items:center;';
-    if (node.noChild) {
-      const noEl = renderNode(node.noChild);
-      if (noEl) noCol.appendChild(noEl);
-    } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'no') {
-      noCol.appendChild(makeChooser(id, 'no'));
-    } else {
-      noCol.appendChild(makeTerminal(id, 'no'));
-    }
-    row.appendChild(noCol);
-  }
-
-  outer.appendChild(row);
-
-  // YES subtree below
   if (node.yesChild) {
-    outer.appendChild(makeConnV());
+    yesWrap.appendChild(makeConnV());
     const yesEl = renderNode(node.yesChild);
-    if (yesEl) outer.appendChild(yesEl);
+    if (yesEl) yesWrap.appendChild(yesEl);
   } else if (node.type === 'condition') {
     if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
-      outer.appendChild(makeConnV());
-      outer.appendChild(makeChooser(id, 'yes'));
+      yesWrap.appendChild(makeConnV());
+      yesWrap.appendChild(makeChooser(id, 'yes'));
     }
   } else if (node.type === 'trigger') {
-    outer.appendChild(makeConnV());
-    outer.appendChild(makeChooser(id, 'yes'));
+    yesWrap.appendChild(makeConnV());
+    if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
+      yesWrap.appendChild(makeChooser(id, 'yes'));
+    } else {
+      yesWrap.appendChild(makeChooser(id, 'yes'));
+    }
   }
+
+  if (node.type === 'trigger') {
+    return yesWrap;
+  }
+
+  // Condition: horizontal row — yesWrap (left) + H-connector + NO column (right)
+  // H-connector and NO column get margin-top set by alignConnectors() after render
+  const outer = mk('div', 'display:flex;flex-direction:row;align-items:flex-start;');
+  outer.appendChild(yesWrap);
+
+  const connH = makeConnH();
+  connH.dataset.alignCard = node.id;
+  connH.style.alignSelf = 'flex-start';
+  outer.appendChild(connH);
+
+  const noCol = mk('div', 'display:flex;flex-direction:column;align-items:center;align-self:flex-start;');
+  noCol.className = 'no-col';
+  noCol.dataset.alignCard = node.id;
+  if (node.noChild) {
+    const noEl = renderNode(node.noChild);
+    if (noEl) noCol.appendChild(noEl);
+  } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'no') {
+    noCol.appendChild(makeChooser(id, 'no'));
+  } else {
+    noCol.appendChild(makeTerminal(id, 'no'));
+  }
+  outer.appendChild(noCol);
 
   return outer;
 }
 
 function makeCard(node) {
   const div = document.createElement('div');
+  div.dataset.nid = node.id;
   const isSelected = state.sidebar.nodeId === node.id;
 
   if (node.type === 'trigger') {
