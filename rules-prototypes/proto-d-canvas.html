@@ -47,15 +47,15 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .tree-node{display:flex;align-items:flex-start;gap:0}
 .tree-column{display:flex;flex-direction:column;align-items:center;gap:0}
 
-.card{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:11px 14px;min-width:200px;max-width:270px;cursor:pointer;position:relative;transition:box-shadow .15s}
+.card{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:11px 14px;width:220px;cursor:pointer;position:relative;transition:box-shadow .15s}
 .card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .card.selected{box-shadow:0 0 0 2px #0053CC}
 .card.trigger-card{border-left:4px solid #757575}
 .card.condition-card{border-left:4px solid #0053CC}
 .card.action-card{border-left:4px solid #16A34A}
-.card.empty-card{border:2px dashed #BDBDBD;background:#FAFAFA;cursor:pointer;min-height:56px;display:flex;align-items:center;justify-content:center;color:#BDBDBD;font-size:12px;transition:all .15s}
+.card.empty-card{width:220px;border:2px dashed #BDBDBD;background:#FAFAFA;cursor:pointer;min-height:56px;display:flex;align-items:center;justify-content:center;color:#BDBDBD;font-size:12px;transition:all .15s}
 .card.empty-card:hover{border-color:#0053CC;color:#0053CC;background:#EEF3FF}
-.card.chooser-card{border:2px dashed #0053CC;background:#EEF3FF;padding:8px;min-width:200px}
+.card.chooser-card{width:220px;border:2px dashed #0053CC;background:#EEF3FF;padding:8px}
 
 .card-type-label{font-size:10px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
 .card-main{font-size:13px;font-weight:500;color:#1A1A2E;line-height:1.35}
@@ -71,8 +71,9 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .path-btn.no{background:#FFF3E0;color:#D97706}.path-btn.no:hover,.path-btn.no.active{background:#D97706;color:#fff}
 
 /* ── Connectors ── */
-.conn-v{width:2px;height:28px;background:#BDBDBD;align-self:center}
-.conn-h{height:2px;width:32px;background:#BDBDBD;flex-shrink:0;align-self:center}
+/* margin-left: 109px = (card width 220px / 2) - 1px (half conn width) */
+.conn-v{width:2px;height:28px;background:#BDBDBD;margin-left:109px;align-self:flex-start;flex-shrink:0}
+.conn-h{height:2px;width:32px;background:#BDBDBD;flex-shrink:0}
 .path-label{font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;color:#fff;margin-bottom:4px;display:inline-block;align-self:flex-start}
 .path-label.yes-lbl{background:#16A34A}
 .path-label.no-lbl{background:#D97706}
@@ -146,11 +147,11 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <div>
         <label class="modal-label">Examples</label>
         <div class="example-chips">
-          <span class="chip" onclick="setPrompt(this)">Send email when invoice is overdue</span>
-          <span class="chip" onclick="setPrompt(this)">Notify me when a high-value invoice is created</span>
-          <span class="chip" onclick="setPrompt(this)">Update class when payment is received</span>
+          <span class="chip" onclick="setPrompt(this)">Send email to contact when invoice has outstanding balance</span>
+          <span class="chip" onclick="setPrompt(this)">Tag high-value invoices with a tracking category</span>
+          <span class="chip" onclick="setPrompt(this)">Email me when a payment is received</span>
           <span class="chip" onclick="setPrompt(this)">Send SMS when a refund is issued</span>
-          <span class="chip" onclick="setPrompt(this)">Post to webhook when a new customer is created</span>
+          <span class="chip" onclick="setPrompt(this)">Post to webhook when a new contact is created</span>
         </div>
       </div>
       <div class="ai-generating" id="aiGenerating">
@@ -178,6 +179,24 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
   </div>
 </div>
 
+<!-- Delete modal -->
+<div class="modal-overlay" id="deleteOverlay" onclick="onDeleteOverlay(event)">
+  <div class="modal" style="width:440px">
+    <div class="modal-head">
+      <div class="modal-head-title">Delete block?</div>
+      <button class="modal-close" onclick="closeDeleteModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="deleteModalMsg" style="font-size:13px;color:#1A1A2E;line-height:1.5"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-secondary" id="deleteOnlyBtn" onclick="confirmDeleteOnly()">Delete this block only</button>
+      <button class="btn" style="background:#DC2626;color:#fff" onclick="confirmDeleteAll()">Delete block + all below</button>
+    </div>
+  </div>
+</div>
+
 <!-- Error bar -->
 <div class="error-bar" id="errorBar">
   ⚠️ Each IF condition needs at least one THEN action before you can save.
@@ -187,54 +206,116 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 // ──────────────────────────────────────────────────────────────
 // DATA
 // ──────────────────────────────────────────────────────────────
-const ENTITIES = ['Customer','Deposit','Expense','Invoice','Journal Entry','Payment','Product or Service','Refund Receipt','Sales Receipt','Transfer','Vendor'];
+// Xero entities (per FDD: cloudbusinessllc.atlassian.net/wiki/.../FDD+Xero+Smart+Rules)
+const ENTITIES = ['Invoice','Bill','Payment','Bill Payment','Refund','Deposit','Contact','Bank Transfer','Item'];
 const EVENTS = {
-  'Invoice': ['Created','Paid','Sent'],
-  'Customer': ['Created','Updated','Deleted'],
-  'Payment': ['Created','Voided'],
-  'Expense': ['Created','Updated'],
+  'Invoice':      ['Created'],
+  'Bill':         ['Created'],
+  'Payment':      ['Created'],
+  'Bill Payment': ['Created'],
+  'Refund':       ['Created'],
+  'Deposit':      ['Created'],
+  'Contact':      ['Created','Updated'],
+  'Bank Transfer':['Created'],
+  'Item':         ['Created','Updated'],
 };
-const DEFAULT_EVENTS = ['Created','Updated','Deleted'];
+const DEFAULT_EVENTS = ['Created'];
+
+// Sub-fields for Contact (used in both Invoice/Bill and as Contact entity)
+const CONTACT_SUB = {
+  'Name':                          'text',
+  'Email':                         'text',
+  'Shipping Address: City':        'text',
+  'Shipping Address: Region':      'text',
+  'Shipping Address: Postal Code': 'text',
+  'Shipping Address: Country':     'text',
+  'Billing Address: City':         'text',
+  'Billing Address: Region':       'text',
+  'Billing Address: Postal Code':  'text',
+  'Billing Address: Country':      'text',
+};
+
+const INVOICE_FIELDS = {
+  'Reference':               {type:'text',   sub:null},
+  'Currency':                {type:'text',   sub:null},
+  'Total Amount':            {type:'number', sub:null},
+  'Balance':                 {type:'number', sub:null},
+  'Txn Date':                {type:'date',   sub:null},
+  'Line: Amount':            {type:'number', sub:null},
+  'Line: Description':       {type:'text',   sub:null},
+  'Line: Qty':               {type:'number', sub:null},
+  'Line: Item':              {type:'text',   sub:null},
+  'Line: Tax Rate':          {type:'text',   sub:null},
+  'Line: TrackingCategory1': {type:'text',   sub:null},
+  'Line: TrackingCategory2': {type:'text',   sub:null},
+  'Contact':                 {type:'object', sub:CONTACT_SUB},
+};
+
+const PAYMENT_FIELDS = {
+  'Total Amount':            {type:'number', sub:null},
+  'Currency':                {type:'text',   sub:null},
+  'Reference':               {type:'text',   sub:null},
+  'Txn Date':                {type:'date',   sub:null},
+  'Contact':                 {type:'object', sub:CONTACT_SUB},
+};
+
+const CONTACT_FIELDS = {
+  'Name':                    {type:'text',   sub:null},
+  'Email':                   {type:'text',   sub:null},
+  'Balance':                 {type:'number', sub:null},
+  'Shipping Address: City':        {type:'text', sub:null},
+  'Shipping Address: Region':      {type:'text', sub:null},
+  'Shipping Address: Postal Code': {type:'text', sub:null},
+  'Shipping Address: Country':     {type:'text', sub:null},
+  'Billing Address: City':         {type:'text', sub:null},
+  'Billing Address: Region':       {type:'text', sub:null},
+  'Billing Address: Postal Code':  {type:'text', sub:null},
+  'Billing Address: Country':      {type:'text', sub:null},
+};
+
+const BANK_TRANSFER_FIELDS = {
+  'Amount':                  {type:'number', sub:null},
+  'Txn Date':                {type:'date',   sub:null},
+  'From Account: Name':      {type:'text',   sub:null},
+  'From Account: Currency':  {type:'text',   sub:null},
+  'To Account: Name':        {type:'text',   sub:null},
+  'To Account: Currency':    {type:'text',   sub:null},
+};
+
+const ITEM_FIELDS = {
+  'Name':                    {type:'text',   sub:null},
+  'Code':                    {type:'text',   sub:null},
+  'Sale Price':              {type:'number', sub:null},
+  'Cost Price':              {type:'number', sub:null},
+};
 
 const FIELDS = {
-  'Invoice': {
-    'Balance':              {type:'number', sub:null},
-    'Billing address':      {type:'text',   sub:null},
-    'Class':                {type:'text',   sub:null},
-    'Currency':             {type:'text',   sub:null},
-    'Customer':             {type:'object', sub:{'Balance':'number','Billing address':'text','Company name':'text','Display name':'text','Email':'text','Phone':'text','Preferred delivery method':'text','Shipping address':'text'}},
-    'Customer memo':        {type:'text',   sub:null},
-    'Due date':             {type:'date',   sub:null},
-    'Line: Amount':         {type:'number', sub:null},
-    'Line: Class':          {type:'text',   sub:null},
-    'Line: Description':    {type:'text',   sub:null},
-    'Line: Product or Service': {type:'text', sub:null},
-    'Line: Qty':            {type:'number', sub:null},
-    'Line: Service Date':   {type:'date',   sub:null},
-    'Location':             {type:'text',   sub:null},
-    'Memo':                 {type:'text',   sub:null},
-    'Number':               {type:'text',   sub:null},
-    'Ship via':             {type:'text',   sub:null},
-    'Shipping address':     {type:'text',   sub:null},
-    'Shipping date':        {type:'date',   sub:null},
-    'Terms':                {type:'text',   sub:null},
-    'Total amount':         {type:'number', sub:null},
-    'Tracking no.':         {type:'text',   sub:null},
-    'Txn date':             {type:'date',   sub:null},
-  }
+  'Invoice':       INVOICE_FIELDS,
+  'Bill':          INVOICE_FIELDS,
+  'Refund':        INVOICE_FIELDS,
+  'Deposit':       INVOICE_FIELDS,
+  'Payment':       PAYMENT_FIELDS,
+  'Bill Payment':  PAYMENT_FIELDS,
+  'Contact':       CONTACT_FIELDS,
+  'Bank Transfer': BANK_TRANSFER_FIELDS,
+  'Item':          ITEM_FIELDS,
 };
+
 const TEXT_OPS   = ['Contains','Equals','Not equals','Set','Not set'];
 const NUMBER_OPS = ['Equals','Greater','Greater or equals','Less','Less or equals','Not equals','Set','Not set'];
 const DATE_OPS   = ['Equals','Before','After','Set','Not set'];
 const NO_VALUE_OPS = ['Set','Not set'];
 
-const ACTION_TYPES = ['Email','SMS','Voice','QuickBooks action','Post to URL'];
-const EMAIL_RECIPIENTS = ['Company owner','Customer','Vendor','Employee','Other'];
-const QB_ENTITY_ACTIONS = ['Update current','Update line'];
-const QB_FIELDS = {
-  'Update current': ['Class','Location','Customer','Terms','Memo','Message to customer'],
-  'Update line':    ['Service date','Item','Description','Class','Tax'],
+const ACTION_TYPES = ['Email','SMS','Voice','Xero action','Post to URL'];
+const EMAIL_RECIPIENTS = ['Account owner','Contact','Other'];
+const XERO_ENTITY_ACTIONS = ['Update current','Update line'];
+// Xero action fields per FDD — depends on parent (Invoice/Bill have lines; Contact/Item have own fields)
+const XERO_FIELDS = {
+  'Update current': ['Contact','Reference','Amounts Tax','Line: Item','Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
+  'Update line':    ['Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
 };
+// Which entities support Xero action
+const XERO_ACTION_ENTITIES = new Set(['Invoice','Bill','Refund','Deposit','Contact','Item','Bank Transfer']);
 
 // ──────────────────────────────────────────────────────────────
 // STATE
@@ -289,20 +370,95 @@ function getOperands(type) {
 
 function needsValue(op) { return !NO_VALUE_OPS.includes(op); }
 
-function deleteNode(id) {
-  // Remove from parent's yesChild/noChild
+function findParent(id) {
   for (const nid in state.nodes) {
     const n = state.nodes[nid];
-    if (n.yesChild === id) n.yesChild = null;
-    if (n.noChild  === id) n.noChild  = null;
+    if (n.yesChild === id) return {parentId: nid, path: 'yes'};
+    if (n.noChild  === id) return {parentId: nid, path: 'no'};
   }
-  // Recursively delete subtree
+  return null;
+}
+
+function deleteSubtree(id) {
+  // Pure recursive delete — does NOT touch parent links
   const node = state.nodes[id];
   if (!node) return;
-  if (node.yesChild) deleteNode(node.yesChild);
-  if (node.noChild)  deleteNode(node.noChild);
+  if (node.yesChild) deleteSubtree(node.yesChild);
+  if (node.noChild)  deleteSubtree(node.noChild);
+  delete state.nodes[id];
+}
+
+function deleteNode(id) {
+  // "Delete + all below": unlink from parent, then delete entire subtree
+  const p = findParent(id);
+  if (p) {
+    if (p.path === 'yes') state.nodes[p.parentId].yesChild = null;
+    else                  state.nodes[p.parentId].noChild  = null;
+  }
+  deleteSubtree(id);
+  if (state.sidebar.nodeId === id) state.sidebar = {mode:'select-block', nodeId:null};
+}
+
+function deleteOnly(id) {
+  // "Delete only this block": promote YES child up; delete NO subtree
+  const node = state.nodes[id];
+  if (!node) return;
+  const p = findParent(id);
+  const yesId = node.yesChild;
+  // Delete NO subtree
+  if (node.noChild) deleteSubtree(node.noChild);
+  // Reconnect YES child to parent (or to root if no parent — shouldn't happen for non-trigger)
+  if (p) {
+    if (p.path === 'yes') state.nodes[p.parentId].yesChild = yesId;
+    else                  state.nodes[p.parentId].noChild  = yesId;
+  }
+  // Drop this node
+  node.yesChild = null;
+  node.noChild = null;
   delete state.nodes[id];
   if (state.sidebar.nodeId === id) state.sidebar = {mode:'select-block', nodeId:null};
+}
+
+function countSubtree(id) {
+  const n = state.nodes[id];
+  if (!n) return 0;
+  return 1 + countSubtree(n.yesChild) + countSubtree(n.noChild);
+}
+
+// ── Delete modal ───────────────────────────────────────────────
+let pendingDeleteId = null;
+function openDeleteModal(id) {
+  pendingDeleteId = id;
+  const n = state.nodes[id];
+  if (!n) return;
+  const below = countSubtree(n.yesChild) + countSubtree(n.noChild);
+  const msg = document.getElementById('deleteModalMsg');
+  const onlyBtn = document.getElementById('deleteOnlyBtn');
+  if (below > 0) {
+    msg.innerHTML = `This block has <strong>${below}</strong> connected block${below !== 1 ? 's' : ''} below it.<br><br><strong>Delete this block only</strong> — keeps the YES chain attached, removes the NO branch.<br><strong>Delete block + all below</strong> — removes this block and everything underneath it.`;
+    onlyBtn.style.display = '';
+  } else {
+    msg.textContent = 'This will remove the block from your rule.';
+    onlyBtn.style.display = 'none';
+  }
+  document.getElementById('deleteOverlay').classList.add('open');
+}
+function closeDeleteModal() {
+  pendingDeleteId = null;
+  document.getElementById('deleteOverlay').classList.remove('open');
+}
+function onDeleteOverlay(e) {
+  if (e.target === document.getElementById('deleteOverlay')) closeDeleteModal();
+}
+function confirmDeleteOnly() {
+  if (pendingDeleteId) deleteOnly(pendingDeleteId);
+  closeDeleteModal();
+  render();
+}
+function confirmDeleteAll() {
+  if (pendingDeleteId) deleteNode(pendingDeleteId);
+  closeDeleteModal();
+  render();
 }
 
 function hasErrors() {
@@ -469,28 +625,28 @@ function renderSidebar() {
             ${EMAIL_RECIPIENTS.map(r=>`<option ${r===node.recipient?'selected':''}>${r}</option>`).join('')}
           </select>
         </div>` : ''}
-        ${node.actionType === 'QuickBooks action' ? `
+        ${node.actionType === 'Xero action' ? `
         <div class="form-group">
           <label class="form-label">Entity</label>
-          <select onchange="onActionField('${nodeId}','qbEntity',this.value)">
-            <option value="">${entity}</option>
+          <select disabled>
             <option selected>${entity}</option>
           </select>
+          <div style="font-size:11px;color:#9E9E9E;margin-top:4px">Locked to trigger entity</div>
         </div>
         <div class="form-group">
           <label class="form-label">Action</label>
           <select onchange="onActionField('${nodeId}','qbAction',this.value)">
             <option value="">Select action…</option>
-            ${QB_ENTITY_ACTIONS.map(a=>`<option ${a===node.qbAction?'selected':''}>${a}</option>`).join('')}
+            ${XERO_ENTITY_ACTIONS.map(a=>`<option ${a===node.qbAction?'selected':''}>${a}</option>`).join('')}
           </select>
         </div>
         ${node.qbAction ? `
         <div class="form-group">
           <label class="form-label">Fields to update</label>
-          ${QB_FIELDS[node.qbAction].map(f=>`
+          ${XERO_FIELDS[node.qbAction].map(f=>`
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <input type="checkbox" id="qbf_${f.replace(/\s/g,'_')}" ${(node.qbFieldValues||{})[f]!==undefined?'checked':''} onchange="onQbField('${nodeId}','${f}',this.checked)">
-              <label for="qbf_${f.replace(/\s/g,'_')}" style="font-size:13px">${f}</label>
+              <input type="checkbox" id="qbf_${f.replace(/[\s:]/g,'_')}" ${(node.qbFieldValues||{})[f]!==undefined?'checked':''} onchange="onQbField('${nodeId}','${f}',this.checked)">
+              <label for="qbf_${f.replace(/[\s:]/g,'_')}" style="font-size:13px">${f}</label>
             </div>`).join('')}
         </div>` : ''}` : ''}
         ${node.actionType === 'Post to URL' ? `
@@ -521,21 +677,16 @@ function mk(tag, css) {
   return el;
 }
 
+// After render: shift each noBranch down so its horizontal line meets the
+// parent card's vertical center. Cards are fixed-width (220px) so all V-connectors
+// are handled purely by CSS (margin-left:109px).
 function alignConnectors() {
-  // Measure each card's height and use it to center H-connectors and NO columns
-  const cardHeights = {};
-  document.querySelectorAll('.card[data-nid]').forEach(c => {
-    cardHeights[c.dataset.nid] = c.offsetHeight;
-  });
-  document.querySelectorAll('.conn-h[data-align-card]').forEach(el => {
-    const h = cardHeights[el.dataset.alignCard] || 80;
-    el.style.marginTop = Math.max(0, Math.round(h / 2 - 1)) + 'px';
-  });
-  document.querySelectorAll('.no-col[data-align-card]').forEach(el => {
-    const h = cardHeights[el.dataset.alignCard] || 80;
-    const firstChild = el.firstElementChild;
-    const childH = firstChild ? firstChild.offsetHeight : 56;
-    el.style.marginTop = Math.max(0, Math.round(h / 2 - childH / 2)) + 'px';
+  document.querySelectorAll('.card[data-nid]').forEach(card => {
+    const id = card.dataset.nid;
+    const h = card.offsetHeight;
+    document.querySelectorAll(`.no-branch[data-align-card="${id}"]`).forEach(el => {
+      el.style.marginTop = Math.max(0, Math.round(h / 2 - 1)) + 'px';
+    });
   });
 }
 
@@ -547,71 +698,85 @@ function renderCanvas() {
   if (el) canvas.appendChild(el);
   requestAnimationFrame(alignConnectors);
 
-  // Error bar cleared on any canvas update (only shown on failed save)
   const eb = document.getElementById('errorBar');
   if (eb && !eb.dataset.sticky) eb.className = 'error-bar';
 }
 
+// Layout philosophy:
+//   - All cards are exactly 220px wide → V-connectors live at margin-left:109px (CSS-only)
+//   - For a condition's NO branch: horizontal connector to the right of the card,
+//     then a short vertical drop, then the NO child. This guarantees every line is
+//     connected (no floating segments).
 function renderNode(id) {
   if (!id) return null;
   const node = state.nodes[id];
   if (!node) return null;
 
-  // Action nodes: just the card
+  // Action: just the card (no branches)
   if (node.type === 'action') {
-    const wrap = mk('div', 'display:flex;flex-direction:column;align-items:center;');
+    const wrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
     wrap.appendChild(makeCard(node));
     return wrap;
   }
 
-  // YES wrapper: card + V-connector + YES subtree, all centered under the card
-  const yesWrap = mk('div', 'display:flex;flex-direction:column;align-items:center;');
+  // yesWrap holds card + V-connector + YES subtree (vertical chain)
+  // align-items:flex-start so child trees stay left-aligned (cards always start at left edge)
+  const yesWrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
   yesWrap.appendChild(makeCard(node));
 
-  if (node.yesChild) {
-    yesWrap.appendChild(makeConnV());
-    const yesEl = renderNode(node.yesChild);
-    if (yesEl) yesWrap.appendChild(yesEl);
-  } else if (node.type === 'condition') {
-    if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
+  const appendYesBelow = () => {
+    if (node.yesChild) {
+      yesWrap.appendChild(makeConnV());
+      const yesEl = renderNode(node.yesChild);
+      if (yesEl) yesWrap.appendChild(yesEl);
+    } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
       yesWrap.appendChild(makeConnV());
       yesWrap.appendChild(makeChooser(id, 'yes'));
     }
-  } else if (node.type === 'trigger') {
-    yesWrap.appendChild(makeConnV());
-    if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
-      yesWrap.appendChild(makeChooser(id, 'yes'));
-    } else {
-      yesWrap.appendChild(makeChooser(id, 'yes'));
-    }
-  }
+  };
 
   if (node.type === 'trigger') {
+    // Trigger always shows what comes next
+    if (node.yesChild) {
+      yesWrap.appendChild(makeConnV());
+      const yesEl = renderNode(node.yesChild);
+      if (yesEl) yesWrap.appendChild(yesEl);
+    } else {
+      yesWrap.appendChild(makeConnV());
+      yesWrap.appendChild(makeChooser(id, 'yes'));
+    }
     return yesWrap;
   }
 
-  // Condition: horizontal row — yesWrap (left) + H-connector + NO column (right)
-  // H-connector and NO column get margin-top set by alignConnectors() after render
+  // Condition: build outer row → [yesWrap] [noBranch]
+  // noBranch holds an L-shape: horizontal line + vertical drop that lands at the
+  // top-CENTER of the NO child card. The corner is where horiz meets drop.
+  //   horizontal line width = 111px (32px breathing space + 109px to reach card center + 2px overlap)
+  //   drop margin-left = 109px so it sits at the no-child card's horizontal center
+  appendYesBelow();
+
   const outer = mk('div', 'display:flex;flex-direction:row;align-items:flex-start;');
   outer.appendChild(yesWrap);
 
-  const connH = makeConnH();
-  connH.dataset.alignCard = node.id;
-  connH.style.alignSelf = 'flex-start';
-  outer.appendChild(connH);
+  const noBranch = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;');
+  noBranch.className = 'no-branch';
+  noBranch.dataset.alignCard = node.id;
 
-  const noCol = mk('div', 'display:flex;flex-direction:column;align-items:center;align-self:flex-start;');
-  noCol.className = 'no-col';
-  noCol.dataset.alignCard = node.id;
+  const horizLine = mk('div', 'height:2px;width:111px;background:#BDBDBD;flex-shrink:0;');
+  noBranch.appendChild(horizLine);
+
+  const drop = mk('div', 'width:2px;height:18px;background:#BDBDBD;margin-left:109px;flex-shrink:0;');
+  noBranch.appendChild(drop);
+
   if (node.noChild) {
     const noEl = renderNode(node.noChild);
-    if (noEl) noCol.appendChild(noEl);
+    if (noEl) noBranch.appendChild(noEl);
   } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'no') {
-    noCol.appendChild(makeChooser(id, 'no'));
+    noBranch.appendChild(makeChooser(id, 'no'));
   } else {
-    noCol.appendChild(makeTerminal(id, 'no'));
+    noBranch.appendChild(makeTerminal(id, 'no'));
   }
-  outer.appendChild(noCol);
+  outer.appendChild(noBranch);
 
   return outer;
 }
@@ -645,8 +810,7 @@ function makeCard(node) {
       </div>`;
     div.querySelector('.del-btn').addEventListener('click', e => {
       e.stopPropagation();
-      if ((node.yesChild || node.noChild) && !confirm('Delete this block and all connected blocks?')) return;
-      deleteNode(node.id); render();
+      openDeleteModal(node.id);
     });
     div.addEventListener('click', () => { startEdit(node.id, 'condition'); render(); });
   }
@@ -655,14 +819,14 @@ function makeCard(node) {
     div.className = 'card action-card' + (isSelected ? ' selected' : '');
     let detail = '';
     if (node.actionType==='Email'||node.actionType==='SMS'||node.actionType==='Voice') detail = node.recipient || '';
-    if (node.actionType==='QuickBooks action') detail = `${node.qbEntity||state.trigger.entity} · ${node.qbAction||''}`;
+    if (node.actionType==='Xero action') detail = `${state.trigger.entity} · ${node.qbAction||''}`;
     if (node.actionType==='Post to URL') detail = node.urlTarget || '';
     div.innerHTML = `
       <button class="del-btn" title="Delete">×</button>
       <div class="card-type-label">THEN</div>
       <div class="card-main">${node.actionType || '…'}</div>
       ${detail ? `<div class="card-detail">${detail}</div>` : ''}`;
-    div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); deleteNode(node.id); render(); });
+    div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); openDeleteModal(node.id); });
     div.addEventListener('click', () => { startEdit(node.id, 'action'); render(); });
   }
 
@@ -683,7 +847,7 @@ function makeConnH() {
 function makeTerminal(parentId, path) {
   const div = document.createElement('div');
   div.className = 'card empty-card';
-  div.style.cssText = 'min-width:140px;max-width:160px;font-size:11px;font-weight:500;';
+  div.style.cssText = 'font-size:11px;font-weight:500;';
   div.textContent = 'Rule ends here';
   div.title = 'Click to add a block on this path';
   div.addEventListener('click', () => {
@@ -887,8 +1051,8 @@ document.getElementById('ruleName').addEventListener('input', function() {
 // ──────────────────────────────────────────────────────────────
 const AI_TEMPLATES = [
   {
-    keywords: ['overdue','due','past due','late'],
-    name: 'Overdue invoice alert',
+    keywords: ['overdue','due','past due','late','balance'],
+    name: 'Outstanding invoice alert',
     build() {
       resetCanvas();
       state.trigger = {entity:'Invoice', event:'Created'};
@@ -896,21 +1060,21 @@ const AI_TEMPLATES = [
       root.entity = 'Invoice'; root.event = 'Created';
       const cond = createNode('condition', {field:'Balance', operand:'Greater', values:['0']});
       root.yesChild = cond;
-      const act = createNode('action', {actionType:'Email', recipient:'Customer'});
+      const act = createNode('action', {actionType:'Email', recipient:'Contact'});
       state.nodes[cond].yesChild = act;
     }
   },
   {
-    keywords: ['high-value','high value','large','amount','expensive'],
+    keywords: ['high-value','high value','large','amount','expensive','tracking'],
     name: 'High-value invoice tag',
     build() {
       resetCanvas();
       state.trigger = {entity:'Invoice', event:'Created'};
       const root = state.nodes[state.rootId];
       root.entity = 'Invoice'; root.event = 'Created';
-      const cond = createNode('condition', {field:'Total amount', operand:'Greater', values:['1000']});
+      const cond = createNode('condition', {field:'Total Amount', operand:'Greater', values:['1000']});
       root.yesChild = cond;
-      const act = createNode('action', {actionType:'QuickBooks action', qbEntity:'Invoice', qbAction:'Update current', qbFieldValues:{Class:''}});
+      const act = createNode('action', {actionType:'Xero action', qbAction:'Update current', qbFieldValues:{'Line: TrackingCategory1':''}});
       state.nodes[cond].yesChild = act;
     }
   },
@@ -923,33 +1087,33 @@ const AI_TEMPLATES = [
       const root = state.nodes[state.rootId];
       root.entity = 'Payment'; root.event = 'Created';
       state.trigger.entity = 'Payment'; state.trigger.event = 'Created';
-      const act = createNode('action', {actionType:'QuickBooks action', qbEntity:'Payment', qbAction:'Update current', qbFieldValues:{Class:''}});
+      const act = createNode('action', {actionType:'Email', recipient:'Account owner'});
       root.yesChild = act;
     }
   },
   {
-    keywords: ['refund'],
+    keywords: ['refund','credit'],
     name: 'Refund notification',
     build() {
       resetCanvas();
-      state.trigger = {entity:'Refund Receipt', event:'Created'};
+      state.trigger = {entity:'Refund', event:'Created'};
       const root = state.nodes[state.rootId];
-      root.entity = 'Refund Receipt'; root.event = 'Created';
-      state.trigger.entity = 'Refund Receipt'; state.trigger.event = 'Created';
-      const act = createNode('action', {actionType:'SMS', recipient:'Company owner'});
+      root.entity = 'Refund'; root.event = 'Created';
+      state.trigger.entity = 'Refund'; state.trigger.event = 'Created';
+      const act = createNode('action', {actionType:'SMS', recipient:'Account owner'});
       root.yesChild = act;
     }
   },
   {
-    keywords: ['customer','new customer','client'],
-    name: 'New customer webhook',
+    keywords: ['contact','customer','new contact','client','vendor'],
+    name: 'New contact webhook',
     build() {
       resetCanvas();
-      state.trigger = {entity:'Customer', event:'Created'};
+      state.trigger = {entity:'Contact', event:'Created'};
       const root = state.nodes[state.rootId];
-      root.entity = 'Customer'; root.event = 'Created';
-      state.trigger.entity = 'Customer'; state.trigger.event = 'Created';
-      const act = createNode('action', {actionType:'Post to URL', urlTarget:'https://hooks.example.com/new-customer'});
+      root.entity = 'Contact'; root.event = 'Created';
+      state.trigger.entity = 'Contact'; state.trigger.event = 'Created';
+      const act = createNode('action', {actionType:'Post to URL', urlTarget:'https://hooks.example.com/new-contact'});
       root.yesChild = act;
     }
   },
