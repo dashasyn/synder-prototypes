@@ -88,6 +88,10 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .error-bar{background:#FFF3E0;border-top:1px solid #FFCC80;padding:7px 20px;font-size:12px;color:#E65100;flex-shrink:0;display:none}
 .error-bar.show{display:block}
 
+/* ── Card flash (path already filled feedback) ── */
+@keyframes card-flash{0%,100%{box-shadow:0 0 0 2px #0053CC}50%{box-shadow:0 0 0 5px rgba(0,83,204,.45)}}
+.card.flash{animation:card-flash .35s ease 2}
+
 /* ── AI modal ── */
 .ai-btn{background:linear-gradient(135deg,#6C47FF,#0053CC);color:#fff;border:none;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:7px 14px;border-radius:4px;cursor:pointer;transition:opacity .15s}
 .ai-btn:hover{opacity:.88}
@@ -191,7 +195,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
     </div>
     <div class="modal-foot">
       <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
-      <button class="btn btn-secondary" id="deleteOnlyBtn" onclick="confirmDeleteOnly()">Delete this block only</button>
+      <button class="btn btn-secondary" id="deleteOnlyBtn" onclick="confirmDeleteOnly()">Delete this block + NO branch</button>
       <button class="btn" style="background:#DC2626;color:#fff" onclick="confirmDeleteAll()">Delete block + all below</button>
     </div>
   </div>
@@ -311,7 +315,7 @@ const EMAIL_RECIPIENTS = ['Account owner','Contact','Other'];
 const XERO_ENTITY_ACTIONS = ['Update current','Update line'];
 // Xero action fields per FDD — depends on parent (Invoice/Bill have lines; Contact/Item have own fields)
 const XERO_FIELDS = {
-  'Update current': ['Contact','Reference','Amounts Tax','Line: Item','Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
+  'Update current': ['Contact','Reference','Tax Treatment','Line: Item','Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
   'Update line':    ['Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
 };
 // Which entities support Xero action
@@ -435,7 +439,7 @@ function openDeleteModal(id) {
   const msg = document.getElementById('deleteModalMsg');
   const onlyBtn = document.getElementById('deleteOnlyBtn');
   if (below > 0) {
-    msg.innerHTML = `This block has <strong>${below}</strong> connected block${below !== 1 ? 's' : ''} below it.<br><br><strong>Delete this block only</strong> — keeps the YES chain attached, removes the NO branch.<br><strong>Delete block + all below</strong> — removes this block and everything underneath it.`;
+    msg.innerHTML = `This block has <strong>${below}</strong> connected block${below !== 1 ? 's' : ''} below it.<br><br><strong>Delete this block + NO branch</strong> — keeps the YES chain attached, removes the NO branch (${below > 1 ? below - countSubtree(node.yesChild) : 0} block${below > 1 ? 's' : ''} removed).<br><strong>Delete block + all below</strong> — removes this block and everything underneath it (${below + 1} block${below + 1 !== 1 ? 's' : ''} removed).`;
     onlyBtn.style.display = '';
   } else {
     msg.textContent = 'This will remove the block from your rule.';
@@ -571,8 +575,7 @@ function renderSidebar() {
           <button class="add-or-btn" onclick="addOrValue('${nodeId}')" style="margin-top:6px">+ Add OR value</button>
         </div>` : ''}
         <div class="btn-row" style="margin-top:8px">
-          <button class="btn btn-primary btn-sm" onclick="saveCondition('${nodeId}')">Apply</button>
-          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Cancel</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Close</button>
         </div>
       </div>
       ${node.field && node.operand ? `
@@ -655,8 +658,7 @@ function renderSidebar() {
           <input class="text-input" type="text" value="${node.urlTarget||''}" placeholder="https://…" oninput="onActionField('${nodeId}','urlTarget',this.value)" />
         </div>` : ''}
         <div class="btn-row" style="margin-top:8px">
-          <button class="btn btn-primary btn-sm" onclick="saveAction('${nodeId}')">Apply</button>
-          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Cancel</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Close</button>
         </div>
       </div>`;
   }
@@ -677,17 +679,15 @@ function mk(tag, css) {
   return el;
 }
 
-// After render: shift each noBranch down so its horizontal line meets the
-// parent card's vertical center. Cards are fixed-width (220px) so all V-connectors
-// are handled purely by CSS (margin-left:109px).
+// After render: position each absolutely-placed noBranch so its horizontal line
+// exits from the parent card's vertical center. Drop height is also adjusted so
+// the NO child always starts below the card bottom.
 function alignConnectors() {
   document.querySelectorAll('.card[data-nid]').forEach(card => {
     const id = card.dataset.nid;
     const h = card.offsetHeight;
     document.querySelectorAll(`.no-branch[data-align-card="${id}"]`).forEach(nb => {
-      const mTop = Math.max(0, Math.round(h / 2 - 1));
-      nb.style.marginTop = mTop + 'px';
-      // Make drop tall enough so NO child starts below the card bottom
+      nb.style.top = Math.max(0, Math.round(h / 2 - 1)) + 'px';
       const dropEl = nb.children[1];
       if (dropEl) dropEl.style.height = Math.max(18, Math.round(h / 2) + 8) + 'px';
     });
@@ -706,72 +706,57 @@ function renderCanvas() {
   if (eb && !eb.dataset.sticky) eb.className = 'error-bar';
 }
 
-// Layout philosophy:
-//   - All cards are exactly 220px wide → V-connectors live at margin-left:109px (CSS-only)
-//   - For a condition's NO branch: horizontal connector to the right of the card,
-//     then a short vertical drop, then the NO child. This guarantees every line is
-//     connected (no floating segments).
+// Layout:
+//   - All cards 220px wide. V-connectors: margin-left:109px (CSS-only).
+//   - Condition NO branch: absolutely positioned at left:220px (card's right edge)
+//     so it never gets displaced by a wide YES subtree.
+//   - Action nodes chain vertically (V-connector + chooser below them).
 function renderNode(id) {
   if (!id) return null;
   const node = state.nodes[id];
   if (!node) return null;
 
-  // Action: just the card (no branches)
-  if (node.type === 'action') {
+  // Trigger: vertical chain only
+  if (node.type === 'trigger') {
     const wrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
     wrap.appendChild(makeCard(node));
+    if (node.yesChild) {
+      wrap.appendChild(makeConnV());
+      wrap.appendChild(renderNode(node.yesChild));
+    } else {
+      wrap.appendChild(makeConnV());
+      wrap.appendChild(makeChooser(id, 'yes'));
+    }
     return wrap;
   }
 
-  // yesWrap holds card + V-connector + YES subtree (vertical chain)
-  // align-items:flex-start so child trees stay left-aligned (cards always start at left edge)
-  const yesWrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
-  yesWrap.appendChild(makeCard(node));
-
-  const appendYesBelow = () => {
+  // Action: vertical chain (can have more steps below)
+  if (node.type === 'action') {
+    const wrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
+    wrap.appendChild(makeCard(node));
+    wrap.appendChild(makeConnV());
     if (node.yesChild) {
-      yesWrap.appendChild(makeConnV());
-      const yesEl = renderNode(node.yesChild);
-      if (yesEl) yesWrap.appendChild(yesEl);
+      wrap.appendChild(renderNode(node.yesChild));
     } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
-      yesWrap.appendChild(makeConnV());
-      yesWrap.appendChild(makeChooser(id, 'yes'));
-    }
-  };
-
-  if (node.type === 'trigger') {
-    // Trigger always shows what comes next
-    if (node.yesChild) {
-      yesWrap.appendChild(makeConnV());
-      const yesEl = renderNode(node.yesChild);
-      if (yesEl) yesWrap.appendChild(yesEl);
+      wrap.appendChild(makeChooser(id, 'yes'));
     } else {
-      yesWrap.appendChild(makeConnV());
-      yesWrap.appendChild(makeChooser(id, 'yes'));
+      wrap.appendChild(makeTerminal(id, 'yes'));
     }
-    return yesWrap;
+    return wrap;
   }
 
-  // Condition: build outer row → [yesWrap] [noBranch]
-  // noBranch holds an L-shape: horizontal line + vertical drop that lands at the
-  // top-CENTER of the NO child card. The corner is where horiz meets drop.
-  //   horizontal line width = 111px (32px breathing space + 109px to reach card center + 2px overlap)
-  //   drop margin-left = 109px so it sits at the no-child card's horizontal center
-  appendYesBelow();
+  // Condition: column with card + absolutely-anchored NO branch + YES subtree below
+  const outerCol = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;position:relative;');
+  outerCol.appendChild(makeCard(node));
 
-  const outer = mk('div', 'display:flex;flex-direction:row;align-items:flex-start;');
-  outer.appendChild(yesWrap);
-
-  const noBranch = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;');
+  // NO branch — always starts at card's right edge regardless of YES subtree width
+  const noBranch = mk('div', 'position:absolute;left:220px;top:0;display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;');
   noBranch.className = 'no-branch';
   noBranch.dataset.alignCard = node.id;
-
   const horizLine = mk('div', 'height:2px;width:111px;background:#BDBDBD;flex-shrink:0;');
   noBranch.appendChild(horizLine);
-
   const drop = mk('div', 'width:2px;height:18px;background:#BDBDBD;margin-left:109px;flex-shrink:0;');
   noBranch.appendChild(drop);
-
   if (node.noChild) {
     const noEl = renderNode(node.noChild);
     if (noEl) noBranch.appendChild(noEl);
@@ -780,9 +765,19 @@ function renderNode(id) {
   } else {
     noBranch.appendChild(makeTerminal(id, 'no'));
   }
-  outer.appendChild(noBranch);
+  outerCol.appendChild(noBranch);
 
-  return outer;
+  // YES chain below card
+  outerCol.appendChild(makeConnV());
+  if (node.yesChild) {
+    outerCol.appendChild(renderNode(node.yesChild));
+  } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
+    outerCol.appendChild(makeChooser(id, 'yes'));
+  } else {
+    outerCol.appendChild(makeTerminal(id, 'yes'));
+  }
+
+  return outerCol;
 }
 
 function makeCard(node) {
@@ -808,10 +803,10 @@ function makeCard(node) {
       <div class="card-main">${fieldLabel || '…'}</div>
       ${node.operand ? `<div class="card-detail">${node.operand}${valDisplay ? '' : ''}</div>` : ''}
       ${valDisplay ? `<div class="or-tags">${(node.values||[]).filter(Boolean).map(v=>`<span class="or-tag">${v}</span>`).join('')}</div>` : ''}
-      <div class="path-btns">
-        <button class="path-btn yes${node.yesChild?' active':''}" onclick="event.stopPropagation();onPathBtn(event,'${node.id}','yes')">YES</button>
-        <button class="path-btn no${node.noChild?' active':''}" onclick="event.stopPropagation();onPathBtn(event,'${node.id}','no')">NO</button>
-      </div>`;
+      ${!(node.yesChild && node.noChild) ? `<div class="path-btns">
+        ${!node.yesChild ? `<button class="path-btn yes" onclick="event.stopPropagation();onPathBtn(event,'${node.id}','yes')">YES</button>` : ''}
+        ${!node.noChild  ? `<button class="path-btn no"  onclick="event.stopPropagation();onPathBtn(event,'${node.id}','no')">NO</button>`  : ''}
+      </div>` : ''}`;
     div.querySelector('.del-btn').addEventListener('click', e => {
       e.stopPropagation();
       openDeleteModal(node.id);
@@ -899,11 +894,15 @@ function onPathBtn(e, nodeId, path) {
   if (!node) return;
   const childId = path === 'yes' ? node.yesChild : node.noChild;
   if (childId) {
-    // Already has a child — select it
     state.sidebar = {mode: state.nodes[childId].type === 'action' ? 'action' : 'condition', nodeId: childId};
-    render(); return;
+    render();
+    // Flash the child card so user sees which block is now selected
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`.card[data-nid="${childId}"]`);
+      if (el) { el.classList.add('flash'); el.addEventListener('animationend', () => el.classList.remove('flash'), {once:true}); }
+    });
+    return;
   }
-  // Toggle pending slot
   if (state.pendingSlot && state.pendingSlot.parentId === nodeId && state.pendingSlot.path === path) {
     state.pendingSlot = null;
   } else {
@@ -1013,12 +1012,6 @@ function saveAction(nodeId) {
 }
 
 function clearSidebar() {
-  const nodeId = state.sidebar.nodeId;
-  if (nodeId && state.editBuffer[nodeId]) {
-    const n = state.nodes[nodeId];
-    if (n) Object.assign(n, state.editBuffer[nodeId]);
-    delete state.editBuffer[nodeId];
-  }
   state.sidebar = {mode:'none', nodeId:null};
   render();
 }
