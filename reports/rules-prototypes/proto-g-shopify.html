@@ -155,7 +155,7 @@ const RECIPIENTS=['Account owner','Contact','Other'];
 let S={nodes:{},rootId:null,sel:null,idc:1};
 function uid(){return 'n'+(S.idc++)}
 function mkN(type,ov={}){
-  const id=uid(), n={id,type,thenChild:null,otherwiseChild:null};
+  const id=uid(), n={id,type,thenChild:null};
   if(type==='trigger')   Object.assign(n,{entity:'Invoice',event:'Created'});
   if(type==='condition') Object.assign(n,{field:'',op:'',value:''});
   if(type==='action')    Object.assign(n,{actionType:'',recipient:'',detail:'',qbAction:'',customEmail:''});
@@ -170,9 +170,8 @@ function thenChain(){
 }
 
 // ── Layout ────────────────────────────────────────────────────────
-const CW=260, CGAP=64, CSTEP=CW+CGAP; // card width 260, col gap 64
-const MAIN_Y=0;   // main row Y (relative to canvasWrap padding box)
-const SUB_Y=220;  // otherwise-branch row Y
+const CW=260, CGAP=64, CSTEP=CW+CGAP;
+const MAIN_Y=0;
 
 // ── Render ────────────────────────────────────────────────────────
 function render(){
@@ -180,51 +179,29 @@ function render(){
   wrap.innerHTML='';
 
   const chain=thenChain();
-  let maxCol=chain.length;
 
-  // Render main chain cards
+  // Render cards
   chain.forEach((id,col)=>{
-    const n=S.nodes[id];
-    const x=col*CSTEP;
-
-    // Main card
-    addCard(wrap, n, x, MAIN_Y);
-
-    // Otherwise child
-    if(n.otherwiseChild){
-      const ow=S.nodes[n.otherwiseChild];
-      const owx=(col+1)*CSTEP;
-      addCard(wrap, ow, owx, SUB_Y);
-      maxCol=Math.max(maxCol, col+2);
-
-      // Otherwise child's then-child (one level deep)
-      if(ow.thenChild){
-        const ow2=S.nodes[ow.thenChild];
-        addCard(wrap, ow2, (col+2)*CSTEP, SUB_Y);
-        maxCol=Math.max(maxCol, col+3);
-      } else {
-        addAddBtn(wrap, (col+2)*CSTEP, SUB_Y+24, ow.id, 'then', 'action');
-      }
-    } else if(n.type==='condition'){
-      addAddBtn(wrap, (col+1)*CSTEP, SUB_Y+24, n.id, 'otherwise', 'action', true);
-    }
+    addCard(wrap, S.nodes[id], col*CSTEP, MAIN_Y);
   });
 
-  // Add-block at end of main chain
-  const lastId=chain[chain.length-1];
-  const lastN=S.nodes[lastId];
+  // Add-block button at end of chain
+  const lastN=S.nodes[chain[chain.length-1]];
   if(!lastN.thenChild){
-    const nt=lastN.type==='action'?'action':'condition';
-    addAddBtn(wrap, chain.length*CSTEP, MAIN_Y+24, lastId, 'then', nt);
+    // After conditions: offer Check If or Do This choice; after actions: only action
+    const hasAction=chain.some(id=>S.nodes[id].type==='action');
+    if(hasAction){
+      addAddBtn(wrap, chain.length*CSTEP, MAIN_Y+24, lastN.id, 'then', 'action', false, 'Do this…');
+    } else {
+      addAddBtn(wrap, chain.length*CSTEP, MAIN_Y+24, lastN.id, 'then', 'condition', false, 'Check if…');
+      addAddBtn(wrap, chain.length*CSTEP, MAIN_Y+104, lastN.id, 'then', 'action', false, 'Do this…');
+    }
   }
 
-  // Canvas size
-  wrap.style.minWidth=((maxCol+1)*CSTEP+120)+'px';
-  wrap.style.minHeight=(SUB_Y+200)+'px';
+  wrap.style.minWidth=((chain.length+2)*CSTEP+120)+'px';
+  wrap.style.minHeight='320px';
 
-  // Draw SVG connections AFTER layout (requestAnimationFrame = after paint)
   requestAnimationFrame(()=>drawSVG(wrap, chain));
-
   renderSidebar();
 }
 
@@ -251,21 +228,10 @@ function addCard(wrap, n, x, y){
     else if(n.actionType==='Xero action'&&n.qbAction) detail=n.qbAction;
   }
 
-  // Port rows (with data attributes for getBoundingClientRect measurement)
-  let portRows='';
-  if(n.type==='trigger'||n.type==='action'){
-    portRows=`<div class="sf-port-row then-lbl">Then
-      <div class="pdot-out${n.thenChild?'':' off'}" data-nid="${n.id}" data-port="then"></div>
-    </div>`;
-  } else { // condition
-    portRows=`
-      <div class="sf-port-row then-lbl">Then
-        <div class="pdot-out${n.thenChild?'':' off'}" data-nid="${n.id}" data-port="then"></div>
-      </div>
-      <div class="sf-port-row">Otherwise
-        <div class="pdot-out${n.otherwiseChild?'':' off'}" data-nid="${n.id}" data-port="otherwise"></div>
-      </div>`;
-  }
+  // Port rows — all cards have only a "Then" output
+  const portRows=`<div class="sf-port-row then-lbl">Then
+    <div class="pdot-out${n.thenChild?'':' off'}" data-nid="${n.id}" data-port="then"></div>
+  </div>`;
 
   // Input dot (everything except trigger)
   const inputDot=n.type!=='trigger'
@@ -284,17 +250,26 @@ function addCard(wrap, n, x, y){
   wrap.appendChild(div);
 }
 
-function addAddBtn(wrap,x,y,parentId,path,nodeType,isOth=false){
+function addAddBtn(wrap,x,y,parentId,path,nodeType,_unused=false,label='+ Add block'){
   const btn=document.createElement('button');
   btn.className='sf-add';
   btn.style.cssText=`left:${x}px;top:${y}px`;
-  btn.innerHTML=`<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>${isOth?'+ Otherwise…':'+ Add block'}`;
+  btn.innerHTML=`<svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M5.5 1v9M1 5.5h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>+ ${label}`;
   btn.addEventListener('click',e=>{
     e.stopPropagation();
-    const newId=mkN(nodeType);
-    if(path==='then') S.nodes[parentId].thenChild=newId;
-    else              S.nodes[parentId].otherwiseChild=newId;
-    S.sel={nodeId:newId};
+    // If there's already a thenChild (another add-btn slot was clicked), reuse or chain
+    if(S.nodes[parentId].thenChild){
+      // Walk to end of chain and attach
+      let cur=parentId;
+      while(S.nodes[cur].thenChild) cur=S.nodes[cur].thenChild;
+      const newId=mkN(nodeType);
+      S.nodes[cur].thenChild=newId;
+      S.sel={nodeId:newId};
+    } else {
+      const newId=mkN(nodeType);
+      S.nodes[parentId].thenChild=newId;
+      S.sel={nodeId:newId};
+    }
     render();
   });
   wrap.appendChild(btn);
@@ -327,17 +302,10 @@ function drawSVG(wrap, chain){
            : dashed(svg,src.x,src.y,dst.x,dst.y);
   }
 
-  // Draw all connections
+  // Draw connections — linear Then chain only
   chain.forEach(id=>{
     const n=S.nodes[id];
-    // Then → next in chain
     if(n.thenChild) connect(id,'then',n.thenChild,'input');
-    // Otherwise → child
-    if(n.otherwiseChild){
-      connect(id,'otherwise',n.otherwiseChild,'input');
-      const ow=S.nodes[n.otherwiseChild];
-      if(ow.thenChild) connect(n.otherwiseChild,'then',ow.thenChild,'input');
-    }
   });
 }
 
@@ -380,7 +348,7 @@ function path(svg,d,stroke,w,dash){
 function renderSidebar(){
   const sb=document.getElementById('sidebar');
   if(!S.sel){
-    sb.innerHTML=`<div class="sb-hint">Click any block to edit it.<br><br><strong>Then</strong> → connects blocks left to right<br><strong>Otherwise</strong> → branches downward</div>`;
+    sb.innerHTML=`<div class="sb-hint">Click any block to edit it.<br><br><strong>Check if…</strong> conditions all run in sequence (AND logic)<br><br><strong>Do this…</strong> actions all execute in order</div>`;
     return;
   }
   const n=S.nodes[S.sel.nodeId];
@@ -418,9 +386,8 @@ function renderSidebar(){
         </select></div>`:''}
       ${n.op&&!noVal?`<div class="form-group"><label class="form-label">Value</label>
         <input class="ti" type="text" value="${n.value||''}" placeholder="Enter value…" oninput="S.nodes['${n.id}'].value=this.value" /></div>`:''}
-      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #F5F5F5;display:flex;justify-content:space-between;align-items:center">
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #F5F5F5">
         <button class="del-lnk" onclick="delNode('${n.id}')">Delete</button>
-        ${!n.otherwiseChild?`<button class="sb-btn-sm" onclick="addOth('${n.id}')">+ Otherwise action</button>`:''}
       </div></div>`;
   }
   else if(n.type==='action'){
@@ -465,17 +432,11 @@ function onAT(id,val){
   const n=S.nodes[id];
   Object.assign(n,{actionType:val,recipient:'',detail:'',qbAction:'',customEmail:''});render();
 }
-function addOth(condId){
-  const newId=mkN('action');
-  S.nodes[condId].otherwiseChild=newId;
-  S.sel={nodeId:newId};render();
-}
 function delNode(id){
   for(const k in S.nodes){
-    if(S.nodes[k].thenChild===id)      S.nodes[k].thenChild=null;
-    if(S.nodes[k].otherwiseChild===id) S.nodes[k].otherwiseChild=null;
+    if(S.nodes[k].thenChild===id) S.nodes[k].thenChild=null;
   }
-  (function del(nid){const n=S.nodes[nid];if(!n)return;if(n.thenChild)del(n.thenChild);if(n.otherwiseChild)del(n.otherwiseChild);delete S.nodes[nid];})(id);
+  (function del(nid){const n=S.nodes[nid];if(!n)return;if(n.thenChild)del(n.thenChild);delete S.nodes[nid];})(id);
   S.sel=null;render();
 }
 
@@ -484,20 +445,20 @@ function delNode(id){
   const tid=mkN('trigger',{entity:'Invoice',event:'Created'});
   S.rootId=tid;
 
-  const c1=mkN('condition',{field:'Total Amount',op:'Greater than',value:'1000'});
+  const c1=mkN('condition',{field:'Currency',op:'Equals',value:'USD'});
   S.nodes[tid].thenChild=c1;
 
-  const c2=mkN('condition',{field:'Balance',op:'Greater than',value:'0'});
+  const c2=mkN('condition',{field:'Total Amount',op:'Greater than',value:'100'});
   S.nodes[c1].thenChild=c2;
 
   const a1=mkN('action',{actionType:'Email',recipient:'Contact'});
   S.nodes[c2].thenChild=a1;
 
-  const oa1=mkN('action',{actionType:'Post to URL',detail:'https://webhook.site/…'});
-  S.nodes[c1].otherwiseChild=oa1;
+  const a2=mkN('action',{actionType:'SMS',recipient:'Account owner'});
+  S.nodes[a1].thenChild=a2;
 
-  const oa2=mkN('action',{actionType:'Email',recipient:'Account owner'});
-  S.nodes[c2].otherwiseChild=oa2;
+  const a3=mkN('action',{actionType:'Post to URL',detail:'https://webhook.site/…'});
+  S.nodes[a2].thenChild=a3;
 
   S.sel={nodeId:tid};
   render();
