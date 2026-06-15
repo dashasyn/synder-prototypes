@@ -5,6 +5,16 @@
 
 ## 🔧 Active Projects
 
+### Smart Rules — Branch Engine Redesign (2026-06-03)
+- **Status:** 🚧 In progress — 2 prototypes built, awaiting Ignat feedback
+- **Jira:** DIS-336 — Introduce Smart Rules for Xero
+- **Context:** Adding parallel branches to rule engine. Independent branches don't cascade-delete. First for Xero, then QBO.
+- **Prototype A · List View:** https://dashasyn.github.io/synder-prototypes/rules-prototypes/proto-a-list.html
+- **Prototype B · Canvas Fork:** https://dashasyn.github.io/synder-prototypes/rules-prototypes/proto-b-canvas.html
+- **Local files:** `reports/rules-prototypes/proto-a-list.html`, `reports/rules-prototypes/proto-b-canvas.html`
+- **Sample:** US Sales Tax by State rule (CA, NY, TX + default fallback)
+- **Key decisions:** Keep IF-THEN chain, add Branch grouping on top; independent delete; drag-to-reorder branches; execution mode toggle (first match vs run all)
+
 ### Manual Match Prototype (2026-05-29)
 - **Status:** ✅ v1 complete — 2 validator rounds done
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/manual-match/
@@ -191,6 +201,54 @@
   - Material Icons for actions
   - Status badges (Synced/Pending/Failed) with color coding
   - Compact filter bar height (64px) for variants 2-4 vs current (variable)
+
+---
+
+## 🔀 Side Projects
+
+### ETC Station Area Editor (2026-06-15)
+- **Status:** ✅ v1 prototype live
+- **Client:** ETC Solutions GmbH — ITCS DatNet product
+- **Purpose:** Prototype for the NOTIFICATION ZONE feature in station details — lets operators draw a geofence polygon on a map for each direction of travel. When a train enters the zone, it triggers an announcement.
+- **Local file:** `projects/station-area-editor/index.html`
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/projects/station-area-editor/
+- **Features built:**
+  - Station details page mock (matches existing ITCS DatNet UI style)
+  - Direction selector: "To Haifa" / "To Beer Sheva" — each direction stores its own independent polygon
+  - Leaflet map with CartoDB tiles, station point marker
+  - Polygon editor: drag vertices, click edge midpoints to add vertices, click vertex to select, Delete key to remove
+  - Auto-generate default asymmetric shape (500m approach side, 100m departure side)
+  - Undo/Redo (Ctrl+Z / Ctrl+Y), Clear shape
+  - Empty state when no polygon defined
+- **Demo data:** Tel Aviv Savidor Center, pre-generated polygons for both directions
+
+### ETC Solutions Website Redesign (2026-06-05)
+- **Status:** 🚧 In progress — full prototype built, awaiting feedback
+- **Client:** ETC Solutions GmbH (Ignat's client, public transport software company)
+- **Scope:** Full website structural redesign + copy rewrite — no live changes, exploration only
+- **Audience:** Executives and managers of transport companies
+- **Local files:** `prototypes/etc-website/` (10 pages + shared CSS)
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/projects/etc-website/
+- **Pages built:**
+  - `index.html` — Homepage (hero, trust logos, 3 product cards, stats, case studies, industries, testimonials, CTA)
+  - `about.html` — Company story, values, offices (Berlin + Olten), team
+  - `solutions.html` — Solutions overview, integration diagram, why ETC
+  - `solutions-itcs.html` — DatNet ITCS platform (features, RAILTAB, testimonial)
+  - `solutions-qdaba.html` — Q.Daba quality database (features, BAV proof point)
+  - `solutions-passenger.html` — Passenger information systems
+  - `industries.html` — 4 segments: Railways, Bus, Authorities, Vehicle Manufacturers
+  - `resources.html` — 4 case studies, 3 brochure downloads, 3 events
+  - `career.html` — 6 open positions, team culture, benefits
+  - `contact.html` — Contact form + two office locations
+- **Design decisions:**
+  - Language switcher EN/DE in nav (DE shows "translation coming soon" banner)
+  - All images = gray placeholder boxes (no real images needed)
+  - Product hierarchy: ITCS DatNet / Passenger Info / Q.Daba (not Vehicle Cleaning)
+  - "Industries Served" replaces old "Interactive forecast" nav label
+  - Copy is outcome-focused in English; no ÖPNV jargon for executive audience
+- **Original site:** https://etc-solutions.de/
+- **Reference sketch:** Figma file `wqNAuzPQKe975ly3nNjfXK` (Ignat's token needed)
+- **Next:** Ignat to review and provide feedback on structure/copy
 
 ---
 
