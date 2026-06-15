@@ -152,6 +152,56 @@
       border-radius: 3px; padding: 1px 5px; font-size: 11px; color: #4a5568;
     }
 
+    /* ── Tracks tab ── */
+    .tracks-panel { max-width: 760px; }
+    .tracks-list { display: flex; flex-direction: column; gap: 0; margin-bottom: 16px; }
+    .track-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 16px; background: #f7f9fc;
+      border: 1px solid #e2e8f0; border-top: none;
+    }
+    .track-row:first-child { border-top: 1px solid #e2e8f0; border-radius: 4px 4px 0 0; }
+    .track-row:last-child { border-radius: 0 0 4px 4px; }
+    .track-row:only-child { border-radius: 4px; border-top: 1px solid #e2e8f0; }
+    .track-field {
+      flex: 1; background: white; border: 1px solid #e2e8f0;
+      border-radius: 3px; padding: 0; overflow: hidden;
+    }
+    .track-field label {
+      display: block; font-size: 11px; color: #718096;
+      padding: 6px 10px 2px; pointer-events: none;
+    }
+    .track-field label .req { color: #e53e3e; }
+    .track-field select, .track-field input {
+      display: block; width: 100%; border: none; outline: none;
+      padding: 2px 10px 7px; font-size: 13px; color: #2d3748;
+      background: transparent; font-family: inherit;
+    }
+    .track-field select { cursor: pointer; }
+    .track-field select option:disabled { color: #a0aec0; }
+    .track-arrow { color: #a0aec0; font-size: 18px; flex-shrink: 0; }
+    .track-delete {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: none; background: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: #a0aec0; font-size: 16px; flex-shrink: 0;
+    }
+    .track-delete:hover { background: #fed7d7; color: #c53030; }
+    .btn-add-track {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 18px; background: #0053CC; color: white;
+      border: none; border-radius: 4px; font-size: 13px;
+      font-weight: 600; cursor: pointer; letter-spacing: 0.5px;
+    }
+    .btn-add-track:hover { background: #0041a8; }
+    .btn-add-track:disabled { opacity: 0.45; cursor: not-allowed; }
+    .tracks-empty {
+      padding: 32px 16px; text-align: center; color: #a0aec0; font-size: 13px;
+      background: #f7f9fc; border: 1px solid #e2e8f0; border-radius: 4px;
+      margin-bottom: 16px;
+    }
+    .tracks-hint { font-size: 12px; color: #a0aec0; margin-top: 10px; }
+
     /* Station marker legend */
     .map-legend {
       display: flex; align-items: center; gap: 16px;
@@ -297,7 +347,18 @@
     <!-- Other panels -->
     <div id="panel-displays" class="tab-panel"><div class="placeholder-panel">Displays — not part of this prototype</div></div>
     <div id="panel-sound" class="tab-panel"><div class="placeholder-panel">Sound Devices — not part of this prototype</div></div>
-    <div id="panel-tracks" class="tab-panel"><div class="placeholder-panel">Tracks — not part of this prototype</div></div>
+    <div id="panel-tracks" class="tab-panel">
+      <div class="tracks-panel">
+        <div id="tracks-list" class="tracks-list"></div>
+        <div id="tracks-empty" class="tracks-empty" style="display:none">
+          No tracks configured. Click "+ Add Track" to map a backend track to a display name.
+        </div>
+        <button class="btn-add-track" id="btn-add-track" onclick="addTrack()">+ ADD TRACK</button>
+        <div class="tracks-hint">
+          Map technical backend track identifiers to friendly display names shown on passenger screens.
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -579,11 +640,112 @@ function switchTab(tab) {
   if (tab === 'notif' && window._map) window._map.invalidateSize();
 }
 
+// ─── Tracks tab ──────────────────────────────────────────────────────────────
+
+// Backend track names as received from the system (intentionally technical/inconsistent)
+const BACKEND_TRACKS = [
+  'Plat 2',
+  '1',
+  '18',
+  'Platform-YUY-87',
+  'TLV-SAV-MAIN',
+  'Gleis_Nord_A',
+  'TECHNICAL_TRK_04',
+  'Depot-Stabling-S7',
+  'Approach.North.Express',
+  'EG-Abstellgleis-003'
+];
+
+// Track mappings: [{system, display}]
+let trackMappings = [
+  { system: 'Plat 2',  display: '1' },
+  { system: '1',       display: '2' },
+  { system: '18',      display: '3' }
+];
+
+function usedSystems() {
+  return trackMappings.map(m => m.system).filter(Boolean);
+}
+
+function renderTracks() {
+  const list  = document.getElementById('tracks-list');
+  const empty = document.getElementById('tracks-empty');
+  const addBtn = document.getElementById('btn-add-track');
+
+  list.innerHTML = '';
+
+  if (trackMappings.length === 0) {
+    empty.style.display = 'block';
+    addBtn.disabled = false;
+    return;
+  }
+  empty.style.display = 'none';
+
+  const used = usedSystems();
+
+  trackMappings.forEach((mapping, idx) => {
+    const row = document.createElement('div');
+    row.className = 'track-row';
+
+    // Build options: all backend tracks, disable those already used in OTHER rows
+    const opts = BACKEND_TRACKS.map(t => {
+      const isUsedElsewhere = used.includes(t) && t !== mapping.system;
+      return `<option value="${t}" ${t === mapping.system ? 'selected' : ''} ${isUsedElsewhere ? 'disabled' : ''}>${t}</option>`;
+    }).join('');
+
+    row.innerHTML = `
+      <div class="track-field">
+        <label>Operating track number <span class="req">*</span></label>
+        <select onchange="updateTrackSystem(${idx}, this.value)">
+          <option value="" ${!mapping.system ? 'selected' : ''} disabled>Select backend track…</option>
+          ${opts}
+        </select>
+      </div>
+      <span class="track-arrow">→</span>
+      <div class="track-field">
+        <label>Custom track number <span class="req">*</span></label>
+        <input type="text" value="${mapping.display}" placeholder="e.g. Platform 1"
+          oninput="updateTrackDisplay(${idx}, this.value)" />
+      </div>
+      <button class="track-delete" title="Remove" onclick="deleteTrack(${idx})">×</button>
+    `;
+    list.appendChild(row);
+  });
+
+  // Disable add button when all backend tracks are mapped
+  addBtn.disabled = used.length >= BACKEND_TRACKS.length;
+}
+
+function addTrack() {
+  trackMappings.push({ system: '', display: '' });
+  renderTracks();
+  // Focus the new row's select
+  const rows = document.querySelectorAll('.track-row');
+  const lastSelect = rows[rows.length - 1]?.querySelector('select');
+  if (lastSelect) lastSelect.focus();
+}
+
+function deleteTrack(idx) {
+  trackMappings.splice(idx, 1);
+  renderTracks();
+}
+
+function updateTrackSystem(idx, val) {
+  trackMappings[idx].system = val;
+  renderTracks(); // re-render to update disabled states across all rows
+}
+
+function updateTrackDisplay(idx, val) {
+  trackMappings[idx].display = val;
+  // No re-render needed — input handles its own value
+}
+
 // ─── Boot ────────────────────────────────────────────────────────────────────
 
 initMap();
 window._map = map;
 render();
+renderTracks();
 </script>
 </body>
 </html>
