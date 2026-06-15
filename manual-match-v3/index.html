@@ -1435,9 +1435,9 @@
 
 <!-- TABS -->
 <div class="tabs-bar">
-  <div class="tab" data-tab="matched" onclick="switchTab(this)">Matched <span class="tab-chip tab-chip-blue" id="count-matched">0</span></div>
+  <div class="tab" data-tab="matched" onclick="switchTab(this)">Matched <span class="tab-chip tab-chip-green" id="count-matched">0</span></div>
   <div class="tab" data-tab="discrepancy" onclick="switchTab(this)">Discrepancy <span class="tab-chip tab-chip-orange" id="count-discrepancy">0</span></div>
-  <div class="tab active" data-tab="not-matched" onclick="switchTab(this)">Not matched <span class="tab-chip tab-chip-red" id="count-not-matched">50</span></div>
+  <div class="tab active" data-tab="not-matched" onclick="switchTab(this)">Missing source <span class="tab-chip tab-chip-red" id="count-not-matched">50</span></div>
   <div class="tab" data-tab="ignored" onclick="switchTab(this)">Ignored <span class="tab-chip tab-chip-grey" id="count-ignored">0</span></div>
 </div>
 
@@ -1471,6 +1471,14 @@
     <div class="gf-field">
       <label class="gf-label">Amount</label>
       <input class="gf-input gf-input-amount" type="text" id="gf-amount-matched" placeholder="Amount">
+    </div>
+    <div class="gf-field">
+      <label class="gf-label">Currency</label>
+      <select class="gf-input" id="gf-currency-matched" style="width:100px" onchange="applyGlobalFilter('matched')">
+        <option value="">All</option>
+        <option value="USD">USD</option>
+        <option value="EUR">EUR</option>
+      </select>
     </div>
     <div class="gf-actions">
       <button class="btn-apply" onclick="applyGlobalFilter('matched')">Apply</button>
@@ -1775,7 +1783,7 @@
     <div class="modal-title" id="modal-error-title">Can't create match</div>
     <div class="modal-body" id="modal-error-body"></div>
     <div class="modal-footer">
-      <button class="btn btn-primary" onclick="closeModal('modal-error-overlay')">Okay</button>
+      <button class="btn btn-primary" onclick="closeModal('modal-error-overlay')">Back to selection</button>
     </div>
   </div>
 </div>
@@ -2189,7 +2197,7 @@ function resetFilters(side) {
 // ─── GLOBAL FILTERS (Matched / Matched manually / Ignored) ───────────────────
 
 const globalFilter = {
-  'matched':     { search: '', amount: '', type: '' },
+  'matched':     { search: '', amount: '', type: '', currency: '' },
   'discrepancy': { search: '', amount: '' },
   'ignored':     { search: '', amount: '' },
 };
@@ -2205,6 +2213,8 @@ function applyGlobalFilter(tab) {
   if (tab === 'matched') {
     const t = document.getElementById('gf-type-matched');
     if (t) globalFilter[tab].type = t.value;
+    const c = document.getElementById('gf-currency-matched');
+    if (c) globalFilter[tab].currency = c.value;
   }
   if (tab === 'matched')     renderUnifiedMatched();
   if (tab === 'discrepancy') renderDiscrepancy();
@@ -2214,13 +2224,15 @@ function applyGlobalFilter(tab) {
 function resetGlobalFilter(tab) {
   globalFilter[tab].search = '';
   globalFilter[tab].amount = '';
-  if (tab === 'matched') globalFilter[tab].type = '';
+  if (tab === 'matched') { globalFilter[tab].type = ''; globalFilter[tab].currency = ''; }
   const s = document.getElementById('gf-search-' + tab);
   const a = document.getElementById('gf-amount-' + tab);
   if (s) s.value = '';
   if (a) a.value = '';
   const t = document.getElementById('gf-type-matched');
   if (t) t.value = '';
+  const c = document.getElementById('gf-currency-matched');
+  if (c) c.value = '';
   if (tab === 'matched')     renderUnifiedMatched();
   if (tab === 'discrepancy') renderDiscrepancy();
   if (tab === 'ignored')     renderIgnored();
@@ -2398,6 +2410,9 @@ function renderUnifiedMatched() {
   if (f.type) {
     rows = rows.filter(r => r.matchType === f.type);
   }
+  if (f.currency) {
+    rows = rows.filter(r => r.totalAmount && r.totalAmount.includes(f.currency));
+  }
   if (f.search) {
     const q = f.search.toLowerCase();
     rows = rows.filter(r => r.matchingId.toLowerCase().includes(q) || r.types.toLowerCase().includes(q) || r.totalAmount.toLowerCase().includes(q));
@@ -2425,7 +2440,15 @@ function renderUnifiedMatched() {
       ? `<td onclick="event.stopPropagation()"><input type="checkbox" data-match-id="${r.id}" ${isSelected ? 'checked' : ''} onchange="handleMatchedCheckbox('${r.id}', this.checked)"></td>`
       : `<td><input type="checkbox" disabled title="No actions available for this transaction." style="opacity:0.35;cursor:not-allowed"></td>`;
     const actionCell = r.isCustom
-      ? `<td onclick="event.stopPropagation()" style="text-align:right"><button class="btn-unmatch" onclick="unmatch('${r.id}')">Unmatch</button></td>`
+      ? `<td onclick="event.stopPropagation()" style="text-align:right">
+           <div class="row-dropdown-wrap" style="display:inline-block;position:relative">
+             <button class="btn-ghost" style="padding:4px 8px;border-radius:4px;font-size:18px;line-height:1;color:var(--text-sec)" onclick="toggleMatchedMenu(event,'menu-${r.id}')">⋯</button>
+             <div class="row-dropdown" id="menu-${r.id}" style="display:none;position:absolute;right:0;top:100%;background:#fff;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.1);z-index:100;min-width:110px">
+               <div class="dropdown-item" onclick="unmatch('${r.id}')">Unmatch</div>
+               <div class="dropdown-item" onclick="ignoreMatchedRow('${r.id}')">Ignore</div>
+             </div>
+           </div>
+         </td>`
       : `<td></td>`;
     const detailColspan = 9;
     const detailContent = r.accountingRows
@@ -2521,7 +2544,7 @@ function bulkUnmatch() {
   });
   matchedBulkSelected.clear();
   renderAll();
-  showToast(`${ids.length} match${ids.length === 1 ? '' : 'es'} removed. ${restored} rows returned to Not matched.`);
+  showToast('Successfully unmatched. Transactions were moved to Missing source tab.');
 }
 
 function typeBadgeHTML(t) {
@@ -2831,11 +2854,22 @@ function switchTab(el) {
 
 // ─── SELECTION ───────────────────────────────────────────────────────────────
 
+const MAX_SELECTION = 200;
+
 function onCheckboxChange(cb) {
   const side = cb.dataset.side;
   const id   = cb.dataset.id;
-  if (cb.checked) selected[side].add(id);
-  else            selected[side].delete(id);
+  if (cb.checked) {
+    const total = selected.synder.size + selected.integration.size;
+    if (total >= MAX_SELECTION) {
+      cb.checked = false;
+      showToast('You can select up to 200 transactions at a time. Deselect some to continue.', 'error');
+      return;
+    }
+    selected[side].add(id);
+  } else {
+    selected[side].delete(id);
+  }
   const tr = document.getElementById('row-' + id);
   if (tr) tr.classList.toggle('selected', cb.checked);
   updateToolbar(side);
@@ -2952,9 +2986,7 @@ function handleMatchClick(side) {
     ).join('');
     showErrorModal(
       'Currencies differ',
-      `<p style="margin-bottom:10px;">All selected transactions must use the same currency. Expected <strong>${dominant}</strong> — these don't match:</p>
-       <ul style="margin:0 0 10px 16px;padding:0">${offList}</ul>
-       <p style="color:var(--text-sec);font-size:13px">Deselect the mismatched transactions to proceed.</p>`
+      `<p>All selected transactions must share the same currency.</p>`
     );
     return;
   }
@@ -3010,7 +3042,21 @@ function handleMatchClick(side) {
 
 // ─── UNMATCH ─────────────────────────────────────────────────────────────────
 
-function unmatch(matchId) {
+function toggleMatchedMenu(e, menuId) {
+  e.stopPropagation();
+  document.querySelectorAll('.row-dropdown').forEach(m => { if (m.id !== menuId) m.style.display = 'none'; });
+  const menu = document.getElementById(menuId);
+  if (menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+document.addEventListener('click', () => {
+  document.querySelectorAll('.row-dropdown').forEach(m => m.style.display = 'none');
+});
+
+function ignoreMatchedRow(matchId) {
+  unmatch(matchId, true);
+}
+
+function unmatch(matchId, thenIgnore) {
   const idx = manualMatches.findIndex(m => m.id === matchId);
   if (idx === -1) return;
   const match = manualMatches[idx];
@@ -3024,8 +3070,9 @@ function unmatch(matchId) {
     selected.integration.delete(id);
   });
   manualMatches.splice(idx, 1);
+  matchedBulkSelected.delete(matchId);
   renderAll();
-  showToast(`Match removed. ${restored} rows returned to Not matched.`);
+  showToast('Successfully unmatched. Transactions were moved to Missing source tab.');
 }
 
 // ─── IGNORE ──────────────────────────────────────────────────────────────────
@@ -3457,7 +3504,7 @@ function confirmDeleteJE() {
   jePendingDeleteId = null;
   renderAll();
   renderProcessLog();
-  showToast('Journal entry deleted. Transactions returned to Not matched.');
+  showToast('Journal entry deleted. Transactions returned to Missing source.');
 }
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
