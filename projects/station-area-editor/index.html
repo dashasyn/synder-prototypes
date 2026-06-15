@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Station Details — Tel Aviv Savidor Center</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #2d3748; font-size: 13px; }
+
+    /* ── Top nav ── */
+    .nav {
+      background: #1a2535; color: #fff; height: 44px;
+      display: flex; align-items: center; padding: 0 12px;
+      position: sticky; top: 0; z-index: 1000;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 8px;
+      margin-right: 8px; font-weight: 700; font-size: 14px; color: #7ec8e3;
+    }
+    .nav-items { display: flex; height: 100%; }
+    .nav-item {
+      padding: 0 13px; height: 100%;
+      display: flex; align-items: center; gap: 4px;
+      font-size: 13px; color: #b8c5d3; cursor: pointer; white-space: nowrap;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    .nav-item.active { background: rgba(255,255,255,0.12); color: #fff; }
+    .nav-chevron { font-size: 9px; opacity: 0.7; }
+    .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: 13px; color: #b8c5d3; }
+    .nav-bell-wrap { position: relative; cursor: pointer; }
+    .nav-bell-badge {
+      position: absolute; top: -6px; right: -8px;
+      background: #ef4444; color: white; border-radius: 10px;
+      padding: 1px 5px; font-size: 10px; font-weight: 700; min-width: 18px; text-align: center;
+    }
+    .nav-lang { padding: 2px 8px; border: 1px solid #4a5568; border-radius: 3px; font-size: 12px; cursor: pointer; }
+
+    /* ── Layout ── */
+    .layout { display: flex; min-height: calc(100vh - 44px); }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      width: 40px; background: #f8f9fc; border-right: 1px solid #e2e8f0;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 0; gap: 4px; flex-shrink: 0;
+    }
+    .sb-btn {
+      width: 32px; height: 32px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: #718096; font-size: 16px;
+    }
+    .sb-btn:hover { background: #e2e8f0; }
+    .sb-btn.active { background: #e8edf8; color: #0053CC; }
+    .sb-expand { margin-top: auto; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #718096; font-size: 14px; }
+
+    /* ── Content ── */
+    .content { flex: 1; padding: 16px 24px 48px; overflow-y: auto; }
+
+    .breadcrumb { font-size: 13px; color: #718096; margin-bottom: 14px; }
+    .breadcrumb a { color: #0053CC; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    /* Station header */
+    .station-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .station-name { font-size: 21px; font-weight: 600; color: #1a202c; }
+    .header-btns { display: flex; gap: 8px; }
+    .btn { padding: 6px 16px; font-size: 13px; cursor: pointer; border-radius: 2px; font-weight: 500; }
+    .btn-delete { background: white; border: 1px solid #cbd5e0; color: #4a5568; }
+    .btn-delete:hover { background: #f7fafc; }
+    .btn-save { background: #0053CC; border: none; color: white; }
+    .btn-save:hover { background: #0041a8; }
+
+    /* Form */
+    .form-row { display: grid; gap: 10px; margin-bottom: 10px; }
+    .form-row-5 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr; }
+    .form-row-7 { grid-template-columns: 1fr 1fr 1fr 1fr 1fr 0.65fr 0.65fr; }
+    .field label { display: block; font-size: 11px; color: #718096; margin-bottom: 4px; }
+    .field label .req { color: #e53e3e; }
+    .field input, .field select {
+      width: 100%; border: 1px solid #e2e8f0; padding: 6px 10px;
+      font-size: 13px; color: #2d3748; background: #f7f9fc; border-radius: 3px; outline: none;
+    }
+    .field input:focus, .field select:focus { border-color: #0053CC; background: #fff; }
+
+    /* Section title + tabs */
+    .section-title { font-size: 15px; font-weight: 600; color: #1a202c; margin: 22px 0 12px; }
+    .tabs { display: flex; border-bottom: 1px solid #e2e8f0; margin-bottom: 20px; }
+    .tab {
+      padding: 10px 16px; font-size: 12px; font-weight: 600;
+      letter-spacing: 0.5px; color: #718096; cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .tab:hover { color: #4a5568; }
+    .tab.active { color: #0053CC; border-bottom-color: #0053CC; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    .placeholder-panel { padding: 56px; text-align: center; color: #a0aec0; font-size: 14px; }
+
+    /* ── Notification zone ── */
+    .dir-tabs {
+      display: flex; border: 1px solid #e2e8f0; border-radius: 4px;
+      overflow: hidden; width: fit-content; margin-bottom: 14px;
+    }
+    .dir-tab {
+      padding: 7px 20px; font-size: 13px; font-weight: 500;
+      cursor: pointer; background: white; color: #718096;
+      border-right: 1px solid #e2e8f0;
+    }
+    .dir-tab:last-child { border-right: none; }
+    .dir-tab:hover { background: #f7f9fc; }
+    .dir-tab.active { background: #0053CC; color: white; }
+
+    /* Toolbar */
+    .map-toolbar {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding: 7px 10px; background: #f7f9fc;
+      border: 1px solid #e2e8f0; border-radius: 4px; margin-bottom: 8px;
+    }
+    .tool-btn {
+      padding: 5px 11px; font-size: 12px; border: 1px solid #e2e8f0;
+      background: white; cursor: pointer; border-radius: 3px; color: #4a5568;
+      display: flex; align-items: center; gap: 5px; font-weight: 500;
+    }
+    .tool-btn:hover:not([disabled]) { background: #f0f4f8; border-color: #a0aec0; }
+    .tool-btn[disabled] { opacity: 0.38; cursor: not-allowed; }
+    .tool-btn.primary { background: #0053CC; border-color: #0053CC; color: white; }
+    .tool-btn.primary:hover:not([disabled]) { background: #0041a8; }
+    .tool-btn.danger { border-color: #feb2b2; color: #c53030; }
+    .tool-btn.danger:hover:not([disabled]) { background: #fff5f5; }
+    .t-sep { width: 1px; height: 22px; background: #e2e8f0; flex-shrink: 0; }
+    .vtx-count { margin-left: auto; font-size: 12px; color: #a0aec0; }
+
+    /* Map */
+    #map { height: 440px; border: 1px solid #e2e8f0; border-radius: 4px; position: relative; z-index: 0; }
+
+    /* Empty state */
+    .map-empty-msg {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(255,255,255,0.94); border: 1px solid #e2e8f0;
+      border-radius: 6px; padding: 12px 20px; font-size: 13px; color: #718096;
+      text-align: center; z-index: 500; white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08); pointer-events: none;
+    }
+
+    /* Tip */
+    .map-tip { font-size: 12px; color: #a0aec0; margin-top: 8px; text-align: center; }
+    .map-tip kbd {
+      background: #f7f9fc; border: 1px solid #e2e8f0;
+      border-radius: 3px; padding: 1px 5px; font-size: 11px; color: #4a5568;
+    }
+
+    /* Station marker legend */
+    .map-legend {
+      display: flex; align-items: center; gap: 16px;
+      font-size: 12px; color: #718096; margin-top: 10px;
+    }
+    .legend-item { display: flex; align-items: center; gap: 6px; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 50%; background: #0053CC; border: 2px solid white; box-shadow: 0 0 0 2px #0053CC; flex-shrink: 0; }
+    .legend-vtx { width: 12px; height: 12px; border-radius: 50%; background: white; border: 2.5px solid #0053CC; flex-shrink: 0; }
+    .legend-mid { width: 9px; height: 9px; border-radius: 50%; background: #94a3b8; flex-shrink: 0; }
+    .legend-zone { width: 20px; height: 12px; border-radius: 2px; background: rgba(0,83,204,0.2); border: 2px solid #0053CC; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<!-- ── Navigation ── -->
+<nav class="nav">
+  <div class="nav-logo">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/>
+    </svg>
+    ITCS DatNet
+  </div>
+  <div class="nav-items">
+    <div class="nav-item">Maps</div>
+    <div class="nav-item active">Stations <span class="nav-chevron">▾</span></div>
+    <div class="nav-item">Events</div>
+    <div class="nav-item">Journeys <span class="nav-chevron">▾</span></div>
+    <div class="nav-item">Passenger Info</div>
+    <div class="nav-item">Output Devices</div>
+    <div class="nav-item">Administrator <span class="nav-chevron">▾</span></div>
+    <div class="nav-item">Timetable <span class="nav-chevron">▾</span></div>
+    <div class="nav-item">System</div>
+  </div>
+  <div class="nav-right">
+    <div class="nav-bell-wrap">
+      <span style="font-size:18px;cursor:pointer;">🔔</span>
+      <span class="nav-bell-badge">4</span>
+    </div>
+    <span class="nav-lang">EN</span>
+    <span style="font-size:18px;cursor:pointer;opacity:0.7;">⏻</span>
+  </div>
+</nav>
+
+<!-- ── Page layout ── -->
+<div class="layout">
+
+  <!-- Sidebar -->
+  <div class="sidebar">
+    <div class="sb-btn">☰</div>
+    <div class="sb-btn active">⊞</div>
+    <div class="sb-btn">◎</div>
+    <div class="sb-btn">⊡</div>
+    <div class="sb-btn">⇄</div>
+    <div class="sb-expand">›</div>
+  </div>
+
+  <!-- Main content -->
+  <div class="content">
+    <div class="breadcrumb">
+      <a href="#">Stations list</a> / Station details
+    </div>
+
+    <div class="station-header">
+      <h1 class="station-name">Tel Aviv Savidor Center</h1>
+      <div class="header-btns">
+        <button class="btn btn-delete">DELETE STATION</button>
+        <button class="btn btn-save">SAVE</button>
+      </div>
+    </div>
+
+    <!-- Form rows -->
+    <div class="form-row form-row-5">
+      <div class="field"><label>Station No.<span class="req">*</span></label><input value="1823"></div>
+      <div class="field"><label>Full name (Hebrew)<span class="req">*</span></label><input value="תל אביב סבידור מרכז" dir="rtl"></div>
+      <div class="field"><label>Full name (English)<span class="req">*</span></label><input value="Tel Aviv Savidor Center"></div>
+      <div class="field"><label>Full name (Arabic)<span class="req">*</span></label><input value="تل أبيب سافيدور سنتر" dir="rtl"></div>
+      <div class="field"><label>Group</label>
+        <select><option>Central stations</option><option>Northern stations</option></select>
+      </div>
+    </div>
+    <div class="form-row form-row-5">
+      <div class="field"><label>Coordinate<span class="req">*</span></label><input value="N 32°04'11&quot; E 34°46'48&quot;"></div>
+      <div class="field"><label>Short name (Hebrew)</label><input value='ת"א סבידור מרכז' dir="rtl"></div>
+      <div class="field"><label>Short name (English)</label><input value="TA Savidor Ctr"></div>
+      <div class="field"><label>Short name (Arabic)</label><input value="ت.أ سافيدور" dir="rtl"></div>
+      <div class="field"><label>Station Code<span class="req">*</span></label><input value="3700"></div>
+    </div>
+    <div class="form-row form-row-7">
+      <div class="field"><label>Time from</label><input value="04:00"></div>
+      <div class="field"><label>Time to</label><input value="02:00"></div>
+      <div class="field"><label>Aramis distance<span class="req">*</span></label><input value="TA-SAV"></div>
+      <div class="field"><label>Tolerance</label><input value="5"></div>
+      <div class="field"><label>Fullback timer<span class="req">*</span></label><input value="3"></div>
+      <div class="field"><label>Min distance</label><input value="200"></div>
+      <div class="field"><label>Max distance</label><input value="800"></div>
+    </div>
+
+    <!-- Tabs -->
+    <h2 class="section-title">Station displays</h2>
+    <div class="tabs">
+      <div class="tab" onclick="switchTab('displays')">DISPLAYS</div>
+      <div class="tab" onclick="switchTab('sound')">SOUND DEVICES</div>
+      <div class="tab" onclick="switchTab('tracks')">TRACKS</div>
+      <div class="tab active" onclick="switchTab('notif')">NOTIFICATION ZONE</div>
+    </div>
+
+    <!-- NOTIFICATION ZONE panel -->
+    <div id="panel-notif" class="tab-panel active">
+
+      <div class="dir-tabs">
+        <div class="dir-tab active" id="dir-haifa" onclick="switchDir('haifa')">To Haifa</div>
+        <div class="dir-tab" id="dir-beer" onclick="switchDir('beer')">To Beer Sheva</div>
+      </div>
+
+      <div class="map-toolbar">
+        <button class="tool-btn primary" id="btn-generate" onclick="generateDefault()">✦ Generate default shape</button>
+        <button class="tool-btn" id="btn-clear" onclick="clearShape()" disabled>Clear</button>
+        <div class="t-sep"></div>
+        <button class="tool-btn" id="btn-undo" onclick="doUndo()" disabled>↩ Undo</button>
+        <button class="tool-btn" id="btn-redo" onclick="doRedo()" disabled>↪ Redo</button>
+        <div class="t-sep" id="sel-sep" style="display:none"></div>
+        <button class="tool-btn danger" id="btn-del-vtx" onclick="deleteSelected()" style="display:none">× Delete vertex</button>
+        <span class="vtx-count" id="vtx-count"></span>
+      </div>
+
+      <div id="map">
+        <div class="map-empty-msg" id="empty-msg">
+          No notification zone defined. Click "Generate default shape" to start.
+        </div>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:10px;">
+        <div class="map-legend">
+          <div class="legend-item"><div class="legend-dot"></div> Station</div>
+          <div class="legend-item"><div class="legend-zone"></div> Notification zone</div>
+          <div class="legend-item"><div class="legend-vtx"></div> Vertex — drag to reshape</div>
+          <div class="legend-item"><div class="legend-mid"></div> Midpoint — click to add vertex</div>
+        </div>
+        <div class="map-tip">Click vertex to select • <kbd>Del</kbd> to remove • <kbd>Ctrl+Z</kbd> undo</div>
+      </div>
+    </div>
+
+    <!-- Other panels -->
+    <div id="panel-displays" class="tab-panel"><div class="placeholder-panel">Displays — not part of this prototype</div></div>
+    <div id="panel-sound" class="tab-panel"><div class="placeholder-panel">Sound Devices — not part of this prototype</div></div>
+    <div id="panel-tracks" class="tab-panel"><div class="placeholder-panel">Tracks — not part of this prototype</div></div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ─── Data ───────────────────────────────────────────────────────────────────
+
+const STATION_LATLNG = [32.0697, 34.7800];
+
+// Pre-generated asymmetric defaults.
+// "To Haifa" → train travels north → came from south → 500m south, 100m north of station.
+// "To Beer Sheva" → train travels south → came from north → 500m north, 100m south.
+const DEFAULTS = {
+  haifa: [
+    [32.0706, 34.7796], [32.0706, 34.7804],
+    [32.0700, 34.7813], [32.0685, 34.7819],
+    [32.0668, 34.7817], [32.0657, 34.7808],
+    [32.0652, 34.7800], [32.0657, 34.7792],
+    [32.0668, 34.7783], [32.0685, 34.7781],
+    [32.0700, 34.7787]
+  ],
+  beer: [
+    [32.0742, 34.7796], [32.0742, 34.7804],
+    [32.0730, 34.7815], [32.0715, 34.7819],
+    [32.0702, 34.7813], [32.0693, 34.7804],
+    [32.0689, 34.7800], [32.0693, 34.7796],
+    [32.0702, 34.7787], [32.0715, 34.7781],
+    [32.0730, 34.7785]
+  ]
+};
+
+// ─── State ───────────────────────────────────────────────────────────────────
+
+const dirs = {
+  haifa: { points: [], history: [], future: [] },
+  beer:  { points: [], history: [], future: [] }
+};
+let currentDir = 'haifa';
+let selectedVtx = null; // index or null
+
+// ─── Map layer refs ───────────────────────────────────────────────────────────
+
+let map, stationCircle;
+let polyLayer = null;
+let vtxMarkers = [];
+let midMarkers = [];
+
+// ─── Icons ───────────────────────────────────────────────────────────────────
+
+function makeVtxIcon(selected) {
+  const border = selected ? '#c53030' : '#0053CC';
+  const bg     = selected ? '#fff5f5' : '#ffffff';
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:14px;height:14px;border-radius:50%;background:${bg};border:2.5px solid ${border};box-shadow:0 1px 4px rgba(0,0,0,0.28);cursor:grab;"></div>`,
+    iconSize: [14, 14],
+    iconAnchor: [7, 7]
+  });
+}
+
+function makeMidIcon() {
+  return L.divIcon({
+    className: '',
+    html: `<div style="width:9px;height:9px;border-radius:50%;background:#94a3b8;border:1.5px solid white;cursor:crosshair;"></div>`,
+    iconSize: [9, 9],
+    iconAnchor: [4.5, 4.5]
+  });
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView(STATION_LATLNG, 15);
+
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '© OpenStreetMap contributors © CartoDB',
+    maxZoom: 19
+  }).addTo(map);
+
+  stationCircle = L.circleMarker(STATION_LATLNG, {
+    radius: 8, fillColor: '#0053CC', color: 'white',
+    weight: 2.5, fillOpacity: 1, interactive: false
+  }).addTo(map);
+
+  document.addEventListener('keydown', e => {
+    if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
+    if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); doUndo(); }
+    if ((e.ctrlKey || e.metaKey) && (e.shiftKey && e.key === 'z' || e.key === 'y')) { e.preventDefault(); doRedo(); }
+  });
+}
+
+// ─── Render ──────────────────────────────────────────────────────────────────
+
+function render() {
+  const d   = dirs[currentDir];
+  const pts = d.points;
+
+  // Clear old layers
+  if (polyLayer) { map.removeLayer(polyLayer); polyLayer = null; }
+  vtxMarkers.forEach(m => map.removeLayer(m)); vtxMarkers = [];
+  midMarkers.forEach(m => map.removeLayer(m)); midMarkers = [];
+
+  // Empty state
+  document.getElementById('empty-msg').style.display = pts.length === 0 ? 'block' : 'none';
+
+  // Toolbar state
+  document.getElementById('btn-clear').disabled = pts.length === 0;
+  document.getElementById('btn-undo').disabled  = d.history.length === 0;
+  document.getElementById('btn-redo').disabled  = d.future.length  === 0;
+
+  const hasSel = selectedVtx !== null && pts.length > 0;
+  document.getElementById('btn-del-vtx').style.display = hasSel ? 'flex' : 'none';
+  document.getElementById('sel-sep').style.display     = hasSel ? 'block' : 'none';
+  document.getElementById('vtx-count').textContent     = pts.length > 0 ? `${pts.length} vertices` : '';
+
+  if (pts.length === 0) return;
+
+  // Polygon fill
+  polyLayer = L.polygon(pts, {
+    color: '#0053CC', weight: 2,
+    fillColor: '#0053CC', fillOpacity: 0.22,
+    interactive: false
+  }).addTo(map);
+
+  // Midpoint markers
+  buildMidMarkers();
+
+  // Vertex markers
+  pts.forEach((pt, i) => {
+    const m = L.marker(pt, {
+      icon: makeVtxIcon(selectedVtx === i),
+      draggable: true,
+      zIndexOffset: 1000
+    }).addTo(map);
+
+    m.on('click', e => {
+      L.DomEvent.stop(e);
+      selectedVtx = selectedVtx === i ? null : i;
+      refreshVtxIcons();
+      updateToolbar();
+    });
+
+    m.on('dragstart', () => {
+      saveHistory();
+      selectedVtx = null;
+      updateToolbar();
+    });
+
+    m.on('drag', e => {
+      const ll = e.target.getLatLng();
+      dirs[currentDir].points[i] = [ll.lat, ll.lng];
+      if (polyLayer) polyLayer.setLatLngs(dirs[currentDir].points);
+      // Refresh midpoints live
+      midMarkers.forEach(mm => map.removeLayer(mm));
+      midMarkers = [];
+      buildMidMarkers();
+    });
+
+    vtxMarkers.push(m);
+  });
+
+  // Keep station on top
+  if (stationCircle) stationCircle.bringToFront();
+}
+
+function buildMidMarkers() {
+  const pts = dirs[currentDir].points;
+  pts.forEach((pt, j) => {
+    const next = pts[(j + 1) % pts.length];
+    const mLat = (pt[0] + next[0]) / 2;
+    const mLng = (pt[1] + next[1]) / 2;
+
+    const mm = L.marker([mLat, mLng], {
+      icon: makeMidIcon(),
+      zIndexOffset: 400
+    }).addTo(map);
+
+    mm.on('click', e => {
+      L.DomEvent.stop(e);
+      saveHistory();
+      dirs[currentDir].points.splice(j + 1, 0, [mLat, mLng]);
+      selectedVtx = j + 1;
+      render();
+    });
+
+    midMarkers.push(mm);
+  });
+}
+
+function refreshVtxIcons() {
+  vtxMarkers.forEach((m, i) => m.setIcon(makeVtxIcon(selectedVtx === i)));
+}
+
+function updateToolbar() {
+  const d = dirs[currentDir];
+  document.getElementById('btn-clear').disabled = d.points.length === 0;
+  document.getElementById('btn-undo').disabled  = d.history.length === 0;
+  document.getElementById('btn-redo').disabled  = d.future.length  === 0;
+  const hasSel = selectedVtx !== null && d.points.length > 0;
+  document.getElementById('btn-del-vtx').style.display = hasSel ? 'flex' : 'none';
+  document.getElementById('sel-sep').style.display     = hasSel ? 'block' : 'none';
+  document.getElementById('vtx-count').textContent     = d.points.length > 0 ? `${d.points.length} vertices` : '';
+}
+
+// ─── History ─────────────────────────────────────────────────────────────────
+
+function saveHistory() {
+  const d = dirs[currentDir];
+  d.history.push(JSON.parse(JSON.stringify(d.points)));
+  d.future = [];
+}
+
+// ─── Actions ─────────────────────────────────────────────────────────────────
+
+function generateDefault() {
+  saveHistory();
+  dirs[currentDir].points = JSON.parse(JSON.stringify(DEFAULTS[currentDir]));
+  selectedVtx = null;
+  render();
+  if (polyLayer) map.fitBounds(polyLayer.getBounds(), { padding: [50, 50] });
+}
+
+function clearShape() {
+  if (!dirs[currentDir].points.length) return;
+  saveHistory();
+  dirs[currentDir].points = [];
+  selectedVtx = null;
+  render();
+}
+
+function deleteSelected() {
+  if (selectedVtx === null) return;
+  const pts = dirs[currentDir].points;
+  if (pts.length <= 3) return; // minimum 3 vertices for a polygon
+  saveHistory();
+  pts.splice(selectedVtx, 1);
+  selectedVtx = null;
+  render();
+}
+
+function doUndo() {
+  const d = dirs[currentDir];
+  if (!d.history.length) return;
+  d.future.push(JSON.parse(JSON.stringify(d.points)));
+  d.points = d.history.pop();
+  selectedVtx = null;
+  render();
+}
+
+function doRedo() {
+  const d = dirs[currentDir];
+  if (!d.future.length) return;
+  d.history.push(JSON.parse(JSON.stringify(d.points)));
+  d.points = d.future.pop();
+  selectedVtx = null;
+  render();
+}
+
+// ─── Direction / Tab switching ────────────────────────────────────────────────
+
+function switchDir(dir) {
+  currentDir = dir;
+  selectedVtx = null;
+  document.getElementById('dir-haifa').className = 'dir-tab' + (dir === 'haifa' ? ' active' : '');
+  document.getElementById('dir-beer').className  = 'dir-tab' + (dir === 'beer'  ? ' active' : '');
+  render();
+}
+
+function switchTab(tab) {
+  const map = { displays: 'panel-displays', sound: 'panel-sound', tracks: 'panel-tracks', notif: 'panel-notif' };
+  document.querySelectorAll('.tab').forEach((el, i) => {
+    const names = ['displays', 'sound', 'tracks', 'notif'];
+    el.className = 'tab' + (names[i] === tab ? ' active' : '');
+  });
+  Object.entries(map).forEach(([k, id]) => {
+    document.getElementById(id).className = 'tab-panel' + (k === tab ? ' active' : '');
+  });
+  if (tab === 'notif' && window._map) window._map.invalidateSize();
+}
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+
+initMap();
+window._map = map;
+render();
+</script>
+</body>
+</html>
