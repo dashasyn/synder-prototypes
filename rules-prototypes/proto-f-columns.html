@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synder Smart Rules — Proto F: Parallel Columns</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Roboto',sans-serif;font-size:14px;color:#1A1A2E;background:#F9FAFB;overflow-x:auto;}
+
+/* ── Header ── */
+.hdr{
+  position:fixed;top:0;left:0;right:0;height:56px;
+  background:#fff;border-bottom:1px solid #E5E7EB;
+  display:flex;align-items:center;padding:0 24px;z-index:100;
+  gap:8px;
+}
+.hdr-title{font-size:16px;font-weight:700;}
+.hdr-sub{font-size:12px;color:#6B7280;}
+.hdr-badge{
+  padding:2px 10px;border-radius:12px;
+  background:#E8F0FE;color:#0053CC;font-size:11px;font-weight:700;
+}
+.hdr-actions{margin-left:auto;display:flex;gap:8px;}
+
+/* ── Buttons ── */
+.btn{
+  padding:7px 16px;border-radius:4px;font-size:14px;font-weight:500;
+  cursor:pointer;border:none;transition:background .15s;font-family:inherit;
+}
+.btn-primary{background:#0053CC;color:#fff;}
+.btn-primary:hover{background:#0044AA;}
+.btn-ghost{background:#fff;color:#1A1A2E;border:1px solid #E5E7EB;}
+.btn-ghost:hover{background:#F3F4F6;}
+.btn-danger{background:#DC2626;color:#fff;}
+.btn-danger:hover{background:#B91C1C;}
+
+/* ── Canvas ── */
+.canvas-wrap{
+  margin-top:56px;
+  padding:40px 40px 100px;
+  min-height:calc(100vh - 56px);
+  transition:margin-right .25s;
+  overflow:auto;
+}
+.canvas-wrap.panel-open{margin-right:320px;}
+
+.flow-root{
+  display:flex;flex-direction:column;align-items:center;
+  min-width:max-content;
+}
+
+/* ── V-connector ── */
+.vline{
+  width:2px;background:#BDBDBD;flex-shrink:0;
+}
+
+/* ── Cards ── */
+.card{
+  width:240px;background:#fff;
+  border:1px solid #E5E7EB;border-radius:8px;
+  padding:12px 14px;position:relative;
+  cursor:pointer;transition:box-shadow .15s;
+  flex-shrink:0;
+}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);}
+.card.selected{box-shadow:0 0 0 2px #0053CC;}
+
+.card-label{
+  font-size:10px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;margin-bottom:3px;
+}
+.card-title{font-size:14px;font-weight:500;}
+.card-detail{font-size:12px;color:#6B7280;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.card-trigger{border-left:4px solid #757575;}
+.card-trigger .card-label{color:#757575;}
+
+.card-condition{border-left:4px solid #0053CC;}
+.card-condition .card-label{color:#0053CC;}
+
+.card-action{border-left:4px solid #16A34A;}
+.card-action .card-label{color:#16A34A;}
+
+.card-del{
+  position:absolute;top:7px;right:7px;
+  width:22px;height:22px;border-radius:50%;
+  background:none;border:none;
+  color:#D1D5DB;font-size:17px;line-height:1;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:background .1s,color .1s;
+}
+.card-del:hover{background:#FEE2E2;color:#DC2626;}
+
+/* ── End / Add block ── */
+.card-end{
+  width:240px;
+  border:2px dashed #D1D5DB;border-radius:8px;
+  padding:14px;text-align:center;
+  color:#9CA3AF;font-size:13px;
+  cursor:pointer;background:#fff;
+  transition:border-color .15s,color .15s;
+  flex-shrink:0;
+}
+.card-end:hover{border-color:#0053CC;color:#0053CC;}
+
+.add-chooser{
+  width:240px;
+  border:2px dashed #93C5FD;border-radius:8px;
+  padding:10px;display:flex;gap:8px;
+  background:#EFF6FF;flex-shrink:0;
+}
+.add-chooser .ac-cond{
+  flex:1;padding:7px 4px;border-radius:4px;
+  background:#0053CC;color:#fff;border:none;
+  font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;
+}
+.add-chooser .ac-cond:hover{background:#0044AA;}
+.add-chooser .ac-act{
+  flex:1;padding:7px 4px;border-radius:4px;
+  background:#16A34A;color:#fff;border:none;
+  font-size:12px;font-weight:500;cursor:pointer;font-family:inherit;
+}
+.add-chooser .ac-act:hover{background:#15803D;}
+
+/* ── Branch section ── */
+.branch-section{
+  display:flex;flex-direction:column;align-items:center;
+  width:max-content;
+}
+
+/* Junction bar: horizontal bar + vertical drops */
+.junction-bar{
+  position:relative;
+  width:552px; /* 260+32+260 */
+  height:24px;
+  flex-shrink:0;
+}
+.junction-bar::before{ /* full-width H-line */
+  content:'';position:absolute;top:0;left:0;right:0;
+  height:2px;background:#BDBDBD;
+}
+.junction-drop{
+  position:absolute;top:0;width:2px;height:100%;background:#BDBDBD;
+}
+.junction-drop-yes{left:129px;} /* center of 260px YES col = 130, -1 for alignment */
+.junction-drop-no{left:421px;}  /* 260+32+130-1 = 421 */
+
+/* Branch row */
+.branch-row{
+  display:flex;gap:32px;
+  width:552px;
+  align-items:flex-start;
+}
+.branch-col{
+  display:flex;flex-direction:column;align-items:center;
+  width:260px;
+}
+
+/* Column header badge */
+.col-badge{
+  padding:4px 14px;border-radius:12px;
+  font-size:12px;font-weight:700;
+  flex-shrink:0;
+}
+.yes-badge{background:#E8F5E9;color:#16A34A;}
+.no-badge{background:#FFF3E0;color:#D97706;}
+
+/* ── Right panel ── */
+.rpanel{
+  position:fixed;top:56px;right:0;
+  width:320px;height:calc(100vh - 56px);
+  background:#fff;border-left:1px solid #E5E7EB;
+  overflow-y:auto;z-index:90;
+  transform:translateX(100%);
+  transition:transform .25s;
+  padding:20px;
+}
+.rpanel.visible{transform:translateX(0);}
+
+.panel-hdr{
+  display:flex;align-items:center;margin-bottom:20px;
+  padding-bottom:16px;border-bottom:1px solid #F3F4F6;
+}
+.panel-title{font-size:15px;font-weight:700;flex:1;}
+.panel-close{
+  width:28px;height:28px;border-radius:4px;
+  background:none;border:none;font-size:20px;
+  cursor:pointer;color:#6B7280;display:flex;align-items:center;justify-content:center;
+  line-height:1;font-family:inherit;
+}
+.panel-close:hover{background:#F3F4F6;color:#1A1A2E;}
+
+/* ── Forms ── */
+.fg{margin-bottom:14px;}
+.fg-label{font-size:12px;font-weight:500;color:#6B7280;margin-bottom:4px;display:block;}
+.fc{
+  width:100%;padding:8px 10px;
+  border:1px solid #E5E7EB;border-radius:4px;
+  font-family:'Roboto',sans-serif;font-size:14px;color:#1A1A2E;
+  background:#fff;outline:none;appearance:none;-webkit-appearance:none;
+}
+.fc:focus{border-color:#0053CC;box-shadow:0 0 0 2px rgba(0,83,204,.12);}
+select.fc{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236B7280' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 10px center;
+  padding-right:32px;cursor:pointer;
+}
+
+.val-list{display:flex;flex-direction:column;gap:6px;}
+.val-row{display:flex;gap:6px;align-items:center;}
+.val-row .fc{flex:1;}
+.val-or{font-size:11px;color:#9CA3AF;text-align:center;}
+.btn-val-rm{
+  width:24px;height:24px;border-radius:4px;border:none;
+  background:none;color:#D1D5DB;cursor:pointer;font-size:16px;
+  display:flex;align-items:center;justify-content:center;
+  line-height:1;flex-shrink:0;
+}
+.btn-val-rm:hover{background:#FEE2E2;color:#DC2626;}
+.btn-add-val{
+  font-size:12px;color:#0053CC;background:none;border:none;
+  cursor:pointer;padding:3px 0;text-align:left;font-family:inherit;
+}
+.btn-add-val:hover{text-decoration:underline;}
+
+/* ── Modal ── */
+.modal-bg{
+  position:fixed;inset:0;background:rgba(0,0,0,.45);
+  z-index:200;display:flex;align-items:center;justify-content:center;
+}
+.modal{
+  background:#fff;border-radius:8px;padding:24px;width:360px;
+  box-shadow:0 8px 32px rgba(0,0,0,.14);
+}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:8px;}
+.modal-body{font-size:14px;color:#4B5563;margin-bottom:24px;line-height:1.5;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;}
+
+/* ── Empty state hint ── */
+.empty-hint{
+  font-size:13px;color:#9CA3AF;text-align:center;
+  margin-top:8px;
+}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <span class="hdr-title">Smart Rules</span>
+  <span class="hdr-sub">Rule builder</span>
+  <span class="hdr-badge">Proto F — Parallel Columns</span>
+  <div class="hdr-actions">
+    <button class="btn btn-ghost" onclick="resetRule()">Reset</button>
+    <button class="btn btn-primary">Save Rule</button>
+  </div>
+</header>
+
+<div class="canvas-wrap" id="canvasWrap">
+  <div class="flow-root" id="flowRoot"></div>
+</div>
+
+<!-- Right edit panel -->
+<div class="rpanel" id="rPanel">
+  <div class="panel-hdr">
+    <span class="panel-title" id="panelTitle">Edit</span>
+    <button class="panel-close" onclick="closePanel()">×</button>
+  </div>
+  <div id="panelBody"></div>
+</div>
+
+<!-- Delete confirm modal -->
+<div class="modal-bg" id="modalBg" style="display:none">
+  <div class="modal">
+    <div class="modal-title">Delete block?</div>
+    <div class="modal-body" id="modalMsg">This will also delete all blocks below it in this branch.</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA CONSTANTS
+// ============================================================
+const ENTITIES = ['Invoice','Bill','Payment','Bill Payment','Refund','Deposit','Contact','Bank Transfer','Item'];
+const EVENTS = {
+  'Invoice':['Created'],'Bill':['Created'],'Payment':['Created'],'Bill Payment':['Created'],
+  'Refund':['Created'],'Deposit':['Created'],'Contact':['Created','Updated'],
+  'Bank Transfer':['Created'],'Item':['Created','Updated']
+};
+const CONTACT_SUB = {
+  'Name':'text','Email':'text',
+  'Shipping Address: City':'text','Shipping Address: Region':'text',
+  'Shipping Address: Postal Code':'text','Shipping Address: Country':'text',
+  'Billing Address: City':'text','Billing Address: Region':'text',
+  'Billing Address: Postal Code':'text','Billing Address: Country':'text'
+};
+const INVOICE_FIELDS = {
+  'Reference':{type:'text',sub:null},'Currency':{type:'text',sub:null},
+  'Total Amount':{type:'number',sub:null},'Balance':{type:'number',sub:null},
+  'Txn Date':{type:'date',sub:null},'Line: Amount':{type:'number',sub:null},
+  'Line: Description':{type:'text',sub:null},'Line: Qty':{type:'number',sub:null},
+  'Line: Item':{type:'text',sub:null},'Line: Tax Rate':{type:'text',sub:null},
+  'Line: TrackingCategory1':{type:'text',sub:null},'Line: TrackingCategory2':{type:'text',sub:null},
+  'Contact':{type:'object',sub:CONTACT_SUB}
+};
+const PAYMENT_FIELDS = {
+  'Total Amount':{type:'number',sub:null},'Currency':{type:'text',sub:null},
+  'Reference':{type:'text',sub:null},'Txn Date':{type:'date',sub:null},
+  'Contact':{type:'object',sub:CONTACT_SUB}
+};
+const CONTACT_FIELDS = {
+  'Name':{type:'text',sub:null},'Email':{type:'text',sub:null},'Balance':{type:'number',sub:null},
+  'Shipping Address: City':{type:'text',sub:null},'Shipping Address: Region':{type:'text',sub:null},
+  'Shipping Address: Postal Code':{type:'text',sub:null},'Shipping Address: Country':{type:'text',sub:null},
+  'Billing Address: City':{type:'text',sub:null},'Billing Address: Region':{type:'text',sub:null},
+  'Billing Address: Postal Code':{type:'text',sub:null},'Billing Address: Country':{type:'text',sub:null}
+};
+const BANK_TRANSFER_FIELDS = {
+  'Amount':{type:'number',sub:null},'Txn Date':{type:'date',sub:null},
+  'From Account: Name':{type:'text',sub:null},'From Account: Currency':{type:'text',sub:null},
+  'To Account: Name':{type:'text',sub:null},'To Account: Currency':{type:'text',sub:null}
+};
+const ITEM_FIELDS = {
+  'Name':{type:'text',sub:null},'Code':{type:'text',sub:null},
+  'Sale Price':{type:'number',sub:null},'Cost Price':{type:'number',sub:null}
+};
+const FIELDS = {
+  'Invoice':INVOICE_FIELDS,'Bill':INVOICE_FIELDS,'Refund':INVOICE_FIELDS,'Deposit':INVOICE_FIELDS,
+  'Payment':PAYMENT_FIELDS,'Bill Payment':PAYMENT_FIELDS,'Contact':CONTACT_FIELDS,
+  'Bank Transfer':BANK_TRANSFER_FIELDS,'Item':ITEM_FIELDS
+};
+const TEXT_OPS   = ['Contains','Equals','Not equals','Set','Not set'];
+const NUMBER_OPS = ['Equals','Greater','Greater or equals','Less','Less or equals','Not equals','Set','Not set'];
+const DATE_OPS   = ['Equals','Before','After','Set','Not set'];
+const NO_VALUE_OPS = ['Set','Not set'];
+const ACTION_TYPES = ['Email','SMS','Voice','Xero action','Post to URL'];
+const EMAIL_RECIPIENTS = ['Account owner','Contact','Other'];
+const XERO_ENTITY_ACTIONS = ['Update current','Update line'];
+const XERO_FIELDS = {
+  'Update current':['Contact','Reference','Tax Treatment','Line: Item','Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
+  'Update line':['Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2']
+};
+
+// ============================================================
+// STATE
+// ============================================================
+let state = {
+  trigger: {entity:'Invoice', event:'Created'},
+  nodes: {},
+  rootId: null,
+  idCounter: 1,
+  editingId: null
+};
+let pendingDeleteId = null;
+
+function newId() { return state.idCounter++; }
+
+function mkCondition() {
+  const id = newId();
+  state.nodes[id] = {id, type:'condition', field:'', subField:'', operator:'', values:[''], yesId:null, noId:null};
+  return id;
+}
+function mkAction() {
+  const id = newId();
+  state.nodes[id] = {id, type:'action', actionType:'', recipient:'', customEmail:'', xeroAction:'', xeroFieldValues:{}, urlTarget:'', nextId:null};
+  return id;
+}
+
+// ============================================================
+// RENDER ENGINE
+// ============================================================
+function render() {
+  const root = document.getElementById('flowRoot');
+  root.innerHTML = '';
+
+  // Trigger
+  root.appendChild(buildTriggerCard());
+  root.appendChild(vline(28));
+
+  // Chain from root
+  buildChain(state.rootId, root, null, null);
+
+  // Update panel without focus-disruption
+  if (state.editingId !== null) refreshPanel();
+}
+
+// renderChain: append all nodes of a chain starting at nodeId into container
+function buildChain(nodeId, container, parentId, parentBranch) {
+  if (!nodeId) {
+    container.appendChild(buildEndCard(parentId, parentBranch));
+    return;
+  }
+  const node = state.nodes[nodeId];
+  if (node.type === 'condition') {
+    container.appendChild(buildConditionCard(node));
+    container.appendChild(buildBranchSection(node));
+  } else if (node.type === 'action') {
+    container.appendChild(buildActionCard(node));
+    container.appendChild(vline(28));
+    buildChain(node.nextId, container, nodeId, 'next');
+  }
+}
+
+// ── T-junction + parallel columns for a condition ──
+function buildBranchSection(condNode) {
+  const sec = document.createElement('div');
+  sec.className = 'branch-section';
+
+  // V-line from condition down to H-bar
+  sec.appendChild(vline(20));
+
+  // Junction bar (horizontal line + two vertical drops)
+  const jbar = document.createElement('div');
+  jbar.className = 'junction-bar';
+  const dYes = document.createElement('div');
+  dYes.className = 'junction-drop junction-drop-yes';
+  const dNo = document.createElement('div');
+  dNo.className = 'junction-drop junction-drop-no';
+  jbar.appendChild(dYes);
+  jbar.appendChild(dNo);
+  sec.appendChild(jbar);
+
+  // Branch row
+  const row = document.createElement('div');
+  row.className = 'branch-row';
+
+  row.appendChild(buildBranchCol('yes', condNode));
+  row.appendChild(buildBranchCol('no', condNode));
+  sec.appendChild(row);
+
+  return sec;
+}
+
+function buildBranchCol(side, condNode) {
+  const col = document.createElement('div');
+  col.className = 'branch-col';
+
+  // Badge
+  const badge = document.createElement('div');
+  badge.className = 'col-badge ' + (side === 'yes' ? 'yes-badge' : 'no-badge');
+  badge.textContent = side === 'yes' ? '✓ YES' : '✗ NO';
+  col.appendChild(badge);
+
+  // V-line below badge
+  col.appendChild(vline(14));
+
+  // Blocks chain
+  const childId = side === 'yes' ? condNode.yesId : condNode.noId;
+  buildChain(childId, col, condNode.id, side);
+
+  return col;
+}
+
+// ── Card builders ──
+function buildTriggerCard() {
+  const el = document.createElement('div');
+  el.className = 'card card-trigger' + (state.editingId === 'trigger' ? ' selected' : '');
+  el.innerHTML = `
+    <div class="card-label">Start when</div>
+    <div class="card-title">${esc(state.trigger.entity)} ${esc(state.trigger.event)}</div>
+  `;
+  el.addEventListener('click', () => openPanel('trigger'));
+  return el;
+}
+
+function buildConditionCard(node) {
+  const el = document.createElement('div');
+  el.className = 'card card-condition' + (state.editingId === node.id ? ' selected' : '');
+  el.dataset.nodeId = node.id;
+
+  let title = '…', detail = '';
+  if (node.field) {
+    title = node.subField ? `${node.field} › ${node.subField}` : node.field;
+    if (node.operator) {
+      detail = node.operator;
+      if (!NO_VALUE_OPS.includes(node.operator)) {
+        const vals = node.values.filter(v => v.trim());
+        if (vals.length) detail += ': ' + vals.join(' OR ');
+      }
+    }
+  }
+
+  el.innerHTML = `
+    <button class="card-del" title="Delete">×</button>
+    <div class="card-label">If</div>
+    <div class="card-title">${esc(title)}</div>
+    ${detail ? `<div class="card-detail">${esc(detail)}</div>` : ''}
+  `;
+  el.querySelector('.card-del').addEventListener('click', e => { e.stopPropagation(); handleDelete(node.id); });
+  el.addEventListener('click', () => openPanel(node.id));
+  return el;
+}
+
+function buildActionCard(node) {
+  const el = document.createElement('div');
+  el.className = 'card card-action' + (state.editingId === node.id ? ' selected' : '');
+  el.dataset.nodeId = node.id;
+
+  let title = node.actionType || '…', detail = '';
+  if (node.actionType === 'Email' && node.recipient) {
+    detail = node.recipient === 'Other' ? (node.customEmail || 'Other') : node.recipient;
+  } else if (node.actionType === 'Post to URL' && node.urlTarget) {
+    detail = node.urlTarget;
+  } else if (node.actionType === 'Xero action' && node.xeroAction) {
+    detail = node.xeroAction;
+  } else if ((node.actionType === 'SMS' || node.actionType === 'Voice') && node.recipient) {
+    detail = node.recipient;
+  }
+
+  el.innerHTML = `
+    <button class="card-del" title="Delete">×</button>
+    <div class="card-label">Then</div>
+    <div class="card-title">${esc(title)}</div>
+    ${detail ? `<div class="card-detail">${esc(detail)}</div>` : ''}
+  `;
+  el.querySelector('.card-del').addEventListener('click', e => { e.stopPropagation(); handleDelete(node.id); });
+  el.addEventListener('click', () => openPanel(node.id));
+  return el;
+}
+
+function buildEndCard(parentId, parentBranch) {
+  const el = document.createElement('div');
+  el.className = 'card-end';
+  el.textContent = '+ Add block';
+  el.addEventListener('click', () => replaceEndWithChooser(el, parentId, parentBranch));
+  return el;
+}
+
+function replaceEndWithChooser(endEl, parentId, parentBranch) {
+  const chooser = document.createElement('div');
+  chooser.className = 'add-chooser';
+
+  const btnC = document.createElement('button');
+  btnC.className = 'ac-cond';
+  btnC.textContent = '+ Condition';
+  btnC.addEventListener('click', () => addNode('condition', parentId, parentBranch));
+
+  const btnA = document.createElement('button');
+  btnA.className = 'ac-act';
+  btnA.textContent = '+ Action';
+  btnA.addEventListener('click', () => addNode('action', parentId, parentBranch));
+
+  chooser.appendChild(btnC);
+  chooser.appendChild(btnA);
+  endEl.replaceWith(chooser);
+}
+
+function vline(h) {
+  const el = document.createElement('div');
+  el.className = 'vline';
+  el.style.height = h + 'px';
+  return el;
+}
+
+// ============================================================
+// MUTATIONS
+// ============================================================
+function addNode(type, parentId, parentBranch) {
+  const id = type === 'condition' ? mkCondition() : mkAction();
+
+  if (parentId === null) {
+    state.rootId = id;
+  } else if (parentBranch === 'next') {
+    state.nodes[parentId].nextId = id;
+  } else if (parentBranch === 'yes') {
+    state.nodes[parentId].yesId = id;
+  } else if (parentBranch === 'no') {
+    state.nodes[parentId].noId = id;
+  }
+
+  state.editingId = id;
+  render();
+  openPanel(id);
+}
+
+function handleDelete(id) {
+  if (hasDescendants(id)) {
+    pendingDeleteId = id;
+    document.getElementById('modalMsg').textContent =
+      'This will also delete all blocks below it in this branch.';
+    document.getElementById('modalBg').style.display = 'flex';
+  } else {
+    execDelete(id);
+  }
+}
+
+function hasDescendants(id) {
+  const n = state.nodes[id];
+  if (!n) return false;
+  if (n.type === 'condition') return n.yesId !== null || n.noId !== null;
+  if (n.type === 'action') return n.nextId !== null;
+  return false;
+}
+
+function execDelete(id) {
+  detach(id);
+  pruneSubtree(id);
+  if (state.editingId === id) closePanel();
+  render();
+}
+
+function detach(id) {
+  if (state.rootId === id) { state.rootId = null; return; }
+  for (const nid in state.nodes) {
+    const n = state.nodes[nid];
+    if (n.nextId === id) { n.nextId = null; return; }
+    if (n.yesId  === id) { n.yesId  = null; return; }
+    if (n.noId   === id) { n.noId   = null; return; }
+  }
+}
+
+function pruneSubtree(id) {
+  const n = state.nodes[id];
+  if (!n) return;
+  if (n.type === 'condition') {
+    if (n.yesId) pruneSubtree(n.yesId);
+    if (n.noId)  pruneSubtree(n.noId);
+  } else if (n.type === 'action') {
+    if (n.nextId) pruneSubtree(n.nextId);
+  }
+  delete state.nodes[id];
+}
+
+function confirmDelete() {
+  if (pendingDeleteId !== null) { execDelete(pendingDeleteId); pendingDeleteId = null; }
+  closeModal();
+}
+function closeModal() { document.getElementById('modalBg').style.display = 'none'; }
+
+// ============================================================
+// PANEL
+// ============================================================
+function openPanel(id) {
+  state.editingId = id;
+  document.getElementById('canvasWrap').classList.add('panel-open');
+  document.getElementById('rPanel').classList.add('visible');
+  refreshPanel();
+  // Re-render cards to show selection highlight without rebuilding panel
+  highlightSelected(id);
+}
+
+function closePanel() {
+  state.editingId = null;
+  document.getElementById('canvasWrap').classList.remove('panel-open');
+  document.getElementById('rPanel').classList.remove('visible');
+  highlightSelected(null);
+}
+
+function highlightSelected(id) {
+  document.querySelectorAll('.card.selected').forEach(c => c.classList.remove('selected'));
+  if (id === 'trigger') {
+    document.querySelector('.card-trigger') && document.querySelector('.card-trigger').classList.add('selected');
+  } else if (id !== null) {
+    const c = document.querySelector(`[data-node-id="${id}"]`);
+    if (c) c.classList.add('selected');
+  }
+}
+
+function refreshPanel() {
+  const id = state.editingId;
+  if (id === null) return;
+  if (id === 'trigger') buildTriggerPanel();
+  else {
+    const node = state.nodes[id];
+    if (!node) return;
+    if (node.type === 'condition') buildConditionPanel(node);
+    else if (node.type === 'action') buildActionPanel(node);
+  }
+}
+
+// ── Trigger panel ──
+function buildTriggerPanel() {
+  document.getElementById('panelTitle').textContent = 'Trigger';
+  const body = document.getElementById('panelBody');
+  const t = state.trigger;
+  const evts = EVENTS[t.entity] || [];
+
+  body.innerHTML = `
+    <div class="fg">
+      <label class="fg-label">Entity</label>
+      <select class="fc" id="p-entity">
+        ${ENTITIES.map(e => `<option${e===t.entity?' selected':''}>${esc(e)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg">
+      <label class="fg-label">Event</label>
+      <select class="fc" id="p-event">
+        ${evts.map(e => `<option${e===t.event?' selected':''}>${esc(e)}</option>`).join('')}
+      </select>
+    </div>
+  `;
+
+  body.querySelector('#p-entity').addEventListener('change', e => {
+    state.trigger.entity = e.target.value;
+    state.trigger.event = (EVENTS[e.target.value]||[])[0]||'';
+    renderAndRefreshPanel();
+  });
+  body.querySelector('#p-event').addEventListener('change', e => {
+    state.trigger.event = e.target.value;
+    updateTriggerCard();
+  });
+}
+
+// ── Condition panel ──
+function buildConditionPanel(node) {
+  document.getElementById('panelTitle').textContent = 'Condition';
+  const body = document.getElementById('panelBody');
+  const entityFields = FIELDS[state.trigger.entity] || {};
+  const fieldNames = Object.keys(entityFields);
+
+  const fd = node.field ? entityFields[node.field] : null;
+  const hasSub = fd && fd.type === 'object' && fd.sub;
+  const subNames = hasSub ? Object.keys(fd.sub) : [];
+
+  let fieldType = 'text';
+  if (fd) {
+    if (hasSub) {
+      const sfd = node.subField && fd.sub[node.subField];
+      fieldType = sfd || 'text';
+    } else {
+      fieldType = fd.type;
+    }
+  }
+  const ops = fieldType === 'number' ? NUMBER_OPS : fieldType === 'date' ? DATE_OPS : TEXT_OPS;
+  const noVal = NO_VALUE_OPS.includes(node.operator);
+  const vals = node.values.length ? node.values : [''];
+
+  let html = `
+    <div class="fg">
+      <label class="fg-label">Field</label>
+      <select class="fc" id="p-field">
+        <option value="">— Select field —</option>
+        ${fieldNames.map(f => `<option${f===node.field?' selected':''}>${esc(f)}</option>`).join('')}
+      </select>
+    </div>
+  `;
+
+  if (hasSub) {
+    html += `
+      <div class="fg">
+        <label class="fg-label">Sub-field</label>
+        <select class="fc" id="p-subfield">
+          <option value="">— Select —</option>
+          ${subNames.map(f => `<option${f===node.subField?' selected':''}>${esc(f)}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  if (node.field && (!hasSub || node.subField)) {
+    html += `
+      <div class="fg">
+        <label class="fg-label">Operator</label>
+        <select class="fc" id="p-op">
+          <option value="">— Select —</option>
+          ${ops.map(op => `<option${op===node.operator?' selected':''}>${esc(op)}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  }
+
+  if (node.operator && !noVal) {
+    html += `<div class="fg"><label class="fg-label">Value</label><div class="val-list" id="p-vals">`;
+    vals.forEach((v, i) => {
+      html += `<div class="val-row">
+        <input class="fc p-vi" type="text" data-i="${i}" value="${esc(v)}" placeholder="Enter value…">
+        ${i > 0 ? `<button class="btn-val-rm p-vrm" data-i="${i}">×</button>` : ''}
+      </div>`;
+      if (i < vals.length - 1) html += `<div class="val-or">OR</div>`;
+    });
+    html += `</div><button class="btn-add-val" id="p-av">+ Add OR value</button></div>`;
+  }
+
+  body.innerHTML = html;
+
+  body.querySelector('#p-field')?.addEventListener('change', e => {
+    node.field = e.target.value; node.subField=''; node.operator=''; node.values=[''];
+    renderAndRefreshPanel();
+  });
+  body.querySelector('#p-subfield')?.addEventListener('change', e => {
+    node.subField = e.target.value; node.operator=''; node.values=[''];
+    renderAndRefreshPanel();
+  });
+  body.querySelector('#p-op')?.addEventListener('change', e => {
+    node.operator = e.target.value; node.values=[''];
+    renderAndRefreshPanel();
+  });
+  body.querySelectorAll('.p-vi').forEach(inp => {
+    inp.addEventListener('input', e => {
+      node.values[+e.target.dataset.i] = e.target.value;
+      updateNodeCard(node.id);
+    });
+  });
+  body.querySelectorAll('.p-vrm').forEach(btn => {
+    btn.addEventListener('click', e => {
+      node.values.splice(+e.target.dataset.i, 1);
+      renderAndRefreshPanel();
+    });
+  });
+  body.querySelector('#p-av')?.addEventListener('click', () => {
+    node.values.push('');
+    renderAndRefreshPanel();
+  });
+}
+
+// ── Action panel ──
+function buildActionPanel(node) {
+  document.getElementById('panelTitle').textContent = 'Action';
+  const body = document.getElementById('panelBody');
+
+  let extraHtml = '';
+  if (node.actionType === 'Email') {
+    extraHtml = `
+      <div class="fg">
+        <label class="fg-label">Recipient</label>
+        <select class="fc" id="p-recip">
+          <option value="">— Select —</option>
+          ${EMAIL_RECIPIENTS.map(r => `<option${r===node.recipient?' selected':''}>${esc(r)}</option>`).join('')}
+        </select>
+      </div>
+      ${node.recipient === 'Other' ? `
+      <div class="fg">
+        <label class="fg-label">Email address</label>
+        <input class="fc" type="email" id="p-cemail" value="${esc(node.customEmail)}" placeholder="name@example.com">
+      </div>` : ''}
+    `;
+  } else if (node.actionType === 'SMS' || node.actionType === 'Voice') {
+    extraHtml = `
+      <div class="fg">
+        <label class="fg-label">Recipient</label>
+        <select class="fc" id="p-recip">
+          <option value="">— Select —</option>
+          ${EMAIL_RECIPIENTS.map(r => `<option${r===node.recipient?' selected':''}>${esc(r)}</option>`).join('')}
+        </select>
+      </div>
+    `;
+  } else if (node.actionType === 'Xero action') {
+    const xFields = node.xeroAction ? (XERO_FIELDS[node.xeroAction]||[]) : [];
+    extraHtml = `
+      <div class="fg">
+        <label class="fg-label">Action</label>
+        <select class="fc" id="p-xact">
+          <option value="">— Select —</option>
+          ${XERO_ENTITY_ACTIONS.map(a => `<option${a===node.xeroAction?' selected':''}>${esc(a)}</option>`).join('')}
+        </select>
+      </div>
+      ${xFields.map(f => `
+      <div class="fg">
+        <label class="fg-label">${esc(f)}</label>
+        <input class="fc p-xf" type="text" data-field="${esc(f)}" value="${esc(node.xeroFieldValues[f]||'')}" placeholder="Value…">
+      </div>`).join('')}
+    `;
+  } else if (node.actionType === 'Post to URL') {
+    extraHtml = `
+      <div class="fg">
+        <label class="fg-label">URL</label>
+        <input class="fc" type="url" id="p-url" value="${esc(node.urlTarget)}" placeholder="https://…">
+      </div>
+    `;
+  }
+
+  body.innerHTML = `
+    <div class="fg">
+      <label class="fg-label">Action type</label>
+      <select class="fc" id="p-atype">
+        <option value="">— Select —</option>
+        ${ACTION_TYPES.map(a => `<option${a===node.actionType?' selected':''}>${esc(a)}</option>`).join('')}
+      </select>
+    </div>
+    ${extraHtml}
+  `;
+
+  body.querySelector('#p-atype').addEventListener('change', e => {
+    node.actionType = e.target.value;
+    node.recipient = ''; node.customEmail = '';
+    node.xeroAction = ''; node.xeroFieldValues = {}; node.urlTarget = '';
+    renderAndRefreshPanel();
+  });
+  body.querySelector('#p-recip')?.addEventListener('change', e => {
+    node.recipient = e.target.value;
+    renderAndRefreshPanel();
+  });
+  body.querySelector('#p-cemail')?.addEventListener('input', e => {
+    node.customEmail = e.target.value; updateNodeCard(node.id);
+  });
+  body.querySelector('#p-xact')?.addEventListener('change', e => {
+    node.xeroAction = e.target.value; node.xeroFieldValues = {};
+    renderAndRefreshPanel();
+  });
+  body.querySelectorAll('.p-xf').forEach(inp => {
+    inp.addEventListener('input', e => {
+      node.xeroFieldValues[e.target.dataset.field] = e.target.value;
+      updateNodeCard(node.id);
+    });
+  });
+  body.querySelector('#p-url')?.addEventListener('input', e => {
+    node.urlTarget = e.target.value; updateNodeCard(node.id);
+  });
+}
+
+// ── Lightweight card-text-only update (avoids destroying panel focus) ──
+function updateNodeCard(id) {
+  const el = document.querySelector(`[data-node-id="${id}"]`);
+  if (!el) return;
+  const node = state.nodes[id];
+  if (!node) return;
+
+  if (node.type === 'condition') {
+    let title = '…', detail = '';
+    if (node.field) {
+      title = node.subField ? `${node.field} › ${node.subField}` : node.field;
+      if (node.operator) {
+        detail = node.operator;
+        if (!NO_VALUE_OPS.includes(node.operator)) {
+          const vals = node.values.filter(v => v.trim());
+          if (vals.length) detail += ': ' + vals.join(' OR ');
+        }
+      }
+    }
+    el.querySelector('.card-title').textContent = title;
+    let dd = el.querySelector('.card-detail');
+    if (detail) {
+      if (!dd) { dd = document.createElement('div'); dd.className = 'card-detail'; el.appendChild(dd); }
+      dd.textContent = detail;
+    } else if (dd) dd.textContent = '';
+  } else if (node.type === 'action') {
+    let title = node.actionType || '…', detail = '';
+    if (node.actionType === 'Email' && node.recipient) {
+      detail = node.recipient === 'Other' ? (node.customEmail || 'Other') : node.recipient;
+    } else if (node.actionType === 'Post to URL' && node.urlTarget) detail = node.urlTarget;
+    else if (node.actionType === 'Xero action' && node.xeroAction) detail = node.xeroAction;
+    else if ((node.actionType === 'SMS' || node.actionType === 'Voice') && node.recipient) detail = node.recipient;
+
+    el.querySelector('.card-title').textContent = title;
+    let dd = el.querySelector('.card-detail');
+    if (detail) {
+      if (!dd) { dd = document.createElement('div'); dd.className = 'card-detail'; el.appendChild(dd); }
+      dd.textContent = detail;
+    } else if (dd) dd.textContent = '';
+  }
+}
+
+function updateTriggerCard() {
+  const tc = document.querySelector('.card-trigger');
+  if (tc) tc.querySelector('.card-title').textContent =
+    `${state.trigger.entity} ${state.trigger.event}`;
+}
+
+// Full re-render + re-open panel (for structural changes)
+function renderAndRefreshPanel() {
+  const eid = state.editingId;
+  render();
+  if (eid !== null) {
+    document.getElementById('rPanel').classList.add('visible');
+    document.getElementById('canvasWrap').classList.add('panel-open');
+    highlightSelected(eid);
+  }
+}
+
+// ============================================================
+// RESET
+// ============================================================
+function resetRule() {
+  state.trigger = {entity:'Invoice', event:'Created'};
+  state.nodes = {};
+  state.rootId = null;
+  state.idCounter = 1;
+  state.editingId = null;
+  document.getElementById('canvasWrap').classList.remove('panel-open');
+  document.getElementById('rPanel').classList.remove('visible');
+  render();
+}
+
+// ============================================================
+// UTIL
+// ============================================================
+function esc(s) {
+  return String(s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+render();
+</script>
+</body>
+</html>
