@@ -47,7 +47,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .tree-node{display:flex;align-items:flex-start;gap:0}
 .tree-column{display:flex;flex-direction:column;align-items:center;gap:0}
 
-.card{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:11px 14px;width:220px;cursor:pointer;position:relative;transition:box-shadow .15s}
+.card{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:11px 14px;width:220px;cursor:pointer;position:relative;transition:box-shadow .15s;overflow:visible}
 .card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
 .card.selected{box-shadow:0 0 0 2px #0053CC}
 .card.trigger-card{border-left:4px solid #757575}
@@ -66,9 +66,17 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 /* ── Path buttons on condition cards ── */
 .path-btns{display:flex;gap:6px;margin-top:8px}
-.path-btn{font-size:11px;font-weight:700;padding:3px 0;border-radius:4px;border:none;cursor:pointer;transition:all .15s;min-width:44px;text-align:center}
-.path-btn.yes{background:#E8F5E9;color:#16A34A}.path-btn.yes:hover,.path-btn.yes.active{background:#16A34A;color:#fff}
-.path-btn.no{background:#FFF3E0;color:#D97706}.path-btn.no:hover,.path-btn.no.active{background:#D97706;color:#fff}
+.path-btn{font-size:12px;font-weight:600;padding:4px 12px;border-radius:4px;cursor:pointer;transition:all .15s;min-width:52px;text-align:center;border:1.5px solid;background:#fff}
+.path-btn.yes{color:#16A34A;border-color:#16A34A}.path-btn.yes:hover{background:#16A34A;color:#fff}
+.path-btn.no{color:#D97706;border-color:#D97706}.path-btn.no:hover{background:#D97706;color:#fff}
+
+/* ── Drag handle + card action buttons ── */
+.drag-handle{position:absolute;top:50%;left:-18px;transform:translateY(-50%);width:14px;cursor:grab;color:#BDBDBD;display:none;flex-direction:column;gap:2px;padding:2px}
+.drag-handle:active{cursor:grabbing}
+.drag-handle span{display:block;width:10px;height:2px;background:#BDBDBD;border-radius:1px}
+.card:hover .drag-handle,.card.selected .drag-handle{display:flex}
+.copy-btn{position:absolute;top:6px;right:26px;background:none;border:none;color:#9E9E9E;cursor:pointer;font-size:13px;line-height:1;padding:0 2px}.copy-btn:hover{color:#0053CC}
+.card.drag-over{outline:2px dashed #0053CC;outline-offset:2px}
 
 /* ── Connectors ── */
 /* margin-left: 109px = (card width 220px / 2) - 1px (half conn width) */
@@ -429,6 +437,70 @@ function countSubtree(id) {
   return 1 + countSubtree(n.yesChild) + countSubtree(n.noChild);
 }
 
+// ── Copy (duplicate) ───────────────────────────────────────────
+function copyNode(nodeId) {
+  const node = state.nodes[nodeId];
+  if (!node || node.type === 'trigger') return;
+  let overrides = {};
+  if (node.type === 'condition') {
+    overrides = {field:node.field, subField:node.subField, operand:node.operand, values:[...(node.values||[''])]};
+  } else if (node.type === 'action') {
+    overrides = {actionType:node.actionType, recipient:node.recipient, customEmail:node.customEmail,
+                 qbAction:node.qbAction, qbFieldValues:{...(node.qbFieldValues||{})}, urlTarget:node.urlTarget};
+  }
+  const newId = createNode(node.type, overrides);
+  const newNode = state.nodes[newId];
+  newNode.yesChild = node.yesChild;
+  node.yesChild = newId;
+  render();
+}
+
+// ── Drag-and-drop ──────────────────────────────────────────────
+let dragId = null;
+
+function addDragListeners(el, nodeId) {
+  el.addEventListener('dragstart', e => {
+    dragId = nodeId;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => el.style.opacity = '.5', 0);
+  });
+  el.addEventListener('dragend', () => {
+    el.style.opacity = '';
+    dragId = null;
+    document.querySelectorAll('.card.drag-over').forEach(c => c.classList.remove('drag-over'));
+  });
+  el.addEventListener('dragover', e => {
+    if (!dragId || dragId === nodeId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    el.classList.add('drag-over');
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    el.classList.remove('drag-over');
+    if (!dragId || dragId === nodeId) return;
+    moveNode(dragId, nodeId);
+    dragId = null;
+  });
+}
+
+function moveNode(fromId, beforeId) {
+  // Only reorder nodes in the root YES chain
+  const chain = [];
+  let cur = state.rootId;
+  while (cur) { chain.push(cur); cur = state.nodes[cur]?.yesChild || null; }
+  const fi = chain.indexOf(fromId);
+  const bi = chain.indexOf(beforeId);
+  if (fi < 1 || bi < 0 || fi === bi) return; // fi<1: don't move trigger
+  chain.splice(fi, 1);
+  const newBi = chain.indexOf(beforeId);
+  if (newBi < 0) return;
+  chain.splice(newBi, 0, fromId);
+  for (let i = 0; i < chain.length - 1; i++) state.nodes[chain[i]].yesChild = chain[i+1];
+  render();
+}
+
 // ── Delete modal ───────────────────────────────────────────────
 let pendingDeleteId = null;
 function openDeleteModal(id) {
@@ -679,18 +751,27 @@ function mk(tag, css) {
   return el;
 }
 
-// After render: position each absolutely-placed noBranch so its horizontal line
-// exits from the parent card's vertical center. Drop height is also adjusted so
-// the NO child always starts below the card bottom.
+// After render:
+// 1. Set noBranch marginTop so horizontal connector exits card vertical center
+// 2. Set drop height so NO child clears card bottom
+// 3. Extend V-connector (data-vconn-for) to bridge gap between card bottom and YES child
 function alignConnectors() {
   document.querySelectorAll('.card[data-nid]').forEach(card => {
     const id = card.dataset.nid;
     const h = card.offsetHeight;
     document.querySelectorAll(`.no-branch[data-align-card="${id}"]`).forEach(nb => {
-      nb.style.top = Math.max(0, Math.round(h / 2 - 1)) + 'px';
+      nb.style.marginTop = Math.max(0, Math.round(h / 2 - 1)) + 'px';
       const dropEl = nb.children[1];
       if (dropEl) dropEl.style.height = Math.max(18, Math.round(h / 2) + 8) + 'px';
     });
+  });
+  // Extend each condition's V-connector so YES child starts below NO subtree bottom
+  document.querySelectorAll('[data-vconn-for]').forEach(vconn => {
+    const nb = document.querySelector(`.no-branch[data-align-card="${vconn.dataset.vconnFor}"]`);
+    const card = document.querySelector(`.card[data-nid="${vconn.dataset.vconnFor}"]`);
+    if (!nb || !card) return;
+    const gap = Math.max(0, nb.getBoundingClientRect().bottom - card.getBoundingClientRect().bottom);
+    vconn.style.height = (28 + gap) + 'px';
   });
 }
 
@@ -707,56 +788,45 @@ function renderCanvas() {
 }
 
 // Layout:
-//   - All cards 220px wide. V-connectors: margin-left:109px (CSS-only).
-//   - Condition NO branch: absolutely positioned at left:220px (card's right edge)
-//     so it never gets displaced by a wide YES subtree.
-//   - Action nodes chain vertically (V-connector + chooser below them).
+//   - Trigger/Action: pure flex-column chain.
+//   - Condition: cardRow (flex-row: card + noBranch side by side) so the NO branch
+//     is always anchored to x=220 regardless of YES subtree depth.
+//     A dynamic V-connector below cardRow bridges any height gap.
 function renderNode(id) {
   if (!id) return null;
   const node = state.nodes[id];
   if (!node) return null;
 
-  // Trigger: vertical chain only
   if (node.type === 'trigger') {
     const wrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
     wrap.appendChild(makeCard(node));
-    if (node.yesChild) {
-      wrap.appendChild(makeConnV());
-      wrap.appendChild(renderNode(node.yesChild));
-    } else {
-      wrap.appendChild(makeConnV());
-      wrap.appendChild(makeChooser(id, 'yes'));
-    }
+    wrap.appendChild(makeConnV());
+    if (node.yesChild) wrap.appendChild(renderNode(node.yesChild));
+    else wrap.appendChild(makeChooser(id, 'yes'));
     return wrap;
   }
 
-  // Action: vertical chain (can have more steps below)
   if (node.type === 'action') {
     const wrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
     wrap.appendChild(makeCard(node));
     wrap.appendChild(makeConnV());
-    if (node.yesChild) {
-      wrap.appendChild(renderNode(node.yesChild));
-    } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
-      wrap.appendChild(makeChooser(id, 'yes'));
-    } else {
-      wrap.appendChild(makeTerminal(id, 'yes'));
-    }
+    if (node.yesChild) wrap.appendChild(renderNode(node.yesChild));
+    else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') wrap.appendChild(makeChooser(id, 'yes'));
+    else wrap.appendChild(makeTerminal(id, 'yes'));
     return wrap;
   }
 
-  // Condition: column with card + absolutely-anchored NO branch + YES subtree below
-  const outerCol = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;position:relative;');
-  outerCol.appendChild(makeCard(node));
+  // CONDITION: cardRow keeps noBranch anchored to card right edge
+  const condWrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
 
-  // NO branch — always starts at card's right edge regardless of YES subtree width
-  const noBranch = mk('div', 'position:absolute;left:220px;top:0;display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;');
+  const cardRow = mk('div', 'display:flex;flex-direction:row;align-items:flex-start;');
+  cardRow.appendChild(makeCard(node));
+
+  const noBranch = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;');
   noBranch.className = 'no-branch';
   noBranch.dataset.alignCard = node.id;
-  const horizLine = mk('div', 'height:2px;width:111px;background:#BDBDBD;flex-shrink:0;');
-  noBranch.appendChild(horizLine);
-  const drop = mk('div', 'width:2px;height:18px;background:#BDBDBD;margin-left:109px;flex-shrink:0;');
-  noBranch.appendChild(drop);
+  noBranch.appendChild(mk('div', 'height:2px;width:111px;background:#BDBDBD;flex-shrink:0;'));
+  noBranch.appendChild(mk('div', 'width:2px;height:18px;background:#BDBDBD;margin-left:109px;flex-shrink:0;'));
   if (node.noChild) {
     const noEl = renderNode(node.noChild);
     if (noEl) noBranch.appendChild(noEl);
@@ -765,19 +835,19 @@ function renderNode(id) {
   } else {
     noBranch.appendChild(makeTerminal(id, 'no'));
   }
-  outerCol.appendChild(noBranch);
+  cardRow.appendChild(noBranch);
+  condWrap.appendChild(cardRow);
 
-  // YES chain below card
-  outerCol.appendChild(makeConnV());
-  if (node.yesChild) {
-    outerCol.appendChild(renderNode(node.yesChild));
-  } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') {
-    outerCol.appendChild(makeChooser(id, 'yes'));
-  } else {
-    outerCol.appendChild(makeTerminal(id, 'yes'));
-  }
+  // Dynamic V-connector — height extended by alignConnectors to bridge gap to YES child
+  const vconn = mk('div', 'width:2px;height:28px;background:#BDBDBD;margin-left:109px;align-self:flex-start;flex-shrink:0;');
+  vconn.dataset.vconnFor = node.id;
+  condWrap.appendChild(vconn);
 
-  return outerCol;
+  if (node.yesChild) condWrap.appendChild(renderNode(node.yesChild));
+  else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') condWrap.appendChild(makeChooser(id, 'yes'));
+  else condWrap.appendChild(makeTerminal(id, 'yes'));
+
+  return condWrap;
 }
 
 function makeCard(node) {
@@ -797,36 +867,43 @@ function makeCard(node) {
     const valDisplay = (node.values||[]).filter(Boolean).join(', ');
     const fieldLabel = node.subField ? `${node.field}: ${node.subField}` : node.field;
     div.className = 'card condition-card' + (isSelected ? ' selected' : '');
+    div.draggable = true;
     div.innerHTML = `
+      <div class="drag-handle" title="Drag to reorder"><span></span><span></span><span></span></div>
+      <button class="copy-btn" title="Duplicate">⧉</button>
       <button class="del-btn" title="Delete">×</button>
       <div class="card-type-label">IF</div>
       <div class="card-main">${fieldLabel || '…'}</div>
-      ${node.operand ? `<div class="card-detail">${node.operand}${valDisplay ? '' : ''}</div>` : ''}
+      ${node.operand ? `<div class="card-detail">${node.operand}</div>` : ''}
       ${valDisplay ? `<div class="or-tags">${(node.values||[]).filter(Boolean).map(v=>`<span class="or-tag">${v}</span>`).join('')}</div>` : ''}
       ${!(node.yesChild && node.noChild) ? `<div class="path-btns">
         ${!node.yesChild ? `<button class="path-btn yes" onclick="event.stopPropagation();onPathBtn(event,'${node.id}','yes')">YES</button>` : ''}
         ${!node.noChild  ? `<button class="path-btn no"  onclick="event.stopPropagation();onPathBtn(event,'${node.id}','no')">NO</button>`  : ''}
       </div>` : ''}`;
-    div.querySelector('.del-btn').addEventListener('click', e => {
-      e.stopPropagation();
-      openDeleteModal(node.id);
-    });
+    div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); openDeleteModal(node.id); });
+    div.querySelector('.copy-btn').addEventListener('click', e => { e.stopPropagation(); copyNode(node.id); });
     div.addEventListener('click', () => { startEdit(node.id, 'condition'); render(); });
+    addDragListeners(div, node.id);
   }
 
   else if (node.type === 'action') {
     div.className = 'card action-card' + (isSelected ? ' selected' : '');
+    div.draggable = true;
     let detail = '';
     if (node.actionType==='Email'||node.actionType==='SMS'||node.actionType==='Voice') detail = node.recipient || '';
     if (node.actionType==='Xero action') detail = `${state.trigger.entity} · ${node.qbAction||''}`;
     if (node.actionType==='Post to URL') detail = node.urlTarget || '';
     div.innerHTML = `
+      <div class="drag-handle" title="Drag to reorder"><span></span><span></span><span></span></div>
+      <button class="copy-btn" title="Duplicate">⧉</button>
       <button class="del-btn" title="Delete">×</button>
       <div class="card-type-label">THEN</div>
       <div class="card-main">${node.actionType || '…'}</div>
       ${detail ? `<div class="card-detail">${detail}</div>` : ''}`;
     div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); openDeleteModal(node.id); });
+    div.querySelector('.copy-btn').addEventListener('click', e => { e.stopPropagation(); copyNode(node.id); });
     div.addEventListener('click', () => { startEdit(node.id, 'action'); render(); });
+    addDragListeners(div, node.id);
   }
 
   return div;
