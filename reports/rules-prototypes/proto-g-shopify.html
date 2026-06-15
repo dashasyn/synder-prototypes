@@ -67,6 +67,13 @@ body{font-family:Roboto,sans-serif;background:#F9FAFB;display:flex;flex-directio
 
 .conn-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;z-index:2}
 
+/* Block picker popup */
+.block-menu{position:fixed;z-index:1000;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.14);padding:8px;min-width:190px}
+.block-menu-hd{font-size:11px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;padding:4px 8px 8px}
+.block-menu-btn{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:none;background:none;cursor:pointer;border-radius:6px;font-size:13px;color:#1A1A2E;text-align:left}
+.block-menu-btn:hover{background:#F3F4F6}
+.block-menu-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+
 .sb-section{padding:16px;border-bottom:1px solid #F5F5F5}
 .sb-label{font-size:11px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
 .sb-hint{font-size:13px;color:#9E9E9E;text-align:center;padding:28px 16px;line-height:1.6}
@@ -184,8 +191,7 @@ function render(){
   addCard(wrap, S.nodes[S.rootId], 0, 0);
 
   if(conds.length===0){
-    // No conditions yet — show add button for first condition
-    addPlus(wrap, CSTEP, 0, S.rootId, 'then', 'condition', '+ Check if…');
+    addPlus(wrap, CSTEP, 0, S.rootId, 'then');
   }
 
   conds.forEach((condId, row)=>{
@@ -200,19 +206,17 @@ function render(){
       acts.forEach((actId,col)=>{
         addCard(wrap, S.nodes[actId], (2+col)*CSTEP, y);
       });
-      // "+" at end of action chain
       const lastAct=S.nodes[acts[acts.length-1]];
       if(!lastAct.thenChild){
-        addPlus(wrap, (2+acts.length)*CSTEP, y, lastAct.id, 'then', 'action', '+ Do this…');
+        addPlus(wrap, (2+acts.length)*CSTEP, y, lastAct.id, 'then');
       }
     } else {
-      // No actions yet for this branch
-      addPlus(wrap, 2*CSTEP, y, condId, 'then', 'action', '+ Do this…');
+      addPlus(wrap, 2*CSTEP, y, condId, 'then');
     }
 
-    // "+" below last condition (for adding another branch via Otherwise)
+    // "+" below last condition (Otherwise branch)
     if(!condN.otherwiseChild && row===conds.length-1){
-      addPlus(wrap, CSTEP, (row+1)*ROW_H, condId, 'otherwise', 'condition', '+ Check if…');
+      addPlus(wrap, CSTEP, (row+1)*ROW_H, condId, 'otherwise');
     }
   });
 
@@ -292,20 +296,45 @@ function addCard(wrap, n, x, y){
   wrap.appendChild(div);
 }
 
-function addPlus(wrap, x, y, parentId, port, nodeType, label){
+function addPlus(wrap, x, y, parentId, port){
   const btn=document.createElement('button');
   btn.className='sf-add';
   btn.style.cssText=`left:${x}px;top:${y+24}px`;
-  btn.textContent=label;
+  btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v11M1 6.5h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
   btn.addEventListener('click',e=>{
     e.stopPropagation();
-    const newId=mkN(nodeType);
-    if(port==='otherwise') S.nodes[parentId].otherwiseChild=newId;
-    else                    S.nodes[parentId].thenChild=newId;
-    S.sel={nodeId:newId};
-    render();
+    openBlockMenu(btn, parentId, port);
   });
   wrap.appendChild(btn);
+}
+
+function openBlockMenu(anchor, parentId, port){
+  document.getElementById('blockMenu')?.remove();
+  const menu=document.createElement('div');
+  menu.id='blockMenu';
+  menu.className='block-menu';
+  const r=anchor.getBoundingClientRect();
+  menu.style.left=(r.right+10)+'px';
+  menu.style.top=r.top+'px';
+  menu.innerHTML=`
+    <div class="block-menu-hd">Add block</div>
+    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','condition')">
+      <span class="block-menu-dot" style="background:#1A73E8"></span>Check if…
+    </button>
+    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','action')">
+      <span class="block-menu-dot" style="background:#16A34A"></span>Do this…
+    </button>`;
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
+}
+
+function addBlock(parentId, port, nodeType){
+  document.getElementById('blockMenu')?.remove();
+  const newId=mkN(nodeType);
+  if(port==='otherwise') S.nodes[parentId].otherwiseChild=newId;
+  else                    S.nodes[parentId].thenChild=newId;
+  S.sel={nodeId:newId};
+  render();
 }
 
 // ── SVG connections ───────────────────────────────────────────────
