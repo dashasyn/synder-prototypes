@@ -58,21 +58,20 @@ body{font-family:Roboto,sans-serif;background:#F9FAFB;display:flex;flex-directio
   box-shadow:0 0 0 1.5px #1A73E8;z-index:4;
 }
 
-.sf-add{
-  position:absolute;background:#fff;border:1.5px dashed #B0B7C3;border-radius:8px;
-  width:160px;height:52px;display:flex;align-items:center;justify-content:center;gap:6px;
-  font-size:12px;color:#9E9E9E;cursor:pointer;transition:all .15s;
+/* Blue "+" button inside port rows */
+.port-plus{
+  width:22px;height:22px;border-radius:50%;background:#1A73E8;border:none;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-right:-12px;z-index:5;transition:background .15s,transform .15s;
 }
-.sf-add:hover{border-color:#1A73E8;color:#1A73E8;background:#F0F5FF}
+.port-plus:hover{background:#1557B0;transform:scale(1.12)}
 
 .conn-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;z-index:2}
 
 /* Block picker popup */
-.block-menu{position:fixed;z-index:1000;background:#fff;border:1px solid #E5E7EB;border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.14);padding:8px;min-width:190px}
-.block-menu-hd{font-size:11px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;padding:4px 8px 8px}
-.block-menu-btn{display:flex;align-items:center;gap:10px;width:100%;padding:8px 10px;border:none;background:none;cursor:pointer;border-radius:6px;font-size:13px;color:#1A1A2E;text-align:left}
+.block-menu{position:fixed;z-index:1000;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.18);padding:8px;min-width:160px}
+.block-menu-btn{display:block;width:100%;padding:14px 20px;border:none;background:none;cursor:pointer;border-radius:8px;font-size:17px;font-weight:500;color:#1A1A2E;text-align:left}
 .block-menu-btn:hover{background:#F3F4F6}
-.block-menu-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 
 .sb-section{padding:16px;border-bottom:1px solid #F5F5F5}
 .sb-label{font-size:11px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
@@ -190,33 +189,15 @@ function render(){
   // Trigger at column 0, row 0
   addCard(wrap, S.nodes[S.rootId], 0, 0);
 
-  if(conds.length===0){
-    addPlus(wrap, CSTEP, 0, S.rootId, 'then');
-  }
-
   conds.forEach((condId, row)=>{
     const y=row*ROW_H;
     addCard(wrap, S.nodes[condId], CSTEP, y);
-
     const condN=S.nodes[condId];
-
-    // Action chain for this row
     if(condN.thenChild){
       const acts=actionChain(condN.thenChild);
       acts.forEach((actId,col)=>{
         addCard(wrap, S.nodes[actId], (2+col)*CSTEP, y);
       });
-      const lastAct=S.nodes[acts[acts.length-1]];
-      if(!lastAct.thenChild){
-        addPlus(wrap, (2+acts.length)*CSTEP, y, lastAct.id, 'then');
-      }
-    } else {
-      addPlus(wrap, 2*CSTEP, y, condId, 'then');
-    }
-
-    // "+" below last condition (Otherwise branch)
-    if(!condN.otherwiseChild && row===conds.length-1){
-      addPlus(wrap, CSTEP, (row+1)*ROW_H, condId, 'otherwise');
     }
   });
 
@@ -262,25 +243,24 @@ function addCard(wrap, n, x, y){
   const inputDot=n.type!=='trigger'
     ?`<div class="pdot-in" data-nid="${n.id}" data-port="input"></div>`:'';
 
+  // Render port: blue dot if connected (for SVG), blue "+" button if not
+  function portEl(childKey, port){
+    const hasChild=n[childKey];
+    return hasChild
+      ?`<div class="pdot-out" data-nid="${n.id}" data-port="${port}"></div>`
+      :`<button class="port-plus" onclick="event.stopPropagation();openBlockMenu(this,'${n.id}','${port}')"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button>`;
+  }
+
   // Port rows
   let portRows='';
   if(n.type==='trigger'){
-    portRows=`<div class="sf-port-row then-lbl">Output
-      <div class="pdot-out" data-nid="${n.id}" data-port="then"></div>
-    </div>`;
+    portRows=`<div class="sf-port-row then-lbl">Output ${portEl('thenChild','then')}</div>`;
   } else if(n.type==='condition'){
     portRows=`
-      <div class="sf-port-row then-lbl">Then
-        <div class="pdot-out${n.thenChild?'':' off'}" data-nid="${n.id}" data-port="then"></div>
-      </div>
-      <div class="sf-port-row">Otherwise
-        <div class="pdot-out${n.otherwiseChild?'':' off'}" data-nid="${n.id}" data-port="otherwise"></div>
-      </div>`;
+      <div class="sf-port-row then-lbl">Then ${portEl('thenChild','then')}</div>
+      <div class="sf-port-row">Otherwise ${portEl('otherwiseChild','otherwise')}</div>`;
   } else {
-    // Action: Then only
-    portRows=`<div class="sf-port-row then-lbl">Then
-      <div class="pdot-out${n.thenChild?'':' off'}" data-nid="${n.id}" data-port="then"></div>
-    </div>`;
+    portRows=`<div class="sf-port-row then-lbl">Then ${portEl('thenChild','then')}</div>`;
   }
 
   div.innerHTML=`
@@ -296,34 +276,17 @@ function addCard(wrap, n, x, y){
   wrap.appendChild(div);
 }
 
-function addPlus(wrap, x, y, parentId, port){
-  const btn=document.createElement('button');
-  btn.className='sf-add';
-  btn.style.cssText=`left:${x}px;top:${y+24}px`;
-  btn.innerHTML=`<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 1v11M1 6.5h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
-  btn.addEventListener('click',e=>{
-    e.stopPropagation();
-    openBlockMenu(btn, parentId, port);
-  });
-  wrap.appendChild(btn);
-}
-
 function openBlockMenu(anchor, parentId, port){
   document.getElementById('blockMenu')?.remove();
   const menu=document.createElement('div');
   menu.id='blockMenu';
   menu.className='block-menu';
   const r=anchor.getBoundingClientRect();
-  menu.style.left=(r.right+10)+'px';
-  menu.style.top=r.top+'px';
+  menu.style.left=(r.right+12)+'px';
+  menu.style.top=(r.top-8)+'px';
   menu.innerHTML=`
-    <div class="block-menu-hd">Add block</div>
-    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','condition')">
-      <span class="block-menu-dot" style="background:#1A73E8"></span>Check if…
-    </button>
-    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','action')">
-      <span class="block-menu-dot" style="background:#16A34A"></span>Do this…
-    </button>`;
+    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','condition')">Condition</button>
+    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','action')">Action</button>`;
   document.body.appendChild(menu);
   setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
 }
