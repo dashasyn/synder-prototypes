@@ -99,6 +99,37 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 /* ── Card flash (path already filled feedback) ── */
 @keyframes card-flash{0%,100%{box-shadow:0 0 0 2px #0053CC}50%{box-shadow:0 0 0 5px rgba(0,83,204,.45)}}
+
+/* ── Xero Invoice Overlay ── */
+.xero-modal{background:#fff;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.2);width:700px;max-width:96vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;transform:translateY(8px);transition:transform .18s}
+.modal-overlay.open .xero-modal{transform:translateY(0)}
+.xero-inv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 16px}
+.xero-inv-field{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border-radius:4px;border:1.5px solid transparent;transition:all .15s;background:#F9FAFB}
+.xero-inv-field.updatable{cursor:pointer;border-color:#BDBDBD;background:#fff}
+.xero-inv-field.updatable:hover{border-color:#0053CC;background:#F0F5FF}
+.xero-inv-field.xero-selected{border-color:#0053CC;background:#EEF3FF}
+.xero-inv-field.disabled{opacity:.45;pointer-events:none}
+.xero-field-label{font-size:11px;color:#6B7280;font-weight:500;display:flex;align-items:center;gap:5px}
+.xero-field-val{font-size:13px;color:#BDBDBD;font-style:italic;min-height:18px;margin-top:1px}
+.xero-field-val.has-val{color:#1A1A2E;font-style:normal}
+.xero-field-input{margin-top:5px;width:100%;border:none;border-top:1px solid #C5D8FF;padding-top:4px;font-size:12px;outline:none;background:transparent;color:#0053CC;font-family:Roboto,sans-serif}
+.xero-field-input::placeholder{color:#93C5FD}
+.update-badge{font-size:9px;font-weight:700;color:#fff;background:#0053CC;padding:1px 4px;border-radius:2px;letter-spacing:.3px}
+.xero-table{width:100%;border-collapse:collapse}
+.xero-table th{font-size:11px;color:#6B7280;font-weight:500;padding:8px 10px;text-align:left;border-bottom:1px solid #E5E7EB;white-space:nowrap}
+.xero-table td{padding:6px 8px;border-bottom:1px solid #F5F5F5;vertical-align:top}
+.xero-cell{padding:7px 9px;border-radius:4px;border:1.5px solid transparent;cursor:default;transition:all .15s;min-height:34px;font-size:12px;color:#BDBDBD;background:#F9FAFB}
+.xero-cell.updatable{cursor:pointer;border-color:#BDBDBD;color:#1A1A2E;background:#fff}
+.xero-cell.updatable:hover{border-color:#0053CC;background:#F0F5FF}
+.xero-cell.xero-selected{border-color:#0053CC;background:#EEF3FF}
+.xero-cell-hint{font-size:11px;color:#BDBDBD;font-style:italic}
+.xero-cell-input{width:100%;border:none;border-bottom:1px solid #C5D8FF;font-size:12px;outline:none;background:transparent;color:#0053CC;font-family:Roboto,sans-serif;padding:1px 0}
+.xero-cell-input::placeholder{color:#93C5FD}
+.xero-section-hd{font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;padding:10px 16px 4px;border-top:1px solid #F5F5F5}
+.xero-summary{font-size:12px;color:#0053CC;background:#EEF3FF;border-radius:4px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:8px;border:1px solid #C5D8FF}
+.xero-summary:hover{background:#E0EBFF}
+.xero-open-btn{width:100%;padding:8px;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px dashed #0053CC;color:#0053CC;background:#F0F5FF;transition:all .15s;text-align:center;margin-top:4px}
+.xero-open-btn:hover{background:#0053CC;color:#fff;border-style:solid}
 .card.flash{animation:card-flash .35s ease 2}
 
 /* ── AI modal ── */
@@ -206,6 +237,27 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
       <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
       <button class="btn btn-secondary" id="deleteOnlyBtn" onclick="confirmDeleteOnly()">Delete this block + NO branch</button>
       <button class="btn" style="background:#DC2626;color:#fff" onclick="confirmDeleteAll()">Delete block + all below</button>
+    </div>
+  </div>
+</div>
+
+<!-- Xero Invoice overlay -->
+<div class="modal-overlay" id="xeroOverlay" onclick="onXeroOverlayClick(event)">
+  <div class="xero-modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title">Configure Xero fields to update</div>
+        <div style="font-size:12px;color:#9E9E9E;margin-top:2px">Click a field on the invoice to include it in this rule. Set the value it should be changed to.</div>
+      </div>
+      <button class="modal-close" onclick="closeXeroOverlay()" style="margin-left:auto">×</button>
+    </div>
+    <div id="xeroModalBody" style="overflow-y:auto;flex:1"></div>
+    <div class="modal-foot" style="justify-content:space-between;align-items:center">
+      <div id="xeroModalCount" style="font-size:12px;color:#6B7280"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeXeroOverlay()">Cancel</button>
+        <button class="btn btn-primary" onclick="applyXeroOverlay()">Apply</button>
+      </div>
     </div>
   </div>
 </div>
@@ -719,11 +771,17 @@ function renderSidebar() {
         ${node.qbAction ? `
         <div class="form-group">
           <label class="form-label">Fields to update</label>
-          ${XERO_FIELDS[node.qbAction].map(f=>`
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <input type="checkbox" id="qbf_${f.replace(/[\s:]/g,'_')}" ${(node.qbFieldValues||{})[f]!==undefined?'checked':''} onchange="onQbField('${nodeId}','${f}',this.checked)">
-              <label for="qbf_${f.replace(/[\s:]/g,'_')}" style="font-size:13px">${f}</label>
-            </div>`).join('')}
+          ${Object.keys(node.qbFieldValues||{}).length > 0 ? `
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+              ${Object.keys(node.qbFieldValues).map(f=>`
+                <div style="display:flex;align-items:center;gap:6px;font-size:12px;background:#EEF3FF;border-radius:4px;padding:4px 8px;color:#0053CC">
+                  <span style="font-size:10px;font-weight:700;background:#0053CC;color:#fff;padding:1px 4px;border-radius:2px">SET</span>
+                  ${f}${node.qbFieldValues[f]?` → <em style="color:#1A1A2E">${node.qbFieldValues[f]}</em>`:''}
+                </div>`).join('')}
+            </div>` : `<div style="font-size:12px;color:#9E9E9E;margin-bottom:8px">No fields selected yet.</div>`}
+          <button class="xero-open-btn" onclick="openXeroOverlay('${nodeId}')">
+            ✎ Configure in invoice view
+          </button>
         </div>` : ''}` : ''}
         ${node.actionType === 'Post to URL' ? `
         <div class="form-group">
@@ -1096,6 +1154,144 @@ function saveAction(nodeId) {
   delete state.editBuffer[nodeId];
   state.pendingSlot = null;
   render();
+}
+
+// ── Xero Invoice Overlay ───────────────────────────────────────
+let xeroNodeId = null;
+
+function openXeroOverlay(nodeId) {
+  xeroNodeId = nodeId;
+  refreshXeroOverlay();
+  document.getElementById('xeroOverlay').classList.add('open');
+}
+function closeXeroOverlay() {
+  document.getElementById('xeroOverlay').classList.remove('open');
+  xeroNodeId = null;
+}
+function onXeroOverlayClick(e) {
+  if (e.target === document.getElementById('xeroOverlay')) closeXeroOverlay();
+}
+function applyXeroOverlay() {
+  closeXeroOverlay();
+  render();
+}
+
+function toggleXeroField(field) {
+  const node = state.nodes[xeroNodeId];
+  if (!node) return;
+  if (!node.qbFieldValues) node.qbFieldValues = {};
+  if (node.qbFieldValues[field] !== undefined) delete node.qbFieldValues[field];
+  else node.qbFieldValues[field] = '';
+  refreshXeroOverlay();
+}
+
+function setXeroFieldValue(field, val) {
+  const node = state.nodes[xeroNodeId];
+  if (!node || node.qbFieldValues === undefined) return;
+  node.qbFieldValues[field] = val;
+  const cnt = Object.keys(node.qbFieldValues).length;
+  document.getElementById('xeroModalCount').textContent = cnt > 0 ? `${cnt} field${cnt !== 1 ? 's' : ''} will be updated` : '';
+}
+
+function refreshXeroOverlay() {
+  const node = state.nodes[xeroNodeId];
+  if (!node) return;
+  const action = node.qbAction;
+  const fieldSet = new Set(XERO_FIELDS[action] || []);
+  const sel = node.qbFieldValues || {};
+  const isSel = f => sel[f] !== undefined;
+
+  function invField(label, key, placeholder, span1) {
+    const up = fieldSet.has(key);
+    const s = up && isSel(key);
+    return `<div class="xero-inv-field ${up ? 'updatable' : 'disabled'} ${s ? 'xero-selected' : ''}"
+              ${up ? `onclick="toggleXeroField('${key}')"` : ''}>
+      <div class="xero-field-label">${label}${s ? ' <span class="update-badge">SET</span>' : ''}</div>
+      <div class="xero-field-val ${s && sel[key] ? 'has-val' : ''}">${s && sel[key] ? sel[key] : placeholder}</div>
+      ${s ? `<input class="xero-field-input" type="text" placeholder="Set value…" value="${sel[key]||''}"
+               onclick="event.stopPropagation()" oninput="setXeroFieldValue('${key}',this.value)" />` : ''}
+    </div>`;
+  }
+
+  function lineCell(key, placeholder) {
+    const up = fieldSet.has(key);
+    const s = up && isSel(key);
+    return `<td><div class="xero-cell ${up ? 'updatable' : ''} ${s ? 'xero-selected' : ''}${!up ? ' disabled' : ''}"
+              ${up ? `onclick="toggleXeroField('${key}')"` : ''}>
+      ${s
+        ? `<div style="font-size:9px;font-weight:700;color:#0053CC;margin-bottom:3px">SET VALUE</div>
+           <input class="xero-cell-input" type="text" placeholder="Value…" value="${sel[key]||''}"
+             onclick="event.stopPropagation()" oninput="setXeroFieldValue('${key}',this.value)" />`
+        : `<span class="xero-cell-hint">${up ? placeholder : '—'}</span>`}
+    </div></td>`;
+  }
+
+  const showHeader = action === 'Update current';
+  const cnt = Object.keys(sel).length;
+  document.getElementById('xeroModalCount').textContent = cnt > 0 ? `${cnt} field${cnt !== 1 ? 's' : ''} will be updated` : 'Click fields to select them';
+
+  document.getElementById('xeroModalBody').innerHTML = `
+    <div style="padding:10px 16px 4px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;color:#6B7280">
+      Rule action: <strong>${action}</strong> on <strong>${state.trigger.entity}</strong>
+      — <em>highlighted fields are editable by this rule</em>
+    </div>
+
+    ${showHeader ? `
+    <div class="xero-section-hd">Invoice header</div>
+    <div class="xero-inv-grid">
+      ${invField('Contact', 'Contact', 'Test Andrew')}
+      ${invField('Reference', 'Reference', 'INV-0001')}
+      ${invField('Tax Treatment', 'Tax Treatment', 'Tax exclusive')}
+      <div class="xero-inv-field disabled">
+        <div class="xero-field-label">Issue date</div>
+        <div class="xero-field-val">Jun 3, 2026</div>
+      </div>
+      <div class="xero-inv-field disabled">
+        <div class="xero-field-label">Due date</div>
+        <div class="xero-field-val">Jul 3, 2026</div>
+      </div>
+      <div class="xero-inv-field disabled">
+        <div class="xero-field-label">Currency</div>
+        <div class="xero-field-val">United States Dollar</div>
+      </div>
+    </div>` : ''}
+
+    <div class="xero-section-hd">Line items</div>
+    <div style="overflow-x:auto;padding:8px 16px 16px">
+      <table class="xero-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Item</th>
+            <th>Description</th>
+            <th style="text-align:right">Qty</th>
+            <th style="text-align:right">Price</th>
+            <th>Account</th>
+            <th>Tax rate</th>
+            <th>Category 1</th>
+            <th>Category 2</th>
+            <th style="text-align:right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:#9E9E9E;font-size:12px;padding:6px 8px">1</td>
+            ${lineCell('Line: Item', 'click to set')}
+            ${lineCell('Line: Description', 'click to set')}
+            <td><div class="xero-cell disabled" style="text-align:right">3</div></td>
+            <td><div class="xero-cell disabled" style="text-align:right">10.00</div></td>
+            ${lineCell('Line: Account', 'click to set')}
+            ${lineCell('Line: Tax Rate', 'click to set')}
+            ${lineCell('Line: TrackingCategory1', 'click to set')}
+            ${lineCell('Line: TrackingCategory2', 'click to set')}
+            <td><div class="xero-cell disabled" style="text-align:right">30.00</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:0 16px 12px;font-size:11px;color:#9E9E9E">
+      Greyed-out fields (Qty, Price, Amount, dates) cannot be set by a rule action.
+    </div>`;
 }
 
 function clearSidebar() {
