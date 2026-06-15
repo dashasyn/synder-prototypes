@@ -1389,6 +1389,7 @@
     .badge-auto { background: #EFF6FF; color: #1D4ED8; }
     .badge-manually { background: #F0FDF4; color: #166534; }
     .badge-ai { background: #F5F3FF; color: #6D28D9; }
+    .row-selected { background: #EFF6FF !important; }
     /* ─── AI MATCH MODAL TABLE ─── */
     .ai-match-pair-row { border-bottom: 1px solid var(--border-light); }
     .ai-match-pair-row:hover { background: var(--hover-row); }
@@ -1434,8 +1435,7 @@
 
 <!-- TABS -->
 <div class="tabs-bar">
-  <div class="tab" data-tab="matched" onclick="switchTab(this)">Matched <span class="tab-chip tab-chip-green" id="count-matched">0</span></div>
-  <div class="tab" data-tab="matched-manually" onclick="switchTab(this)">Custom matches <span class="tab-chip tab-chip-blue" id="count-matched-manually">0</span></div>
+  <div class="tab" data-tab="matched" onclick="switchTab(this)">Matched <span class="tab-chip tab-chip-blue" id="count-matched">0</span></div>
   <div class="tab" data-tab="discrepancy" onclick="switchTab(this)">Discrepancy <span class="tab-chip tab-chip-orange" id="count-discrepancy">0</span></div>
   <div class="tab active" data-tab="not-matched" onclick="switchTab(this)">Not matched <span class="tab-chip tab-chip-red" id="count-not-matched">50</span></div>
   <div class="tab" data-tab="ignored" onclick="switchTab(this)">Ignored <span class="tab-chip tab-chip-grey" id="count-ignored">0</span></div>
@@ -1443,12 +1443,22 @@
 
 <!-- TAB PANELS -->
 
-<!-- Matched (auto) -->
+<!-- Matched (unified) -->
 <div class="tab-panel" id="panel-matched">
   <div class="global-filter-bar">
     <div class="gf-field">
       <label class="gf-label">Search</label>
       <input class="gf-input" type="text" id="gf-search-matched" placeholder="Search…">
+    </div>
+    <div class="gf-field">
+      <label class="gf-label">Match type</label>
+      <select class="gf-input" id="gf-type-matched" style="width:140px" onchange="applyGlobalFilter('matched')">
+        <option value="">All types</option>
+        <option value="auto">Auto</option>
+        <option value="manual">Manual</option>
+        <option value="ai">AI</option>
+        <option value="je">Journal entry</option>
+      </select>
     </div>
     <div class="gf-field">
       <label class="gf-label">Date range</label>
@@ -1467,21 +1477,30 @@
       <button class="btn-reset" onclick="resetGlobalFilter('matched')">Reset filters</button>
     </div>
   </div>
+  <!-- Bulk action toolbar (shown when custom match rows are checked) -->
+  <div id="matched-bulk-toolbar" style="display:none;padding:8px 16px;background:#EFF6FF;border-bottom:1px solid #BFDBFE;display:none;align-items:center;gap:12px">
+    <span id="matched-bulk-count" style="font-size:13px;color:var(--text-sec)">0 selected</span>
+    <button class="btn btn-outlined" style="color:var(--red);border-color:#fca5a5;font-size:13px;padding:4px 12px" onclick="bulkUnmatch()">Unmatch</button>
+    <button class="btn btn-ghost" style="font-size:13px;padding:4px 10px" onclick="clearMatchedSelection()">Clear</button>
+  </div>
   <div class="matches-table-wrap">
     <table class="matches-table" id="matches-table-matched">
       <thead>
         <tr>
-          <th style="width:40px"></th>
+          <th style="width:40px">
+            <input type="checkbox" id="matched-select-all" onchange="toggleAllMatchedCustom(this.checked)" title="Select all custom matches">
+          </th>
           <th>Matching ID <span class="th-sort">↓</span></th>
           <th>Total amount <span class="th-sort">↓</span></th>
           <th>Date <span class="th-sort">↓</span></th>
           <th>Types</th>
           <th>Count</th>
-          <th class="variant-b-only" style="width:90px">Match type</th>
+          <th style="width:110px">Match type</th>
+          <th style="width:160px">Match by</th>
         </tr>
       </thead>
       <tbody id="tbody-matched-auto">
-        <tr><td colspan="6" class="no-results">No results found</td></tr>
+        <tr><td colspan="8" class="no-results">No results found</td></tr>
       </tbody>
     </table>
     <div class="matches-footer">
@@ -1497,70 +1516,6 @@
   </div>
 </div>
 
-<!-- Matched manually -->
-<div class="tab-panel" id="panel-matched-manually">
-  <div class="global-filter-bar">
-    <div class="gf-field">
-      <label class="gf-label">Search</label>
-      <input class="gf-input" type="text" id="gf-search-matched-manually" placeholder="Search…">
-    </div>
-    <div class="gf-field">
-      <label class="gf-label">Match type</label>
-      <select class="gf-input" id="gf-type-matched-manually" style="width:160px" onchange="applyGlobalFilter('matched-manually')">
-        <option value="">All types</option>
-        <option value="manual">Manual</option>
-        <option value="ai">AI</option>
-        <option value="je">Journal entry</option>
-      </select>
-    </div>
-    <div class="gf-field">
-      <label class="gf-label">Date range</label>
-      <div class="gf-date-row">
-        <input class="gf-date" type="text" placeholder="Start" readonly>
-        <span class="gf-dash">–</span>
-        <input class="gf-date" type="text" placeholder="End" readonly>
-      </div>
-    </div>
-    <div class="gf-field">
-      <label class="gf-label">Amount</label>
-      <input class="gf-input gf-input-amount" type="text" id="gf-amount-matched-manually" placeholder="Amount">
-    </div>
-    <div class="gf-actions">
-      <button class="btn-apply" onclick="applyGlobalFilter('matched-manually')">Apply</button>
-      <button class="btn-reset" onclick="resetGlobalFilter('matched-manually')">Reset filters</button>
-    </div>
-  </div>
-  <div class="matches-table-wrap">
-    <table class="matches-table" id="matches-table-matched-manually">
-      <thead>
-        <tr>
-          <th style="width:40px"></th>
-          <th>Matching ID <span class="th-sort">↓</span></th>
-          <th>Total amount <span class="th-sort">↓</span></th>
-          <th>Date <span class="th-sort">↓</span></th>
-          <th>Types</th>
-          <th style="text-align:right">Count</th>
-          <th style="width:110px">Match type</th>
-          <th style="width:160px">Match by</th>
-          <th style="width:90px"></th>
-        </tr>
-      </thead>
-      <tbody id="tbody-matched-manually">
-        <tr><td colspan="8" class="no-results">No results found</td></tr>
-      </tbody>
-    </table>
-    <div class="matches-footer">
-      <span class="rows-per-page">Rows per page: <select><option>25</option><option>50</option><option>100</option></select></span>
-      <span class="page-info" id="matched-manually-page-info">0–0 of 0</span>
-      <div class="pagination-btns">
-        <button class="page-btn">|◁</button>
-        <button class="page-btn">◀</button>
-        <button class="page-btn">▶</button>
-        <button class="page-btn">▷|</button>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- Discrepancy -->
 <div class="tab-panel" id="panel-discrepancy">
@@ -2233,41 +2188,41 @@ function resetFilters(side) {
 // ─── GLOBAL FILTERS (Matched / Matched manually / Ignored) ───────────────────
 
 const globalFilter = {
-  'matched':           { search: '', amount: '' },
-  'matched-manually':  { search: '', amount: '', type: '' },
-  'discrepancy':       { search: '', amount: '' },
-  'ignored':           { search: '', amount: '' },
+  'matched':     { search: '', amount: '', type: '' },
+  'discrepancy': { search: '', amount: '' },
+  'ignored':     { search: '', amount: '' },
 };
+
+// Tracks which custom-match IDs are selected in the unified Matched tab
+const matchedBulkSelected = new Set();
 
 function applyGlobalFilter(tab) {
   const s = document.getElementById('gf-search-' + tab);
   const a = document.getElementById('gf-amount-' + tab);
   globalFilter[tab].search = s ? s.value.trim() : '';
   globalFilter[tab].amount = a ? a.value.trim() : '';
-  if (tab === 'matched-manually') {
-    const t = document.getElementById('gf-type-matched-manually');
-    globalFilter[tab].type = t ? t.value : '';
+  if (tab === 'matched') {
+    const t = document.getElementById('gf-type-matched');
+    if (t) globalFilter[tab].type = t.value;
   }
-  if (tab === 'matched')          renderAutoMatched();
-  if (tab === 'matched-manually') renderManualMatches();
-  if (tab === 'discrepancy')      renderDiscrepancy();
-  if (tab === 'ignored')          renderIgnored();
+  if (tab === 'matched')     renderUnifiedMatched();
+  if (tab === 'discrepancy') renderDiscrepancy();
+  if (tab === 'ignored')     renderIgnored();
 }
 
 function resetGlobalFilter(tab) {
   globalFilter[tab].search = '';
   globalFilter[tab].amount = '';
-  if (tab === 'matched-manually') globalFilter[tab].type = '';
+  if (tab === 'matched') globalFilter[tab].type = '';
   const s = document.getElementById('gf-search-' + tab);
   const a = document.getElementById('gf-amount-' + tab);
   if (s) s.value = '';
   if (a) a.value = '';
-  const t = document.getElementById('gf-type-matched-manually');
+  const t = document.getElementById('gf-type-matched');
   if (t) t.value = '';
-  if (tab === 'matched')          renderAutoMatched();
-  if (tab === 'matched-manually') renderManualMatches();
-  if (tab === 'discrepancy')      renderDiscrepancy();
-  if (tab === 'ignored')          renderIgnored();
+  if (tab === 'matched')     renderUnifiedMatched();
+  if (tab === 'discrepancy') renderDiscrepancy();
+  if (tab === 'ignored')     renderIgnored();
 }
 
 // ─── RENDER ──────────────────────────────────────────────────────────────────
@@ -2410,69 +2365,158 @@ function renderAutoMatched() {
 function renderUnifiedMatched() {
   const tbody = document.getElementById('tbody-matched-auto');
   if (!tbody) return;
-  const f = globalFilter['matched'] || { search: '', amount: '' };
+  const f = globalFilter['matched'] || { search: '', amount: '', type: '' };
 
-  const autoRows = autoMatchedRecords.map(r => ({ ...r, matchType: 'auto' }));
-  const manualRows = manualMatches.map(m => {
+  const autoRows = autoMatchedRecords.map(r => ({ ...r, matchType: 'auto', isCustom: false, matchBy: '—' }));
+  const customRows = manualMatches.map(m => {
     const sRows = m.synderIds.map(id => synderRows.find(r => r.id === id)).filter(Boolean);
     const iRows = m.integrationIds.map(id => integrationRows.find(r => r.id === id)).filter(Boolean);
     const allR = [...sRows, ...iRows];
     const currency = sRows[0] ? sRows[0].currency : (iRows[0] ? iRows[0].currency : 'USD');
     const sym = currency === 'EUR' ? '€' : '$';
     const total = allR.reduce((s, r) => s + r.amount, 0);
+    const isJE = m.matchType === 'je';
     return {
       id: m.id,
       matchType: m.matchType || 'manual',
-      matchingId: 'MAN-' + String(m.seq).padStart(3, '0'),
+      isCustom: true,
+      matchingId: isJE ? (m.docNumber || ('JE-' + String(m.seq).padStart(3, '0'))) : ('MAN-' + String(m.seq).padStart(3, '0')),
       totalAmount: (total >= 0 ? '+' : '') + sym + Math.abs(total).toFixed(2) + ' ' + currency,
       date: m.createdAt,
       types: [...new Set(allR.map(r => r.type))].join(', '),
       count: String(allR.length),
+      matchBy: (m.matchType === 'ai' && m.aiRule) ? m.aiRule : '—',
       accountingRows: sRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display })),
       integrationRows: iRows.map(r => ({ primaryId: r.primaryId, secondaryId: r.secondaryId, date: r.date, type: r.type, amount: r.display })),
     };
   });
 
-  let rows = [...autoRows, ...manualRows];
+  let rows = [...autoRows, ...customRows];
+
+  // Apply type filter
+  if (f.type) {
+    rows = rows.filter(r => r.matchType === f.type);
+  }
   if (f.search) {
     const q = f.search.toLowerCase();
     rows = rows.filter(r => r.matchingId.toLowerCase().includes(q) || r.types.toLowerCase().includes(q) || r.totalAmount.toLowerCase().includes(q));
   }
 
   const chip = document.getElementById('count-matched');
-  if (chip) chip.textContent = rows.length;
+  if (chip) chip.textContent = autoMatchedRecords.length + manualMatches.length;
 
   if (rows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="no-results">No results found</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="no-results">No results found</td></tr>';
+    updateMatchedBulkToolbar();
     return;
   }
-
 
   function typeBadge(t) {
     if (t === 'auto') return '<span class="badge-match-type badge-auto">Auto</span>';
     if (t === 'ai')   return '<span class="badge-match-type badge-ai">AI</span>';
-    return '<span class="badge-match-type badge-manually">Manually</span>';
+    if (t === 'je')   return '<span class="badge-match-type badge-auto" style="background:#FEF3C7;color:#92400E">Journal entry</span>';
+    return '<span class="badge-match-type badge-manually">Manual</span>';
   }
 
-  tbody.innerHTML = rows.map(r => `
-    <tr class="mg-row" data-id="${r.id}" onclick="toggleMatchGroup('${r.id}')">
-      <td><span class="mg-chevron">▸</span></td>
+  tbody.innerHTML = rows.map(r => {
+    const isSelected = matchedBulkSelected.has(r.id);
+    const checkboxCell = r.isCustom
+      ? `<td onclick="event.stopPropagation()"><input type="checkbox" data-match-id="${r.id}" ${isSelected ? 'checked' : ''} onchange="handleMatchedCheckbox('${r.id}', this.checked)"></td>`
+      : `<td><input type="checkbox" disabled title="No actions available for this transaction." style="opacity:0.35;cursor:not-allowed"></td>`;
+    const detailColspan = 8;
+    const detailContent = r.accountingRows
+      ? `${subTable('Accounting rows', r.accountingRows)}<div class="mg-divider"></div>${subTable('Integration rows', r.integrationRows)}`
+      : '';
+    const detailId = r.isCustom ? `man-detail-${r.id}` : `detail-${r.id}`;
+    const toggleFn = r.isCustom ? `toggleManualMatchGroup('${r.id}')` : `toggleMatchGroup('${r.id}')`;
+    return `
+    <tr class="mg-row${isSelected ? ' row-selected' : ''}" data-id="${r.id}" onclick="${toggleFn}">
+      ${checkboxCell}
       <td class="td-id">${r.matchingId}</td>
       <td class="td-amount">${r.totalAmount}</td>
       <td class="td-date">${r.date}</td>
       <td class="td-type">${r.types}</td>
       <td style="color:var(--text-sec)">${r.count}</td>
       <td>${typeBadge(r.matchType)}</td>
+      <td style="color:var(--text-sec);font-size:13px">${r.matchBy}</td>
     </tr>
-    <tr class="mg-detail" id="detail-${r.id}" style="display:none">
-      <td colspan="7">
-        <div class="mg-split">
-          ${subTable('Accounting rows', r.accountingRows)}
-          <div class="mg-divider"></div>
-          ${subTable('Integration rows', r.integrationRows)}
-        </div>
+    <tr class="mg-detail" id="${detailId}" style="display:none">
+      <td colspan="${detailColspan}">
+        <div class="mg-split">${detailContent}</div>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
+
+  updateMatchedBulkToolbar();
+}
+
+function handleMatchedCheckbox(id, checked) {
+  if (checked) {
+    matchedBulkSelected.add(id);
+  } else {
+    matchedBulkSelected.delete(id);
+  }
+  updateMatchedBulkToolbar();
+  // Update row highlight
+  const row = document.querySelector(`#tbody-matched-auto tr[data-id="${id}"]`);
+  if (row) row.classList.toggle('row-selected', checked);
+}
+
+function toggleAllMatchedCustom(checked) {
+  // Only selects custom match rows currently visible
+  document.querySelectorAll('#tbody-matched-auto input[type="checkbox"]:not(:disabled)').forEach(cb => {
+    cb.checked = checked;
+    const id = cb.dataset.matchId;
+    if (id) {
+      if (checked) matchedBulkSelected.add(id);
+      else matchedBulkSelected.delete(id);
+      const row = document.querySelector(`#tbody-matched-auto tr[data-id="${id}"]`);
+      if (row) row.classList.toggle('row-selected', checked);
+    }
+  });
+  updateMatchedBulkToolbar();
+}
+
+function updateMatchedBulkToolbar() {
+  const toolbar = document.getElementById('matched-bulk-toolbar');
+  const countEl = document.getElementById('matched-bulk-count');
+  if (!toolbar) return;
+  const n = matchedBulkSelected.size;
+  if (n > 0) {
+    toolbar.style.display = 'flex';
+    if (countEl) countEl.textContent = n + (n === 1 ? ' selected' : ' selected');
+  } else {
+    toolbar.style.display = 'none';
+  }
+}
+
+function clearMatchedSelection() {
+  matchedBulkSelected.clear();
+  const selectAll = document.getElementById('matched-select-all');
+  if (selectAll) selectAll.checked = false;
+  renderUnifiedMatched();
+}
+
+function bulkUnmatch() {
+  const ids = [...matchedBulkSelected];
+  let restored = 0;
+  ids.forEach(matchId => {
+    const idx = manualMatches.findIndex(m => m.id === matchId);
+    if (idx === -1) return;
+    const match = manualMatches[idx];
+    match.synderIds.forEach(id => {
+      if (!ignored.synder.has(id)) { removed.synder.delete(id); restored++; }
+      selected.synder.delete(id);
+    });
+    match.integrationIds.forEach(id => {
+      if (!ignored.integration.has(id)) { removed.integration.delete(id); restored++; }
+      selected.integration.delete(id);
+    });
+    manualMatches.splice(idx, 1);
+  });
+  matchedBulkSelected.clear();
+  renderAll();
+  showToast(`${ids.length} match${ids.length === 1 ? '' : 'es'} removed. ${restored} rows returned to Not matched.`);
 }
 
 function typeBadgeHTML(t) {
@@ -2733,9 +2777,8 @@ function renderAll() {
   renderTable('synder', synderRows);
   renderTable('integration', integrationRows);
   updateCountLabels();
-  renderManualMatches();
   renderIgnored();
-  renderAutoMatched();
+  renderUnifiedMatched();
   renderDiscrepancy();
   updateTabCounter();
   updateToolbar('synder');
@@ -2764,10 +2807,9 @@ function updateTabCounter() {
   const notMatched   = (synderRows.length - removed.synder.size) + (integrationRows.length - removed.integration.size);
   const ignoredTotal = ignored.synder.size + ignored.integration.size + preIgnoredRows.length;
   setText('count-not-matched',       notMatched);
-  setText('count-matched-manually',  manualMatches.length);
   setText('count-ignored',           ignoredTotal);
   setText('count-discrepancy',       discrepancyRecords.length);
-  setText('count-matched',           autoMatchedRecords.length);
+  setText('count-matched',           autoMatchedRecords.length + manualMatches.length);
   setText('recon-not-matched-count', notMatched);
   setText('pl-count',                journalEntries.length);
 }
@@ -2957,7 +2999,7 @@ function handleMatchClick(side) {
     clearSelection('integration');
 
     const total = sSel.length + iSel.length;
-    showToast('Successfully matched. Transactions were moved to Custom matches tab.');
+    showToast('Successfully matched. Transactions were moved to Matched tab.');
   }, 800);
 }
 
@@ -3553,7 +3595,7 @@ async function runAIMatching() {
   updateAIBannerCount();
   progressWrap.classList.remove('visible');
   progressBar.style.width = '0%';
-  showToast('Successfully matched. Transactions were moved to Custom matches tab.');
+  showToast('Successfully matched. Transactions were moved to Matched tab.');
 }
 
 function applyAIMatches() { runAIMatching(); } // legacy shim
