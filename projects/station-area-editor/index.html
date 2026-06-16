@@ -100,18 +100,19 @@
     .placeholder-panel { padding: 56px; text-align: center; color: #a0aec0; font-size: 14px; }
 
     /* ── Notification zone ── */
-    .dir-tabs {
-      display: flex; border: 1px solid #e2e8f0; border-radius: 4px;
-      overflow: hidden; width: fit-content; margin-bottom: 14px;
-    }
-    .dir-tab {
-      padding: 7px 20px; font-size: 13px; font-weight: 500;
+    .zone-selector { display: flex; gap: 8px; margin-bottom: 14px; }
+    .zone-btn {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 16px; font-size: 13px; font-weight: 500;
       cursor: pointer; background: white; color: #718096;
-      border-right: 1px solid #e2e8f0;
+      border: 1px solid #e2e8f0; border-radius: 4px;
+      transition: all 0.15s;
     }
-    .dir-tab:last-child { border-right: none; }
-    .dir-tab:hover { background: #f7f9fc; }
-    .dir-tab.active { background: #0053CC; color: white; }
+    .zone-btn:hover { background: #f7f9fc; color: #4a5568; }
+    .zone-btn.active { background: #f7f9fc; color: #1a202c; border-color: #a0aec0; font-weight: 600; }
+    .zdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .zdot-big   { background: #d97706; }
+    .zdot-small { background: #0053CC; }
 
     /* Toolbar */
     .map-toolbar {
@@ -211,7 +212,9 @@
     .legend-dot { width: 12px; height: 12px; border-radius: 50%; background: #0053CC; border: 2px solid white; box-shadow: 0 0 0 2px #0053CC; flex-shrink: 0; }
     .legend-vtx { width: 12px; height: 12px; border-radius: 50%; background: white; border: 2.5px solid #0053CC; flex-shrink: 0; }
     .legend-mid { width: 9px; height: 9px; border-radius: 50%; background: #94a3b8; flex-shrink: 0; }
-    .legend-zone { width: 20px; height: 12px; border-radius: 2px; background: rgba(0,83,204,0.2); border: 2px solid #0053CC; flex-shrink: 0; }
+    .legend-zone { width: 20px; height: 12px; border-radius: 2px; flex-shrink: 0; border: 2px solid; }
+    .legend-zone.z-big   { background: rgba(217,119,6,0.15); border-color: #d97706; }
+    .legend-zone.z-small { background: rgba(0,83,204,0.18);  border-color: #0053CC; }
   </style>
 </head>
 <body>
@@ -311,9 +314,13 @@
     <!-- NOTIFICATION ZONE panel -->
     <div id="panel-notif" class="tab-panel active">
 
-      <div class="dir-tabs">
-        <div class="dir-tab active" id="dir-haifa" onclick="switchDir('haifa')">To Haifa</div>
-        <div class="dir-tab" id="dir-beer" onclick="switchDir('beer')">To Beer Sheva</div>
+      <div class="zone-selector">
+        <button class="zone-btn active" id="zone-big"   onclick="switchZone('big')">
+          <span class="zdot zdot-big"></span> Outer zone · 1000 m
+        </button>
+        <button class="zone-btn" id="zone-small" onclick="switchZone('small')">
+          <span class="zdot zdot-small"></span> Inner zone · 200 m
+        </button>
       </div>
 
       <div class="map-toolbar">
@@ -336,9 +343,10 @@
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:10px;">
         <div class="map-legend">
           <div class="legend-item"><div class="legend-dot"></div> Station</div>
-          <div class="legend-item"><div class="legend-zone"></div> Notification zone</div>
+          <div class="legend-item"><div class="legend-zone z-big"></div> Outer zone (1000 m)</div>
+          <div class="legend-item"><div class="legend-zone z-small"></div> Inner zone (200 m)</div>
           <div class="legend-item"><div class="legend-vtx"></div> Vertex — drag to reshape</div>
-          <div class="legend-item"><div class="legend-mid"></div> Midpoint — click to add vertex</div>
+          <div class="legend-item"><div class="legend-mid"></div> Midpoint — click to add</div>
         </div>
         <div class="map-tip">Click vertex to select • <kbd>Del</kbd> to remove • <kbd>Ctrl+Z</kbd> undo</div>
       </div>
@@ -364,52 +372,44 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-// ─── Data ───────────────────────────────────────────────────────────────────
+// ─── Zone config ─────────────────────────────────────────────────────────────
 
 const STATION_LATLNG = [32.0697, 34.7800];
 
-// Pre-generated asymmetric defaults.
-// "To Haifa" → train travels north → came from south → 500m south, 100m north of station.
-// "To Beer Sheva" → train travels south → came from north → 500m north, 100m south.
-const DEFAULTS = {
-  haifa: [
-    [32.0706, 34.7796], [32.0706, 34.7804],
-    [32.0700, 34.7813], [32.0685, 34.7819],
-    [32.0668, 34.7817], [32.0657, 34.7808],
-    [32.0652, 34.7800], [32.0657, 34.7792],
-    [32.0668, 34.7783], [32.0685, 34.7781],
-    [32.0700, 34.7787]
-  ],
-  beer: [
-    [32.0742, 34.7796], [32.0742, 34.7804],
-    [32.0730, 34.7815], [32.0715, 34.7819],
-    [32.0702, 34.7813], [32.0693, 34.7804],
-    [32.0689, 34.7800], [32.0693, 34.7796],
-    [32.0702, 34.7787], [32.0715, 34.7781],
-    [32.0730, 34.7785]
-  ]
+const ZONE_CFG = {
+  big:   { radius: 1000, color: '#d97706', fillColor: '#f59e0b', fillOpacity: 0.12 },
+  small: { radius: 200,  color: '#0053CC', fillColor: '#0053CC', fillOpacity: 0.22 }
 };
+
+function makeHexagon(lat, lng, radiusM) {
+  const rLat = radiusM / 111000;
+  const rLng = radiusM / (111000 * Math.cos(lat * Math.PI / 180));
+  return Array.from({ length: 6 }, (_, i) => {
+    const a = (90 - 60 * i) * Math.PI / 180;
+    return [lat + rLat * Math.sin(a), lng + rLng * Math.cos(a)];
+  });
+}
 
 // ─── State ───────────────────────────────────────────────────────────────────
 
-const dirs = {
-  haifa: { points: [], history: [], future: [] },
-  beer:  { points: [], history: [], future: [] }
+const zones = {
+  big:   { points: [], history: [], future: [] },
+  small: { points: [], history: [], future: [] }
 };
-let currentDir = 'haifa';
-let selectedVtx = null; // index or null
+let activeZone = 'big';
+let selectedVtx = null;
 
 // ─── Map layer refs ───────────────────────────────────────────────────────────
 
 let map, stationCircle;
-let polyLayer = null;
+let zonePoly = { big: null, small: null };
 let vtxMarkers = [];
 let midMarkers = [];
 
 // ─── Icons ───────────────────────────────────────────────────────────────────
 
 function makeVtxIcon(selected) {
-  const border = selected ? '#c53030' : '#0053CC';
+  const border = selected ? '#c53030' : ZONE_CFG[activeZone].color;
   const bg     = selected ? '#fff5f5' : '#ffffff';
   return L.divIcon({
     className: '',
@@ -431,7 +431,7 @@ function makeMidIcon() {
 // ─── Init ────────────────────────────────────────────────────────────────────
 
 function initMap() {
-  map = L.map('map', { zoomControl: true }).setView(STATION_LATLNG, 15);
+  map = L.map('map', { zoomControl: true }).setView(STATION_LATLNG, 14);
 
   L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
     attribution: '© OpenStreetMap contributors © CartoDB',
@@ -454,40 +454,42 @@ function initMap() {
 // ─── Render ──────────────────────────────────────────────────────────────────
 
 function render() {
-  const d   = dirs[currentDir];
-  const pts = d.points;
-
-  // Clear old layers
-  if (polyLayer) { map.removeLayer(polyLayer); polyLayer = null; }
+  // Clear interactive handles
   vtxMarkers.forEach(m => map.removeLayer(m)); vtxMarkers = [];
   midMarkers.forEach(m => map.removeLayer(m)); midMarkers = [];
 
-  // Empty state
+  // Draw inactive zone first (sits behind), then active zone on top
+  const inactive = activeZone === 'big' ? 'small' : 'big';
+  [inactive, activeZone].forEach(key => {
+    if (zonePoly[key]) { map.removeLayer(zonePoly[key]); zonePoly[key] = null; }
+    const pts = zones[key].points;
+    if (!pts.length) return;
+    const cfg = ZONE_CFG[key];
+    const isActive = key === activeZone;
+    zonePoly[key] = L.polygon(pts, {
+      color: cfg.color,
+      weight: isActive ? 2.5 : 1.5,
+      fillColor: cfg.fillColor,
+      fillOpacity: isActive ? cfg.fillOpacity : cfg.fillOpacity * 0.45,
+      dashArray: isActive ? null : '6 4',
+      interactive: false
+    }).addTo(map);
+  });
+
+  // Handles only on active zone
+  const pts = zones[activeZone].points;
+  if (pts.length > 0) {
+    buildMidMarkers();
+    buildVtxMarkers();
+  }
+
   document.getElementById('empty-msg').style.display = pts.length === 0 ? 'block' : 'none';
+  if (stationCircle) stationCircle.bringToFront();
+  updateToolbar();
+}
 
-  // Toolbar state
-  document.getElementById('btn-clear').disabled = pts.length === 0;
-  document.getElementById('btn-undo').disabled  = d.history.length === 0;
-  document.getElementById('btn-redo').disabled  = d.future.length  === 0;
-
-  const hasSel = selectedVtx !== null && pts.length > 0;
-  document.getElementById('btn-del-vtx').style.display = hasSel ? 'flex' : 'none';
-  document.getElementById('sel-sep').style.display     = hasSel ? 'block' : 'none';
-  document.getElementById('vtx-count').textContent     = pts.length > 0 ? `${pts.length} vertices` : '';
-
-  if (pts.length === 0) return;
-
-  // Polygon fill
-  polyLayer = L.polygon(pts, {
-    color: '#0053CC', weight: 2,
-    fillColor: '#0053CC', fillOpacity: 0.22,
-    interactive: false
-  }).addTo(map);
-
-  // Midpoint markers
-  buildMidMarkers();
-
-  // Vertex markers
+function buildVtxMarkers() {
+  const pts = zones[activeZone].points;
   pts.forEach((pt, i) => {
     const m = L.marker(pt, {
       icon: makeVtxIcon(selectedVtx === i),
@@ -510,9 +512,8 @@ function render() {
 
     m.on('drag', e => {
       const ll = e.target.getLatLng();
-      dirs[currentDir].points[i] = [ll.lat, ll.lng];
-      if (polyLayer) polyLayer.setLatLngs(dirs[currentDir].points);
-      // Refresh midpoints live
+      zones[activeZone].points[i] = [ll.lat, ll.lng];
+      if (zonePoly[activeZone]) zonePoly[activeZone].setLatLngs(zones[activeZone].points);
       midMarkers.forEach(mm => map.removeLayer(mm));
       midMarkers = [];
       buildMidMarkers();
@@ -520,13 +521,10 @@ function render() {
 
     vtxMarkers.push(m);
   });
-
-  // Keep station on top
-  if (stationCircle) stationCircle.bringToFront();
 }
 
 function buildMidMarkers() {
-  const pts = dirs[currentDir].points;
+  const pts = zones[activeZone].points;
   pts.forEach((pt, j) => {
     const next = pts[(j + 1) % pts.length];
     const mLat = (pt[0] + next[0]) / 2;
@@ -540,7 +538,7 @@ function buildMidMarkers() {
     mm.on('click', e => {
       L.DomEvent.stop(e);
       saveHistory();
-      dirs[currentDir].points.splice(j + 1, 0, [mLat, mLng]);
+      zones[activeZone].points.splice(j + 1, 0, [mLat, mLng]);
       selectedVtx = j + 1;
       render();
     });
@@ -554,7 +552,7 @@ function refreshVtxIcons() {
 }
 
 function updateToolbar() {
-  const d = dirs[currentDir];
+  const d = zones[activeZone];
   document.getElementById('btn-clear').disabled = d.points.length === 0;
   document.getElementById('btn-undo').disabled  = d.history.length === 0;
   document.getElementById('btn-redo').disabled  = d.future.length  === 0;
@@ -567,7 +565,7 @@ function updateToolbar() {
 // ─── History ─────────────────────────────────────────────────────────────────
 
 function saveHistory() {
-  const d = dirs[currentDir];
+  const d = zones[activeZone];
   d.history.push(JSON.parse(JSON.stringify(d.points)));
   d.future = [];
 }
@@ -576,24 +574,25 @@ function saveHistory() {
 
 function generateDefault() {
   saveHistory();
-  dirs[currentDir].points = JSON.parse(JSON.stringify(DEFAULTS[currentDir]));
+  const cfg = ZONE_CFG[activeZone];
+  zones[activeZone].points = makeHexagon(STATION_LATLNG[0], STATION_LATLNG[1], cfg.radius);
   selectedVtx = null;
   render();
-  if (polyLayer) map.fitBounds(polyLayer.getBounds(), { padding: [50, 50] });
+  if (zonePoly[activeZone]) map.fitBounds(zonePoly[activeZone].getBounds(), { padding: [50, 50] });
 }
 
 function clearShape() {
-  if (!dirs[currentDir].points.length) return;
+  if (!zones[activeZone].points.length) return;
   saveHistory();
-  dirs[currentDir].points = [];
+  zones[activeZone].points = [];
   selectedVtx = null;
   render();
 }
 
 function deleteSelected() {
   if (selectedVtx === null) return;
-  const pts = dirs[currentDir].points;
-  if (pts.length <= 3) return; // minimum 3 vertices for a polygon
+  const pts = zones[activeZone].points;
+  if (pts.length <= 3) return;
   saveHistory();
   pts.splice(selectedVtx, 1);
   selectedVtx = null;
@@ -601,7 +600,7 @@ function deleteSelected() {
 }
 
 function doUndo() {
-  const d = dirs[currentDir];
+  const d = zones[activeZone];
   if (!d.history.length) return;
   d.future.push(JSON.parse(JSON.stringify(d.points)));
   d.points = d.history.pop();
@@ -610,7 +609,7 @@ function doUndo() {
 }
 
 function doRedo() {
-  const d = dirs[currentDir];
+  const d = zones[activeZone];
   if (!d.future.length) return;
   d.history.push(JSON.parse(JSON.stringify(d.points)));
   d.points = d.future.pop();
@@ -618,23 +617,23 @@ function doRedo() {
   render();
 }
 
-// ─── Direction / Tab switching ────────────────────────────────────────────────
+// ─── Zone / Tab switching ─────────────────────────────────────────────────────
 
-function switchDir(dir) {
-  currentDir = dir;
+function switchZone(zone) {
+  activeZone = zone;
   selectedVtx = null;
-  document.getElementById('dir-haifa').className = 'dir-tab' + (dir === 'haifa' ? ' active' : '');
-  document.getElementById('dir-beer').className  = 'dir-tab' + (dir === 'beer'  ? ' active' : '');
+  document.getElementById('zone-big').className   = 'zone-btn' + (zone === 'big'   ? ' active' : '');
+  document.getElementById('zone-small').className = 'zone-btn' + (zone === 'small' ? ' active' : '');
   render();
 }
 
 function switchTab(tab) {
-  const map = { displays: 'panel-displays', sound: 'panel-sound', tracks: 'panel-tracks', notif: 'panel-notif' };
+  const panels = { displays: 'panel-displays', sound: 'panel-sound', tracks: 'panel-tracks', notif: 'panel-notif' };
   document.querySelectorAll('.tab').forEach((el, i) => {
     const names = ['displays', 'sound', 'tracks', 'notif'];
     el.className = 'tab' + (names[i] === tab ? ' active' : '');
   });
-  Object.entries(map).forEach(([k, id]) => {
+  Object.entries(panels).forEach(([k, id]) => {
     document.getElementById(id).className = 'tab-panel' + (k === tab ? ' active' : '');
   });
   if (tab === 'notif' && window._map) window._map.invalidateSize();
@@ -681,30 +680,20 @@ function renderTracks() {
   }
   empty.style.display = 'none';
 
-  const used = usedSystems();
+  addBtn.disabled = false;
 
   trackMappings.forEach((mapping, idx) => {
     const row = document.createElement('div');
     row.className = 'track-row';
-
-    // Build options: all backend tracks, disable those already used in OTHER rows
-    const sorted = [...BACKEND_TRACKS].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
-  const opts = sorted.map(t => {
-      const isUsedElsewhere = used.includes(t) && t !== mapping.system;
-      return `<option value="${t}" ${t === mapping.system ? 'selected' : ''} ${isUsedElsewhere ? 'disabled' : ''}>${t}</option>`;
-    }).join('');
-
     row.innerHTML = `
       <div class="track-field">
-        <label>Operating track number <span class="req">*</span></label>
-        <select onchange="updateTrackSystem(${idx}, this.value)">
-          <option value="" ${!mapping.system ? 'selected' : ''} disabled>Select backend track…</option>
-          ${opts}
-        </select>
+        <label>System track <span class="req">*</span></label>
+        <input type="text" value="${mapping.system}" placeholder="e.g. Platform-YUY-87"
+          oninput="updateTrackSystem(${idx}, this.value)" />
       </div>
       <span class="track-arrow">→</span>
       <div class="track-field">
-        <label>Custom track number <span class="req">*</span></label>
+        <label>Custom name <span class="req">*</span></label>
         <input type="text" value="${mapping.display}" placeholder="e.g. Platform 1"
           oninput="updateTrackDisplay(${idx}, this.value)" />
       </div>
@@ -712,18 +701,14 @@ function renderTracks() {
     `;
     list.appendChild(row);
   });
-
-  // Disable add button when all backend tracks are mapped
-  addBtn.disabled = used.length >= BACKEND_TRACKS.length;
 }
 
 function addTrack() {
   trackMappings.push({ system: '', display: '' });
   renderTracks();
-  // Focus the new row's select
   const rows = document.querySelectorAll('.track-row');
-  const lastSelect = rows[rows.length - 1]?.querySelector('select');
-  if (lastSelect) lastSelect.focus();
+  const lastInput = rows[rows.length - 1]?.querySelector('input');
+  if (lastInput) lastInput.focus();
 }
 
 function deleteTrack(idx) {
@@ -733,7 +718,6 @@ function deleteTrack(idx) {
 
 function updateTrackSystem(idx, val) {
   trackMappings[idx].system = val;
-  renderTracks(); // re-render to update disabled states across all rows
 }
 
 function updateTrackDisplay(idx, val) {
