@@ -168,6 +168,13 @@
       color: #0053CC;
     }
 
+    /* Shortcut option — visually separated */
+    .option-shortcut {
+      border-style: dashed;
+      color: #4A6FA5;
+    }
+    .option-shortcut .option-label { color: #4A6FA5; font-style: italic; }
+
     /* ── Phone fields ─────────────────────────────────── */
     .phone-fields {
       background: #F7F8FA;
@@ -422,10 +429,14 @@
           <div class="radio-dot"><div class="radio-inner"></div></div>
           <div class="option-text"><span class="option-label">Not sure yet</span></div>
         </div>
+        <div class="option-card option-shortcut" data-value="shortcut" onclick="selectOption(1,'shortcut')">
+          <div class="radio-dot"><div class="radio-inner"></div></div>
+          <div class="option-text"><span class="option-label">Let's just have an activation session — I'll tell you everything there</span></div>
+        </div>
       </div>
       <div class="wizard-footer">
         <button class="btn-back" id="back1"></button>
-        <button class="btn-primary" id="continue1" disabled onclick="goStep(2)">Continue</button>
+        <button class="btn-primary" id="continue1" disabled onclick="continueStep(1)">Continue</button>
       </div>
     </div>
 
@@ -448,12 +459,16 @@
           <div class="radio-dot"><div class="radio-inner"></div></div>
           <div class="option-text"><span class="option-label">This week — it's urgent</span></div>
         </div>
+        <div class="option-card option-shortcut" data-value="shortcut" onclick="selectOption(2,'shortcut')">
+          <div class="radio-dot"><div class="radio-inner"></div></div>
+          <div class="option-text"><span class="option-label">Let's just have an activation session — I'll tell you everything there</span></div>
+        </div>
       </div>
       <div class="wizard-footer">
         <button class="btn-back visible" id="back2" onclick="goStep(1)">
           <span class="material-icons-round">arrow_back</span> Back
         </button>
-        <button class="btn-primary" id="continue2" disabled onclick="goStep(3)">Continue</button>
+        <button class="btn-primary" id="continue2" disabled onclick="continueStep(2)">Continue</button>
       </div>
     </div>
 
@@ -680,6 +695,18 @@
     showStep(n);
   }
 
+  // Continue button handler — checks for shortcut selection
+  function continueStep(step) {
+    const answer = state.answers[`q${step}`];
+    if (answer === 'shortcut') {
+      // Open booking URL in new tab, then show success page
+      window.open(BOOKING_URL + '&type=shortcut', '_blank');
+      showSuccessPage('shortcut');
+    } else {
+      goStep(step + 1);
+    }
+  }
+
   // ── Selection ─────────────────────────────────────────
   function selectOption(step, val) {
     const opts = document.querySelectorAll(`#opts${step} .option-card`);
@@ -724,7 +751,6 @@
 
   // ── Submit ────────────────────────────────────────────
   function submitWizard() {
-    // Validate phone if selected
     if (state.answers.q3 === 'phone') {
       const phone = document.getElementById('phoneNumber').value.trim();
       if (!phone) {
@@ -736,36 +762,35 @@
       state.time = document.getElementById('preferredTime').value;
       state.tz = document.getElementById('timezone').value;
     }
+    if (state.answers.q3 === 'zoom') {
+      window.open(BOOKING_URL + '&type=zoom', '_blank');
+    }
+    showSuccessPage(state.answers.q3);
+  }
 
-    // Build success page
-    const q3 = state.answers.q3;
+  function showSuccessPage(path) {
     let subtitle = '';
     let blockText = '';
 
-    if (q3 === 'zoom') {
+    if (path === 'shortcut' || path === 'zoom') {
       subtitle = 'Your Synder specialist will see you on the call. Talk soon.';
       blockText = 'Your Zoom call is all set — your Synder specialist will see you there. Talk soon.';
-      // Open booking in new tab
-      window.open(BOOKING_URL + '&type=zoom', '_blank');
-    } else if (q3 === 'phone') {
+    } else if (path === 'phone') {
       const phone = state.phone || 'your number';
-      const time = state.time ? ` ${document.getElementById('preferredTime').options[document.getElementById('preferredTime').selectedIndex].text}` : '';
-      const tz = state.tz || '';
+      const timeEl = document.getElementById('preferredTime');
+      const time = timeEl.selectedIndex > 0 ? ` ${timeEl.options[timeEl.selectedIndex].text}` : '';
+      const tz = state.tz ? ' ' + state.tz.split('/').pop().replace(/_/g,' ') : '';
       subtitle = `We'll give you a call at ${phone}.`;
-      blockText = `We'll call you at <strong>${phone}</strong>, aiming for<strong>${time}</strong>${tz ? ' ' + tz.split('/').pop().replace('_',' ') : ''}. We'll do our best to fit that window.`;
-    } else if (q3 === 'email') {
+      blockText = `We'll call you at <strong>${phone}</strong>, aiming for<strong>${time}</strong>${tz}. We'll do our best to fit that window.`;
+    } else if (path === 'email') {
       subtitle = 'Expect a personal email in the next few hours.';
       blockText = 'Expect a personal email at <strong>demo@example.com</strong> in the next few hours.';
     }
 
     document.getElementById('successSubtitle').textContent = subtitle;
     document.getElementById('contactBlockText').innerHTML = blockText;
-
-    // Switch views
     document.getElementById('wizardSteps').style.display = 'none';
     document.getElementById('successPage').classList.add('active');
-
-    // Mark resolved in storage
     state.resolved = true;
     save();
   }
