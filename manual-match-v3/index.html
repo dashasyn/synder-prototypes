@@ -1403,7 +1403,7 @@
 <!-- TOP NAV -->
 <nav class="top-nav">
   <span class="top-nav-title">Reconciliation results</span>
-  <button class="btn btn-outlined" onclick="alert('Refreshing data...')">
+  <button class="btn btn-outlined" title="Reload reconciliation data" onclick="showToast('Data refreshed.')">
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
     Refresh data
   </button>
@@ -1421,11 +1421,11 @@
       <div class="recon-subtitle">mzkt.by (Stripe) / Jan 1–31, 2026 · <span id="recon-not-matched-count">50</span> not matched</div>
     </div>
     <div class="recon-actions">
-      <button class="btn btn-ghost" id="btn-process-log" onclick="openProcessLog()">
+      <button class="btn btn-ghost" id="btn-process-log" title="View the step-by-step import and matching log" onclick="openProcessLog()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
         Process log
       </button>
-      <button class="btn btn-outlined" onclick="alert('Export options coming soon')">
+      <button class="btn btn-outlined" title="Export reconciliation results to CSV or PDF" onclick="alert('Export options coming soon')">
         Export
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
@@ -1488,8 +1488,8 @@
   <!-- Bulk action toolbar (shown when custom match rows are checked) -->
   <div id="matched-bulk-toolbar" style="display:none;padding:8px 16px;background:#EFF6FF;border-bottom:1px solid #BFDBFE;display:none;align-items:center;gap:12px">
     <span id="matched-bulk-count" style="font-size:13px;color:var(--text-sec)">0 selected</span>
-    <button class="btn btn-outlined" style="color:var(--red);border-color:#fca5a5;font-size:13px;padding:4px 12px" onclick="bulkUnmatch()">Unmatch</button>
-    <button class="btn btn-ghost" style="font-size:13px;padding:4px 10px" onclick="clearMatchedSelection()">Clear</button>
+    <button class="btn btn-outlined" title="Remove the match and return transactions to Missing source" style="color:var(--red);border-color:#fca5a5;font-size:13px;padding:4px 12px" onclick="bulkUnmatch()">Unmatch</button>
+    <button class="btn btn-ghost" title="Deselect all" style="font-size:13px;padding:4px 10px" onclick="clearMatchedSelection()">Clear</button>
   </div>
   <div class="matches-table-wrap">
     <table class="matches-table" id="matches-table-matched">
@@ -2636,8 +2636,8 @@ function renderManualMatches() {
 function renderIgnored() {
   const list = document.getElementById('ignored-list');
   const sessionAll = [];
-  synderRows.forEach(r => { if (ignored.synder.has(r.id)) sessionAll.push({ ...r, secondaryId: r.secondaryId || '—', session: true }); });
-  integrationRows.forEach(r => { if (ignored.integration.has(r.id)) sessionAll.push({ ...r, secondaryId: r.secondaryId || '—', session: true }); });
+  synderRows.forEach(r => { if (ignored.synder.has(r.id)) sessionAll.push({ ...r, source: 'synder', secondaryId: r.secondaryId || '—', session: true }); });
+  integrationRows.forEach(r => { if (ignored.integration.has(r.id)) sessionAll.push({ ...r, source: 'integration', secondaryId: r.secondaryId || '—', session: true }); });
 
   const f = globalFilter['ignored'] || { search: '', amount: '' };
   const q = (f.search || '').toLowerCase();
@@ -2689,10 +2689,7 @@ function renderIgnored() {
             <td class="td-type">${r.type}</td>
             <td class="td-amount ${r.sign === '-' ? 'amount-negative' : 'amount-positive'}" style="text-align:right">${r.display}</td>
             <td style="text-align:center"><span class="info-icon">ⓘ</span></td>
-            <td style="text-align:right">${r.session
-              ? `<a class="disc-ignore-link" href="#" onclick="event.preventDefault();restoreIgnored('${r.source}','${r.id}')">Unignore</a>`
-              : `<a class="disc-ignore-link" href="#" onclick="event.preventDefault()">Unignore</a>`
-            }</td>
+            <td style="text-align:right"><a class="disc-ignore-link" href="#" onclick="event.preventDefault();restoreIgnored('${r.source}','${r.id}')">Unignore</a></td>
           </tr>`).join('')}
         </tbody>
       </table>
@@ -2879,14 +2876,13 @@ function toggleAll(side, checked) {
   const rows = side === 'synder' ? synderRows : integrationRows;
   rows.forEach(row => {
     if (removed[side].has(row.id)) return;
+    const tr = document.getElementById('row-' + row.id);
+    if (!tr) return; // skip filtered-out rows — not in DOM
     if (checked) selected[side].add(row.id);
     else         selected[side].delete(row.id);
-    const tr = document.getElementById('row-' + row.id);
-    if (tr) {
-      tr.classList.toggle('selected', checked);
-      const cb = tr.querySelector('input[type="checkbox"]');
-      if (cb) cb.checked = checked;
-    }
+    tr.classList.toggle('selected', checked);
+    const cb = tr.querySelector('input[type="checkbox"]');
+    if (cb) cb.checked = checked;
   });
   updateToolbar(side);
 }
@@ -3060,19 +3056,25 @@ function unmatch(matchId, thenIgnore) {
   const idx = manualMatches.findIndex(m => m.id === matchId);
   if (idx === -1) return;
   const match = manualMatches[idx];
-  let restored = 0;
   match.synderIds.forEach(id => {
-    if (!ignored.synder.has(id)) { removed.synder.delete(id); restored++; }
+    removed.synder.delete(id);
+    if (thenIgnore) { removed.synder.add(id); ignored.synder.add(id); }
     selected.synder.delete(id);
   });
   match.integrationIds.forEach(id => {
-    if (!ignored.integration.has(id)) { removed.integration.delete(id); restored++; }
+    removed.integration.delete(id);
+    if (thenIgnore) { removed.integration.add(id); ignored.integration.add(id); }
     selected.integration.delete(id);
   });
   manualMatches.splice(idx, 1);
   matchedBulkSelected.delete(matchId);
   renderAll();
-  showToast('Successfully unmatched. Transactions were moved to Missing source tab.');
+  updateAIBannerCount();
+  if (thenIgnore) {
+    showToast('Successfully ignored. Transactions were moved to Ignored tab.');
+  } else {
+    showToast('Successfully unmatched. Transactions were moved to Missing source tab.');
+  }
 }
 
 // ─── IGNORE ──────────────────────────────────────────────────────────────────
@@ -3105,6 +3107,7 @@ function restoreIgnored(side, id) {
   ignored[side].delete(id);
   renderAll();
   updateMatchConsole();
+  showToast('Successfully unignored. Transactions returned to Missing source.');
 }
 
 // ─── MODALS & TOASTS ─────────────────────────────────────────────────────────
