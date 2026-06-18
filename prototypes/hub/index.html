@@ -43,6 +43,37 @@
   }
   .proto-card .comment-count.zero { display: none; }
 
+  .proto-card .delete-proto-btn {
+    position: absolute; bottom: 8px; right: 8px;
+    background: none; border: 1px solid transparent; border-radius: 5px;
+    color: #6b7294; font-size: 13px; cursor: pointer;
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.15s, border-color 0.15s, color 0.15s;
+    line-height: 1;
+  }
+  .proto-card:hover .delete-proto-btn { opacity: 1; }
+  .proto-card .delete-proto-btn:hover { border-color: var(--danger); color: var(--danger); background: rgba(239,68,68,0.08); }
+
+  .proto-card .delete-confirm {
+    position: absolute; inset: 0; border-radius: 10px;
+    background: rgba(15,14,30,0.92); display: none;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 8px; padding: 10px;
+  }
+  .proto-card .delete-confirm.visible { display: flex; }
+  .proto-card .delete-confirm p { font-size: 11px; color: #e0e1ec; text-align: center; line-height: 1.4; }
+  .proto-card .delete-confirm .confirm-btns { display: flex; gap: 6px; }
+  .proto-card .delete-confirm .confirm-btns button {
+    font-size: 11px; padding: 4px 10px; border-radius: 5px; cursor: pointer; border: 1px solid;
+  }
+  .proto-card .delete-confirm .confirm-yes { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .proto-card .delete-confirm .confirm-yes:hover { background: #dc2626; }
+  .proto-card .delete-confirm .confirm-no { background: transparent; border-color: #4d4e60; color: #b0b3cc; }
+  .proto-card .delete-confirm .confirm-no:hover { border-color: #6b7294; }
+
+  .restore-bar { font-size: 11px; color: #6b7294; margin-top: 6px; }
+  .restore-bar a { color: #8fa4f4; text-decoration: underline; cursor: pointer; }
+
   .sidebar-footer { margin-top: auto; padding: 12px 16px; border-top: 1px solid #2d2e3e; font-size: 11px; color: #6b7294; }
 
   /* ===== Main Content ===== */
@@ -199,6 +230,9 @@
     <div class="sidebar-footer">
       Click any prototype to preview.<br>
       Use 💬 mode to leave comments on elements.
+      <div class="restore-bar" id="restore-bar" style="display:none;">
+        <span id="hidden-count"></span> hidden — <a onclick="restoreAll()">Restore all</a>
+      </div>
     </div>
   </div>
 
@@ -258,8 +292,9 @@ const DATA_KEY = 'prototype-hub-data';
 function loadData() {
   try {
     const raw = localStorage.getItem(DATA_KEY);
-    return raw ? JSON.parse(raw) : { prototypes: {}, comments: {} };
-  } catch { return { prototypes: {}, comments: {} }; }
+    const d = raw ? JSON.parse(raw) : {};
+    return { prototypes: {}, comments: {}, hidden: [], ...d };
+  } catch { return { prototypes: {}, comments: {}, hidden: [] }; }
 }
 function saveData(data) {
   localStorage.setItem(DATA_KEY, JSON.stringify(data));
@@ -394,27 +429,83 @@ window.INLINE_REGISTRY = [
 function renderProtoList() {
   const list = document.getElementById('proto-list');
   const data = loadData();
+  const hidden = data.hidden || [];
+
+  const visible = registry.filter(p => !hidden.includes(p.id));
 
   if (registry.length === 0) {
     list.innerHTML = '<div style="font-size:13px;color:#888;padding:8px;">No prototypes yet.</div>';
-    return;
+  } else if (visible.length === 0) {
+    list.innerHTML = '<div style="font-size:13px;color:#888;padding:8px;">All prototypes hidden.</div>';
+  } else {
+    list.innerHTML = visible.map(p => {
+      const comments = (data.comments[p.id] || []).filter(c => !c.resolved);
+      const latestVersion = p.versions[p.versions.length - 1];
+      const isActive = currentProto && currentProto.id === p.id;
+      return `
+        <div class="proto-card ${isActive ? 'active' : ''}" onclick="selectProto('${p.id}')">
+          <div class="proto-name">${p.name}</div>
+          <div class="proto-meta">
+            <span class="version">v${latestVersion.version}</span>
+            <span>${latestVersion.date}</span>
+          </div>
+          <div class="comment-count ${comments.length === 0 ? 'zero' : ''}">${comments.length}</div>
+          <button class="delete-proto-btn" onclick="event.stopPropagation(); showDeleteConfirm(this, '${p.id}')" title="Remove from list">🗑</button>
+          <div class="delete-confirm" id="confirm-${p.id}">
+            <p>Remove <strong>${escapeHtml(p.name)}</strong> from the list?</p>
+            <div class="confirm-btns">
+              <button class="confirm-yes" onclick="event.stopPropagation(); confirmDeleteProto('${p.id}')">Remove</button>
+              <button class="confirm-no" onclick="event.stopPropagation(); hideDeleteConfirm('${p.id}')">Cancel</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
   }
 
-  list.innerHTML = registry.map(p => {
-    const comments = (data.comments[p.id] || []).filter(c => !c.resolved);
-    const latestVersion = p.versions[p.versions.length - 1];
-    const isActive = currentProto && currentProto.id === p.id;
-    return `
-      <div class="proto-card ${isActive ? 'active' : ''}" onclick="selectProto('${p.id}')">
-        <div class="proto-name">${p.name}</div>
-        <div class="proto-meta">
-          <span class="version">v${latestVersion.version}</span>
-          <span>${latestVersion.date}</span>
-        </div>
-        <div class="comment-count ${comments.length === 0 ? 'zero' : ''}">${comments.length}</div>
-      </div>
-    `;
-  }).join('');
+  // Restore bar
+  const restoreBar = document.getElementById('restore-bar');
+  const hiddenCount = document.getElementById('hidden-count');
+  if (hidden.length > 0) {
+    restoreBar.style.display = 'block';
+    hiddenCount.textContent = hidden.length + ' prototype' + (hidden.length > 1 ? 's' : '');
+  } else {
+    restoreBar.style.display = 'none';
+  }
+}
+
+function showDeleteConfirm(btn, id) {
+  document.getElementById('confirm-' + id).classList.add('visible');
+}
+
+function hideDeleteConfirm(id) {
+  const el = document.getElementById('confirm-' + id);
+  if (el) el.classList.remove('visible');
+}
+
+function confirmDeleteProto(id) {
+  const data = loadData();
+  if (!data.hidden.includes(id)) data.hidden.push(id);
+  saveData(data);
+  if (currentProto && currentProto.id === id) {
+    currentProto = null;
+    currentVersion = null;
+    document.getElementById('toolbar').style.display = 'none';
+    document.getElementById('preview-frame').style.display = 'none';
+    document.getElementById('empty-state').style.display = '';
+    document.getElementById('comment-panel').classList.remove('visible');
+    document.getElementById('changelog-panel').classList.remove('visible');
+  }
+  renderProtoList();
+  setStatus('Prototype removed from list');
+}
+
+function restoreAll() {
+  const data = loadData();
+  data.hidden = [];
+  saveData(data);
+  renderProtoList();
+  setStatus('All prototypes restored');
 }
 
 function selectProto(id) {
