@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Per Transaction Dashboard · Iteration 1 — Synder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #FAFAFA; font-family: 'Roboto', -apple-system, sans-serif; color: #1A1B24; font-size: 14px; line-height: 1.4; }
+  a { color: #0053CC; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* App shell */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 230px; background: #F6F6F6; border-right: 1px solid #E5E5E5; flex-shrink: 0; }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  /* Sidebar */
+  .org-switch { display: flex; align-items: center; padding: 14px 16px; gap: 10px; border-bottom: 1px solid #E5E5E5; cursor: pointer; }
+  .org-avatar { width: 32px; height: 32px; border-radius: 50%; background: #D64273; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 12px; flex-shrink: 0; }
+  .org-name { font-size: 14px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org-caret { color: #6B778C; }
+  .nav { padding: 8px 0; }
+  .nav-item { display: flex; align-items: center; padding: 9px 16px; font-size: 14px; color: #2F303A; cursor: pointer; gap: 12px; }
+  .nav-item:hover { background: rgba(0,83,204,0.06); }
+  .nav-item.active { background: #E3EEFF; color: #0053CC; font-weight: 500; border-left: 3px solid #0053CC; padding-left: 13px; }
+  .nav-item .icon { width: 18px; display: flex; justify-content: center; flex-shrink: 0; }
+  .nav-item .chevron { margin-left: auto; color: #6B778C; font-size: 11px; }
+  .nav-item .beta { font-size: 10px; background: #E3F2FD; color: #0053CC; padding: 1px 6px; border-radius: 3px; }
+  .nav-divider { height: 1px; background: #E5E5E5; margin: 8px 16px; }
+
+  /* Topbar */
+  .topbar { display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; height: 59px; border-bottom: 1px solid #E5E5E5; background: #FFF; gap: 16px; flex-shrink: 0; }
+  .syncs-left { font-size: 14px; }
+  .syncs-left .num { color: #0053CC; font-weight: 700; border-bottom: 1px solid #0053CC; padding-bottom: 1px; }
+  .topbar-icon { width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: #0053CC; cursor: pointer; }
+
+  /* Page */
+  .page { padding: 24px 32px 80px; max-width: 1280px; width: 100%; }
+
+  /* Header row */
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 24px; flex-wrap: wrap; }
+  .page-title { font-size: 24px; font-weight: 500; margin-bottom: 2px; color: #1A1B24; }
+  .page-subtitle { font-size: 14px; color: #6B778C; }
+
+  /* Period selector */
+  .period-select { position: relative; }
+  .period-btn { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid #C8C7CC; background: #FFF; border-radius: 4px; font-size: 14px; cursor: pointer; color: #2F303A; font-family: inherit; }
+  .period-btn:hover { border-color: #0053CC; }
+  .period-dropdown { display: none; position: absolute; top: calc(100% + 4px); right: 0; background: #FFF; border: 1px solid #C8C7CC; border-radius: 4px; box-shadow: 0 4px 8px rgba(0,0,0,0.08); min-width: 180px; z-index: 10; }
+  .period-dropdown.open { display: block; }
+  .period-option { padding: 9px 14px; font-size: 14px; cursor: pointer; }
+  .period-option:hover { background: #F6F6F6; }
+  .period-option.selected { color: #0053CC; font-weight: 500; }
+
+  /* TOP STRIP — 3 cross-cutting metrics */
+  .top-strip { display: grid; grid-template-columns: repeat(3, 1fr); background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+  .strip-cell { padding: 20px 24px; border-right: 1px solid #E5E5E5; }
+  .strip-cell:last-child { border-right: none; }
+  .strip-label { font-size: 12px; color: #6B778C; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .strip-number { font-size: 32px; font-weight: 400; line-height: 1.1; color: #1A1B24; margin-bottom: 6px; }
+  .strip-number.muted { color: #C8C7CC; }
+  .strip-number .unit { font-size: 16px; color: #6B778C; font-weight: 400; margin-left: 4px; }
+  .strip-context { font-size: 13px; color: #6B778C; }
+  .strip-context a { color: #0053CC; }
+  .strip-number.score-excellent { color: #1F8940; }
+  .strip-number.score-healthy { color: #1F8940; }
+  .strip-number.score-needs-work { color: #E18013; }
+  .strip-number.score-action { color: #A72222; }
+  .score-band { font-weight: 500; }
+  .score-band.excellent, .score-band.healthy { color: #1F8940; }
+  .score-band.needs-work { color: #E18013; }
+  .score-band.action { color: #A72222; }
+  .strip-cell.attention .strip-number.warn { color: #E18013; }
+  .strip-cell.attention .strip-number.danger { color: #A72222; }
+
+  /* PIPELINE — 4 stages */
+  .pipeline-section { margin-bottom: 32px; }
+  .section-title { font-size: 16px; font-weight: 500; color: #1A1B24; margin-bottom: 12px; }
+  .pipeline { display: grid; grid-template-columns: 1fr 24px 1fr 24px 1fr 24px 1fr; align-items: stretch; gap: 0; }
+  .stage { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px 18px 16px; display: flex; flex-direction: column; min-height: 150px; }
+  .stage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .stage-icon { width: 28px; height: 28px; border-radius: 6px; background: #E3EEFF; color: #0053CC; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; }
+  .stage-name { font-size: 14px; font-weight: 500; color: #2F303A; }
+  .stage-metric { font-size: 22px; font-weight: 400; color: #1A1B24; margin-bottom: 6px; }
+  .stage-metric.muted { color: #6B778C; font-size: 18px; }
+  .stage-context { font-size: 12px; color: #6B778C; line-height: 1.5; margin-bottom: 12px; flex: 1; }
+  .stage-link { font-size: 13px; color: #0053CC; margin-top: auto; }
+  .stage.placeholder { background: #F6F6F6; border-style: dashed; border-color: #C8C7CC; }
+  .stage.placeholder .stage-icon { background: #E5E5E5; color: #818EA5; }
+  .stage.placeholder .stage-metric { color: #6B778C; font-size: 16px; font-style: italic; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: #818EA5; font-size: 18px; }
+
+  /* TWO-COLUMN GRID */
+  .grid-2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .panel { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px 20px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+  .panel-title { font-size: 16px; font-weight: 500; color: #1A1B24; display: flex; align-items: center; gap: 8px; }
+  .panel-cta { font-size: 13px; color: #0053CC; }
+
+  /* Customizations table (SD-17676) */
+  .cust-row { display: grid; grid-template-columns: 1.6fr 1fr auto; align-items: center; padding: 12px 0; border-bottom: 1px solid #F0F0F0; gap: 16px; }
+  .cust-row:last-child { border-bottom: none; }
+  .cust-row.at-cap { background: linear-gradient(90deg, #FFF8F0 0%, transparent 100%); margin: 0 -12px; padding: 12px 12px; border-radius: 6px; position: relative; border-bottom: none; }
+  .cust-row.at-cap + .cust-row { border-top: 1px solid #F0F0F0; }
+  .cust-row.at-cap::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; background: #E18013; border-radius: 2px; }
+  .cust-name { font-size: 14px; color: #2F303A; display: flex; align-items: center; gap: 6px; }
+  .cust-count { font-size: 14px; color: #2F303A; font-weight: 500; }
+  .cust-count.at-cap { color: #E18013; display: inline-flex; align-items: center; gap: 6px; }
+  .at-cap-badge { background: #E18013; color: #FFF; font-size: 10px; padding: 2px 6px; border-radius: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.4px; }
+
+  /* Tooltip */
+  .tip { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid #818EA5; color: #6B778C; font-size: 10px; font-weight: 500; cursor: help; position: relative; }
+  .tip:hover .tip-content { display: block; }
+  .tip-content { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #2F303A; color: #FFF; padding: 8px 12px; border-radius: 4px; font-size: 12px; font-weight: 400; width: 240px; white-space: normal; z-index: 100; line-height: 1.5; text-transform: none; letter-spacing: 0; }
+  .tip-content::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #2F303A; }
+
+  /* Buttons */
+  .btn { padding: 7px 14px; border-radius: 4px; font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; font-family: inherit; }
+  .btn-ghost { background: transparent; color: #0053CC; border-color: #0053CC; }
+  .btn-ghost:hover { background: rgba(0,83,204,0.06); }
+  .btn-primary { background: #0053CC; color: #FFF; }
+  .btn-primary:hover { background: #003C99; }
+  .btn-warning { background: transparent; color: #E18013; border-color: #E18013; }
+  .btn-warning:hover { background: rgba(225,128,19,0.06); }
+
+  /* Health check card (compact) */
+  .hc-head { display: flex; align-items: center; gap: 8px; }
+  .hc-count { font-size: 13px; color: #6B778C; font-weight: 400; }
+  .hc-count.all-clear { color: #1F8940; font-weight: 500; }
+  .hc-list { list-style: none; padding: 0; margin: 0 0 14px; }
+  .hc-item { display: flex; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #F0F0F0; gap: 12px; font-size: 13px; }
+  .hc-item:last-child { border-bottom: none; }
+  .hc-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; flex-shrink: 0; font-weight: 700; margin-top: 1px; }
+  .hc-icon.error { background: #FDEDE9; color: #A72222; }
+  .hc-icon.warn { background: #FFF3E0; color: #E18013; }
+  .hc-text { flex: 1; color: #2F303A; }
+  .hc-text .subtext { font-size: 12px; color: #6B778C; margin-top: 2px; }
+  .hc-fix { font-size: 13px; color: #0053CC; cursor: pointer; }
+  .hc-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid #F0F0F0; font-size: 12px; color: #6B778C; }
+  .hc-rerun { background: transparent; border: 1px solid #C8C7CC; color: #2F303A; padding: 5px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; font-family: inherit; }
+  .hc-rerun:hover { border-color: #0053CC; color: #0053CC; }
+
+  /* Integrations panel */
+  .integ-group-label { font-size: 11px; color: #6B778C; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin: 12px 0 4px; }
+  .integ-group-label:first-child { margin-top: 0; }
+  .integ-row { display: grid; grid-template-columns: 24px 1fr auto auto auto; align-items: center; padding: 12px 0; border-bottom: 1px solid #F0F0F0; gap: 12px; }
+  .integ-row:last-child { border-bottom: none; }
+  .integ-logo { width: 24px; height: 24px; border-radius: 4px; background: #F6F6F6; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #2F303A; }
+  .integ-logo.stripe { background: #635BFF; color: #FFF; }
+  .integ-logo.shopify { background: #95BF47; color: #FFF; }
+  .integ-logo.qbo { background: #2CA01C; color: #FFF; }
+  .integ-logo.paypal { background: #003087; color: #FFF; }
+  .integ-name { font-size: 14px; color: #2F303A; }
+  .integ-status { font-size: 12px; padding: 3px 8px; border-radius: 10px; font-weight: 500; }
+  .integ-status.connected { background: #E8F5E9; color: #1F8940; }
+  .integ-status.lost { background: #FDEDE9; color: #A72222; }
+  .integ-status.warn { background: #FFF3E0; color: #E18013; }
+  .integ-sync { font-size: 12px; color: #6B778C; }
+  .integ-sync.on { color: #1F8940; }
+  .integ-sync.off { color: #E18013; }
+  .integ-link { font-size: 13px; color: #0053CC; }
+
+  /* Time Saved expanded card */
+  .ts-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px 20px; }
+  .ts-horizons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 8px; }
+  .ts-horizon { padding: 14px; background: #F6F6F6; border-radius: 6px; }
+  .ts-horizon-label { font-size: 12px; color: #6B778C; margin-bottom: 6px; font-weight: 500; }
+  .ts-horizon-value { font-size: 20px; font-weight: 500; color: #1A1B24; }
+  .ts-horizon-value.muted { color: #C8C7CC; font-weight: 400; }
+  .ts-horizon-sub { font-size: 12px; color: #6B778C; margin-top: 4px; }
+
+  /* Sync Health gauge */
+  .sh-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px 20px; }
+  .gauge { display: flex; align-items: center; gap: 20px; margin-top: 8px; }
+  .gauge-ring { width: 90px; height: 90px; flex-shrink: 0; }
+  .gauge-details { flex: 1; }
+  .gauge-band { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+  .gauge-breakdown { font-size: 12px; color: #6B778C; line-height: 1.6; }
+  .gauge-breakdown li { display: flex; justify-content: space-between; }
+
+  /* Empty / cold state CTA card */
+  .cold-card { background: #F6F6F6; border: 1px dashed #C8C7CC; border-radius: 8px; padding: 24px; text-align: center; }
+  .cold-card .cold-icon { font-size: 28px; margin-bottom: 8px; }
+  .cold-card .cold-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+  .cold-card .cold-sub { font-size: 13px; color: #6B778C; margin-bottom: 12px; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1A1B24; color: #FFF; padding: 12px 18px; border-radius: 6px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px); transition: all 0.2s; pointer-events: none; z-index: 1000; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Demo switcher */
+  .demo-switcher { position: fixed; bottom: 20px; left: 20px; background: #FFF; border: 1px solid #C8C7CC; border-radius: 8px; padding: 12px 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); z-index: 100; }
+  .demo-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6B778C; font-weight: 500; margin-bottom: 8px; }
+  .demo-buttons { display: flex; gap: 6px; }
+  .demo-btn { padding: 6px 12px; font-size: 12px; border: 1px solid #C8C7CC; background: #FFF; border-radius: 4px; cursor: pointer; color: #2F303A; font-family: inherit; }
+  .demo-btn.active { background: #0053CC; color: #FFF; border-color: #0053CC; }
+  .demo-btn:hover:not(.active) { background: #F6F6F6; }
+
+  .deeplink { color: #0053CC; cursor: pointer; border-bottom: 1px dashed transparent; }
+  .deeplink:hover { border-bottom-color: #0053CC; }
+
+  /* Spec ribbon */
+  .spec-ribbon { position: fixed; top: 8px; right: 8px; background: #1A1B24; color: #FFF; font-size: 11px; padding: 5px 10px; border-radius: 4px; z-index: 100; opacity: 0.8; }
+</style>
+</head>
+<body>
+<div class="spec-ribbon">FDD: PT Dashboard · Iteration 1</div>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="org-switch">
+      <div class="org-avatar">PE</div>
+      <div class="org-name">Per transaction t...</div>
+      <span class="org-caret">▾</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active"><span class="icon">▦</span> Dashboard</div>
+      <div class="nav-item"><span class="icon">⇄</span> Transactions <span class="chevron">▾</span></div>
+      <div class="nav-item"><span class="icon">📄</span> Transaction reconciliation <span class="beta">Beta</span></div>
+      <div class="nav-item"><span class="icon">⚡</span> Smart rules <span class="chevron">▾</span></div>
+      <div class="nav-item"><span class="icon">🛒</span> Invoicing <span class="chevron">▾</span></div>
+      <div class="nav-item"><span class="icon">✦</span> AI reports</div>
+      <div class="nav-item"><span class="icon">📈</span> Reporting <span class="chevron">▾</span></div>
+      <div class="nav-item"><span class="icon">📅</span> Revenue recognition</div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">⚙</span> Settings</div>
+      <div class="nav-item"><span class="icon">●</span> AI Agents</div>
+      <div class="nav-item"><span class="icon">★</span> What's New</div>
+    </nav>
+  </aside>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="syncs-left">Syncs left: <span class="num" id="syncsLeft">1000</span></div>
+      <div class="topbar-icon" title="Notifications">🔔</div>
+      <div class="topbar-icon" title="Help">?</div>
+      <div class="topbar-icon" title="Profile">👤</div>
+    </div>
+
+    <div class="page">
+      <!-- Page header -->
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Dashboard</h1>
+          <div class="page-subtitle">Your sync workflow at a glance.</div>
+        </div>
+        <div class="period-select">
+          <button class="period-btn" id="periodBtn">
+            <span id="periodLabel">Last 30 days</span> ▾
+          </button>
+          <div class="period-dropdown" id="periodDropdown">
+            <div class="period-option" data-period="Last 7 days">Last 7 days</div>
+            <div class="period-option selected" data-period="Last 30 days">Last 30 days</div>
+            <div class="period-option" data-period="Last 90 days">Last 90 days</div>
+            <div class="period-option" data-period="Custom">Custom…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TOP STRIP -->
+      <div class="top-strip">
+        <div class="strip-cell">
+          <div class="strip-label">Time saved
+            <span class="tip">?<span class="tip-content">Estimated bookkeeping hours saved by syncing through Synder. Based on successful syncs only — failed and rolled-back syncs do not contribute.</span></span>
+          </div>
+          <div class="strip-number" id="tsNumber">~47<span class="unit">hours this month</span></div>
+          <div class="strip-context" id="tsContext">Across <span class="deeplink">2,847 syncs</span> · <a href="#" onclick="showToast('How we calculate this →'); return false;">How we calculate this →</a></div>
+        </div>
+        <div class="strip-cell">
+          <div class="strip-label">Sync health
+            <span class="tip">?<span class="tip-content">Composite score (0–100) of pipeline health, customizations utilisation, and admin rule pass rate. Weights stay internal.</span></span>
+          </div>
+          <div class="strip-number score-healthy" id="shNumber">82<span class="unit">/100</span></div>
+          <div class="strip-context"><span class="score-band healthy" id="shBand">Healthy</span> · <a href="#" onclick="showToast('About the Sync Health →'); return false;">About the Sync Health →</a></div>
+        </div>
+        <div class="strip-cell attention">
+          <div class="strip-label">Needs attention</div>
+          <div class="strip-number warn" id="naNumber">3</div>
+          <div class="strip-context" id="naContext"><span class="deeplink" onclick="scrollToHealth()">View issues →</span></div>
+        </div>
+      </div>
+
+      <!-- PIPELINE -->
+      <div class="pipeline-section">
+        <h2 class="section-title">Your sync pipeline</h2>
+        <div class="pipeline">
+          <!-- Import -->
+          <div class="stage">
+            <div class="stage-head">
+              <div class="stage-icon">1</div>
+              <div class="stage-name">Import</div>
+            </div>
+            <div class="stage-metric" id="impMetric">3,241</div>
+            <div class="stage-context" id="impContext">Synder pulls every sale, fee, refund, and payout from your connected platforms into one place.</div>
+            <a class="stage-link deeplink" onclick="showToast('Open Platform Transactions → Imported')">View imported →</a>
+          </div>
+          <div class="arrow">→</div>
+          <!-- Customize -->
+          <div class="stage">
+            <div class="stage-head">
+              <div class="stage-icon">2</div>
+              <div class="stage-name">Customize</div>
+            </div>
+            <div class="stage-metric" id="cusMetric">4 active</div>
+            <div class="stage-context" id="cusContext">Your rules, mappings, and modifiers shape each transaction so it gets recorded the way your books need it.</div>
+            <a class="stage-link deeplink" onclick="scrollToCust()">View customizations →</a>
+          </div>
+          <div class="arrow">→</div>
+          <!-- Sync -->
+          <div class="stage">
+            <div class="stage-head">
+              <div class="stage-icon">3</div>
+              <div class="stage-name">Sync</div>
+            </div>
+            <div class="stage-metric" id="synMetric">2,847</div>
+            <div class="stage-context" id="synContext">Transactions post to your accounting software with the right accounts, taxes, and fees, ready for reporting.</div>
+            <a class="stage-link deeplink" onclick="showToast('Open Platform Transactions → Synced')">View synced →</a>
+          </div>
+          <div class="arrow">→</div>
+          <!-- Reconcile (placeholder) -->
+          <div class="stage placeholder">
+            <div class="stage-head">
+              <div class="stage-icon">4</div>
+              <div class="stage-name">Reconcile</div>
+            </div>
+            <div class="stage-metric">Coming next iteration</div>
+            <div class="stage-context">Synder compares your transactions against your payment platform so your books match what actually happened on the sales side.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID: Customizations + Integrations | Health Check + Time Saved -->
+      <div class="grid-2">
+        <div>
+          <!-- Customizations -->
+          <div class="panel" id="custPanel">
+            <div class="panel-head">
+              <div class="panel-title">Customizations
+                <span class="tip">?<span class="tip-content">Every customization Synder has applied to your account, with usage-vs-cap counts per your plan.</span></span>
+              </div>
+              <a class="panel-cta" href="#" onclick="showToast('Compare plans'); return false;">Compare plans →</a>
+            </div>
+            <div id="custRows">
+              <div class="cust-row">
+                <div class="cust-name">Smart Rules <span class="tip">?<span class="tip-content">Rules that apply classes, locations, categories, products, or taxes to synced transactions based on if-then conditions.</span></span></div>
+                <div class="cust-count">3 of 10</div>
+                <button class="btn btn-ghost" onclick="showToast('Open CSM HubSpot call')">Get it set up</button>
+              </div>
+              <div class="cust-row at-cap">
+                <div class="cust-name">Custom Import Modifications <span class="tip">?<span class="tip-content">Custom logic applied to transactions during import. Handles complex tax calculations, currency conversions, or conditional routing.</span></span></div>
+                <div class="cust-count at-cap">1 of 1 <span class="at-cap-badge">At cap</span></div>
+                <button class="btn btn-warning" onclick="showToast('Open Billing → Manage subscription')">Get more</button>
+              </div>
+              <div class="cust-row">
+                <div class="cust-name">Custom Settings <span class="tip">?<span class="tip-content">Account-level behaviors that adjust how transactions are processed, including tax treatments, payout grouping, transaction matching, and sync exceptions.</span></span></div>
+                <div class="cust-count">4 of 5</div>
+                <button class="btn btn-ghost" onclick="showToast('Open CSM HubSpot call')">Get it set up</button>
+              </div>
+              <div class="cust-row">
+                <div class="cust-name">E-commerce Data Enrichment <span class="tip">?<span class="tip-content">Adds order details to payment transactions from connected e-commerce platforms, including products, customers, taxes, and shipping.</span></span></div>
+                <div class="cust-count">2 of 3</div>
+                <button class="btn btn-ghost" onclick="showToast('Open CSM HubSpot call')">Get it set up</button>
+              </div>
+              <div class="cust-row">
+                <div class="cust-name">Revenue Recognition <span class="tip">?<span class="tip-content">Recognizes subscription revenue as it's earned across the service period. GAAP/ASC 606 compliant.</span></span></div>
+                <div class="cust-count">342 of 1,000 subs</div>
+                <button class="btn btn-ghost" onclick="showToast('Open Revenue Recognition')">Get it set up</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Integrations -->
+          <div class="panel" id="integPanel" style="margin-top: 16px;">
+            <div class="panel-head">
+              <div class="panel-title">Integrations
+                <span class="tip">?<span class="tip-content">Connected payment platforms and accounting integrations. Each number is a deep link to Platform Transactions filtered to that integration.</span></span>
+              </div>
+              <a class="panel-cta" href="#" onclick="showToast('Open Settings → Integrations'); return false;">Manage →</a>
+            </div>
+            <div id="integRows">
+              <div class="integ-group-label">Payment platforms</div>
+              <div class="integ-row">
+                <div class="integ-logo stripe">S</div>
+                <div class="integ-name">Stripe</div>
+                <span class="integ-status connected">Connected</span>
+                <span class="integ-sync on">Auto-sync ON</span>
+                <a class="integ-link deeplink" onclick="showToast('Open Platform Transactions filtered to Stripe')">12 min ago →</a>
+              </div>
+              <div class="integ-row">
+                <div class="integ-logo shopify">SH</div>
+                <div class="integ-name">Shopify (Changolivia)</div>
+                <span class="integ-status connected">Connected</span>
+                <span class="integ-sync on">Auto-sync ON</span>
+                <a class="integ-link deeplink" onclick="showToast('Open Platform Transactions filtered to Shopify')">1 hr ago →</a>
+              </div>
+              <div class="integ-group-label">Accounting</div>
+              <div class="integ-row">
+                <div class="integ-logo qbo">QB</div>
+                <div class="integ-name">QuickBooks Online</div>
+                <span class="integ-status connected">Connected</span>
+                <span class="integ-sync">N/A</span>
+                <a class="integ-link deeplink" onclick="showToast('Open Platform Transactions filtered to QBO')">Just now →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column -->
+        <div>
+          <!-- Health Check -->
+          <div class="panel" id="hcPanel">
+            <div class="panel-head">
+              <div class="hc-head">
+                <div class="panel-title">⚕ Health Check</div>
+                <span class="hc-count" id="hcCount">1 issue</span>
+              </div>
+              <a class="panel-cta" href="#" onclick="showToast('Open Monitoring → Org Health'); return false;">Open Org Health →</a>
+            </div>
+            <ul class="hc-list" id="hcList">
+              <li class="hc-item">
+                <div class="hc-icon error">!</div>
+                <div class="hc-text">
+                  Stripe connection needs reconnection
+                  <div class="subtext">Auto-sync suspended 3 days ago</div>
+                </div>
+                <a class="hc-fix" onclick="showToast('Open Stripe reconnect flow')">Fix →</a>
+              </li>
+            </ul>
+            <div class="hc-foot">
+              <span>Last run 2h ago</span>
+              <button class="hc-rerun" onclick="showToast('Rerunning health check…')">Rerun</button>
+            </div>
+          </div>
+
+          <!-- Sync Health gauge -->
+          <div class="sh-card" id="shCard" style="margin-top: 16px;">
+            <div class="panel-head">
+              <div class="panel-title">Sync Health
+                <span class="tip">?<span class="tip-content">Composite of sync pipe health, health check pass rate, and customizations utilisation. Weights stay internal but the number moves directionally with the underlying signals.</span></span>
+              </div>
+              <a class="panel-cta" href="#" onclick="showToast('About the Sync Health'); return false;">About →</a>
+            </div>
+            <div class="gauge">
+              <svg class="gauge-ring" viewBox="0 0 36 36">
+                <path fill="none" stroke="#F0F0F0" stroke-width="3.5" d="M18 2.5 a15.5 15.5 0 0 1 0 31 a15.5 15.5 0 0 1 0 -31"/>
+                <path id="gaugePath" fill="none" stroke="#1F8940" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="82,100" d="M18 2.5 a15.5 15.5 0 0 1 0 31 a15.5 15.5 0 0 1 0 -31"/>
+                <text x="18" y="20" text-anchor="middle" font-size="9" fill="#1A1B24" font-weight="500" id="gaugeText">82</text>
+              </svg>
+              <div class="gauge-details">
+                <div class="gauge-band healthy" id="gaugeBand">Healthy</div>
+                <ul class="gauge-breakdown" id="gaugeBreakdown">
+                  <li><span>Sync pipe</span><span>Healthy</span></li>
+                  <li><span>Customizations</span><span>1 at cap</span></li>
+                  <li><span>Admin rules</span><span>OK</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Time Saved horizons -->
+          <div class="ts-card" id="tsCard" style="margin-top: 16px;">
+            <div class="panel-head">
+              <div class="panel-title">Time saved
+                <span class="tip">?<span class="tip-content">Derived from successful syncs. Time-at-risk from items in Needs Attention is subtracted. Rounded to whole hours.</span></span>
+              </div>
+              <a class="panel-cta" href="#" onclick="showToast('How we calculate this'); return false;">How we calculate →</a>
+            </div>
+            <div class="ts-horizons">
+              <div class="ts-horizon">
+                <div class="ts-horizon-label">This month so far</div>
+                <div class="ts-horizon-value" id="tsMonth">~47 hours</div>
+                <div class="ts-horizon-sub">Synced 2,847 transactions</div>
+              </div>
+              <div class="ts-horizon">
+                <div class="ts-horizon-label">This year</div>
+                <div class="ts-horizon-value" id="tsYear">~412 hours</div>
+                <div class="ts-horizon-sub">Since Jan 1</div>
+              </div>
+              <div class="ts-horizon">
+                <div class="ts-horizon-label">All-time with Synder</div>
+                <div class="ts-horizon-value" id="tsAll">~1,180 hours</div>
+                <div class="ts-horizon-sub">Since first sync</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Demo switcher -->
+<div class="demo-switcher">
+  <div class="demo-title">Demo state</div>
+  <div class="demo-buttons">
+    <button class="demo-btn active" data-state="default" onclick="setState('default')">Healthy</button>
+    <button class="demo-btn" data-state="issues" onclick="setState('issues')">Action req.</button>
+    <button class="demo-btn" data-state="cold" onclick="setState('cold')">Cold (new org)</button>
+  </div>
+</div>
+
+<script>
+  // Period selector
+  const periodBtn = document.getElementById('periodBtn');
+  const periodDropdown = document.getElementById('periodDropdown');
+  const periodLabel = document.getElementById('periodLabel');
+  periodBtn.addEventListener('click', (e) => { e.stopPropagation(); periodDropdown.classList.toggle('open'); });
+  document.addEventListener('click', () => periodDropdown.classList.remove('open'));
+  periodDropdown.querySelectorAll('.period-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      periodDropdown.querySelectorAll('.period-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      periodLabel.textContent = opt.dataset.period;
+      periodDropdown.classList.remove('open');
+      showToast('Period: ' + opt.dataset.period);
+    });
+  });
+
+  // Toast
+  let toastTimer = null;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  function scrollToHealth() {
+    document.getElementById('hcPanel').scrollIntoView({behavior: 'smooth', block: 'center'});
+  }
+  function scrollToCust() {
+    document.getElementById('custPanel').scrollIntoView({behavior: 'smooth', block: 'center'});
+  }
+
+  // Demo state switching
+  const states = {
+    default: {
+      ts: { number: '~47<span class="unit">hours this month</span>', context: 'Across <span class="deeplink">2,847 syncs</span> · <a href="#" onclick="showToast(\'How we calculate this →\'); return false;">How we calculate this →</a>' },
+      sh: { number: 82, band: 'Healthy', bandClass: 'healthy', stroke: '#1F8940' },
+      na: { number: '3', class: 'warn', context: '<span class="deeplink" onclick="scrollToHealth()">View issues →</span>' },
+      pipeline: { imp: '3,241', impCtx: 'Synder pulls every sale, fee, refund, and payout from your connected platforms into one place.', cus: '4 active', syn: '2,847' },
+      hcCount: { text: '1 issue', cls: '' },
+      hcHTML: `<li class="hc-item">
+        <div class="hc-icon error">!</div>
+        <div class="hc-text">Stripe connection needs reconnection<div class="subtext">Auto-sync suspended 3 days ago</div></div>
+        <a class="hc-fix" onclick="showToast('Open Stripe reconnect flow')">Fix →</a>
+      </li>`,
+      tsHorizons: { month: '~47 hours', year: '~412 hours', all: '~1,180 hours' }
+    },
+    issues: {
+      ts: { number: '~12<span class="unit">hours this month</span>', context: 'Across <span class="deeplink">487 syncs</span> · <a href="#" onclick="showToast(\'How we calculate this →\'); return false;">How we calculate this →</a>' },
+      sh: { number: 31, band: 'Action required', bandClass: 'action', stroke: '#A72222' },
+      na: { number: '7', class: 'danger', context: '<span class="deeplink" onclick="scrollToHealth()">View issues →</span>' },
+      pipeline: { imp: '892', impCtx: '2 imports failed in the last 24h. Check Stripe and PayPal connections.', cus: '4 active', syn: '487' },
+      hcCount: { text: '4 issues', cls: '' },
+      hcHTML: `<li class="hc-item">
+        <div class="hc-icon error">!</div>
+        <div class="hc-text">Stripe connection lost<div class="subtext">Auto-sync suspended 3 days ago · 405 unsynced</div></div>
+        <a class="hc-fix" onclick="showToast('Open Stripe reconnect flow')">Fix →</a>
+      </li>
+      <li class="hc-item">
+        <div class="hc-icon warn">!</div>
+        <div class="hc-text">PayPal auto-sync is off<div class="subtext">Last sync 12 days ago</div></div>
+        <a class="hc-fix" onclick="showToast('Open PayPal settings')">Turn on →</a>
+      </li>
+      <li class="hc-item">
+        <div class="hc-icon warn">!</div>
+        <div class="hc-text">12 transactions missing tax code<div class="subtext">Will sync once resolved</div></div>
+        <a class="hc-fix" onclick="showToast('Review tax codes')">Review →</a>
+      </li>
+      <li class="hc-item">
+        <div class="hc-icon warn">!</div>
+        <div class="hc-text">Clearing account not configured<div class="subtext">Some payouts may not reconcile</div></div>
+        <a class="hc-fix" onclick="showToast('Open Settings → Clearing account')">Set up →</a>
+      </li>`,
+      tsHorizons: { month: '~12 hours', year: '~287 hours', all: '~1,055 hours' }
+    },
+    cold: {
+      ts: { number: '<span class="strip-number muted">—</span>', context: 'Run your first sync to start the clock.' },
+      sh: { number: null, band: 'Score appears after your first successful sync', bandClass: '', stroke: '#C8C7CC' },
+      na: { number: '0', class: '', context: 'All clear' },
+      pipeline: { imp: '0', impCtx: 'Connect a platform to begin. Synder will pull every sale, fee, refund, and payout into one place.', cus: '0 set up', syn: '0' },
+      hcCount: { text: 'All clear', cls: 'all-clear' },
+      hcHTML: '<li class="hc-item"><div class="hc-text" style="color:#6B778C;">Run your first health check after connecting a platform.</div></li>',
+      tsHorizons: { month: '—', year: '—', all: '—' },
+      cold: true
+    }
+  };
+
+  function setState(name) {
+    const s = states[name];
+    document.querySelectorAll('.demo-btn').forEach(b => b.classList.toggle('active', b.dataset.state === name));
+
+    // Top strip
+    document.getElementById('tsNumber').innerHTML = name === 'cold' ? '—' : s.ts.number;
+    document.getElementById('tsNumber').classList.toggle('muted', name === 'cold');
+    document.getElementById('tsContext').innerHTML = s.ts.context;
+
+    const shNum = document.getElementById('shNumber');
+    shNum.className = 'strip-number';
+    if (s.sh.number === null) {
+      shNum.innerHTML = '—';
+      shNum.classList.add('muted');
+    } else {
+      shNum.innerHTML = s.sh.number + '<span class="unit">/100</span>';
+      shNum.classList.add('score-' + s.sh.bandClass);
+    }
+    const shBand = document.getElementById('shBand');
+    shBand.textContent = s.sh.band;
+    shBand.className = 'score-band ' + s.sh.bandClass;
+
+    // Gauge
+    const gpath = document.getElementById('gaugePath');
+    gpath.setAttribute('stroke', s.sh.stroke);
+    gpath.setAttribute('stroke-dasharray', (s.sh.number || 0) + ',100');
+    document.getElementById('gaugeText').textContent = s.sh.number === null ? '—' : s.sh.number;
+    document.getElementById('gaugeBand').textContent = s.sh.band;
+    document.getElementById('gaugeBand').className = 'gauge-band ' + s.sh.bandClass;
+
+    const na = document.getElementById('naNumber');
+    na.className = 'strip-number';
+    if (s.na.class) na.classList.add(s.na.class);
+    na.textContent = s.na.number;
+    document.getElementById('naContext').innerHTML = s.na.context;
+
+    // Pipeline
+    document.getElementById('impMetric').textContent = s.pipeline.imp;
+    document.getElementById('impContext').textContent = s.pipeline.impCtx;
+    document.getElementById('cusMetric').textContent = s.pipeline.cus;
+    document.getElementById('synMetric').textContent = s.pipeline.syn;
+
+    // HC
+    const hcCount = document.getElementById('hcCount');
+    hcCount.textContent = s.hcCount.text;
+    hcCount.className = 'hc-count ' + s.hcCount.cls;
+    document.getElementById('hcList').innerHTML = s.hcHTML;
+
+    // Time saved horizons
+    document.getElementById('tsMonth').textContent = s.tsHorizons.month;
+    document.getElementById('tsYear').textContent = s.tsHorizons.year;
+    document.getElementById('tsAll').textContent = s.tsHorizons.all;
+    [document.getElementById('tsMonth'), document.getElementById('tsYear'), document.getElementById('tsAll')].forEach(el => {
+      el.classList.toggle('muted', s.tsHorizons.month === '—');
+    });
+
+    showToast('Demo: ' + (name === 'default' ? 'Healthy active org' : name === 'issues' ? 'Action required' : 'New org (cold)'));
+  }
+</script>
+</body>
+</html>
