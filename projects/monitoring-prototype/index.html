@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Monitoring · Prototype — Synder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #FAFAFA; font-family: 'Roboto', sans-serif; color: #1A1B24; font-size: 14px; line-height: 1.4; }
+a { color: #0053CC; text-decoration: none; }
+
+/* ── Layout ── */
+.app { display: flex; min-height: 100vh; }
+.sidebar { width: 232px; background: #F6F6F6; border-right: 1px solid #E5E5E5; flex-shrink: 0; display: flex; flex-direction: column; }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* ── Sidebar ── */
+.org-switch { display: flex; align-items: center; padding: 14px 16px; gap: 10px; border-bottom: 1px solid #E5E5E5; cursor: pointer; }
+.org-avatar { width: 32px; height: 32px; border-radius: 50%; background: #D64273; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 12px; flex-shrink: 0; }
+.org-name { font-size: 14px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.org-caret { color: #6B778C; font-size: 12px; }
+.nav { padding: 8px 0; flex: 1; overflow-y: auto; }
+.nav-item { display: flex; align-items: center; padding: 9px 16px; font-size: 14px; color: #2F303A; cursor: pointer; gap: 10px; user-select: none; }
+.nav-item:hover { background: rgba(0,83,204,0.06); }
+.nav-item.active { background: #E3EEFF; color: #0053CC; font-weight: 500; border-left: 3px solid #0053CC; padding-left: 13px; }
+.nav-item .ico { width: 18px; display: flex; justify-content: center; flex-shrink: 0; }
+.nav-item .chevron { margin-left: auto; color: #6B778C; font-size: 11px; transition: transform .2s; }
+.nav-item .chevron.open { transform: rotate(180deg); }
+.nav-item .badge-new { font-size: 9px; background: #0053CC; color: #fff; padding: 1px 5px; border-radius: 3px; font-weight: 600; letter-spacing: .4px; }
+.nav-item .badge-beta { font-size: 9px; background: #E3F2FD; color: #0053CC; padding: 1px 5px; border-radius: 3px; }
+
+/* sub-items (indented) */
+.nav-sub { overflow: hidden; max-height: 0; transition: max-height .2s ease; }
+.nav-sub.open { max-height: 300px; }
+.nav-sub-item { display: flex; align-items: center; padding: 8px 16px 8px 44px; font-size: 14px; color: #2F303A; cursor: pointer; gap: 8px; }
+.nav-sub-item:hover { background: rgba(0,83,204,0.06); }
+.nav-sub-item.active { background: #E3EEFF; color: #0053CC; font-weight: 500; border-left: 3px solid #0053CC; padding-left: 41px; }
+.nav-sub-item .dot { width: 6px; height: 6px; border-radius: 50%; background: #E34E2A; flex-shrink: 0; }
+
+/* monitoring badge on sidebar parent */
+.nav-item .alert-count { min-width: 18px; height: 18px; background: #E34E2A; color: #fff; border-radius: 9px; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+
+.nav-divider { height: 1px; background: #E5E5E5; margin: 6px 16px; }
+
+/* ── Topbar ── */
+.topbar { display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; height: 56px; border-bottom: 1px solid #E5E5E5; background: #FFF; gap: 16px; flex-shrink: 0; }
+.syncs-left { font-size: 14px; }
+.syncs-left .num { color: #0053CC; font-weight: 700; border-bottom: 1px solid #0053CC; }
+
+/* ── Page ── */
+.page { display: none; padding: 28px 32px 80px; }
+.page.active { display: block; }
+.page-title { font-size: 24px; font-weight: 500; margin-bottom: 20px; }
+
+/* ── Tab bar ── */
+.tab-bar { display: flex; border-bottom: 1px solid #E5E5E5; margin-bottom: 24px; gap: 0; }
+.tab { padding: 10px 20px; font-size: 14px; color: #6B778C; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: #2F303A; }
+.tab.active { color: #0053CC; border-bottom-color: #0053CC; font-weight: 500; }
+
+/* ── Chart card ── */
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.chart-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 20px; }
+.chart-card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; }
+.chart-card-title { font-size: 16px; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.chart-card-title .info { color: #6B778C; font-size: 14px; cursor: help; }
+.chart-card-sub { font-size: 12px; color: #6B778C; margin-bottom: 16px; }
+.chart-filters { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.chip-filter { padding: 5px 10px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; background: #FFF; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.chip-filter .caret { font-size: 10px; color: #6B778C; }
+.btn-apply { padding: 5px 14px; background: #0053CC; color: #FFF; border: none; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.btn-reset { padding: 5px 14px; background: transparent; color: #0053CC; border: 1px solid #0053CC; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.chart-area { background: #F6F8FC; border-radius: 6px; height: 200px; display: flex; align-items: flex-end; padding: 12px 12px 0; gap: 0; overflow: hidden; position: relative; }
+.chart-legend { display: flex; gap: 16px; margin-bottom: 12px; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6B778C; }
+.legend-dot { width: 12px; height: 4px; border-radius: 2px; }
+/* SVG charts */
+.chart-svg { width: 100%; height: 200px; }
+
+/* ── Filters bar (error grouping) ── */
+.filters-bar { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-label { font-size: 12px; color: #6B778C; font-weight: 500; }
+.filter-input { padding: 6px 10px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; font-family: inherit; background: #FFF; min-width: 160px; color: #2F303A; }
+.filter-select { padding: 6px 28px 6px 10px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; font-family: inherit; background: #FFF; appearance: none; color: #2F303A; cursor: pointer; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B778C' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 8px center; }
+.filter-date { display: flex; align-items: center; gap: 8px; }
+.date-input { padding: 6px 10px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; font-family: inherit; background: #FFF; width: 110px; }
+.filters-actions { display: flex; gap: 8px; align-items: flex-end; }
+
+/* ── Table ── */
+.data-table { width: 100%; border-collapse: collapse; background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; overflow: hidden; }
+.data-table th { text-align: left; padding: 11px 16px; font-size: 13px; font-weight: 500; color: #6B778C; border-bottom: 1px solid #E5E5E5; background: #F6F6F6; cursor: pointer; white-space: nowrap; }
+.data-table th .sort { color: #C8C7CC; font-size: 11px; }
+.data-table th.sorted .sort { color: #0053CC; }
+.data-table td { padding: 12px 16px; font-size: 13px; color: #2F303A; border-bottom: 1px solid #F0F0F0; vertical-align: top; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #FAFBFF; }
+.status-pill { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+.status-pill.failed { background: #FEE8E8; color: #A72222; }
+.status-pill.rollback { background: #FFF3E0; color: #B55C00; }
+.status-pill.cancelled { background: #FFF8E1; color: #A07800; }
+.table-link { color: #0053CC; cursor: pointer; white-space: nowrap; }
+.table-link:hover { text-decoration: underline; }
+.table-footer { display: flex; align-items: center; justify-content: flex-end; padding: 12px 16px; background: #FFF; border: 1px solid #E5E5E5; border-top: none; border-radius: 0 0 8px 8px; gap: 8px; font-size: 13px; color: #6B778C; }
+.pagination-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border: 1px solid #C8C7CC; border-radius: 4px; background: #FFF; cursor: pointer; font-size: 14px; color: #2F303A; }
+.pagination-btn:disabled { color: #C8C7CC; cursor: default; }
+.rows-select { padding: 4px 24px 4px 8px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; appearance: none; background: #FFF url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B778C' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 6px center; cursor: pointer; }
+
+/* ── Dashboard monitoring widget ── */
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+.dash-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 20px; }
+.dash-card-title { font-size: 15px; font-weight: 500; margin-bottom: 2px; }
+.dash-card-sub { font-size: 12px; color: #6B778C; margin-bottom: 16px; }
+
+/* Monitoring widget — the main focus */
+.monitoring-widget { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+.mw-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.mw-title { font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.mw-badge { min-width: 20px; height: 20px; background: #E34E2A; color: #fff; border-radius: 10px; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; padding: 0 5px; }
+.mw-badge.warn { background: #E8A000; }
+.mw-badge.ok { background: #2D8A3E; }
+.mw-link { font-size: 13px; color: #0053CC; cursor: pointer; }
+.mw-link:hover { text-decoration: underline; }
+.mw-issue { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid #F0F0F0; }
+.mw-issue:first-child { border-top: 1px solid #F0F0F0; }
+.mw-issue-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+.mw-issue-icon.critical { background: #FEE8E8; color: #A72222; }
+.mw-issue-icon.warning { background: #FFF3E0; color: #B55C00; }
+.mw-issue-icon.info { background: #E3F2FD; color: #0053CC; }
+.mw-issue-body { flex: 1; }
+.mw-issue-name { font-size: 14px; font-weight: 500; color: #1A1B24; margin-bottom: 2px; }
+.mw-issue-desc { font-size: 12px; color: #6B778C; }
+.mw-issue-action { font-size: 13px; color: #0053CC; white-space: nowrap; cursor: pointer; padding: 4px 10px; border: 1px solid #C8E0FF; border-radius: 4px; background: transparent; font-family: inherit; align-self: center; }
+.mw-issue-action:hover { background: #F0F6FF; }
+.mw-footer { margin-top: 14px; text-align: right; }
+.btn-ghost { padding: 7px 16px; background: transparent; color: #0053CC; border: 1px solid #0053CC; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.btn-ghost:hover { background: #F0F6FF; }
+
+/* ── Problems page (health check) ── */
+.problems-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 28px; }
+.summary-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px 20px; display: flex; align-items: flex-start; gap: 14px; }
+.summary-card-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.summary-card-icon.critical { background: #FEE8E8; }
+.summary-card-icon.warning { background: #FFF3E0; }
+.summary-card-icon.ok { background: #E8F5E9; }
+.summary-card-label { font-size: 12px; color: #6B778C; margin-bottom: 2px; }
+.summary-card-count { font-size: 28px; font-weight: 700; line-height: 1; margin-bottom: 4px; }
+.summary-card-count.critical { color: #A72222; }
+.summary-card-count.warning { color: #B55C00; }
+.summary-card-count.ok { color: #2D8A3E; }
+.summary-card-detail { font-size: 12px; color: #6B778C; }
+
+.problems-section-title { font-size: 14px; font-weight: 600; color: #6B778C; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 10px; margin-top: 24px; }
+.problem-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+.problem-card-head { display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px; cursor: pointer; }
+.problem-card-head:hover { background: #FAFBFF; }
+.problem-card-sev { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; }
+.problem-card-sev.critical { background: #A72222; }
+.problem-card-sev.warning { background: #E8A000; }
+.problem-card-sev.info { background: #0053CC; }
+.problem-card-title { font-size: 14px; font-weight: 500; margin-bottom: 3px; }
+.problem-card-meta { font-size: 12px; color: #6B778C; }
+.problem-card-right { margin-left: auto; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.problem-card-tag { font-size: 11px; padding: 2px 7px; border-radius: 3px; font-weight: 500; }
+.problem-card-tag.critical { background: #FEE8E8; color: #A72222; }
+.problem-card-tag.warning { background: #FFF3E0; color: #B55C00; }
+.problem-card-tag.info { background: #E3F2FD; color: #0053CC; }
+.problem-card-body { border-top: 1px solid #F0F0F0; padding: 16px 20px; display: none; }
+.problem-card-body.open { display: block; }
+.problem-body-desc { font-size: 14px; color: #2F303A; margin-bottom: 12px; line-height: 1.6; }
+.problem-body-steps { margin-bottom: 12px; }
+.problem-body-steps-title { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.problem-body-step { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; color: #2F303A; margin-bottom: 6px; }
+.problem-body-step .step-num { width: 20px; height: 20px; border-radius: 50%; background: #E3EEFF; color: #0053CC; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.btn-primary { padding: 8px 18px; background: #0053CC; color: #FFF; border: none; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; }
+.btn-primary:hover { background: #003E99; }
+
+/* empty state (all clear) */
+.all-clear { text-align: center; padding: 60px 20px; }
+.all-clear-icon { font-size: 48px; margin-bottom: 12px; }
+.all-clear-title { font-size: 18px; font-weight: 500; margin-bottom: 6px; color: #2D8A3E; }
+.all-clear-sub { font-size: 14px; color: #6B778C; }
+
+/* ── Toast ── */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1A1B24; color: #FFF; padding: 10px 20px; border-radius: 6px; font-size: 13px; opacity: 0; transition: all .3s; z-index: 9999; white-space: nowrap; }
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* ── Demo controls ── */
+.demo-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1A1B24; padding: 10px 24px; display: flex; align-items: center; gap: 10px; z-index: 100; }
+.demo-label { color: #6B778C; font-size: 12px; font-weight: 500; margin-right: 4px; }
+.demo-btn { padding: 5px 14px; border-radius: 4px; border: 1px solid #444; background: transparent; color: #CCC; font-size: 12px; font-family: inherit; cursor: pointer; }
+.demo-btn.active { background: #0053CC; border-color: #0053CC; color: #FFF; }
+
+/* ── Misc ── */
+.info-callout { display: flex; align-items: flex-start; gap: 8px; background: #F0F6FF; border: 1px solid #C8E0FF; border-radius: 6px; padding: 10px 14px; margin-bottom: 20px; font-size: 13px; color: #2F303A; }
+.info-callout .info-ico { color: #0053CC; flex-shrink: 0; margin-top: 1px; }
+.period-row { display: flex; gap: 8px; margin-bottom: 16px; }
+.period-chip { padding: 5px 12px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; background: #FFF; cursor: pointer; }
+.period-chip.active { background: #E3EEFF; border-color: #0053CC; color: #0053CC; font-weight: 500; }
+</style>
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ─────────────── SIDEBAR ─────────────── -->
+  <aside class="sidebar">
+    <div class="org-switch">
+      <div class="org-avatar">LC</div>
+      <div class="org-name">Lara Croft</div>
+      <div class="org-caret">▾</div>
+    </div>
+    <nav class="nav">
+      <div class="nav-item" onclick="navigate('dashboard')">
+        <span class="ico">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/><rect x="9" y="1" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/><rect x="1" y="9" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/></svg>
+        </span>
+        Dashboard
+      </div>
+
+      <div class="nav-item" onclick="toggleSub('txns')">
+        <span class="ico">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 5h12M2 8h8M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+        Transactions
+        <span class="chevron open" id="chevron-txns">▾</span>
+      </div>
+      <div class="nav-sub open" id="sub-txns">
+        <div class="nav-sub-item" onclick="toast('Transactions list')">All transactions</div>
+        <div class="nav-sub-item" onclick="toast('Import history')">Import history</div>
+      </div>
+
+      <div class="nav-item" onclick="toast('Transaction reconciliation')">
+        <span class="ico">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h7M3 12h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="12" cy="12" r="3" fill="currentColor" opacity=".2"/><path d="M11 12l1 1 2-2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        Transaction reconciliation
+        <span class="badge-beta">Beta</span>
+      </div>
+
+      <div class="nav-item" onclick="toast('AI reports')">
+        <span class="ico">✦</span>
+        AI reports
+      </div>
+
+      <div class="nav-item" onclick="toast('Revenue recognition')">
+        <span class="ico">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 8l3 3 5-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </span>
+        Revenue recognition
+        <span class="chevron">▾</span>
+      </div>
+
+      <div class="nav-divider"></div>
+
+      <!-- MONITORING section -->
+      <div class="nav-item" id="nav-monitoring" onclick="toggleSub('monitoring')">
+        <span class="ico">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </span>
+        Monitoring
+        <span class="alert-count" id="monitoring-badge" style="display:none">3</span>
+        <span class="chevron open" id="chevron-monitoring">▾</span>
+      </div>
+      <div class="nav-sub open" id="sub-monitoring">
+        <div class="nav-sub-item" id="nav-problems" onclick="navigate('problems')">
+          <span class="dot" id="dot-problems" style="display:none"></span>
+          Problems
+          <span class="badge-new" id="new-badge" style="display:none">NEW</span>
+        </div>
+        <div class="nav-sub-item" onclick="navigate('sync-issues')">Synchronization issues</div>
+        <div class="nav-sub-item" onclick="navigate('sync-speed')">Sync speed</div>
+      </div>
+
+      <div class="nav-divider"></div>
+
+      <div class="nav-item" onclick="toast('Settings')">
+        <span class="ico">⚙</span>
+        Settings
+      </div>
+      <div class="nav-item" onclick="toast('AI Agents')">
+        <span class="ico">●</span>
+        AI Agents
+      </div>
+      <div class="nav-item" onclick="toast('What\'s new')">
+        <span class="ico">★</span>
+        What's new
+      </div>
+    </nav>
+  </aside>
+
+  <!-- ─────────────── MAIN ─────────────── -->
+  <div class="main">
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="syncs-left">Syncs left: <span class="num">1000</span></div>
+      <div style="color:#0053CC;cursor:pointer">?</div>
+      <div style="width:28px;height:28px;border-radius:50%;background:#6B778C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;cursor:pointer">LC</div>
+    </div>
+
+    <!-- ══════════════ DASHBOARD PAGE ══════════════ -->
+    <div class="page active" id="page-dashboard" style="max-width:1280px">
+      <div class="page-title">Dashboard</div>
+
+      <div class="tab-bar">
+        <div class="tab active">Overview</div>
+        <div class="tab" onclick="navigate('sync-issues')">Synchronization issues</div>
+        <div class="tab" onclick="navigate('sync-speed')">Sync speed</div>
+      </div>
+
+      <!-- Monitoring widget -->
+      <div class="monitoring-widget" id="dash-monitoring-widget">
+        <div class="mw-head">
+          <div class="mw-title">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#A72222" stroke-width="1.5"/><path d="M8 5v3" stroke="#A72222" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r=".75" fill="#A72222"/></svg>
+            <span id="mw-title-text">Monitoring</span>
+            <span class="mw-badge" id="mw-badge">3</span>
+          </div>
+          <span class="mw-link" onclick="navigate('problems')">View all →</span>
+        </div>
+        <div id="mw-issues-list">
+          <!-- injected by JS based on demo state -->
+        </div>
+        <div class="mw-footer">
+          <button class="btn-ghost" onclick="navigate('problems')">Go to Monitoring</button>
+        </div>
+      </div>
+
+      <!-- Other dashboard cards (placeholder) -->
+      <div class="dash-grid">
+        <div class="dash-card">
+          <div class="dash-card-title">Transaction volume</div>
+          <div class="dash-card-sub">Synced transactions this month</div>
+          <div style="height:140px;background:#F6F8FC;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#C8C7CC;font-size:13px">Chart placeholder</div>
+        </div>
+        <div class="dash-card">
+          <div class="dash-card-title">Sync health</div>
+          <div class="dash-card-sub">Overall connection status</div>
+          <div style="height:140px;background:#F6F8FC;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#C8C7CC;font-size:13px">Chart placeholder</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ PROBLEMS PAGE ══════════════ -->
+    <div class="page" id="page-problems" style="max-width:1100px">
+      <div class="page-title">Problems</div>
+
+      <div class="problems-summary">
+        <div class="summary-card" id="sumcard-critical">
+          <div class="summary-card-icon critical">⚠</div>
+          <div>
+            <div class="summary-card-label">Critical</div>
+            <div class="summary-card-count critical" id="sum-critical">1</div>
+            <div class="summary-card-detail">Needs immediate attention</div>
+          </div>
+        </div>
+        <div class="summary-card" id="sumcard-warning">
+          <div class="summary-card-icon warning">!</div>
+          <div>
+            <div class="summary-card-label">Warnings</div>
+            <div class="summary-card-count warning" id="sum-warning">2</div>
+            <div class="summary-card-detail">Should be addressed soon</div>
+          </div>
+        </div>
+        <div class="summary-card" id="sumcard-ok">
+          <div class="summary-card-icon ok">✓</div>
+          <div>
+            <div class="summary-card-label">Healthy</div>
+            <div class="summary-card-count ok" id="sum-ok">5</div>
+            <div class="summary-card-detail">Everything working</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- All clear state -->
+      <div id="all-clear-state" style="display:none">
+        <div class="all-clear">
+          <div class="all-clear-icon">✅</div>
+          <div class="all-clear-title">Everything looks good</div>
+          <div class="all-clear-sub">No issues detected. All connections and sync processes are healthy.</div>
+        </div>
+      </div>
+
+      <!-- Issues list -->
+      <div id="problems-list">
+        <div class="problems-section-title">Critical</div>
+
+        <div class="problem-card">
+          <div class="problem-card-head" onclick="toggleProblem(this)">
+            <div class="problem-card-sev critical"></div>
+            <div>
+              <div class="problem-card-title">Accounting platform disconnected</div>
+              <div class="problem-card-meta">QuickBooks Online · Disconnected 2 days ago</div>
+            </div>
+            <div class="problem-card-right">
+              <span class="problem-card-tag critical">Critical</span>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" class="expand-ico"><path d="M3 5l4 4 4-4" stroke="#6B778C" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <div class="problem-card-body">
+            <div class="problem-body-desc">
+              Your QuickBooks Online account has been disconnected. Synder cannot post transactions to your books until you reconnect. All imports are currently paused.
+            </div>
+            <div class="problem-body-steps">
+              <div class="problem-body-steps-title">How to fix</div>
+              <div class="problem-body-step"><span class="step-num">1</span> Go to Settings → Integrations → QuickBooks Online</div>
+              <div class="problem-body-step"><span class="step-num">2</span> Click "Reconnect" and sign in with your QBO credentials</div>
+              <div class="problem-body-step"><span class="step-num">3</span> Confirm permissions — Synder needs read/write access to transactions</div>
+              <div class="problem-body-step"><span class="step-num">4</span> Synder will automatically resume syncing pending transactions</div>
+            </div>
+            <button class="btn-primary" onclick="toast('Opening QuickBooks reconnect flow…')">Reconnect QuickBooks Online →</button>
+          </div>
+        </div>
+
+        <div class="problems-section-title">Warnings</div>
+
+        <div class="problem-card">
+          <div class="problem-card-head" onclick="toggleProblem(this)">
+            <div class="problem-card-sev warning"></div>
+            <div>
+              <div class="problem-card-title">Stripe integration auto-sync is off</div>
+              <div class="problem-card-meta">Stripe · Last synced 12 days ago</div>
+            </div>
+            <div class="problem-card-right">
+              <span class="problem-card-tag warning">Warning</span>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" class="expand-ico"><path d="M3 5l4 4 4-4" stroke="#6B778C" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <div class="problem-card-body">
+            <div class="problem-body-desc">
+              Auto-sync for your Stripe integration is currently disabled. Transactions from the past 12 days have not been imported. You can run a manual sync or re-enable auto-sync to catch up.
+            </div>
+            <div class="problem-body-steps">
+              <div class="problem-body-steps-title">How to fix</div>
+              <div class="problem-body-step"><span class="step-num">1</span> Go to Settings → Integrations → Stripe</div>
+              <div class="problem-body-step"><span class="step-num">2</span> Enable "Auto-sync" toggle</div>
+              <div class="problem-body-step"><span class="step-num">3</span> Optionally run a historical import to backfill missing dates</div>
+            </div>
+            <button class="btn-primary" onclick="toast('Opening Stripe settings…')">Go to Stripe settings →</button>
+          </div>
+        </div>
+
+        <div class="problem-card">
+          <div class="problem-card-head" onclick="toggleProblem(this)">
+            <div class="problem-card-sev warning"></div>
+            <div>
+              <div class="problem-card-title">Missing periods detected</div>
+              <div class="problem-card-meta">Shopify · Gaps in Feb 14–18, Mar 2–4</div>
+            </div>
+            <div class="problem-card-right">
+              <span class="problem-card-tag warning">Warning</span>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" class="expand-ico"><path d="M3 5l4 4 4-4" stroke="#6B778C" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <div class="problem-card-body">
+            <div class="problem-body-desc">
+              Synder detected gaps in your imported data from Shopify. Transactions from Feb 14–18 and Mar 2–4 are missing and may not have been synced to your books. This can cause reconciliation discrepancies.
+            </div>
+            <div class="problem-body-steps">
+              <div class="problem-body-steps-title">How to fix</div>
+              <div class="problem-body-step"><span class="step-num">1</span> Go to Transactions → Import history</div>
+              <div class="problem-body-step"><span class="step-num">2</span> Run a manual import for the affected date ranges</div>
+              <div class="problem-body-step"><span class="step-num">3</span> Review imported transactions for duplicates before syncing to books</div>
+            </div>
+            <button class="btn-primary" onclick="toast('Opening import for missing periods…')">Import missing periods →</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════ SYNC ISSUES PAGE ══════════════ -->
+    <div class="page" id="page-sync-issues" style="max-width:1200px">
+      <div class="page-title">Synchronization issues</div>
+
+      <div class="filters-bar">
+        <div class="filter-group">
+          <div class="filter-label">Search</div>
+          <input class="filter-input" type="text" placeholder="Search by any word…">
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">Status</div>
+          <select class="filter-select" style="width:120px">
+            <option>All</option>
+            <option>Failed</option>
+            <option>Rollback failed</option>
+            <option>Cancelled</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">Date range</div>
+          <select class="filter-select" style="width:130px">
+            <option>This month</option>
+            <option>Last 7 days</option>
+            <option>Last 30 days</option>
+            <option>Custom</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">From</div>
+          <input class="date-input" type="text" value="02/01/2025">
+        </div>
+        <div class="filter-group">
+          <div class="filter-label">To</div>
+          <input class="date-input" type="text" value="02/28/2025">
+        </div>
+        <div class="filters-actions">
+          <button class="btn-apply" onclick="toast('Filters applied')">Apply</button>
+          <button class="btn-reset" onclick="toast('Filters reset')">Reset filters</button>
+        </div>
+      </div>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th class="sorted">Quantity <span class="sort">↓</span></th>
+            <th>Status</th>
+            <th>Error message</th>
+            <th>Actions <span style="color:#6B778C;font-size:11px">ⓘ</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>4000</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>QuickBooks Online limitation: The item '[HK-FXCF-1BHN] Activated Charcoal x 240 Caps' has been used in too many transactions, causing QuickBooks Online to reject it. <a href="#" onclick="toast('Learn more')">Learn how to…</a></td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>3500</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>QuickBooks Online limitation: The item '[HK-FXCF-1BHN] Activated Charcoal x 240 Caps' has been used in too many transactions, causing QuickBooks Online to reject it.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>300</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>QuickBooks Online limitation: The item '[HK-FXCF-1BHN] Activated Charcoal x 240 Caps' has been used in too many transactions.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>300</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>Invoice can not be synchronized without Product or Service.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>250</td>
+            <td><span class="status-pill rollback">Rollback failed</span></td>
+            <td>QuickBooks Online limitation: The item '[HK-FXCF-1BHN] Activated Charcoal x 240 Caps' has been used in too many transactions, causing QuickBooks Online to reject it.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>200</td>
+            <td><span class="status-pill cancelled">Cancelled</span></td>
+            <td>Invoice can not be synchronized without Contact.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>150</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>QuickBooks Online limitation: The item '[HK-FXCF-1BHN] Activated Charcoal x 240 Caps' has been used in too many transactions.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>100</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>QuickBooks Online limitation: The item '[HK-FXCF-1BHN] Activated Charcoal x 240 Caps' has been used in too many transactions.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>50</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>Invoice can not be synchronized without Product or Service.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+          <tr>
+            <td>45</td>
+            <td><span class="status-pill failed">Failed</span></td>
+            <td>Invoice can not be synchronized without Product or Service.</td>
+            <td><span class="table-link" onclick="toast('See related transactions')">See related transactions</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="table-footer">
+        Rows per page: <select class="rows-select"><option>10</option><option>25</option><option>50</option></select>
+        <span>1–10 of 87</span>
+        <button class="pagination-btn" disabled>‹</button>
+        <button class="pagination-btn" onclick="toast('Next page')">›</button>
+      </div>
+    </div>
+
+    <!-- ══════════════ SYNC SPEED PAGE ══════════════ -->
+    <div class="page" id="page-sync-speed" style="max-width:1200px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;">
+        <div class="page-title" style="margin-bottom:0">Dashboard</div>
+      </div>
+
+      <div class="tab-bar">
+        <div class="tab" onclick="navigate('dashboard')">Overview</div>
+        <div class="tab" onclick="navigate('sync-issues')">Synchronization issues</div>
+        <div class="tab active">Sync speed</div>
+      </div>
+
+      <div class="info-callout">
+        <span class="info-ico">ℹ</span>
+        Below graphs help getting a grasp of how quickly the synchronization goes. <a href="#" onclick="toast('Learn more')">Learn more.</a>
+      </div>
+
+      <div class="chart-row">
+        <!-- Chart 1 -->
+        <div class="chart-card">
+          <div class="chart-card-head">
+            <div class="chart-card-title">Transaction volume by platform <span class="info" title="Info">ⓘ</span></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select class="filter-select" style="width:100px">
+                <option>30 days</option>
+                <option>7 days</option>
+                <option>90 days</option>
+              </select>
+              <select class="filter-select" style="width:70px">
+                <option>Day</option>
+                <option>Week</option>
+              </select>
+            </div>
+          </div>
+          <div class="chart-card-sub">Amount of synchronized transactions per connected integration.</div>
+          <div class="chart-filters">
+            <div class="chip-filter">All integrations <span class="caret">▾</span></div>
+            <div class="chip-filter">All statuses <span class="caret">▾</span></div>
+            <button class="btn-apply">Apply</button>
+            <button class="btn-reset">Reset filters</button>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#E8A000"></span>My wonderful flowers (Shopify)</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#7B9FD4"></span>My great bread (Stripe)</div>
+          </div>
+          <svg class="chart-svg" viewBox="0 0 600 180" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#E8A000" stop-opacity=".15"/>
+                <stop offset="100%" stop-color="#E8A000" stop-opacity="0"/>
+              </linearGradient>
+              <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#7B9FD4" stop-opacity=".15"/>
+                <stop offset="100%" stop-color="#7B9FD4" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <!-- Grid lines -->
+            <line x1="0" y1="30" x2="600" y2="30" stroke="#E5E5E5" stroke-width="1"/>
+            <line x1="0" y1="75" x2="600" y2="75" stroke="#E5E5E5" stroke-width="1"/>
+            <line x1="0" y1="120" x2="600" y2="120" stroke="#E5E5E5" stroke-width="1"/>
+            <line x1="0" y1="165" x2="600" y2="165" stroke="#E5E5E5" stroke-width="1"/>
+            <!-- Labels -->
+            <text x="2" y="27" font-size="10" fill="#6B778C">12000</text>
+            <text x="2" y="72" font-size="10" fill="#6B778C">8000</text>
+            <text x="2" y="117" font-size="10" fill="#6B778C">4000</text>
+            <text x="4" y="162" font-size="10" fill="#6B778C">0</text>
+            <!-- Shopify line -->
+            <path d="M40,140 L140,130 L240,110 L340,80 L440,45 L540,60 L600,65" fill="none" stroke="#E8A000" stroke-width="2"/>
+            <!-- Stripe line -->
+            <path d="M40,150 L140,142 L240,130 L340,105 L440,75 L540,90 L600,95" fill="none" stroke="#7B9FD4" stroke-width="2"/>
+            <!-- X axis labels -->
+            <text x="35" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 7 '25</text>
+            <text x="135" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 8 '25</text>
+            <text x="235" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 9 '25</text>
+            <text x="335" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 10 '25</text>
+            <text x="440" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 11 '25</text>
+            <text x="540" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 12 '25</text>
+          </svg>
+        </div>
+
+        <!-- Chart 2 -->
+        <div class="chart-card">
+          <div class="chart-card-head">
+            <div class="chart-card-title">Sync time process breakdown <span class="info" title="Info">ⓘ</span></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select class="filter-select" style="width:100px"><option>30 days</option><option>7 days</option></select>
+              <select class="filter-select" style="width:70px"><option>Day</option><option>Week</option></select>
+            </div>
+          </div>
+          <div class="chart-card-sub">Breakdown of average time by sync process steps. <a href="#" onclick="toast('Learn how to speed it up')">Learn how to speed it up here.</a></div>
+          <div class="chart-filters">
+            <div class="chip-filter">All integrations <span class="caret">▾</span></div>
+            <div class="chip-filter">All process groups <span class="caret">▾</span></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:13px">
+              <input type="checkbox" id="detailed"> <label for="detailed" style="cursor:pointer">Display detailed processes</label>
+            </div>
+            <button class="btn-apply">Apply</button>
+            <button class="btn-reset">Reset filters</button>
+          </div>
+          <div class="chart-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#E8A000"></span>Query to stripe for detailed data</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#7B9FD4"></span>Query to Shopify for detailed data</div>
+          </div>
+          <svg class="chart-svg" viewBox="0 0 600 180" preserveAspectRatio="none">
+            <line x1="0" y1="30" x2="600" y2="30" stroke="#E5E5E5" stroke-width="1"/>
+            <line x1="0" y1="75" x2="600" y2="75" stroke="#E5E5E5" stroke-width="1"/>
+            <line x1="0" y1="120" x2="600" y2="120" stroke="#E5E5E5" stroke-width="1"/>
+            <line x1="0" y1="165" x2="600" y2="165" stroke="#E5E5E5" stroke-width="1"/>
+            <text x="2" y="27" font-size="10" fill="#6B778C">12ms</text>
+            <text x="2" y="72" font-size="10" fill="#6B778C">8ms</text>
+            <text x="2" y="117" font-size="10" fill="#6B778C">4ms</text>
+            <text x="4" y="162" font-size="10" fill="#6B778C">0</text>
+            <path d="M40,145 L140,130 L240,110 L340,75 L440,40 L540,55 L600,60" fill="none" stroke="#E8A000" stroke-width="2"/>
+            <path d="M40,155 L140,148 L240,135 L340,110 L440,85 L540,95 L600,100" fill="none" stroke="#7B9FD4" stroke-width="2"/>
+            <text x="35" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 7 '25</text>
+            <text x="135" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 8 '25</text>
+            <text x="235" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 9 '25</text>
+            <text x="335" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 10 '25</text>
+            <text x="440" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 11 '25</text>
+            <text x="540" y="178" font-size="9" fill="#6B778C" text-anchor="middle">Mar 12 '25</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end .main -->
+</div><!-- end .app -->
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Demo bar -->
+<div class="demo-bar">
+  <span class="demo-label">Demo state:</span>
+  <button class="demo-btn" data-state="healthy" onclick="setDemoState('healthy')">Healthy (no issues)</button>
+  <button class="demo-btn active" data-state="issues" onclick="setDemoState('issues')">Issues (3 problems)</button>
+</div>
+
+<script>
+// ─── Navigation ───────────────────────────────────────────
+const pages = ['dashboard', 'problems', 'sync-issues', 'sync-speed'];
+const navItems = {
+  'dashboard': null,
+  'problems': 'nav-problems',
+  'sync-issues': null,
+  'sync-speed': null,
+};
+
+function navigate(page) {
+  pages.forEach(p => {
+    const el = document.getElementById('page-' + p);
+    if (el) el.classList.toggle('active', p === page);
+  });
+  // highlight nav
+  document.querySelectorAll('.nav-item, .nav-sub-item').forEach(el => el.classList.remove('active'));
+  if (page === 'dashboard') {
+    document.querySelector('.nav-item[onclick*="dashboard"]').classList.add('active');
+  } else if (page === 'problems') {
+    document.getElementById('nav-problems').classList.add('active');
+  } else if (page === 'sync-issues') {
+    document.querySelectorAll('.nav-sub-item').forEach(el => {
+      if (el.textContent.trim() === 'Synchronization issues') el.classList.add('active');
+    });
+  } else if (page === 'sync-speed') {
+    document.querySelectorAll('.nav-sub-item').forEach(el => {
+      if (el.textContent.trim() === 'Sync speed') el.classList.add('active');
+    });
+  }
+}
+
+// ─── Sub-nav toggle ────────────────────────────────────────
+function toggleSub(key) {
+  const sub = document.getElementById('sub-' + key);
+  const chevron = document.getElementById('chevron-' + key);
+  const isOpen = sub.classList.contains('open');
+  sub.classList.toggle('open', !isOpen);
+  chevron.classList.toggle('open', !isOpen);
+}
+
+// ─── Problem card expand ───────────────────────────────────
+function toggleProblem(head) {
+  const body = head.nextElementSibling;
+  const ico = head.querySelector('.expand-ico');
+  const isOpen = body.classList.contains('open');
+  body.classList.toggle('open', !isOpen);
+  ico.style.transform = isOpen ? '' : 'rotate(180deg)';
+}
+
+// ─── Demo state ────────────────────────────────────────────
+const issuesData = {
+  healthy: {
+    badge: null,
+    mwTitle: 'Monitoring',
+    mwBadge: null,
+    mwIssues: '',
+    sumCritical: '0', sumWarning: '0', sumOk: '8',
+    showProblems: false,
+  },
+  issues: {
+    badge: '3',
+    mwTitle: 'Monitoring — action required',
+    mwBadge: '3',
+    mwIssues: `
+      <div class="mw-issue">
+        <div class="mw-issue-icon critical">!</div>
+        <div class="mw-issue-body">
+          <div class="mw-issue-name">Accounting platform disconnected</div>
+          <div class="mw-issue-desc">QuickBooks Online · Sync paused 2 days ago</div>
+        </div>
+        <button class="mw-issue-action" onclick="navigate('problems');event.stopPropagation()">Fix →</button>
+      </div>
+      <div class="mw-issue">
+        <div class="mw-issue-icon warning">!</div>
+        <div class="mw-issue-body">
+          <div class="mw-issue-name">Stripe integration auto-sync is off</div>
+          <div class="mw-issue-desc">Last synced 12 days ago</div>
+        </div>
+        <button class="mw-issue-action" onclick="navigate('problems');event.stopPropagation()">Fix →</button>
+      </div>
+      <div class="mw-issue">
+        <div class="mw-issue-icon warning">!</div>
+        <div class="mw-issue-body">
+          <div class="mw-issue-name">Missing periods detected</div>
+          <div class="mw-issue-desc">Shopify · Feb 14–18, Mar 2–4 not imported</div>
+        </div>
+        <button class="mw-issue-action" onclick="navigate('problems');event.stopPropagation()">Fix →</button>
+      </div>`,
+    sumCritical: '1', sumWarning: '2', sumOk: '5',
+    showProblems: true,
+  }
+};
+
+function setDemoState(state) {
+  document.querySelectorAll('.demo-btn').forEach(b => b.classList.toggle('active', b.dataset.state === state));
+  const d = issuesData[state];
+
+  // sidebar badge
+  const badge = document.getElementById('monitoring-badge');
+  const dot = document.getElementById('dot-problems');
+  const newBadge = document.getElementById('new-badge');
+  if (d.badge) {
+    badge.textContent = d.badge;
+    badge.style.display = 'flex';
+    dot.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+    dot.style.display = 'none';
+  }
+
+  // monitoring widget on dashboard
+  document.getElementById('mw-title-text').textContent = d.mwTitle;
+  const mwBadge = document.getElementById('mw-badge');
+  if (d.mwBadge) {
+    mwBadge.textContent = d.mwBadge;
+    mwBadge.style.display = 'flex';
+    mwBadge.className = 'mw-badge';
+  } else {
+    mwBadge.style.display = 'none';
+  }
+  document.getElementById('mw-issues-list').innerHTML = d.mwIssues || `
+    <div style="padding:20px 0;text-align:center;color:#2D8A3E;font-size:14px">
+      ✓ No issues detected — all systems healthy
+    </div>`;
+
+  // problems page counters
+  document.getElementById('sum-critical').textContent = d.sumCritical;
+  document.getElementById('sum-warning').textContent = d.sumWarning;
+  document.getElementById('sum-ok').textContent = d.sumOk;
+
+  // problems list visibility
+  document.getElementById('problems-list').style.display = d.showProblems ? 'block' : 'none';
+  document.getElementById('all-clear-state').style.display = d.showProblems ? 'none' : 'block';
+}
+
+// ─── Toast ─────────────────────────────────────────────────
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// init
+setDemoState('issues');
+navigate('dashboard');
+document.getElementById('new-badge').style.display = 'inline-flex';
+</script>
+</body>
+</html>
