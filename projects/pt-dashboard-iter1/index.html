@@ -55,6 +55,25 @@
   .period-option:hover { background: #F6F6F6; }
   .period-option.selected { color: #0053CC; font-weight: 500; }
 
+  /* BLOCKING ISSUES BANNER */
+  .issues-banner { background: #FFF5F5; border: 1px solid #F5C2C2; border-radius: 8px; margin-bottom: 20px; overflow: hidden; display: none; }
+  .issues-banner.visible { display: block; }
+  .issues-banner-head { display: flex; align-items: center; gap: 10px; padding: 14px 20px; cursor: pointer; user-select: none; }
+  .issues-banner-head:hover { background: rgba(167,34,34,0.03); }
+  .issues-icon { width: 20px; height: 20px; background: #A72222; border-radius: 50%; color: #FFF; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .issues-title { font-size: 14px; font-weight: 600; color: #A72222; flex: 1; }
+  .issues-chevron { font-size: 12px; color: #A72222; transition: transform 0.15s; }
+  .issues-chevron.open { transform: rotate(180deg); }
+  .issues-body { border-top: 1px solid #F5C2C2; padding: 4px 20px 16px; }
+  .issue-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-bottom: 1px solid rgba(167,34,34,0.1); }
+  .issue-row:last-child { border-bottom: none; }
+  .issue-dot { width: 6px; height: 6px; border-radius: 50%; background: #A72222; flex-shrink: 0; margin-top: 6px; }
+  .issue-text { flex: 1; }
+  .issue-name { font-size: 13px; font-weight: 600; color: #A72222; margin-bottom: 2px; }
+  .issue-desc { font-size: 12px; color: #6B778C; line-height: 1.4; }
+  .issue-fix { font-size: 13px; color: #A72222; font-weight: 500; white-space: nowrap; padding: 5px 12px; border: 1px solid #F5C2C2; border-radius: 4px; cursor: pointer; background: transparent; font-family: inherit; }
+  .issue-fix:hover { background: rgba(167,34,34,0.06); }
+
   /* TOP STRIP — 3 cross-cutting metrics */
   .top-strip { display: grid; grid-template-columns: repeat(3, 1fr); background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
   .strip-cell { padding: 20px 24px; border-right: 1px solid #E5E5E5; }
@@ -278,6 +297,33 @@
             <div class="period-option selected" data-period="Last 30 days">Last 30 days</div>
             <div class="period-option" data-period="Last 90 days">Last 90 days</div>
             <div class="period-option" data-period="Custom">Custom…</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BLOCKING ISSUES BANNER (action required state only) -->
+      <div class="issues-banner" id="issuesBanner">
+        <div class="issues-banner-head" onclick="toggleBanner()">
+          <div class="issues-icon">!</div>
+          <div class="issues-title" id="issuesBannerTitle">2 critical issues — Synder can't sync until resolved</div>
+          <span class="issues-chevron open" id="issuesChevron">▼</span>
+        </div>
+        <div class="issues-body" id="issuesBody">
+          <div class="issue-row">
+            <div class="issue-dot"></div>
+            <div class="issue-text">
+              <div class="issue-name">Stripe connection lost</div>
+              <div class="issue-desc">Auto-sync is suspended. 405 transactions are waiting to sync — they'll post once reconnected.</div>
+            </div>
+            <button class="issue-fix" onclick="showToast('Open Stripe reconnect flow')">Reconnect →</button>
+          </div>
+          <div class="issue-row">
+            <div class="issue-dot"></div>
+            <div class="issue-text">
+              <div class="issue-name">QuickBooks Online token expired</div>
+              <div class="issue-desc">Synder can't post to your books. Reconnect to resume syncing.</div>
+            </div>
+            <button class="issue-fix" onclick="showToast('Open QBO reconnect flow')">Reconnect →</button>
           </div>
         </div>
       </div>
@@ -729,6 +775,14 @@
     toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
   }
 
+  function toggleBanner() {
+    const body = document.getElementById('issuesBody');
+    const chevron = document.getElementById('issuesChevron');
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : '';
+    chevron.classList.toggle('open', !isOpen);
+  }
+
   function scrollToHealth() {
     document.getElementById('hcPanel').scrollIntoView({behavior: 'smooth', block: 'center'});
   }
@@ -745,10 +799,12 @@
     const active = document.getElementById('dashboardActive');
     const periodSel = document.querySelector('.period-select');
 
+    const banner = document.getElementById('issuesBanner');
     if (name === 'cold') {
       onb.classList.add('active');
       active.classList.add('hidden');
       if (periodSel) periodSel.style.display = 'none';
+      banner.classList.remove('visible');
       showToast('Demo: New org (cold) — onboarding view');
       return;
     }
@@ -756,6 +812,16 @@
     onb.classList.remove('active');
     active.classList.remove('hidden');
     if (periodSel) periodSel.style.display = '';
+
+    // Show banner only for blocking-issue state
+    if (name === 'issues') {
+      banner.classList.add('visible');
+      // Reset to expanded on state switch
+      document.getElementById('issuesBody').style.display = '';
+      document.getElementById('issuesChevron').classList.add('open');
+    } else {
+      banner.classList.remove('visible');
+    }
 
     // Apply period-aware data
     applyPeriod(name, currentPeriod);
