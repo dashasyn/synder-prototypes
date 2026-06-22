@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Per Transaction Dashboard · Iteration 2 — Synder</title>
+<title>Per Transaction Dashboard · Iteration 3 — Synder</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
@@ -103,6 +103,9 @@
   .integ-dot { width: 18px; height: 18px; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #FFF; flex-shrink: 0; }
   .integ-dot.stripe { background: #635BFF; }
   .integ-dot.shopify { background: #95BF47; }
+
+  /* Page intro (scrolls away, above sticky nav) */
+  .page-intro { padding: 24px 32px 20px; }
 
   /* Header row */
   .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 24px; flex-wrap: wrap; }
@@ -491,6 +494,46 @@
 
     <div class="page active" id="page-dashboard">
 
+      <!-- PAGE HEADER + TOP STRIP (scrolls away, above sticky nav) -->
+      <div class="page-intro" id="pageIntro">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Dashboard</h1>
+            <div class="page-subtitle">Your sync workflow at a glance.</div>
+          </div>
+          <div class="period-select">
+            <button class="period-btn" id="periodBtn"><span id="periodLabel">Last 30 days</span> ▾</button>
+            <div class="period-dropdown" id="periodDropdown">
+              <div class="period-option" data-period="Last 7 days">Last 7 days</div>
+              <div class="period-option selected" data-period="Last 30 days">Last 30 days</div>
+              <div class="period-option" data-period="Last 90 days">Last 90 days</div>
+              <div class="period-option" data-period="Custom">Custom…</div>
+            </div>
+          </div>
+        </div>
+        <div class="top-strip" id="topStrip">
+          <div class="strip-cell">
+            <div class="strip-label">Time saved
+              <span class="tip">?<span class="tip-content">Estimated bookkeeping hours saved by syncing through Synder. Based on successful syncs only — failed and rolled-back syncs do not contribute.</span></span>
+            </div>
+            <div class="strip-number" id="tsNumber">~47<span class="unit">hours this month</span><span class="strip-trend up" id="tsTrend">↑ 18%</span></div>
+            <div class="strip-context" id="tsContext">Across <span class="deeplink">2,847 syncs</span> · <a href="#" onclick="showToast('How we calculate this →'); return false;">How we calculate this →</a></div>
+          </div>
+          <div class="strip-cell">
+            <div class="strip-label">Sync health
+              <span class="tip">?<span class="tip-content">Composite score (0–100) of pipeline health, customizations utilisation, and admin rule pass rate. Weights stay internal.</span></span>
+            </div>
+            <div class="strip-number score-healthy" id="shNumber">82<span class="unit">/100</span><span class="strip-trend up" id="shTrend">↑ 4pts</span></div>
+            <div class="strip-context"><span class="score-band healthy" id="shBand">Healthy</span> · <a href="#" onclick="showToast('About the Sync Health →'); return false;">About the Sync Health →</a></div>
+          </div>
+          <div class="strip-cell attention">
+            <div class="strip-label">Needs attention</div>
+            <div class="strip-number warn" id="naNumber">3</div>
+            <div class="strip-context" id="naContext"><span class="deeplink" onclick="scrollToHealth()">View issues →</span></div>
+          </div>
+        </div>
+      </div>
+
       <!-- STICKY PIPELINE NAV -->
       <div class="pipeline-sticky">
         <div class="pipeline-sticky-inner">
@@ -551,15 +594,6 @@
         <div id="section-import" class="section-anchor" style="margin-top: 28px;">
           <div class="section-head">
             <h2 class="section-title-lg">Import</h2>
-            <div class="period-select">
-              <button class="period-btn" id="periodBtn"><span id="periodLabel">Last 30 days</span> ▾</button>
-              <div class="period-dropdown" id="periodDropdown">
-                <div class="period-option" data-period="Last 7 days">Last 7 days</div>
-                <div class="period-option selected" data-period="Last 30 days">Last 30 days</div>
-                <div class="period-option" data-period="Last 90 days">Last 90 days</div>
-                <div class="period-option" data-period="Custom">Custom…</div>
-              </div>
-            </div>
           </div>
           <div class="import-cards">
             <div class="import-card">
@@ -1246,8 +1280,22 @@
   // ─── Apply period data to DOM ──────────────────────────────────────────────
   function applyPeriod(stateName, period) {
     const pd = (periodData[stateName] || periodData.default)[period] || periodData[stateName]['Last 30 days'];
-    // Update import cards
     const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const setHtml = (id, val) => { const el = document.getElementById(id); if (el) el.innerHTML = val; };
+
+    // Top strip
+    const periodShort = period === 'Last 7 days' ? 'this week' : period === 'Last 30 days' ? 'this month' : 'last 90 days';
+    const tsNum = document.getElementById('tsNumber');
+    if (tsNum) { tsNum.className = 'strip-number'; tsNum.innerHTML = `~${pd.ts.hours}<span class="unit">hours ${periodShort}</span><span class="strip-trend ${pd.ts.trendDir}">${pd.ts.trendLabel}</span>`; }
+    setHtml('tsContext', `Across <span class="deeplink">${pd.ts.syncs} syncs</span> · <a href="#" onclick="showToast('How we calculate this →'); return false;">How we calculate this →</a>`);
+    const shNum = document.getElementById('shNumber');
+    if (shNum) { shNum.className = `strip-number score-${pd.sh.bandClass}`; shNum.innerHTML = `${pd.sh.score}<span class="unit">/100</span><span class="strip-trend ${pd.sh.trendDir}">${pd.sh.trendLabel}</span>`; }
+    const shBand = document.getElementById('shBand');
+    if (shBand) { shBand.textContent = pd.sh.band; shBand.className = `score-band ${pd.sh.bandClass}`; }
+    const naNum = document.getElementById('naNumber');
+    if (naNum) { naNum.textContent = pd.na.number; naNum.className = `strip-number ${pd.na.cls}`; }
+
+    // Import cards
     if (stateName === 'issues') {
       setEl('imp-success', '241'); setEl('imp-failed', '80'); setEl('imp-progress', '5');
       setEl('imp-ready', '10'); setEl('imp-deleted', '60');
@@ -1330,14 +1378,17 @@
     const periodSel = document.querySelector('.period-select');
 
     const banner = document.getElementById('issuesBanner');
+    const pageIntro = document.getElementById('pageIntro');
     if (name === 'cold') {
       active.style.display = 'none';
+      if (pageIntro) pageIntro.style.display = 'none';
       banner.classList.remove('visible');
       showToast('Demo: New org (cold) — coming soon in Iteration 2');
       return;
     }
 
     active.style.display = '';
+    if (pageIntro) pageIntro.style.display = '';
     if (periodSel) periodSel.style.display = '';
 
     // Show banner only for blocking-issue state
