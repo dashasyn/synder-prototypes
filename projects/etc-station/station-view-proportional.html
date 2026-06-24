@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Station View</title>
+<title>Station View – Timeline</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
@@ -190,6 +190,38 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
 }
 .zoom-btn:hover { background: #f5f5f5; }
 
+/* ── View switcher pill ── */
+.view-switcher {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e0e0e0;
+  border-radius: 20px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.view-pill {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  color: #555;
+  background: white;
+  transition: background 0.15s, color 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.view-pill:hover:not(.active) { background: #f5f5f5; }
+
+.view-pill.active {
+  background: #0053CC;
+  color: white;
+  cursor: default;
+}
+
 /* ── Main timeline area ── */
 .timeline-wrapper {
   flex: 1;
@@ -351,6 +383,7 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   z-index: 5;
   transition: box-shadow 0.15s;
   user-select: none;
+  overflow: hidden;
 }
 
 .train-block:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.22); z-index: 10; }
@@ -392,7 +425,7 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
 }
 
 .train-arrow {
-  margin-right: 4px; /* kept for ghost compat, unused in new layout */
+  margin-right: 4px;
   font-size: 10px;
   opacity: 0.75;
   flex-shrink: 0;
@@ -423,37 +456,6 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   border-radius: 3px;
   flex-shrink: 0;
 }
-
-/* ── View switcher ── */
-.view-switcher {
-  display: flex;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  overflow: hidden;
-  flex-shrink: 0;
-}
-
-.view-btn {
-  padding: 5px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #555;
-  background: white;
-  text-decoration: none;
-  cursor: pointer;
-  white-space: nowrap;
-  border: none;
-  font-family: inherit;
-}
-
-.view-btn + .view-btn { border-left: 1px solid #e0e0e0; }
-
-.view-btn.active {
-  background: #0053CC;
-  color: white;
-}
-
-.view-btn:not(.active):hover { background: #f5f5f5; }
 
 /* ── Confirmation modal ── */
 .modal-backdrop {
@@ -551,6 +553,40 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   box-shadow: 0 6px 20px rgba(0,0,0,0.3);
   opacity: 0.85;
 }
+
+/* ── Hover tooltip ── */
+#train-tooltip {
+  position: fixed;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.14);
+  pointer-events: none;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+}
+
+#train-tooltip.visible { display: flex; }
+
+.tooltip-route {
+  font-size: 14px;
+  font-weight: 700;
+  color: #222;
+}
+
+.tooltip-time {
+  font-size: 14px;
+  font-weight: 400;
+  color: #333;
+}
+
+.tooltip-name {
+  font-size: 12px;
+  color: #888;
+}
 </style>
 </head>
 <body>
@@ -597,9 +633,10 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
     <button class="zoom-btn" id="zoom-in">+</button>
   </div>
 
+  <!-- View switcher -->
   <div class="view-switcher">
-    <span class="view-btn active">Content</span>
-    <a href="station-view-proportional.html" class="view-btn">Timeline</a>
+    <a href="station-view.html" class="view-pill">Content</a>
+    <span class="view-pill active">Timeline</span>
   </div>
 </div>
 
@@ -661,12 +698,21 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
 <!-- Drag ghost -->
 <div id="drag-ghost"></div>
 
+<!-- Hover tooltip for narrow blocks -->
+<div id="train-tooltip">
+  <div class="tooltip-route" id="tooltip-route"></div>
+  <div class="tooltip-time" id="tooltip-time"></div>
+  <div class="tooltip-name" id="tooltip-name"></div>
+</div>
+
 <script>
 // ── Config ──────────────────────────────────────────────
 const START_HOUR = 6;
 const END_HOUR   = 24;
-let PX_PER_HOUR  = 180; // mutable for zoom — 180px/hr → 3px/min → 5 min ≈ 15px
+let PX_PER_HOUR  = 360; // 360px/hr → 6px/min → 5 min = 30px
 const NUM_PLATFORMS = 7;
+const MIN_BLOCK_PX  = 4;   // minimum visible width for any dwell
+const CONTENT_THRESHOLD = 68; // show text only if block width >= this px
 
 function pxPerMin() { return PX_PER_HOUR / 60; }
 function totalWidth() { return (END_HOUR - START_HOUR) * PX_PER_HOUR; }
@@ -677,8 +723,9 @@ function parseTime(str) {
   return { h, m };
 }
 
-function formatTime(h, m) {
-  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+function timeToMinutes(str) {
+  const [h, m] = str.split(':').map(Number);
+  return h * 60 + m;
 }
 
 // ── Sample data ──────────────────────────────────────────
@@ -688,7 +735,7 @@ let trains = [
   { id:1,  platform:1, route:'201', name:'Tel Aviv – Netanya',        arrival:'06:30', departure:'06:34', status:'on-time',     delay:  0 },
   { id:2,  platform:1, route:'966', name:'Netanya – Bet Shemesh',     arrival:'14:00', departure:'14:04', status:'on-time',     delay:  0 },
   { id:3,  platform:1, route:'312', name:'Haifa – Jerusalem',         arrival:'17:30', departure:'17:33', status:'ahead',       delay: -2 },
-  { id:4,  platform:1, route:'115', name:'Tel Aviv – Beʼer Sheva', arrival:'21:00', departure:'21:05', status:'on-time',   delay:  0 },
+  { id:4,  platform:1, route:'115', name:'Tel Aviv – Be\'er Sheva',   arrival:'21:00', departure:'21:05', status:'on-time',     delay:  0 },
   // Platform 2
   { id:5,  platform:2, route:'966', name:'Netanya – Bet Shemesh',     arrival:'10:55', departure:'10:58', status:'delay-major', delay:  8 },
   { id:6,  platform:2, route:'145', name:'Herzliya – Ashdod',         arrival:'14:20', departure:'14:24', status:'delay-minor', delay:  3 },
@@ -724,6 +771,10 @@ const nowLine       = document.getElementById('now-line');
 const platformRows  = document.getElementById('platform-rows');
 const rowLabelsCol  = document.getElementById('row-labels-col');
 const dragGhost     = document.getElementById('drag-ghost');
+const tooltip       = document.getElementById('train-tooltip');
+const tooltipRoute  = document.getElementById('tooltip-route');
+const tooltipTime   = document.getElementById('tooltip-time');
+const tooltipName   = document.getElementById('tooltip-name');
 
 // ── Build UI ─────────────────────────────────────────────
 function buildTimeline() {
@@ -803,25 +854,75 @@ function renderTrains() {
 
     const a = parseTime(train.arrival);
     const d = parseTime(train.departure);
-    const x    = timeToX(a.h, a.m);
-    const xEnd = timeToX(d.h, d.m);
-    const w    = Math.max(xEnd - x, 24); // physical dwell width
+
+    const arrMin = timeToMinutes(train.arrival);
+    const depMin = timeToMinutes(train.departure);
+    const dwellMin = depMin - arrMin;
+
+    // Block width = dwell time in pixels, minimum MIN_BLOCK_PX
+    const blockW = Math.max(dwellMin * pxPerMin(), MIN_BLOCK_PX);
+
+    const x = timeToX(a.h, a.m);
 
     const el = document.createElement('div');
     el.className = `train-block ${statusClass(train.status)}`;
     el.dataset.id = train.id;
     el.style.left  = x + 'px';
+    el.style.width = blockW + 'px';
     el.title = `Route ${train.route} · ${train.name || ''} · ${train.arrival}–${train.departure} · ${statusLabel(train.status)}`;
 
     const delayStr = delayLabel(train.delay, train.status);
     const cancelled = train.status === 'cancelled';
-    el.innerHTML = cancelled
-      ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
-      : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+    const showContent = blockW >= CONTENT_THRESHOLD;
+
+    if (showContent) {
+      el.innerHTML = cancelled
+        ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
+        : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+    }
+    // else: empty block (color only) — tooltip on hover
 
     setupTrainDrag(el, train);
+
+    // Tooltip for narrow blocks
+    if (!showContent) {
+      el.addEventListener('mouseenter', e => showTooltip(e, train, delayStr));
+      el.addEventListener('mousemove',  e => moveTooltip(e));
+      el.addEventListener('mouseleave', hideTooltip);
+    }
+
     row.appendChild(el);
   });
+}
+
+// ── Tooltip ───────────────────────────────────────────────
+function showTooltip(e, train, delayStr) {
+  tooltipRoute.textContent = `→ ${train.route}`;
+  tooltipTime.textContent  = `${train.arrival} (${delayStr.replace(/[()]/g,'')})`;
+  tooltipName.textContent  = train.name || '';
+  tooltip.classList.add('visible');
+  positionTooltip(e);
+}
+
+function positionTooltip(e) {
+  tooltip.style.display = 'flex'; // ensure dimensions are computed
+  const tw = tooltip.offsetWidth;
+  const th = tooltip.offsetHeight;
+  let left = e.clientX - tw / 2;
+  let top  = e.clientY - th - 10;
+  // Clamp to viewport
+  left = Math.max(6, Math.min(left, window.innerWidth - tw - 6));
+  top  = Math.max(6, top);
+  tooltip.style.left = left + 'px';
+  tooltip.style.top  = top  + 'px';
+}
+
+function moveTooltip(e) {
+  positionTooltip(e);
+}
+
+function hideTooltip() {
+  tooltip.classList.remove('visible');
 }
 
 function statusClass(s) {
@@ -905,12 +1006,18 @@ function showGhost(el, train, cx, cy) {
   dragGhost.style.left = (cx - dragging.offsetX) + 'px';
   dragGhost.style.top  = (cy - dragging.offsetY) + 'px';
 
-  const w = rect.width;
   const delayStr = delayLabel(train.delay, train.status);
   const isCancelled = train.status === 'cancelled';
-  dragGhost.innerHTML = isCancelled
-    ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
-    : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+  const blockW = rect.width;
+  const showContent = blockW >= CONTENT_THRESHOLD;
+
+  if (showContent) {
+    dragGhost.innerHTML = isCancelled
+      ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
+      : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+  } else {
+    dragGhost.innerHTML = '';
+  }
 }
 
 function onDragMove(e) {
@@ -1029,7 +1136,7 @@ scrollArea.addEventListener('wheel', e => {
 document.getElementById('zoom-in').addEventListener('click', () => {
   const mid = scrollArea.scrollLeft + scrollArea.clientWidth / 2;
   const ratio = mid / totalWidth();
-  PX_PER_HOUR = Math.min(PX_PER_HOUR * 1.25, 360);
+  PX_PER_HOUR = Math.min(PX_PER_HOUR * 1.25, 720);
   buildTimeline();
   scrollArea.scrollLeft = ratio * totalWidth() - scrollArea.clientWidth / 2;
 });
@@ -1037,7 +1144,7 @@ document.getElementById('zoom-in').addEventListener('click', () => {
 document.getElementById('zoom-out').addEventListener('click', () => {
   const mid = scrollArea.scrollLeft + scrollArea.clientWidth / 2;
   const ratio = mid / totalWidth();
-  PX_PER_HOUR = Math.max(PX_PER_HOUR / 1.25, 36);
+  PX_PER_HOUR = Math.max(PX_PER_HOUR / 1.25, 72);
   buildTimeline();
   scrollArea.scrollLeft = ratio * totalWidth() - scrollArea.clientWidth / 2;
 });
