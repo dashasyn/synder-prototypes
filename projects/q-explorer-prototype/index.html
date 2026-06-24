@@ -994,6 +994,12 @@
     border-bottom: 1px solid #E5E7EB;
   }
 
+  .data-table th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  .data-table th.sortable::after { content: ' ⇕'; font-size: 10px; opacity: 0.35; }
+  .data-table th.sort-asc::after { content: ' ↑'; opacity: 0.8; color: #2563EB; }
+  .data-table th.sort-desc::after { content: ' ↓'; opacity: 0.8; color: #2563EB; }
+  .data-table th.sortable:hover { background: #F3F4F6; color: #374151; }
+
   .data-table td {
     padding: 12px 16px;
     font-size: 14px;
@@ -2667,13 +2673,13 @@
       type_trip_failures_desc: 'Analysis of cancelled trips by cause and line',
       type_raw_data: 'Raw Data Export DPM',
       type_raw_data_desc: 'Export raw data for external analysis (CSV)',
-      type_data_quality: 'Data Quality Index DPM',
+      type_data_quality: 'Data Quality Index (DQI) DPM',
       type_data_quality_desc: 'Quality indicators by region and transport company',
       type_line_analysis: 'Line Analysis DPM',
       type_line_analysis_desc: 'Detailed punctuality analysis by line',
       type_connection: 'Connection Punctuality',
       type_connection_desc: 'Connection rates between services',
-      type_punctuality: 'Punctuality',
+      type_punctuality: 'Punctuality DPM',
       type_punctuality_desc: 'Overall punctuality by canton and operator',
 
       wizard_subtitle: 'Configure evaluation',
@@ -2829,13 +2835,13 @@
       type_trip_failures_desc: 'Analyse ausgefallener Fahrten nach Ursache und Linie',
       type_raw_data: 'Rohdaten Export DPM',
       type_raw_data_desc: 'Exportieren Sie Rohdaten für externe Analysen (CSV)',
-      type_data_quality: 'Datenqualitätsindex DPM',
+      type_data_quality: 'Datenqualitätsindex (DQI) DPM',
       type_data_quality_desc: 'Qualitätskennzahlen nach Region und Transportunternehmen',
       type_line_analysis: 'Linienanalyse DPM',
       type_line_analysis_desc: 'Detaillierte Pünktlichkeitsanalyse nach Linie',
       type_connection: 'Anschlusspünktlichkeit',
       type_connection_desc: 'Anschlussquoten zwischen Verbindungen',
-      type_punctuality: 'Pünktlichkeit',
+      type_punctuality: 'Pünktlichkeit DPM',
       type_punctuality_desc: 'Gesamtpünktlichkeit nach Kanton und TU',
 
       wizard_subtitle: 'Auswertung konfigurieren',
@@ -3407,7 +3413,7 @@
     const row = link.closest('tr');
     const name = row.dataset.name || '';
     const typeMap = {
-      'Fahrtausfälle': 'trip_failures', 'Pünktlichkeit': 'punctuality',
+      'Fahrtausfälle': 'trip_failures', 'Pünktlichkeit DPM': 'punctuality', 'Pünktlichkeit': 'punctuality',
       'Rohdaten': 'raw_data', 'Linienanalyse': 'line_analysis',
       'Datenqualität': 'data_quality', 'Anschluss': 'connection',
     };
@@ -4149,6 +4155,38 @@
     updateCantonLabel();
   }
 
+  // ── Sortable table headers ────────────────────────────────────
+  function sortByColumn(th) {
+    const tr = th.closest('tr');
+    const thead = th.closest('thead');
+    const tbody = th.closest('table').querySelector('tbody');
+    const colIndex = Array.from(tr.children).indexOf(th);
+    const currentDir = th.dataset.sortDir || 'none';
+    const newDir = currentDir === 'asc' ? 'desc' : 'asc';
+
+    thead.querySelectorAll('th.sortable').forEach(h => {
+      h.dataset.sortDir = 'none';
+      h.classList.remove('sort-asc', 'sort-desc');
+    });
+    th.dataset.sortDir = newDir;
+    th.classList.add(newDir === 'asc' ? 'sort-asc' : 'sort-desc');
+
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    rows.sort((a, b) => {
+      const aText = (a.cells[colIndex]?.textContent || '').trim();
+      const bText = (b.cells[colIndex]?.textContent || '').trim();
+      return newDir === 'asc' ? aText.localeCompare(bText, 'de') : bText.localeCompare(aText, 'de');
+    });
+    rows.forEach(row => tbody.appendChild(row));
+  }
+
+  function initSortableHeaders() {
+    document.querySelectorAll('.data-table thead th:not([data-i18n="col_actions"])').forEach(th => {
+      th.classList.add('sortable');
+      th.addEventListener('click', () => sortByColumn(th));
+    });
+  }
+
   // ── Init ─────────────────────────────────────────────────────
   function init() {
     initCantonDropdown();
@@ -4156,6 +4194,7 @@
     renderLinesOptions();
     renderStopsOptions();
     updateCascade();
+    initSortableHeaders();
 
     const today = new Date();
     const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
