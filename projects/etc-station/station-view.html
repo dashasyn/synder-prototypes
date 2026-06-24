@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Station View</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.header-title {
+  font-weight: 500;
+  font-size: 15px;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
+.station-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  min-width: 170px;
+  color: #333;
+}
+
+.station-select span { flex: 1; }
+.station-select .chevron { color: #888; font-size: 11px; }
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: white;
+  font-size: 13px;
+  color: #888;
+  cursor: pointer;
+  min-width: 160px;
+}
+
+.btn-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: #0053CC;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.btn-add:hover { background: #0046b0; }
+
+.filter-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #0053CC;
+  position: relative;
+}
+
+.filter-badge::after {
+  content: '4';
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #0053CC;
+  color: white;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.toggle-switch {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: #0053CC;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: white;
+  top: 2px;
+  right: 2px;
+  transition: right 0.2s, left 0.2s;
+}
+
+.toggle-switch.off { background: #ccc; }
+.toggle-switch.off::after { right: auto; left: 2px; }
+
+.spacer { flex: 1; }
+
+.now-btn {
+  padding: 5px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+}
+.now-btn:hover { background: #f5f5f5; }
+
+.date-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.zoom-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-family: inherit;
+  color: #555;
+  line-height: 1;
+}
+.zoom-btn:hover { background: #f5f5f5; }
+
+/* ── Main timeline area ── */
+.timeline-wrapper {
+  flex: 1;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+/* sticky row-label column + scrollable time content */
+.timeline-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.row-labels-col {
+  flex-shrink: 0;
+  width: 42px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e0e0e0;
+  z-index: 20;
+  background: white;
+}
+
+.row-labels-col .label-header {
+  height: 32px;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+}
+
+.row-label {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+  border-bottom: 1px solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.scroll-area {
+  flex: 1;
+  overflow-x: scroll;
+  overflow-y: hidden;
+  cursor: default;
+}
+
+.scroll-area::-webkit-scrollbar { height: 8px; }
+.scroll-area::-webkit-scrollbar-track { background: #f0f0f0; }
+.scroll-area::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+.scroll-area::-webkit-scrollbar-thumb:hover { background: #aaa; }
+
+.timeline-canvas {
+  position: relative;
+  /* width set by JS */
+}
+
+/* Time header */
+.time-header {
+  height: 32px;
+  position: sticky;
+  top: 0;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  z-index: 15;
+}
+
+.time-tick {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  color: #888;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.time-tick.major { color: #555; font-weight: 500; }
+
+/* Grid */
+.grid-layer {
+  position: absolute;
+  top: 32px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.grid-line-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: #f0f0f0;
+}
+
+.grid-line-v.major { background: #e8e8e8; }
+
+/* Platform rows */
+.platform-rows {
+  position: relative;
+}
+
+.platform-row {
+  height: 52px;
+  border-bottom: 1px solid #f0f0f0;
+  position: relative;
+  transition: background 0.1s;
+}
+
+.platform-row.drag-over {
+  background: rgba(0, 83, 204, 0.06);
+  outline: 2px dashed rgba(0, 83, 204, 0.4);
+  outline-offset: -2px;
+}
+
+/* Now line — spans full height, sits in scroll canvas */
+.now-line {
+  position: absolute;
+  top: 32px;
+  bottom: 0;
+  width: 2px;
+  background: #4CAF50;
+  z-index: 18;
+  pointer-events: none;
+}
+
+.now-line::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: -4px;
+  width: 10px;
+  height: 10px;
+  background: #4CAF50;
+  border-radius: 50%;
+}
+
+/* Train block */
+.train-block {
+  position: absolute;
+  top: 6px;
+  height: 40px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  color: white;
+  overflow: hidden;
+  white-space: nowrap;
+  min-width: 24px;
+  cursor: grab;
+  z-index: 5;
+  transition: box-shadow 0.15s;
+  user-select: none;
+}
+
+.train-block:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.22); z-index: 10; }
+
+.train-block.dragging {
+  opacity: 0.85;
+  cursor: grabbing;
+  z-index: 1000;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  pointer-events: none;
+}
+
+.train-block.on-time   { background: #4CAF50; }
+.train-block.ahead     { background: #2196F3; }
+.train-block.delay-minor { background: #FF9800; }
+.train-block.delay-major { background: #F44336; }
+.train-block.cancelled { background: #9E9E9E; }
+
+.train-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.train-route {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.train-time {
+  font-size: 10px;
+  opacity: 0.88;
+  line-height: 1.2;
+}
+
+.train-arrow {
+  margin-right: 4px;
+  font-size: 10px;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+/* Legend bar */
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 7px 16px 7px 58px;
+  background: white;
+  border-top: 1px solid #e0e0e0;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #555;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Drag ghost */
+#drag-ghost {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9999;
+  display: none;
+  border-radius: 6px;
+  font-family: Roboto, Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  color: white;
+  padding: 0 8px;
+  height: 40px;
+  align-items: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+  opacity: 0.85;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title">Station view</div>
+
+  <div class="station-select">
+    <span>TM – TA Savidor C.</span>
+    <span class="chevron">▾</span>
+  </div>
+
+  <div class="search-box">
+    <span>🔍</span>
+    <span>Journey details</span>
+  </div>
+
+  <button class="btn-add">+ ADD EVENT</button>
+
+  <div class="filter-badge" title="4 active filters" style="font-size:11px; letter-spacing:-0.5px;">⊞</div>
+
+  <div class="toggle-wrap">
+    <div class="toggle-switch" id="toggle-announcements"></div>
+    <span>Announcements</span>
+  </div>
+
+  <div class="toggle-wrap">
+    <div class="toggle-switch" id="toggle-displays"></div>
+    <span>Displays</span>
+  </div>
+
+  <div class="spacer"></div>
+
+  <button class="now-btn" id="goto-now">Now</button>
+
+  <div class="date-picker">
+    <span id="date-display">06/24/2026</span>
+    <span>📅</span>
+  </div>
+
+  <div class="zoom-controls">
+    <button class="zoom-btn" id="zoom-out">−</button>
+    <button class="zoom-btn" id="zoom-in">+</button>
+  </div>
+</div>
+
+<!-- Timeline layout -->
+<div class="timeline-wrapper">
+  <div class="timeline-layout">
+
+    <!-- Sticky row labels -->
+    <div class="row-labels-col" id="row-labels-col">
+      <div class="label-header"></div>
+      <!-- platform labels injected by JS -->
+    </div>
+
+    <!-- Scrollable timeline canvas -->
+    <div class="scroll-area" id="scroll-area">
+      <div class="timeline-canvas" id="timeline-canvas">
+        <!-- time header -->
+        <div class="time-header" id="time-header"></div>
+
+        <!-- grid lines layer -->
+        <div class="grid-layer" id="grid-layer"></div>
+
+        <!-- now line -->
+        <div class="now-line" id="now-line"></div>
+
+        <!-- platform rows -->
+        <div class="platform-rows" id="platform-rows"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div> On time</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2196F3"></div> Ahead of schedule</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#FF9800"></div> Delay &lt;5 min</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#F44336"></div> Delay ≥5 min</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#9E9E9E"></div> Cancelled</div>
+</div>
+
+<!-- Drag ghost -->
+<div id="drag-ghost"></div>
+
+<script>
+// ── Config ──────────────────────────────────────────────
+const START_HOUR = 6;
+const END_HOUR   = 24;
+let PX_PER_HOUR  = 90; // mutable for zoom
+const NUM_PLATFORMS = 7;
+
+function pxPerMin() { return PX_PER_HOUR / 60; }
+function totalWidth() { return (END_HOUR - START_HOUR) * PX_PER_HOUR; }
+function timeToX(h, m) { return (h - START_HOUR + m / 60) * PX_PER_HOUR; }
+
+function parseTime(str) {
+  const [h, m] = str.split(':').map(Number);
+  return { h, m };
+}
+
+function formatTime(h, m) {
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+
+// ── Sample data ──────────────────────────────────────────
+let trains = [
+  // Platform 1
+  { id:1,  platform:1, route:'201', arrival:'06:30', departure:'06:42', status:'on-time'     },
+  { id:2,  platform:1, route:'966', arrival:'14:00', departure:'14:15', status:'on-time'     },
+  { id:3,  platform:1, route:'312', arrival:'17:30', departure:'17:45', status:'ahead'       },
+  { id:4,  platform:1, route:'115', arrival:'21:00', departure:'21:12', status:'on-time'     },
+  // Platform 2
+  { id:5,  platform:2, route:'966', arrival:'10:55', departure:'11:10', status:'delay-major' },
+  { id:6,  platform:2, route:'145', arrival:'14:20', departure:'14:35', status:'delay-minor' },
+  { id:7,  platform:2, route:'966', arrival:'15:45', departure:'16:00', status:'on-time'     },
+  // Platform 3
+  { id:8,  platform:3, route:'720', arrival:'12:00', departure:'12:18', status:'on-time'     },
+  { id:9,  platform:3, route:'966', arrival:'14:05', departure:'14:20', status:'ahead'       },
+  { id:10, platform:3, route:'503', arrival:'14:50', departure:'15:05', status:'delay-minor' },
+  { id:11, platform:3, route:'201', arrival:'23:30', departure:'23:45', status:'on-time'     },
+  // Platform 4 — sparse
+  // Platform 5
+  { id:12, platform:5, route:'99',  arrival:'06:55', departure:'07:08', status:'on-time'     },
+  { id:13, platform:5, route:'211', arrival:'11:10', departure:'11:25', status:'on-time'     },
+  { id:14, platform:5, route:'966', arrival:'14:10', departure:'14:25', status:'delay-minor' },
+  { id:15, platform:5, route:'88',  arrival:'15:40', departure:'15:55', status:'cancelled'   },
+  { id:16, platform:5, route:'312', arrival:'20:50', departure:'21:05', status:'on-time'     },
+  // Platform 6
+  // Platform 7
+  { id:17, platform:7, route:'403', arrival:'07:40', departure:'07:52', status:'delay-minor' },
+  { id:18, platform:7, route:'711', arrival:'11:20', departure:'11:32', status:'on-time'     },
+  { id:19, platform:7, route:'966', arrival:'13:50', departure:'14:05', status:'delay-major' },
+  { id:20, platform:7, route:'503', arrival:'14:30', departure:'14:42', status:'ahead'       },
+  { id:21, platform:7, route:'201', arrival:'17:00', departure:'17:12', status:'delay-minor' },
+  { id:22, platform:7, route:'88',  arrival:'20:50', departure:'21:02', status:'cancelled'   },
+];
+
+// ── DOM refs ─────────────────────────────────────────────
+const scrollArea    = document.getElementById('scroll-area');
+const canvas        = document.getElementById('timeline-canvas');
+const timeHeader    = document.getElementById('time-header');
+const gridLayer     = document.getElementById('grid-layer');
+const nowLine       = document.getElementById('now-line');
+const platformRows  = document.getElementById('platform-rows');
+const rowLabelsCol  = document.getElementById('row-labels-col');
+const dragGhost     = document.getElementById('drag-ghost');
+
+// ── Build UI ─────────────────────────────────────────────
+function buildTimeline() {
+  const w = totalWidth();
+  canvas.style.width = w + 'px';
+
+  // Time header ticks
+  timeHeader.innerHTML = '';
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const x = (h - START_HOUR) * PX_PER_HOUR;
+    const tick = document.createElement('div');
+    tick.className = 'time-tick major';
+    tick.style.left = x + 'px';
+    tick.textContent = `${String(h % 24).padStart(2,'0')}:00`;
+    timeHeader.appendChild(tick);
+
+    // 30-min minor tick
+    if (h < END_HOUR) {
+      const t30 = document.createElement('div');
+      t30.className = 'time-tick';
+      t30.style.left = (x + PX_PER_HOUR / 2) + 'px';
+      t30.textContent = `${String(h % 24).padStart(2,'0')}:30`;
+      timeHeader.appendChild(t30);
+    }
+  }
+
+  // Grid lines
+  gridLayer.innerHTML = '';
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const x = (h - START_HOUR) * PX_PER_HOUR;
+    const line = document.createElement('div');
+    line.className = 'grid-line-v major';
+    line.style.left = x + 'px';
+    gridLayer.appendChild(line);
+
+    if (h < END_HOUR) {
+      const l30 = document.createElement('div');
+      l30.className = 'grid-line-v';
+      l30.style.left = (x + PX_PER_HOUR / 2) + 'px';
+      gridLayer.appendChild(l30);
+    }
+  }
+
+  // Platform rows
+  platformRows.innerHTML = '';
+  rowLabelsCol.innerHTML = '<div class="label-header"></div>';
+
+  for (let p = 1; p <= NUM_PLATFORMS; p++) {
+    // Label
+    const lbl = document.createElement('div');
+    lbl.className = 'row-label';
+    lbl.textContent = p;
+    rowLabelsCol.appendChild(lbl);
+
+    // Row
+    const row = document.createElement('div');
+    row.className = 'platform-row';
+    row.dataset.platform = p;
+    row.style.width = w + 'px';
+    platformRows.appendChild(row);
+  }
+
+  // Render trains
+  renderTrains();
+
+  // Now line
+  updateNowLine();
+}
+
+function renderTrains() {
+  // Clear existing train elements
+  document.querySelectorAll('.train-block').forEach(el => el.remove());
+
+  trains.forEach(train => {
+    const row = platformRows.querySelector(`.platform-row[data-platform="${train.platform}"]`);
+    if (!row) return;
+
+    const a = parseTime(train.arrival);
+    const d = parseTime(train.departure);
+    const x    = timeToX(a.h, a.m);
+    const xEnd = timeToX(d.h, d.m);
+    const w    = Math.max(xEnd - x, 24);
+
+    const el = document.createElement('div');
+    el.className = `train-block ${statusClass(train.status)}`;
+    el.dataset.id = train.id;
+    el.style.left  = x + 'px';
+    el.style.width = w + 'px';
+    el.title = `Route ${train.route} · ${train.arrival}–${train.departure} · ${statusLabel(train.status)}`;
+
+    if (w >= 40) {
+      el.innerHTML = `
+        <span class="train-arrow">→</span>
+        <div class="train-inner">
+          <div class="train-route">${train.route}</div>
+          <div class="train-time">${train.arrival}</div>
+        </div>`;
+    }
+
+    setupTrainDrag(el, train);
+    row.appendChild(el);
+  });
+}
+
+function statusClass(s) {
+  return s; // CSS class names match status strings
+}
+
+function statusLabel(s) {
+  return { 'on-time':'On time', 'ahead':'Ahead of schedule', 'delay-minor':'Delay <5 min', 'delay-major':'Delay ≥5 min', 'cancelled':'Cancelled' }[s] || s;
+}
+
+function updateNowLine() {
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  if (h < START_HOUR || h >= END_HOUR) {
+    nowLine.style.display = 'none';
+    return;
+  }
+  nowLine.style.display = 'block';
+  nowLine.style.left = timeToX(h, m) + 'px';
+}
+
+// ── Drag & Drop ───────────────────────────────────────────
+let dragging = null; // { train, el, origPlatform, offsetX }
+
+function setupTrainDrag(el, train) {
+  el.addEventListener('mousedown', e => startDrag(e, el, train));
+  el.addEventListener('touchstart', e => startDragTouch(e, el, train), { passive: false });
+}
+
+function startDrag(e, el, train) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+
+  const rect = el.getBoundingClientRect();
+  dragging = {
+    train,
+    el,
+    origPlatform: train.platform,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+  };
+
+  el.classList.add('dragging');
+  showGhost(el, train, e.clientX, e.clientY);
+
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+}
+
+function startDragTouch(e, el, train) {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = el.getBoundingClientRect();
+  dragging = {
+    train,
+    el,
+    origPlatform: train.platform,
+    offsetX: touch.clientX - rect.left,
+    offsetY: touch.clientY - rect.top,
+  };
+  el.classList.add('dragging');
+  showGhost(el, train, touch.clientX, touch.clientY);
+  document.addEventListener('touchmove', onDragMoveTouch, { passive: false });
+  document.addEventListener('touchend', onDragEndTouch);
+}
+
+function showGhost(el, train, cx, cy) {
+  const rect = el.getBoundingClientRect();
+  dragGhost.style.display = 'flex';
+  dragGhost.style.width  = rect.width + 'px';
+  dragGhost.style.background = getComputedStyle(el).background;
+  dragGhost.style.left = (cx - dragging.offsetX) + 'px';
+  dragGhost.style.top  = (cy - dragging.offsetY) + 'px';
+
+  const w = rect.width;
+  if (w >= 40) {
+    dragGhost.innerHTML = `<span class="train-arrow">→</span><div class="train-inner"><div class="train-route">${train.route}</div><div class="train-time">${train.arrival}</div></div>`;
+  } else {
+    dragGhost.innerHTML = '';
+  }
+}
+
+function onDragMove(e) {
+  if (!dragging) return;
+  moveGhost(e.clientX, e.clientY);
+  highlightRow(e.clientX, e.clientY);
+}
+
+function onDragMoveTouch(e) {
+  if (!dragging) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  moveGhost(t.clientX, t.clientY);
+  highlightRow(t.clientX, t.clientY);
+}
+
+function moveGhost(cx, cy) {
+  dragGhost.style.left = (cx - dragging.offsetX) + 'px';
+  dragGhost.style.top  = (cy - dragging.offsetY) + 'px';
+}
+
+function highlightRow(cx, cy) {
+  document.querySelectorAll('.platform-row').forEach(r => r.classList.remove('drag-over'));
+  const target = getRowAt(cx, cy);
+  if (target) target.classList.add('drag-over');
+}
+
+function getRowAt(cx, cy) {
+  const rows = document.querySelectorAll('.platform-row');
+  for (const row of rows) {
+    const rect = row.getBoundingClientRect();
+    if (cy >= rect.top && cy <= rect.bottom) return row;
+  }
+  return null;
+}
+
+function onDragEnd(e) {
+  finishDrag(e.clientX, e.clientY);
+  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('mouseup', onDragEnd);
+}
+
+function onDragEndTouch(e) {
+  const t = e.changedTouches[0];
+  finishDrag(t.clientX, t.clientY);
+  document.removeEventListener('touchmove', onDragMoveTouch);
+  document.removeEventListener('touchend', onDragEndTouch);
+}
+
+function finishDrag(cx, cy) {
+  if (!dragging) return;
+  dragging.el.classList.remove('dragging');
+  dragGhost.style.display = 'none';
+  document.querySelectorAll('.platform-row').forEach(r => r.classList.remove('drag-over'));
+
+  const targetRow = getRowAt(cx, cy);
+  if (targetRow) {
+    const newPlatform = parseInt(targetRow.dataset.platform);
+    if (newPlatform !== dragging.train.platform) {
+      dragging.train.platform = newPlatform;
+      renderTrains();
+    }
+  }
+
+  dragging = null;
+}
+
+// ── Horizontal scroll on wheel ────────────────────────────
+scrollArea.addEventListener('wheel', e => {
+  e.preventDefault();
+  // Use deltaY for normal scroll wheel, deltaX for trackpad horizontal
+  const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  scrollArea.scrollLeft += delta;
+}, { passive: false });
+
+// ── Zoom ─────────────────────────────────────────────────
+document.getElementById('zoom-in').addEventListener('click', () => {
+  const mid = scrollArea.scrollLeft + scrollArea.clientWidth / 2;
+  const ratio = mid / totalWidth();
+  PX_PER_HOUR = Math.min(PX_PER_HOUR * 1.25, 360);
+  buildTimeline();
+  scrollArea.scrollLeft = ratio * totalWidth() - scrollArea.clientWidth / 2;
+});
+
+document.getElementById('zoom-out').addEventListener('click', () => {
+  const mid = scrollArea.scrollLeft + scrollArea.clientWidth / 2;
+  const ratio = mid / totalWidth();
+  PX_PER_HOUR = Math.max(PX_PER_HOUR / 1.25, 36);
+  buildTimeline();
+  scrollArea.scrollLeft = ratio * totalWidth() - scrollArea.clientWidth / 2;
+});
+
+// ── Now button ─────────────────────────────────────────────
+document.getElementById('goto-now').addEventListener('click', () => {
+  const now = new Date();
+  const x = timeToX(now.getHours(), now.getMinutes());
+  scrollArea.scrollLeft = x - scrollArea.clientWidth / 2;
+});
+
+// ── Toggles ───────────────────────────────────────────────
+document.querySelectorAll('.toggle-switch').forEach(t => {
+  t.addEventListener('click', () => t.classList.toggle('off'));
+});
+
+// ── Auto-update now line every minute ─────────────────────
+setInterval(updateNowLine, 60000);
+
+// ── Init ──────────────────────────────────────────────────
+buildTimeline();
+
+// Scroll to show current time on load
+requestAnimationFrame(() => {
+  const now = new Date();
+  const x = timeToX(now.getHours(), now.getMinutes());
+  scrollArea.scrollLeft = Math.max(0, x - scrollArea.clientWidth / 3);
+});
+</script>
+</body>
+</html>
