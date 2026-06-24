@@ -381,7 +381,7 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   white-space: nowrap;
   cursor: grab;
   z-index: 5;
-  transition: box-shadow 0.15s;
+  transition: box-shadow 0.15s, width 0.18s ease;
   user-select: none;
   overflow: hidden;
 }
@@ -554,36 +554,6 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   opacity: 0.85;
 }
 
-/* ── Hover tooltip — styled as a train block ── */
-#train-tooltip {
-  position: fixed;
-  z-index: 1000;
-  border-radius: 5px;
-  padding: 2px 5px;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.22);
-  pointer-events: none;
-  display: none;
-  flex-direction: column;
-  gap: 1px;
-  color: white;
-}
-
-#train-tooltip.visible { display: flex; }
-
-.tooltip-route {
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.3;
-  white-space: nowrap;
-}
-
-.tooltip-time {
-  font-size: 14px;
-  font-weight: 400;
-  opacity: 0.90;
-  line-height: 1.3;
-  white-space: nowrap;
-}
 </style>
 </head>
 <body>
@@ -695,11 +665,6 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
 <!-- Drag ghost -->
 <div id="drag-ghost"></div>
 
-<!-- Hover tooltip for narrow blocks -->
-<div id="train-tooltip">
-  <div class="tooltip-route" id="tooltip-route"></div>
-  <div class="tooltip-time" id="tooltip-time"></div>
-</div>
 
 <script>
 // ── Config ──────────────────────────────────────────────
@@ -708,7 +673,6 @@ const END_HOUR   = 24;
 let PX_PER_HOUR  = 360; // 360px/hr → 6px/min → 5 min = 30px
 const NUM_PLATFORMS = 7;
 const MIN_BLOCK_PX  = 4;   // minimum visible width for any dwell
-const CONTENT_THRESHOLD = 68; // show text only if block width >= this px
 
 function pxPerMin() { return PX_PER_HOUR / 60; }
 function totalWidth() { return (END_HOUR - START_HOUR) * PX_PER_HOUR; }
@@ -767,9 +731,6 @@ const nowLine       = document.getElementById('now-line');
 const platformRows  = document.getElementById('platform-rows');
 const rowLabelsCol  = document.getElementById('row-labels-col');
 const dragGhost     = document.getElementById('drag-ghost');
-const tooltip       = document.getElementById('train-tooltip');
-const tooltipRoute  = document.getElementById('tooltip-route');
-const tooltipTime   = document.getElementById('tooltip-time');
 
 // ── Build UI ─────────────────────────────────────────────
 function buildTimeline() {
@@ -868,63 +829,28 @@ function renderTrains() {
 
     const delayStr = delayLabel(train.delay, train.status);
     const cancelled = train.status === 'cancelled';
-    const showContent = blockW >= CONTENT_THRESHOLD;
 
-    if (showContent) {
-      el.innerHTML = cancelled
-        ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
-        : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
-    }
-    // else: empty block (color only) — tooltip on hover
+    // Always render content — clipped by overflow:hidden at narrow widths
+    el.innerHTML = cancelled
+      ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
+      : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+
+    // Expand to content width on hover, shrink back on leave
+    el.addEventListener('mouseenter', () => {
+      el.style.width = el.scrollWidth + 'px';
+      el.style.zIndex = 10;
+    });
+    el.addEventListener('mouseleave', () => {
+      el.style.width = blockW + 'px';
+      el.style.zIndex = 5;
+    });
 
     setupTrainDrag(el, train);
-
-    // Tooltip for narrow blocks
-    if (!showContent) {
-      el.addEventListener('mouseenter', e => showTooltip(e, train, delayStr));
-      el.addEventListener('mousemove',  e => moveTooltip(e));
-      el.addEventListener('mouseleave', hideTooltip);
-    }
 
     row.appendChild(el);
   });
 }
 
-// ── Tooltip ───────────────────────────────────────────────
-const STATUS_COLORS = {
-  'on-time': '#4CAF50', 'ahead': '#2196F3',
-  'delay-minor': '#FF9800', 'delay-major': '#F44336', 'cancelled': '#9E9E9E'
-};
-
-function showTooltip(e, train, delayStr) {
-  const cancelled = train.status === 'cancelled';
-  tooltipRoute.textContent = cancelled ? train.route : `→ ${train.route}`;
-  tooltipTime.textContent  = cancelled ? '' : `${train.arrival} ${delayStr}`;
-  tooltip.style.background = STATUS_COLORS[train.status] || '#888';
-  tooltip.classList.add('visible');
-  positionTooltip(e);
-}
-
-function positionTooltip(e) {
-  tooltip.style.display = 'flex'; // ensure dimensions are computed
-  const tw = tooltip.offsetWidth;
-  const th = tooltip.offsetHeight;
-  let left = e.clientX - tw / 2;
-  let top  = e.clientY - th - 10;
-  // Clamp to viewport
-  left = Math.max(6, Math.min(left, window.innerWidth - tw - 6));
-  top  = Math.max(6, top);
-  tooltip.style.left = left + 'px';
-  tooltip.style.top  = top  + 'px';
-}
-
-function moveTooltip(e) {
-  positionTooltip(e);
-}
-
-function hideTooltip() {
-  tooltip.classList.remove('visible');
-}
 
 function statusClass(s) {
   return s; // CSS class names match status strings
@@ -1009,16 +935,9 @@ function showGhost(el, train, cx, cy) {
 
   const delayStr = delayLabel(train.delay, train.status);
   const isCancelled = train.status === 'cancelled';
-  const blockW = rect.width;
-  const showContent = blockW >= CONTENT_THRESHOLD;
-
-  if (showContent) {
-    dragGhost.innerHTML = isCancelled
-      ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
-      : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
-  } else {
-    dragGhost.innerHTML = '';
-  }
+  dragGhost.innerHTML = isCancelled
+    ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
+    : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
 }
 
 function onDragMove(e) {
