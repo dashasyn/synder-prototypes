@@ -551,6 +551,47 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   box-shadow: 0 6px 20px rgba(0,0,0,0.3);
   opacity: 0.85;
 }
+
+/* ── Train detail card ── */
+.train-detail-card {
+  position: fixed;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+  width: 230px;
+  z-index: 3000;
+  overflow: hidden;
+}
+.train-detail-card.hidden { display: none; }
+.tdc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px 10px;
+}
+.tdc-title { display: flex; align-items: center; gap: 8px; }
+.tdc-icon { font-size: 18px; line-height: 1; }
+.tdc-route { font-size: 22px; font-weight: 700; color: #0053CC; line-height: 1; }
+.tdc-delay-badge {
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.tdc-delay-badge.on-time     { background: #4CAF50; }
+.tdc-delay-badge.ahead       { background: #2196F3; }
+.tdc-delay-badge.delay-minor { background: #FF9800; }
+.tdc-delay-badge.delay-major { background: #F44336; }
+.tdc-delay-badge.cancelled   { background: #9E9E9E; }
+.tdc-stops { background: #f5f5f5; padding: 10px 14px 14px; }
+.tdc-stop-row { display: flex; gap: 10px; align-items: flex-start; }
+.tdc-dot-col { display: flex; flex-direction: column; align-items: center; padding-top: 4px; flex-shrink: 0; }
+.tdc-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; }
+.tdc-vline { width: 2px; height: 20px; background: #ccc; margin: 3px 0; }
+.tdc-stop-name { font-size: 14px; font-weight: 500; color: #222; line-height: 1.3; }
+.tdc-stop-time { font-size: 12px; color: #777; margin-top: 2px; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -660,6 +701,36 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
 
 <!-- Drag ghost -->
 <div id="drag-ghost"></div>
+
+<!-- Train detail card -->
+<div class="train-detail-card hidden" id="train-detail-card">
+  <div class="tdc-header">
+    <div class="tdc-title">
+      <span class="tdc-icon">🚆</span>
+      <span class="tdc-route" id="tdc-route"></span>
+    </div>
+    <div class="tdc-delay-badge" id="tdc-delay-badge"></div>
+  </div>
+  <div class="tdc-stops">
+    <div class="tdc-stop-row">
+      <div class="tdc-dot-col">
+        <div class="tdc-dot"></div>
+        <div class="tdc-vline"></div>
+      </div>
+      <div>
+        <div class="tdc-stop-name" id="tdc-origin"></div>
+        <div class="tdc-stop-time" id="tdc-arrival"></div>
+      </div>
+    </div>
+    <div class="tdc-stop-row">
+      <div class="tdc-dot-col"><div class="tdc-dot"></div></div>
+      <div>
+        <div class="tdc-stop-name" id="tdc-dest"></div>
+        <div class="tdc-stop-time" id="tdc-departure"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ── Config ──────────────────────────────────────────────
@@ -852,6 +923,8 @@ function updateNowLine() {
 
 // ── Drag & Drop ───────────────────────────────────────────
 let dragging = null; // { train, el, origPlatform, offsetX }
+let dragStartX = 0, dragStartY = 0, didDrag = false;
+const DRAG_THRESHOLD = 5;
 
 function setupTrainDrag(el, train) {
   el.addEventListener('mousedown', e => startDrag(e, el, train));
@@ -862,8 +935,13 @@ function startDrag(e, el, train) {
   if (e.button !== 0) return;
   e.preventDefault();
   e.stopPropagation();
+  closeDetailCard();
 
   const rect = el.getBoundingClientRect();
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  didDrag = false;
+
   dragging = {
     train,
     el,
@@ -871,9 +949,6 @@ function startDrag(e, el, train) {
     offsetX: e.clientX - rect.left,
     offsetY: e.clientY - rect.top,
   };
-
-  el.classList.add('dragging');
-  showGhost(el, train, e.clientX, e.clientY);
 
   document.addEventListener('mousemove', onDragMove);
   document.addEventListener('mouseup', onDragEnd);
@@ -883,6 +958,10 @@ function startDragTouch(e, el, train) {
   e.preventDefault();
   const touch = e.touches[0];
   const rect = el.getBoundingClientRect();
+  dragStartX = touch.clientX;
+  dragStartY = touch.clientY;
+  didDrag = false;
+
   dragging = {
     train,
     el,
@@ -890,8 +969,6 @@ function startDragTouch(e, el, train) {
     offsetX: touch.clientX - rect.left,
     offsetY: touch.clientY - rect.top,
   };
-  el.classList.add('dragging');
-  showGhost(el, train, touch.clientX, touch.clientY);
   document.addEventListener('touchmove', onDragMoveTouch, { passive: false });
   document.addEventListener('touchend', onDragEndTouch);
 }
@@ -915,6 +992,14 @@ function showGhost(el, train, cx, cy) {
 
 function onDragMove(e) {
   if (!dragging) return;
+  if (!didDrag) {
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+    didDrag = true;
+    dragging.el.classList.add('dragging');
+    showGhost(dragging.el, dragging.train, e.clientX, e.clientY);
+  }
   moveGhost(e.clientX, e.clientY);
   highlightRow(e.clientX, e.clientY);
 }
@@ -923,6 +1008,14 @@ function onDragMoveTouch(e) {
   if (!dragging) return;
   e.preventDefault();
   const t = e.touches[0];
+  if (!didDrag) {
+    const dx = t.clientX - dragStartX;
+    const dy = t.clientY - dragStartY;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+    didDrag = true;
+    dragging.el.classList.add('dragging');
+    showGhost(dragging.el, dragging.train, t.clientX, t.clientY);
+  }
   moveGhost(t.clientX, t.clientY);
   highlightRow(t.clientX, t.clientY);
 }
@@ -965,6 +1058,13 @@ function finishDrag(cx, cy) {
   dragging.el.classList.remove('dragging');
   dragGhost.style.display = 'none';
   document.querySelectorAll('.platform-row').forEach(r => r.classList.remove('drag-over'));
+
+  if (!didDrag) {
+    const train = dragging.train;
+    dragging = null;
+    showDetailCard(train, cx, cy);
+    return;
+  }
 
   const targetRow = getRowAt(cx, cy);
   if (targetRow) {
@@ -1009,13 +1109,58 @@ modalBackdrop.addEventListener('click', e => {
 });
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !modalBackdrop.classList.contains('hidden')) closeModal();
+  if (e.key === 'Escape') {
+    closeDetailCard();
+    if (!modalBackdrop.classList.contains('hidden')) closeModal();
+  }
 });
 
 function closeModal() {
   modalBackdrop.classList.add('hidden');
   pendingChange = null;
 }
+
+// ── Train detail card ─────────────────────────────────────
+function showDetailCard(train, cx, cy) {
+  const card = document.getElementById('train-detail-card');
+  const parts = (train.name || '').split(/\s[–\-]\s/);
+  document.getElementById('tdc-route').textContent    = train.route;
+  document.getElementById('tdc-origin').textContent   = parts[0] || '';
+  document.getElementById('tdc-dest').textContent     = parts[1] || '';
+  document.getElementById('tdc-arrival').textContent  = train.arrival;
+  document.getElementById('tdc-departure').textContent = train.departure;
+
+  const badge = document.getElementById('tdc-delay-badge');
+  badge.className = 'tdc-delay-badge ' + train.status;
+  if (train.status === 'cancelled') {
+    badge.textContent = 'CANC';
+  } else if (!train.delay || train.delay === 0) {
+    badge.textContent = '+0 min';
+  } else {
+    badge.textContent = (train.delay > 0 ? '+' : '') + train.delay + ' min';
+  }
+
+  card.classList.remove('hidden');
+  const cardW = 230, cardH = 170;
+  let left = cx + 14;
+  let top  = cy - 24;
+  if (left + cardW > window.innerWidth - 8)  left = cx - cardW - 14;
+  if (top + cardH > window.innerHeight - 8)  top  = window.innerHeight - cardH - 8;
+  if (top < 8) top = 8;
+  card.style.left = left + 'px';
+  card.style.top  = top  + 'px';
+}
+
+function closeDetailCard() {
+  document.getElementById('train-detail-card').classList.add('hidden');
+}
+
+document.addEventListener('click', e => {
+  const card = document.getElementById('train-detail-card');
+  if (!card.classList.contains('hidden') && !card.contains(e.target) && !e.target.closest('.train-block')) {
+    closeDetailCard();
+  }
+});
 
 // ── Horizontal scroll on wheel ────────────────────────────
 scrollArea.addEventListener('wheel', e => {
