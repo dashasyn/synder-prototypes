@@ -301,6 +301,7 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   background: white;
   border-bottom: 1px solid #e0e0e0;
   z-index: 15;
+  cursor: crosshair;
 }
 
 .time-tick {
@@ -376,6 +377,39 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   height: 10px;
   background: #4CAF50;
   border-radius: 50%;
+}
+
+/* Manual time marker */
+.marker-line {
+  position: absolute;
+  top: 32px;
+  bottom: 0;
+  width: 2px;
+  background: #FFB300;
+  z-index: 17;
+  pointer-events: none;
+}
+.marker-line::before {
+  content: '';
+  position: absolute;
+  top: -5px; left: -4px;
+  width: 10px; height: 10px;
+  background: #FFB300;
+  border-radius: 50%;
+}
+.marker-line.hidden { display: none; }
+.marker-label {
+  position: absolute;
+  top: -26px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #FFB300;
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
 }
 
 /* Train block */
@@ -683,6 +717,11 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
         <!-- now line -->
         <div class="now-line" id="now-line"></div>
 
+        <!-- manual time marker -->
+        <div class="marker-line hidden" id="marker-line">
+          <div class="marker-label" id="marker-label"></div>
+        </div>
+
         <!-- platform rows -->
         <div class="platform-rows" id="platform-rows"></div>
       </div>
@@ -879,8 +918,9 @@ function buildTimeline() {
   // Render trains
   renderTrains();
 
-  // Now line
+  // Lines
   updateNowLine();
+  updateMarkerPosition();
 }
 
 function renderTrains() {
@@ -959,6 +999,28 @@ function updateNowLine() {
   }
   nowLine.style.display = 'block';
   nowLine.style.left = timeToX(h, m) + 'px';
+}
+
+// ── Manual time marker ────────────────────────────────────
+let markerTimeMin = null;
+
+timeHeader.addEventListener('click', e => {
+  const x = e.clientX - scrollArea.getBoundingClientRect().left + scrollArea.scrollLeft;
+  markerTimeMin = Math.max(0, Math.min(x / PX_PER_HOUR * 60, (END_HOUR - START_HOUR) * 60));
+  updateMarkerPosition();
+});
+
+function updateMarkerPosition() {
+  if (markerTimeMin === null) return;
+  const markerLine  = document.getElementById('marker-line');
+  const markerLabel = document.getElementById('marker-label');
+  const x = markerTimeMin / 60 * PX_PER_HOUR;
+  markerLine.style.left = x + 'px';
+  markerLine.classList.remove('hidden');
+  const absMin = START_HOUR * 60 + markerTimeMin;
+  const h = Math.floor(absMin / 60) % 24;
+  const m = Math.floor(absMin % 60);
+  markerLabel.textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
 
 // ── Drag & Drop ───────────────────────────────────────────
