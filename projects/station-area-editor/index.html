@@ -1022,8 +1022,11 @@ function renderDevModal() {
   const q = document.getElementById('dev-search').value.toLowerCase();
   const list = document.getElementById('dev-modal-list');
 
-  // Devices already assigned anywhere (across all areas) for visual cue
-  const assignedInThisArea = new Set(area.deviceIds);
+  // Devices assigned anywhere across all areas (physically fixed location)
+  const assignedGlobally = new Map(); // devId → areaName
+  areas.forEach(a => a.deviceIds.forEach(id => {
+    if (!assignedGlobally.has(id)) assignedGlobally.set(id, a.name);
+  }));
 
   const filtered = ALL_DEVICES.filter(d =>
     !q ||
@@ -1039,11 +1042,15 @@ function renderDevModal() {
   }
 
   list.innerHTML = filtered.map(d => {
-    const inArea = assignedInThisArea.has(d.id);
+    const usedIn = assignedGlobally.get(d.id);
+    const blocked = !!usedIn;
+    const hint = blocked
+      ? `<span style="font-size:11px;color:#a0aec0">· assigned to ${escHtml(usedIn)}</span>`
+      : '';
     return `
-      <div class="modal-item${inArea ? ' assigned' : ''}" onclick="${inArea ? '' : `assignDevice('${d.id}')`}">
+      <div class="modal-item${blocked ? ' assigned' : ''}" onclick="${blocked ? '' : `assignDevice('${d.id}')`}">
         <div>
-          <div class="modal-item-name">${d.name} ${inArea ? '<span style="font-size:11px;color:#a0aec0">(already added)</span>' : ''}</div>
+          <div class="modal-item-name">${escHtml(d.name)} ${hint}</div>
           <div class="modal-item-meta">${d.id} · ${d.network}</div>
         </div>
         <span class="modal-item-type">${d.type}</span>
