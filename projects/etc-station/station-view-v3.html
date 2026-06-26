@@ -280,6 +280,11 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
 .tdc-vline { width: 2px; height: 20px; background: #ccc; margin: 3px 0; }
 .tdc-stop-name { font-size: 14px; font-weight: 500; color: #222; line-height: 1.3; }
 .tdc-stop-time { font-size: 12px; color: #777; margin-top: 2px; margin-bottom: 6px; }
+.tdc-actions { display: flex; gap: 8px; padding: 10px 14px 12px; background: white; border-top: 1px solid #eee; }
+.tdc-btn { flex: 1; padding: 7px 0; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
+.tdc-btn:hover { opacity: .85; }
+.tdc-btn-primary { background: #0053CC; color: white; }
+.tdc-btn-secondary { background: #f0f0f0; color: #444; }
 </style>
 </head>
 <body>
@@ -289,7 +294,7 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
   <div class="view-switcher">
     <a href="station-view.html" class="view-btn">Content</a>
     <a href="station-view-proportional.html" class="view-btn">Timeline</a>
-    <span class="view-btn active">Hybrid</span>
+    <span class="view-btn active">Tooltip</span>
   </div>
 </div>
 
@@ -396,6 +401,10 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
         <div class="tdc-stop-time" id="tdc-departure"></div>
       </div>
     </div>
+  </div>
+  <div class="tdc-actions">
+    <button class="tdc-btn tdc-btn-primary" id="tdc-btn-assign">Assign platform</button>
+    <button class="tdc-btn tdc-btn-secondary" id="tdc-btn-delay">Set delay</button>
   </div>
 </div>
 
@@ -878,13 +887,42 @@ _tooltipCard.addEventListener('mouseleave', () => {
   cardLeaveTimer = setTimeout(closeDetailCard, 100);
 });
 
+let _tooltipTrain = null;
+
+document.getElementById('tdc-btn-assign').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!_tooltipTrain) return;
+  const plat = prompt(`Assign platform for route ${_tooltipTrain.route}:`, _tooltipTrain.platform);
+  if (plat && plat.trim()) {
+    _tooltipTrain.platform = plat.trim();
+    closeDetailCard();
+    buildTimeline();
+  }
+});
+
+document.getElementById('tdc-btn-delay').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!_tooltipTrain) return;
+  const val = prompt(`Set delay in minutes for route ${_tooltipTrain.route} (negative = ahead):`, _tooltipTrain.delay || 0);
+  if (val !== null) {
+    const n = parseInt(val, 10);
+    if (!isNaN(n)) {
+      _tooltipTrain.delay = n;
+      _tooltipTrain.status = n === 0 ? 'on-time' : n > 0 ? (n <= 5 ? 'delay-minor' : 'delay-major') : 'ahead';
+      closeDetailCard();
+      buildTimeline();
+    }
+  }
+});
+
 function setupTrainTooltip(el, train) {
   el.addEventListener('mouseenter', () => {
     clearTimeout(cardLeaveTimer);
+    _tooltipTrain = train;
     populateDetailCard(train);
     const card = document.getElementById('train-detail-card');
     const rect = el.getBoundingClientRect();
-    const cardW = 230, cardH = 170;
+    const cardW = 230, cardH = 215;
     let left = rect.left;
     let top  = rect.bottom + 10;
     if (left + cardW > window.innerWidth - 8)  left = window.innerWidth - cardW - 8;
