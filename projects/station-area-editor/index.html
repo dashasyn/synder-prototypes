@@ -222,12 +222,15 @@
     }
     .area-name {
       font-weight: 600; font-size: 13px; color: #1a202c;
-      flex: 1; outline: none; border: none; background: transparent;
-      font-family: inherit;
-      border-bottom: 1px solid transparent; padding: 1px 2px;
+      flex: 1;
     }
-    .area-name:hover { border-bottom-color: #cbd5e0; }
-    .area-name:focus { border-bottom-color: #0053CC; }
+    .area-edit-btn {
+      width: 26px; height: 26px; border-radius: 4px;
+      border: none; background: none; cursor: pointer;
+      color: #a0aec0; font-size: 14px; display: flex;
+      align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .area-edit-btn:hover { background: #e8edf8; color: #0053CC; }
     .area-badge {
       background: #e2e8f0; color: #4a5568; border-radius: 10px;
       padding: 1px 8px; font-size: 11px; font-weight: 600; flex-shrink: 0;
@@ -505,6 +508,28 @@
           <input class="modal-search" id="dev-search" placeholder="Search by name, type, or ID…" oninput="renderDevModal()" autocomplete="off">
         </div>
         <div class="modal-list" id="dev-modal-list"></div>
+      </div>
+    </div>
+
+    <!-- Area name modal -->
+    <div class="modal-overlay" id="area-modal">
+      <div class="modal" style="width:380px;max-height:none;">
+        <div class="modal-head">
+          <span class="modal-title" id="area-modal-title">New Area</span>
+          <button class="modal-close" onclick="closeAreaModal()">×</button>
+        </div>
+        <div style="padding:20px;">
+          <label style="display:block;font-size:11px;color:#718096;margin-bottom:6px;">Area name <span style="color:#e53e3e">*</span></label>
+          <input id="area-name-input" type="text" placeholder="e.g. Platform 1, Passenger Hall…"
+            style="width:100%;border:1px solid #e2e8f0;border-radius:4px;padding:8px 10px;font-size:13px;font-family:inherit;outline:none;"
+            onfocus="this.style.borderColor='#0053CC'" onblur="this.style.borderColor='#e2e8f0'"
+            onkeydown="if(event.key==='Enter')saveAreaModal()" />
+          <div id="area-name-error" style="color:#c53030;font-size:12px;margin-top:5px;display:none;">Name cannot be empty.</div>
+        </div>
+        <div style="padding:0 20px 16px;display:flex;justify-content:flex-end;gap:8px;">
+          <button onclick="closeAreaModal()" style="padding:6px 16px;font-size:13px;background:white;border:1px solid #cbd5e0;color:#4a5568;border-radius:3px;cursor:pointer;">CANCEL</button>
+          <button onclick="saveAreaModal()" style="padding:6px 16px;font-size:13px;background:#0053CC;border:none;color:white;border-radius:3px;cursor:pointer;font-weight:600;">SAVE</button>
+        </div>
       </div>
     </div>
 
@@ -943,10 +968,9 @@ function renderDisplays() {
 
     block.innerHTML = `
       <div class="area-head">
-        <input class="area-name" value="${escHtml(area.name)}" title="Click to rename"
-          onchange="renameArea(${area.id}, this.value)"
-          onfocus="this.select()" />
+        <span class="area-name">${escHtml(area.name)}</span>
         <span class="area-badge">${devices.length}</span>
+        <button class="area-edit-btn" title="Rename area" onclick="openAreaModal(${area.id})">✎</button>
         <button class="area-del-btn" title="Delete area" onclick="deleteArea(${area.id})">🗑</button>
       </div>
       <table class="devices-table">
@@ -969,20 +993,49 @@ function escHtml(str) {
   return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+let areaModalTargetId = null; // null = create new, number = edit existing
+
 function addArea() {
-  const name = `Area ${nextAreaId}`;
-  areas.push({ id: nextAreaId++, name, deviceIds: [] });
-  renderDisplays();
-  // focus the new area's name input
-  const inputs = document.querySelectorAll('.area-name');
-  const last = inputs[inputs.length - 1];
-  if (last) { last.select(); last.focus(); }
+  openAreaModal(null);
 }
 
-function renameArea(id, val) {
-  const a = areas.find(a => a.id === id);
-  if (a) a.name = val.trim() || a.name;
+function openAreaModal(areaId) {
+  areaModalTargetId = areaId;
+  const input = document.getElementById('area-name-input');
+  const title = document.getElementById('area-modal-title');
+  const err   = document.getElementById('area-name-error');
+  title.textContent = areaId ? 'Edit Area' : 'New Area';
+  input.value = areaId ? (areas.find(a => a.id === areaId)?.name || '') : '';
+  err.style.display = 'none';
+  document.getElementById('area-modal').classList.add('open');
+  setTimeout(() => input.focus(), 50);
 }
+
+function closeAreaModal() {
+  document.getElementById('area-modal').classList.remove('open');
+  areaModalTargetId = null;
+}
+
+function saveAreaModal() {
+  const input = document.getElementById('area-name-input');
+  const name  = input.value.trim();
+  const err   = document.getElementById('area-name-error');
+  if (!name) { err.style.display = 'block'; input.focus(); return; }
+  err.style.display = 'none';
+  if (areaModalTargetId === null) {
+    areas.push({ id: nextAreaId++, name, deviceIds: [] });
+  } else {
+    const a = areas.find(a => a.id === areaModalTargetId);
+    if (a) a.name = name;
+  }
+  closeAreaModal();
+  renderDisplays();
+}
+
+// Close on overlay click
+document.getElementById('area-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAreaModal();
+});
 
 function deleteArea(id) {
   const a = areas.find(a => a.id === id);
@@ -1072,7 +1125,7 @@ document.getElementById('dev-modal').addEventListener('click', function(e) {
   if (e.target === this) closeDevModal();
 });
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') closeDevModal();
+  if (e.key === 'Escape') { closeDevModal(); closeAreaModal(); }
 });
 
 // ─── Boot ────────────────────────────────────────────────────────────────────
