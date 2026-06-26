@@ -314,26 +314,29 @@
       align-items: center; justify-content: center;
     }
     .modal-close:hover { background: #f7f9fc; }
-    .modal-search-wrap { padding: 12px 20px; border-bottom: 1px solid #e2e8f0; }
+    .modal-search-wrap { padding: 12px 20px 0; }
     .modal-search {
-      width: 100%; border: 1px solid #e2e8f0; border-radius: 4px;
-      padding: 7px 10px; font-size: 13px; outline: none; font-family: inherit;
+      width: 100%; border: none; border-bottom: 2px solid #cbd5e0;
+      background: #f0f2f5; border-radius: 0;
+      padding: 10px 12px; font-size: 14px; outline: none; font-family: inherit; color: #1a202c;
     }
-    .modal-search:focus { border-color: #0053CC; }
+    .modal-search:focus { border-bottom-color: #0053CC; }
     .modal-list { overflow-y: auto; flex: 1; }
-    .modal-item {
-      display: flex; align-items: center; gap: 12px;
-      padding: 9px 20px; cursor: pointer; border-bottom: 1px solid #f0f2f5;
+    /* Device picker table */
+    .dev-pick-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .dev-pick-table th {
+      text-align: left; padding: 8px 12px;
+      font-size: 12px; font-weight: 700; color: #2d3748;
+      border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+      user-select: none;
     }
-    .modal-item:last-child { border-bottom: none; }
-    .modal-item:hover { background: #f7f9fc; }
-    .modal-item.assigned { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
-    .modal-item-name { font-weight: 600; font-size: 13px; color: #1a202c; flex: 1; }
-    .modal-item-meta { font-size: 11px; color: #718096; }
-    .modal-item-type {
-      font-size: 11px; font-weight: 600; color: #4a5568;
-      background: #e2e8f0; padding: 1px 7px; border-radius: 9px;
-    }
+    .dev-pick-table th .sort-icon { font-size: 10px; color: #a0aec0; margin-left: 3px; }
+    .dev-pick-table td { padding: 10px 12px; border-bottom: 1px solid #f0f2f5; color: #2d3748; }
+    .dev-pick-table tr:last-child td { border-bottom: none; }
+    .dev-pick-table tr.pick-row:not(.pick-row-disabled):hover td { background: #f7f9fc; cursor: pointer; }
+    .dev-pick-table tr.pick-row-disabled td { color: #a0aec0; }
+    .dev-pick-table tr.pick-row-disabled input[type=checkbox] { opacity: 0.35; }
+    .dev-pick-table tr.pick-row-selected td { background: #ebf2ff; }
     .modal-empty { padding: 32px; text-align: center; color: #a0aec0; font-size: 13px; }
 
     /* Station marker legend */
@@ -498,15 +501,22 @@
 
     <!-- Device picker modal -->
     <div class="modal-overlay" id="dev-modal">
-      <div class="modal">
-        <div class="modal-head">
-          <span class="modal-title">Add Device</span>
-          <button class="modal-close" onclick="closeDevModal()">×</button>
+      <div class="modal" style="width:560px;max-height:600px;">
+        <div style="padding:24px 24px 0;">
+          <div style="font-size:18px;font-weight:700;color:#1a202c;margin-bottom:8px;" id="dev-modal-title">Add devices to 'Area'</div>
+          <div style="font-size:13px;color:#4a5568;margin-bottom:16px;line-height:1.5;">
+            Select the devices to add to the area. If the required device is
+            not listed, you can add it on the <a href="#" style="color:#0053CC;text-decoration:none;" onclick="return false;">Devices page.</a>
+          </div>
         </div>
         <div class="modal-search-wrap">
-          <input class="modal-search" id="dev-search" placeholder="Search by name, type, or ID…" oninput="renderDevModal()" autocomplete="off">
+          <input class="modal-search" id="dev-search" placeholder="Search..." oninput="renderDevModal()" autocomplete="off">
         </div>
-        <div class="modal-list" id="dev-modal-list"></div>
+        <div class="modal-list" id="dev-modal-list" style="margin-top:8px;"></div>
+        <div style="padding:12px 16px;display:flex;justify-content:flex-end;gap:4px;border-top:1px solid #e2e8f0;">
+          <button onclick="closeDevModal()" style="padding:8px 16px;font-size:13px;background:none;border:none;color:#0053CC;border-radius:4px;cursor:pointer;font-weight:600;letter-spacing:0.5px;">CANCEL</button>
+          <button onclick="confirmAddDevices()" id="dev-modal-confirm" style="padding:8px 18px;font-size:13px;background:#0053CC;border:none;color:white;border-radius:4px;cursor:pointer;font-weight:600;letter-spacing:0.5px;">ADD DEVICES</button>
+        </div>
       </div>
     </div>
 
@@ -1054,8 +1064,13 @@ function removeDevice(areaId, devId) {
 
 // ─── Device modal ─────────────────────────────────────────────────────────────
 
+let selectedDevIds = new Set();
+
 function openDevModal(areaId) {
   pickerAreaId = areaId;
+  selectedDevIds = new Set();
+  const area = areas.find(a => a.id === areaId);
+  document.getElementById('dev-modal-title').textContent = `Add devices to '${area ? area.name : ''}'`;
   document.getElementById('dev-search').value = '';
   document.getElementById('dev-modal').classList.add('open');
   renderDevModal();
@@ -1065,6 +1080,7 @@ function openDevModal(areaId) {
 function closeDevModal() {
   document.getElementById('dev-modal').classList.remove('open');
   pickerAreaId = null;
+  selectedDevIds = new Set();
 }
 
 function renderDevModal() {
@@ -1073,8 +1089,8 @@ function renderDevModal() {
   const q = document.getElementById('dev-search').value.toLowerCase();
   const list = document.getElementById('dev-modal-list');
 
-  // Devices assigned anywhere across all areas (physically fixed location)
-  const assignedGlobally = new Map(); // devId → areaName
+  // Global assignment map: devId → areaName
+  const assignedGlobally = new Map();
   areas.forEach(a => a.deviceIds.forEach(id => {
     if (!assignedGlobally.has(id)) assignedGlobally.set(id, a.name);
   }));
@@ -1092,29 +1108,54 @@ function renderDevModal() {
     return;
   }
 
-  list.innerHTML = filtered.map(d => {
-    const usedIn = assignedGlobally.get(d.id);
-    const blocked = !!usedIn;
-    const hint = blocked
-      ? `<span style="font-size:11px;color:#a0aec0">· assigned to ${escHtml(usedIn)}</span>`
-      : '';
-    return `
-      <div class="modal-item${blocked ? ' assigned' : ''}" onclick="${blocked ? '' : `assignDevice('${d.id}')`}">
-        <div>
-          <div class="modal-item-name">${escHtml(d.name)} ${hint}</div>
-          <div class="modal-item-meta">${d.id} · ${d.network}</div>
-        </div>
-        <span class="modal-item-type">${d.type}</span>
-        <span class="status-chip status-${d.status}" style="font-size:11px">${d.status.charAt(0).toUpperCase()+d.status.slice(1)}</span>
-      </div>`;
+  const rows = filtered.map(d => {
+    const assignedTo = assignedGlobally.get(d.id);
+    const disabled = !!assignedTo;
+    const checked = selectedDevIds.has(d.id);
+    const assignedLabel = assignedTo ? escHtml(assignedTo) : '–';
+    const rowClass = disabled ? 'pick-row pick-row-disabled' : (checked ? 'pick-row pick-row-selected' : 'pick-row');
+    const onclick = disabled ? '' : `toggleDevPick('${d.id}')`;
+    return `<tr class="${rowClass}" onclick="${onclick}">
+      <td style="width:36px;padding-left:16px;">
+        <input type="checkbox" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}
+          onclick="event.stopPropagation();toggleDevPick('${d.id}')" style="cursor:pointer;width:15px;height:15px;" />
+      </td>
+      <td style="font-weight:600">${escHtml(d.name)}</td>
+      <td style="color:#718096">${d.id}</td>
+      <td style="color:#718096">${d.device}</td>
+      <td style="color:${assignedTo ? '#718096' : '#a0aec0'}">${assignedLabel}</td>
+    </tr>`;
   }).join('');
+
+  list.innerHTML = `
+    <table class="dev-pick-table">
+      <thead><tr>
+        <th style="width:36px;padding-left:16px;"></th>
+        <th>Name <span class="sort-icon">⇅</span></th>
+        <th>ID <span class="sort-icon">⇅</span></th>
+        <th>Device <span class="sort-icon">⇅</span></th>
+        <th>Assigned <span class="sort-icon">⇅</span></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  const n = selectedDevIds.size;
+  document.getElementById('dev-modal-confirm').textContent = n > 0 ? `ADD DEVICES (${n})` : 'ADD DEVICES';
 }
 
-function assignDevice(devId) {
-  const area = areas.find(a => a.id === pickerAreaId);
-  if (!area || area.deviceIds.includes(devId)) return;
-  area.deviceIds.push(devId);
+function toggleDevPick(devId) {
+  if (selectedDevIds.has(devId)) selectedDevIds.delete(devId);
+  else selectedDevIds.add(devId);
   renderDevModal();
+}
+
+function confirmAddDevices() {
+  const area = areas.find(a => a.id === pickerAreaId);
+  if (!area) return;
+  selectedDevIds.forEach(id => {
+    if (!area.deviceIds.includes(id)) area.deviceIds.push(id);
+  });
+  closeDevModal();
   renderDisplays();
 }
 
