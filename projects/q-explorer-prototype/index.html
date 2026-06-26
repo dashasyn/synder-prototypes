@@ -1508,6 +1508,13 @@
   .rpt-act-btn-raw { color: #424242; }
   .rpt-act-btn-raw:hover { background: rgba(0,0,0,0.08); }
   .rpt-act-btn .material-icons { font-size: 18px; }
+  @keyframes fa-btn-spin { to { transform: rotate(360deg); } }
+  .rpt-act-btn-raw.is-loading { pointer-events: none; }
+  .rpt-act-btn-raw.is-loading .material-icons { animation: fa-btn-spin 0.9s linear infinite; color: #9E9E9E; }
+  .rpt-act-btn-raw.is-ready { color: #2E7D32; border: 1px solid #A5D6A7; background: #E8F5E9; text-decoration: none; }
+  .rpt-act-btn-raw.is-ready:hover { background: #C8E6C9; border-color: #81C784; }
+  .rpt-act-btn-raw.is-error { color: #C62828; border: 1px solid #FFCDD2; background: #FFEBEE; }
+  .rpt-act-btn-raw.is-error:hover { background: #FFCDD2; }
 
   /* Value coloring: green = good, red = bad */
   .rpt-val { font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -3915,6 +3922,7 @@
       fa_mask_col_ersatz: 'Replacement transport',
       fa_mask_no_cause: 'No cancellation cause recorded',
       fa_pager_info: '{start} to {end} of {total} entries',
+      fa_mask_loading: 'Preparing report…', fa_mask_ready: 'Report ready — click to open', fa_mask_error: 'Failed — click to retry',
       fa_tab_ubersicht: 'Overview', fa_tab_tabelle: 'Table',
       fa_ub_anzeigen: 'Show', fa_ub_infoblatt: 'Data sheet', fa_ub_camera: 'Save image',
       fa_ub_title_prefix: 'Overview of cancelled journey time',
@@ -4195,6 +4203,7 @@
       fa_mask_col_ersatz: 'Ersatzverkehr',
       fa_mask_no_cause: 'keine Ausfallursache hinterlegt',
       fa_pager_info: '{start} bis {end} von {total} Einträgen',
+      fa_mask_loading: 'Bericht wird vorbereitet…', fa_mask_ready: 'Bericht bereit — zum Öffnen klicken', fa_mask_error: 'Fehler — zum Wiederholen klicken',
       fa_tab_ubersicht: 'Übersicht', fa_tab_tabelle: 'Tabelle',
       fa_ub_anzeigen: 'Anzeigen', fa_ub_infoblatt: 'Infoblatt', fa_ub_camera: 'Bild speichern',
       fa_ub_title_prefix: 'Übersicht über ausgefallene Fahrtzeit',
@@ -5795,8 +5804,12 @@
 
     applyLang();
 
-    const startView = HASH_VIEW[location.hash] || 'reports-list';
-    showView(startView);
+    const hashParts = location.hash.slice(1).split('/');
+    if (hashParts[0] === 'mask' && hashParts[1]) {
+      openFAMask(decodeURIComponent(hashParts[1]), hashParts[2] ? decodeURIComponent(hashParts[2]) : undefined);
+    } else {
+      showView(HASH_VIEW[location.hash] || 'reports-list');
+    }
   }
 
   init();
@@ -5887,15 +5900,52 @@
     }).join('');
   }
 
+  const faMaskBtnState = {};
+  function faMaskKey(tuId, tagD) { return tuId + '|' + (tagD || ''); }
+  function faMaskElemId(tuId, tagD) { return 'fa-act-' + (tuId + '_' + (tagD || '')).replace(/[^a-z0-9]/gi, '_'); }
+  function faMaskHashHref(tuId, tagD) { return '#mask/' + encodeURIComponent(tuId) + (tagD ? '/' + encodeURIComponent(tagD) : ''); }
+
+  function renderFAMaskBtnHtml(tuId, tagD) {
+    const key = faMaskKey(tuId, tagD);
+    const state = faMaskBtnState[key] || 'idle';
+    const maskArgs = tagD ? `'${tuId}','${tagD}'` : `'${tuId}'`;
+    if (state === 'loading') {
+      return `<button class="rpt-act-btn rpt-act-btn-raw is-loading" disabled title="${t('fa_mask_loading')}"><span class="material-icons">hourglass_top</span></button>`;
+    } else if (state === 'ready') {
+      return `<a class="rpt-act-btn rpt-act-btn-raw is-ready" href="${faMaskHashHref(tuId, tagD)}" title="${t('fa_mask_ready')}" onclick="openFAMask(${maskArgs}); return false;"><span class="material-icons">check_circle</span></a>`;
+    } else if (state === 'error') {
+      return `<button class="rpt-act-btn rpt-act-btn-raw is-error" title="${t('fa_mask_error')}" onclick="requestFAMask(${maskArgs})"><span class="material-icons">error_outline</span></button>`;
+    }
+    return `<button class="rpt-act-btn rpt-act-btn-raw" title="${t('fa_mask_title')}" onclick="requestFAMask(${maskArgs})"><span class="material-icons">fact_check</span></button>`;
+  }
+
+  function updateFAMaskBtn(tuId, tagD) {
+    const el = document.getElementById(faMaskElemId(tuId, tagD));
+    if (el) el.innerHTML = renderFAMaskBtnHtml(tuId, tagD);
+    // Re-apply i18n tooltips in case lang is non-default
+  }
+
+  function requestFAMask(tuId, tagD) {
+    const key = faMaskKey(tuId, tagD);
+    if (faMaskBtnState[key] === 'loading') return;
+    faMaskBtnState[key] = 'loading';
+    updateFAMaskBtn(tuId, tagD);
+    // Simulate async report generation (2–3 s)
+    setTimeout(() => {
+      faMaskBtnState[key] = 'ready';
+      updateFAMaskBtn(tuId, tagD);
+    }, 2000 + Math.random() * 1000);
+  }
+
   function renderFATable() {
     const tbody = document.getElementById('fa-tbody');
     if (!tbody) return;
     const actCell = (tuId, tagD) => {
       const chartArgs = tagD ? `'${tuId}','${tagD}'` : `'${tuId}'`;
-      const maskArgs  = tagD ? `'${tuId}','${tagD}'` : `'${tuId}'`;
+      const elemId = faMaskElemId(tuId, tagD);
       return `<td><div class="rpt-actions-cell">
         <button class="rpt-act-btn rpt-act-btn-chart" title="${t('rpt_action_chart')}" onclick="openFAChart(${chartArgs})"><span class="material-icons">bar_chart</span></button>
-        <button class="rpt-act-btn rpt-act-btn-raw"   title="${t('fa_mask_title')}" onclick="openFAMask(${maskArgs})"><span class="material-icons">fact_check</span></button>
+        <span id="${elemId}">${renderFAMaskBtnHtml(tuId, tagD)}</span>
       </div></td>`;
     };
     const g = FA_DATA.gesamt;
@@ -6173,10 +6223,10 @@
 
   let faMaskPage=1;
   function openFAMask(tuId, tagD) {
-    // Build header
+    // Build header (defensive: fa-p-von/bis may not exist if opened directly via hash in new tab)
     const header = document.getElementById('fa-mask-header');
-    const von = document.getElementById('fa-p-von').textContent;
-    const bis = document.getElementById('fa-p-bis').textContent;
+    const von = (document.getElementById('fa-p-von') || {textContent: '—'}).textContent;
+    const bis = (document.getElementById('fa-p-bis') || {textContent: '—'}).textContent;
     const unlim = t('fa_mask_unlimited');
     const u = (v) => ({value: unlim, dim: true});
     const fields = [
