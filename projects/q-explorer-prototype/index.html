@@ -1321,9 +1321,28 @@
 
   .rpt-filter-panel { background: #fff; border: 1px solid #E0E0E0; border-radius: 8px; padding: 16px 20px; margin-bottom: 16px; display: flex; gap: 0; flex-wrap: wrap; align-items: flex-start; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
   .rpt-filter-col { display: flex; flex-direction: column; gap: 10px; padding-right: 24px; margin-right: 24px; border-right: 1px solid #E0E0E0; }
-  .rpt-filter-col:last-of-type { border-right: none; margin-right: 0; padding-right: 0; }
+  /* :has() — remove border from the last filter-col before .rpt-info-col */
+  .rpt-filter-col:has(+ .rpt-info-col),
+  .rpt-filter-col:last-child { border-right: none; margin-right: 0; padding-right: 0; }
   .rpt-filter-col-label { font-size: 12px; font-weight: 600; color: #616161; letter-spacing: 0.02em; }
-  .rpt-filter-dropdowns { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .rpt-filter-dropdowns { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  /* Cascade select group: level label + select stacked */
+  .rpt-select-group { display: flex; flex-direction: column; gap: 3px; }
+  .rpt-select-level { font-size: 10px; font-weight: 600; color: #BDBDBD; text-transform: uppercase; letter-spacing: 0.06em; padding-left: 2px; }
+  /* Arrow between cascade selects */
+  .rpt-cascade-arrow { color: #BDBDBD; font-size: 18px; align-self: flex-end; margin-bottom: 10px; flex-shrink: 0; user-select: none; }
+  /* MUI Snackbar */
+  .rpt-snackbar {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: #323232; color: #fff;
+    padding: 10px 20px; border-radius: 4px;
+    font-size: 14px; font-family: 'Roboto', sans-serif;
+    box-shadow: 0 3px 5px rgba(0,0,0,.2), 0 6px 10px rgba(0,0,0,.14);
+    z-index: 1400; display: flex; align-items: center; gap: 12px;
+    animation: snackbar-in 0.2s ease;
+    white-space: nowrap;
+  }
+  @keyframes snackbar-in { from { opacity: 0; transform: translateX(-50%) translateY(12px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
   /* MUI-style outlined select */
   .rpt-select {
     padding: 8px 32px 8px 12px;
@@ -2819,24 +2838,39 @@
         <div class="rpt-filter-col">
           <div class="rpt-filter-col-label">Aufschlüsseln nach</div>
           <div class="rpt-filter-dropdowns">
-            <select class="rpt-select">
-              <option>Linienbündel (Abbringer)</option>
-              <option>TU (Abbringer)</option>
-              <option>Haltestelle (Abbringer)</option>
-              <option>Verkehrsmittel (Abbringer)</option>
-              <option>Linie (Abbringer)</option>
-              <option>Linie (Zubringer)</option>
-              <option>Betriebstag</option>
-              <option>KW</option>
-            </select>
-            <select class="rpt-select">
-              <option>Linie (Abbringer)</option>
-              <option>keine Auswahl</option>
-            </select>
-            <select class="rpt-select">
-              <option>keine Auswahl</option>
-            </select>
-            <button class="rpt-apply-btn" onclick="alert('Auswertung wird aktualisiert…')">
+            <div class="rpt-select-group">
+              <span class="rpt-select-level">Ebene 1</span>
+              <select class="rpt-select" onchange="rptCascadeLevel1(this)">
+                <option>Linienbündel (Abbringer)</option>
+                <option>TU (Abbringer)</option>
+                <option>Haltestelle (Abbringer)</option>
+                <option>Verkehrsmittel (Abbringer)</option>
+                <option>Linie (Abbringer)</option>
+                <option>Linie (Zubringer)</option>
+                <option>Betriebstag</option>
+                <option>KW</option>
+              </select>
+            </div>
+            <span class="rpt-cascade-arrow material-icons">chevron_right</span>
+            <div class="rpt-select-group">
+              <span class="rpt-select-level">Ebene 2</span>
+              <select class="rpt-select" id="rpt-aufschluss-2" onchange="rptCascadeLevel2(this)">
+                <option value="">keine Auswahl</option>
+                <option>Linie (Abbringer)</option>
+                <option>TU (Abbringer)</option>
+                <option>Haltestelle (Abbringer)</option>
+                <option>Betriebstag</option>
+                <option>KW</option>
+              </select>
+            </div>
+            <span class="rpt-cascade-arrow material-icons" id="rpt-cascade-arrow-2">chevron_right</span>
+            <div class="rpt-select-group">
+              <span class="rpt-select-level">Ebene 3</span>
+              <select class="rpt-select" id="rpt-aufschluss-3" disabled style="opacity:0.38;cursor:not-allowed">
+                <option value="">keine Auswahl</option>
+              </select>
+            </div>
+            <button class="rpt-apply-btn" onclick="showRptApplyToast()" style="margin-bottom:1px">
               <span class="material-icons">refresh</span>Anwenden
             </button>
           </div>
@@ -4831,6 +4865,63 @@
 
   function closeConnectionReport() {
     showView('reports-list');
+  }
+
+  // ── Aufschlüsseln cascade logic ──────────────────────────────
+  const AUFSCHLUSS_OPTIONS = [
+    'keine Auswahl', 'Linienbündel (Abbringer)', 'TU (Abbringer)',
+    'Haltestelle (Abbringer)', 'Verkehrsmittel (Abbringer)',
+    'Linie (Abbringer)', 'Linie (Zubringer)', 'Betriebstag', 'KW'
+  ];
+
+  function rptCascadeLevel1(sel) {
+    const sel2 = document.getElementById('rpt-aufschluss-2');
+    const sel3 = document.getElementById('rpt-aufschluss-3');
+    const arr2 = document.getElementById('rpt-cascade-arrow-2');
+    if (!sel2) return;
+    // Reset level 2 and 3
+    sel2.value = '';
+    rptCascadeLevel2(sel2);
+    // Enable level 2
+    sel2.disabled = false;
+    sel2.style.opacity = '';
+    sel2.style.cursor = '';
+    if (arr2) arr2.style.color = '';
+  }
+
+  function rptCascadeLevel2(sel) {
+    const sel3 = document.getElementById('rpt-aufschluss-3');
+    if (!sel3) return;
+    if (!sel.value) {
+      sel3.disabled = true;
+      sel3.style.opacity = '0.38';
+      sel3.style.cursor = 'not-allowed';
+      sel3.innerHTML = '<option value="">keine Auswahl</option>';
+    } else {
+      sel3.disabled = false;
+      sel3.style.opacity = '';
+      sel3.style.cursor = '';
+      const used = [sel.closest('.rpt-filter-dropdowns').querySelector('select').value, sel.value];
+      const opts = AUFSCHLUSS_OPTIONS.filter(o => !used.includes(o));
+      sel3.innerHTML = opts.map(o => `<option value="${o === 'keine Auswahl' ? '' : o}">${o}</option>`).join('');
+    }
+  }
+
+  // ── MUI Snackbar ─────────────────────────────────────────────
+  let _snackTimer = null;
+  function showRptApplyToast(msg) {
+    msg = msg || 'Auswertung wird aktualisiert…';
+    let bar = document.getElementById('rpt-snackbar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'rpt-snackbar';
+      bar.className = 'rpt-snackbar';
+      document.body.appendChild(bar);
+    }
+    bar.textContent = msg;
+    bar.style.display = 'flex';
+    clearTimeout(_snackTimer);
+    _snackTimer = setTimeout(() => { bar.style.display = 'none'; }, 3000);
   }
 
   // ── Sortable table headers ────────────────────────────────────
