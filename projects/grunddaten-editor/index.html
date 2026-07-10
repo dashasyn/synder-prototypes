@@ -277,6 +277,9 @@ select { min-width: 200px; }
 .modal-field label { display: block; font-size: 12px; color: var(--text-sec); margin-bottom: 6px; }
 .modal-field input, .modal-field select { width: 100%; box-sizing: border-box; }
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
+.field-error { font-size: 12px; color: #C62828; margin-top: 4px; min-height: 16px; }
+.modal-field input.invalid, .modal-field select.invalid { border-color: #C62828; }
+.modal-field input.invalid:focus { border-color: #C62828; outline-color: #C62828; }
 </style>
 </head>
 <body>
@@ -1041,12 +1044,18 @@ function openModal(html, onSave) {
   const saveBtn = document.getElementById('modal-save-btn');
   if (saveBtn && onSave) {
     saveBtn.addEventListener('click', onSave);
-    // Enter key on any input also triggers save
     document.querySelectorAll('#modal-box input').forEach(inp => {
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') onSave(); });
+      inp.addEventListener('input', () => { inp.classList.remove('invalid'); const err = document.getElementById('err-' + inp.id); if (err) err.textContent = ''; });
     });
   }
   setTimeout(() => { const f = document.querySelector('#modal-box input,#modal-box select'); if (f) f.focus(); }, 50);
+}
+function markInvalid(inputId, msg) {
+  const el = document.getElementById(inputId);
+  if (el) el.classList.add('invalid');
+  const err = document.getElementById('err-' + inputId);
+  if (err) err.textContent = msg || (state.lang === 'de' ? 'Dieses Feld ist erforderlich.' : 'This field is required.');
 }
 function closeModal() {
   document.getElementById('modal-overlay').style.display = 'none';
@@ -1067,6 +1076,7 @@ function showSpcEdit(idx) {
     <div class="modal-field">
       <label>${t('spcLabel')}</label>
       <input type="text" id="m-spc-label" value="${sp.label}" placeholder="${state.lang === 'de' ? 'z.B. Weiterfahrt verzögert sich' : 'e.g. Service delayed'}">
+      <div class="field-error" id="err-m-spc-label"></div>
     </div>
     <div class="modal-field">
       <label>${t('spcSound')}</label>
@@ -1082,7 +1092,7 @@ function showSpcEdit(idx) {
     () => {
       const label = document.getElementById('m-spc-label').value.trim();
       const fileId = document.getElementById('m-spc-sound').value;
-      if (!label) { document.getElementById('m-spc-label').focus(); return; }
+      if (!label) { markInvalid('m-spc-label'); return; }
       if (idx === -1) {
         const id = 'SPC-' + String(specialAnnouncements.length + 1).padStart(3, '0');
         specialAnnouncements.push({ id, label, fileId });
@@ -1109,6 +1119,7 @@ function openTextModal(i) {
     <div class="modal-field">
       <label>${state.lang === 'de' ? 'Text' : 'Display text'}</label>
       <input type="text" id="m-txt-value" value="${isNew ? '' : displayTexts[i].text}" placeholder="${state.lang === 'de' ? 'z.B. Bitte zurücktreten' : 'e.g. Please stand back'}">
+      <div class="field-error" id="err-m-txt-value"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('cancel')}</button>
@@ -1116,7 +1127,7 @@ function openTextModal(i) {
     </div>`,
     () => {
       const val = document.getElementById('m-txt-value').value.trim();
-      if (!val) { document.getElementById('m-txt-value').focus(); return; }
+      if (!val) { markInvalid('m-txt-value'); return; }
       if (isNew) {
         displayTexts.push({ id: 'TXT-' + String(displayTexts.length + 1).padStart(3,'0'), text: val, usedBy: 0 });
       } else {
