@@ -269,6 +269,9 @@ select { min-width: 200px; }
     <div class="tn-item" data-view="sounds" onclick="navigate('sounds')" id="nav-sounds">
       <span id="nav-label-sounds">Tondateien</span>
     </div>
+    <div class="tn-item" data-view="spc" onclick="navigate('spc')" id="nav-spc">
+      <span id="nav-label-spc">Sonderansagen</span>
+    </div>
     <div class="tn-item" data-view="texts" onclick="navigate('texts')" id="nav-texts">
       <span id="nav-label-texts">Anzeigetexte</span>
     </div>
@@ -297,6 +300,7 @@ const state = {
   soundFilter: 'all',
   lang: 'de',
   search: '',
+  spcEditing: null, // null | { idx: -1 (new) | n (edit), label, fileId }
 };
 
 // ── Translations ───────────────────────────────────────────
@@ -355,7 +359,19 @@ const i18n = {
     typeSpecial:         'Sonder',
     tabAll:              'Alle',
     addText:             '+ Text hinzufügen',
-    textsIntro:          'Diese Texte können im Fahrzeug durch den Fahrer für die Außenanzeige ausgewählt werden.',
+    textsIntro:          'Vordefinierte Texte für die Außenanzeige, die im Fahrzeug durch den Fahrer manuell ausgewählt werden können.',
+    spcPage:             'Sonderansagen',
+    spcIntro:            'Vordefinierte Ansagen, die im Fahrzeug durch den Fahrer manuell ausgewählt werden können.',
+    addSpc:              '+ Sonderansage hinzufügen',
+    spcNewTitle:         'Neue Sonderansage',
+    spcEditTitle:        'Sonderansage bearbeiten',
+    spcLabel:            'Bezeichnung',
+    spcSound:            'Tondatei',
+    spcNoSound:          '— keine Tondatei —',
+    spcNote:             'Diese Ansagen stehen dem Fahrer im Fahrzeug zur manuellen Auswahl zur Verfügung.',
+    colLabel:            'Bezeichnung',
+    saveEntry:           'Speichern',
+    cancel:              'Abbrechen',
     stationsSuffix:      (n) => n === 1 ? '1 Haltestelle' : `${n} Haltestellen`,
     currentName:         'Aktueller Name',
   },
@@ -413,7 +429,19 @@ const i18n = {
     typeSpecial:         'Special',
     tabAll:              'All',
     addText:             '+ Add text',
-    textsIntro:          'These texts are selectable by the operator on the vehicle for the outside display.',
+    textsIntro:          'Predefined texts for the outside display, manually selectable by the driver on the vehicle.',
+    spcPage:             'Special Announcements',
+    spcIntro:            'Predefined announcements that can be manually selected by the driver during the ride.',
+    addSpc:              '+ Add announcement',
+    spcNewTitle:         'New special announcement',
+    spcEditTitle:        'Edit announcement',
+    spcLabel:            'Label',
+    spcSound:            'Sound file',
+    spcNoSound:          '— no sound file —',
+    spcNote:             'These announcements are available to the driver for manual selection on the vehicle.',
+    colLabel:            'Label',
+    saveEntry:           'Save',
+    cancel:              'Cancel',
     stationsSuffix:      (n) => n === 1 ? '1 station' : `${n} stations`,
     currentName:         'Current name',
   },
@@ -573,6 +601,7 @@ function setLang(lang) {
   // Update nav labels
   document.getElementById('nav-label-stations').textContent = t('stations');
   document.getElementById('nav-label-sounds').textContent = t('sounds');
+  document.getElementById('nav-label-spc').textContent = t('spcPage');
   document.getElementById('nav-label-texts').textContent = t('texts');
   render();
 }
@@ -588,6 +617,7 @@ function render() {
   if      (state.view === 'stations') c.innerHTML = renderStations();
   else if (state.view === 'detail')   c.innerHTML = renderDetail();
   else if (state.view === 'sounds')   c.innerHTML = renderSounds();
+  else if (state.view === 'spc')      c.innerHTML = renderSpcPage();
   else if (state.view === 'texts')    c.innerHTML = renderTexts();
 }
 
@@ -894,12 +924,10 @@ function renderSounds() {
 function renderTexts() {
   const rows = displayTexts.map((tx, i) => `
     <tr>
-      <td><span class="badge b-id">${tx.id}</span></td>
       <td style="font-weight:500">${tx.text}</td>
-      <td style="color:var(--text-sec)">${t('stationsSuffix', tx.usedBy)}</td>
-      <td>
+      <td style="text-align:right">
         <button class="btn btn-ghost btn-sm" onclick="editText(${i})">${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}</button>
-        ${tx.usedBy === 0 ? `<button class="btn-danger-ghost btn-sm" onclick="deleteText(${i})">✕</button>` : ''}
+        <button class="btn-danger-ghost btn-sm" onclick="deleteText(${i})">✕</button>
       </td>
     </tr>`).join('');
 
@@ -907,15 +935,14 @@ function renderTexts() {
   <div class="ph">
     <div>
       <h1>${t('displayTexts')}</h1>
-      <div class="ph-sub">${state.lang === 'de' ? 'Vordefinierte Texte für die Außenanzeige' : 'Predefined texts for outside vehicle display'}</div>
+      <div class="ph-sub">${t('textsIntro')}</div>
     </div>
     <div class="ph-right">
       <button class="btn btn-primary btn-sm" onclick="addText()">${t('addText')}</button>
     </div>
   </div>
-  <p style="font-size:13px;color:var(--text-sec);margin-bottom:16px;max-width:560px">${t('textsIntro')}</p>
   <div class="tbl-wrap"><table>
-    <thead><tr><th>ID</th><th>${state.lang === 'de' ? 'Text' : 'Display text'}</th><th>${t('colUsedBy')}</th><th></th></tr></thead>
+    <thead><tr><th>${state.lang === 'de' ? 'Text' : 'Display text'}</th><th></th></tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
 }
@@ -933,6 +960,99 @@ function editText(i) {
 }
 function deleteText(i) {
   if (confirm(`${state.lang === 'de' ? 'Löschen' : 'Delete'}: "${displayTexts[i].text}"?`)) { displayTexts.splice(i, 1); navigate('texts'); }
+}
+
+// ── Special Announcements page ─────────────────────────────
+function renderSpcPage() {
+  const editCard = state.spcEditing !== null ? `
+    <div class="card" style="margin-bottom:20px">
+      <div class="card-head"><span class="card-title">${state.spcEditing.idx === -1 ? t('spcNewTitle') : t('spcEditTitle')}</span></div>
+      <div class="card-body" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
+        <div>
+          <div style="font-size:12px;color:var(--text-sec);margin-bottom:6px">${t('spcLabel')}</div>
+          <input type="text" id="spc-edit-label" value="${state.spcEditing.label}" placeholder="${state.lang === 'de' ? 'z.B. Weiterfahrt verzögert sich' : 'e.g. Service delayed'}" style="width:280px">
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--text-sec);margin-bottom:6px">${t('spcSound')}</div>
+          <select id="spc-edit-sound" style="min-width:260px">
+            <option value="">${t('spcNoSound')}</option>
+            ${soundFiles.filter(f => f.type === 'special').map(f =>
+              `<option value="${f.id}" ${f.id === state.spcEditing.fileId ? 'selected' : ''}>${f.filename}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div style="display:flex;gap:8px;padding-bottom:1px">
+          <button class="btn btn-primary btn-sm" onclick="saveSpcEdit()">${t('saveEntry')}</button>
+          <button class="btn btn-outline btn-sm" onclick="cancelSpcEdit()">${t('cancel')}</button>
+        </div>
+      </div>
+    </div>` : '';
+
+  const rows = specialAnnouncements.map((sp, i) => `
+    <tr>
+      <td style="font-weight:500">${sp.label}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-sec)">${sndName(sp.fileId)}</td>
+      <td style="text-align:right">
+        <button class="btn btn-ghost btn-sm" onclick="showSpcEdit(${i})">${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}</button>
+        <button class="btn-danger-ghost btn-sm" onclick="deleteSpcEntry(${i})">✕</button>
+      </td>
+    </tr>`).join('');
+
+  return `
+  <div class="ph">
+    <div>
+      <h1>${t('spcPage')}</h1>
+      <div class="ph-sub">${t('spcIntro')}</div>
+    </div>
+    <div class="ph-right">
+      ${state.spcEditing === null ? `<button class="btn btn-primary btn-sm" onclick="showSpcEdit(-1)">${t('addSpc')}</button>` : ''}
+    </div>
+  </div>
+  ${editCard}
+  <div class="tbl-wrap"><table>
+    <thead><tr>
+      <th>${t('colLabel')}</th>
+      <th>${t('colFilename')}</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="3" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
+  </table></div>
+  <p style="font-size:12px;color:var(--text-dis);margin-top:14px">${t('spcNote')}</p>`;
+}
+
+function showSpcEdit(idx) {
+  if (idx === -1) {
+    state.spcEditing = { idx: -1, label: '', fileId: '' };
+  } else {
+    const sp = specialAnnouncements[idx];
+    state.spcEditing = { idx, label: sp.label, fileId: sp.fileId };
+  }
+  navigate('spc');
+}
+function saveSpcEdit() {
+  const label = document.getElementById('spc-edit-label').value.trim();
+  const fileId = document.getElementById('spc-edit-sound').value;
+  if (!label) return;
+  if (state.spcEditing.idx === -1) {
+    const id = 'SPC-' + String(specialAnnouncements.length + 1).padStart(3, '0');
+    specialAnnouncements.push({ id, label, fileId });
+  } else {
+    specialAnnouncements[state.spcEditing.idx].label = label;
+    specialAnnouncements[state.spcEditing.idx].fileId = fileId;
+  }
+  state.spcEditing = null;
+  navigate('spc');
+}
+function cancelSpcEdit() {
+  state.spcEditing = null;
+  navigate('spc');
+}
+function deleteSpcEntry(i) {
+  const sp = specialAnnouncements[i];
+  if (confirm(`${state.lang === 'de' ? 'Löschen' : 'Delete'}: "${sp.label}"?`)) {
+    specialAnnouncements.splice(i, 1);
+    navigate('spc');
+  }
 }
 
 // ── Boot ───────────────────────────────────────────────────
