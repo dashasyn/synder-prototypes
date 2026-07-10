@@ -250,6 +250,32 @@ select { min-width: 200px; }
 }
 .ftab.active { color: var(--pri); border-bottom-color: var(--pri); }
 .ftab:hover:not(.active) { color: var(--text-pri); background: rgba(25,118,210,0.04); }
+
+/* Line filter chips */
+.line-filter { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+.lf-chip {
+  padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 500;
+  cursor: pointer; border: 1px solid var(--divider); background: #fff; color: var(--text-sec);
+  transition: background 0.12s, color 0.12s;
+}
+.lf-chip.active { background: var(--pri); color: #fff; border-color: var(--pri); }
+.lf-chip:hover:not(.active) { background: var(--pri-50); border-color: #90CAF9; }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 300;
+  align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: #fff; border-radius: 4px; box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+  padding: 28px; min-width: 400px; max-width: 520px; width: 90%;
+}
+.modal-title { font-size: 16px; font-weight: 500; margin-bottom: 20px; }
+.modal-field { margin-bottom: 16px; }
+.modal-field label { display: block; font-size: 12px; color: var(--text-sec); margin-bottom: 6px; }
+.modal-field input, .modal-field select { width: 100%; box-sizing: border-box; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
 </style>
 </head>
 <body>
@@ -265,9 +291,6 @@ select { min-width: 200px; }
   <div class="tn-items">
     <div class="tn-item" data-view="stations" onclick="navigate('stations')" id="nav-stations">
       <span id="nav-label-stations">Stationen</span>
-    </div>
-    <div class="tn-item" data-view="sounds" onclick="navigate('sounds')" id="nav-sounds">
-      <span id="nav-label-sounds">Tondateien</span>
     </div>
     <div class="tn-item" data-view="spc" onclick="navigate('spc')" id="nav-spc">
       <span id="nav-label-spc">Sonderansagen</span>
@@ -291,6 +314,13 @@ select { min-width: 200px; }
 
 <div class="save-toast" id="save-toast"></div>
 
+<!-- Modal overlay -->
+<div class="modal-overlay" id="modal-overlay" onclick="handleOverlayClick(event)">
+  <div class="modal-box" id="modal-box">
+    <div id="modal-content"></div>
+  </div>
+</div>
+
 <script>
 // ── State ──────────────────────────────────────────────────
 const state = {
@@ -300,7 +330,9 @@ const state = {
   soundFilter: 'all',
   lang: 'de',
   search: '',
-  spcEditing: null, // null | { idx: -1 (new) | n (edit), label, fileId }
+  lineFilter: 'all',
+  spcEditing: null,
+  textEditing: null, // null = new, number = edit index
 };
 
 // ── Translations ───────────────────────────────────────────
@@ -600,7 +632,6 @@ function setLang(lang) {
   document.getElementById('lang-en').classList.toggle('active', lang === 'en');
   // Update nav labels
   document.getElementById('nav-label-stations').textContent = t('stations');
-  document.getElementById('nav-label-sounds').textContent = t('sounds');
   document.getElementById('nav-label-spc').textContent = t('spcPage');
   document.getElementById('nav-label-texts').textContent = t('texts');
   render();
@@ -616,43 +647,53 @@ function render() {
   const c = document.getElementById('content');
   if      (state.view === 'stations') c.innerHTML = renderStations();
   else if (state.view === 'detail')   c.innerHTML = renderDetail();
-  else if (state.view === 'sounds')   c.innerHTML = renderSounds();
   else if (state.view === 'spc')      c.innerHTML = renderSpcPage();
   else if (state.view === 'texts')    c.innerHTML = renderTexts();
 }
 
 // ── Stations list ──────────────────────────────────────────
 function renderStations() {
-  const rows = getRows();
+  const allRows = getRows();
   const q = state.search || '';
+  const lf = state.lineFilter;
 
-  const rowsHtml = rows
-    .filter(r => {
-      if (!q) return true;
-      return r.station.name.toLowerCase().includes(q.toLowerCase()) || r.line.toLowerCase().includes(q.toLowerCase());
-    })
-    .map(r => {
-      const s = r.station;
-      const future = s.nameChanges.length > 0
-        ? `<span class="future-name">→ ${s.nameChanges[0].newName} <span style="opacity:0.6;font-size:10px">${s.nameChanges[0].date}</span></span>`
-        : '';
-      return `<tr class="row-link" onclick="navigate('detail','${s.id}','${r.line}')">
-        <td><span class="b-id badge">${s.id}</span></td>
-        <td>${s.name}${future}</td>
-        <td>${lineBadge(r.line)}</td>
-        <td style="color:var(--text-dis);font-size:16px">›</td>
-      </tr>`;
-    }).join('');
+  const allLines = [...new Set(allRows.map(r => r.line))].sort();
+
+  const filtered = allRows.filter(r => {
+    const matchLine = lf === 'all' || r.line === lf;
+    const matchQ = !q || r.station.name.toLowerCase().includes(q.toLowerCase()) || r.line.toLowerCase().includes(q.toLowerCase());
+    return matchLine && matchQ;
+  });
+
+  const rowsHtml = filtered.map(r => {
+    const s = r.station;
+    const future = s.nameChanges.length > 0
+      ? `<span class="future-name">→ ${s.nameChanges[0].newName} <span style="opacity:0.6;font-size:10px">${s.nameChanges[0].date}</span></span>`
+      : '';
+    return `<tr class="row-link" onclick="navigate('detail','${s.id}','${r.line}')">
+      <td><span class="b-id badge">${s.id}</span></td>
+      <td>${s.name}${future}</td>
+      <td>${lineBadge(r.line)}</td>
+      <td style="color:var(--text-dis);font-size:16px">›</td>
+    </tr>`;
+  }).join('');
+
+  const lineChips = ['all', ...allLines].map(l => {
+    const active = l === lf ? 'active' : '';
+    const label = l === 'all' ? (state.lang === 'de' ? 'Alle' : 'All') : l;
+    return `<span class="lf-chip ${active}" onclick="state.lineFilter='${l}';render()">${label}</span>`;
+  }).join('');
 
   return `<div class="ph">
     <div>
       <h1>${t('stations')}</h1>
-      <div class="ph-sub">${t('stationsSuffix', rows.length)} · BVG J/JK</div>
+      <div class="ph-sub">${t('stationsSuffix', filtered.length)} · BVG J/JK</div>
     </div>
   </div>
   <div class="search-row">
     <input class="search-input" type="text" placeholder="${t('searchPlaceholder')}" value="${state.search}" oninput="state.search=this.value;render()">
   </div>
+  <div class="line-filter">${lineChips}</div>
   <div class="tbl-wrap"><table>
     <thead><tr>
       <th>${t('colId')}</th>
@@ -923,47 +964,12 @@ function renderTexts() {
   </table></div>`;
 }
 
-function addText() {
-  const text = prompt(state.lang === 'de' ? 'Neuen Anzeigetext eingeben:' : 'Enter new display text:');
-  if (text && text.trim()) {
-    displayTexts.push({ id:'TXT-' + String(displayTexts.length + 1).padStart(3,'0'), text: text.trim(), usedBy: 0 });
-    navigate('texts');
-  }
-}
-function editText(i) {
-  const text = prompt(state.lang === 'de' ? 'Text bearbeiten:' : 'Edit display text:', displayTexts[i].text);
-  if (text && text.trim()) { displayTexts[i].text = text.trim(); navigate('texts'); }
-}
 function deleteText(i) {
   if (confirm(`${state.lang === 'de' ? 'Löschen' : 'Delete'}: "${displayTexts[i].text}"?`)) { displayTexts.splice(i, 1); navigate('texts'); }
 }
 
 // ── Special Announcements page ─────────────────────────────
 function renderSpcPage() {
-  const editCard = state.spcEditing !== null ? `
-    <div class="card" style="margin-bottom:20px">
-      <div class="card-head"><span class="card-title">${state.spcEditing.idx === -1 ? t('spcNewTitle') : t('spcEditTitle')}</span></div>
-      <div class="card-body" style="display:flex;gap:16px;align-items:flex-end;flex-wrap:wrap">
-        <div>
-          <div style="font-size:12px;color:var(--text-sec);margin-bottom:6px">${t('spcLabel')}</div>
-          <input type="text" id="spc-edit-label" value="${state.spcEditing.label}" placeholder="${state.lang === 'de' ? 'z.B. Weiterfahrt verzögert sich' : 'e.g. Service delayed'}" style="width:280px">
-        </div>
-        <div>
-          <div style="font-size:12px;color:var(--text-sec);margin-bottom:6px">${t('spcSound')}</div>
-          <select id="spc-edit-sound" style="min-width:260px">
-            <option value="">${t('spcNoSound')}</option>
-            ${soundFiles.filter(f => f.type === 'special').map(f =>
-              `<option value="${f.id}" ${f.id === state.spcEditing.fileId ? 'selected' : ''}>${f.filename}</option>`
-            ).join('')}
-          </select>
-        </div>
-        <div style="display:flex;gap:8px;padding-bottom:1px">
-          <button class="btn btn-primary btn-sm" onclick="saveSpcEdit()">${t('saveEntry')}</button>
-          <button class="btn btn-outline btn-sm" onclick="cancelSpcEdit()">${t('cancel')}</button>
-        </div>
-      </div>
-    </div>` : '';
-
   const rows = specialAnnouncements.map((sp, i) => `
     <tr>
       <td style="font-weight:500">${sp.label}</td>
@@ -981,10 +987,9 @@ function renderSpcPage() {
       <div class="ph-sub">${t('spcIntro')}</div>
     </div>
     <div class="ph-right">
-      ${state.spcEditing === null ? `<button class="btn btn-primary btn-sm" onclick="showSpcEdit(-1)">${t('addSpc')}</button>` : ''}
+      <button class="btn btn-primary btn-sm" onclick="showSpcEdit(-1)">${t('addSpc')}</button>
     </div>
   </div>
-  ${editCard}
   <div class="tbl-wrap"><table>
     <thead><tr>
       <th>${t('colLabel')}</th>
@@ -996,31 +1001,56 @@ function renderSpcPage() {
   <p style="font-size:12px;color:var(--text-dis);margin-top:14px">${t('spcNote')}</p>`;
 }
 
-function showSpcEdit(idx) {
-  if (idx === -1) {
-    state.spcEditing = { idx: -1, label: '', fileId: '' };
-  } else {
-    const sp = specialAnnouncements[idx];
-    state.spcEditing = { idx, label: sp.label, fileId: sp.fileId };
-  }
-  navigate('spc');
+// ── Modal helpers ──────────────────────────────────────────
+function openModal(html) {
+  document.getElementById('modal-content').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => { const f = document.querySelector('#modal-box input,#modal-box select'); if (f) f.focus(); }, 50);
 }
-function saveSpcEdit() {
-  const label = document.getElementById('spc-edit-label').value.trim();
-  const fileId = document.getElementById('spc-edit-sound').value;
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  document.getElementById('modal-content').innerHTML = '';
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+function showSpcEdit(idx) {
+  const sp = idx === -1 ? { label: '', fileId: '' } : specialAnnouncements[idx];
+  const title = idx === -1 ? t('spcNewTitle') : t('spcEditTitle');
+  const soundOpts = soundFiles.filter(f => f.type === 'special').map(f =>
+    `<option value="${f.id}" ${f.id === sp.fileId ? 'selected' : ''}>${f.filename}</option>`
+  ).join('');
+  openModal(`
+    <div class="modal-title">${title}</div>
+    <div class="modal-field">
+      <label>${t('spcLabel')}</label>
+      <input type="text" id="m-spc-label" value="${sp.label}" placeholder="${state.lang === 'de' ? 'z.B. Weiterfahrt verzögert sich' : 'e.g. Service delayed'}">
+    </div>
+    <div class="modal-field">
+      <label>${t('spcSound')}</label>
+      <select id="m-spc-sound">
+        <option value="">${t('spcNoSound')}</option>
+        ${soundOpts}
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('cancel')}</button>
+      <button class="btn btn-primary btn-sm" onclick="saveSpcEdit(${idx})">${t('saveEntry')}</button>
+    </div>`);
+}
+function saveSpcEdit(idx) {
+  const label = document.getElementById('m-spc-label').value.trim();
+  const fileId = document.getElementById('m-spc-sound').value;
   if (!label) return;
-  if (state.spcEditing.idx === -1) {
+  if (idx === -1) {
     const id = 'SPC-' + String(specialAnnouncements.length + 1).padStart(3, '0');
     specialAnnouncements.push({ id, label, fileId });
   } else {
-    specialAnnouncements[state.spcEditing.idx].label = label;
-    specialAnnouncements[state.spcEditing.idx].fileId = fileId;
+    specialAnnouncements[idx].label = label;
+    specialAnnouncements[idx].fileId = fileId;
   }
-  state.spcEditing = null;
-  navigate('spc');
-}
-function cancelSpcEdit() {
-  state.spcEditing = null;
+  closeModal();
   navigate('spc');
 }
 function deleteSpcEntry(i) {
@@ -1029,6 +1059,44 @@ function deleteSpcEntry(i) {
     specialAnnouncements.splice(i, 1);
     navigate('spc');
   }
+}
+
+function addText() {
+  state.textEditing = null;
+  openModal(`
+    <div class="modal-title">${state.lang === 'de' ? 'Neuer Anzeigetext' : 'New display text'}</div>
+    <div class="modal-field">
+      <label>${state.lang === 'de' ? 'Text' : 'Display text'}</label>
+      <input type="text" id="m-txt-value" value="" placeholder="${state.lang === 'de' ? 'z.B. Bitte zurücktreten' : 'e.g. Please stand back'}">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('cancel')}</button>
+      <button class="btn btn-primary btn-sm" onclick="saveTextModal()">${t('saveEntry')}</button>
+    </div>`);
+}
+function editText(i) {
+  state.textEditing = i;
+  openModal(`
+    <div class="modal-title">${state.lang === 'de' ? 'Anzeigetext bearbeiten' : 'Edit display text'}</div>
+    <div class="modal-field">
+      <label>${state.lang === 'de' ? 'Text' : 'Display text'}</label>
+      <input type="text" id="m-txt-value" value="${displayTexts[i].text}">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('cancel')}</button>
+      <button class="btn btn-primary btn-sm" onclick="saveTextModal()">${t('saveEntry')}</button>
+    </div>`);
+}
+function saveTextModal() {
+  const val = document.getElementById('m-txt-value').value.trim();
+  if (!val) return;
+  if (state.textEditing === null) {
+    displayTexts.push({ id: 'TXT-' + String(displayTexts.length + 1).padStart(3,'0'), text: val, usedBy: 0 });
+  } else {
+    displayTexts[state.textEditing].text = val;
+  }
+  closeModal();
+  navigate('texts');
 }
 
 // ── Boot ───────────────────────────────────────────────────
