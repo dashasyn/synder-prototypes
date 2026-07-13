@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Balance Reconciliation — DIS-259 Prototype</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@7.2.96/css/materialdesignicons.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0053CC;
+      --primary-light: #E8F0FE;
+      --primary-dark: #0047B3;
+      --success: #0D9D57;
+      --success-light: #E6F5ED;
+      --success-50: #F0FBF4;
+      --error: #D93025;
+      --error-light: #FCE8E6;
+      --warning: #E37400;
+      --warning-light: #FEF3E0;
+      --warning-50: #FFFBF0;
+      --blue: #1A73E8;
+      --blue-light: #E8F0FE;
+      --blue-50: #F0F6FF;
+      --gray-50: #F8F9FA;
+      --gray-100: #F1F3F4;
+      --gray-200: #E8EAED;
+      --gray-300: #DADCE0;
+      --gray-400: #BDC1C6;
+      --gray-500: #9AA0A6;
+      --gray-600: #80868B;
+      --gray-700: #5F6368;
+      --gray-800: #3C4043;
+      --gray-900: #202124;
+      --white: #FFFFFF;
+      --shadow-sm: 0 1px 2px rgba(60,64,67,0.1);
+      --shadow-md: 0 2px 6px rgba(60,64,67,0.15);
+      --radius-sm: 4px;
+      --radius-md: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Roboto', sans-serif; background: var(--white); color: var(--gray-900); font-size: 14px; line-height: 1.5; }
+
+    /* ── Prototype Navigator ── */
+    .proto-nav {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+      background: #1E2A3A; padding: 0 24px;
+      display: flex; align-items: center; gap: 4px; height: 44px;
+    }
+    .proto-label { color: #8EA4C0; font-size: 11px; font-weight: 500; letter-spacing: 0.5px; text-transform: uppercase; margin-right: 12px; white-space: nowrap; }
+    .proto-btn {
+      padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 500;
+      color: #8EA4C0; cursor: pointer; border: none; background: transparent;
+      white-space: nowrap; transition: all 0.15s;
+    }
+    .proto-btn:hover { background: rgba(255,255,255,0.08); color: #C8D8EC; }
+    .proto-btn.active { background: rgba(255,255,255,0.15); color: #FFFFFF; }
+
+    /* ── App Shell ── */
+    .app { min-height: 100vh; display: flex; flex-direction: column; padding-top: 44px; }
+
+    /* ── Top Bar ── */
+    .topbar {
+      background: var(--white); border-bottom: 1px solid var(--gray-200);
+      padding: 0 24px; height: 52px; display: flex; align-items: center;
+      justify-content: space-between; position: sticky; top: 44px; z-index: 100;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 20px; }
+    .logo { font-weight: 700; font-size: 18px; color: var(--primary); letter-spacing: -0.3px; }
+    .topbar-nav { display: flex; gap: 2px; }
+    .topbar-link {
+      padding: 6px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+      color: var(--gray-700); cursor: pointer;
+    }
+    .topbar-link.active { background: var(--primary-light); color: var(--primary); }
+
+    .btn {
+      padding: 7px 16px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+      cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s;
+    }
+    .btn-primary { background: var(--primary); color: var(--white); border-color: var(--primary); }
+    .btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+    .btn-outlined { background: var(--white); color: var(--gray-700); border-color: var(--gray-300); }
+    .btn-outlined:hover { background: var(--gray-50); }
+    .btn-ghost { background: transparent; color: var(--gray-700); }
+    .btn-ghost:hover { background: var(--gray-100); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+    /* ── Page Layout ── */
+    .page { display: none; flex-direction: column; flex: 1; }
+    .page.active { display: flex; }
+
+    /* ── Page Header ── */
+    .page-header { padding: 24px 24px 0; }
+    .page-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .page-title { font-size: 20px; font-weight: 600; color: var(--gray-900); }
+    .page-subtitle { font-size: 13px; color: var(--gray-600); margin-bottom: 20px; }
+    .breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--gray-500); margin-bottom: 12px; }
+    .breadcrumb a { color: var(--primary); cursor: pointer; text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    /* ── Filters Bar ── */
+    .filters-bar {
+      padding: 12px 24px; border-bottom: 1px solid var(--gray-200);
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 2px; }
+    .filter-label { font-size: 11px; color: var(--gray-500); font-weight: 500; }
+    .filter-select {
+      padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--radius-sm);
+      font-size: 13px; color: var(--gray-800); background: var(--white); cursor: pointer;
+      min-width: 120px;
+    }
+    .filter-select:focus { outline: none; border-color: var(--primary); }
+
+    /* ── Table ── */
+    .table-wrap { flex: 1; overflow: auto; }
+    .table { width: 100%; border-collapse: collapse; }
+    .table th {
+      text-align: left; padding: 10px 16px; font-size: 12px; font-weight: 500;
+      color: var(--gray-600); background: var(--gray-50); border-bottom: 1px solid var(--gray-200);
+      white-space: nowrap; position: sticky; top: 0;
+    }
+    .table td { padding: 12px 16px; border-bottom: 1px solid var(--gray-100); vertical-align: middle; }
+    .table tr:hover td { background: var(--gray-50); }
+    .table tr:last-child td { border-bottom: none; }
+    .table tr.clickable { cursor: pointer; }
+
+    /* ── Status Chips ── */
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+      white-space: nowrap;
+    }
+    .chip-blue { background: var(--blue-light); color: var(--blue); }
+    .chip-green { background: var(--success-light); color: var(--success); }
+    .chip-orange { background: var(--warning-light); color: var(--warning); }
+    .chip-red { background: var(--error-light); color: var(--error); }
+    .chip-gray { background: var(--gray-100); color: var(--gray-600); }
+
+    .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .chip .spin {
+      width: 10px; height: 10px; border: 2px solid currentColor; border-top-color: transparent;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Integration Badge ── */
+    .int-badge { display: flex; align-items: center; gap: 8px; }
+    .int-icon {
+      width: 28px; height: 28px; border-radius: 6px; background: var(--primary);
+      color: white; font-size: 11px; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .int-icon.stripe { background: #635BFF; }
+    .int-icon.paypal { background: #003087; }
+    .int-icon.shopify { background: #96BF48; }
+    .int-name { font-size: 13px; font-weight: 500; }
+    .int-sub { font-size: 11px; color: var(--gray-500); }
+
+    /* ── Tooltip ── */
+    .tooltip-wrap { position: relative; display: inline-flex; }
+    .tooltip-wrap .tooltip {
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: var(--gray-900); color: white; font-size: 12px; font-weight: 400;
+      padding: 6px 10px; border-radius: var(--radius-sm); white-space: nowrap; max-width: 260px;
+      white-space: normal; pointer-events: none; opacity: 0; transition: opacity 0.15s;
+      z-index: 200; line-height: 1.4; text-align: center;
+    }
+    .tooltip-wrap:hover .tooltip { opacity: 1; }
+
+    /* ── Action Link ── */
+    .action-link { color: var(--primary); font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+    .action-link:hover { text-decoration: underline; }
+
+    /* ── Results Page ── */
+    .results-header { padding: 20px 24px 0; border-bottom: 1px solid var(--gray-200); }
+    .results-back { display: flex; align-items: center; gap: 6px; color: var(--gray-600); font-size: 13px; cursor: pointer; margin-bottom: 12px; }
+    .results-back:hover { color: var(--primary); }
+    .results-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+    .results-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+    .results-meta { font-size: 13px; color: var(--gray-600); }
+    .results-pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+    .results-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+    /* ── Balance Block ── */
+    .balance-block {
+      margin: 16px 24px;
+      border: 1px solid var(--gray-200);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .balance-block.gap { border-color: #F5C8B8; }
+    .balance-block.ok { border-color: #A8D5B5; }
+
+    .balance-head {
+      padding: 12px 16px; border-bottom: 1px solid var(--gray-200);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--gray-50);
+    }
+    .balance-block.gap .balance-head { background: var(--warning-50); border-color: #F5C8B8; }
+    .balance-block.ok .balance-head { background: var(--success-50); border-color: #A8D5B5; }
+
+    .balance-head-title { font-size: 13px; font-weight: 600; color: var(--gray-800); }
+    .balance-verdict {
+      font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+    }
+    .balance-verdict.gap { color: var(--warning); }
+    .balance-verdict.ok { color: var(--success); }
+
+    .balance-body { padding: 4px 0; }
+    .balance-row {
+      display: grid; grid-template-columns: 180px 1fr auto;
+      align-items: center; padding: 9px 16px; gap: 8px;
+    }
+    .balance-row + .balance-row { border-top: 1px solid var(--gray-100); }
+    .balance-row.divider { border-top: 1px solid var(--gray-200); background: var(--gray-50); }
+    .balance-row-label { font-size: 13px; color: var(--gray-700); }
+    .balance-row-label.plus { color: var(--success); font-weight: 500; }
+    .balance-row-label.eq { color: var(--gray-800); font-weight: 500; }
+    .balance-row-value { font-size: 14px; font-weight: 600; color: var(--gray-900); font-variant-numeric: tabular-nums; }
+    .balance-row-source { font-size: 12px; color: var(--gray-500); text-align: right; }
+
+    .balance-footer {
+      padding: 12px 16px; border-top: 1px solid var(--gray-200);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--gray-50);
+    }
+    .balance-block.gap .balance-footer { background: var(--warning-50); border-color: #F5C8B8; }
+    .balance-block.ok .balance-footer { background: var(--success-50); border-color: #A8D5B5; }
+
+    .balance-gap-label { font-size: 13px; font-weight: 600; }
+    .balance-gap-label.gap { color: var(--warning); }
+    .balance-gap-label.ok { color: var(--success); }
+    .balance-footer-actions { display: flex; gap: 8px; }
+
+    .balance-notice {
+      margin: 16px 24px; padding: 14px 16px; border-radius: var(--radius-md);
+      border: 1px solid var(--gray-200); background: var(--gray-50);
+      display: flex; align-items: flex-start; gap: 12px;
+    }
+    .balance-notice-icon { font-size: 18px; color: var(--gray-500); flex-shrink: 0; margin-top: 1px; }
+    .balance-notice-title { font-size: 13px; font-weight: 600; color: var(--gray-800); margin-bottom: 2px; }
+    .balance-notice-text { font-size: 13px; color: var(--gray-600); }
+
+    /* ── Tabs ── */
+    .tabs { display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid var(--gray-200); }
+    .tab {
+      padding: 10px 16px; font-size: 13px; font-weight: 500; color: var(--gray-600);
+      cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px;
+      display: flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+    .tab:hover { color: var(--gray-900); }
+    .tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+    .tab-count {
+      background: var(--gray-200); color: var(--gray-700); font-size: 11px; font-weight: 600;
+      padding: 1px 7px; border-radius: 10px;
+    }
+    .tab.active .tab-count { background: var(--primary-light); color: var(--primary); }
+
+    /* ── Configure Page ── */
+    .configure-wrap { padding: 24px; max-width: 720px; }
+    .steps { display: flex; align-items: center; gap: 0; margin-bottom: 32px; }
+    .step { display: flex; align-items: center; gap: 8px; }
+    .step-num {
+      width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700;
+    }
+    .step-num.done { background: var(--success); color: white; }
+    .step-num.active { background: var(--primary); color: white; }
+    .step-num.pending { background: var(--gray-200); color: var(--gray-500); }
+    .step-label { font-size: 13px; font-weight: 500; }
+    .step-label.active { color: var(--primary); }
+    .step-label.pending { color: var(--gray-500); }
+    .step-divider { flex: 1; height: 1px; background: var(--gray-300); margin: 0 8px; }
+
+    .form-section { margin-bottom: 28px; }
+    .form-section-title { font-size: 14px; font-weight: 600; color: var(--gray-900); margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid var(--gray-200); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .form-row.single { grid-template-columns: 1fr; }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-label { font-size: 12px; font-weight: 500; color: var(--gray-700); }
+    .form-label .opt { font-weight: 400; color: var(--gray-500); }
+    .form-input, .form-select {
+      padding: 8px 12px; border: 1px solid var(--gray-300); border-radius: var(--radius-sm);
+      font-size: 13px; color: var(--gray-900); background: var(--white);
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-select:focus { outline: none; border-color: var(--primary); }
+    .form-hint { font-size: 11px; color: var(--gray-500); margin-top: 2px; }
+
+    .import-method-group { display: flex; flex-direction: column; gap: 8px; }
+    .import-option {
+      border: 1px solid var(--gray-300); border-radius: var(--radius-sm); padding: 12px 14px;
+      cursor: pointer; display: flex; align-items: flex-start; gap: 10px; transition: all 0.15s;
+    }
+    .import-option:hover { border-color: var(--gray-400); background: var(--gray-50); }
+    .import-option.selected { border-color: var(--primary); background: var(--primary-light); }
+    .import-option input[type=radio] { margin-top: 2px; flex-shrink: 0; accent-color: var(--primary); }
+    .import-option-title { font-size: 13px; font-weight: 500; color: var(--gray-900); }
+    .import-option-desc { font-size: 12px; color: var(--gray-600); margin-top: 2px; }
+
+    .balance-entry-section {
+      background: var(--gray-50); border: 1px solid var(--gray-200);
+      border-radius: var(--radius-sm); padding: 16px; margin-top: 16px;
+    }
+    .balance-entry-title { font-size: 13px; font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
+    .balance-entry-desc { font-size: 12px; color: var(--gray-600); margin-bottom: 14px; }
+    .currency-input-wrap { position: relative; }
+    .currency-symbol { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--gray-500); font-size: 13px; }
+    .currency-input { padding-left: 22px !important; }
+
+    .form-actions { display: flex; gap: 8px; margin-top: 32px; }
+
+    /* ── Empty state for balance (unsupported/no values) ── */
+    .balance-empty {
+      margin: 16px 24px; padding: 20px; border-radius: var(--radius-md);
+      border: 1px solid var(--gray-200); background: var(--gray-50);
+      display: flex; align-items: flex-start; gap: 14px;
+    }
+    .balance-empty-icon { color: var(--gray-400); font-size: 22px; flex-shrink: 0; }
+    .balance-empty-title { font-size: 13px; font-weight: 600; color: var(--gray-700); margin-bottom: 4px; }
+    .balance-empty-text { font-size: 13px; color: var(--gray-600); line-height: 1.5; }
+
+    /* ── Misc ── */
+    .divider-text { text-align: center; color: var(--gray-400); font-size: 13px; padding: 8px 0; }
+    .nowrap { white-space: nowrap; }
+    .text-secondary { color: var(--gray-600); font-size: 13px; }
+    .mt-4 { margin-top: 4px; }
+    .tag { display: inline-block; padding: 1px 8px; border-radius: 3px; font-size: 11px; font-weight: 500; }
+    .tag-manual { background: var(--gray-100); color: var(--gray-600); }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<!-- PROTOTYPE NAVIGATOR                                            -->
+<!-- ═══════════════════════════════════════════════════════════════ -->
+<nav class="proto-nav">
+  <span class="proto-label">DIS-259</span>
+  <button class="proto-btn active" onclick="show('list')">1 · Reconciliation list</button>
+  <button class="proto-btn" onclick="show('configure')">2 · Configure (Manual)</button>
+  <button class="proto-btn" onclick="show('results-gap')">3 · Results · Gap</button>
+  <button class="proto-btn" onclick="show('results-ok')">4 · Results · Balanced</button>
+  <button class="proto-btn" onclick="show('results-unsupported')">5 · Results · Unsupported</button>
+  <button class="proto-btn" onclick="show('results-no-values')">6 · Results · No values</button>
+</nav>
+
+<div class="app">
+
+  <!-- ── TOP BAR ── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="logo">Synder</div>
+      <nav class="topbar-nav">
+        <div class="topbar-link">Sync</div>
+        <div class="topbar-link active">Reconciliation</div>
+        <div class="topbar-link">Insights</div>
+      </nav>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div class="btn btn-outlined btn-sm"><i class="mdi mdi-help-circle-outline"></i> Help</div>
+      <div style="width:32px;height:32px;border-radius:50%;background:var(--primary);color:white;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">A</div>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- SCREEN 1 · RECONCILIATION LIST                                -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <main class="page active" id="page-list">
+
+    <div class="page-header">
+      <div class="page-title-row">
+        <div>
+          <div class="page-title">Transaction reconciliation</div>
+          <div class="page-subtitle">Compare data from your integrations and accounting to spot discrepancies and keep your records accurate.</div>
+        </div>
+        <button class="btn btn-primary" onclick="show('configure')"><i class="mdi mdi-plus"></i> Run reconciliation</button>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filters-bar">
+      <div class="filter-group">
+        <div class="filter-label">Integration</div>
+        <select class="filter-select"><option>All</option><option>Stripe</option><option>PayPal</option></select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Account</div>
+        <select class="filter-select"><option>All</option></select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Date range</div>
+        <select class="filter-select"><option>All time</option><option>Last 3 months</option></select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Status</div>
+        <select class="filter-select"><option>All</option><option>Reconciled</option><option>Has discrepancies</option><option>Matching in progress</option><option>Matching failed</option></select>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm">Apply</button>
+        <button class="btn btn-outlined btn-sm">Reset</button>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Date range</th>
+            <th>Integration</th>
+            <th>Account</th>
+            <th>Created</th>
+            <th>Status</th>
+            <th>Action</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+
+          <!-- Row 1: Matching in progress -->
+          <tr class="clickable">
+            <td class="nowrap">Apr 1–30, 2026</td>
+            <td>
+              <div class="int-badge">
+                <div class="int-icon stripe">S</div>
+                <div>
+                  <div class="int-name">Stripe</div>
+                  <div class="int-sub">Stripe Test (sandbox)</div>
+                </div>
+              </div>
+            </td>
+            <td>Stripe Test (sandbox)</td>
+            <td class="text-secondary nowrap">Jul 13, 2026</td>
+            <td>
+              <div class="tooltip-wrap">
+                <span class="chip chip-blue"><span class="spin"></span> Matching in progress</span>
+                <div class="tooltip">Synder is processing and matching your transactions. This may take a few minutes.</div>
+              </div>
+            </td>
+            <td><span class="action-link" onclick="show('results-gap')">View progress →</span></td>
+            <td><span style="color:var(--gray-400);cursor:pointer;">⋯</span></td>
+          </tr>
+
+          <!-- Row 2: Has discrepancies -->
+          <tr class="clickable">
+            <td class="nowrap">Mar 1–31, 2026</td>
+            <td>
+              <div class="int-badge">
+                <div class="int-icon stripe">S</div>
+                <div>
+                  <div class="int-name">Stripe</div>
+                  <div class="int-sub">Stripe Test (sandbox)</div>
+                </div>
+              </div>
+            </td>
+            <td>Stripe Test (sandbox)</td>
+            <td class="text-secondary nowrap">Jun 29, 2026</td>
+            <td>
+              <div class="tooltip-wrap">
+                <span class="chip chip-orange"><span class="dot"></span> Has discrepancies</span>
+                <div class="tooltip">Matching is complete, but discrepancies remain. Open the results to review and fix them manually.</div>
+              </div>
+            </td>
+            <td><span class="action-link" onclick="show('results-gap')">Review discrepancies →</span></td>
+            <td><span style="color:var(--gray-400);cursor:pointer;">⋯</span></td>
+          </tr>
+
+          <!-- Row 3: Reconciled -->
+          <tr class="clickable">
+            <td class="nowrap">Apr 1–30, 2026</td>
+            <td>
+              <div class="int-badge">
+                <div class="int-icon stripe">S</div>
+                <div>
+                  <div class="int-name">Stripe</div>
+                  <div class="int-sub">Stripe Test (sandbox)</div>
+                </div>
+              </div>
+            </td>
+            <td>Stripe Test (sandbox)</td>
+            <td class="text-secondary nowrap">Jun 15, 2026</td>
+            <td>
+              <div class="tooltip-wrap">
+                <span class="chip chip-green"><span class="dot"></span> Reconciled</span>
+                <div class="tooltip">All transactions matched successfully. Your records are reconciled for this period.</div>
+              </div>
+            </td>
+            <td><span class="action-link" onclick="show('results-ok')">View report →</span></td>
+            <td><span style="color:var(--gray-400);cursor:pointer;">⋯</span></td>
+          </tr>
+
+          <!-- Row 4: Reconciled (Mastercard) -->
+          <tr class="clickable">
+            <td class="nowrap">Jan 1–Apr 30, 2026</td>
+            <td>
+              <div class="int-badge">
+                <div class="int-icon stripe">S</div>
+                <div>
+                  <div class="int-name">Stripe</div>
+                  <div class="int-sub">Stripe Test (sandbox)</div>
+                </div>
+              </div>
+            </td>
+            <td>Mastercard clearing</td>
+            <td class="text-secondary nowrap">Jun 15, 2026</td>
+            <td>
+              <div class="tooltip-wrap">
+                <span class="chip chip-green"><span class="dot"></span> Reconciled</span>
+                <div class="tooltip">All transactions matched successfully. Your records are reconciled for this period.</div>
+              </div>
+            </td>
+            <td><span class="action-link" onclick="show('results-ok')">View report →</span></td>
+            <td><span style="color:var(--gray-400);cursor:pointer;">⋯</span></td>
+          </tr>
+
+          <!-- Row 5: Has discrepancies (PayPal — unsupported) -->
+          <tr class="clickable">
+            <td class="nowrap">Mar 1–31, 2026</td>
+            <td>
+              <div class="int-badge">
+                <div class="int-icon paypal">P</div>
+                <div>
+                  <div class="int-name">PayPal</div>
+                  <div class="int-sub">PayPal clearing (USD)</div>
+                </div>
+              </div>
+            </td>
+            <td>PayPal clearing (USD)</td>
+            <td class="text-secondary nowrap">Jun 15, 2026</td>
+            <td>
+              <div class="tooltip-wrap">
+                <span class="chip chip-orange"><span class="dot"></span> Has discrepancies</span>
+                <div class="tooltip">Matching is complete, but discrepancies remain. Open the results to review and fix them manually.</div>
+              </div>
+            </td>
+            <td><span class="action-link" onclick="show('results-unsupported')">Review discrepancies →</span></td>
+            <td><span style="color:var(--gray-400);cursor:pointer;">⋯</span></td>
+          </tr>
+
+          <!-- Row 6: Matching failed -->
+          <tr class="clickable">
+            <td class="nowrap">Feb 1–28, 2026</td>
+            <td>
+              <div class="int-badge">
+                <div class="int-icon stripe">S</div>
+                <div>
+                  <div class="int-name">Stripe</div>
+                  <div class="int-sub">Stripe Test (sandbox)</div>
+                </div>
+              </div>
+            </td>
+            <td>Stripe Test (sandbox)<br><span class="tag tag-manual">Manual</span></td>
+            <td class="text-secondary nowrap">Jun 10, 2026</td>
+            <td>
+              <div class="tooltip-wrap">
+                <span class="chip chip-red"><span class="dot"></span> Matching failed</span>
+                <div class="tooltip">Something went wrong during matching. Open the details to see the error and retry.</div>
+              </div>
+            </td>
+            <td><span class="action-link">See error →</span></td>
+            <td><span style="color:var(--gray-400);cursor:pointer;">⋯</span></td>
+          </tr>
+
+          <!-- Row 7: Manual mode, no values (Not reconciled) -->
+          <tr class="clickable">
+            <td class="nowrap">Jan 1–31, 2026</td>
+            <td>
+              <div class="int-badge">
+                <div class="int-icon stripe">S</div>
+                <div>
+                  <div class="int-name">Stripe</div>
+                  <div class="int-sub">Stripe Test (sandbox)</div>
+                </div>
+              </div>
+            </td>
+            <td>Stripe Test (sandbox)<br><span class="tag tag-manual">Manual</span></td>
+            <td class="text-secondary nowrap">Jun 20, 2026</td>
+            <td>
+              <div class="tooltip-wrap">
+                <span class="chip chip-orange"><span class="dot"></span> Has discrepancies</span>
+                <div class="tooltip">Matching is complete, but discrepancies remain. Open the results to review and fix them manually.</div>
+              </div>
+            </td>
+            <td><span class="action-link" onclick="show('results-no-values')">Review discrepancies →</span></td>
+            <td><span style="color:var(--gray-400);cursor:pointer;">⋯</span></td>
+          </tr>
+
+        </tbody>
+      </table>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- SCREEN 2 · CONFIGURE (S9 — Manual balance entry)              -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <main class="page" id="page-configure">
+    <div class="page-header">
+      <div class="breadcrumb">
+        <a onclick="show('list')">← Transaction reconciliation</a>
+      </div>
+      <div class="page-title">Run reconciliation</div>
+    </div>
+
+    <div class="configure-wrap">
+
+      <!-- Steps -->
+      <div class="steps">
+        <div class="step"><div class="step-num active">1</div><div class="step-label active">Setup</div></div>
+        <div class="step-divider"></div>
+        <div class="step"><div class="step-num pending">2</div><div class="step-label pending">Review</div></div>
+        <div class="step-divider"></div>
+        <div class="step"><div class="step-num pending">3</div><div class="step-label pending">Run</div></div>
+      </div>
+
+      <!-- Integration section -->
+      <div class="form-section">
+        <div class="form-section-title">Integration</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Integration</label>
+            <select class="form-select">
+              <option>Stripe — Stripe Test (sandbox)</option>
+              <option>PayPal</option>
+              <option>Shopify</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Account</label>
+            <select class="form-select">
+              <option>Stripe Test (sandbox)</option>
+              <option>Mastercard clearing</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Date range</label>
+            <input class="form-input" type="text" placeholder="Jan 1, 2026 – Jan 31, 2026" value="Mar 1, 2026 – Mar 31, 2026">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Import method</label>
+            <div class="import-method-group">
+              <label class="import-option">
+                <input type="radio" name="import" value="automated">
+                <div>
+                  <div class="import-option-title">Automated <span style="font-size:11px;color:var(--gray-500);font-weight:400;">(Recommended)</span></div>
+                  <div class="import-option-desc">Synder retrieves data directly from your connected integration — no file needed.</div>
+                </div>
+              </label>
+              <label class="import-option">
+                <input type="radio" name="import" value="assisted">
+                <div>
+                  <div class="import-option-title">Assisted</div>
+                  <div class="import-option-desc">Synder tells you exactly which file to download and where to find it. Upload it and we handle the rest.</div>
+                </div>
+              </label>
+              <label class="import-option selected">
+                <input type="radio" name="import" value="manual" checked>
+                <div>
+                  <div class="import-option-title">Manual</div>
+                  <div class="import-option-desc">Upload any file and configure column mapping yourself.</div>
+                </div>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Accounting section -->
+      <div class="form-section">
+        <div class="form-section-title">Accounting</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Accounting platform</label>
+            <select class="form-select">
+              <option>QuickBooks Desktop</option>
+              <option>QuickBooks Online</option>
+              <option>Xero</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Clearing account</label>
+            <select class="form-select">
+              <option>Stripe clearing (USD)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Balance verification section (S9 — Manual mode) -->
+      <div class="form-section">
+        <div class="form-section-title">Balance verification <span style="font-weight:400;color:var(--gray-500);font-size:12px;">(optional)</span></div>
+        <div class="balance-entry-section">
+          <div class="balance-entry-title">Enter opening and closing balances</div>
+          <div class="balance-entry-desc">Synder will verify that the net transactions from your file match the change in your account balance. Leave blank to skip balance verification for this run — you can always add it when running the next reconciliation.</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label">Opening balance <span class="opt">(start of period)</span></label>
+              <div class="currency-input-wrap">
+                <span class="currency-symbol">$</span>
+                <input class="form-input currency-input" type="number" placeholder="0.00">
+              </div>
+              <div class="form-hint">Balance at the start of Mar 1, 2026</div>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Reported closing balance <span class="opt">(end of period)</span></label>
+              <div class="currency-input-wrap">
+                <span class="currency-symbol">$</span>
+                <input class="form-input currency-input" type="number" placeholder="0.00">
+              </div>
+              <div class="form-hint">Balance at the end of Mar 31, 2026 per your books</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="show('results-gap')">Next →</button>
+        <button class="btn btn-outlined" onclick="show('list')">Cancel</button>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- SCREEN 3 · RESULTS — HAS DISCREPANCIES + BALANCE GAP          -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <main class="page" id="page-results-gap">
+
+    <div class="results-header">
+      <div class="results-back" onclick="show('list')"><i class="mdi mdi-arrow-left"></i> Transaction reconciliation</div>
+      <div class="results-title-row">
+        <div>
+          <div class="results-title">Stripe Test (sandbox) · Mar 1–31, 2026</div>
+          <div class="results-meta">Stripe — Automated · QuickBooks Online</div>
+          <div class="results-pills">
+            <span class="chip chip-gray">Finished</span>
+            <span class="chip chip-orange"><span class="dot"></span> Has discrepancies</span>
+            <span class="chip chip-orange">⚠ Balance off by $50.00</span>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button class="btn btn-outlined btn-sm"><i class="mdi mdi-refresh"></i> Refresh data</button>
+          <button class="btn btn-outlined btn-sm">Export <i class="mdi mdi-chevron-down"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance Block — Gap state -->
+    <div class="balance-block gap">
+      <div class="balance-head">
+        <span class="balance-head-title">Balance verification</span>
+        <span class="balance-verdict gap"><i class="mdi mdi-alert-outline"></i> Off by $50.00</span>
+      </div>
+      <div class="balance-body">
+        <div class="balance-row">
+          <span class="balance-row-label">Opening balance</span>
+          <span class="balance-row-value">$10,000.00</span>
+          <span class="balance-row-source">from QuickBooks</span>
+        </div>
+        <div class="balance-row">
+          <span class="balance-row-label plus">+ Net transactions</span>
+          <span class="balance-row-value">+$44,100.00</span>
+          <span class="balance-row-source">from Stripe · 63 transactions</span>
+        </div>
+        <div class="balance-row divider">
+          <span class="balance-row-label eq">Expected closing</span>
+          <span class="balance-row-value">$54,100.00</span>
+          <span class="balance-row-source"></span>
+        </div>
+        <div class="balance-row">
+          <span class="balance-row-label">Reported closing</span>
+          <span class="balance-row-value">$54,050.00</span>
+          <span class="balance-row-source">from QuickBooks</span>
+        </div>
+      </div>
+      <div class="balance-footer">
+        <span class="balance-gap-label gap"><i class="mdi mdi-alert-outline"></i> Gap: −$50.00</span>
+        <div class="balance-footer-actions">
+          <button class="btn btn-outlined btn-sm">Review discrepancies →</button>
+          <button class="btn btn-outlined btn-sm">Review missing →</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active">Matched <span class="tab-count">56</span></div>
+      <div class="tab">Discrepancy <span class="tab-count">4</span></div>
+      <div class="tab">Missing <span class="tab-count">3</span></div>
+      <div class="tab">Ignored <span class="tab-count">0</span></div>
+    </div>
+
+    <!-- Filter bar for table -->
+    <div class="filters-bar" style="padding:10px 24px;">
+      <div class="filter-group">
+        <div class="filter-label">Search</div>
+        <input class="filter-select" style="min-width:220px;" placeholder="Search by ID or amount…">
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Match type</div>
+        <select class="filter-select"><option>All</option><option>Auto (ID)</option><option>Manual</option></select>
+      </div>
+      <div class="filter-group">
+        <div class="filter-label">Amount</div>
+        <input class="filter-select" style="min-width:80px;" placeholder="Min">
+      </div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <button class="btn btn-primary btn-sm">Apply</button>
+        <button class="btn btn-outlined btn-sm">Reset</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th><input type="checkbox"></th>
+            <th>Date ↓</th>
+            <th>Matching ID</th>
+            <th>Amount</th>
+            <th>Types</th>
+            <th>Match type</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 31, 2026</td><td style="font-family:monospace;font-size:12px;">po_1TGqaE7Q…k9QMnj9H</td><td class="nowrap">−$301.76</td><td>Transfer · Payout</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>2</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 30, 2026</td><td style="font-family:monospace;font-size:12px;">po_1TGU6C7Q…V9eJPM9V8</td><td class="nowrap">−$520.74</td><td>Transfer · Payout</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>2</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 29, 2026</td><td style="font-family:monospace;font-size:12px;">ch_3TF9fT7Q…V0qesufrt</td><td class="nowrap">$142.30</td><td>Sales Receipt · Charge</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>3</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 27, 2026</td><td style="font-family:monospace;font-size:12px;">po_1TFOI47Q…VAJxJMzGu</td><td class="nowrap">−$2,808.05</td><td>Transfer · Payout</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>2</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 26, 2026</td><td style="font-family:monospace;font-size:12px;">ch_3TES167Q…V1bCL9uFG</td><td class="nowrap">$579.30</td><td>Payment · Charge</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>3</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 25, 2026</td><td style="font-family:monospace;font-size:12px;">po_1TEfqB7Q…VIZzpcd8h</td><td class="nowrap">−$2,346.18</td><td>Transfer · Payout</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>2</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:12px 16px;color:var(--gray-500);font-size:13px;">Showing 6 of 56 matched rows</div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- SCREEN 4 · RESULTS — RECONCILED + BALANCE OK                  -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <main class="page" id="page-results-ok">
+
+    <div class="results-header">
+      <div class="results-back" onclick="show('list')"><i class="mdi mdi-arrow-left"></i> Transaction reconciliation</div>
+      <div class="results-title-row">
+        <div>
+          <div class="results-title">Stripe Test (sandbox) · Apr 1–30, 2026</div>
+          <div class="results-meta">Stripe — Automated · QuickBooks Online</div>
+          <div class="results-pills">
+            <span class="chip chip-gray">Finished</span>
+            <span class="chip chip-green"><span class="dot"></span> Reconciled</span>
+            <span class="chip chip-green">✓ Balance verified</span>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button class="btn btn-outlined btn-sm"><i class="mdi mdi-refresh"></i> Refresh data</button>
+          <button class="btn btn-outlined btn-sm">Export <i class="mdi mdi-chevron-down"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance Block — OK state -->
+    <div class="balance-block ok">
+      <div class="balance-head">
+        <span class="balance-head-title">Balance verification</span>
+        <span class="balance-verdict ok"><i class="mdi mdi-check-circle-outline"></i> Balanced</span>
+      </div>
+      <div class="balance-body">
+        <div class="balance-row">
+          <span class="balance-row-label">Opening balance</span>
+          <span class="balance-row-value">$10,000.00</span>
+          <span class="balance-row-source">from QuickBooks</span>
+        </div>
+        <div class="balance-row">
+          <span class="balance-row-label plus">+ Net transactions</span>
+          <span class="balance-row-value">+$44,100.00</span>
+          <span class="balance-row-source">from Stripe · 71 transactions</span>
+        </div>
+        <div class="balance-row divider">
+          <span class="balance-row-label eq">Expected closing</span>
+          <span class="balance-row-value">$54,100.00</span>
+          <span class="balance-row-source"></span>
+        </div>
+        <div class="balance-row">
+          <span class="balance-row-label">Reported closing</span>
+          <span class="balance-row-value">$54,100.00</span>
+          <span class="balance-row-source">from QuickBooks</span>
+        </div>
+      </div>
+      <div class="balance-footer">
+        <span class="balance-gap-label ok"><i class="mdi mdi-check-circle-outline"></i> No gap — balances match</span>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active">Matched <span class="tab-count">71</span></div>
+      <div class="tab">Discrepancy <span class="tab-count">0</span></div>
+      <div class="tab">Missing <span class="tab-count">0</span></div>
+      <div class="tab">Ignored <span class="tab-count">0</span></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th><input type="checkbox"></th>
+            <th>Date ↓</th>
+            <th>Matching ID</th>
+            <th>Amount</th>
+            <th>Types</th>
+            <th>Match type</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Apr 30, 2026</td><td style="font-family:monospace;font-size:12px;">po_2TGqaE7Q…k9QMnj9H</td><td class="nowrap">−$412.10</td><td>Transfer · Payout</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>2</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Apr 28, 2026</td><td style="font-family:monospace;font-size:12px;">ch_3UF9fT7Q…V0qesufrt</td><td class="nowrap">$210.00</td><td>Sales Receipt · Charge</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>3</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Apr 25, 2026</td><td style="font-family:monospace;font-size:12px;">po_1UFfqB7Q…VIZzpcd8h</td><td class="nowrap">−$1,980.00</td><td>Transfer · Payout</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>2</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:12px 16px;color:var(--gray-500);font-size:13px;">Showing 3 of 71 matched rows</div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- SCREEN 5 · RESULTS — UNSUPPORTED CLEARING (PayPal)            -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <main class="page" id="page-results-unsupported">
+
+    <div class="results-header">
+      <div class="results-back" onclick="show('list')"><i class="mdi mdi-arrow-left"></i> Transaction reconciliation</div>
+      <div class="results-title-row">
+        <div>
+          <div class="results-title">PayPal clearing (USD) · Mar 1–31, 2026</div>
+          <div class="results-meta">PayPal — Automated · QuickBooks Online</div>
+          <div class="results-pills">
+            <span class="chip chip-gray">Finished</span>
+            <span class="chip chip-orange"><span class="dot"></span> Has discrepancies</span>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button class="btn btn-outlined btn-sm"><i class="mdi mdi-refresh"></i> Refresh data</button>
+          <button class="btn btn-outlined btn-sm">Export <i class="mdi mdi-chevron-down"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance Notice — Unsupported -->
+    <div class="balance-empty">
+      <i class="mdi mdi-information-outline balance-empty-icon"></i>
+      <div>
+        <div class="balance-empty-title">Balance verification is not available for this account</div>
+        <div class="balance-empty-text">PayPal reports transactions in multiple currencies against a single-currency clearing account. End-to-end balance verification requires all transactions to be in the same currency.</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active">Matched <span class="tab-count">44</span></div>
+      <div class="tab">Discrepancy <span class="tab-count">6</span></div>
+      <div class="tab">Missing <span class="tab-count">5</span></div>
+      <div class="tab">Ignored <span class="tab-count">0</span></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th><input type="checkbox"></th>
+            <th>Date ↓</th>
+            <th>Matching ID</th>
+            <th>Amount</th>
+            <th>Types</th>
+            <th>Match type</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 28, 2026</td><td style="font-family:monospace;font-size:12px;">PP_3Txa9fT7…V0qa12rt</td><td class="nowrap">$88.00</td><td>Payment</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>1</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Mar 22, 2026</td><td style="font-family:monospace;font-size:12px;">PP_1TadfB7Q…V0qemm8h</td><td class="nowrap">$155.40</td><td>Payment</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>1</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:12px 16px;color:var(--gray-500);font-size:13px;">Showing 2 of 44 matched rows</div>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <!-- SCREEN 6 · RESULTS — MANUAL MODE, NO VALUES ENTERED           -->
+  <!-- ═══════════════════════════════════════════════════════════════ -->
+  <main class="page" id="page-results-no-values">
+
+    <div class="results-header">
+      <div class="results-back" onclick="show('list')"><i class="mdi mdi-arrow-left"></i> Transaction reconciliation</div>
+      <div class="results-title-row">
+        <div>
+          <div class="results-title">Stripe Test (sandbox) · Jan 1–31, 2026</div>
+          <div class="results-meta">Stripe — Manual · QuickBooks Desktop</div>
+          <div class="results-pills">
+            <span class="chip chip-gray">Finished</span>
+            <span class="chip chip-orange"><span class="dot"></span> Has discrepancies</span>
+          </div>
+        </div>
+        <div class="results-actions">
+          <button class="btn btn-outlined btn-sm"><i class="mdi mdi-refresh"></i> Refresh data</button>
+          <button class="btn btn-outlined btn-sm">Export <i class="mdi mdi-chevron-down"></i></button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Balance Notice — No values entered -->
+    <div class="balance-empty">
+      <i class="mdi mdi-chart-bar balance-empty-icon"></i>
+      <div>
+        <div class="balance-empty-title">Balance verification was skipped</div>
+        <div class="balance-empty-text">No opening or closing balances were entered when this reconciliation was set up. To verify balances, enter your opening and reported closing balance when running the next reconciliation.</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active">Matched <span class="tab-count">38</span></div>
+      <div class="tab">Discrepancy <span class="tab-count">3</span></div>
+      <div class="tab">Missing <span class="tab-count">2</span></div>
+      <div class="tab">Ignored <span class="tab-count">0</span></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th><input type="checkbox"></th>
+            <th>Date ↓</th>
+            <th>Matching ID</th>
+            <th>Amount</th>
+            <th>Types</th>
+            <th>Match type</th>
+            <th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Jan 31, 2026</td><td style="font-family:monospace;font-size:12px;">po_1AGqaE7Q…k9QMnj9H</td><td class="nowrap">−$218.50</td><td>Transfer · Payout</td><td><span class="chip chip-blue" style="font-size:11px;">Auto (ID)</span></td><td>2</td></tr>
+          <tr><td><input type="checkbox"></td><td class="nowrap">Jan 28, 2026</td><td style="font-family:monospace;font-size:12px;">ch_3AF9fT7Q…V0qesufrt</td><td class="nowrap">$95.00</td><td>Payment · Charge</td><td><span class="chip chip-gray" style="font-size:11px;">Manual</span></td><td>2</td></tr>
+        </tbody>
+      </table>
+      <div style="padding:12px 16px;color:var(--gray-500);font-size:13px;">Showing 2 of 38 matched rows</div>
+    </div>
+
+  </main>
+
+</div><!-- /.app -->
+
+<script>
+  function show(screen) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.proto-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + screen).classList.add('active');
+    const idx = ['list','configure','results-gap','results-ok','results-unsupported','results-no-values'].indexOf(screen);
+    if (idx >= 0) document.querySelectorAll('.proto-btn')[idx].classList.add('active');
+    window.scrollTo(0, 0);
+  }
+
+  // Import method radio interaction
+  document.querySelectorAll('.import-option').forEach(opt => {
+    opt.addEventListener('click', () => {
+      document.querySelectorAll('.import-option').forEach(o => o.classList.remove('selected'));
+      opt.classList.add('selected');
+      opt.querySelector('input').checked = true;
+    });
+  });
+</script>
+</body>
+</html>
