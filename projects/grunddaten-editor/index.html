@@ -214,13 +214,20 @@ select { min-width: 200px; }
   border-bottom: 1px solid var(--divider);
 }
 .xfer-ann-row:last-child { border-bottom: none; }
+.xfer-main-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 10px; background: var(--pri); color: #fff;
+  white-space: nowrap; flex-shrink: 0; user-select: none;
+}
+.xfer-main-placeholder { width: 42px; flex-shrink: 0; }
 .xfer-ann-file { font-family: monospace; font-size: 12px; color: #1565C0; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .xfer-ann-label { font-size: 12px; color: var(--text-sec); min-width: 90px; flex-shrink: 0; }
 .xfer-sched-tag {
-  font-size: 11px; padding: 2px 7px; border-radius: 10px;
-  background: #E8F5E9; color: #2E7D32; white-space: nowrap; flex-shrink: 0;
+  font-size: 11px; padding: 2px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0;
 }
-.xfer-sched-tag.has-sched { background: #FFF3E0; color: #BF360C; }
+.xfer-sched-tag.always   { background: #E3F2FD; color: #1565C0; }
+.xfer-sched-tag.has-sched { background: #E8F5E9; color: #2E7D32; }
+.xfer-sched-tag.no-sched  { background: #FFEBEE; color: #C62828; }
 
 /* Neighbor distances */
 .neighbor-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
@@ -437,6 +444,9 @@ const i18n = {
     alwaysActive:        'Immer aktiv',
     scheduleSet:         'Zeitplan',
     editSchedule:        'Zeitplan bearbeiten',
+    mainAnn:             'Haupt',
+    setAsMain:           'Als Haupt festlegen',
+    schedMissing:        'Zeitplan fehlt',
     scheduleTitle:       'Zeitplan bearbeiten',
     saveSchedule:        'Zeitplan speichern',
     addSlot:             'Slot hinzufügen',
@@ -518,6 +528,9 @@ const i18n = {
     alwaysActive:        'Always active',
     scheduleSet:         'Schedule',
     editSchedule:        'Edit schedule',
+    mainAnn:             'Main',
+    setAsMain:           'Set as main',
+    schedMissing:        'Schedule missing',
     scheduleTitle:       'Edit schedule',
     saveSchedule:        'Save schedule',
     addSlot:             'Add slot',
@@ -602,8 +615,8 @@ const stations = [
     tracks:[{num:'1',exits:['left','right']},{num:'2',exits:['right','left']}],
     stationNameFile:'SND-001',
     transferAnnouncements:[
-      { fileId:'SND-010', label:'Standard', scheduleSlots: null },
-      { fileId:'SND-012', label:'S-Bahn Nacht', scheduleSlots:[
+      { fileId:'SND-010', label:'Standard', isMain: true, scheduleSlots: null },
+      { fileId:'SND-012', label:'S-Bahn Nacht', isMain: false, scheduleSlots:[
         { day:'Mon', slots:[{start:'22:00',end:'01:00'}] },
         { day:'Tue', slots:[{start:'22:00',end:'01:00'}] },
         { day:'Wed', slots:[{start:'22:00',end:'01:00'}] },
@@ -643,8 +656,8 @@ const stations = [
     tracks:[{num:'1',exits:['right','right']},{num:'2',exits:['right','right']}],
     stationNameFile:'SND-002',
     transferAnnouncements:[
-      { fileId:'SND-012', label:'S-Bahn', scheduleSlots: null },
-      { fileId:'SND-013', label:'Regional', scheduleSlots: null },
+      { fileId:'SND-012', label:'S-Bahn', isMain: true, scheduleSlots: null },
+      { fileId:'SND-013', label:'Regional', isMain: false, scheduleSlots: null },
     ],
     triggerArrival:180, triggerDeparture:100,
     neighborDist:{ prev:{name:'Turmstraße', dist:680}, next:{name:'Bundestag', dist:500} } },
@@ -656,8 +669,8 @@ const stations = [
     tracks:[{num:'1',exits:['left','right']},{num:'2',exits:['right','left']}],
     stationNameFile:'SND-005',
     transferAnnouncements:[
-      { fileId:'SND-011', label:'U1/U3', scheduleSlots: null },
-      { fileId:'SND-012', label:'S-Bahn', scheduleSlots: null },
+      { fileId:'SND-011', label:'U1/U3', isMain: true, scheduleSlots: null },
+      { fileId:'SND-012', label:'S-Bahn', isMain: false, scheduleSlots: null },
     ],
     triggerArrival:150, triggerDeparture:80,
     neighborDist:{ prev:{name:'Unter den Linden', dist:380}, next:{name:'Stadtmitte', dist:420} } },
@@ -669,7 +682,7 @@ const stations = [
     tracks:[{num:'1',exits:['right','left']},{num:'2',exits:['left','right']}],
     stationNameFile:'SND-003',
     transferAnnouncements:[
-      { fileId:'SND-012', label:'S-Bahn', scheduleSlots: null },
+      { fileId:'SND-012', label:'S-Bahn', isMain: true, scheduleSlots: null },
     ],
     triggerArrival:130, triggerDeparture:80,
     neighborDist:{ prev:{name:'Mendelssohn-Bartholdy-Park', dist:450}, next:{name:'Mohrenstraße', dist:350} } },
@@ -681,7 +694,7 @@ const stations = [
     tracks:[{num:'1',exits:['left','right']},{num:'2',exits:['right','left']}],
     stationNameFile:'SND-006',
     transferAnnouncements:[
-      { fileId:'SND-011', label:'U1/U3', scheduleSlots: null },
+      { fileId:'SND-011', label:'U1/U3', isMain: true, scheduleSlots: null },
     ],
     triggerArrival:140, triggerDeparture:80,
     neighborDist:{ prev:{name:'Uhlandstraße', dist:390}, next:{name:'Wittenbergplatz', dist:480} } },
@@ -728,9 +741,17 @@ function findStationsUsingSound(id) {
     s.transferAnnouncements.some(ta => ta.fileId === id)
   );
 }
-function schedSummary(slots) {
-  if (!slots) return `<span class="xfer-sched-tag">${t('alwaysActive')}</span>`;
-  return `<span class="xfer-sched-tag has-sched">${t('scheduleSet')}</span>`;
+function schedSummary(ann) {
+  if (ann.isMain)
+    return `<span class="xfer-sched-tag always">${t('alwaysActive')}</span>`;
+  if (ann.scheduleSlots)
+    return `<span class="xfer-sched-tag has-sched">&#128344; ${t('scheduleSet')}</span>`;
+  return `<span class="xfer-sched-tag no-sched">&#9888; ${t('schedMissing')}</span>`;
+}
+function setTransferMain(stationId, idx) {
+  const s = getStation(stationId);
+  s.transferAnnouncements.forEach((a, i) => { a.isMain = (i === idx); });
+  navigate(state.view, state.selectedId, state.selectedLine);
 }
 
 // ── Navigation ─────────────────────────────────────────────
@@ -872,9 +893,13 @@ function renderDetail() {
   const xferRows = s.transferAnnouncements.length > 0
     ? s.transferAnnouncements.map((ann, i) => `
       <div class="xfer-ann-row">
-        <span class="xfer-ann-file">♪ ${sndName(ann.fileId)}</span>
+        ${ann.isMain
+          ? `<span class="xfer-main-badge">&#9733; ${t('mainAnn')}</span>`
+          : `<span class="xfer-main-placeholder"></span>`}
+        <span class="xfer-ann-file">&#9835; ${sndName(ann.fileId)}</span>
         <span class="xfer-ann-label">${ann.label || '—'}</span>
-        ${schedSummary(ann.scheduleSlots)}
+        ${schedSummary(ann)}
+        ${ann.isMain ? '' : `<button class="btn btn-ghost btn-sm" onclick="setTransferMain('${s.id}',${i})">${t('setAsMain')}</button>`}
         <button class="btn btn-ghost btn-sm" onclick="showScheduleModal('${s.id}',${i})">${t('editSchedule')}</button>
         <button class="btn-danger-ghost btn-sm" onclick="removeTransferAnn('${s.id}',${i})">✕</button>
       </div>`).join('')
@@ -1082,7 +1107,8 @@ function showAddTransferModal(stationId) {
       const fileId = document.getElementById('m-xfer-file').value;
       const label  = document.getElementById('m-xfer-label').value.trim();
       if (!fileId) { markInvalid('m-xfer-file'); return; }
-      s.transferAnnouncements.push({ fileId, label: label || sndName(fileId), scheduleSlots: null });
+      const hasMain = s.transferAnnouncements.some(a => a.isMain);
+      s.transferAnnouncements.push({ fileId, label: label || sndName(fileId), isMain: !hasMain, scheduleSlots: null });
       closeModal();
       navigate('detail', stationId, state.selectedLine);
     });
