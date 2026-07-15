@@ -206,6 +206,22 @@
 
 ## 🔀 Side Projects
 
+### PIMS · Grunddaten Editor (2026-07-09)
+- **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
+- **Client:** ETC Solutions GmbH — PIMS product for BVG (Berlin transport authority)
+- **Purpose:** RailML base data editor for BVG Stadler J/JK vehicles. Replaces manual Excel workflow (JJK.xlsx). Daily export at 04:00 to Stadler FIS-SW via RailML 2.5.
+- **Local file:** `projects/grunddaten-editor/index.html`
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/projects/grunddaten-editor/
+- **4 screens:**
+  1. **Stations list** — 10 Berlin U2 stations, completeness progress bars (green/amber/red), search, click-through to detail
+  2. **Station detail** — 4 cards: Station Name (+ scheduled name changes), Platform Directions (exit side per direction), Announcements (station-name file, transfer files, special announcements checklist, arrival/departure trigger points in metres), Display Texts checklist
+  3. **Sound Library** — upload area, filter tabs (All / Station names / Transfer / Special), file table with type badges and preview
+  4. **Display Texts** — editable library (add/edit/delete), usage count per text
+- **Design:** Classic Material Design (MUI) — blue `#1976D2` app bar, white drawer with blue left-border active indicator, Roboto, MUI elevation shadows
+- **Data model:** Stations → directions (2 per station: exit side) + stationNameFile + transferFiles[] + specialAnnouncements[] + triggerArrival/triggerDeparture + displayTexts[]
+- **Completeness formula:** 4 required fields (stationNameFile, both exit sides, triggerArrival, triggerDeparture)
+- **Sample data:** 10 stations (Alexanderplatz → Nollendorfplatz), 15 sound files, 4 special announcements, 5 display texts
+
 ### ETC Station Area Editor (2026-06-15)
 - **Status:** ✅ v1 prototype live
 - **Client:** ETC Solutions GmbH — ITCS DatNet product
