@@ -261,11 +261,11 @@ select { min-width: 200px; }
 .lf-chip.active { background: var(--pri); color: #fff; border-color: var(--pri); }
 .lf-chip:hover:not(.active) { background: var(--pri-50); border-color: #90CAF9; }
 
-/* Reorder controls */
-.reorder-btns { display: flex; flex-direction: column; gap: 1px; }
-.reorder-btns button { background: none; border: none; cursor: pointer; color: var(--text-dis); font-size: 11px; padding: 1px 4px; border-radius: 2px; line-height: 1; }
-.reorder-btns button:hover:not(:disabled) { color: var(--pri); background: var(--pri-50); }
-.reorder-btns button:disabled { opacity: 0.2; cursor: not-allowed; }
+/* Drag and drop reordering */
+.drag-handle { cursor: grab; color: var(--text-dis); font-size: 17px; padding: 0 10px 0 0; user-select: none; line-height: 1; vertical-align: middle; }
+.drag-handle:active { cursor: grabbing; }
+tr.dragging td { opacity: 0.35; background: var(--pri-50); }
+tr.drag-over td { box-shadow: inset 0 2px 0 0 var(--pri); }
 
 /* Modal */
 .modal-overlay {
@@ -1281,14 +1281,20 @@ function deleteSoundFile(id) {
 
 // ── Display texts ──────────────────────────────────────────
 function renderTexts() {
+  const total = displayTexts.length;
   const rows = displayTexts.map((tx, i) => `
-    <tr>
+    <tr draggable="true"
+        ondragstart="listDragStart('txt',${i},event)"
+        ondragover="listDragOver('txt',${i},event)"
+        ondrop="listDrop('txt',${i},event)"
+        ondragend="listDragEnd(event)">
+      <td style="width:32px;padding-right:0"><span class="drag-handle">⠿</span></td>
       <td style="font-weight:500">${tx.text}</td>
-      <td style="text-align:right;white-space:nowrap">
-        <div class="reorder-btns" style="display:inline-flex;flex-direction:column;margin-right:4px">
-          <button onclick="moveText(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-          <button onclick="moveText(${i},1)" ${i === displayTexts.length-1 ? 'disabled' : ''}>▼</button>
-        </div>
+      <td style="text-align:right;white-space:nowrap;display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:10px 16px">
+        <input type="number" value="${i+1}" min="1" max="${total}" style="width:48px;text-align:center;padding:4px 6px;font-size:12px"
+          title="${state.lang === 'de' ? 'Position eingeben' : 'Enter position'}"
+          onchange="moveToPos('txt',${i},this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur();event.preventDefault()}">
         <button class="btn btn-ghost btn-sm" onclick="editText(${i})">${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}</button>
         <button class="btn-danger-ghost btn-sm" onclick="deleteText(${i})">✕</button>
       </td>
@@ -1304,17 +1310,16 @@ function renderTexts() {
     </div>
   </div>
   <div class="tbl-wrap"><table>
-    <thead><tr><th>${state.lang === 'de' ? 'Text' : 'Display text'}</th><th></th></tr></thead>
-    <tbody>${rows || '<tr><td colspan="2" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
+    <thead><tr>
+      <th style="width:32px"></th>
+      <th>${state.lang === 'de' ? 'Text' : 'Display text'}</th>
+      <th></th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="3" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
   </table></div>`;
 }
 
-function moveText(i, dir) {
-  const j = i + dir;
-  if (j < 0 || j >= displayTexts.length) return;
-  [displayTexts[i], displayTexts[j]] = [displayTexts[j], displayTexts[i]];
-  navigate('texts');
-}
+function moveText(i, dir) {}
 function deleteText(i) {
   if (confirm(`${state.lang === 'de' ? 'Löschen' : 'Delete'}: "${displayTexts[i].text}"?`)) {
     displayTexts.splice(i, 1); navigate('texts');
@@ -1323,15 +1328,21 @@ function deleteText(i) {
 
 // ── Special Announcements ──────────────────────────────────
 function renderSpcPage() {
+  const total = specialAnnouncements.length;
   const rows = specialAnnouncements.map((sp, i) => `
-    <tr>
+    <tr draggable="true"
+        ondragstart="listDragStart('spc',${i},event)"
+        ondragover="listDragOver('spc',${i},event)"
+        ondrop="listDrop('spc',${i},event)"
+        ondragend="listDragEnd(event)">
+      <td style="width:32px;padding-right:0"><span class="drag-handle">⠿</span></td>
       <td style="font-weight:500">${sp.label}</td>
       <td style="font-family:monospace;font-size:12px;color:var(--text-sec)">${sndName(sp.fileId)}</td>
-      <td style="text-align:right;white-space:nowrap">
-        <div class="reorder-btns" style="display:inline-flex;flex-direction:column;margin-right:4px">
-          <button onclick="moveSpc(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-          <button onclick="moveSpc(${i},1)" ${i === specialAnnouncements.length-1 ? 'disabled' : ''}>▼</button>
-        </div>
+      <td style="text-align:right;white-space:nowrap;display:flex;align-items:center;justify-content:flex-end;gap:6px;padding:10px 16px">
+        <input type="number" value="${i+1}" min="1" max="${total}" style="width:48px;text-align:center;padding:4px 6px;font-size:12px"
+          title="${state.lang === 'de' ? 'Position eingeben' : 'Enter position'}"
+          onchange="moveToPos('spc',${i},this.value)"
+          onkeydown="if(event.key==='Enter'){this.blur();event.preventDefault()}">
         <button class="btn btn-ghost btn-sm" onclick="showSpcEdit(${i})">${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}</button>
         <button class="btn-danger-ghost btn-sm" onclick="deleteSpcEntry(${i})">✕</button>
       </td>
@@ -1348,21 +1359,56 @@ function renderSpcPage() {
   </div>
   <div class="tbl-wrap"><table>
     <thead><tr>
+      <th style="width:32px"></th>
       <th>${t('colLabel')}</th>
       <th>${t('colFilename')}</th>
       <th></th>
     </tr></thead>
-    <tbody>${rows || '<tr><td colspan="3" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
+    <tbody>${rows || '<tr><td colspan="4" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
   </table></div>
   <p style="font-size:12px;color:var(--text-dis);margin-top:14px">${t('spcNote')}</p>`;
 }
 
-function moveSpc(i, dir) {
-  const j = i + dir;
-  if (j < 0 || j >= specialAnnouncements.length) return;
-  [specialAnnouncements[i], specialAnnouncements[j]] = [specialAnnouncements[j], specialAnnouncements[i]];
-  navigate('spc');
+// ── Drag-and-drop + position reorder ──────────────────────
+const dragCtx = { type: null, src: null };
+
+function listDragStart(type, i, e) {
+  dragCtx.type = type;
+  dragCtx.src = i;
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', String(i));
+  // Defer adding class so the ghost image captures before it goes transparent
+  setTimeout(() => { e.target.closest('tr').classList.add('dragging'); }, 0);
 }
+function listDragOver(type, i, e) {
+  if (dragCtx.type !== type) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.querySelectorAll('tr.drag-over').forEach(el => el.classList.remove('drag-over'));
+  if (dragCtx.src !== i) e.target.closest('tr').classList.add('drag-over');
+}
+function listDrop(type, i, e) {
+  e.preventDefault();
+  if (dragCtx.type !== type || dragCtx.src === null || dragCtx.src === i) return;
+  const list = type === 'spc' ? specialAnnouncements : displayTexts;
+  const [item] = list.splice(dragCtx.src, 1);
+  list.splice(i, 0, item);
+  dragCtx.type = null; dragCtx.src = null;
+  navigate(type === 'spc' ? 'spc' : 'texts');
+}
+function listDragEnd(e) {
+  document.querySelectorAll('tr.dragging, tr.drag-over').forEach(el => el.classList.remove('dragging','drag-over'));
+  dragCtx.type = null; dragCtx.src = null;
+}
+function moveToPos(type, currentIdx, rawVal) {
+  const list = type === 'spc' ? specialAnnouncements : displayTexts;
+  let newIdx = Math.max(0, Math.min(list.length - 1, parseInt(rawVal) - 1));
+  if (isNaN(newIdx) || newIdx === currentIdx) return;
+  const [item] = list.splice(currentIdx, 1);
+  list.splice(newIdx, 0, item);
+  navigate(type === 'spc' ? 'spc' : 'texts');
+}
+function moveSpc(i, dir) {}
 function deleteSpcEntry(i) {
   const sp = specialAnnouncements[i];
   if (confirm(`${state.lang === 'de' ? 'Löschen' : 'Delete'}: "${sp.label}"?`)) {
