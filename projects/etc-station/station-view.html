@@ -385,17 +385,30 @@ body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333;
 /* Train block */
 .train-block {
   position: absolute;
-  top: 6px;
+  height: 44px;
   border-radius: 5px;
-  display: inline-flex;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   padding: 2px 5px;
   color: white;
   white-space: nowrap;
   cursor: grab;
   z-index: 5;
+  overflow: hidden;
   transition: box-shadow 0.15s;
   user-select: none;
+}
+
+/* Dwell indicator bar at block bottom (Var 3) */
+.dwell-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: rgba(0,0,0,0.28);
+  border-radius: 0 0 0 5px;
+  pointer-events: none;
 }
 
 .train-block:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.22); z-index: 10; }
@@ -931,9 +944,45 @@ function buildTimeline() {
   updateMarkerPosition();
 }
 
+// ── Lane constants (Var 3) ──────────────────────────────────
+const MIN_CONTENT_PX = 85; // minimum block width to fit route + time
+const LANE_HEIGHT    = 44;
+const LANE_GAP       = 8;
+const LANE_PAD       = 8;
+
+function timeToMinutes(str) { const [h, m] = str.split(':').map(Number); return h * 60 + m; }
+
+function assignLanes() {
+  const byPlatform = {};
+  for (const train of trains) {
+    if (!byPlatform[train.platform]) byPlatform[train.platform] = [];
+    byPlatform[train.platform].push(train);
+  }
+  const laneMap = new Map();
+  for (const platformTrains of Object.values(byPlatform)) {
+    const sorted = [...platformTrains].sort((a, b) =>
+      timeToMinutes(a.arrival) - timeToMinutes(b.arrival));
+    const laneEndTimes = [];
+    const trainLanes = new Map();
+    for (const train of sorted) {
+      const arrMin = timeToMinutes(train.arrival);
+      const depMin = timeToMinutes(train.departure);
+      let laneIdx = laneEndTimes.findIndex(end => arrMin >= end);
+      if (laneIdx === -1) { laneIdx = laneEndTimes.length; laneEndTimes.push(depMin); }
+      else { laneEndTimes[laneIdx] = depMin; }
+      trainLanes.set(train.id, laneIdx);
+    }
+    const totalLanes = laneEndTimes.length;
+    for (const [id, lane] of trainLanes) laneMap.set(id, { lane, totalLanes });
+  }
+  return laneMap;
+}
+
 function renderTrains() {
   // Clear existing train elements
   document.querySelectorAll('.train-block').forEach(el => el.remove());
+
+  const laneMap = assignLanes();
 
   trains.forEach(train => {
     const row = platformRows.querySelector(`.platform-row[data-platform="${train.platform}"]`);
@@ -941,21 +990,34 @@ function renderTrains() {
 
     const a = parseTime(train.arrival);
     const d = parseTime(train.departure);
-    const x    = timeToX(a.h, a.m);
-    const xEnd = timeToX(d.h, d.m);
-    const w    = Math.max(xEnd - x, 24); // physical dwell width
+    const x      = timeToX(a.h, a.m);
+    const xEnd   = timeToX(d.h, d.m);
+    const dwellPx = Math.max(xEnd - x, 0);
+    const blockW  = Math.max(dwellPx, MIN_CONTENT_PX); // Var 3: enforce min for content
+
+    const { lane = 0, totalLanes = 1 } = laneMap.get(train.id) || {};
+    let topPx;
+    if (totalLanes === 1) {
+      topPx = (108 - LANE_HEIGHT) / 2;
+    } else {
+      topPx = LANE_PAD + lane * (LANE_HEIGHT + LANE_GAP);
+    }
 
     const el = document.createElement('div');
     el.className = `train-block ${statusClass(train.status)}`;
     el.dataset.id = train.id;
-    el.style.left  = x + 'px';
+    el.style.left = x + 'px';
+    el.style.width = blockW + 'px';
+    el.style.top   = topPx + 'px';
     el.title = `Route ${train.route} · ${train.name || ''} · ${train.arrival}–${train.departure} · ${statusLabel(train.status)}`;
 
     const delayStr = delayLabel(train.delay, train.status);
     const cancelled = train.status === 'cancelled';
+    const dwellRatio = blockW > 0 ? Math.min(dwellPx / blockW * 100, 100) : 100;
+
     el.innerHTML = cancelled
-      ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
-      : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+      ? `<div class="train-inner"><div class="train-route">${train.route}</div></div><div class="dwell-bar" style="width:${dwellRatio.toFixed(1)}%"></div>`
+      : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div><div class="dwell-bar" style="width:${dwellRatio.toFixed(1)}%"></div>`;
 
     setupTrainDrag(el, train);
     row.appendChild(el);
