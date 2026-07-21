@@ -396,7 +396,9 @@ tr.drag-over td { box-shadow: inset 0 2px 0 0 var(--pri); }
       <div class="cfg-dropdown" id="cfg-dropdown" onclick="event.stopPropagation()">
         <div class="cfg-item" onclick="closeCfgDropdown()">Users and permissions</div>
         <div class="cfg-item" onclick="closeCfgDropdown()">Templates</div>
-        <div class="cfg-item" onclick="closeCfgDropdown()">Line management</div>
+        <div class="cfg-item" data-view="lines" id="nav-lines" onclick="closeCfgDropdown();navigate('lines')">
+          <span id="nav-label-lines">Line management</span>
+        </div>
         <div class="cfg-item" data-view="sounds" id="nav-sounds" onclick="closeCfgDropdown();navigate('sounds')">
           <span id="nav-label-sounds">Audio library</span>
         </div>
@@ -451,6 +453,7 @@ const state = {
   view: 'stations',
   selectedId: null,
   selectedLine: null,
+  selectedLineId: null,
   soundFilter: 'all',
   lang: 'de',
   search: '',
@@ -552,6 +555,13 @@ const i18n = {
     coordLon:            'Längengrad',
     coordPreview:        'Karte öffnen',
     stationConfigs:      'Stationskonfigurationen',
+    lines:               'Linien',
+    linesSuffix:         (n) => `${n} Linien`,
+    lineMgmt:            'Linienverwaltung',
+    lineName:            'Linienname',
+    lineNameFile:        'Audiodatei Linienname',
+    ttsText:             'TTS-Text (Fallback)',
+    ttsHint:             'Wird als Text-to-Speech verwendet, wenn keine Audiodatei verfügbar ist.',
   },
   en: {
     stations:            'Stations',
@@ -643,6 +653,13 @@ const i18n = {
     coordLon:            'Longitude',
     coordPreview:        'Open map',
     stationConfigs:      'Station configurations',
+    lines:               'Lines',
+    linesSuffix:         (n) => `${n} lines`,
+    lineMgmt:            'Line management',
+    lineName:            'Line name',
+    lineNameFile:        'Audio file for line name',
+    ttsText:             'TTS text (fallback)',
+    ttsHint:             'Used as text-to-speech when no audio file is available.',
   },
 };
 function t(key, ...args) {
@@ -701,6 +718,21 @@ const displayTexts = [
   { id:'TXT-004', text:'Außer Betrieb' },
   { id:'TXT-005', text:'Weiterfahrt' },
 ];
+
+// ── Line data ──────────────────────────────────────────────
+const lineData = [
+  { id:'U1', fullName:'U1 Uhlandstraße – Warschauer Straße', shortName:'U1', longName:'U-Bahn Linie 1', nameFile:'', ttsText:'U eins' },
+  { id:'U2', fullName:'U2 Ruhleben – Pankow', shortName:'U2', longName:'U-Bahn Linie 2', nameFile:'', ttsText:'U zwei' },
+  { id:'U3', fullName:'U3 Nollendorfplatz – Krumme Lanke', shortName:'U3', longName:'U-Bahn Linie 3', nameFile:'', ttsText:'U drei' },
+  { id:'U4', fullName:'U4 Nollendorfplatz – Innsbrucker Platz', shortName:'U4', longName:'U-Bahn Linie 4', nameFile:'', ttsText:'U vier' },
+  { id:'U5', fullName:'U5 Hauptbahnhof – Hönow', shortName:'U5', longName:'U-Bahn Linie 5', nameFile:'', ttsText:'U fünf' },
+  { id:'U6', fullName:'U6 Alt-Tegel – Alt-Mariendorf', shortName:'U6', longName:'U-Bahn Linie 6', nameFile:'', ttsText:'U sechs' },
+  { id:'U7', fullName:'U7 Spandau – Rudow', shortName:'U7', longName:'U-Bahn Linie 7', nameFile:'', ttsText:'U sieben' },
+  { id:'U8', fullName:'U8 Wittenau – Hermannstraße', shortName:'U8', longName:'U-Bahn Linie 8', nameFile:'', ttsText:'U acht' },
+  { id:'U9', fullName:'U9 Osloer Straße – Rathaus Steglitz', shortName:'U9', longName:'U-Bahn Linie 9', nameFile:'', ttsText:'U neun' },
+  { id:'U12', fullName:'U12 Ruhleben – Warschauer Straße', shortName:'U12', longName:'U-Bahn Linie 12 (Express)', nameFile:'', ttsText:'U zwölf' },
+];
+function getLine(id) { return lineData.find(l => l.id === id); }
 
 // transferAnnouncements: [{fileId, label, scheduleSlots}]
 // scheduleSlots: null = always active
@@ -893,8 +925,12 @@ function setTransferMain(stationId, idx) {
 // ── Navigation ─────────────────────────────────────────────
 function navigate(v, id, line) {
   state.view = v;
-  state.selectedId = id || null;
-  state.selectedLine = line || null;
+  if (v === 'lineDetail') {
+    state.selectedLineId = id || null;
+  } else {
+    state.selectedId = id || null;
+    state.selectedLine = line || null;
+  }
   render();
 }
 function setLang(lang) {
@@ -907,6 +943,7 @@ function setLang(lang) {
   document.getElementById('nav-label-spc').textContent = t('spcPage');
   document.getElementById('nav-label-texts').textContent = t('texts');
   document.getElementById('cfg-section-stations').textContent = t('stationConfigs');
+  document.getElementById('nav-label-lines').textContent = t('lineMgmt');
   render();
 }
 function toggleCfgDropdown(e) {
@@ -920,7 +957,7 @@ function closeCfgDropdown() {
 document.addEventListener('click', () => closeCfgDropdown());
 
 // ── Render ─────────────────────────────────────────────────
-const GD_VIEWS = ['stations','detail','sounds','spc','texts'];
+const GD_VIEWS = ['stations','detail','sounds','spc','texts','lines','lineDetail'];
 function render() {
   // Highlight cfg trigger when any GD view is active
   const cfgActive = GD_VIEWS.includes(state.view);
@@ -928,15 +965,142 @@ function render() {
   // Highlight active item inside dropdown
   document.querySelectorAll('.cfg-item[data-view]').forEach(el => {
     const v = el.dataset.view;
-    el.style.fontWeight = (v === state.view || (state.view === 'detail' && v === 'stations')) ? '500' : '';
-    el.style.color = (v === state.view || (state.view === 'detail' && v === 'stations')) ? 'var(--pri)' : '';
+    const active = v === state.view
+      || (state.view === 'detail'     && v === 'stations')
+      || (state.view === 'lineDetail' && v === 'lines');
+    el.style.fontWeight = active ? '500' : '';
+    el.style.color      = active ? 'var(--pri)' : '';
   });
   const c = document.getElementById('content');
-  if      (state.view === 'stations') c.innerHTML = renderStations();
-  else if (state.view === 'detail')   c.innerHTML = renderDetail();
-  else if (state.view === 'sounds')   c.innerHTML = renderSounds();
-  else if (state.view === 'spc')      c.innerHTML = renderSpcPage();
-  else if (state.view === 'texts')    c.innerHTML = renderTexts();
+  if      (state.view === 'stations')   c.innerHTML = renderStations();
+  else if (state.view === 'detail')     c.innerHTML = renderDetail();
+  else if (state.view === 'sounds')     c.innerHTML = renderSounds();
+  else if (state.view === 'spc')        c.innerHTML = renderSpcPage();
+  else if (state.view === 'texts')      c.innerHTML = renderTexts();
+  else if (state.view === 'lines')      c.innerHTML = renderLines();
+  else if (state.view === 'lineDetail') c.innerHTML = renderLineDetail();
+}
+
+// ── Lines list ─────────────────────────────────────────────
+function renderLines() {
+  const rowsHtml = lineData.map(l => {
+    const hasFile = !!l.nameFile;
+    const fileIndicator = hasFile
+      ? `<span style="font-size:11px;color:var(--pri)">&#9835; ${t('lineNameFile')}</span>`
+      : `<span style="font-size:11px;color:var(--text-dis)">— ${state.lang === 'de' ? 'keine Audiodatei' : 'no audio file'}</span>`;
+    return `<tr class="row-link" onclick="navigate('lineDetail','${l.id}')">
+      <td>${lineBadge(l.id)}</td>
+      <td><span style="font-weight:500">${l.fullName}</span><br><span style="font-size:12px;color:var(--text-sec)">${l.longName}</span></td>
+      <td>${fileIndicator}</td>
+      <td style="color:var(--text-dis);font-size:16px">›</td>
+    </tr>`;
+  }).join('');
+  return `<div class="ph">
+    <div>
+      <h1>${t('lines')}</h1>
+      <div class="ph-sub">${t('linesSuffix', lineData.length)} · BVG J/JK</div>
+    </div>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr>
+      <th style="width:60px">${t('colLine')}</th>
+      <th>${t('colName')}</th>
+      <th>${t('lineNameFile')}</th>
+      <th style="width:32px"></th>
+    </tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
+}
+
+// ── Line detail ────────────────────────────────────────────
+function renderLineDetail() {
+  const l = getLine(state.selectedLineId);
+  if (!l) return '<div class="ph"><div><h1>—</h1></div></div>';
+
+  const stnNameFileOpts = (selId) => soundFiles
+    .filter(f => f.type === 'station-name')
+    .map(f => `<option value="${f.id}" ${f.id === selId ? 'selected' : ''}>${f.filename}</option>`)
+    .join('');
+
+  return `
+  <div class="breadcrumb">
+    <button class="bc-link" onclick="navigate('lines')">${t('lines')}</button>
+    <span class="bc-sep">/</span>
+    <span class="bc-current">${l.fullName}</span>
+    <span class="bc-sep">·</span>
+    ${lineBadge(l.id)}
+  </div>
+
+  <div class="ph">
+    <div>
+      <h1>${l.fullName}</h1>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
+        ${lineBadge(l.id)}
+        <span style="font-size:12px;color:var(--text-dis)">${t('identifier')}</span>
+      </div>
+    </div>
+    <div class="ph-right">
+      <button class="btn btn-primary btn-sm" onclick="saveLineData('${l.id}')">${t('saveBtn')}</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">${t('lineName')}</span></div>
+    <div class="card-body">
+      <div class="frow">
+        <span class="flabel">${t('fullName')}</span>
+        <div class="fval"><input type="text" id="line-full-input" value="${l.fullName}" style="width:340px"></div>
+      </div>
+      <div class="frow">
+        <span class="flabel">${t('shortName')}</span>
+        <div class="fval"><input type="text" id="line-short-input" value="${l.shortName||''}" style="width:80px"></div>
+      </div>
+      <div class="frow">
+        <span class="flabel">${t('longName')}</span>
+        <div class="fval"><input type="text" id="line-long-input" value="${l.longName||''}" style="width:340px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">${t('announcements')}</span></div>
+    <div class="card-body">
+      <div class="frow">
+        <span class="flabel">${t('lineNameFile')}</span>
+        <div class="fval" style="display:flex;gap:6px;align-items:center">
+          <select id="line-name-file">
+            <option value="">${t('notAssigned')}</option>
+            ${stnNameFileOpts(l.nameFile)}
+          </select>
+        </div>
+      </div>
+      <div class="frow top">
+        <span class="flabel">${t('ttsText')}</span>
+        <div class="fval">
+          <input type="text" id="line-tts-input" value="${l.ttsText||''}" style="width:260px" placeholder="${state.lang === 'de' ? 'z.B. U eins' : 'e.g. U one'}">
+          <div style="font-size:12px;color:var(--text-sec);margin-top:4px">${t('ttsHint')}</div>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function saveLineData(id) {
+  const l = getLine(id);
+  const fi = document.getElementById('line-full-input');
+  const si = document.getElementById('line-short-input');
+  const li = document.getElementById('line-long-input');
+  const nf = document.getElementById('line-name-file');
+  const ti = document.getElementById('line-tts-input');
+  if (fi) l.fullName  = fi.value.trim() || l.fullName;
+  if (si) l.shortName = si.value.trim();
+  if (li) l.longName  = li.value.trim();
+  if (nf) l.nameFile  = nf.value;
+  if (ti) l.ttsText   = ti.value.trim();
+  const toast = document.getElementById('save-toast');
+  toast.textContent = t('savedMsg');
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 2500);
 }
 
 // ── Stations list ──────────────────────────────────────────
