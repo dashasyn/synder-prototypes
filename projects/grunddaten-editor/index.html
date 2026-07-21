@@ -203,6 +203,7 @@ tr.row-link:hover td { background: var(--pri-50); }
 .b-id { background: rgba(0,0,0,0.06); color: var(--text-sec); font-family: monospace; font-size: 12px; border-radius: 4px; letter-spacing: 0.05em; }
 .b-snd  { background: #E3F2FD; color: #1565C0; }
 .b-xfer { background: #F3E5F5; color: #6A1B9A; }
+.b-evt  { background: #FFF3E0; color: #E65100; }
 .b-spc  { background: #FFF3E0; color: #BF360C; }
 .future-name {
   display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
@@ -400,12 +401,15 @@ tr.drag-over td { box-shadow: inset 0 2px 0 0 var(--pri); }
           <span id="nav-label-sounds">Audio library</span>
         </div>
         <div class="cfg-dropdown-sep"></div>
-        <div class="cfg-section-label" id="cfg-section-stations">Configuration</div>
-        <div class="cfg-item" data-view="lines" id="nav-lines" onclick="closeCfgDropdown();navigate('lines')">
-          <span id="nav-label-lines">Line management</span>
-        </div>
+        <div class="cfg-section-label" id="cfg-section-stations">Grunddatenversorgung</div>
         <div class="cfg-item" data-view="stations" id="nav-stations" onclick="closeCfgDropdown();navigate('stations')">
           <span id="nav-label-stations">Stations</span>
+        </div>
+        <div class="cfg-item" data-view="lines" id="nav-lines" onclick="closeCfgDropdown();navigate('lines')">
+          <span id="nav-label-lines">Lines</span>
+        </div>
+        <div class="cfg-item" data-view="lineMgmt" id="nav-line-mgmt" onclick="closeCfgDropdown();navigate('lineMgmt')">
+          <span id="nav-label-line-mgmt">Line management</span>
         </div>
         <div class="cfg-item" data-view="spc" id="nav-spc" onclick="closeCfgDropdown();navigate('spc')">
           <span id="nav-label-spc">Special announcements</span>
@@ -455,6 +459,7 @@ const state = {
   selectedLine: null,
   selectedLineId: null,
   soundFilter: 'all',
+  soundSearch: '',
   lang: 'de',
   search: '',
   lineFilter: 'all',
@@ -522,6 +527,17 @@ const i18n = {
     colUsedBy:           'Verwendet in',
     typeStationName:     'Stationsname',
     typeTransfer:        'Umstieg',
+    typeEvent:           'Ereignis',
+    colName:             'Name',
+    colLang:             'Sprache',
+    langDe:              'Deutsch',
+    langEn:              'Englisch',
+    addAudio:            'Audiodatei hinzufügen',
+    audioName:           'Name',
+    audioType:           'Typ',
+    audioLang:           'Sprache',
+    audioFile:           'Datei',
+    searchByName:        'Nach Name suchen…',
     tabAll:              'Alle',
     uploadFile:          'Datei hochladen',
     dropAudio:           'Audiodateien hierher ziehen oder klicken',
@@ -554,7 +570,7 @@ const i18n = {
     coordLat:            'Breitengrad',
     coordLon:            'Längengrad',
     coordPreview:        'Karte öffnen',
-    stationConfigs:      'Konfiguration',
+    stationConfigs:      'Grunddatenversorgung',
     lines:               'Linien',
     linesSuffix:         (n) => `${n} Linien`,
     lineMgmt:            'Linienverwaltung',
@@ -631,6 +647,16 @@ const i18n = {
     colUsedBy:           'Used in',
     typeStationName:     'Station name',
     typeTransfer:        'Transfer',
+    typeEvent:           'Event',
+    colLang:             'Language',
+    langDe:              'German',
+    langEn:              'English',
+    addAudio:            'Add audio file',
+    audioName:           'Name',
+    audioType:           'Type',
+    audioLang:           'Language',
+    audioFile:           'File',
+    searchByName:        'Search by name…',
     tabAll:              'All',
     uploadFile:          'Upload file',
     dropAudio:           'Drop audio files here, or click to browse',
@@ -663,7 +689,7 @@ const i18n = {
     coordLat:            'Latitude',
     coordLon:            'Longitude',
     coordPreview:        'Open map',
-    stationConfigs:      'Configuration',
+    stationConfigs:      'Grunddatenversorgung',
     lines:               'Lines',
     linesSuffix:         (n) => `${n} lines`,
     lineMgmt:            'Line management',
@@ -705,17 +731,19 @@ function lineBadge(line) {
 // ── Data ───────────────────────────────────────────────────
 // Sound files (station-name + transfer types only here; special sounds referenced from Sonderansagen)
 const soundFiles = [
-  { id:'SND-001', filename:'alexanderplatz.mp3',             type:'station-name', size:'52 KB', uploaded:'02.11.2025' },
-  { id:'SND-002', filename:'hauptbahnhof.mp3',               type:'station-name', size:'61 KB', uploaded:'02.11.2025' },
-  { id:'SND-003', filename:'potsdamer_platz.mp3',            type:'station-name', size:'58 KB', uploaded:'02.11.2025' },
-  { id:'SND-004', filename:'brandenburger_tor.mp3',          type:'station-name', size:'72 KB', uploaded:'02.11.2025' },
-  { id:'SND-005', filename:'friedrichstrasse.mp3',           type:'station-name', size:'68 KB', uploaded:'02.11.2025' },
-  { id:'SND-006', filename:'zoologischer_garten.mp3',        type:'station-name', size:'74 KB', uploaded:'02.11.2025' },
-  { id:'SND-007', filename:'nollendorfplatz.mp3',            type:'station-name', size:'55 KB', uploaded:'10.11.2025' },
-  { id:'SND-010', filename:'umstieg_u2_u5_u8.mp3',           type:'transfer',     size:'89 KB', uploaded:'15.11.2025' },
-  { id:'SND-011', filename:'umstieg_u1_u3.mp3',              type:'transfer',     size:'72 KB', uploaded:'15.11.2025' },
-  { id:'SND-012', filename:'umstieg_sbahn.mp3',              type:'transfer',     size:'68 KB', uploaded:'15.11.2025' },
-  { id:'SND-013', filename:'umstieg_regional.mp3',           type:'transfer',     size:'81 KB', uploaded:'20.11.2025' },
+  { id:'SND-001', name:'Alexanderplatz',       filename:'alexanderplatz.mp3',      type:'station-name', lang:'de', size:'52 KB', uploaded:'02.11.2025' },
+  { id:'SND-002', name:'Hauptbahnhof',         filename:'hauptbahnhof.mp3',        type:'station-name', lang:'de', size:'61 KB', uploaded:'02.11.2025' },
+  { id:'SND-003', name:'Potsdamer Platz',      filename:'potsdamer_platz.mp3',     type:'station-name', lang:'de', size:'58 KB', uploaded:'02.11.2025' },
+  { id:'SND-004', name:'Brandenburger Tor',    filename:'brandenburger_tor.mp3',   type:'station-name', lang:'de', size:'72 KB', uploaded:'02.11.2025' },
+  { id:'SND-005', name:'Friedrichstraße',      filename:'friedrichstrasse.mp3',    type:'station-name', lang:'de', size:'68 KB', uploaded:'02.11.2025' },
+  { id:'SND-006', name:'Zoologischer Garten',  filename:'zoologischer_garten.mp3', type:'station-name', lang:'de', size:'74 KB', uploaded:'02.11.2025' },
+  { id:'SND-007', name:'Nollendorfplatz',      filename:'nollendorfplatz.mp3',     type:'station-name', lang:'de', size:'55 KB', uploaded:'10.11.2025' },
+  { id:'SND-010', name:'Umstieg U2/U5/U8',     filename:'umstieg_u2_u5_u8.mp3',    type:'transfer',     lang:'de', size:'89 KB', uploaded:'15.11.2025' },
+  { id:'SND-011', name:'Umstieg U1/U3',        filename:'umstieg_u1_u3.mp3',       type:'transfer',     lang:'de', size:'72 KB', uploaded:'15.11.2025' },
+  { id:'SND-012', name:'Umstieg S-Bahn',       filename:'umstieg_sbahn.mp3',       type:'transfer',     lang:'de', size:'68 KB', uploaded:'15.11.2025' },
+  { id:'SND-013', name:'Umstieg Regional',     filename:'umstieg_regional.mp3',    type:'transfer',     lang:'de', size:'81 KB', uploaded:'20.11.2025' },
+  { id:'SND-030', name:'Sommerfest 2026',      filename:'event_sommerfest.mp3',    type:'event',        lang:'de', size:'112 KB', uploaded:'01.07.2026' },
+  { id:'SND-031', name:'Silvester Nacht',      filename:'event_silvester.mp3',     type:'event',        lang:'de', size:'98 KB',  uploaded:'12.12.2025' },
 ];
 
 // Special-type sounds (for Sonderansagen only)
@@ -967,7 +995,8 @@ function setLang(lang) {
   document.getElementById('nav-label-spc').textContent = t('spcPage');
   document.getElementById('nav-label-texts').textContent = t('texts');
   document.getElementById('cfg-section-stations').textContent = t('stationConfigs');
-  document.getElementById('nav-label-lines').textContent = t('lineMgmt');
+  document.getElementById('nav-label-lines').textContent = t('lines');
+  document.getElementById('nav-label-line-mgmt').textContent = t('lineMgmt');
   render();
 }
 function toggleCfgDropdown(e) {
@@ -981,7 +1010,7 @@ function closeCfgDropdown() {
 document.addEventListener('click', () => closeCfgDropdown());
 
 // ── Render ─────────────────────────────────────────────────
-const GD_VIEWS = ['stations','detail','sounds','spc','texts','lines','lineDetail'];
+const GD_VIEWS = ['stations','detail','sounds','spc','texts','lines','lineDetail','lineMgmt'];
 function render() {
   // Highlight cfg trigger when any GD view is active
   const cfgActive = GD_VIEWS.includes(state.view);
@@ -1003,6 +1032,7 @@ function render() {
   else if (state.view === 'texts')      c.innerHTML = renderTexts();
   else if (state.view === 'lines')      c.innerHTML = renderLines();
   else if (state.view === 'lineDetail') c.innerHTML = renderLineDetail();
+  else if (state.view === 'lineMgmt')   c.innerHTML = renderLineMgmt();
 }
 
 // ── Lines list ─────────────────────────────────────────────
@@ -1108,29 +1138,7 @@ function renderLineDetail() {
     </div>
   </div>
 
-  ${l.id === 'U12' ? `<div class="card">
-    <div class="card-head"><span class="card-title">${t('activationSchedule')}</span></div>
-    <div class="card-body">
-      <div style="display:flex;gap:12px;align-items:flex-start">
-        <div style="flex:0 0 auto">${lineBadge(l.id)}</div>
-        <div style="flex:1">
-          <p style="margin:0 0 12px;color:var(--text-sec);font-size:13px">${t('lineScheduleCard', l.id)}</p>
-          ${l.schedules.length > 0 ? `
-          <div style="margin-bottom:12px">
-            <div style="font-size:12px;font-weight:500;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${t('activationSchedule')}:</div>
-            ${l.schedules.map((sch, i) => `
-              <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--divider)">
-                <span style="flex:1;font-size:13px">${fmtLineSchedule(sch)}</span>
-                ${sch.reason ? `<span style="font-size:12px;color:var(--text-sec);font-style:italic">${sch.reason}</span>` : ''}
-                <button class="btn btn-ghost btn-sm" onclick="showEditLineScheduleModal('${l.id}',${i})" title="${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}">✎</button>
-                <button class="btn-danger-ghost btn-sm" onclick="deleteLineSchedule('${l.id}',${i})" title="${state.lang === 'de' ? 'Löschen' : 'Delete'}">🗑</button>
-              </div>`).join('')}
-          </div>` : ''}
-          <button class="btn btn-primary btn-sm" onclick="showAddLineScheduleModal('${l.id}')">${t('addSchedule').toUpperCase()}</button>
-        </div>
-      </div>
-    </div>
-  </div>` : ''}`;
+  `;
 }
 
 function saveLineData(id) {
@@ -1217,7 +1225,7 @@ function showAddLineScheduleModal(lineId) {
     const l = getLine(lineId);
     l.schedules.push({ dateFrom: df.value, timeFrom: tf.value, dateTo: dt.value, timeTo: tt.value, reason: re.value.trim() });
     closeModal();
-    navigate('lineDetail', lineId);
+    navigate('lineMgmt');
   });
 }
 
@@ -1239,14 +1247,53 @@ function showEditLineScheduleModal(lineId, idx) {
     if (!ok) return false;
     l.schedules[idx] = { dateFrom: df.value, timeFrom: tf.value, dateTo: dt.value, timeTo: tt.value, reason: re.value.trim() };
     closeModal();
-    navigate('lineDetail', lineId);
+    navigate('lineMgmt');
   });
 }
 
 function deleteLineSchedule(lineId, idx) {
   const l = getLine(lineId);
   l.schedules.splice(idx, 1);
-  navigate('lineDetail', lineId);
+  navigate('lineMgmt');
+}
+
+// ── Line management page ──────────────────────────────────
+function renderLineMgmt() {
+  const rowsHtml = lineData.map(l => {
+    const schedList = l.schedules.length > 0
+      ? l.schedules.map((sch, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--divider)">
+          <span style="flex:1;font-size:13px">${fmtLineSchedule(sch)}</span>
+          ${sch.reason ? `<span style="font-size:12px;color:var(--text-sec);font-style:italic">${sch.reason}</span>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="showEditLineScheduleModal('${l.id}',${i})" title="${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}">✎</button>
+          <button class="btn-danger-ghost btn-sm" onclick="deleteLineSchedule('${l.id}',${i})" title="${state.lang === 'de' ? 'Löschen' : 'Delete'}">🗑</button>
+        </div>`).join('')
+      : '';
+    return `
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="flex:0 0 auto">${lineBadge(l.id)}</div>
+          <div style="flex:1">
+            <p style="margin:0 0 12px;color:var(--text-sec);font-size:13px">${t('lineScheduleCard', l.id)}</p>
+            ${schedList ? `
+            <div style="margin-bottom:12px">
+              <div style="font-size:12px;font-weight:500;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${t('activationSchedule')}:</div>
+              ${schedList}
+            </div>` : ''}
+            <button class="btn btn-primary btn-sm" onclick="showAddLineScheduleModal('${l.id}')">${t('addSchedule').toUpperCase()}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="ph">
+    <div>
+      <h1>${t('lineMgmt')}</h1>
+      <div class="ph-sub">${state.lang === 'de' ? 'Aktivieren und deaktivieren Sie Linien nach Zeitplan.' : 'Activate and deactivate lines by schedule.'}</div>
+    </div>
+  </div>
+  ${rowsHtml}`;
 }
 
 // ── Stations list ──────────────────────────────────────────
@@ -1722,60 +1769,125 @@ function saveSchedule() {
 // ── Sound library (Tondateien) ─────────────────────────────
 function renderSounds() {
   const f = state.soundFilter;
-  const filtered = (f === 'all' ? soundFiles : soundFiles.filter(sf => sf.type === f));
-  const typeLabel = { 'station-name': t('typeStationName'), 'transfer': t('typeTransfer') };
-  const typeCls   = { 'station-name':'b-snd', 'transfer':'b-xfer' };
+  const q = (state.soundSearch || '').toLowerCase();
+  const filtered = soundFiles.filter(sf => {
+    const matchType = f === 'all' || sf.type === f;
+    const matchQ = !q || (sf.name || '').toLowerCase().includes(q) || sf.filename.toLowerCase().includes(q);
+    return matchType && matchQ;
+  });
+  const typeLabel = { 'station-name': t('typeStationName'), 'transfer': t('typeTransfer'), 'event': t('typeEvent') };
+  const typeCls   = { 'station-name':'b-snd', 'transfer':'b-xfer', 'event':'b-evt' };
+  const langLabel = { de: t('langDe'), en: t('langEn') };
 
   const rows = filtered.map(sf => {
     const usedStations = findStationsUsingSound(sf.id);
     const usedCount = usedStations.length;
     return `<tr>
-      <td style="font-family:monospace;font-size:13px">♪ ${sf.filename}</td>
+      <td style="font-weight:500">${sf.name || sf.filename}</td>
       <td><span class="badge ${typeCls[sf.type]}">${typeLabel[sf.type]}</span></td>
+      <td style="color:var(--text-sec)">${langLabel[sf.lang] || sf.lang || '—'}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-sec)">${sf.filename}</td>
       <td style="color:var(--text-sec)">${sf.size}</td>
       <td style="color:var(--text-sec)">${sf.uploaded}</td>
       <td style="color:var(--text-sec)">${usedCount > 0 ? t('fileUsedIn', usedCount) : '—'}</td>
       <td style="white-space:nowrap">
-        <button class="btn-danger-ghost btn-sm" onclick="deleteSoundFile('${sf.id}')">✕ ${state.lang === 'de' ? 'Löschen' : 'Delete'}</button>
+        <button class="btn-danger-ghost btn-sm" onclick="deleteSoundFile('${sf.id}')">✕</button>
       </td>
     </tr>`;
   }).join('');
-
-  const tabData = [
-    { val:'all',          label: t('tabAll') },
-    { val:'station-name', label: t('typeStationName') },
-    { val:'transfer',     label: t('typeTransfer') },
-  ];
 
   return `
   <div class="ph">
     <div>
       <h1>${t('sounds')}</h1>
-      <div class="ph-sub">${soundFiles.length} ${state.lang === 'de' ? 'Dateien' : 'files'} · ${state.lang === 'de' ? 'Stationsnamen & Umstiegsansagen' : 'Station names & transfer announcements'}</div>
+      <div class="ph-sub">${soundFiles.length} ${state.lang === 'de' ? 'Dateien' : 'files'}</div>
     </div>
     <div class="ph-right">
-      <button class="btn btn-primary btn-sm" onclick="alert('${state.lang === 'de' ? 'Datei-Upload' : 'File upload'}')">${t('uploadFile')}</button>
+      <button class="btn btn-primary btn-sm" onclick="showAddAudioModal()">+ ${t('addAudio')}</button>
     </div>
   </div>
-  <div class="upload-area" onclick="alert('${state.lang === 'de' ? 'Audiodateien hochladen' : 'Upload audio files'}')">
-    <div class="upload-ico">♪</div>
-    <div class="upload-text">${t('dropAudio')}</div>
-    <div class="upload-hint">${t('dropHint')}</div>
+  <div class="search-row" style="display:flex;gap:10px;align-items:center">
+    <input class="search-input" type="text" placeholder="${t('searchByName')}" value="${state.soundSearch}" oninput="state.soundSearch=this.value;render()" style="flex:1">
+    <select class="lf-select" onchange="state.soundFilter=this.value;render()" style="min-width:160px">
+      <option value="all"          ${f==='all'?'selected':''}>${t('tabAll')}</option>
+      <option value="station-name" ${f==='station-name'?'selected':''}>${t('typeStationName')}</option>
+      <option value="transfer"     ${f==='transfer'?'selected':''}>${t('typeTransfer')}</option>
+      <option value="event"        ${f==='event'?'selected':''}>${t('typeEvent')}</option>
+    </select>
   </div>
-  <div class="ftabs">${tabData.map(tab =>
-    `<div class="ftab ${f === tab.val ? 'active' : ''}" onclick="state.soundFilter='${tab.val}';navigate('sounds')">${tab.label}</div>`
-  ).join('')}</div>
   <div class="tbl-wrap"><table>
     <thead><tr>
-      <th>${t('colFilename')}</th>
+      <th>${t('colName')}</th>
       <th>${t('colType')}</th>
+      <th>${t('colLang')}</th>
+      <th>${t('colFilename')}</th>
       <th>${t('colSize')}</th>
       <th>${t('colUploaded')}</th>
       <th>${t('colUsedBy')}</th>
       <th></th>
     </tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
+    <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
   </table></div>`;
+}
+
+function showAddAudioModal() {
+  openModal(`
+    <div class="modal-title">${t('addAudio')}</div>
+    <div class="modal-field">
+      <label>${t('audioName')} *</label>
+      <input type="text" id="m-audio-name" placeholder="${state.lang === 'de' ? 'z.B. Alexanderplatz' : 'e.g. Alexanderplatz'}">
+      <div class="field-error" id="err-m-audio-name"></div>
+    </div>
+    <div class="modal-field">
+      <label>${t('audioType')} *</label>
+      <select id="m-audio-type">
+        <option value="">${state.lang === 'de' ? '— wählen —' : '— select —'}</option>
+        <option value="station-name">${t('typeStationName')}</option>
+        <option value="transfer">${t('typeTransfer')}</option>
+        <option value="event">${t('typeEvent')}</option>
+      </select>
+      <div class="field-error" id="err-m-audio-type"></div>
+    </div>
+    <div class="modal-field">
+      <label>${t('audioLang')} *</label>
+      <select id="m-audio-lang">
+        <option value="de">${t('langDe')}</option>
+        <option value="en">${t('langEn')}</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>${t('audioFile')} *</label>
+      <input type="text" id="m-audio-file" placeholder="datei.mp3">
+      <div class="field-error" id="err-m-audio-file"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('cancel')}</button>
+      <button class="btn btn-primary btn-sm" id="modal-save-btn">${t('saveEntry')}</button>
+    </div>`,
+    () => {
+      const name = document.getElementById('m-audio-name');
+      const type = document.getElementById('m-audio-type');
+      const lang = document.getElementById('m-audio-lang');
+      const file = document.getElementById('m-audio-file');
+      let ok = true;
+      if (!name.value.trim()) { markInvalid('m-audio-name'); ok = false; }
+      if (!type.value)         { markInvalid('m-audio-type'); ok = false; }
+      if (!file.value.trim()) { markInvalid('m-audio-file'); ok = false; }
+      if (!ok) return false;
+      const nextNum = soundFiles.length + 100;
+      const today = new Date().toLocaleDateString('de-DE');
+      soundFiles.push({
+        id: 'SND-' + String(nextNum).padStart(3,'0'),
+        name: name.value.trim(),
+        filename: file.value.trim(),
+        type: type.value,
+        lang: lang.value,
+        size: '—',
+        uploaded: today,
+      });
+      closeModal();
+      navigate('sounds');
+    });
 }
 
 function deleteSoundFile(id) {
