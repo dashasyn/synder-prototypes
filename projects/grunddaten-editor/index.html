@@ -75,6 +75,7 @@ body {
 }
 .cfg-dropdown.open { display: flex; }
 .cfg-dropdown-sep { height: 1px; background: var(--divider); margin: 4px 0; }
+.cfg-section-label { padding: 6px 16px 2px; font-size: 11px; font-weight: 600; color: var(--text-dis); letter-spacing: 0.07em; text-transform: uppercase; }
 .cfg-item {
   padding: 10px 16px; font-size: 14px; color: var(--text-pri);
   cursor: pointer; white-space: nowrap;
@@ -202,6 +203,7 @@ tr.row-link:hover td { background: var(--pri-50); }
 .b-id { background: rgba(0,0,0,0.06); color: var(--text-sec); font-family: monospace; font-size: 12px; border-radius: 4px; letter-spacing: 0.05em; }
 .b-snd  { background: #E3F2FD; color: #1565C0; }
 .b-xfer { background: #F3E5F5; color: #6A1B9A; }
+.b-evt  { background: #FFF3E0; color: #E65100; }
 .b-spc  { background: #FFF3E0; color: #BF360C; }
 .future-name {
   display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px;
@@ -311,15 +313,14 @@ select { min-width: 200px; }
 .ftab.active { color: var(--pri); border-bottom-color: var(--pri); }
 .ftab:hover:not(.active) { color: var(--text-pri); background: rgba(25,118,210,0.04); }
 
-/* Line filter chips */
-.line-filter { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
-.lf-chip {
-  padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 500;
-  cursor: pointer; border: 1px solid var(--divider); background: #fff; color: var(--text-sec);
-  transition: background 0.12s, color 0.12s;
+/* Line filter */
+.line-filter { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.lf-select {
+  padding: 6px 10px; border-radius: 4px; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--divider); background: #fff; color: var(--text-pri);
+  cursor: pointer; min-width: 120px;
 }
-.lf-chip.active { background: var(--pri); color: #fff; border-color: var(--pri); }
-.lf-chip:hover:not(.active) { background: var(--pri-50); border-color: #90CAF9; }
+.lf-select:focus { outline: none; border-color: var(--pri); }
 
 /* Drag and drop reordering */
 .drag-handle { cursor: grab; color: var(--text-dis); font-size: 17px; padding: 0 10px 0 0; user-select: none; line-height: 1; vertical-align: middle; }
@@ -396,12 +397,19 @@ tr.drag-over td { box-shadow: inset 0 2px 0 0 var(--pri); }
       <div class="cfg-dropdown" id="cfg-dropdown" onclick="event.stopPropagation()">
         <div class="cfg-item" onclick="closeCfgDropdown()">Users and permissions</div>
         <div class="cfg-item" onclick="closeCfgDropdown()">Templates</div>
-        <div class="cfg-item" onclick="closeCfgDropdown()">Line management</div>
+        <div class="cfg-item" data-view="sounds" id="nav-sounds" onclick="closeCfgDropdown();navigate('sounds')">
+          <span id="nav-label-sounds">Audio library</span>
+        </div>
+        <div class="cfg-item" data-view="lineMgmt" id="nav-line-mgmt" onclick="closeCfgDropdown();navigate('lineMgmt')">
+          <span id="nav-label-line-mgmt">Line management</span>
+        </div>
+        <div class="cfg-dropdown-sep"></div>
+        <div class="cfg-section-label" id="cfg-section-stations">Grunddatenversorgung</div>
         <div class="cfg-item" data-view="stations" id="nav-stations" onclick="closeCfgDropdown();navigate('stations')">
           <span id="nav-label-stations">Stations</span>
         </div>
-        <div class="cfg-item" data-view="sounds" id="nav-sounds" onclick="closeCfgDropdown();navigate('sounds')">
-          <span id="nav-label-sounds">Audio library</span>
+        <div class="cfg-item" data-view="lines" id="nav-lines" onclick="closeCfgDropdown();navigate('lines')">
+          <span id="nav-label-lines">Lines</span>
         </div>
         <div class="cfg-item" data-view="spc" id="nav-spc" onclick="closeCfgDropdown();navigate('spc')">
           <span id="nav-label-spc">Special announcements</span>
@@ -449,7 +457,9 @@ const state = {
   view: 'stations',
   selectedId: null,
   selectedLine: null,
+  selectedLineId: null,
   soundFilter: 'all',
+  soundSearch: '',
   lang: 'de',
   search: '',
   lineFilter: 'all',
@@ -493,8 +503,8 @@ const i18n = {
     prevStation:         '← Vorher',
     nextStation:         '→ Nachher',
     identifier:          'Kennung · schreibgeschützt',
-    fullName:            'Vollständiger Name',
-    shortName:           'Kurzname',
+    fullName:            'Standardname',
+    shortName:           'Kurzer Name',
     saveBtn:             'Speichern',
     savedMsg:            '✓ Änderungen gespeichert',
     displayTexts:        'Anzeigetexte',
@@ -517,6 +527,17 @@ const i18n = {
     colUsedBy:           'Verwendet in',
     typeStationName:     'Stationsname',
     typeTransfer:        'Umstieg',
+    typeEvent:           'Ereignis',
+    colName:             'Name',
+    colLang:             'Sprache',
+    langDe:              'Deutsch',
+    langEn:              'Englisch',
+    addAudio:            'Audiodatei hinzufügen',
+    audioName:           'Name',
+    audioType:           'Typ',
+    audioLang:           'Sprache',
+    audioFile:           'Datei',
+    searchByName:        'Nach Name suchen…',
     tabAll:              'Alle',
     uploadFile:          'Datei hochladen',
     dropAudio:           'Audiodateien hierher ziehen oder klicken',
@@ -544,6 +565,30 @@ const i18n = {
     selectFile:          'Datei wählen',
     xferLabel:           'Bezeichnung',
     xferLabelPlaceholder:'z.B. Standard, Nacht, Wochenende',
+    longName:            'Langer Name',
+    coordinates:         'Koordinaten',
+    coordLat:            'Breitengrad',
+    coordLon:            'Längengrad',
+    coordPreview:        'Karte öffnen',
+    stationConfigs:      'Grunddatenversorgung',
+    lines:               'Linien',
+    linesSuffix:         (n) => `${n} Linien`,
+    lineMgmt:            'Linienverwaltung',
+    lineName:            'Linienname',
+    lineNameFile:        'Audiodatei Linienname',
+    ttsText:             'TTS-Text (Fallback)',
+    ttsHint:             'Wird als Text-to-Speech verwendet, wenn keine Audiodatei verfügbar ist.',
+    lineScheduleCard:    (id) => `Zeitraum festlegen, in dem ${id} aktiv oder inaktiv ist.`,
+    lineScheduleTitle:   (id) => `Zeitraum hinzufügen für ${id}`,
+    lineScheduleDesc:    (id) => `Legen Sie fest, wann ${id} aktiv und inaktiv ist. Nur in diesem Zeitraum werden Änderungen an den betroffenen Linien vorgenommen.`,
+    lineScheduleEdit:    (id) => `Zeitraum bearbeiten für ${id}`,
+    addSchedule:         'Zeitraum hinzufügen',
+    activationSchedule:  'Aktivierungszeitraum',
+    dateFrom:            'Datum von',
+    dateTo:              'Datum bis',
+    timeFrom:            'Uhrzeit von',
+    timeTo:              'Uhrzeit bis',
+    reason:              'Grund',
   },
   en: {
     stations:            'Stations',
@@ -578,7 +623,7 @@ const i18n = {
     prevStation:         '← Before',
     nextStation:         '→ After',
     identifier:          'Identifier · read-only',
-    fullName:            'Full name',
+    fullName:            'Default name',
     shortName:           'Short name',
     saveBtn:             'Save changes',
     savedMsg:            '✓ Changes saved',
@@ -602,6 +647,16 @@ const i18n = {
     colUsedBy:           'Used in',
     typeStationName:     'Station name',
     typeTransfer:        'Transfer',
+    typeEvent:           'Event',
+    colLang:             'Language',
+    langDe:              'German',
+    langEn:              'English',
+    addAudio:            'Add audio file',
+    audioName:           'Name',
+    audioType:           'Type',
+    audioLang:           'Language',
+    audioFile:           'File',
+    searchByName:        'Search by name…',
     tabAll:              'All',
     uploadFile:          'Upload file',
     dropAudio:           'Drop audio files here, or click to browse',
@@ -629,6 +684,30 @@ const i18n = {
     selectFile:          'Select file',
     xferLabel:           'Label',
     xferLabelPlaceholder:'e.g. Standard, Night, Weekend',
+    longName:            'Long name',
+    coordinates:         'Coordinates',
+    coordLat:            'Latitude',
+    coordLon:            'Longitude',
+    coordPreview:        'Open map',
+    stationConfigs:      'Grunddatenversorgung',
+    lines:               'Lines',
+    linesSuffix:         (n) => `${n} lines`,
+    lineMgmt:            'Line management',
+    lineName:            'Line name',
+    lineNameFile:        'Audio file for line name',
+    ttsText:             'TTS text (fallback)',
+    ttsHint:             'Used as text-to-speech when no audio file is available.',
+    lineScheduleCard:    (id) => `Set up a schedule to activate and deactivate ${id}.`,
+    lineScheduleTitle:   (id) => `Add schedule for ${id}`,
+    lineScheduleDesc:    (id) => `Set a schedule to activate and deactivate ${id}. Only during this period changes will be made to the affected lines.`,
+    lineScheduleEdit:    (id) => `Edit schedule for ${id}`,
+    addSchedule:         'Add schedule',
+    activationSchedule:  'Activation schedule',
+    dateFrom:            'Date from',
+    dateTo:              'Date to',
+    timeFrom:            'Time from',
+    timeTo:              'Time to',
+    reason:              'Reason',
   },
 };
 function t(key, ...args) {
@@ -641,6 +720,7 @@ const lineColor = {
   'U1':'#6EB53B', 'U2':'#D4262A', 'U3':'#007A3D',
   'U4':'#F7D100', 'U5':'#6E3008', 'U6':'#8B0057',
   'U7':'#1265A8', 'U8':'#224F9F', 'U9':'#FA911C',
+  'U12':'#E3000F',
 };
 function lineBadge(line) {
   const bg = lineColor[line] || '#666';
@@ -651,17 +731,19 @@ function lineBadge(line) {
 // ── Data ───────────────────────────────────────────────────
 // Sound files (station-name + transfer types only here; special sounds referenced from Sonderansagen)
 const soundFiles = [
-  { id:'SND-001', filename:'alexanderplatz.mp3',             type:'station-name', size:'52 KB', uploaded:'02.11.2025' },
-  { id:'SND-002', filename:'hauptbahnhof.mp3',               type:'station-name', size:'61 KB', uploaded:'02.11.2025' },
-  { id:'SND-003', filename:'potsdamer_platz.mp3',            type:'station-name', size:'58 KB', uploaded:'02.11.2025' },
-  { id:'SND-004', filename:'brandenburger_tor.mp3',          type:'station-name', size:'72 KB', uploaded:'02.11.2025' },
-  { id:'SND-005', filename:'friedrichstrasse.mp3',           type:'station-name', size:'68 KB', uploaded:'02.11.2025' },
-  { id:'SND-006', filename:'zoologischer_garten.mp3',        type:'station-name', size:'74 KB', uploaded:'02.11.2025' },
-  { id:'SND-007', filename:'nollendorfplatz.mp3',            type:'station-name', size:'55 KB', uploaded:'10.11.2025' },
-  { id:'SND-010', filename:'umstieg_u2_u5_u8.mp3',           type:'transfer',     size:'89 KB', uploaded:'15.11.2025' },
-  { id:'SND-011', filename:'umstieg_u1_u3.mp3',              type:'transfer',     size:'72 KB', uploaded:'15.11.2025' },
-  { id:'SND-012', filename:'umstieg_sbahn.mp3',              type:'transfer',     size:'68 KB', uploaded:'15.11.2025' },
-  { id:'SND-013', filename:'umstieg_regional.mp3',           type:'transfer',     size:'81 KB', uploaded:'20.11.2025' },
+  { id:'SND-001', name:'Alexanderplatz',       filename:'alexanderplatz.mp3',      type:'station-name', lang:'de', size:'52 KB', uploaded:'02.11.2025' },
+  { id:'SND-002', name:'Hauptbahnhof',         filename:'hauptbahnhof.mp3',        type:'station-name', lang:'de', size:'61 KB', uploaded:'02.11.2025' },
+  { id:'SND-003', name:'Potsdamer Platz',      filename:'potsdamer_platz.mp3',     type:'station-name', lang:'de', size:'58 KB', uploaded:'02.11.2025' },
+  { id:'SND-004', name:'Brandenburger Tor',    filename:'brandenburger_tor.mp3',   type:'station-name', lang:'de', size:'72 KB', uploaded:'02.11.2025' },
+  { id:'SND-005', name:'Friedrichstraße',      filename:'friedrichstrasse.mp3',    type:'station-name', lang:'de', size:'68 KB', uploaded:'02.11.2025' },
+  { id:'SND-006', name:'Zoologischer Garten',  filename:'zoologischer_garten.mp3', type:'station-name', lang:'de', size:'74 KB', uploaded:'02.11.2025' },
+  { id:'SND-007', name:'Nollendorfplatz',      filename:'nollendorfplatz.mp3',     type:'station-name', lang:'de', size:'55 KB', uploaded:'10.11.2025' },
+  { id:'SND-010', name:'Umstieg U2/U5/U8',     filename:'umstieg_u2_u5_u8.mp3',    type:'transfer',     lang:'de', size:'89 KB', uploaded:'15.11.2025' },
+  { id:'SND-011', name:'Umstieg U1/U3',        filename:'umstieg_u1_u3.mp3',       type:'transfer',     lang:'de', size:'72 KB', uploaded:'15.11.2025' },
+  { id:'SND-012', name:'Umstieg S-Bahn',       filename:'umstieg_sbahn.mp3',       type:'transfer',     lang:'de', size:'68 KB', uploaded:'15.11.2025' },
+  { id:'SND-013', name:'Umstieg Regional',     filename:'umstieg_regional.mp3',    type:'transfer',     lang:'de', size:'81 KB', uploaded:'20.11.2025' },
+  { id:'SND-030', name:'Sommerfest 2026',      filename:'event_sommerfest.mp3',    type:'event',        lang:'de', size:'112 KB', uploaded:'01.07.2026' },
+  { id:'SND-031', name:'Silvester Nacht',      filename:'event_silvester.mp3',     type:'event',        lang:'de', size:'98 KB',  uploaded:'12.12.2025' },
 ];
 
 // Special-type sounds (for Sonderansagen only)
@@ -687,11 +769,29 @@ const displayTexts = [
   { id:'TXT-005', text:'Weiterfahrt' },
 ];
 
+// ── Line data ──────────────────────────────────────────────
+const lineData = [
+  { id:'U1',  fullName:'U1 Uhlandstraße – Warschauer Straße',      shortName:'U1',  longName:'U-Bahn Linie 1',           nameFile:'', ttsText:'U eins',   schedules:[] },
+  { id:'U2',  fullName:'U2 Ruhleben – Pankow',                    shortName:'U2',  longName:'U-Bahn Linie 2',           nameFile:'', ttsText:'U zwei',   schedules:[] },
+  { id:'U3',  fullName:'U3 Nollendorfplatz – Krumme Lanke',       shortName:'U3',  longName:'U-Bahn Linie 3',           nameFile:'', ttsText:'U drei',   schedules:[] },
+  { id:'U4',  fullName:'U4 Nollendorfplatz – Innsbrucker Platz',  shortName:'U4',  longName:'U-Bahn Linie 4',           nameFile:'', ttsText:'U vier',   schedules:[] },
+  { id:'U5',  fullName:'U5 Hauptbahnhof – Hönow',                 shortName:'U5',  longName:'U-Bahn Linie 5',           nameFile:'', ttsText:'U fünf',   schedules:[] },
+  { id:'U6',  fullName:'U6 Alt-Tegel – Alt-Mariendorf',           shortName:'U6',  longName:'U-Bahn Linie 6',           nameFile:'', ttsText:'U sechs',  schedules:[] },
+  { id:'U7',  fullName:'U7 Spandau – Rudow',                      shortName:'U7',  longName:'U-Bahn Linie 7',           nameFile:'', ttsText:'U sieben', schedules:[] },
+  { id:'U8',  fullName:'U8 Wittenau – Hermannstraße',             shortName:'U8',  longName:'U-Bahn Linie 8',           nameFile:'', ttsText:'U acht',   schedules:[] },
+  { id:'U9',  fullName:'U9 Osloer Straße – Rathaus Steglitz',     shortName:'U9',  longName:'U-Bahn Linie 9',           nameFile:'', ttsText:'U neun',   schedules:[] },
+  { id:'U12', fullName:'U12 Ruhleben – Warschauer Straße',        shortName:'U12', longName:'U-Bahn Linie 12 (Express)',nameFile:'', ttsText:'U zwölf',  schedules:[
+    { dateFrom:'2026-07-26', timeFrom:'01:00', dateTo:'2026-07-31', timeTo:'03:00', reason:'Sonderbetrieb Sommerfest' },
+  ]},
+];
+function getLine(id) { return lineData.find(l => l.id === id); }
+
 // transferAnnouncements: [{fileId, label, scheduleSlots}]
 // scheduleSlots: null = always active
 //                array of {day:'Mon'…'Sun', slots:[{start:'HH:MM',end:'HH:MM'}]}
 const stations = [
-  { id:'AL', name:'Alexanderplatz', shortName:'Alex',
+  { id:'AL', name:'Alexanderplatz', shortName:'Alex', longName:'Bahnhof Berlin Alexanderplatz',
+    coords:{ lat: 52.521992, lon: 13.413244 },
     lines: ['U2','U5','U8'],
     nameChanges:[{date:'2026-09-01', fullName:'Alexanderplatz (Umbau)', shortName:'Alex (U)', fileId:''}],
     directions:[{name:'Richtung Ruhleben'},{name:'Richtung Pankow'}],
@@ -718,7 +818,8 @@ const stations = [
     triggerArrival:150, triggerDeparture:80,
     neighborDist:{ prev:{name:'Klosterstraße', dist:370}, next:{name:'Schillingstraße', dist:420} } },
 
-  { id:'BR', name:'Brandenburger Tor', shortName:'Brand. Tor',
+  { id:'BR', name:'Brandenburger Tor', shortName:'Brand. Tor', longName:'U-Bahnhof Brandenburger Tor',
+    coords:{ lat: 52.516275, lon: 13.381741 },
     lines: ['U5'],
     nameChanges:[],
     directions:[{name:'Richtung Hönow'},{name:'Richtung Hauptbahnhof'}],
@@ -728,7 +829,8 @@ const stations = [
     triggerArrival:120, triggerDeparture:80,
     neighborDist:{ prev:{name:'Bundestag', dist:350}, next:{name:'Unter den Linden', dist:400} } },
 
-  { id:'BU', name:'Bundestag', shortName:'Bundestag',
+  { id:'BU', name:'Bundestag', shortName:'Bundestag', longName:'U-Bahnhof Bundestag',
+    coords:{ lat: 52.520556, lon: 13.375278 },
     lines: ['U5'],
     nameChanges:[],
     directions:[{name:'Richtung Hönow'},{name:'Richtung Hauptbahnhof'}],
@@ -738,7 +840,8 @@ const stations = [
     triggerArrival:0, triggerDeparture:0,
     neighborDist:{ prev:{name:'Hauptbahnhof', dist:500}, next:{name:'Brandenburger Tor', dist:350} } },
 
-  { id:'HA', name:'Hauptbahnhof', shortName:'Hbf',
+  { id:'HA', name:'Hauptbahnhof', shortName:'Hbf', longName:'U-Bahnhof Berlin Hauptbahnhof',
+    coords:{ lat: 52.525592, lon: 13.369545 },
     lines: ['U5'],
     nameChanges:[],
     directions:[{name:'Richtung Hönow'},{name:'Richtung Spandau'}],
@@ -751,7 +854,8 @@ const stations = [
     triggerArrival:180, triggerDeparture:100,
     neighborDist:{ prev:{name:'Turmstraße', dist:680}, next:{name:'Bundestag', dist:500} } },
 
-  { id:'FR', name:'Friedrichstraße', shortName:'Friedrichstr.',
+  { id:'FR', name:'Friedrichstraße', shortName:'Friedrichstr.', longName:'U-Bahnhof Friedrichstraße',
+    coords:{ lat: 52.519696, lon: 13.387571 },
     lines: ['U5','U6'],
     nameChanges:[],
     directions:[{name:'Richtung Hönow'},{name:'Richtung Spandau'}],
@@ -764,7 +868,8 @@ const stations = [
     triggerArrival:150, triggerDeparture:80,
     neighborDist:{ prev:{name:'Unter den Linden', dist:380}, next:{name:'Stadtmitte', dist:420} } },
 
-  { id:'PO', name:'Potsdamer Platz', shortName:'Potsd. Platz',
+  { id:'PO', name:'Potsdamer Platz', shortName:'Potsd. Platz', longName:'U-Bahnhof Potsdamer Platz',
+    coords:{ lat: 52.509167, lon: 13.376389 },
     lines: ['U2'],
     nameChanges:[{date:'2027-01-15', fullName:'Potsdamer Platz (ERP)', shortName:'Potsd. (ERP)', fileId:'SND-003'}],
     directions:[{name:'Richtung Ruhleben'},{name:'Richtung Pankow'}],
@@ -776,7 +881,8 @@ const stations = [
     triggerArrival:130, triggerDeparture:80,
     neighborDist:{ prev:{name:'Mendelssohn-Bartholdy-Park', dist:450}, next:{name:'Mohrenstraße', dist:350} } },
 
-  { id:'ZO', name:'Zoologischer Garten', shortName:'Zoo',
+  { id:'ZO', name:'Zoologischer Garten', shortName:'Zoo', longName:'U-Bahnhof Zoologischer Garten',
+    coords:{ lat: 52.506944, lon: 13.332778 },
     lines: ['U2','U9'],
     nameChanges:[],
     directions:[{name:'Richtung Ruhleben'},{name:'Richtung Pankow'}],
@@ -788,7 +894,8 @@ const stations = [
     triggerArrival:140, triggerDeparture:80,
     neighborDist:{ prev:{name:'Uhlandstraße', dist:390}, next:{name:'Wittenbergplatz', dist:480} } },
 
-  { id:'KU', name:'Kurfürstendamm', shortName:'Kudamm',
+  { id:'KU', name:'Kurfürstendamm', shortName:'Kudamm', longName:'U-Bahnhof Kurfürstendamm',
+    coords:{ lat: 52.503611, lon: 13.329167 },
     lines: ['U9'],
     nameChanges:[],
     directions:[{name:'Richtung Osloer Str.'},{name:'Richtung Rathaus Steglitz'}],
@@ -798,7 +905,8 @@ const stations = [
     triggerArrival:0, triggerDeparture:0,
     neighborDist:{ prev:{name:'Zoologischer Garten', dist:320}, next:{name:'Uhlandstraße', dist:280} } },
 
-  { id:'WI', name:'Wittenbergplatz', shortName:'Wittenberg.',
+  { id:'WI', name:'Wittenbergplatz', shortName:'Wittenberg.', longName:'U-Bahnhof Wittenbergplatz',
+    coords:{ lat: 52.500833, lon: 13.341111 },
     lines: ['U1','U2','U3'],
     nameChanges:[],
     directions:[{name:'Richtung Uhlandstraße'},{name:'Richtung Warschauer Str.'}],
@@ -808,7 +916,8 @@ const stations = [
     triggerArrival:120, triggerDeparture:80,
     neighborDist:{ prev:{name:'Kurfürstendamm', dist:480}, next:{name:'Zoologischer Garten', dist:490} } },
 
-  { id:'NO', name:'Nollendorfplatz', shortName:'Nollendorf.',
+  { id:'NO', name:'Nollendorfplatz', shortName:'Nollendorf.', longName:'U-Bahnhof Nollendorfplatz',
+    coords:{ lat: 52.499167, lon: 13.353889 },
     lines: ['U1','U2','U3','U4'],
     nameChanges:[],
     directions:[{name:'Richtung Uhlandstraße'},{name:'Richtung Warschauer Str.'}],
@@ -817,6 +926,28 @@ const stations = [
     transferAnnouncements:[],
     triggerArrival:0, triggerDeparture:0,
     neighborDist:{ prev:{name:'Wittenbergplatz', dist:320}, next:{name:'Kleistpark', dist:450} } },
+
+  { id:'WA', name:'Warschauer Straße', shortName:'Warschauer Str.', longName:'U-Bahnhof Warschauer Straße',
+    coords:{ lat: 52.505556, lon: 13.448611 },
+    lines: ['U12'],
+    nameChanges:[],
+    directions:[{name:'Richtung Ruhleben'},{name:'Richtung Uhlandstraße'}],
+    tracks:[{num:'1',exits:['left','right']},{num:'2',exits:['right','left']}],
+    stationNameFile:'',
+    transferAnnouncements:[],
+    triggerArrival:120, triggerDeparture:80,
+    neighborDist:{ prev:{name:'Schlesisches Tor', dist:560}, next:{name:'Ostkreuz', dist:780} } },
+
+  { id:'KA', name:'Kaiserdamm', shortName:'Kaiserdamm', longName:'U-Bahnhof Kaiserdamm',
+    coords:{ lat: 52.516667, lon: 13.294722 },
+    lines: ['U12'],
+    nameChanges:[],
+    directions:[{name:'Richtung Ruhleben'},{name:'Richtung Uhlandstraße'}],
+    tracks:[{num:'1',exits:['right','left']},{num:'2',exits:['left','right']}],
+    stationNameFile:'',
+    transferAnnouncements:[],
+    triggerArrival:100, triggerDeparture:80,
+    neighborDist:{ prev:{name:'Theodor-Heuss-Platz', dist:480}, next:{name:'Sophie-Charlotte-Platz', dist:410} } },
 ];
 
 // ── Helpers ────────────────────────────────────────────────
@@ -846,8 +977,12 @@ function setTransferMain(stationId, idx) {
 // ── Navigation ─────────────────────────────────────────────
 function navigate(v, id, line) {
   state.view = v;
-  state.selectedId = id || null;
-  state.selectedLine = line || null;
+  if (v === 'lineDetail') {
+    state.selectedLineId = id || null;
+  } else {
+    state.selectedId = id || null;
+    state.selectedLine = line || null;
+  }
   render();
 }
 function setLang(lang) {
@@ -859,6 +994,9 @@ function setLang(lang) {
   document.getElementById('nav-label-sounds').textContent = t('sounds');
   document.getElementById('nav-label-spc').textContent = t('spcPage');
   document.getElementById('nav-label-texts').textContent = t('texts');
+  document.getElementById('cfg-section-stations').textContent = t('stationConfigs');
+  document.getElementById('nav-label-lines').textContent = t('lines');
+  document.getElementById('nav-label-line-mgmt').textContent = t('lineMgmt');
   render();
 }
 function toggleCfgDropdown(e) {
@@ -872,7 +1010,7 @@ function closeCfgDropdown() {
 document.addEventListener('click', () => closeCfgDropdown());
 
 // ── Render ─────────────────────────────────────────────────
-const GD_VIEWS = ['stations','detail','sounds','spc','texts'];
+const GD_VIEWS = ['stations','detail','sounds','spc','texts','lines','lineDetail','lineMgmt'];
 function render() {
   // Highlight cfg trigger when any GD view is active
   const cfgActive = GD_VIEWS.includes(state.view);
@@ -880,15 +1018,282 @@ function render() {
   // Highlight active item inside dropdown
   document.querySelectorAll('.cfg-item[data-view]').forEach(el => {
     const v = el.dataset.view;
-    el.style.fontWeight = (v === state.view || (state.view === 'detail' && v === 'stations')) ? '500' : '';
-    el.style.color = (v === state.view || (state.view === 'detail' && v === 'stations')) ? 'var(--pri)' : '';
+    const active = v === state.view
+      || (state.view === 'detail'     && v === 'stations')
+      || (state.view === 'lineDetail' && v === 'lines');
+    el.style.fontWeight = active ? '500' : '';
+    el.style.color      = active ? 'var(--pri)' : '';
   });
   const c = document.getElementById('content');
-  if      (state.view === 'stations') c.innerHTML = renderStations();
-  else if (state.view === 'detail')   c.innerHTML = renderDetail();
-  else if (state.view === 'sounds')   c.innerHTML = renderSounds();
-  else if (state.view === 'spc')      c.innerHTML = renderSpcPage();
-  else if (state.view === 'texts')    c.innerHTML = renderTexts();
+  if      (state.view === 'stations')   c.innerHTML = renderStations();
+  else if (state.view === 'detail')     c.innerHTML = renderDetail();
+  else if (state.view === 'sounds')     c.innerHTML = renderSounds();
+  else if (state.view === 'spc')        c.innerHTML = renderSpcPage();
+  else if (state.view === 'texts')      c.innerHTML = renderTexts();
+  else if (state.view === 'lines')      c.innerHTML = renderLines();
+  else if (state.view === 'lineDetail') c.innerHTML = renderLineDetail();
+  else if (state.view === 'lineMgmt')   c.innerHTML = renderLineMgmt();
+}
+
+// ── Lines list ─────────────────────────────────────────────
+function renderLines() {
+  const rowsHtml = lineData.map(l => {
+    const hasFile = !!l.nameFile;
+    const fileIndicator = hasFile
+      ? `<span style="font-size:11px;color:var(--pri)">&#9835; ${t('lineNameFile')}</span>`
+      : `<span style="font-size:11px;color:var(--text-dis)">— ${state.lang === 'de' ? 'keine Audiodatei' : 'no audio file'}</span>`;
+    return `<tr class="row-link" onclick="navigate('lineDetail','${l.id}')">
+      <td>${lineBadge(l.id)}</td>
+      <td><span style="font-weight:500">${l.fullName}</span><br><span style="font-size:12px;color:var(--text-sec)">${l.longName}</span></td>
+      <td>${fileIndicator}</td>
+      <td style="color:var(--text-dis);font-size:16px">›</td>
+    </tr>`;
+  }).join('');
+  return `<div class="ph">
+    <div>
+      <h1>${t('lines')}</h1>
+      <div class="ph-sub">${t('linesSuffix', lineData.length)} · BVG J/JK</div>
+    </div>
+  </div>
+  <div class="tbl-wrap"><table>
+    <thead><tr>
+      <th style="width:60px">${t('colLine')}</th>
+      <th>${t('colName')}</th>
+      <th>${t('lineNameFile')}</th>
+      <th style="width:32px"></th>
+    </tr></thead>
+    <tbody>${rowsHtml}</tbody>
+  </table></div>`;
+}
+
+// ── Line detail ────────────────────────────────────────────
+function renderLineDetail() {
+  const l = getLine(state.selectedLineId);
+  if (!l) return '<div class="ph"><div><h1>—</h1></div></div>';
+
+  const stnNameFileOpts = (selId) => soundFiles
+    .filter(f => f.type === 'station-name')
+    .map(f => `<option value="${f.id}" ${f.id === selId ? 'selected' : ''}>${f.filename}</option>`)
+    .join('');
+
+  return `
+  <div class="breadcrumb">
+    <button class="bc-link" onclick="navigate('lines')">${t('lines')}</button>
+    <span class="bc-sep">/</span>
+    <span class="bc-current">${l.fullName}</span>
+    <span class="bc-sep">·</span>
+    ${lineBadge(l.id)}
+  </div>
+
+  <div class="ph">
+    <div>
+      <h1>${l.fullName}</h1>
+      <div style="display:flex;gap:8px;align-items:center;margin-top:5px">
+        ${lineBadge(l.id)}
+        <span style="font-size:12px;color:var(--text-dis)">${t('identifier')}</span>
+      </div>
+    </div>
+    <div class="ph-right">
+      <button class="btn btn-primary btn-sm" onclick="saveLineData('${l.id}')">${t('saveBtn')}</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">${t('lineName')}</span></div>
+    <div class="card-body">
+      <div class="frow">
+        <span class="flabel">${t('fullName')}</span>
+        <div class="fval"><input type="text" id="line-full-input" value="${l.fullName}" style="width:340px"></div>
+      </div>
+      <div class="frow">
+        <span class="flabel">${t('shortName')}</span>
+        <div class="fval"><input type="text" id="line-short-input" value="${l.shortName||''}" style="width:80px"></div>
+      </div>
+      <div class="frow">
+        <span class="flabel">${t('longName')}</span>
+        <div class="fval"><input type="text" id="line-long-input" value="${l.longName||''}" style="width:340px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><span class="card-title">${t('announcements')}</span></div>
+    <div class="card-body">
+      <div class="frow">
+        <span class="flabel">${t('lineNameFile')}</span>
+        <div class="fval" style="display:flex;gap:6px;align-items:center">
+          <select id="line-name-file">
+            <option value="">${t('notAssigned')}</option>
+            ${stnNameFileOpts(l.nameFile)}
+          </select>
+        </div>
+      </div>
+      <div class="frow top">
+        <span class="flabel">${t('ttsText')}</span>
+        <div class="fval">
+          <input type="text" id="line-tts-input" value="${l.ttsText||''}" style="width:260px" placeholder="${state.lang === 'de' ? 'z.B. U eins' : 'e.g. U one'}">
+          <div style="font-size:12px;color:var(--text-sec);margin-top:4px">${t('ttsHint')}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  `;
+}
+
+function saveLineData(id) {
+  const l = getLine(id);
+  const fi = document.getElementById('line-full-input');
+  const si = document.getElementById('line-short-input');
+  const li = document.getElementById('line-long-input');
+  const nf = document.getElementById('line-name-file');
+  const ti = document.getElementById('line-tts-input');
+  if (fi) l.fullName  = fi.value.trim() || l.fullName;
+  if (si) l.shortName = si.value.trim();
+  if (li) l.longName  = li.value.trim();
+  if (nf) l.nameFile  = nf.value;
+  if (ti) l.ttsText   = ti.value.trim();
+  const toast = document.getElementById('save-toast');
+  toast.textContent = t('savedMsg');
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 2500);
+}
+
+// ── Line schedule helpers ──────────────────────────────────
+function fmtLineSchedule(sch) {
+  const fmtDate = (d) => {
+    if (!d) return '—';
+    const [y, m, day] = d.split('-');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mDe = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+    const arr = state.lang === 'de' ? mDe : months;
+    return `${arr[parseInt(m)-1]} ${parseInt(day)}`;
+  };
+  return `${fmtDate(sch.dateFrom)}, ${sch.timeFrom||'—'} – ${fmtDate(sch.dateTo)}, ${sch.timeTo||'—'}`;
+}
+
+function lineScheduleModalHtml(lineId, sch) {
+  const isEdit = !!sch;
+  const title = isEdit ? t('lineScheduleEdit', lineId) : t('lineScheduleTitle', lineId);
+  const desc  = t('lineScheduleDesc', lineId);
+  return `
+    <div class="modal-title">${title}</div>
+    <p style="font-size:13px;color:var(--text-sec);margin:0 0 16px">${desc}</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div class="modal-field">
+        <label>${t('dateFrom')} *</label>
+        <input type="date" id="ls-date-from" value="${sch ? sch.dateFrom : ''}">
+        <div class="field-error" id="err-ls-date-from"></div>
+      </div>
+      <div class="modal-field">
+        <label>${t('timeFrom')} *</label>
+        <input type="time" id="ls-time-from" value="${sch ? sch.timeFrom : ''}">
+        <div class="field-error" id="err-ls-time-from"></div>
+      </div>
+      <div class="modal-field">
+        <label>${t('dateTo')} *</label>
+        <input type="date" id="ls-date-to" value="${sch ? sch.dateTo : ''}">
+        <div class="field-error" id="err-ls-date-to"></div>
+      </div>
+      <div class="modal-field">
+        <label>${t('timeTo')} *</label>
+        <input type="time" id="ls-time-to" value="${sch ? sch.timeTo : ''}">
+        <div class="field-error" id="err-ls-time-to"></div>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label>${t('reason')} *</label>
+      <input type="text" id="ls-reason" value="${sch ? sch.reason : ''}" placeholder="${state.lang === 'de' ? 'z.B. Sonderbetrieb' : 'e.g. Special service'}">
+      <div class="field-error" id="err-ls-reason"></div>
+    </div>`;
+}
+
+function showAddLineScheduleModal(lineId) {
+  openModal(lineScheduleModalHtml(lineId, null), () => {
+    const df = document.getElementById('ls-date-from');
+    const tf = document.getElementById('ls-time-from');
+    const dt = document.getElementById('ls-date-to');
+    const tt = document.getElementById('ls-time-to');
+    const re = document.getElementById('ls-reason');
+    let ok = true;
+    if (!df.value) { markInvalid('ls-date-from'); ok = false; }
+    if (!tf.value) { markInvalid('ls-time-from'); ok = false; }
+    if (!dt.value) { markInvalid('ls-date-to');   ok = false; }
+    if (!tt.value) { markInvalid('ls-time-to');   ok = false; }
+    if (!re.value.trim()) { markInvalid('ls-reason'); ok = false; }
+    if (!ok) return false;
+    const l = getLine(lineId);
+    l.schedules.push({ dateFrom: df.value, timeFrom: tf.value, dateTo: dt.value, timeTo: tt.value, reason: re.value.trim() });
+    closeModal();
+    navigate('lineMgmt');
+  });
+}
+
+function showEditLineScheduleModal(lineId, idx) {
+  const l = getLine(lineId);
+  const sch = l.schedules[idx];
+  openModal(lineScheduleModalHtml(lineId, sch), () => {
+    const df = document.getElementById('ls-date-from');
+    const tf = document.getElementById('ls-time-from');
+    const dt = document.getElementById('ls-date-to');
+    const tt = document.getElementById('ls-time-to');
+    const re = document.getElementById('ls-reason');
+    let ok = true;
+    if (!df.value) { markInvalid('ls-date-from'); ok = false; }
+    if (!tf.value) { markInvalid('ls-time-from'); ok = false; }
+    if (!dt.value) { markInvalid('ls-date-to');   ok = false; }
+    if (!tt.value) { markInvalid('ls-time-to');   ok = false; }
+    if (!re.value.trim()) { markInvalid('ls-reason'); ok = false; }
+    if (!ok) return false;
+    l.schedules[idx] = { dateFrom: df.value, timeFrom: tf.value, dateTo: dt.value, timeTo: tt.value, reason: re.value.trim() };
+    closeModal();
+    navigate('lineMgmt');
+  });
+}
+
+function deleteLineSchedule(lineId, idx) {
+  const l = getLine(lineId);
+  l.schedules.splice(idx, 1);
+  navigate('lineMgmt');
+}
+
+// ── Line management page ──────────────────────────────────
+function renderLineMgmt() {
+  const rowsHtml = lineData.map(l => {
+    const schedList = l.schedules.length > 0
+      ? l.schedules.map((sch, i) => `
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--divider)">
+          <span style="flex:1;font-size:13px">${fmtLineSchedule(sch)}</span>
+          ${sch.reason ? `<span style="font-size:12px;color:var(--text-sec);font-style:italic">${sch.reason}</span>` : ''}
+          <button class="btn btn-ghost btn-sm" onclick="showEditLineScheduleModal('${l.id}',${i})" title="${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}">✎</button>
+          <button class="btn-danger-ghost btn-sm" onclick="deleteLineSchedule('${l.id}',${i})" title="${state.lang === 'de' ? 'Löschen' : 'Delete'}">🗑</button>
+        </div>`).join('')
+      : '';
+    return `
+    <div class="card">
+      <div class="card-body">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="flex:0 0 auto">${lineBadge(l.id)}</div>
+          <div style="flex:1">
+            <p style="margin:0 0 12px;color:var(--text-sec);font-size:13px">${t('lineScheduleCard', l.id)}</p>
+            ${schedList ? `
+            <div style="margin-bottom:12px">
+              <div style="font-size:12px;font-weight:500;color:var(--text-sec);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px">${t('activationSchedule')}:</div>
+              ${schedList}
+            </div>` : ''}
+            <button class="btn btn-primary btn-sm" onclick="showAddLineScheduleModal('${l.id}')">${t('addSchedule').toUpperCase()}</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="ph">
+    <div>
+      <h1>${t('lineMgmt')}</h1>
+      <div class="ph-sub">${state.lang === 'de' ? 'Aktivieren und deaktivieren Sie Linien nach Zeitplan.' : 'Activate and deactivate lines by schedule.'}</div>
+    </div>
+  </div>
+  ${rowsHtml}`;
 }
 
 // ── Stations list ──────────────────────────────────────────
@@ -915,11 +1320,11 @@ function renderStations() {
       <td style="color:var(--text-dis);font-size:16px">›</td>
     </tr>`;
   }).join('');
-  const lineChips = ['all', ...allLines].map(l => {
-    const active = l === lf ? 'active' : '';
-    const label = l === 'all' ? (state.lang === 'de' ? 'Alle' : 'All') : l;
-    return `<span class="lf-chip ${active}" onclick="state.lineFilter='${l}';render()">${label}</span>`;
-  }).join('');
+  const allLineOptions = ['U1','U2','U3','U4','U5','U6','U7','U8','U9','U12'];
+  const lineSelectOpts = [
+    `<option value="all" ${lf === 'all' ? 'selected' : ''}>${state.lang === 'de' ? 'Alle Linien' : 'All lines'}</option>`,
+    ...allLineOptions.map(l => `<option value="${l}" ${lf === l ? 'selected' : ''}>${l}</option>`)
+  ].join('');
   return `<div class="ph">
     <div>
       <h1>${t('stations')}</h1>
@@ -929,7 +1334,9 @@ function renderStations() {
   <div class="search-row">
     <input class="search-input" type="text" placeholder="${t('searchPlaceholder')}" value="${state.search}" oninput="state.search=this.value;render()">
   </div>
-  <div class="line-filter">${lineChips}</div>
+  <div class="line-filter">
+    <select class="lf-select" onchange="state.lineFilter=this.value;render()">${lineSelectOpts}</select>
+  </div>
   <div class="tbl-wrap"><table>
     <thead><tr>
       <th>${t('colId')}</th>
@@ -1049,6 +1456,24 @@ function renderDetail() {
         <span class="flabel">${t('shortName')}</span>
         <div class="fval"><input type="text" id="station-short-input" value="${s.shortName||''}" style="width:160px" placeholder="${state.lang === 'de' ? 'z.B. Alex' : 'e.g. Alex'}"></div>
       </div>
+      <div class="frow">
+        <span class="flabel">${t('longName')}</span>
+        <div class="fval"><input type="text" id="station-long-input" value="${s.longName||''}" style="width:320px" placeholder="${state.lang === 'de' ? 'z.B. Bahnhof Berlin Alexanderplatz' : 'e.g. Berlin Alexanderplatz station'}"></div>
+      </div>
+      <div class="frow">
+        <span class="flabel">${t('coordinates')}</span>
+        <div class="fval" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:12px;color:var(--text-sec);min-width:72px">${t('coordLat')}</span>
+            <input type="number" id="station-lat-input" value="${s.coords ? s.coords.lat : ''}" step="0.000001" style="width:120px" placeholder="52.521992">
+          </div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span style="font-size:12px;color:var(--text-sec);min-width:72px">${t('coordLon')}</span>
+            <input type="number" id="station-lon-input" value="${s.coords ? s.coords.lon : ''}" step="0.000001" style="width:120px" placeholder="13.413244">
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="previewStationMap('${s.id}')">${t('coordPreview')}</button>
+        </div>
+      </div>
       <div class="frow top">
         <span class="flabel"></span>
         <div class="fval">
@@ -1144,12 +1569,31 @@ function removeTransferAnn(id, idx) {
   navigate('detail', id, state.selectedLine);
 }
 
+function previewStationMap(id) {
+  const s = getStation(id);
+  const latEl = document.getElementById('station-lat-input');
+  const lonEl = document.getElementById('station-lon-input');
+  const lat = latEl ? parseFloat(latEl.value) : (s.coords && s.coords.lat);
+  const lon = lonEl ? parseFloat(lonEl.value) : (s.coords && s.coords.lon);
+  if (!lat || !lon) return;
+  window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=17`, '_blank');
+}
+
 function saveStation(id) {
   const s = getStation(id);
   const ni = document.getElementById('station-name-input');
   if (ni) s.name = ni.value.trim() || s.name;
   const nsi = document.getElementById('station-short-input');
   if (nsi) s.shortName = nsi.value.trim();
+  const nli = document.getElementById('station-long-input');
+  if (nli) s.longName = nli.value.trim();
+  const latEl = document.getElementById('station-lat-input');
+  const lonEl = document.getElementById('station-lon-input');
+  if (latEl && lonEl) {
+    if (!s.coords) s.coords = { lat: null, lon: null };
+    s.coords.lat = latEl.value ? parseFloat(latEl.value) : null;
+    s.coords.lon = lonEl.value ? parseFloat(lonEl.value) : null;
+  }
 
   s.nameChanges = [];
   document.querySelectorAll('[id^="nc-date-"]').forEach((el, i) => {
@@ -1325,60 +1769,125 @@ function saveSchedule() {
 // ── Sound library (Tondateien) ─────────────────────────────
 function renderSounds() {
   const f = state.soundFilter;
-  const filtered = (f === 'all' ? soundFiles : soundFiles.filter(sf => sf.type === f));
-  const typeLabel = { 'station-name': t('typeStationName'), 'transfer': t('typeTransfer') };
-  const typeCls   = { 'station-name':'b-snd', 'transfer':'b-xfer' };
+  const q = (state.soundSearch || '').toLowerCase();
+  const filtered = soundFiles.filter(sf => {
+    const matchType = f === 'all' || sf.type === f;
+    const matchQ = !q || (sf.name || '').toLowerCase().includes(q) || sf.filename.toLowerCase().includes(q);
+    return matchType && matchQ;
+  });
+  const typeLabel = { 'station-name': t('typeStationName'), 'transfer': t('typeTransfer'), 'event': t('typeEvent') };
+  const typeCls   = { 'station-name':'b-snd', 'transfer':'b-xfer', 'event':'b-evt' };
+  const langLabel = { de: t('langDe'), en: t('langEn') };
 
   const rows = filtered.map(sf => {
     const usedStations = findStationsUsingSound(sf.id);
     const usedCount = usedStations.length;
     return `<tr>
-      <td style="font-family:monospace;font-size:13px">♪ ${sf.filename}</td>
+      <td style="font-weight:500">${sf.name || sf.filename}</td>
       <td><span class="badge ${typeCls[sf.type]}">${typeLabel[sf.type]}</span></td>
+      <td style="color:var(--text-sec)">${langLabel[sf.lang] || sf.lang || '—'}</td>
+      <td style="font-family:monospace;font-size:12px;color:var(--text-sec)">${sf.filename}</td>
       <td style="color:var(--text-sec)">${sf.size}</td>
       <td style="color:var(--text-sec)">${sf.uploaded}</td>
       <td style="color:var(--text-sec)">${usedCount > 0 ? t('fileUsedIn', usedCount) : '—'}</td>
       <td style="white-space:nowrap">
-        <button class="btn-danger-ghost btn-sm" onclick="deleteSoundFile('${sf.id}')">✕ ${state.lang === 'de' ? 'Löschen' : 'Delete'}</button>
+        <button class="btn-danger-ghost btn-sm" onclick="deleteSoundFile('${sf.id}')">✕</button>
       </td>
     </tr>`;
   }).join('');
-
-  const tabData = [
-    { val:'all',          label: t('tabAll') },
-    { val:'station-name', label: t('typeStationName') },
-    { val:'transfer',     label: t('typeTransfer') },
-  ];
 
   return `
   <div class="ph">
     <div>
       <h1>${t('sounds')}</h1>
-      <div class="ph-sub">${soundFiles.length} ${state.lang === 'de' ? 'Dateien' : 'files'} · ${state.lang === 'de' ? 'Stationsnamen & Umstiegsansagen' : 'Station names & transfer announcements'}</div>
+      <div class="ph-sub">${soundFiles.length} ${state.lang === 'de' ? 'Dateien' : 'files'}</div>
     </div>
     <div class="ph-right">
-      <button class="btn btn-primary btn-sm" onclick="alert('${state.lang === 'de' ? 'Datei-Upload' : 'File upload'}')">${t('uploadFile')}</button>
+      <button class="btn btn-primary btn-sm" onclick="showAddAudioModal()">+ ${t('addAudio')}</button>
     </div>
   </div>
-  <div class="upload-area" onclick="alert('${state.lang === 'de' ? 'Audiodateien hochladen' : 'Upload audio files'}')">
-    <div class="upload-ico">♪</div>
-    <div class="upload-text">${t('dropAudio')}</div>
-    <div class="upload-hint">${t('dropHint')}</div>
+  <div class="search-row" style="display:flex;gap:10px;align-items:center">
+    <input class="search-input" type="text" placeholder="${t('searchByName')}" value="${state.soundSearch}" oninput="state.soundSearch=this.value;render()" style="flex:1">
+    <select class="lf-select" onchange="state.soundFilter=this.value;render()" style="min-width:160px">
+      <option value="all"          ${f==='all'?'selected':''}>${t('tabAll')}</option>
+      <option value="station-name" ${f==='station-name'?'selected':''}>${t('typeStationName')}</option>
+      <option value="transfer"     ${f==='transfer'?'selected':''}>${t('typeTransfer')}</option>
+      <option value="event"        ${f==='event'?'selected':''}>${t('typeEvent')}</option>
+    </select>
   </div>
-  <div class="ftabs">${tabData.map(tab =>
-    `<div class="ftab ${f === tab.val ? 'active' : ''}" onclick="state.soundFilter='${tab.val}';navigate('sounds')">${tab.label}</div>`
-  ).join('')}</div>
   <div class="tbl-wrap"><table>
     <thead><tr>
-      <th>${t('colFilename')}</th>
+      <th>${t('colName')}</th>
       <th>${t('colType')}</th>
+      <th>${t('colLang')}</th>
+      <th>${t('colFilename')}</th>
       <th>${t('colSize')}</th>
       <th>${t('colUploaded')}</th>
       <th>${t('colUsedBy')}</th>
       <th></th>
     </tr></thead>
-    <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
+    <tbody>${rows || '<tr><td colspan="8" style="text-align:center;color:var(--text-dis);padding:32px">—</td></tr>'}</tbody>
   </table></div>`;
+}
+
+function showAddAudioModal() {
+  openModal(`
+    <div class="modal-title">${t('addAudio')}</div>
+    <div class="modal-field">
+      <label>${t('audioName')} *</label>
+      <input type="text" id="m-audio-name" placeholder="${state.lang === 'de' ? 'z.B. Alexanderplatz' : 'e.g. Alexanderplatz'}">
+      <div class="field-error" id="err-m-audio-name"></div>
+    </div>
+    <div class="modal-field">
+      <label>${t('audioType')} *</label>
+      <select id="m-audio-type">
+        <option value="">${state.lang === 'de' ? '— wählen —' : '— select —'}</option>
+        <option value="station-name">${t('typeStationName')}</option>
+        <option value="transfer">${t('typeTransfer')}</option>
+        <option value="event">${t('typeEvent')}</option>
+      </select>
+      <div class="field-error" id="err-m-audio-type"></div>
+    </div>
+    <div class="modal-field">
+      <label>${t('audioLang')} *</label>
+      <select id="m-audio-lang">
+        <option value="de">${t('langDe')}</option>
+        <option value="en">${t('langEn')}</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>${t('audioFile')} *</label>
+      <input type="text" id="m-audio-file" placeholder="datei.mp3">
+      <div class="field-error" id="err-m-audio-file"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('cancel')}</button>
+      <button class="btn btn-primary btn-sm" id="modal-save-btn">${t('saveEntry')}</button>
+    </div>`,
+    () => {
+      const name = document.getElementById('m-audio-name');
+      const type = document.getElementById('m-audio-type');
+      const lang = document.getElementById('m-audio-lang');
+      const file = document.getElementById('m-audio-file');
+      let ok = true;
+      if (!name.value.trim()) { markInvalid('m-audio-name'); ok = false; }
+      if (!type.value)         { markInvalid('m-audio-type'); ok = false; }
+      if (!file.value.trim()) { markInvalid('m-audio-file'); ok = false; }
+      if (!ok) return false;
+      const nextNum = soundFiles.length + 100;
+      const today = new Date().toLocaleDateString('de-DE');
+      soundFiles.push({
+        id: 'SND-' + String(nextNum).padStart(3,'0'),
+        name: name.value.trim(),
+        filename: file.value.trim(),
+        type: type.value,
+        lang: lang.value,
+        size: '—',
+        uploaded: today,
+      });
+      closeModal();
+      navigate('sounds');
+    });
 }
 
 function deleteSoundFile(id) {
