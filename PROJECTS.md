@@ -5,6 +5,29 @@
 
 ## 🔧 Active Projects
 
+### Settings & Billing Rework — 3 layouts (2026-07-31)
+- **Status:** 🚧 3 prototypes live, awaiting Ignat's pick
+- **Hub:** https://dashasyn.github.io/synder-prototypes/projects/settings-rework/
+- **Validator report:** https://dashasyn.github.io/synder-prototypes/projects/settings-rework/review.html
+- **Prototype A · One page + drawer:** `/projects/settings-rework/proto-a.html`
+- **Prototype B · Org/Billing split + plan matrix:** `/projects/settings-rework/proto-b.html`
+- **Prototype C · Overview + task panels + pending-changes cart:** `/projects/settings-rework/proto-c.html`
+- **Local files:** `projects/settings-rework/` (index, review, proto-a/b/c, synder.css, FUNCTIONS.md)
+- **Raw capture:** `.synder-state/settings-rework/` (capture.js/capture2.js/capture3.js, inventory.json, interactions.json, deep.json, 30+ screenshots, verify.js, regress.js, hero/)
+- **Scope:** Reworks 3 live pages — Organization settings `/organizations/settings`, Manage subscription `/organizations/settings/manageSubscription`, Update plan `/organizations/billing?action=UPGRADE` (titled "Choose your plan")
+- **Constraint from Ignat:** keep ALL functionality, all users see everything, use actual Synder components, start fresh (don't build on the June 10 manage-subscription variants)
+- **43 functions inventoried** and tagged with `data-fn` attributes; coverage verified by script, 43/43 in all three
+- **Live-page findings (CUR-1..8):** add-ons sold via 3 different UIs; no price before commit; 6 names for one job; 2 save models with no feedback; card + invoices both hand off to the same Stripe portal in a new tab; connection failures buried mid-page; single-item tab bar + nested tabs; feature comparison collapsed while 7 FAQs sit open
+- **Open spec questions (blocking real numbers):**
+  - **SPEC-1:** no add-on rate card exists in the UI — all prototype prices are PLACEHOLDERS
+  - **SPEC-2:** "all users see all functions" contradicts the live invite modal, which says Member has no billing access
+  - **SPEC-3:** Pro Standard↔Max is undocumented — inferred it raises included quantities
+  - **SPEC-4:** production has no responsive behaviour below 1280px; prototypes add breakpoints
+- **Bugs found & fixed during build (FIX-1..6):** quantity ratchet inflating price on plan round-trip; C's balance purchase bypassing its own cart; A's autocharge toggle hidden behind Save; B's table caption `display:none` (hidden from screen readers); C's cards not keyboard reachable; "99 included" seat sentinel leaking to UI
+- **Shared design rule adopted:** anything that costs money confirms explicitly; preferences save instantly and say so
+- **My recommendation:** B is strongest for the pricing-blindness problem (only layout where "what does this cost at my volume" is answerable without navigating); A is the smallest shippable change; C best if firms batch changes
+- **Next:** Ignat picks a direction → swap in real rates → validator round 2
+
 ### Smart Rules — Branch Engine Redesign (2026-06-03)
 - **Status:** 🚧 In progress — 2 prototypes built, awaiting Ignat feedback
 - **Jira:** DIS-336 — Introduce Smart Rules for Xero
