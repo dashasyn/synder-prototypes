@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype C — Status overview + task panels + pending-changes cart · Synder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="synder.css">
+<style>
+body { font-family: Roboto, sans-serif; background: var(--bg-page); color: var(--t-primary); margin: 0; font-size: 14px; }
+a { color: var(--t-link); }
+.proto-bar { background: var(--c-grey); color: #fff; padding: 8px 24px; font-size: 12px; display: flex; gap: 16px; align-items: center; }
+.proto-bar b { font-weight: 500; } .proto-bar a { color: #9DC2FF; } .proto-bar .spacer { flex: 1; }
+
+.shell { max-width: 1120px; margin: 0 auto; padding: 24px; }
+.pagehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+.pagehead h1 { font-size: 24px; font-weight: 500; margin: 0 0 4px; }
+.pagehead .sub { color: var(--t-secondary); font-size: 13px; }
+.orgpill { display: inline-flex; align-items: center; gap: 8px; background: var(--c-white); border: 1px solid var(--border-default);
+  border-radius: var(--r-sm); padding: 6px 10px; font-size: 13px; }
+.avatar { width: 24px; height: 24px; border-radius: var(--r-full); background: var(--c-primary); color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 500; }
+.mini { font-size: 11px; color: var(--t-secondary); }
+
+/* the cart button lives in the header */
+.cartbtn { position: relative; }
+.cartbtn .cnt { position: absolute; top: -6px; right: -6px; background: var(--c-yellow); color: #fff; font-size: 10px;
+  font-weight: 700; border-radius: var(--r-pill); padding: 1px 6px; }
+
+/* ══ status card grid ══════════════════════════════════════ */
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 14px; }
+.scard { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--r-lg); padding: 18px 20px;
+  cursor: pointer; transition: box-shadow .15s, border-color .15s; display: flex; flex-direction: column; min-height: 168px; }
+.scard:hover { border-color: var(--c-primary-50); box-shadow: var(--shadow-card); }
+.scard:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
+.scard.attention { border-left: 3px solid var(--c-red); }
+.scard.pending { border-left: 3px solid var(--c-yellow); }
+.scard .hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.scard h2 { font-size: 15px; font-weight: 500; margin: 0; }
+.scard .desc { font-size: 12px; color: var(--t-secondary); margin: 0 0 12px; line-height: 1.5; }
+.scard .facts { flex: 1; }
+.scard .fact { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 4px 0; }
+.scard .fact span:first-child { color: var(--t-secondary); }
+.scard .fact span:last-child { font-weight: 500; text-align: right; }
+.scard .foot { margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.scard .open { font-size: 13px; color: var(--c-primary); font-weight: 500; }
+.scard .open::after { content: " →"; }
+.spend { font-size: 11px; color: var(--c-yellow); font-weight: 500; }
+
+/* ══ side panel ════════════════════════════════════════════ */
+.scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); opacity: 0; pointer-events: none; transition: .2s; z-index: 50; }
+.scrim.on { opacity: 1; pointer-events: auto; }
+.panel { position: fixed; top: 0; right: 0; bottom: 0; width: 620px; max-width: 96vw; background: var(--bg-surface); z-index: 51;
+  transform: translateX(100%); transition: transform .22s ease; display: flex; flex-direction: column; box-shadow: var(--shadow-modal); }
+.panel.on { transform: none; }
+.panel > header { padding: 18px 24px; border-bottom: 1px solid var(--border-default); display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.panel > header h2 { margin: 0 0 2px; font-size: 18px; font-weight: 500; }
+.panel > header .ph { font-size: 12px; color: var(--t-secondary); }
+.panel .body { flex: 1; overflow: auto; padding: 20px 24px 24px; }
+.panel > footer { border-top: 1px solid var(--border-default); padding: 14px 24px; background: var(--c-grey-5);
+  display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.panel > footer .fl { font-size: 12px; color: var(--t-secondary); }
+
+/* wizard steps inside the billing panel */
+.steps { display: flex; gap: 6px; margin-bottom: 18px; }
+.steps button { flex: 1; border: 0; background: var(--c-grey-10); font: inherit; font-size: 12px; padding: 8px 10px; border-radius: var(--r-sm);
+  cursor: pointer; color: var(--t-secondary); text-align: left; }
+.steps button.on { background: var(--c-primary); color: #fff; font-weight: 500; }
+.steps button.done { background: var(--c-primary-10); color: var(--c-primary); }
+.step { display: none; } .step.on { display: block; }
+
+.plans { display: grid; gap: 10px; }
+.planrow { border: 1px solid var(--border-default); border-radius: var(--r-md); padding: 14px 16px; cursor: pointer;
+  display: grid; grid-template-columns: 20px 1fr auto; gap: 14px; align-items: start; }
+.planrow:hover { border-color: var(--c-primary-50); }
+.planrow.sel { border: 2px solid var(--c-primary); background: var(--c-primary-5); padding: 13px 15px; }
+.planrow .radio { width: 16px; height: 16px; border-radius: var(--r-full); border: 2px solid var(--c-grey-30); margin-top: 2px; }
+.planrow.sel .radio { border-color: var(--c-primary); background: radial-gradient(var(--c-primary) 0 45%, #fff 50%); }
+.planrow .pn { font-size: 15px; font-weight: 500; }
+.planrow .pd { font-size: 12px; color: var(--t-secondary); margin-top: 3px; line-height: 1.5; }
+.planrow .pp { text-align: right; font-size: 18px; font-weight: 500; white-space: nowrap; }
+.planrow .pp s { display: block; font-size: 12px; font-weight: 400; color: var(--t-muted); }
+.planrow .pp small { display: block; font-size: 11px; color: var(--t-secondary); font-weight: 400; }
+.planrow .tag { display: inline-block; background: var(--c-primary); color: #fff; font-size: 10px; font-weight: 500; padding: 1px 7px; border-radius: var(--r-pill); margin-left: 6px; }
+.segmented { display: inline-flex; border: 1px solid var(--border-default); border-radius: var(--r-sm); overflow: hidden; margin-top: 8px; }
+.segmented button { border: 0; background: #fff; font: inherit; font-size: 11px; padding: 3px 10px; cursor: pointer; color: var(--t-secondary); }
+.segmented button.on { background: var(--c-primary); color: #fff; }
+
+.arow { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--c-grey-10); }
+.arow:last-child { border-bottom: none; }
+.arow .an { font-size: 13px; font-weight: 500; }
+.arow .ad { font-size: 12px; color: var(--t-secondary); margin-top: 2px; line-height: 1.45; }
+.arow .aprice { font-size: 13px; text-align: right; min-width: 90px; font-weight: 500; }
+.arow .aprice small { display: block; color: var(--t-secondary); font-size: 11px; font-weight: 400; }
+.stepper { display: inline-flex; align-items: center; gap: 4px; }
+.stepper button { width: 26px; height: 26px; border-radius: var(--r-full); border: 1px solid var(--c-primary); background: #fff;
+  color: var(--c-primary); font-size: 16px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.stepper button:disabled { border-color: var(--c-grey-20); color: var(--c-grey-30); cursor: not-allowed; }
+.stepper .val { min-width: 60px; text-align: center; font-size: 13px; font-weight: 500; }
+.ok { color: var(--c-green); font-weight: 700; } .no { color: var(--c-grey-30); }
+
+/* review / diff */
+.diff { border: 1px solid var(--border-default); border-radius: var(--r-md); overflow: hidden; }
+.diff .dh, .diff .dr { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr; gap: 8px; padding: 10px 14px; align-items: center; }
+.diff .dh { background: var(--c-grey-5); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--t-secondary); font-weight: 500; }
+.diff .dr { border-top: 1px solid var(--c-grey-10); font-size: 13px; }
+.diff .dr .n { text-align: right; }
+.diff .dr.chg { background: var(--c-yellow-light); }
+.diff .dr.tot { border-top: 1px solid var(--border-default); font-weight: 500; background: var(--c-grey-5); }
+.arrow { color: var(--t-secondary); text-align: center; }
+
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field label { font-size: 12px; font-weight: 500; }
+.field .help { font-size: 11px; color: var(--t-secondary); }
+.formgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 14px; }
+.span2 { grid-column: span 2; }
+select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236B778C'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; padding-right: 28px; }
+.tgl { position: relative; display: inline-block; width: 36px; height: 20px; flex: 0 0 auto; }
+.tgl input { opacity: 0; width: 0; height: 0; }
+.tgl span { position: absolute; inset: 0; background: var(--c-grey-30); border-radius: 10px; transition: .15s; cursor: pointer; }
+.tgl span::before { content: ""; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: #fff; border-radius: var(--r-full); transition: .15s; }
+.tgl input:checked + span { background: var(--c-primary); }
+.tgl input:checked + span::before { transform: translateX(16px); }
+.tglrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--c-grey-10); }
+.tglrow:last-child { border-bottom: none; }
+.tglrow .lbl { font-size: 13px; } .tglrow .lbl small { display: block; color: var(--t-secondary); font-size: 12px; margin-top: 2px; }
+
+.icard { border: 1px solid var(--border-default); border-radius: var(--r-md); padding: 14px 16px; position: relative; margin-bottom: 10px; }
+.icard.warn { border-color: var(--c-yellow); background: var(--c-yellow-light); }
+.icard.err { border-color: var(--c-red); background: var(--c-red-light); }
+.icard .top { display: flex; gap: 10px; margin-bottom: 10px; }
+.icard .logo { width: 28px; height: 28px; border-radius: var(--r-sm); display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; flex: 0 0 auto; }
+.icard .name { font-weight: 500; font-size: 13px; } .icard .meta { color: var(--t-secondary); font-size: 12px; }
+.icard .acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.icard .kebab { position: absolute; top: 10px; right: 10px; }
+.addcard { border: 1px dashed var(--c-primary-50); border-radius: var(--r-md); background: var(--c-primary-5); color: var(--c-primary);
+  display: grid; place-items: center; text-align: center; font-size: 13px; font-weight: 500; cursor: pointer; padding: 20px; }
+
+details.acc { border: 1px solid var(--border-default); border-radius: var(--r-md); margin-top: 12px; }
+details.acc > summary { padding: 12px 16px; cursor: pointer; font-size: 13px; font-weight: 500; list-style: none; display: flex; justify-content: space-between; }
+details.acc > summary::after { content: "⌄"; color: var(--t-secondary); }
+details.acc[open] > summary { border-bottom: 1px solid var(--border-default); }
+details.acc .inner { padding: 6px 16px 14px; }
+.cmptable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cmptable th { text-align: left; padding: 6px 6px; color: var(--t-secondary); font-weight: 500; border-bottom: 1px solid var(--border-default); }
+.cmptable td { padding: 6px; border-bottom: 1px solid var(--c-grey-10); }
+.cmptable td.c { text-align: center; }
+.faqlist details { border-bottom: 1px solid var(--c-grey-10); padding: 10px 0; }
+.faqlist summary { font-size: 13px; font-weight: 500; cursor: pointer; }
+.faqlist p { font-size: 12px; color: var(--t-secondary); line-height: 1.6; margin: 8px 0 0; }
+.ext::after { content: "↗"; font-size: 11px; margin-left: 4px; color: var(--t-secondary); }
+.toast { position: fixed; right: 24px; bottom: 24px; z-index: 60; background: var(--c-grey); color: #fff; padding: 12px 16px;
+  border-radius: var(--r-sm); font-size: 13px; box-shadow: var(--shadow-modal); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; max-width: 340px; }
+.toast.on { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <b>Prototype C</b> — Status overview, focused task panels, one pending-changes cart
+  <span class="spacer"></span>
+  <a href="index.html">← All prototypes</a>
+</div>
+
+<div class="shell">
+  <div class="pagehead">
+    <div>
+      <h1>Per transaction test</h1>
+      <div class="sub">Organization overview — open a card to change anything. Nothing is charged until you review.</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div class="orgpill"><span class="avatar">PE</span> Manager</div>
+      <div class="cartbtn">
+        <button class="btn btn-outlined" id="cartBtn" onclick="openPanel('pReview')" disabled>Pending changes</button>
+        <span class="cnt" id="cartCnt" style="display:none">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-error" style="margin-bottom:16px">
+    <div style="flex:1"><strong>2 connections need attention.</strong> Sales data isn't reaching your books right now.
+      <div style="margin-top:6px"><a href="#" onclick="openPanel('pInteg');return false">Fix Stripe</a> ·
+        <a href="#" onclick="openPanel('pAcct');return false">Fix QuickBooks</a></div></div>
+  </div>
+
+  <div class="grid">
+    <!-- PLAN -->
+    <div class="scard" id="cPlan" onclick="openPanel('pPlan')">
+      <div class="hd"><h2>Plan &amp; add-ons</h2><span class="chip chip-success">Active</span></div>
+      <p class="desc">What you're subscribed to and every quantity you can change.</p>
+      <div class="facts">
+        <div class="fact"><span>Plan</span><span data-fn="O1 S1">Essential, yearly</span></div>
+        <div class="fact"><span>You pay</span><span data-fn="S1">$92.00 /mo</span></div>
+        <div class="fact"><span>Transactions</span><span>1,000 /mo</span></div>
+        <div class="fact"><span>Renews</span><span data-fn="S5">27 Jul 2027</span></div>
+      </div>
+      <div class="foot"><span class="open" data-fn="O2 S6 P1">Change plan &amp; add-ons</span><span class="spend" id="planPend"></span></div>
+    </div>
+
+    <!-- PAYMENT -->
+    <div class="scard" onclick="openPanel('pPay')">
+      <div class="hd"><h2>Payment &amp; invoices</h2><span class="chip chip-neutral">Stripe</span></div>
+      <p class="desc">Card on file, receipts and payment history.</p>
+      <div class="facts">
+        <div class="fact"><span>Card</span><span data-fn="S3">•••• 4242</span></div>
+        <div class="fact"><span>Next charge</span><span>$1,104.00 · 27 Jul 2027</span></div>
+        <div class="fact"><span>Billing address</span><span>San Pablo, CA</span></div>
+      </div>
+      <div class="foot"><span class="open">Manage payment</span></div>
+    </div>
+
+    <!-- BALANCE -->
+    <div class="scard" onclick="openPanel('pBal')">
+      <div class="hd"><h2>Sync balance</h2><span class="chip chip-primary">1,000 left</span></div>
+      <p class="desc">Transactions available this month, plus your historical pool.</p>
+      <div class="facts">
+        <div class="fact"><span>Monthly balance</span><span>1,000</span></div>
+        <div class="fact"><span>Historical pool</span><span data-fn="S13">0</span></div>
+        <div class="fact"><span>Autocharge</span><span data-fn="S9">On</span></div>
+      </div>
+      <div class="foot"><span class="open">Top up balance</span></div>
+    </div>
+
+    <!-- INTEGRATIONS -->
+    <div class="scard attention" id="cInteg" onclick="openPanel('pInteg')">
+      <div class="hd"><h2>Integrations</h2><span class="chip chip-warning">1 broken</span></div>
+      <p class="desc">Sales platforms and payment processors feeding this organization.</p>
+      <div class="facts">
+        <div class="fact"><span>mzkt.by (Stripe)</span><span style="color:var(--c-yellow)" data-fn="O3">Connection lost</span></div>
+        <div class="fact"><span>Slots used</span><span>1 of unlimited</span></div>
+      </div>
+      <div class="foot"><span class="open">Manage integrations</span></div>
+    </div>
+
+    <!-- ACCOUNTING -->
+    <div class="scard attention" onclick="openPanel('pAcct')">
+      <div class="hd"><h2>Accounting company</h2><span class="chip chip-error">Disconnected</span></div>
+      <p class="desc">Where Synder posts your books. One platform per organization.</p>
+      <div class="facts">
+        <div class="fact"><span>Company</span><span data-fn="O7">Sandbox Company_US_1</span></div>
+        <div class="fact"><span>Platform</span><span>QuickBooks Online</span></div>
+        <div class="fact"><span>Since</span><span>Disconnected 3 Jul 2026</span></div>
+      </div>
+      <div class="foot"><span class="open">Reconnect</span></div>
+    </div>
+
+    <!-- PEOPLE -->
+    <div class="scard" onclick="openPanel('pUsers')">
+      <div class="hd"><h2>People</h2><span class="chip chip-neutral">1 of 2 seats</span></div>
+      <p class="desc">Who can access this organization, and the firm managing it.</p>
+      <div class="facts">
+        <div class="fact"><span>You</span><span data-fn="O10">Manager · Payer</span></div>
+        <div class="fact"><span>Seats free</span><span>1</span></div>
+        <div class="fact"><span>Accounting firm</span><span>Not linked</span></div>
+      </div>
+      <div class="foot"><span class="open">Manage people</span></div>
+    </div>
+
+    <!-- DETAILS -->
+    <div class="scard" id="cDet" onclick="openPanel('pDet')">
+      <div class="hd"><h2>Details</h2></div>
+      <p class="desc">Legal name and address — shown on invoices, used for tax.</p>
+      <div class="facts">
+        <div class="fact"><span>Name</span><span data-fn="O14" id="fName">Per transaction test</span></div>
+        <div class="fact"><span>Address</span><span data-fn="O15">123 Sierra Way</span></div>
+        <div class="fact"><span>Location</span><span>San Pablo, CA 87999, US</span></div>
+      </div>
+      <div class="foot"><span class="open">Edit details</span><span class="spend" id="detPend"></span></div>
+    </div>
+
+    <!-- NOTIFICATIONS -->
+    <div class="scard" onclick="openPanel('pNotif')">
+      <div class="hd"><h2>Notifications</h2></div>
+      <p class="desc">What Synder emails you about this organization.</p>
+      <div class="facts">
+        <div class="fact"><span>Activity summary</span><span data-fn="O16" id="fFreq">Weekly</span></div>
+        <div class="fact"><span>Reconciliation reminder</span><span data-fn="O17" id="fRem">On</span></div>
+      </div>
+      <div class="foot"><span class="open">Edit notifications</span></div>
+    </div>
+
+    <!-- HELP / DANGER -->
+    <div class="scard" onclick="openPanel('pHelp')">
+      <div class="hd"><h2>Billing help</h2></div>
+      <p class="desc">Coupons, custom plans, common questions, and cancelling.</p>
+      <div class="facts">
+        <div class="fact"><span>Coupon</span><span data-fn="P11">None applied</span></div>
+        <div class="fact"><span>Free transactions</span><span data-fn="S14">Referral programme</span></div>
+        <div class="fact"><span>Subscription</span><span>Active till 27 Jul 2027</span></div>
+      </div>
+      <div class="foot"><span class="open">Open</span></div>
+    </div>
+  </div>
+
+  <p class="mini" style="text-align:center;padding:24px 0 40px">Prototype C · Synder v11.7.54 data · pricing figures are placeholders, not production rates</p>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeAll()"></div>
+
+<!-- ══ PANEL: PLAN & ADD-ONS (3 steps) ═══════════════════════ -->
+<aside class="panel" id="pPlan">
+  <header>
+    <div><h2>Plan &amp; add-ons</h2><div class="ph">Pick a plan, set your quantities, review once.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button>
+  </header>
+  <div class="body">
+    <div class="steps">
+      <button class="on" id="st1" onclick="step(1)">1 · Plan</button>
+      <button id="st2" onclick="step(2)">2 · Quantities</button>
+      <button id="st3" onclick="step(3)">3 · Review</button>
+    </div>
+
+    <div class="step on" id="sp1">
+      <div class="plans">
+        <div class="planrow sel" data-plan="essential" onclick="pickPlan('essential')">
+          <div class="radio"></div>
+          <div><div class="pn">Essential<span class="tag">Your plan</span></div>
+            <div class="pd">1,000 transactions · 1 user · email support · unlimited integrations</div></div>
+          <div class="pp"><s>$115</s>$92<small>/mo yearly</small></div>
+        </div>
+        <div class="planrow" data-plan="pro" onclick="pickPlan('pro')">
+          <div class="radio"></div>
+          <div><div class="pn">Pro</div>
+            <div class="pd">10,000 transactions · 2 users · 3 smart rules · NetSuite · premium integrations · assisted setup</div>
+            <div class="segmented" onclick="event.stopPropagation()" data-fn="P3">
+              <button class="on" id="sStd" onclick="proTier('std')">Standard</button>
+              <button id="sMax" onclick="proTier('max')">Max</button>
+            </div>
+          </div>
+          <div class="pp" id="proPP"><s>$275</s>$220<small>/mo yearly</small></div>
+        </div>
+        <div class="planrow" data-plan="premium" onclick="pickPlan('premium')">
+          <div class="radio"></div>
+          <div><div class="pn">Premium</div>
+            <div class="pd">Unlimited users · 10 free smart rules · dedicated server · Fast Track support</div></div>
+          <div class="pp" style="font-size:14px">Custom<small>we quote you</small></div>
+        </div>
+      </div>
+      <details class="acc" data-fn="P9" open>
+        <summary>Compare all features</summary>
+        <div class="inner">
+          <table class="cmptable">
+            <thead><tr><th>Feature</th><th class="c">Essential</th><th class="c">Pro</th><th class="c">Premium</th></tr></thead>
+            <tbody id="cmpBody"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
+    <div class="step" id="sp2">
+      <p class="mini" style="margin:0 0 4px">Every quantity you can buy, in one list. What your plan already covers shows as <span class="ok">included</span>.</p>
+      <div id="addons" data-fn="P2 S10 S11 S12"></div>
+      <div class="alert alert-info" style="margin-top:14px;font-size:12px">
+        Extra seats here are the same seats you assign in <a href="#" onclick="closeAll();openPanel('pUsers');return false">People</a>.
+      </div>
+    </div>
+
+    <div class="step" id="sp3">
+      <div class="diff" id="diffBox" data-fn="P7"></div>
+      <p class="mini" style="margin-top:12px">Whatever's left on your current plan is credited against the new charge — you only pay the difference.
+        Tax is added at checkout based on your billing address.</p>
+    </div>
+  </div>
+  <footer>
+    <span class="fl" id="planFoot">Essential · $92.00 /mo</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outlined" onclick="closeAll()" data-fn="P4">Keep current plan</button>
+      <button class="btn btn-primary" id="planNext" onclick="planNext()" data-fn="P5">Next: quantities</button>
+    </div>
+  </footer>
+</aside>
+
+<!-- ══ PANEL: PAYMENT ════════════════════════════════════════ -->
+<aside class="panel" id="pPay">
+  <header><div><h2>Payment &amp; invoices</h2><div class="ph">Card, receipts and payment history.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <div class="icard" style="margin-bottom:16px" data-fn="S3">
+      <div class="top"><div class="logo" style="background:var(--c-grey-50)">▭</div>
+        <div><div class="name">Visa •••• 4242</div><div class="meta">Expires 04/2029 · default</div></div></div>
+      <div class="acts">
+        <a class="btn btn-outlined ext" href="#" onclick="stripe('payment method');return false" data-fn="S4 P8">Change card</a>
+      </div>
+    </div>
+
+    <h3 style="font-size:13px;font-weight:500;margin:0 0 8px">What you're paying for</h3>
+    <div class="diff" data-fn="S2">
+      <div class="dh"><span>Item</span><span class="n">Qty</span><span class="n">Unit</span><span class="n">Amount</span></div>
+      <div class="dr"><span>Essential plan</span><span class="n">1</span><span class="n">$115.00</span><span class="n">$115.00</span></div>
+      <div class="dr"><span>Monthly transactions</span><span class="n">1,000</span><span class="n">included</span><span class="n">$0.00</span></div>
+      <div class="dr"><span>Additional users</span><span class="n">1</span><span class="n">included</span><span class="n">$0.00</span></div>
+      <div class="dr" style="color:var(--c-green)"><span>Annual billing discount</span><span class="n">—</span><span class="n">−20%</span><span class="n">−$23.00</span></div>
+      <div class="dr tot"><span>Total per month</span><span class="n"></span><span class="n"></span><span class="n">$92.00 USD</span></div>
+    </div>
+    <p class="mini" style="margin-top:8px" data-fn="S5">Next charge <b>$1,104.00</b> on <b>27 Jul 2027</b> (12 months up front).</p>
+
+    <h3 style="font-size:13px;font-weight:500;margin:20px 0 6px">Invoices</h3>
+    <p class="mini" style="margin:0 0 10px">Payment history and PDF invoices are hosted by Stripe, so they open in a new tab.</p>
+    <a class="btn btn-outlined ext" href="#" onclick="stripe('invoice history');return false" data-fn="S8">Open billing portal</a>
+
+    <h3 style="font-size:13px;font-weight:500;margin:20px 0 6px">Billing address</h3>
+    <p class="mini" style="margin:0 0 10px">123 Sierra Way, San Pablo, CA 87999, United States — tax is calculated from this address.</p>
+    <button class="btn btn-text" style="padding-left:0" onclick="closeAll();openPanel('pDet')">Edit in Details →</button>
+  </div>
+  <footer><span class="fl">Managed together with Stripe</span><button class="btn btn-outlined" onclick="closeAll()">Close</button></footer>
+</aside>
+
+<!-- ══ PANEL: BALANCE ════════════════════════════════════════ -->
+<aside class="panel" id="pBal">
+  <header><div><h2>Sync balance</h2><div class="ph">What's left this month, and your historical pool.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div style="border:1px solid var(--border-default);border-radius:var(--r-md);padding:16px">
+        <div class="mini">Monthly balance</div>
+        <div style="font-size:26px;font-weight:500">1,000</div>
+        <div class="mini">Resets 27 Aug 2026</div>
+      </div>
+      <div style="border:1px solid var(--border-default);border-radius:var(--r-md);padding:16px">
+        <div class="mini">Historical pool</div>
+        <div style="font-size:26px;font-weight:500" data-fn="S13">0</div>
+        <div class="mini">Never expires</div>
+      </div>
+    </div>
+
+    <div class="tglrow" data-fn="S9">
+      <div class="lbl">Autocharge when the balance runs out<small>Keeps syncing instead of pausing. You're charged per block of transactions at your plan's rate.</small></div>
+      <label class="tgl"><input type="checkbox" checked onchange="toast(this.checked ? 'Autocharge on.' : 'Autocharge off — syncing pauses when the balance empties.')"><span></span></label>
+    </div>
+
+    <h3 style="font-size:13px;font-weight:500;margin:20px 0 4px">Buy historical transactions</h3>
+    <p class="mini" style="margin:0 0 10px">Used only for back-dated syncs, once the monthly balance is empty.</p>
+    <div class="arow" style="border:1px solid var(--border-default);border-radius:var(--r-md);padding:12px 14px" data-fn="S13">
+      <div><div class="an">Historical transactions</div><div class="ad">$30.00 per 1,000 · one-time</div></div>
+      <div class="stepper"><button onclick="histQty(-1)">−</button><span class="val" id="histVal">1,000</span><button onclick="histQty(1)">＋</button></div>
+      <div class="aprice" id="histPrice">$30.00</div>
+    </div>
+
+    <h3 style="font-size:13px;font-weight:500;margin:20px 0 4px">Or earn them free</h3>
+    <p class="mini" style="margin:0 0 10px">Refer Synder and top up your balance at no cost.</p>
+    <a class="btn btn-text ext" style="padding-left:0" href="#" onclick="ext('synder.com/make-more-credits');return false" data-fn="S14">How the referral programme works</a>
+
+    <div class="alert alert-info" style="margin-top:16px;font-size:12px">
+      Need a bigger monthly allowance rather than a one-off top-up?
+      <a href="#" onclick="closeAll();openPanel('pPlan');step(2);return false">Raise your monthly transactions</a> instead — it's cheaper per transaction.
+    </div>
+  </div>
+  <footer><span class="fl" id="histFoot">$30.00 one-time</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outlined" onclick="closeAll()">Close</button>
+      <button class="btn btn-primary" onclick="addBalance()">Add to pending changes</button>
+    </div></footer>
+</aside>
+
+<!-- ══ PANEL: INTEGRATIONS ═══════════════════════════════════ -->
+<aside class="panel" id="pInteg">
+  <header><div><h2>Integrations</h2><div class="ph">Sales platforms and payment processors feeding this organization.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <div class="icard warn" data-fn="O3">
+      <button class="btn-icon kebab" onclick="menu()" data-fn="O6">⋯</button>
+      <div class="top"><div class="logo" style="background:#635BFF">S</div>
+        <div><div class="name">mzkt.by (Stripe)</div><div class="meta">Europe/Minsk · last successful import 4 Jul 2026</div></div></div>
+      <p class="mini" style="margin:0 0 10px">Stripe revoked the token, so nothing has imported for 27 days. Reconnecting resumes from where it stopped — no data is lost.</p>
+      <div class="acts"><span class="chip chip-warning">Connection lost</span>
+        <button class="btn btn-primary" onclick="toast('Redirecting to Stripe to re-authorize…')" data-fn="O4">Reconnect</button></div>
+    </div>
+    <div class="addcard" onclick="toast('Integration picker — 30+ platforms')" data-fn="O5">＋ Add integration<div class="mini" style="margin-top:4px">Shopify, Amazon, PayPal, Square and 30+ more</div></div>
+  </div>
+  <footer><span class="fl">Unlimited slots on your plan</span><button class="btn btn-outlined" onclick="closeAll()">Close</button></footer>
+</aside>
+
+<!-- ══ PANEL: ACCOUNTING ═════════════════════════════════════ -->
+<aside class="panel" id="pAcct">
+  <header><div><h2>Accounting company</h2><div class="ph">Where Synder posts your books.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <div class="icard err" data-fn="O7">
+      <div class="top"><div class="logo" style="background:#2CA01C">qb</div>
+        <div><div class="name">Sandbox Company_US_1</div><div class="meta">QuickBooks Online · disconnected 3 Jul 2026</div></div></div>
+      <div class="acts" style="margin-bottom:10px"><span class="chip chip-error">Disconnected</span>
+        <button class="btn btn-primary" onclick="toast('Redirecting to Intuit to re-authorize…')" data-fn="O8">Reconnect QuickBooks</button></div>
+      <p class="mini" style="margin:0">Only this same company can be reconnected here.</p>
+    </div>
+    <div class="alert alert-info" style="font-size:12px">
+      <div><strong>One accounting platform per organization.</strong> To use Xero, Sage Intacct or NetSuite instead, you'll need a separate organization — the books can't be moved across platforms.
+        <div style="margin-top:6px"><a href="#" onclick="toast('Opens the create-organization flow');return false" data-fn="O9">Create a new organization →</a></div></div>
+    </div>
+  </div>
+  <footer><span class="fl">QuickBooks Online</span><button class="btn btn-outlined" onclick="closeAll()">Close</button></footer>
+</aside>
+
+<!-- ══ PANEL: PEOPLE ═════════════════════════════════════════ -->
+<aside class="panel" id="pUsers">
+  <header><div><h2>People</h2><div class="ph">Who can access this organization.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <p class="mini" style="margin:0 0 12px" data-fn="O10">1 of 2 seats used. Seats are a billing add-on —
+      <a href="#" onclick="closeAll();openPanel('pPlan');step(2);return false">change the count</a>.</p>
+    <div class="synder-table-wrap" style="margin-bottom:12px">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;color:var(--t-secondary);border-bottom:1px solid var(--border-default)">Name</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;color:var(--t-secondary);border-bottom:1px solid var(--border-default)">Role</th>
+          <th style="text-align:left;padding:10px 12px;font-size:11px;text-transform:uppercase;color:var(--t-secondary);border-bottom:1px solid var(--border-default)">Status</th>
+          <th style="border-bottom:1px solid var(--border-default)"></th></tr></thead>
+        <tbody data-fn="O10"><tr>
+          <td style="padding:12px">You<div class="mini">dasha.aibot@synder.com</div></td>
+          <td style="padding:12px">Manager<div class="mini">Payer</div></td>
+          <td style="padding:12px"><span class="chip chip-success">Active</span></td>
+          <td style="padding:12px;text-align:right"><button class="btn-icon" onclick="menu()" data-fn="O12">⋯</button></td>
+        </tr></tbody>
+      </table>
+    </div>
+    <button class="btn btn-outlined" onclick="showInvite()" data-fn="O11">＋ Invite user</button>
+
+    <div id="inviteForm" style="display:none;margin-top:14px;border:1px solid var(--border-default);border-radius:var(--r-md);padding:16px">
+      <h3 style="font-size:13px;font-weight:500;margin:0 0 4px">Invite user</h3>
+      <p class="mini" style="margin:0 0 12px">They'll get an email with everything they need to join.</p>
+      <div class="formgrid">
+        <div class="field span2"><label>Name *</label><input class="input"></div>
+        <div class="field span2"><label>Email *</label><input class="input" type="email"></div>
+        <div class="field span2"><label>Profession *</label>
+          <select class="input"><option>Business owner / Executive manager</option><option>Accountant / Bookkeeper</option><option>Staff accountant</option><option>Other</option></select></div>
+      </div>
+      <label style="font-size:12px;font-weight:500">Role</label>
+      <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--c-primary);background:var(--c-primary-5);border-radius:var(--r-sm);margin:6px 0">
+        <input type="radio" name="role3" checked><span><b style="font-size:13px">Manager</b><br><span class="mini">Full access including billing, user management and platform connections.</span></span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;padding:10px;border:1px solid var(--border-default);border-radius:var(--r-sm)">
+        <input type="radio" name="role3"><span><b style="font-size:13px">Member</b><br><span class="mini">Everything except billing, user management and platform connections.</span></span></label>
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="document.getElementById('inviteForm').style.display='none';toast('Invitation sent.')">Send invitation</button>
+        <button class="btn btn-outlined" onclick="document.getElementById('inviteForm').style.display='none'">Cancel</button>
+      </div>
+    </div>
+
+    <h3 style="font-size:13px;font-weight:500;margin:22px 0 4px">Accounting firm</h3>
+    <p class="mini" style="margin:0 0 10px" data-fn="O13">Let a firm manage this organization on your behalf. Ask them for their Firm ID.</p>
+    <div style="display:flex;gap:8px">
+      <input class="input" placeholder="Firm ID" style="flex:1">
+      <button class="btn btn-outlined" onclick="toast('Firm invitation sent.')">Apply</button>
+    </div>
+  </div>
+  <footer><span class="fl">1 of 2 seats used</span><button class="btn btn-outlined" onclick="closeAll()">Close</button></footer>
+</aside>
+
+<!-- ══ PANEL: DETAILS ════════════════════════════════════════ -->
+<aside class="panel" id="pDet">
+  <header><div><h2>Organization details</h2><div class="ph">Shown on invoices and used to calculate tax.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <div class="formgrid">
+      <div class="field span2" data-fn="O14"><label>Organization name</label><input class="input" id="iName" value="Per transaction test" oninput="detDirty()"></div>
+      <div class="field span2" data-fn="O15"><label>Address line 1</label><input class="input" value="123 Sierra Way" oninput="detDirty()"></div>
+      <div class="field span2" data-fn="O15"><label>Address line 2</label><input class="input" placeholder="Apt, suite, floor" oninput="detDirty()"></div>
+      <div class="field" data-fn="O15"><label>Country</label>
+        <select class="input" onchange="detDirty()"><option selected>United States</option><option>Canada</option><option>United Kingdom</option><option>Lithuania</option></select></div>
+      <div class="field" data-fn="O15"><label>State / Province</label><input class="input" value="CA" oninput="detDirty()"></div>
+      <div class="field" data-fn="O15"><label>City</label><input class="input" value="San Pablo" oninput="detDirty()"></div>
+      <div class="field" data-fn="O15"><label>ZIP / Postal code</label><input class="input" value="87999" oninput="detDirty()">
+        <span class="help">Tax is calculated from this address.</span></div>
+    </div>
+    <div class="alert alert-info" style="font-size:12px;margin-top:8px">Changing the country may change the tax rate on your next invoice.</div>
+  </div>
+  <footer><span class="fl" id="detFoot">No changes</span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outlined" onclick="closeAll()">Cancel</button>
+      <button class="btn btn-primary" id="detSave" onclick="saveDet()" disabled>Save details</button>
+    </div></footer>
+</aside>
+
+<!-- ══ PANEL: NOTIFICATIONS ══════════════════════════════════ -->
+<aside class="panel" id="pNotif">
+  <header><div><h2>Notifications</h2><div class="ph">What Synder emails you about this organization.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <div class="tglrow" data-fn="O16">
+      <div class="lbl">Synder activity summary<small>Sync results, errors and transaction volume.</small></div>
+      <select class="input" style="width:140px" id="selFreq" onchange="setFreq(this.value)"><option>Off</option><option>Daily</option><option selected>Weekly</option><option>Monthly</option></select>
+    </div>
+    <div class="tglrow" data-fn="O17">
+      <div class="lbl">Reconciliation reminder<small>Monthly nudge to compare your books against the platform.</small></div>
+      <label class="tgl"><input type="checkbox" id="cbRem" checked onchange="setRem(this.checked)"><span></span></label>
+    </div>
+    <p class="mini" style="margin-top:14px">These save the moment you change them — no separate save button.</p>
+  </div>
+  <footer><span class="fl">Saved automatically</span><button class="btn btn-outlined" onclick="closeAll()">Close</button></footer>
+</aside>
+
+<!-- ══ PANEL: HELP / COUPON / CANCEL ═════════════════════════ -->
+<aside class="panel" id="pHelp">
+  <header><div><h2>Billing help</h2><div class="ph">Coupons, custom plans, questions, and cancelling.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body">
+    <h3 style="font-size:13px;font-weight:500;margin:0 0 4px">Apply a coupon</h3>
+    <div style="display:flex;gap:8px;margin-bottom:18px">
+      <input class="input" placeholder="Coupon code" style="flex:1" data-fn="P11">
+      <button class="btn btn-outlined" onclick="toast('Coupon applied — discount appears on your next invoice.')" data-fn="P11">Apply code</button>
+    </div>
+
+    <div class="icard" style="background:var(--c-primary-5);border-color:var(--c-primary-20)">
+      <div class="name" style="margin-bottom:4px">Need a special plan?</div>
+      <p class="mini" style="margin:0 0 10px">Higher volumes or bespoke automation — we'll put one together for you.</p>
+      <button class="btn btn-outlined" onclick="toast('Our team will reach out within one business day.')" data-fn="P6 P10">Contact us</button>
+    </div>
+
+    <h3 style="font-size:13px;font-weight:500;margin:20px 0 4px">Common questions</h3>
+    <div class="faqlist" data-fn="P12">
+      <details><summary>What transactions am I charged for?</summary><p>Any transaction Synder syncs — sales receipts, refunds, payouts. Processing fees are never charged and never count against your monthly balance.</p></details>
+      <details><summary>Why can't I change currency when resubscribing?</summary><p>Currency is locked for the paid period. Once the cycle ends, a currency switcher appears and you can resubscribe in another one.</p></details>
+      <details><summary>Will my discount remain if I update the plan?</summary><p>Yes — discounts attach to your account, not the plan, and re-apply automatically. Changing the card doesn't affect them.</p></details>
+      <details><summary>Can I get a refund?</summary><p>Purchases are final and non-refundable under our Terms. Contact support if your case is unusual.</p></details>
+      <details><summary>Are there any discounts for me?</summary><p>Discounts unlock the longer you stay. Anything you've earned already shows in the breakdown under Payment &amp; invoices.</p></details>
+      <details><summary>Is tax included in the price?</summary><p>No. VAT/GST/sales tax is added at checkout based on your billing address and itemized on the invoice.</p></details>
+      <details><summary>How does a mid-term change get charged?</summary><p>Whatever's left on your current plan is credited against the new charge, so you only pay the difference.</p></details>
+    </div>
+
+    <h3 style="font-size:13px;font-weight:500;margin:22px 0 4px;color:var(--c-red)">Cancel subscription</h3>
+    <p class="mini" style="margin:0 0 10px">Your plan stays active until <b>27 Jul 2027</b>. After that syncing stops and your data becomes read-only.</p>
+    <button class="btn btn-outlined" style="color:var(--c-red);border-color:var(--c-red)" onclick="showCancel()" data-fn="S7">Cancel subscription</button>
+    <div id="cancelBox" style="display:none;margin-top:12px;border:1px solid var(--c-red);border-radius:var(--r-md);padding:16px">
+      <p style="font-size:13px;margin:0 0 10px">What's driving this? It's the fastest route to the right fix.</p>
+      <select class="input" style="margin-bottom:12px"><option>Choose a reason</option><option>Too expensive</option><option>Missing features I need</option><option>Didn't understand how to use it</option><option>Technical issues</option><option>Switching to another tool</option><option>Business closed or paused</option></select>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-primary" onclick="document.getElementById('cancelBox').style.display='none'">I want to stay</button>
+        <button class="btn btn-outlined" style="color:var(--c-red);border-color:var(--c-red)" onclick="document.getElementById('cancelBox').style.display='none';closeAll();toast('Subscription set to end 27 Jul 2027.')">Continue cancelling</button>
+      </div>
+    </div>
+  </div>
+  <footer><span class="fl">Active till 27 Jul 2027</span><button class="btn btn-outlined" onclick="closeAll()">Close</button></footer>
+</aside>
+
+<!-- ══ PANEL: REVIEW CART ════════════════════════════════════ -->
+<aside class="panel" id="pReview">
+  <header><div><h2>Review pending changes</h2><div class="ph">Nothing has been charged or saved yet.</div></div>
+    <button class="btn-icon" onclick="closeAll()">✕</button></header>
+  <div class="body"><div id="cartBody"></div></div>
+  <footer><span class="fl" id="cartFoot"></span>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outlined" onclick="clearCart()">Discard all</button>
+      <button class="btn btn-primary" onclick="applyCart()">Confirm everything</button>
+    </div></footer>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── PLACEHOLDER pricing, not production rates ───────────────── */
+const PLANS = {
+  essential: { name:'Essential', list:115, disc:.20, inc:{ tx:1000,  users:1,  rules:0,  inv:0  } },
+  pro:       { name:'Pro',       list:275, disc:.20, inc:{ tx:10000, users:2,  rules:3,  inv:0  } },
+  proMax:    { name:'Pro Max',   list:415, disc:.20, inc:{ tx:25000, users:5,  rules:10, inv:20 } },
+  premium:   { name:'Premium',   list:null,disc:0,   inc:{ tx:50000, users:99, rules:10, inv:50 } },
+};
+const ADDONS = [
+  { id:'tx',    name:'Monthly transactions', desc:'Sales, refunds and payouts Synder syncs each month. Processing fees are free.', step:500, unit:15,   fmt:n=>n.toLocaleString() },
+  { id:'users', name:'Additional users',     desc:'Extra people who can log in to this organization.',                             step:1,   unit:12,   fmt:n=>n>=99?'Unlimited':n },
+  { id:'rules', name:'Smart rules',          desc:'Automate edits instead of fixing transactions one by one.',                     step:1,   unit:6.66, fmt:n=>n },
+  { id:'inv',   name:'Invoicing',            desc:'Flat fee per invoice batch instead of a commission per invoice.',               step:10,  unit:24.5, fmt:n=>n },
+];
+const CMP = [
+  ['Monthly transactions', '1,000', '10,000', '50,000+'],
+  ['Additional users', '1', '2', 'Unlimited'],
+  ['Free smart rules', 0, '3', '10'],
+  ['Transaction history', 'Paid unlimited', '3 mo free, then paid', 'Free unlimited'],
+  ['Integration slots', 'Unlimited', 'Unlimited', 'Unlimited'],
+  ['Import frequency', 'Hourly', 'Hourly', 'Hourly'],
+  ['Multicurrency, tax &amp; product tracking', 1, 1, 1],
+  ['Inventory items, bundles, locations', 1, 1, 1],
+  ['Oracle NetSuite', 0, 1, 1],
+  ['Premium integrations (Magento, Walmart, TikTok, …)', 0, 1, 1],
+  ['Assisted setup', 0, 1, 1],
+  ['Dedicated server &amp; custom development', 0, 0, 1],
+  ['Support', 'Email', 'Email, chat', 'Email, chat, Zoom'],
+  ['Health checks', 'Monthly', 'Quarterly', 'Monthly'],
+  ['Support lane', 'Regular', 'Express', 'Fast Track'],
+];
+const CURRENT = { plan:'essential', tx:1000, users:1, rules:0, inv:0, monthly:92 };
+let sel = { ...CURRENT }, proIsMax = false, curStep = 1;
+const want = {};   // quantities the user explicitly asked for; plan minimums are applied on top
+const money = n => '$' + n.toFixed(2);
+const key = () => sel.plan === 'pro' && proIsMax ? 'proMax' : sel.plan;
+
+document.getElementById('cmpBody').innerHTML = CMP.map(r =>
+  `<tr><td>${r[0]}</td>` + r.slice(1).map(c =>
+    `<td class="c">${c === 1 ? '<span class="ok">✓</span>' : c === 0 ? '<span class="no">—</span>' : c}</td>`).join('') + '</tr>').join('');
+
+function renderAddons() {
+  const inc = PLANS[key()].inc;
+  document.getElementById('addons').innerHTML = ADDONS.map(a => {
+    const val = sel[a.id], extra = Math.max(0, val - inc[a.id]), cost = (extra / a.step) * a.unit;
+    return `<div class="arow">
+      <div><div class="an">${a.name}</div><div class="ad">${a.desc}</div></div>
+      <div class="stepper">
+        <button onclick="bump('${a.id}',-1)" ${val <= inc[a.id] ? 'disabled' : ''}>−</button>
+        <span class="val">${a.fmt(val)}</span>
+        <button onclick="bump('${a.id}',1)">＋</button>
+      </div>
+      <div class="aprice">${extra ? '+' + money(cost) : '<span class="ok">included</span>'}
+        <small>${a.fmt(inc[a.id]) === 'Unlimited' ? 'unlimited in plan' : `${a.fmt(inc[a.id])} in plan`}</small></div>
+    </div>`;
+  }).join('');
+  renderFoot();
+}
+
+function bump(id, dir) {
+  const a = ADDONS.find(x => x.id === id), inc = PLANS[key()].inc[id];
+  const next = Math.max(inc, sel[id] + dir * a.step);
+  if (next === inc) delete want[id]; else want[id] = next;
+  sel[id] = next;
+  renderAddons();
+}
+
+function pickPlan(p) {
+  sel.plan = p;
+  document.querySelectorAll('.planrow').forEach(r => r.classList.toggle('sel', r.dataset.plan === p));
+  const inc = PLANS[key()].inc;
+  ADDONS.forEach(a => { sel[a.id] = Math.max(want[a.id] ?? 0, inc[a.id]); });
+  renderAddons();
+}
+function proTier(t) {
+  proIsMax = t === 'max';
+  document.getElementById('sStd').classList.toggle('on', !proIsMax);
+  document.getElementById('sMax').classList.toggle('on', proIsMax);
+  document.getElementById('proPP').innerHTML = proIsMax ? '<s>$415</s>$332<small>/mo yearly</small>' : '<s>$275</s>$220<small>/mo yearly</small>';
+  if (sel.plan === 'pro') pickPlan('pro'); else renderAddons();
+}
+
+function total() {
+  const P = PLANS[key()];
+  if (P.list === null) return null;
+  let s = P.list;
+  ADDONS.forEach(a => { s += (Math.max(0, sel[a.id] - P.inc[a.id]) / a.step) * a.unit; });
+  return s * (1 - P.disc);
+}
+const planChanged = () => JSON.stringify(sel) !== JSON.stringify(CURRENT);
+
+function renderFoot() {
+  const t = total();
+  document.getElementById('planFoot').textContent =
+    `${PLANS[key()].name} · ${t === null ? 'custom pricing' : money(t) + ' /mo'}` + (planChanged() ? ' · not saved yet' : '');
+}
+
+function step(n) {
+  curStep = n;
+  [1,2,3].forEach(i => {
+    document.getElementById('sp' + i).classList.toggle('on', i === n);
+    const b = document.getElementById('st' + i);
+    b.classList.toggle('on', i === n);
+    b.classList.toggle('done', i < n);
+  });
+  const btn = document.getElementById('planNext');
+  btn.textContent = n === 1 ? 'Next: quantities' : n === 2 ? 'Next: review' : 'Add to pending changes';
+  if (n === 3) renderDiff();
+  renderFoot();
+}
+function planNext() {
+  if (curStep < 3) { step(curStep + 1); return; }
+  const t = total();
+  if (t === null) { closeAll(); toast('Request sent — our team will contact you with a Premium quote.'); return; }
+  cart.plan = { from: PLANS[CURRENT.plan].name, to: PLANS[key()].name, was: CURRENT.monthly, now: t, sel: { ...sel } };
+  closeAll(); renderCart();
+  toast('Added to pending changes. Confirm when you\'re ready.');
+}
+
+function renderDiff() {
+  const P = PLANS[key()], t = total();
+  const rows = [
+    ['Plan', PLANS[CURRENT.plan].name, P.name, CURRENT.plan !== sel.plan || (sel.plan === 'pro' && proIsMax)],
+  ].concat(ADDONS.map(a => [a.name, a.fmt(CURRENT[a.id]), a.fmt(sel[a.id]), CURRENT[a.id] !== sel[a.id]]));
+  document.getElementById('diffBox').innerHTML =
+    `<div class="dh"><span>Item</span><span class="n">Now</span><span class="arrow"></span><span class="n">After</span></div>` +
+    rows.map(r => `<div class="dr ${r[3] ? 'chg' : ''}"><span>${r[0]}</span><span class="n">${r[1]}</span><span class="arrow">→</span><span class="n">${r[2]}</span></div>`).join('') +
+    `<div class="dr tot"><span>Per month</span><span class="n">${money(CURRENT.monthly)}</span><span class="arrow">→</span><span class="n">${t === null ? 'custom' : money(t)}</span></div>`;
+}
+
+/* ── the cart: changes accumulate across panels ──────────────── */
+let cart = { plan: null, details: null, balance: null };
+function renderCart() {
+  const n = Object.values(cart).filter(Boolean).length;
+  const btn = document.getElementById('cartBtn'), cnt = document.getElementById('cartCnt');
+  btn.disabled = n === 0;
+  cnt.style.display = n ? '' : 'none';
+  cnt.textContent = n;
+  const monthlyDelta = cart.plan ? cart.plan.now - cart.plan.was : 0;
+  btn.textContent = n === 0 ? 'Pending changes'
+    : `Pending changes${monthlyDelta ? ' · ' + (monthlyDelta > 0 ? '+' : '−') + money(Math.abs(monthlyDelta)) + '/mo' : ''}`;
+  document.getElementById('planPend').textContent = cart.plan ? 'change pending' : '';
+  document.getElementById('detPend').textContent = cart.details ? 'change pending' : '';
+  document.getElementById('cPlan').classList.toggle('pending', !!cart.plan);
+  document.getElementById('cDet').classList.toggle('pending', !!cart.details);
+
+  const body = document.getElementById('cartBody');
+  if (!n) { body.innerHTML = '<p class="mini">No pending changes.</p>'; document.getElementById('cartFoot').textContent = ''; return; }
+  let html = '';
+  if (cart.plan) {
+    const c = cart.plan;
+    html += `<h3 style="font-size:13px;font-weight:500;margin:0 0 8px">Plan &amp; add-ons</h3>
+      <div class="diff" style="margin-bottom:16px">
+        <div class="dh"><span>Item</span><span class="n">Now</span><span class="arrow"></span><span class="n">After</span></div>
+        <div class="dr ${c.from !== c.to ? 'chg' : ''}"><span>Plan</span><span class="n">${c.from}</span><span class="arrow">→</span><span class="n">${c.to}</span></div>` +
+      ADDONS.map(a => `<div class="dr ${CURRENT[a.id] !== c.sel[a.id] ? 'chg' : ''}"><span>${a.name}</span><span class="n">${a.fmt(CURRENT[a.id])}</span><span class="arrow">→</span><span class="n">${a.fmt(c.sel[a.id])}</span></div>`).join('') +
+      `<div class="dr tot"><span>Per month</span><span class="n">${money(c.was)}</span><span class="arrow">→</span><span class="n">${money(c.now)}</span></div>
+      </div>`;
+  }
+  if (cart.balance) {
+    html += `<h3 style="font-size:13px;font-weight:500;margin:0 0 8px">Historical transactions</h3>
+      <div class="diff" style="margin-bottom:16px">
+        <div class="dr chg"><span>Historical transactions</span><span class="n">${CURRENT.hist || 0}</span><span class="arrow">→</span><span class="n">${cart.balance.qty.toLocaleString()}</span></div>
+        <div class="dr tot"><span>One-time charge</span><span class="n"></span><span class="arrow"></span><span class="n">${money(cart.balance.cost)}</span></div>
+      </div>`;
+  }
+  if (cart.details) {
+    html += `<h3 style="font-size:13px;font-weight:500;margin:0 0 8px">Organization details</h3>
+      <div class="diff" style="margin-bottom:16px">
+        <div class="dr"><span>Organization name</span><span class="n">${CURRENT.name || 'Per transaction test'}</span><span class="arrow">→</span><span class="n">${cart.details.name}</span></div>
+      </div>`;
+  }
+  html += `<p class="mini">Confirming applies everything above in one go. Unused plan balance is credited automatically; tax is added at checkout.</p>`;
+  body.innerHTML = html;
+  const bits = [];
+  if (cart.plan) bits.push(`${money(cart.plan.now)} /mo (${monthlyDelta >= 0 ? '+' : '−'}${money(Math.abs(monthlyDelta))})`);
+  if (cart.balance) bits.push(`${money(cart.balance.cost)} one-time`);
+  document.getElementById('cartFoot').textContent = bits.length ? bits.join(' · ') : `${n} change${n === 1 ? '' : 's'} ready`;
+}
+function clearCart() { cart = { plan: null, details: null, balance: null }; sel = { ...CURRENT }; proIsMax = false; Object.keys(want).forEach(k => delete want[k]); pickPlan('essential'); closeAll(); renderCart(); toast('All pending changes discarded.'); }
+function applyCart() {
+  const parts = [];
+  if (cart.plan) { CURRENT.monthly = cart.plan.now; Object.assign(CURRENT, cart.plan.sel); parts.push('plan updated'); }
+  if (cart.balance) { CURRENT.hist = cart.balance.qty; parts.push('historical transactions purchased'); }
+  if (cart.details) { document.getElementById('fName').textContent = cart.details.name; parts.push('details saved'); }
+  cart = { plan: null, details: null, balance: null };
+  closeAll(); renderCart();
+  toast(parts.join(' · ') + '. Prorated credit applied to your next invoice.');
+}
+
+function addBalance() {
+  cart.balance = { qty: hist, cost: hist / 1000 * 30 };
+  closeAll(); renderCart();
+  toast('Added to pending changes. Nothing is charged until you confirm.');
+}
+
+/* details panel */
+let detChanged = false;
+function detDirty() {
+  detChanged = true;
+  document.getElementById('detSave').disabled = false;
+  document.getElementById('detFoot').textContent = 'Unsaved changes';
+}
+function saveDet() {
+  cart.details = { name: document.getElementById('iName').value };
+  detChanged = false;
+  document.getElementById('detSave').disabled = true;
+  document.getElementById('detFoot').textContent = 'No changes';
+  closeAll(); renderCart();
+  toast('Added to pending changes — details apply when you confirm.');
+}
+
+/* notifications save immediately (they cost nothing) */
+function setFreq(v) { document.getElementById('fFreq').textContent = v; toast('Activity summary set to ' + v + '.'); }
+function setRem(c) { document.getElementById('fRem').textContent = c ? 'On' : 'Off'; toast(c ? 'Reconciliation reminder on.' : 'Reconciliation reminder off.'); }
+
+let hist = 1000;
+function histQty(d) {
+  hist = Math.max(1000, hist + d * 1000);
+  document.getElementById('histVal').textContent = hist.toLocaleString();
+  document.getElementById('histPrice').textContent = money(hist / 1000 * 30);
+  document.getElementById('histFoot').textContent = money(hist / 1000 * 30) + ' one-time';
+}
+
+function openPanel(id) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.getElementById('scrim').classList.add('on');
+  if (id === 'pPlan') { step(1); renderAddons(); }
+  if (id === 'pReview') renderCart();
+}
+function closeAll() {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('on'));
+  document.getElementById('scrim').classList.remove('on');
+}
+function showInvite() { document.getElementById('inviteForm').style.display = 'block'; }
+function showCancel() { document.getElementById('cancelBox').style.display = 'block'; }
+let tt;
+function toast(m) { const t = document.getElementById('toast'); t.textContent = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 4400); }
+function stripe(w) { toast(`Opens Stripe's hosted billing portal in a new tab to manage your ${w}.`); }
+function ext(u) { toast(`Opens ${u} in a new tab.`); }
+function menu() { toast('Row menu: Edit · Change role · Remove'); }
+addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+
+/* overview cards are interactive: give them real button semantics */
+document.querySelectorAll('.scard').forEach(c => {
+  c.setAttribute('role', 'button');
+  c.setAttribute('tabindex', '0');
+  const label = c.querySelector('h2');
+  if (label) c.setAttribute('aria-label', label.textContent.trim() + ' — open settings');
+  c.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); c.click(); }
+  });
+});
+
+renderAddons(); renderCart();
+</script>
+</body>
+</html>
