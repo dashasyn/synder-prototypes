@@ -238,40 +238,10 @@ table, thead, tbody, tfoot, tr, th, td { border-color: var(--border-default); }
           <button class="btn btn-primary" onclick="openDrawer()" data-fn="S6 P1 O2">Change plan &amp; add-ons</button>
         </div>
 
-        <div class="plan-strip">
-          <div>
-            <div class="k">Plan</div>
-            <div class="v" data-fn="S1 O1">Essential <span class="chip chip-success">Active</span></div>
-            <div class="mini">Billed yearly · renews 27 Jul 2027</div>
-          </div>
-          <div>
-            <div class="k">You pay</div>
-            <div class="price" data-fn="S1"><s>$115.00</s>$92.00</div>
-            <div class="mini">per month, billed yearly</div>
-          </div>
-          <div>
-            <div class="k">Next charge</div>
-            <div class="v" data-fn="S5">27 Jul 2027</div>
-            <div class="mini">$1,104.00 total</div>
-          </div>
-          <div>
-            <div class="k">Card</div>
-            <div class="v" data-fn="S3">•••• 4242</div>
-            <a class="mini ext" href="#" onclick="stripe('payment method');return false" data-fn="S4 P8">Change card</a>
-          </div>
-        </div>
+        <div class="plan-strip" id="planStrip"></div>
 
         <!-- S2: receipt inline instead of hidden in a popover -->
-        <table class="receipt" data-fn="S2">
-          <thead><tr><th>What you're paying for</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead>
-          <tbody>
-            <tr><td>Essential plan</td><td class="num">1</td><td class="num">$115.00</td><td class="num">$115.00</td></tr>
-            <tr><td>Monthly transactions <span class="mini">(1,000 included)</span></td><td class="num">1,000</td><td class="num">included</td><td class="num">$0.00</td></tr>
-            <tr><td>Additional users</td><td class="num">1</td><td class="num">included</td><td class="num">$0.00</td></tr>
-            <tr class="disc"><td>Annual billing discount</td><td class="num">—</td><td class="num">−20%</td><td class="num">−$23.00</td></tr>
-            <tr class="total"><td>Total per month</td><td class="num"></td><td class="num"></td><td class="num">$92.00 USD</td></tr>
-          </tbody>
-        </table>
+        <table class="receipt" id="pageReceipt" data-fn="S2"></table>
 
         <div class="subgrid">
           <div class="tile">
@@ -716,8 +686,17 @@ function renderTotal() {
 function confirmPlan() {
   const t = total();
   if (t === null) { closeDrawer(); toast('Request sent — our team will contact you with a Premium quote.'); return; }
+  // commit, then re-render the page so strip and receipt cannot disagree with this
+  CURRENT.plan = sel.plan;
+  CURRENT.max = proIsMax;
+  ADDONS.forEach(a => { CURRENT[a.id] = sel[a.id]; });
+  CURRENT.monthly = t;
+  sel = { ...CURRENT };
+  Object.keys(want).forEach(k => delete want[k]);
+  renderPageState();
+  renderAddons();
   closeDrawer();
-  toast(`Plan updated to ${PLANS[planKey()].name}. New total ${money(t)}/mo — prorated credit applied.`);
+  toast(`Now on ${PLANS[planKey()].name} at ${money(t)}/mo — prorated credit applied. The summary above is updated.`);
 }
 
 /* feature comparison (real copy from production accordions) */
@@ -741,6 +720,55 @@ const CMP = [
 document.getElementById('cmpBody').innerHTML = CMP.map(r =>
   `<tr><td>${r[0]}</td>` + r.slice(1).map(c =>
     `<td class="c">${c === 1 ? '<span class="ok">✓</span>' : c === 0 ? '<span class="no">—</span>' : c}</td>`).join('') + '</tr>').join('');
+
+/* Render the page's own plan strip + receipt from CURRENT, so the page can never
+   disagree with what was just confirmed in the drawer. */
+function renderPageState() {
+  const P = PLANS[CURRENT.plan === 'pro' && CURRENT.max ? 'proMax' : CURRENT.plan];
+  const perYear = CURRENT.monthly === null ? null : CURRENT.monthly * 12;
+  document.getElementById('planStrip').innerHTML = `
+    <div>
+      <div class="k">Plan</div>
+      <div class="v" data-fn="S1 O1">${P.name} <span class="chip chip-success">Active</span></div>
+      <div class="mini">Billed yearly · renews 27 Jul 2027</div>
+    </div>
+    <div>
+      <div class="k">You pay</div>
+      <div class="price" data-fn="S1">${CURRENT.monthly === null ? 'Negotiated'
+        : `<s>${money(P.list)}</s>${money(CURRENT.monthly)}`}</div>
+      <div class="mini">per month, billed yearly</div>
+    </div>
+    <div>
+      <div class="k">Next charge</div>
+      <div class="v" data-fn="S5">27 Jul 2027</div>
+      <div class="mini">${perYear === null ? 'per your agreement' : money(perYear) + ' total'}</div>
+    </div>
+    <div>
+      <div class="k">Card</div>
+      <div class="v" data-fn="S3">•••• 4242</div>
+      <a class="mini ext" href="#" onclick="stripe('payment method');return false" data-fn="S4 P8">Change card</a>
+    </div>`;
+
+  if (CURRENT.monthly === null) {
+    document.getElementById('pageReceipt').innerHTML =
+      `<tbody><tr><td class="mini">Premium is priced in your agreement rather than itemised here.</td></tr></tbody>`;
+    return;
+  }
+  const lines = [[`${P.name} plan`, 1, P.list, P.list]];
+  ADDONS.forEach(a => {
+    const extra = Math.max(0, CURRENT[a.id] - P.inc[a.id]);
+    if (extra) lines.push([`${a.name} — ${a.fmt(extra)} over plan`, extra / a.step, a.unit, (extra / a.step) * a.unit]);
+    else lines.push([`${a.name} <span class="mini">(${a.fmt(P.inc[a.id])} included)</span>`, a.fmt(CURRENT[a.id]), 'included', 0]);
+  });
+  const gross = lines.reduce((s2, l) => s2 + l[3], 0);
+  document.getElementById('pageReceipt').innerHTML =
+    `<thead><tr><th>What you're paying for</th><th class="num">Qty</th><th class="num">Unit price</th><th class="num">Amount</th></tr></thead><tbody>` +
+    lines.map(l => `<tr><td>${l[0]}</td><td class="num">${l[1]}</td>` +
+      `<td class="num">${typeof l[2] === 'number' ? money(l[2]) : '<span class="ok">' + l[2] + '</span>'}</td>` +
+      `<td class="num">${money(l[3])}</td></tr>`).join('') +
+    (P.disc ? `<tr class="disc"><td>Annual billing discount</td><td class="num">—</td><td class="num">−${P.disc * 100}%</td><td class="num">−${money(gross * P.disc)}</td></tr>` : '') +
+    `<tr class="total"><td>Total per month</td><td class="num"></td><td class="num"></td><td class="num">${money(CURRENT.monthly)} USD</td></tr></tbody>`;
+}
 
 /* ── drawer / modal / toast plumbing ─────────────────────────── */
 function openDrawer() { renderAddons(); document.getElementById('drawer').classList.add('on'); document.getElementById('scrim').classList.add('on'); }
@@ -778,6 +806,7 @@ addEventListener('scroll', () => {
 }, { passive: true });
 
 addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); ['mUser','mHist','mCancel'].forEach(closeModal); } });
+renderPageState();
 renderAddons();
 </script>
 </body>
