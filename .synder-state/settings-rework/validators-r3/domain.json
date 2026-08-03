@@ -1,0 +1,415 @@
+{
+ "validator": "domain",
+ "per_prototype": [
+  {
+   "prototype": "A",
+   "findings": [
+    {
+     "id": "DOM-A1",
+     "severity": "Critical",
+     "confidence": 92,
+     "element": "Billing questions FAQ \u2014 \"How do I change my subscription?\" vs \"Can I get a refund?\"; Sync balance card",
+     "finding": "The FAQ states \"Anything left on your current balance is credited against the new charge automatically\" while two answers above it states \"Purchases are final and non-refundable.\" The two cannot both be true for a mid-term downgrade. Worse, the word \"balance\" on this page already means something else: the \"Sync balance \u2014 1,000 transactions left this month\" card sits in the same column, so the sentence reads as though unused transactions convert into money against the next charge.",
+     "user_impact": "A bookkeeper downgrading a client mid-term books an expected credit (or a receivable/prepaid reduction) against the next Synder invoice. It never arrives, because under the terms the prepaid balance is forfeited. The accrual has to be reversed, and if the period is already closed it becomes a prior-period adjustment. Separately, treating unused synced-transaction allowance as a monetary asset is simply wrong.",
+     "suggested_fix": "Split the two senses of \"balance\" and state the actual outcome: \"Credit for the unused part of your prepaid term is applied to the new charge. If the credit exceeds the new term, the difference is not refundable.\" Never use \"balance\" for both the transaction allowance and the prepaid subscription value on the same page."
+    },
+    {
+     "id": "DOM-A2",
+     "severity": "Critical",
+     "confidence": 90,
+     "element": "Plan drawer \u2014 \"Review & confirm\" button",
+     "finding": "The button is labelled \"Review & confirm\" but there is no review step: it closes the drawer and reports \"Plan updated to X. New total $Y/mo \u2014 prorated credit applied.\" A non-refundable charge is committed on one click, with no statement of the amount charged today, no tax, and no proration figures \u2014 only a monthly rate.",
+     "user_impact": "The only number the user ever saw was a monthly rate; the card is charged an annual amount plus tax that was never displayed. When the Stripe invoice arrives it cannot be tied back to anything on screen, so the entry has to be reverse-engineered from the invoice. Under \"final and non-refundable\" terms a misclick is unrecoverable.",
+     "suggested_fix": "Insert a real review step showing: line items now \u2192 after, credit applied, any forfeited amount, amount charged today, and \"tax added at checkout\". Label the final button with the amount, e.g. \"Confirm and pay $1,104.00\"."
+    },
+    {
+     "id": "DOM-A3",
+     "severity": "Medium",
+     "confidence": 80,
+     "element": "Sync balance card \u2014 \"1,000 / Transactions left this month\"",
+     "finding": "The card reports remaining allowance only, with no \"used of included\" figure and no period-to-date consumption. The same figure 1,000 also appears in the breakdown row \"Monthly transactions (1,000 included)\", so it is impossible to tell whether 1,000 means \"entitlement\" or \"nothing consumed yet\".",
+     "user_impact": "At month-end an accountant cannot verify volume against the platform without leaving the page, and cannot judge whether the plan is right-sized before renewal. On a 40-client roster this means opening every org to find the ones paying for headroom they never use.",
+     "suggested_fix": "Show \"used X of Y included, resets DD MMM\" plus a short usage trend, as manage-subscription-v2 does."
+    }
+   ]
+  },
+  {
+   "prototype": "B",
+   "findings": [
+    {
+     "id": "DOM-B1",
+     "severity": "Critical",
+     "confidence": 93,
+     "element": "Sticky bottom bar \u2014 delta line; confirmPlan() toast",
+     "finding": "On any decrease the delta line appends \"\u00b7 unused balance is credited\" unconditionally, and the commit toast says \"Prorated credit applied to the next invoice.\" Neither is qualified. Production terms make purchases final and non-refundable, so on a mid-term downgrade the excess prepaid value is forfeited, not credited forward.",
+     "user_impact": "The screen makes an affirmative promise of a credit at the exact moment the money is actually being forfeited. An accountant reduces a client's plan expecting the difference to offset the next invoice, books it, and then has to write it off. This is the single most expensive wrong statement in the set.",
+     "suggested_fix": "Compute the credit and the forfeit separately and show both. If the credit exceeds the new term cost, say the remainder is lost and offer \"schedule the change at renewal instead\", as manage-subscription-v2 does."
+    },
+    {
+     "id": "DOM-B2",
+     "severity": "Critical",
+     "confidence": 90,
+     "element": "Sticky bottom bar \u2014 \"Confirm changes\"",
+     "finding": "\"Confirm changes\" is the commit itself \u2014 no dialog, no diff, no amount-due-today, no tax line, and no check of the new quantities against actual usage or the current roster. Selecting a lower plan silently resets every add-on quantity to the new plan's included level before charging.",
+     "user_impact": "A single click on a page whose only visible figure is a monthly rate irreversibly changes a paid subscription. Because plan selection also rewrites the add-on quantities, an accountant can commit a smart-rules or seat reduction they never explicitly chose \u2014 and smart rules drive how transactions are categorised into the chart of accounts.",
+     "suggested_fix": "Require a confirmation step that itemises now \u2192 after for every quantity, states the amount charged today and that tax is added at checkout, and blocks the change when the new quantities are below current usage or current seat occupancy."
+    },
+    {
+     "id": "DOM-B3",
+     "severity": "High",
+     "confidence": 85,
+     "element": "Quantity matrix \u2014 \"Monthly transactions\" description: \"Sales, refunds and payouts Synder syncs. Processing fees are free.\"",
+     "finding": "\"Processing fees are free\" is ambiguous in a way that matters. It can be read as (a) Synder does not bill you for fee records, (b) the fees themselves cost nothing, or (c) fees are not synced at all. The intended meaning \u2014 fee records do not consume the monthly transaction allowance \u2014 is not what the sentence says. Prototype A words this correctly and B regresses it.",
+     "user_impact": "If a bookkeeper concludes that processing fees aren't part of the sync, they will not expect Stripe/PayPal fee entries in QuickBooks and will not look for them at reconciliation. Missing fee postings mean gross sales booked without the corresponding expense, an overstated net position, and a payout that won't tie to the bank line.",
+     "suggested_fix": "Use A's wording: \"Synder charges for syncing any transaction type \u2014 sales receipts, refunds, payouts \u2014 except processing fees. Processing fees are still synced; they just never count against your monthly balance.\""
+    }
+   ]
+  },
+  {
+   "prototype": "C",
+   "findings": [
+    {
+     "id": "DOM-C1",
+     "severity": "Critical",
+     "confidence": 92,
+     "element": "Plan panel footnote, pending-changes cart footnote, applyCart() toast",
+     "finding": "Three separate places make the same unqualified promise: \"Whatever's left on your current plan is credited against the new charge \u2014 you only pay the difference\", \"Unused plan balance is credited automatically\", and on commit \"Prorated credit applied to your next invoice.\" There is no case where a downgrade forfeits value, which is what the non-refundable terms actually produce.",
+     "user_impact": "Same exposure as B, but stated three times, including inside the review surface that is supposed to be C's safeguard. The cart's whole value proposition is \"review before you commit\", and what it shows the reviewer is a false statement about money.",
+     "suggested_fix": "Replace all three with a computed credit line and, where applicable, an explicit \"remaining balance you would lose (not refundable)\" line inside the cart, plus a schedule-at-renewal alternative."
+    },
+    {
+     "id": "DOM-C2",
+     "severity": "High",
+     "confidence": 84,
+     "element": "Pending changes cart \u2014 bundles cart.plan, cart.balance (one-time historical transactions purchase) and cart.details (organization name/address) into one \"Confirm\" action",
+     "finding": "One commit mixes a recurring subscription change, an irreversible one-time non-refundable purchase, and edits to the organization legal name and address. The address is the tax-determination input, stated elsewhere on the same prototype as \"tax is calculated from this address.\" The cart shows no tax amount and no total charged today, so there is no indication whether the bundled charge is taxed on the old address or the new one.",
+     "user_impact": "The tax on an invoice is decided by a field being changed in the same transaction, with no preview of either the tax or the invoice total. If the wrong jurisdiction is applied the client's input-VAT/sales-tax treatment is wrong, and the purchase cannot be undone. Discarding the cart after confirmation does not unwind the historical-transactions purchase.",
+     "suggested_fix": "Commit chargeable items separately from legal-entity/address edits, or force the address change to settle first. Show tax and the total charged today inside the cart, and mark the one-time purchase as non-refundable at the point of confirmation."
+    },
+    {
+     "id": "DOM-C3",
+     "severity": "High",
+     "confidence": 85,
+     "element": "Add-on list \u2014 \"Monthly transactions: Sales, refunds and payouts Synder syncs each month. Processing fees are free.\"",
+     "finding": "Identical ambiguity to B: \"Processing fees are free\" does not say what is meant (fee records don't consume the allowance) and can be read as fees not being synced.",
+     "user_impact": "A bookkeeper who believes processing fees aren't synced won't look for fee entries in the books, leaving gross revenue recorded without the offsetting fee expense and a payout that won't reconcile to the bank.",
+     "suggested_fix": "Adopt A's explicit two-clause wording separating \"not charged for\" from \"still synced\"."
+    }
+   ]
+  },
+  {
+   "prototype": "v2",
+   "findings": [
+    {
+     "id": "DOM-v21",
+     "severity": "Critical",
+     "confidence": 88,
+     "element": "Review-change modal \u2014 \"What happens to the money\" block and the footnote \"Your renewal date stays 27 Jul 2027\"",
+     "finding": "The block charges for a fresh \"New term \u2014 12 months at $X\" while crediting 11 unused months, and then the footnote states the renewal date does not move. Those are mutually exclusive: if the renewal date stays 27 Jul 2027 the remaining term is 11 months, not 12, so both the amount due today and the \"remaining balance you would lose\" figure are overstated. The credit is also computed as discounted monthly rate \u00d7 11 rather than from the actual prepaid amount, which is not the same number once the annual discount is applied to a prepaid year.",
+     "user_impact": "This is the one screen in the set that shows a specific amount to be charged today and a specific forfeited amount. An accountant will use those two figures to book the charge and write off the forfeit \u2014 and the Stripe invoice will disagree with both. Because the forfeit figure also drives the \"Downgrade now anyway (lose $X)\" decision, the user may be choosing between two options on the basis of a wrong number.",
+     "suggested_fix": "Derive the credit from the actual unused portion of the prepaid invoice and state the term explicitly: either \"new 12-month term starting today, renewal moves to <date>\" or \"remaining 11 months of your current term\". The proration table and the renewal-date footnote must be computed from the same term length."
+    },
+    {
+     "id": "DOM-v22",
+     "severity": "Critical",
+     "confidence": 86,
+     "element": "guardrails() \u2014 smart-rules block: \"You have N smart rules configured but you'd be entitled to M. The extras stop running.\"",
+     "finding": "The block correctly stops the downgrade but never names which rules stop. Smart rules determine how transactions are categorised and mapped to accounts, so an unspecified subset ceasing to run silently changes the posting behaviour of future syncs. The only remedy offered is \"Keep them\"; there is no way to choose which rules survive.",
+     "user_impact": "After the downgrade, transactions that were being mapped to specific income/expense accounts start posting to defaults, with no error and no notification. Nobody discovers it until the P&L looks wrong or a reconciliation breaks \u2014 potentially weeks of misclassified entries requiring reclassification journal entries across a closed period.",
+     "suggested_fix": "List the specific rules that would stop, in priority order, and let the user pick which ones to retain. On commit, log the deactivated rules and warn that transactions previously matched by them will post to default accounts from that date."
+    },
+    {
+     "id": "DOM-v23",
+     "severity": "High",
+     "confidence": 78,
+     "element": "Right rail \"Historical transactions\" tile and the Buy modal stepper (both read/write the single `hist` variable)",
+     "finding": "The tile's displayed balance and the purchase-quantity stepper are the same value. Incrementing the quantity in the Buy modal mutates the figure the tile presents as the owned balance; closing the modal without buying does not restore it, so on the next re-render the tile shows a pool the organization has not purchased.",
+     "user_impact": "The historical-transactions pool is a prepaid, non-refundable, non-expiring asset. A firm that reads the tile to decide whether a client needs a top-up \u2014 or to record the prepaid amount \u2014 can be reading a quantity nobody bought. Either they skip a purchase they needed (back-dated syncs then fail at close) or they record a prepaid balance that does not exist.",
+     "suggested_fix": "Hold the owned balance and the pending purchase quantity in separate state. Reset the modal quantity on close, and only credit the balance after the charge succeeds."
+    }
+   ]
+  },
+  {
+   "prototype": "Concepts 3-in-1",
+   "findings": [
+    {
+     "id": "DOM-CN1",
+     "severity": "Critical",
+     "confidence": 95,
+     "element": "V1 Price breakdown table \u2014 Subtotal $293.00 / \"Annual-billing discount (\u221220%)\" \u2212$52.00 / Monthly total $241.00",
+     "finding": "The breakdown does not foot. 20% of the $293.00 subtotal is $58.60, not $52.00; $52.00 is 17.7% of the subtotal and does not equal 20% of any subset of the line items either (20% of the $115 plan alone is $23.00). The stated discount rate, the discount amount and the total are three mutually inconsistent numbers on the same table.",
+     "user_impact": "This is the first thing an accountant checks and it fails. A billing statement whose line items don't reconcile to its total cannot be used to record the expense or to verify the charge, and it destroys confidence in every other figure on the page \u2014 including the $241.00 the card is supposedly being charged.",
+     "suggested_fix": "Compute the discount from the subtotal at the stated rate and let the total be the arithmetic result. If the discount only applies to the plan and not to add-ons, itemise it as a line under the plan and label it accordingly."
+    },
+    {
+     "id": "DOM-CN2",
+     "severity": "Critical",
+     "confidence": 90,
+     "element": "V1 header \"Next invoice \u00b7 Mar 13, 2027 \u2014 $241.00 \u00b7 billed yearly\"; V2 \"Next charge $241.00 on Mar 13, 2027 \u00b7 billed yearly\"; invoice history rows",
+     "finding": "$241.00 is explicitly labelled \"Monthly total\" in the breakdown, yet the same figure is presented as the amount of a yearly invoice. A yearly invoice at that rate would be roughly $2,892. The invoice history contradicts the annual framing again, showing three monthly invoices (Jan $92.00, Feb $191.00, Mar $241.00) for a subscription described as billed yearly.",
+     "user_impact": "The accountant cannot tell what will hit the card or when, so cash-flow forecasting and accrual of the prepaid subscription are both impossible. A monthly figure presented as an annual charge understates the commitment by roughly 12\u00d7; if the prepaid expense is set up on that basis the amortisation schedule is wrong for the whole year.",
+     "suggested_fix": "Show the monthly equivalent and the actual charge as two clearly distinct figures: \"$241.00/mo \u00b7 next charge $2,892.00 on 13 Mar 2027 (12 months up front)\", and make the invoice history cadence match the stated billing period."
+    },
+    {
+     "id": "DOM-CN3",
+     "severity": "Critical",
+     "confidence": 85,
+     "element": "Danger zone / cancel copy (all three concepts): \"We keep your data for 90 days.\"",
+     "finding": "A 90-day retention window is asserted on cancellation. Elsewhere in this product family the behaviour is that synced data remains in the books untouched and Synder history becomes read-only with nothing deleted. Retention is not a UI detail \u2014 it is a records statement.",
+     "user_impact": "An accountant who believes the record is destroyed after 90 days will either scramble to export everything, or worse, treat Synder as unsuitable for clients with statutory retention obligations (typically 6\u20137 years) and cancel differently than they otherwise would. If the claim is false, the screen is scaring people off a compliant system; if it is true, it is a compliance blocker that needs to be stated far more prominently than in a cancel dialog.",
+     "suggested_fix": "State exactly what happens per data class: transactions already posted to the accounting platform stay there permanently; the Synder-side history becomes read-only and is retained for <verified period>. Get the number confirmed against the actual retention policy before it ships."
+    }
+   ]
+  },
+  {
+   "prototype": "V1 Unified Settings",
+   "findings": [
+    {
+     "id": "DOM-U1",
+     "severity": "Critical",
+     "confidence": 90,
+     "element": "Subscription section \u2014 \"New total: $92.00/mo\" + \"Apply changes\"",
+     "finding": "\"Apply changes\" commits the billing change directly and reports \"Changes applied\". There is no confirmation dialog anywhere on the page, no amount charged today, no tax, no proration or credit/forfeit disclosure, and no statement that purchases are non-refundable.",
+     "user_impact": "A recurring, non-refundable charge is committed on a single click while the only figure on screen is a monthly rate. There is nothing to reconcile the eventual Stripe invoice against, and no chance to catch a misclick before it becomes an unrecoverable charge on a client's card.",
+     "suggested_fix": "Add a confirmation step showing quantities now \u2192 after, the credit applied, the amount charged today, tax treatment, and the non-refundable notice; label the commit button with the amount."
+    },
+    {
+     "id": "DOM-U2",
+     "severity": "High",
+     "confidence": 84,
+     "element": "\"New total: $92.00/mo\" preview vs the Add-ons block (Invoicing / Smart rules \"Subscribe\")",
+     "finding": "The live total is computed from the transaction and user steppers only. Subscribing to Invoicing at $49/mo or Smart rules at $19.99/mo does not enter the \"New total\", so the figure presented as the new monthly cost excludes any add-on the user just bought on the same screen.",
+     "user_impact": "The number an accountant would write down as the new monthly cost understates the actual charge by the full add-on amount. On a 40-client roster, budget figures gathered from this screen are systematically low, and each add-on subscription is a separate uncommunicated recurring commitment.",
+     "suggested_fix": "Make one total that includes every chargeable item \u2014 plan, quantity add-ons and subscribed add-ons \u2014 and route all of them through the same confirmation."
+    },
+    {
+     "id": "DOM-U3",
+     "severity": "High",
+     "confidence": 82,
+     "element": "\"Historical transactions \u2014 Balance: 0 historical syncs / Get 50 free / Purchase\"",
+     "finding": "The same prepaid pool is metered as \"historical syncs\" here, as \"credits\" on the Billing Hub layout, and as \"historical transactions\" elsewhere in the family \u2014 and a promotional grant (\"Get 50 free\") lands in the same counter as purchased units with no distinction. Whether one transaction consumes one sync is never stated.",
+     "user_impact": "A firm cannot tell what it bought or what a unit is, so it cannot size a purchase against a client's back-dated volume, and cannot separate purchased (prepaid asset) units from granted (no cost) units when recording the expense. \"Credits\" is the worst of the three variants \u2014 in an accounting product it reads as a credit balance or credit note.",
+     "suggested_fix": "Pick one unit name \u2014 \"historical transactions\" \u2014 use it everywhere, define it (1 unit = 1 back-dated transaction synced), and show purchased and granted units as separate lines."
+    }
+   ]
+  },
+  {
+   "prototype": "V2 Billing Hub",
+   "findings": [
+    {
+     "id": "DOM-BH1",
+     "severity": "Critical",
+     "confidence": 93,
+     "element": "\"Your plan includes \u2192 1,000 transactions included\" vs \"Adjust your plan \u2192 Monthly transactions: 500 included in plan\" (stepper reads 500)",
+     "finding": "The same plan's transaction entitlement is stated as 1,000 in the breakdown and 500 in the adjustment control, and the stepper's current value is 500 rather than the 1,000 the breakdown claims. There is no reading of the screen under which both are correct.",
+     "user_impact": "The entitlement is the number a firm uses to decide whether a client needs more volume. Believing 500 leads to buying blocks that were already included; believing 1,000 when the real figure is 500 means syncing pauses mid-month and transactions are missing from the books at close. Either way it is a paid decision made on a contradicted figure.",
+     "suggested_fix": "Source both the breakdown and the stepper baseline from a single plan-entitlement value, and show the stepper's included threshold as a label rather than as its initial value."
+    },
+    {
+     "id": "DOM-BH2",
+     "severity": "High",
+     "confidence": 86,
+     "element": "Extras \u2192 Historical transactions: \"Balance: 0 credits\" / \"Purchase credits\"",
+     "finding": "A prepaid pool of syncable transactions is labelled \"credits\" throughout. In an accounting product \"credit\" already means the credit side of an entry, and on a billing screen it means a credit note or account credit applied against an invoice. Neither is what this is.",
+     "user_impact": "\"Purchase credits\" reads as buying account credit toward future invoices \u2014 a prepayment recoverable against billing \u2014 rather than a consumable, non-refundable entitlement to sync back-dated transactions. Booked as the former it sits on the balance sheet as a prepayment that never offsets an invoice.",
+     "suggested_fix": "Call them \"historical transactions\" and describe the unit: \"0 available \u00b7 used for back-dated syncs once the monthly balance is empty \u00b7 $30 per 1,000, one-time, non-refundable.\""
+    },
+    {
+     "id": "DOM-BH3",
+     "severity": "High",
+     "confidence": 85,
+     "element": "\"Adjust your plan\" \u2014 Current / Updated / Difference panel and \"Update plan\"",
+     "finding": "\"Update plan\" commits immediately with \"Plan updated successfully\" \u2014 no confirmation, no amount charged today, no tax, no proration or non-refundable disclosure. The Current/Updated/Difference figures also exclude anything subscribed in the Extras block above, so the \"Difference\" understates the real change in monthly cost.",
+     "user_impact": "The one element on the page designed to show the financial consequence of a change omits part of that consequence, and the change is irreversible once clicked. The delta an accountant records will not match the invoice.",
+     "suggested_fix": "Include every chargeable item in the delta, and require a confirmation step stating the amount charged today, tax treatment and the non-refundable terms."
+    }
+   ]
+  },
+  {
+   "prototype": "V3 Org Health Dashboard",
+   "findings": [
+    {
+     "id": "DOM-D1",
+     "severity": "Critical",
+     "confidence": 92,
+     "element": "Subscription card \u2014 \"Autocharge / Automatically charge your card on the renewal date.\"",
+     "finding": "Autocharge is redefined. Everywhere else in this product it means \"top up the sync balance automatically when it is depleted, so syncing continues instead of pausing\". Here it is described as auto-renewal of the subscription. Same toggle, completely different consequence.",
+     "user_impact": "This is the most dangerous single sentence in the set. A firm that switches it off to prevent unwanted auto-renewal has actually switched off mid-month balance top-ups: syncing silently stops when a client exceeds their allowance, transactions stop reaching the books, and nobody finds out until the month-end reconciliation doesn't balance \u2014 by which time the missing transactions may span weeks. The reverse error is equally real: leaving it on believing it only affects renewal means unexpected mid-period top-up charges.",
+     "suggested_fix": "Restore the correct definition \u2014 \"Autocharge when the sync balance runs out: keeps syncing past your allowance instead of pausing\" \u2014 and if auto-renewal needs a control, make it a separate, separately-labelled one."
+    },
+    {
+     "id": "DOM-D2",
+     "severity": "Critical",
+     "confidence": 88,
+     "element": "Add-ons \u2014 \"Historical Sync +$20/mo \u2014 Import transactions older than 90 days from any source\"",
+     "finding": "A one-time consumable purchase is presented as a recurring monthly add-on, and its trigger condition is invented: the historical pool is used for back-dated syncs once the monthly balance is empty, not for anything \"older than 90 days\". Production prices it at $30 per 1,000 units, one-time.",
+     "user_impact": "Recurring versus one-time changes both the bookkeeping and the commitment: a one-time purchase is a prepaid consumable, a monthly add-on is a subscription expense that renews until cancelled. A firm enabling this across several clients would create recurring charges they believe are single purchases, and the invented 90-day rule means they'll expect back-dated syncs to work in cases where they won't.",
+     "suggested_fix": "Present it as a one-time quantity purchase with the real unit and rate, separate from the recurring add-ons, and describe the actual trigger (monthly balance depleted)."
+    },
+    {
+     "id": "DOM-D3",
+     "severity": "High",
+     "confidence": 82,
+     "element": "Add-ons pricing (+$12/mo Invoicing, +$8/mo Smart Rules) and \"Current plan total $92/mo \u00b7 $1,104/yr\"",
+     "finding": "The add-on prices bear no relation to the real tiered rates ($49 for up to 20 invoices, $19.99 for up to 3 rules) and, more importantly, carry no unit or tier at all \u2014 just a flat monthly figure. The plan total displayed beneath excludes them.",
+     "user_impact": "Without a tier an accountant cannot size the add-on to a client's volume, and cannot tell what happens when the client exceeds it \u2014 overage, hard stop, or automatic upgrade to a higher tier. The stated plan total then omits the add-ons entirely, so no figure on the card represents what will actually be charged.",
+     "suggested_fix": "Show each add-on's tier and unit (\"up to 20 invoices \u2014 $49/mo\"), state the overage behaviour, and include active add-ons in the plan total."
+    }
+   ]
+  },
+  {
+   "prototype": "Sketch V1",
+   "findings": [
+    {
+     "id": "DOM-S11",
+     "severity": "Critical",
+     "confidence": 90,
+     "element": "Cancel subscription dialog \u2014 \"After that, your account will be downgraded to the free plan.\"",
+     "finding": "There is no free plan. On expiry, imports stop and the Synder side becomes read-only. \"Downgraded to the free plan\" describes a continuing, functioning service at no cost.",
+     "user_impact": "An accountant who reads this believes syncing continues after cancellation at a reduced level, so they stop monitoring the integration. Sales, refunds and payouts silently stop reaching the books from the expiry date. The gap is only discovered at reconciliation, and every missing transaction has to be back-filled \u2014 which itself requires a paid historical-transactions purchase they didn't budget for.",
+     "suggested_fix": "State the real outcome: \"On <date> imports stop. Data already synced stays in your books. Your Synder history becomes read-only; nothing is deleted. You can reactivate before <date> at the same price.\""
+    },
+    {
+     "id": "DOM-S12",
+     "severity": "Critical",
+     "confidence": 92,
+     "element": "Subscription line-item table (7 rows) vs header \"Pro \u2014 $1,000.00 USD/year\"",
+     "finding": "Every one of the seven line items \u2014 Pro plan, Smart rules, Invoicing, RevRec, Sales volume, JS modes, Users \u2014 shows the identical \"20%\" discount and \"95 USD/mo\" price. Seven rows at $95/mo is $665/mo or $7,980/yr against a stated $1,000/yr. The itemisation cannot be reconciled to the total under any interpretation.",
+     "user_impact": "This is a billing statement that does not foot, by a factor of eight. It cannot be used to record the expense, allocate cost across a client's departments, or verify the charge. For a firm that recharges Synder cost to clients, there is no defensible basis for the allocation.",
+     "suggested_fix": "Give each line its real quantity, unit rate and extended amount, and make the rows sum to a subtotal, then discount, then total \u2014 in the same currency and period as the header figure."
+    },
+    {
+     "id": "DOM-S13",
+     "severity": "High",
+     "confidence": 83,
+     "element": "Line items \"Sales volume 10,000 / 20,000\" and \"JS modes 2 / 3\"; add-on card \"RevRec \u2014 from 99 USD per 100 invoices\"",
+     "finding": "Three metering errors in one table. \"Sales volume\" reads to any accountant as a currency amount, but is metered here as a count. \"JS modes\" is undefined jargon on a billing document. And revenue recognition is metered in invoices, when the unit is recognition events or subscriptions \u2014 the Concepts prototype gets this right with \"up to 1,000 recognition events\".",
+     "user_impact": "A firm cannot map any of these to a client's actual figures, so it cannot forecast the bill or check it. Metering RevRec by invoice count is the worst of the three: ASC 606 recognition events bear no fixed relationship to invoice count (one annual invoice can generate twelve or more recognition events), so a limit sized against invoice volume will be exhausted unpredictably mid-period and stop recognition postings.",
+     "suggested_fix": "Rename to \"Synced transactions (count)\", expand or drop \"JS modes\", and meter RevRec in recognition events with the relationship to invoices spelled out."
+    }
+   ]
+  },
+  {
+   "prototype": "Sketch V2 Tabbed",
+   "findings": [
+    {
+     "id": "DOM-S21",
+     "severity": "High",
+     "confidence": 91,
+     "element": "Addons block \u2014 all five cards carry the identical description \"Benefit from flat fee rather than commission on every invoice amount!\"",
+     "finding": "Monthly transactions, Invoicing, Smart rules, Revenue recognition and Historical transactions all share one description, and it only makes sense for Invoicing. Nothing on the screen describes what the other four actually do or what their unit is.",
+     "user_impact": "These are non-refundable purchases with an \"Add\" button next to each. An accountant cannot determine what they are buying \u2014 the copy implies every add-on replaces a per-invoice commission, which is false for four of the five. Buying the wrong one is unrecoverable under the terms.",
+     "suggested_fix": "Write a real one-line description and unit for each add-on. Historical transactions in particular must say it is a one-time, non-expiring pool used for back-dated syncs once the monthly balance is empty."
+    },
+    {
+     "id": "DOM-S22",
+     "severity": "High",
+     "confidence": 88,
+     "element": "Users section \u2014 \"Users available for this organization: 2.\" above a roster of three (Lara Active, Russel Active, Monica Invitation sent)",
+     "finding": "The seat entitlement and the roster do not reconcile: two seats are stated, three people are listed, two of them Active. Whether a pending invitation consumes a billable seat is never indicated, and there is no per-row seat indicator.",
+     "user_impact": "Seats are a priced add-on, so this is the number that drives the charge. A firm cannot tell whether inviting the next staff member is free or billable, nor whether the current roster is already over-committed. Across 40 client organizations, an off-by-one on billable seats is a recurring monthly overcharge nobody can trace back to a cause.",
+     "suggested_fix": "Show \"X of Y seats used\" derived from the roster, mark which rows consume a seat (including pending invitations if they do), and warn before an invitation that would exceed the entitlement."
+    },
+    {
+     "id": "DOM-S23",
+     "severity": "High",
+     "confidence": 84,
+     "element": "Add-on units \u2014 \"Smart rules \u2212 500 +\", \"Revenue recognition \u2014 Up to 50 invoices \u2014 $99.00\", \"Historical transactions \u2014 Up to 50 transactions \u2014 $49.00\"",
+     "finding": "Smart rules are stepped in units of 500 when the product is sold in tiers of 3 rules; revenue recognition is metered in invoices rather than recognition events; historical transactions are priced at $49 per 50 against a production rate of $30 per 1,000. No add-on's unit matches the product it represents.",
+     "user_impact": "Nothing on this screen can be used to size or price a client's needs. Metering RevRec by invoices is the substantive error \u2014 recognition events do not track invoice count, so an ASC 606 limit bought against invoice volume runs out mid-period and recognition postings stop.",
+     "suggested_fix": "Take each add-on's real unit and tier list from production pricing; meter RevRec in recognition events."
+    }
+   ]
+  },
+  {
+   "prototype": "Sketch V2 Long page",
+   "findings": [
+    {
+     "id": "DOM-S2L1",
+     "severity": "High",
+     "confidence": 91,
+     "element": "Plan and billing \u2192 Addons \u2014 all five cards share \"Benefit from flat fee rather than commission on every invoice amount!\"",
+     "finding": "Same defect as the tabbed variant, and more visible here because all five cards are in one scroll: one description, accurate for Invoicing only, applied to Monthly transactions, Smart rules, Revenue recognition and Historical transactions.",
+     "user_impact": "Five non-refundable purchases sit side by side with \"Add\" buttons and no accurate description of any of them. Seeing them adjacent makes it obvious the copy is a placeholder, which is better than the tabbed version \u2014 but the purchase is just as irreversible if someone acts on it.",
+     "suggested_fix": "Per-add-on description and unit, with the one-time versus recurring nature stated on each card."
+    },
+    {
+     "id": "DOM-S2L2",
+     "severity": "High",
+     "confidence": 88,
+     "element": "Users section \u2014 \"Users available for this organization: 2.\" above three roster rows (two Active, one Invitation sent)",
+     "finding": "Seat entitlement of 2 against a roster of 3, with no indication whether the pending invitation consumes a billable seat and no per-row seat marker.",
+     "user_impact": "Seats are priced, so this is a billing figure. A firm cannot tell whether the next invitation is free or chargeable, nor whether the roster already exceeds what is paid for \u2014 a recurring untraceable variance across a large client book.",
+     "suggested_fix": "Derive \"X of Y seats used\" from the roster, mark seat-consuming rows, and warn before an over-entitlement invitation."
+    },
+    {
+     "id": "DOM-S2L3",
+     "severity": "Medium",
+     "confidence": 80,
+     "element": "Plan and billing \u2014 \"Next billing date 11/06/2021\"",
+     "finding": "An all-numeric date on a billing screen with no indication of order \u2014 11 June or 6 November \u2014 and set in the past. Every other prototype in the set uses an unambiguous form such as \"27 Jul 2027\".",
+     "user_impact": "A firm with both US and UK/EU clients cannot read this reliably. The renewal date determines when the prepaid period ends, when currency can be switched, and when a scheduled downgrade takes effect; misreading it by five months puts an accrual in the wrong period. A date in the past also makes it impossible to tell whether the subscription is current.",
+     "suggested_fix": "Use \"11 Jun 2021\"-style dates everywhere a billing date appears, and make the fixture date consistent with the subscription's Active status."
+    }
+   ]
+  }
+ ],
+ "ranking": [
+  {
+   "rank": 1,
+   "prototype": "v2",
+   "why": "It is the only prototype that tells the truth about a mid-term downgrade \u2014 credit, forfeited balance, and a schedule-at-renewal alternative \u2014 and the only one that checks a downgrade against actual seat occupancy and six months of real volume before letting it through."
+  },
+  {
+   "rank": 2,
+   "prototype": "C",
+   "why": "The pending-changes cart means nothing is charged until it has been reviewed as a set, and it keeps the monthly allowance and the purchased historical pool as clearly separate things \u2014 though the review surface itself repeats the false credit promise."
+  },
+  {
+   "rank": 3,
+   "prototype": "A",
+   "why": "The best explanatory copy in the set \u2014 the fee question, tax from the billing address, currency lock and discount portability are all answered correctly \u2014 and a properly itemised Product/Qty/Unit/Amount breakdown, but it commits a non-refundable charge on one click behind a button that falsely promises a review."
+  },
+  {
+   "rank": 4,
+   "prototype": "B",
+   "why": "Full line-item itemisation and a visible monthly delta, undermined by a one-click commit and a delta line that promises a credit at the exact moment the money is being forfeited."
+  },
+  {
+   "rank": 5,
+   "prototype": "Concepts 3-in-1",
+   "why": "Alone in offering what a firm actually needs \u2014 separate billing email, tax/VAT ID, invoice numbers, an autocharge cap, a change-log with CSV export and a type-CANCEL confirmation \u2014 but a breakdown that doesn't foot and a monthly figure labelled as a yearly charge make every number on it unusable until fixed."
+  },
+  {
+   "rank": 6,
+   "prototype": "V2 Billing Hub",
+   "why": "Good structure and the only round-1 layout with a Current/Updated/Difference preview, but it states the same plan's transaction entitlement as both 1,000 and 500, and the delta excludes the add-ons sold directly above it."
+  },
+  {
+   "rank": 7,
+   "prototype": "V1 Unified Settings",
+   "why": "Defines autocharge correctly and explains the transaction and seat units in tooltips, but the displayed new total silently omits every add-on and \"Apply changes\" charges with no confirmation at all."
+  },
+  {
+   "rank": 8,
+   "prototype": "V3 Org Health Dashboard",
+   "why": "The health-status overview is genuinely useful for a firm triaging many organizations, but it redefines autocharge as auto-renewal and turns a one-time consumable into a monthly subscription \u2014 two errors that produce missing transactions and unexpected recurring charges."
+  },
+  {
+   "rank": 9,
+   "prototype": "Sketch V2 Long page",
+   "why": "Reads end to end as one document so the inconsistencies are at least visible together, but the add-on copy describes nothing accurately, the seat count contradicts the roster, and the billing date is unreadable."
+  },
+  {
+   "rank": 10,
+   "prototype": "Sketch V2 Tabbed",
+   "why": "Same defects as the long page with the seat entitlement and the roster split across tabs, so the number that drives the charge is never on screen with the people who consume it."
+  },
+  {
+   "rank": 11,
+   "prototype": "Sketch V1",
+   "why": "A line-item table that misses its own total by a factor of eight, add-ons metered in units no accountant can map to anything, and a cancel dialog promising a free plan that does not exist."
+  }
+ ],
+ "verdict": "manage-subscription-v2 is the only one I would put in front of a client's books. It is the single prototype that admits a mid-term downgrade forfeits prepaid money instead of promising a credit that the non-refundable terms make impossible, it blocks a downgrade that would revoke a colleague's access or strand smart rules, and it shows the credit, the forfeit and the amount charged today before anything is committed. Its proration block still needs fixing \u2014 the 12-month new term and the unchanged renewal date cannot both be right, so the amount due and the forfeit figure are currently wrong \u2014 and it must name which smart rules stop running, but those are corrections to a sound design. Everything else in the set either promises a proration credit that does not exist (A, B, C, V1 Unified, V2 Billing Hub), charges on a single click with no reviewable amount, or gets the meaning of a control wrong; the V3 dashboard's redefinition of autocharge as auto-renewal is the one I would treat as a blocker, because switching it off to avoid a renewal silently stops transactions reaching the books mid-month."
+}
