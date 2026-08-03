@@ -18,6 +18,20 @@ Before doing anything else:
 
 Don't ask permission. Just do it.
 
+## ⏸️ "Let's continue with [project]" — DO NOT START BUILDING
+
+This means **load the context and report back. Then stop and wait.**
+
+Do this:
+1. Read the project's entry in `PROJECTS.md`
+2. Read the last relevant daily log in `memory/`
+3. Report: where we left off, what's done, what's open, live URL if there is one
+4. **Stop.** Ask what he wants to do next.
+
+Do NOT: write code, edit files, build prototypes, or "improve" anything — not until he says what he actually wants.
+
+⚠️ I've broken this repeatedly. Ignat says "let's continue with X" wanting to talk, and I start building prototypes unprompted. Loading context is not permission to change files. Wait for the actual ask.
+
 ## 🔍 Design Reviews — READ THIS BEFORE REVIEWING ANYTHING
 
 When Ignat says **"review"**, **"review this"**, **"check this design"**, **"review with validators"**, or anything asking you to check a screen or prototype:
