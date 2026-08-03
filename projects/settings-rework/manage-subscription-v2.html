@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manage subscription v2 — production depth · Synder</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="synder.css">
+<style>
+body { font-family: Roboto, sans-serif; background: var(--bg-page); color: var(--t-primary); margin: 0; font-size: 14px; padding-bottom: 92px; }
+a { color: var(--t-link); }
+
+/* prototype-only state switcher */
+.devbar { background: var(--c-grey); color: #fff; padding: 8px 20px; font-size: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  position: sticky; top: 0; z-index: 45; }
+.devbar b { font-weight: 500; }
+.devbar a { color: #9DC2FF; }
+.devbar .sp { flex: 1; }
+.devbar .states { display: flex; gap: 4px; flex-wrap: wrap; }
+.devbar button { border: 1px solid rgba(255,255,255,.25); background: transparent; color: #C9D6EA; font: inherit; font-size: 11px;
+  padding: 3px 9px; border-radius: var(--r-pill); cursor: pointer; }
+.devbar button.on { background: #fff; color: var(--c-grey); border-color: #fff; font-weight: 500; }
+
+.shell { max-width: 1180px; margin: 0 auto; padding: 20px 24px; }
+.pagehead { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
+.pagehead h1 { font-size: 24px; font-weight: 500; margin: 0; }
+.crumb { font-size: 13px; margin-bottom: 6px; }
+.orgpill { display: inline-flex; align-items: center; gap: 8px; background: var(--c-white); border: 1px solid var(--border-default);
+  border-radius: var(--r-sm); padding: 6px 10px; font-size: 13px; }
+.avatar { width: 24px; height: 24px; border-radius: var(--r-full); background: var(--c-primary); color: #fff; display: grid; place-items: center; font-size: 11px; font-weight: 500; }
+
+.grid2 { display: grid; grid-template-columns: minmax(0,1fr) 320px; gap: 16px; align-items: start; }
+.card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--r-lg); padding: 20px 24px; margin-bottom: 16px; }
+.card > h2 { font-size: 16px; font-weight: 500; margin: 0 0 4px; }
+.card > .hint { color: var(--t-secondary); font-size: 13px; margin: 0 0 16px; line-height: 1.55; }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.mini { font-size: 11px; color: var(--t-secondary); line-height: 1.55; }
+.tile { border: 1px solid var(--border-default); border-radius: var(--r-md); padding: 14px 16px; background: var(--bg-surface); margin-bottom: 12px; }
+.tile h3 { font-size: 13px; font-weight: 500; margin: 0 0 6px; }
+.tile p { color: var(--t-secondary); font-size: 12px; margin: 0 0 10px; line-height: 1.5; }
+.tile .big { font-size: 20px; font-weight: 500; margin: 0 0 4px; }
+.ext::after { content: "↗"; font-size: 11px; margin-left: 4px; color: var(--t-secondary); }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; }
+.kv dt { color: var(--t-secondary); } .kv dd { margin: 0; font-weight: 500; text-align: right; }
+
+/* plan header strip */
+.planstrip { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 20px; background: var(--c-primary-5);
+  border: 1px solid var(--c-primary-20); border-radius: var(--r-md); padding: 16px; margin-bottom: 4px; }
+.planstrip.warnbg { background: var(--c-yellow-light); border-color: var(--c-yellow); }
+.planstrip.errbg { background: var(--c-red-light); border-color: var(--c-red); }
+.planstrip.flat { background: var(--c-grey-5); border-color: var(--border-default); }
+.planstrip .k { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--t-secondary); margin-bottom: 4px; }
+.planstrip .v { font-size: 14px; font-weight: 500; }
+.price { font-size: 24px; font-weight: 500; }
+.price s { font-size: 14px; font-weight: 400; color: var(--t-muted); margin-right: 6px; }
+
+/* usage insight */
+.insight { border: 1px solid var(--c-primary-20); background: var(--c-primary-5); border-radius: var(--r-md); padding: 16px 18px; margin-bottom: 16px; }
+.insight.save { border-color: var(--c-green); background: var(--c-green-light); }
+.insight.grow { border-color: var(--c-yellow); background: var(--c-yellow-light); }
+.insight h3 { font-size: 14px; font-weight: 500; margin: 0 0 4px; }
+.insight p { font-size: 13px; margin: 0 0 10px; line-height: 1.55; }
+.bars { display: flex; gap: 8px; align-items: flex-end; height: 44px; margin: 12px 0 6px; }
+.bars .b { flex: 1; background: var(--c-primary-20); border-radius: 2px 2px 0 0; position: relative; min-height: 3px; }
+.bars .b.hi { background: var(--c-primary); }
+.barlabels { display: flex; gap: 8px; }
+.barlabels span { flex: 1; font-size: 10px; color: var(--t-secondary); text-align: center; }
+.cap { position: relative; height: 1px; background: var(--c-red); margin: -22px 0 22px; }
+.cap span { position: absolute; right: 0; top: -14px; font-size: 10px; color: var(--c-red); background: #fff; padding: 0 4px; }
+
+/* add-on rows */
+.addons { border: 1px solid var(--border-default); border-radius: var(--r-md); }
+.arow { display: grid; grid-template-columns: 1fr auto 108px; gap: 16px; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--c-grey-10); }
+.arow:last-child { border-bottom: none; }
+.arow.inc { background: var(--c-green-light); }
+.arow .an { font-size: 13px; font-weight: 500; }
+.arow .ad { font-size: 12px; color: var(--t-secondary); margin-top: 2px; line-height: 1.45; }
+.arow .aprice { font-size: 13px; text-align: right; font-weight: 500; }
+.arow .aprice small { display: block; color: var(--t-secondary); font-size: 11px; font-weight: 400; }
+.arow.inc .aprice { color: var(--c-green); }
+.stepper { display: inline-flex; align-items: center; gap: 4px; }
+.stepper button { width: 26px; height: 26px; border-radius: var(--r-full); border: 1px solid var(--c-primary); background: #fff;
+  color: var(--c-primary); font-size: 16px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.stepper button:disabled { border-color: var(--c-grey-20); color: var(--c-grey-30); cursor: not-allowed; }
+.stepper .val { min-width: 62px; text-align: center; font-size: 13px; font-weight: 500; }
+.est { color: var(--c-yellow); font-weight: 700; cursor: help; font-size: 11px; }
+.ok { color: var(--c-green); font-weight: 700; } .no { color: var(--c-grey-30); }
+
+/* plan comparison, collapsed by default on this screen */
+details.cmp { border: 1px solid var(--border-default); border-radius: var(--r-md); margin-top: 14px; }
+details.cmp > summary { padding: 13px 16px; cursor: pointer; font-size: 13px; font-weight: 500; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+details.cmp > summary::after { content: "⌄"; color: var(--t-secondary); }
+details.cmp[open] > summary { border-bottom: 1px solid var(--border-default); }
+details.cmp .inner { padding: 14px 16px; }
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 12px; }
+.plancard { border: 1px solid var(--border-default); border-radius: var(--r-md); padding: 14px; cursor: pointer; position: relative; background: #fff; }
+.plancard:hover { border-color: var(--c-primary-50); }
+.plancard.sel { border: 2px solid var(--c-primary); background: var(--c-primary-5); padding: 13px; }
+.plancard .pn { font-size: 15px; font-weight: 500; }
+.plancard .pp { font-size: 19px; font-weight: 500; margin-top: 2px; }
+.plancard .pp s { font-size: 12px; font-weight: 400; color: var(--t-muted); }
+.plancard .pc { font-size: 11px; color: var(--t-secondary); }
+.plancard .tag { position: absolute; top: -9px; left: 12px; background: var(--c-primary); color: #fff; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: var(--r-pill); }
+.plancard ul { margin: 8px 0 0; padding-left: 15px; font-size: 11px; color: var(--t-secondary); line-height: 1.7; }
+.segmented { display: inline-flex; border: 1px solid var(--border-default); border-radius: var(--r-sm); overflow: hidden; margin: 6px 0 2px; }
+.segmented button { border: 0; background: #fff; font: inherit; font-size: 11px; padding: 3px 10px; cursor: pointer; color: var(--t-secondary); }
+.segmented button.on { background: var(--c-primary); color: #fff; }
+.cmptable { width: 100%; border-collapse: collapse; font-size: 12px; }
+.cmptable th { text-align: left; padding: 6px 8px; color: var(--t-secondary); font-weight: 500; border-bottom: 1px solid var(--border-default); }
+.cmptable td { padding: 6px 8px; border-bottom: 1px solid var(--c-grey-10); }
+.cmptable td.c { text-align: center; }
+
+/* invoices */
+table.inv { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.inv th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--t-secondary);
+  font-weight: 500; padding: 8px 10px; border-bottom: 1px solid var(--border-default); }
+table.inv td { padding: 10px; border-bottom: 1px solid var(--c-grey-10); }
+table.inv tr:last-child td { border-bottom: none; }
+table.inv td.n { text-align: right; }
+
+/* sticky total */
+.totalbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--bg-surface);
+  border-top: 1px solid var(--border-default); box-shadow: 0 -2px 8px rgba(60,64,67,.12); padding: 12px 24px; }
+.totalbar .inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; gap: 20px; }
+.totalbar .items { flex: 1; display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--t-secondary); }
+.totalbar .items b { color: var(--t-primary); font-weight: 500; }
+.totalbar .amt { text-align: right; white-space: nowrap; }
+.totalbar .amt .n { font-size: 21px; font-weight: 500; }
+.totalbar .amt .d { font-size: 12px; }
+.d.up { color: var(--c-yellow); } .d.down { color: var(--c-green); }
+
+/* modal */
+.synder-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.42); display: none; align-items: center; justify-content: center; z-index: 60; padding: 24px; }
+.synder-overlay.on { display: flex; }
+.synder-modal { background: #fff; border-radius: var(--r-lg); box-shadow: var(--shadow-modal); width: 100%; max-width: 560px; max-height: 88vh; display: flex; flex-direction: column; }
+.synder-modal.wide { max-width: 660px; }
+.synder-modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border-default); display: flex; align-items: center; justify-content: space-between; }
+.synder-modal-body { padding: 20px; overflow: auto; }
+.synder-modal-footer { padding: 14px 20px; border-top: 1px solid var(--border-default); display: flex; justify-content: flex-end; gap: 8px; background: var(--c-grey-5); border-radius: 0 0 var(--r-lg) var(--r-lg); }
+
+.diff { border: 1px solid var(--border-default); border-radius: var(--r-md); overflow: hidden; font-size: 13px; }
+.diff .dh, .diff .dr { display: grid; grid-template-columns: 1.5fr 1fr 24px 1fr; gap: 8px; padding: 9px 14px; align-items: center; }
+.diff .dh { background: var(--c-grey-5); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--t-secondary); font-weight: 500; }
+.diff .dr { border-top: 1px solid var(--c-grey-10); }
+.diff .dr .n { text-align: right; }
+.diff .dr.chg { background: var(--c-yellow-light); }
+.diff .dr.tot { border-top: 1px solid var(--border-default); font-weight: 500; background: var(--c-grey-5); }
+.arrow { color: var(--t-secondary); text-align: center; }
+
+/* cancel wizard */
+.reasons { display: grid; gap: 8px; }
+.reasons button { text-align: left; border: 1px solid var(--border-default); background: #fff; font: inherit; font-size: 13px;
+  padding: 11px 14px; border-radius: var(--r-sm); cursor: pointer; }
+.reasons button:hover { border-color: var(--c-primary-50); }
+.reasons button.on { border: 2px solid var(--c-primary); background: var(--c-primary-5); padding: 10px 13px; font-weight: 500; }
+.wsteps { display: flex; gap: 6px; margin-bottom: 16px; }
+.wsteps div { flex: 1; height: 3px; border-radius: 2px; background: var(--c-grey-20); }
+.wsteps div.on { background: var(--c-primary); }
+.offer { border: 1px solid var(--c-primary); background: var(--c-primary-5); border-radius: var(--r-md); padding: 16px; margin-bottom: 12px; }
+.offer h4 { font-size: 14px; font-weight: 500; margin: 0 0 6px; }
+.offer p { font-size: 13px; margin: 0 0 12px; line-height: 1.55; }
+
+.tglrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--c-grey-10); }
+.tglrow:last-child { border-bottom: none; }
+.tglrow .lbl { font-size: 13px; } .tglrow .lbl small { display: block; color: var(--t-secondary); font-size: 12px; margin-top: 2px; }
+.tgl { position: relative; display: inline-block; width: 36px; height: 20px; flex: 0 0 auto; }
+.tgl input { opacity: 0; width: 0; height: 0; }
+.tgl span { position: absolute; inset: 0; background: var(--c-grey-30); border-radius: 10px; transition: .15s; cursor: pointer; }
+.tgl span::before { content: ""; position: absolute; width: 16px; height: 16px; left: 2px; top: 2px; background: #fff; border-radius: var(--r-full); transition: .15s; }
+.tgl input:checked + span { background: var(--c-primary); }
+.tgl input:checked + span::before { transform: translateX(16px); }
+
+/* skeleton */
+.sk { background: linear-gradient(90deg, var(--c-grey-10) 25%, var(--c-grey-5) 37%, var(--c-grey-10) 63%);
+  background-size: 400% 100%; animation: sh 1.3s ease-in-out infinite; border-radius: 4px; }
+@keyframes sh { 0% { background-position: 100% 50% } 100% { background-position: 0 50% } }
+
+.toast { position: fixed; right: 24px; bottom: 100px; z-index: 70; background: var(--c-grey); color: #fff; padding: 12px 16px;
+  border-radius: var(--r-sm); font-size: 13px; box-shadow: var(--shadow-modal); opacity: 0; transform: translateY(8px); transition: .2s; pointer-events: none; max-width: 360px; }
+.toast.on { opacity: 1; transform: none; }
+.legend { background: var(--bg-surface); border: 1px solid var(--border-default); border-left: 3px solid var(--c-yellow);
+  border-radius: var(--r-md); padding: 14px 18px; font-size: 12px; line-height: 1.7; color: var(--t-secondary); }
+.legend b { color: var(--t-primary); font-weight: 500; }
+@media (max-width: 1050px) { .grid2 { grid-template-columns: 1fr; } .plans { grid-template-columns: 1fr; } .planstrip { grid-template-columns: 1fr; gap: 12px; } }
+</style>
+</head>
+<body>
+
+<div class="devbar">
+  <b>Manage subscription v2</b>
+  <span class="states" id="states"></span>
+  <span style="opacity:.5">|</span>
+  <span class="states" id="scenarios"></span>
+  <span class="sp"></span>
+  <a href="index.html">← All prototypes</a>
+</div>
+
+<div class="shell">
+  <div class="crumb"><a href="#" onclick="toast('Back to Organization');return false">← Organization</a></div>
+  <div class="pagehead">
+    <h1>Billing</h1>
+    <div class="orgpill"><span class="avatar">PE</span> Per transaction test <span class="chip chip-neutral">Manager</span></div>
+  </div>
+
+  <div id="banner"></div>
+
+  <div class="grid2">
+    <div>
+      <!-- ══ CURRENT PLAN ══ -->
+      <div class="card" id="planCard">
+        <div class="row-between" style="margin-bottom:12px">
+          <div>
+            <h2>Your subscription</h2>
+            <p class="hint" style="margin:0">Change the plan or any quantity. The bar at the bottom shows the new total before anything is charged.</p>
+          </div>
+          <div id="planActions"></div>
+        </div>
+        <div id="planStrip"></div>
+        <div id="couponLine"></div>
+
+        <h3 style="font-size:13px;font-weight:500;margin:20px 0 4px">What you get</h3>
+        <p class="mini" style="margin:0 0 8px">Everything buyable, in one list. What the plan already covers shows as <span class="ok">included</span>.</p>
+        <div class="addons" id="addons"></div>
+
+        <details class="cmp" id="cmpBox">
+          <summary>Compare plans &amp; switch</summary>
+          <div class="inner">
+            <div class="plans" id="plans"></div>
+            <table class="cmptable"><thead><tr><th>Feature</th><th class="c">Essential</th><th class="c">Pro</th><th class="c">Premium</th></tr></thead>
+              <tbody id="cmpBody"></tbody></table>
+          </div>
+        </details>
+      </div>
+
+      <!-- ══ INVOICES ══ -->
+      <div class="card" id="invCard">
+        <div class="row-between" style="margin-bottom:12px">
+          <div><h2>Invoices</h2><p class="hint" style="margin:0">Your last six charges. The full archive and receipts live in Stripe.</p></div>
+          <a class="btn btn-outlined ext" href="#" onclick="stripe('invoice history');return false">Open billing portal</a>
+        </div>
+        <table class="inv"><thead><tr><th>Date</th><th>Description</th><th>Status</th><th class="n">Amount</th><th></th></tr></thead>
+          <tbody id="invBody"></tbody></table>
+      </div>
+
+      <!-- ══ CANCEL ══ -->
+      <div class="card" id="dangerCard">
+        <h2>Cancel subscription</h2>
+        <p class="hint" id="cancelHint"></p>
+        <button class="btn btn-outlined" style="color:var(--c-red);border-color:var(--c-red)" onclick="openCancel()">Cancel subscription</button>
+      </div>
+
+      <div class="legend">
+        <b>Which numbers are real.</b>
+        Taken from production: Invoicing <b>$49.00</b> for up to 20 invoices, Smart rules <b>$19.99</b> for up to 3 rules,
+        historical transactions <b>$30.00</b> per 1,000, Essential <b>$115.00</b> list with a <b>20%</b> annual discount → <b>$92.00</b>.
+        Marked <span class="est">≈</span> and therefore placeholder: the per-block rate for monthly transactions and the per-seat rate.
+        Production never displays either, so they had to be invented — swap them before anyone tests the amounts.
+      </div>
+    </div>
+
+    <!-- ══ RIGHT RAIL ══ -->
+    <div id="rail"></div>
+  </div>
+</div>
+
+<div class="totalbar" id="tbar">
+  <div class="inner">
+    <div class="items" id="tItems"></div>
+    <div class="amt"><div class="n" id="tAmt">$92.00 /mo</div><div class="d" id="tDelta">no change</div></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-outlined" id="tReset" onclick="reset()" disabled>Reset</button>
+      <button class="btn btn-primary" id="tGo" onclick="openConfirm()" disabled>Review change</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CONFIRM: proration + downgrade guardrails ══ -->
+<div class="synder-overlay" id="mConfirm">
+  <div class="synder-modal wide">
+    <div class="synder-modal-header"><b>Review your change</b><button class="btn-icon" onclick="closeM('mConfirm')">✕</button></div>
+    <div class="synder-modal-body" id="confirmBody"></div>
+    <div class="synder-modal-footer">
+      <button class="btn btn-outlined" onclick="closeM('mConfirm')">Back</button>
+      <button class="btn btn-primary" id="confirmGo" onclick="applyChange()">Confirm and pay</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ CANCEL WIZARD: real 8-reason taxonomy ══ -->
+<div class="synder-overlay" id="mCancel">
+  <div class="synder-modal">
+    <div class="synder-modal-header"><b id="cancelTitle">Cancel subscription</b><button class="btn-icon" onclick="closeM('mCancel')">✕</button></div>
+    <div class="synder-modal-body">
+      <div class="wsteps"><div id="w1" class="on"></div><div id="w2"></div><div id="w3"></div></div>
+      <div id="cancelBody"></div>
+    </div>
+    <div class="synder-modal-footer" id="cancelFooter"></div>
+  </div>
+</div>
+
+<!-- ══ BUY HISTORICAL ══ -->
+<div class="synder-overlay" id="mHist">
+  <div class="synder-modal">
+    <div class="synder-modal-header"><b>Buy historical transactions</b><button class="btn-icon" onclick="closeM('mHist')">✕</button></div>
+    <div class="synder-modal-body">
+      <p class="mini" style="margin-top:0">Used only for back-dated syncs, once the monthly balance is empty. They don't expire.</p>
+      <div class="arow" style="border:1px solid var(--border-default);border-radius:var(--r-md)">
+        <div><div class="an">Historical transactions</div><div class="ad">$30.00 per 1,000 · one-time</div></div>
+        <div class="stepper"><button onclick="histQty(-1)">−</button><span class="val" id="histVal">1,000</span><button onclick="histQty(1)">＋</button></div>
+        <div class="aprice" id="histPrice">$30.00</div>
+      </div>
+      <p style="margin:14px 0 0;font-size:14px;font-weight:500;display:flex;justify-content:space-between">
+        <span>Total, one-time</span><span id="histTotal">$30.00 USD</span></p>
+      <p class="mini" style="margin-top:10px">Charged to •••• 4242 immediately. Tax added at checkout.</p>
+    </div>
+    <div class="synder-modal-footer">
+      <button class="btn btn-outlined" onclick="closeM('mHist')">Cancel</button>
+      <button class="btn btn-primary" onclick="closeM('mHist');toast('Purchased. Historical pool is now ' + hist.toLocaleString() + '.')">Buy</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   PRICING. Real values are cited in the legend; ESTimated ones are
+   marked so nobody mistakes an invented rate for a production one.
+   ═══════════════════════════════════════════════════════════════ */
+const PLANS = {
+  essential: { name:'Essential', list:115, disc:.20, inc:{ tx:1000,  users:1,  rules:0,  inv:0  } },
+  pro:       { name:'Pro',       list:275, disc:.20, inc:{ tx:10000, users:2,  rules:3,  inv:0  } },
+  proMax:    { name:'Pro Max',   list:415, disc:.20, inc:{ tx:25000, users:5,  rules:10, inv:20 } },
+  premium:   { name:'Premium',   list:null,disc:0,   inc:{ tx:50000, users:99, rules:10, inv:50 } },
+};
+const ADDONS = [
+  { id:'tx',    name:'Monthly transactions', desc:'Sales, refunds and payouts Synder syncs. Processing fees are never charged.',
+    step:500, unit:15,   est:true,  fmt:n=>n.toLocaleString() },
+  { id:'users', name:'Additional users',     desc:'Extra people who can log in to this organization.',
+    step:1,   unit:12,   est:true,  fmt:n=>n>=99?'Unlimited':n },
+  { id:'rules', name:'Smart rules',          desc:'Automate edits instead of fixing transactions by hand. Sold in tiers of 3.',
+    step:3,   unit:19.99, est:false, fmt:n=>n },
+  { id:'inv',   name:'Invoicing',            desc:'Flat fee per invoice batch instead of a commission on each invoice.',
+    step:20,  unit:49,    est:false, fmt:n=>n },
+];
+/* Real usage — this is what makes right-sizing advice possible. */
+const MONTHS = ['Feb','Mar','Apr','May','Jun','Jul'];
+const SCENARIOS = {
+  demo: { usage:[240, 310, 275, 420, 388, 351], seats:2,
+          note:'The captured demo org: Essential, 2 seats, using well under its allowance.' },
+  pro3: { usage:[7100, 8400, 6900, 9600, 8850, 9210], seats:3,
+          note:'A Pro org with 3 people and real volume — downgrading from here trips the guardrails.' },
+};
+let scenario = 'demo';
+const USAGE = () => SCENARIOS[scenario].usage;
+const SEATS_IN_USE = () => SCENARIOS[scenario].seats;
+
+/* ═══ subscription states ═══ */
+const STATES = {
+  active:     { label:'Active' },
+  trial:      { label:'Trial' },
+  past_due:   { label:'Past due' },
+  cancelling: { label:'Cancelling' },
+  expired:    { label:'Expired' },
+  premium:    { label:'Premium (quoted)' },
+  nocard:     { label:'No card on file' },
+  loading:    { label:'Loading' },
+  error:      { label:'Billing unavailable' },
+};
+let state = 'active';
+
+/* Price any configuration. Never hardcode a total — a hardcoded 92 alongside quantities
+   that disagreed with it was what made a downgrade read "+$0.00". */
+function priceOf(cfg, maxTier) {
+  const k = cfg.plan === 'pro' && maxTier ? 'proMax' : cfg.plan;
+  const P = PLANS[k];
+  if (P.list === null) return null;
+  let s = P.list;
+  ADDONS.forEach(a => { s += (Math.max(0, cfg[a.id] - P.inc[a.id]) / a.step) * a.unit; });
+  return s * (1 - P.disc);
+}
+
+/* current subscription, per state */
+function baseline() {
+  const b = scenario === 'pro3'
+    ? { plan:'pro', tx:10000, users:2, rules:3, inv:0, coupon:null }
+    : { plan:'essential', tx:1000, users:1, rules:0, inv:0, coupon:null };
+  if (state === 'premium') {
+    const p = { ...b, plan:'premium', tx:50000, users:99, rules:10, inv:50 };
+    return { ...p, monthly:null };
+  }
+  return { ...b, monthly: priceOf(b, false) };
+}
+let CURRENT = baseline();
+let sel = { ...CURRENT };
+const want = {};
+let proIsMax = false;
+const money = n => '$' + n.toFixed(2);
+const key = () => sel.plan === 'pro' && proIsMax ? 'proMax' : sel.plan;
+const editable = () => !['loading','error','expired'].includes(state);
+
+/* ═══════════════ state switcher ═══════════════ */
+document.getElementById('states').innerHTML = Object.entries(STATES)
+  .map(([k, v]) => `<button data-s="${k}" onclick="setState('${k}')">${v.label}</button>`).join('');
+document.getElementById('scenarios').innerHTML = Object.entries(SCENARIOS)
+  .map(([k, v]) => `<button data-sc="${k}" title="${v.note}" onclick="setScenario('${k}')">${k === 'demo' ? 'Demo org' : 'Pro org, 3 people'}</button>`).join('');
+function setScenario(sc) {
+  scenario = sc;
+  document.querySelectorAll('#scenarios button').forEach(b => b.classList.toggle('on', b.dataset.sc === sc));
+  setState(state);
+}
+function setState(s) {
+  state = s;
+  document.querySelectorAll('#states button').forEach(b => b.classList.toggle('on', b.dataset.s === s));
+  CURRENT = baseline();
+  sel = { ...CURRENT };
+  Object.keys(want).forEach(k => delete want[k]);
+  proIsMax = false;
+  renderAll();
+}
+
+/* ═══════════════ banner per state ═══════════════ */
+function renderBanner() {
+  const el = document.getElementById('banner');
+  const map = {
+    active: '',
+    trial: `<div class="alert alert-info" style="margin-bottom:16px"><div style="flex:1"><strong>You're on a free trial — 9 days left.</strong>
+      It ends 12 Aug 2026. Add a card before then and syncing continues without a gap; if you don't, imports pause and nothing is deleted.
+      <div style="margin-top:8px"><button class="btn btn-primary" onclick="stripe('payment method')">Add a card</button></div></div></div>`,
+    past_due: `<div class="alert alert-error" style="margin-bottom:16px"><div style="flex:1"><strong>We couldn't charge •••• 4242 on 27 Jul.</strong>
+      The card was declined. We'll retry on 4 Aug, and syncing keeps running until 10 Aug — after that imports pause until payment goes through.
+      <div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-primary" onclick="stripe('payment method')">Update card</button>
+      <button class="btn btn-outlined" onclick="toast('Retrying the charge on •••• 4242…')">Retry now</button></div></div></div>`,
+    cancelling: `<div class="alert alert-warning" style="margin-bottom:16px"><div style="flex:1"><strong>Your subscription ends 27 Jul 2027.</strong>
+      Until then everything works normally. After that date syncing stops, your data stays available read-only, and nothing is deleted.
+      <div style="margin-top:8px"><button class="btn btn-primary" onclick="setState('active');toast('Subscription reactivated — billing continues as before.')">Keep my subscription</button></div></div></div>`,
+    expired: `<div class="alert alert-error" style="margin-bottom:16px"><div style="flex:1"><strong>This subscription ended on 27 Jul 2026.</strong>
+      Syncing has stopped and your existing data is read-only. Resubscribing restores imports from where they stopped — nothing was deleted.
+      <div style="margin-top:8px"><button class="btn btn-primary" onclick="setState('active');toast('Welcome back — subscription restored.')">Resubscribe</button></div></div></div>`,
+    premium: `<div class="alert alert-info" style="margin-bottom:16px"><div style="flex:1"><strong>You're on a negotiated Premium plan.</strong>
+      Quantities and pricing are managed by your account team, so they're read-only here. Everything else on this page works normally.
+      <div style="margin-top:8px"><button class="btn btn-outlined" onclick="toast('Your account manager will be in touch.')">Contact your account manager</button></div></div></div>`,
+    nocard: `<div class="alert alert-warning" style="margin-bottom:16px"><div style="flex:1"><strong>No payment method on file.</strong>
+      This organization is invoiced manually, so plan changes here won't charge a card — they'll appear on your next invoice.
+      <div style="margin-top:8px"><button class="btn btn-outlined" onclick="stripe('payment method')">Add a card instead</button></div></div></div>`,
+    loading: '',
+    error: `<div class="alert alert-error" style="margin-bottom:16px"><div style="flex:1"><strong>We can't load your billing details right now.</strong>
+      Your subscription is unaffected and syncing continues — this is a display problem on our side.
+      <div style="margin-top:8px;display:flex;gap:8px"><button class="btn btn-primary" onclick="setState('active')">Try again</button>
+      <a class="btn btn-outlined ext" href="#" onclick="stripe('subscription');return false">Manage in Stripe instead</a></div></div></div>`,
+  };
+  el.innerHTML = map[state] || '';
+}
+
+/* ═══════════════ plan strip ═══════════════ */
+function renderStrip() {
+  const el = document.getElementById('planStrip');
+  if (state === 'loading') {
+    el.innerHTML = `<div class="planstrip flat">${'<div><div class="sk" style="height:11px;width:60px;margin-bottom:8px"></div><div class="sk" style="height:20px;width:120px"></div></div>'.repeat(3)}</div>`;
+    return;
+  }
+  if (state === 'error') {
+    el.innerHTML = `<div class="planstrip flat"><div><div class="k">Plan</div><div class="v">—</div></div>
+      <div><div class="k">You pay</div><div class="v">—</div></div><div><div class="k">Next charge</div><div class="v">—</div></div></div>`;
+    return;
+  }
+  const cls = state === 'past_due' ? 'errbg' : (state === 'cancelling' || state === 'trial' || state === 'nocard') ? 'warnbg' : '';
+  const chip = { active:'<span class="chip chip-success">Active</span>', trial:'<span class="chip chip-info">Trial</span>',
+    past_due:'<span class="chip chip-error">Past due</span>', cancelling:'<span class="chip chip-warning">Ends 27 Jul 2027</span>',
+    expired:'<span class="chip chip-error">Expired</span>', premium:'<span class="chip chip-primary">Negotiated</span>',
+    nocard:'<span class="chip chip-warning">Invoiced</span>' }[state] || '';
+  const P = PLANS[CURRENT.plan];
+  const payNow = state === 'trial' ? `<span class="price">${money(priceOf(CURRENT, false))}</span>` :
+    CURRENT.monthly === null ? '<span class="price" style="font-size:17px">Negotiated</span>' :
+    `<span class="price"><s>${money(P.list)}</s>${money(CURRENT.monthly)}</span>`;
+  const next = { active:'27 Jul 2027', trial:'12 Aug 2026 (trial ends)', past_due:'4 Aug 2026 (retry)',
+    cancelling:'— no further charges', expired:'—', premium:'Per your agreement', nocard:'On your next invoice' }[state] || '27 Jul 2027';
+  el.innerHTML = `<div class="planstrip ${cls}">
+    <div><div class="k">Plan</div><div class="v">${P.name}, yearly ${chip}</div>
+      <div class="mini">${state === 'trial' ? 'No charge during the trial' : 'Billed once a year'}</div></div>
+    <div><div class="k">${state === 'trial' ? 'After the trial' : 'You pay'}</div>${payNow}
+      <div class="mini">per month, billed yearly</div></div>
+    <div><div class="k">Next charge</div><div class="v">${next}</div>
+      <div class="mini">${state === 'active' ? '$1,104.00 for 12 months' : state === 'past_due' ? '$1,104.00 outstanding' : '&nbsp;'}</div></div>
+  </div>`;
+
+  document.getElementById('couponLine').innerHTML = CURRENT.coupon
+    ? `<p class="mini" style="margin:8px 0 0"><span class="chip chip-success">${CURRENT.coupon}</span> applied — shown as a line in the breakdown.</p>` : '';
+
+  document.getElementById('planActions').innerHTML = editable() && state !== 'premium'
+    ? `<button class="btn btn-outlined" onclick="document.getElementById('cmpBox').open=true;document.getElementById('cmpBox').scrollIntoView({behavior:'smooth',block:'center'})">Compare plans</button>` : '';
+}
+
+/* ═══════════════ usage insight — the thing production never does ═══════════════ */
+function renderInsight() {
+  const rail = [];
+  if (state === 'loading' || state === 'error' || state === 'expired') return '';
+  const U = USAGE(), peak = Math.max(...U), inc = PLANS[CURRENT.plan].inc.tx, avg = Math.round(U.reduce((a, b) => a + b) / U.length);
+  const headroom = Math.round((1 - peak / inc) * 100);
+  const bars = U.map((v, i) => `<div class="b ${v === peak ? 'hi' : ''}" style="height:${Math.max(6, v / inc * 100)}%" title="${MONTHS[i]}: ${v}"></div>`).join('');
+  const labels = MONTHS.map(m => `<span>${m}</span>`).join('');
+  let cls = '', title = '', body = '', cta = '';
+  if (headroom >= 50) {
+    cls = 'save'; title = `You're using about ${Math.round(peak / inc * 100)}% of your transaction allowance`;
+    body = `Your busiest month in the last six was <b>${peak.toLocaleString()}</b> of <b>${inc.toLocaleString()}</b> included, averaging ${avg.toLocaleString()}.
+      You're paying for headroom you haven't needed. Nothing is wrong — just worth knowing before you renew.`;
+    cta = `<button class="btn btn-outlined" onclick="toast('Right-sizing suggestions are advisory — no plan below Essential exists, so this would mean a smaller add-on bundle.')">See a smaller option</button>`;
+  } else if (headroom < 10) {
+    cls = 'grow'; title = 'You came close to your transaction limit last month';
+    body = `Your busiest month hit <b>${peak.toLocaleString()}</b> of <b>${inc.toLocaleString()}</b>. If you go over, syncing pauses unless autocharge is on.`;
+    cta = `<button class="btn btn-primary" onclick="bump('tx',1);document.getElementById('addons').scrollIntoView({behavior:'smooth',block:'center'})">Add more transactions</button>`;
+  } else return '';
+  return `<div class="insight ${cls}"><h3>${title}</h3><p>${body}</p>
+    <div class="bars">${bars}</div><div class="cap"><span>${inc.toLocaleString()} included</span></div>
+    <div class="barlabels">${labels}</div>${cta}</div>`;
+}
+
+/* ═══════════════ add-on rows ═══════════════ */
+function renderAddons() {
+  const el = document.getElementById('addons');
+  if (state === 'loading') {
+    el.innerHTML = Array(4).fill(`<div class="arow"><div><div class="sk" style="height:13px;width:170px;margin-bottom:6px"></div>
+      <div class="sk" style="height:11px;width:280px"></div></div><div class="sk" style="height:26px;width:110px"></div>
+      <div class="sk" style="height:13px;width:70px"></div></div>`).join('');
+    return;
+  }
+  if (state === 'error') { el.innerHTML = `<div class="arow"><div class="ad">Quantities unavailable while billing details can't be loaded.</div><div></div><div></div></div>`; return; }
+  const inc = PLANS[key()].inc;
+  const locked = !editable() || state === 'premium';
+  el.innerHTML = ADDONS.map(a => {
+    const val = sel[a.id], extra = Math.max(0, val - inc[a.id]);
+    const cost = (extra / a.step) * a.unit;
+    const included = extra === 0;
+    const mark = a.est ? ` <span class="est" title="Placeholder rate — production never shows this number">≈</span>` : '';
+    return `<div class="arow ${included ? 'inc' : ''}">
+      <div><div class="an">${a.name}${mark}</div><div class="ad">${a.desc}</div></div>
+      ${locked ? `<div class="mini" style="text-align:center">${a.fmt(val)}</div>`
+        : `<div class="stepper">
+             <button onclick="bump('${a.id}',-1)" ${val <= inc[a.id] ? 'disabled' : ''} aria-label="Decrease ${a.name}">−</button>
+             <span class="val">${a.fmt(val)}</span>
+             <button onclick="bump('${a.id}',1)" aria-label="Increase ${a.name}">＋</button>
+           </div>`}
+      <div class="aprice">${included ? '<span class="ok">included</span>' : '+' + money(cost)}
+        <small>${included ? (a.fmt(inc[a.id]) === 'Unlimited' ? 'unlimited in plan' : a.fmt(inc[a.id]) + ' in plan') : a.fmt(extra) + ' over plan'}</small></div>
+    </div>`;
+  }).join('');
+}
+
+function bump(id, dir) {
+  const a = ADDONS.find(x => x.id === id), inc = PLANS[key()].inc[id];
+  const next = Math.max(inc, sel[id] + dir * a.step);
+  if (next === inc) delete want[id]; else want[id] = next;
+  sel[id] = next;
+  renderAddons(); renderTotal();
+}
+
+/* ═══════════════ plan comparison ═══════════════ */
+const CMP = [
+  ['Monthly transactions', '1,000', '10,000', '50,000+'],
+  ['Additional users', '1', '2', 'Unlimited'],
+  ['Free smart rules', 0, '3', '10'],
+  ['Transaction history', 'Paid unlimited', '3 mo free, then paid', 'Free unlimited'],
+  ['Oracle NetSuite', 0, 1, 1],
+  ['Premium integrations (Magento, Walmart, TikTok, …)', 0, 1, 1],
+  ['Assisted setup', 0, 1, 1],
+  ['Dedicated server &amp; custom development', 0, 0, 1],
+  ['Support', 'Email', 'Email, chat', 'Email, chat, Zoom'],
+  ['Support lane', 'Regular', 'Express', 'Fast Track'],
+];
+function renderPlans() {
+  document.getElementById('cmpBody').innerHTML = CMP.map(r =>
+    `<tr><td>${r[0]}</td>` + r.slice(1).map(c =>
+      `<td class="c">${c === 1 ? '<span class="ok">✓</span>' : c === 0 ? '<span class="no">—</span>' : c}</td>`).join('') + '</tr>').join('');
+  document.getElementById('plans').innerHTML = `
+    <div class="plancard ${sel.plan === 'essential' ? 'sel' : ''}" onclick="pick('essential')">
+      ${CURRENT.plan === 'essential' ? '<span class="tag">Your plan</span>' : ''}
+      <div class="pn">Essential</div><div class="pp"><s>$115</s> $92</div><div class="pc">/mo billed yearly</div>
+      <ul><li>1,000 transactions</li><li>1 user</li></ul></div>
+    <div class="plancard ${sel.plan === 'pro' ? 'sel' : ''}" onclick="pick('pro')">
+      ${CURRENT.plan === 'pro' ? '<span class="tag">Your plan</span>' : ''}
+      <div class="pn">Pro</div>
+      <div class="segmented" onclick="event.stopPropagation()">
+        <button class="${proIsMax ? '' : 'on'}" onclick="proTier('std')">Standard</button>
+        <button class="${proIsMax ? 'on' : ''}" onclick="proTier('max')">Max</button></div>
+      <div class="pp">${proIsMax ? '<s>$415</s> $332' : '<s>$275</s> $220'}</div><div class="pc">/mo billed yearly</div>
+      <ul><li>${proIsMax ? '25,000' : '10,000'} transactions</li><li>${proIsMax ? '5' : '2'} users</li><li>${proIsMax ? '10' : '3'} smart rules</li></ul>
+      <p class="mini" style="margin:6px 0 0">What "Max" changes isn't documented in the live UI — these figures are inferred.</p></div>
+    <div class="plancard ${sel.plan === 'premium' ? 'sel' : ''}" onclick="pick('premium')">
+      ${CURRENT.plan === 'premium' ? '<span class="tag">Your plan</span>' : ''}
+      <div class="pn">Premium</div><div class="pp" style="font-size:15px">Custom pricing</div><div class="pc">Quoted to your setup</div>
+      <ul><li>Unlimited users</li><li>Fast Track support</li></ul></div>`;
+}
+function pick(p) {
+  if (!editable() || state === 'premium') return;
+  sel.plan = p;
+  const inc = PLANS[key()].inc;
+  ADDONS.forEach(a => { sel[a.id] = Math.max(want[a.id] ?? 0, inc[a.id]); });
+  renderPlans(); renderAddons(); renderTotal();
+}
+function proTier(t) { proIsMax = t === 'max'; if (sel.plan === 'pro') pick('pro'); else renderPlans(); }
+
+/* ═══════════════ right rail ═══════════════ */
+function renderRail() {
+  const el = document.getElementById('rail');
+  if (state === 'loading') {
+    el.innerHTML = Array(3).fill(`<div class="tile"><div class="sk" style="height:13px;width:110px;margin-bottom:10px"></div>
+      <div class="sk" style="height:11px;width:100%;margin-bottom:6px"></div><div class="sk" style="height:30px;width:100%"></div></div>`).join('');
+    return;
+  }
+  const cardTile = state === 'nocard'
+    ? `<div class="tile"><h3>Payment method</h3><p>None on file — this organization is invoiced manually.</p>
+        <a class="btn btn-outlined ext" style="width:100%" href="#" onclick="stripe('payment method');return false">Add a card</a></div>`
+    : `<div class="tile"><h3>Payment method</h3>
+        <div class="kv" style="margin-bottom:10px"><dt>Card</dt><dd>•••• 4242${state === 'past_due' ? ' <span class="chip chip-error">Declined</span>' : ''}</dd>
+          <dt>Expires</dt><dd>04 / 2029</dd></div>
+        <a class="btn btn-outlined ext" style="width:100%" href="#" onclick="stripe('payment method');return false">Change card</a>
+        <p class="mini" style="margin:8px 0 0">Card and invoices are handled by Stripe's portal, in a new tab.</p></div>`;
+
+  const breakdown = CURRENT.monthly === null ? `<div class="tile"><h3>What you're paying for</h3>
+      <p>Your Premium terms are set in your agreement rather than itemised here. Your account manager has the breakdown.</p></div>`
+    : `<div class="tile"><h3>What you're paying for</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <tr><td style="padding:3px 0">${PLANS[CURRENT.plan].name} plan × 1</td><td style="text-align:right">${money(PLANS[CURRENT.plan].list)}</td></tr>
+        <tr><td style="padding:3px 0">${CURRENT.tx.toLocaleString()} transactions</td><td style="text-align:right;color:var(--c-green)">included</td></tr>
+        <tr><td style="padding:3px 0">${SEATS_IN_USE()} seats in use of ${1 + CURRENT.users}</td><td style="text-align:right">${CURRENT.users > PLANS[CURRENT.plan].inc.users ? '+' + money((CURRENT.users - PLANS[CURRENT.plan].inc.users) * 12) : '<span style="color:var(--c-green)">included</span>'}</td></tr>
+        <tr><td style="padding:3px 0;color:var(--c-green)">Annual discount −20%</td><td style="text-align:right;color:var(--c-green)">−${money(PLANS[CURRENT.plan].list * .2)}</td></tr>
+        <tr><td style="padding:7px 0 0;border-top:1px solid var(--c-grey-10);font-weight:500">Total /mo</td>
+            <td style="padding:7px 0 0;border-top:1px solid var(--c-grey-10);text-align:right;font-weight:500">${money(CURRENT.monthly)}</td></tr>
+      </table>
+      <p class="mini" style="margin:8px 0 0">Tax is added at checkout from your billing address, and itemised on the invoice.</p></div>`;
+
+  el.innerHTML = cardTile + breakdown + `
+    <div class="tile"><h3>Sync balance</h3><div class="big">${state === 'expired' ? '0' : '1,000'}</div>
+      <p style="margin-bottom:6px">Transactions left this month. Resets 27 Aug.</p>
+      <div class="tglrow" style="padding:0;border:0"><div class="lbl" style="font-size:12px">Autocharge when depleted
+        <small>Keeps syncing past your allowance instead of pausing.</small></div>
+        <label class="tgl"><input type="checkbox" checked onchange="toast(this.checked ? 'Autocharge on — syncing continues past your allowance.' : 'Autocharge off — syncing pauses when the balance empties.')"><span></span></label></div></div>
+    <div class="tile"><h3>Historical transactions</h3><div class="big">${hist === 1000 ? '0' : hist.toLocaleString()}</div>
+      <p>For back-dated syncs, once the monthly balance is empty.</p>
+      <button class="btn btn-outlined" style="width:100%" onclick="openM('mHist')" ${editable() ? '' : 'disabled'}>Buy</button>
+      <a class="btn btn-text ext" style="padding-left:0;margin-top:4px" href="#" onclick="ext('synder.com/make-more-credits');return false">Or earn them free</a></div>
+    <div class="tile"><h3>Coupon</h3>
+      <div style="display:flex;gap:6px"><input class="input" placeholder="Code" style="flex:1" id="couponIn" ${editable() ? '' : 'disabled'}>
+      <button class="btn btn-outlined" onclick="applyCoupon()" ${editable() ? '' : 'disabled'}>Apply</button></div>
+      <p class="mini" style="margin:8px 0 0">Currency is locked to USD until the paid period ends — a switcher appears at renewal.</p></div>
+    <div class="tile"><h3>Need a different shape?</h3><p>Higher volumes or bespoke automation — we'll quote a plan.</p>
+      <button class="btn btn-outlined" style="width:100%" onclick="toast('Our team will reach out within one business day.')">Talk to us</button></div>`;
+}
+function applyCoupon() {
+  const v = (document.getElementById('couponIn').value || '').trim().toUpperCase();
+  if (!v) { toast('Enter a coupon code first.'); return; }
+  CURRENT.coupon = v; renderStrip(); toast(`Coupon ${v} applied — it appears as a line on your next invoice.`);
+}
+
+/* ═══════════════ invoices ═══════════════ */
+const INVOICES = [
+  ['27 Jul 2026', 'Essential plan — 12 months', 'Paid', 1104.00],
+  ['12 Jun 2026', 'Historical transactions × 2,000', 'Paid', 60.00],
+  ['27 Jul 2025', 'Essential plan — 12 months', 'Paid', 1104.00],
+  ['03 Mar 2025', 'Smart rules — up to 3 rules', 'Paid', 19.99],
+  ['27 Jul 2024', 'Essential plan — 12 months', 'Paid', 1050.00],
+  ['14 Jan 2024', 'Invoicing — up to 20 invoices', 'Refunded', 49.00],
+];
+function renderInvoices() {
+  const el = document.getElementById('invBody');
+  if (state === 'loading') {
+    el.innerHTML = Array(4).fill(`<tr><td><div class="sk" style="height:12px;width:80px"></div></td>
+      <td><div class="sk" style="height:12px;width:190px"></div></td><td><div class="sk" style="height:12px;width:50px"></div></td>
+      <td class="n"><div class="sk" style="height:12px;width:60px;margin-left:auto"></div></td><td></td></tr>`).join('');
+    return;
+  }
+  if (state === 'error') { el.innerHTML = `<tr><td colspan="5" class="mini" style="padding:16px 10px">Invoice history is unavailable right now. It's still in Stripe's portal.</td></tr>`; return; }
+  if (state === 'trial') { el.innerHTML = `<tr><td colspan="5" class="mini" style="padding:16px 10px">No invoices yet — your trial hasn't been charged. Your first invoice will appear here after 12 Aug 2026.</td></tr>`; return; }
+  el.innerHTML = INVOICES.map(r => {
+    const chip = r[2] === 'Paid' ? 'chip-success' : r[2] === 'Refunded' ? 'chip-neutral' : 'chip-error';
+    return `<tr><td>${r[0]}</td><td>${r[1]}</td><td><span class="chip ${chip}">${r[2]}</span></td>
+      <td class="n">${money(r[3])}</td><td class="n"><a class="ext" href="#" onclick="stripe('invoice PDF');return false">PDF</a></td></tr>`;
+  }).join('');
+}
+
+/* ═══════════════ total bar ═══════════════ */
+function total() { return priceOf(sel, proIsMax); }
+const changed = () => JSON.stringify(sel) !== JSON.stringify(CURRENT);
+
+function renderTotal() {
+  const bar = document.getElementById('tbar');
+  if (!editable() || state === 'premium') { bar.style.display = 'none'; document.body.style.paddingBottom = '24px'; return; }
+  bar.style.display = ''; document.body.style.paddingBottom = '92px';
+  const P = PLANS[key()], t = total();
+  document.getElementById('tItems').innerHTML = [`<span>Plan <b>${P.name}</b></span>`].concat(
+    ADDONS.map(a => { const extra = Math.max(0, sel[a.id] - P.inc[a.id]);
+      return `<span>${a.name} <b>${a.fmt(sel[a.id])}</b>${extra ? ` <span style="color:var(--c-yellow)">+${a.fmt(extra)}</span>` : ''}</span>`; })).join('');
+  document.getElementById('tReset').disabled = !changed();
+  document.getElementById('tGo').disabled = !changed();
+  if (t === null) {
+    document.getElementById('tAmt').textContent = 'Custom';
+    document.getElementById('tDelta').textContent = 'we’ll quote you';
+    document.getElementById('tGo').disabled = false;
+    document.getElementById('tGo').textContent = 'Request a quote';
+    return;
+  }
+  document.getElementById('tGo').textContent = 'Review change';
+  document.getElementById('tAmt').textContent = money(t) + ' /mo';
+  const base = CURRENT.monthly ?? 0, diff = t - base;
+  const d = document.getElementById('tDelta');
+  d.textContent = !changed() ? (state === 'trial' ? 'what you’ll pay when the trial ends' : 'no change · this is what you pay today')
+    : (diff >= 0 ? `+${money(diff)} more per month` : `${money(Math.abs(diff))} less per month`);
+  d.className = 'd ' + (!changed() ? '' : diff > 0 ? 'up' : 'down');
+}
+function reset() { sel = { ...CURRENT }; Object.keys(want).forEach(k => delete want[k]); proIsMax = false; renderPlans(); renderAddons(); renderTotal(); toast('Back to your current subscription.'); }
+
+/* ═══════════════ confirm: proration + downgrade guardrails ═══════════════
+   Production never checks whether a downgrade fits what you already use.
+   This is the gap worth closing. */
+function guardrails() {
+  const inc = PLANS[key()].inc, out = [];
+  const newSeats = 1 + sel.users;                    // owner + additional
+  const inUse = SEATS_IN_USE();
+  if (inUse > newSeats) {
+    out.push({ sev:'block', what:'Users',
+      msg:`<b>${inUse} people</b> currently have access, but this leaves you <b>${newSeats} seat${newSeats === 1 ? '' : 's'}</b>.
+        ${inUse - newSeats} ${inUse - newSeats === 1 ? 'person loses' : 'people lose'} access when the change takes effect.`,
+      fix:`<button class="btn btn-outlined" onclick="bump('users',1);openConfirm()">Keep ${inUse} seats</button>
+           <button class="btn btn-text" onclick="closeM('mConfirm');toast('Opens People so you can remove someone first.')">Remove someone first</button>` });
+  }
+  const peak = Math.max(...USAGE());
+  if (sel.tx < peak) {
+    out.push({ sev:'warn', what:'Transactions',
+      msg:`Your busiest month in the last six was <b>${peak.toLocaleString()}</b>, above the <b>${sel.tx.toLocaleString()}</b> you'd have.
+        In a month like that, syncing pauses unless autocharge is on.`,
+      fix:`<button class="btn btn-outlined" onclick="bump('tx',1);openConfirm()">Add 500 more</button>` });
+  }
+  if (CURRENT.rules > sel.rules) {
+    out.push({ sev:'block', what:'Smart rules', msg:`You have <b>${CURRENT.rules} smart rules</b> configured but you'd be entitled to <b>${sel.rules}</b>. The extras stop running.`,
+      fix:`<button class="btn btn-outlined" onclick="bump('rules',1);openConfirm()">Keep them</button>` });
+  }
+  return out;
+}
+
+function openConfirm() {
+  const t = total();
+  if (t === null) { toast('Request sent — our team will contact you with a Premium quote.'); return; }
+  const P = PLANS[key()], guards = guardrails();
+  const rows = [['Plan', PLANS[CURRENT.plan].name, P.name]].concat(
+    ADDONS.map(a => [a.name, a.fmt(CURRENT[a.id]), a.fmt(sel[a.id])]));
+  // proration: 11 of 12 months unused on the current term.
+  // A downgrade can leave more credit than the new term costs. Production's terms say
+  // purchases are "final and non refundable", so the difference is forfeited — say so
+  // out loud and offer the alternative that doesn't burn money.
+  const monthsLeft = 11, credit = (CURRENT.monthly ?? 0) * monthsLeft, newTerm = t * 12;
+  const dueToday = Math.max(0, newTerm - credit);
+  const forfeit = Math.max(0, credit - newTerm);
+
+  document.getElementById('confirmBody').innerHTML = `
+    ${guards.length ? guards.map(g => `<div class="alert ${g.sev === 'block' ? 'alert-error' : 'alert-warning'}" style="margin-top:0;margin-bottom:12px">
+      <div style="flex:1"><strong>${g.what}:</strong> ${g.msg}<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">${g.fix}</div></div></div>`).join('') : ''}
+    <div class="diff" style="margin-bottom:14px">
+      <div class="dh"><span>Item</span><span class="n">Now</span><span></span><span class="n">After</span></div>
+      ${rows.map(r => `<div class="dr ${r[1] !== r[2] ? 'chg' : ''}"><span>${r[0]}</span><span class="n">${r[1]}</span>
+        <span class="arrow">→</span><span class="n">${r[2]}</span></div>`).join('')}
+      <div class="dr tot"><span>Per month</span><span class="n">${money(CURRENT.monthly ?? 0)}</span><span class="arrow">→</span><span class="n">${money(t)}</span></div>
+    </div>
+    <h4 style="font-size:13px;font-weight:500;margin:0 0 8px">What happens to the money</h4>
+    <div class="diff">
+      <div class="dr"><span>New term — 12 months at ${money(t)}</span><span class="n"></span><span></span><span class="n">${money(newTerm)}</span></div>
+      <div class="dr" style="color:var(--c-green)"><span>Credit for ${monthsLeft} unused months on your current plan</span><span class="n"></span><span></span><span class="n">−${money(Math.min(credit, newTerm))}</span></div>
+      ${forfeit > 0 ? `<div class="dr" style="color:var(--c-red)"><span>Remaining balance you would lose <b>(not refundable)</b></span><span class="n"></span><span></span><span class="n">${money(forfeit)}</span></div>` : ''}
+      <div class="dr tot"><span>${state === 'nocard' ? 'Added to your next invoice' : 'Charged to •••• 4242 today'}</span><span class="n"></span><span></span><span class="n">${money(dueToday)}</span></div>
+    </div>
+    ${forfeit > 0 ? `<div class="alert alert-warning" style="margin-top:12px"><div style="flex:1">
+      <strong>Downgrading today costs you ${money(forfeit)}.</strong>
+      You've already paid for ${monthsLeft} more months at ${money(CURRENT.monthly)}, and under our terms that balance isn't
+      refundable. Switching at renewal instead gives you the lower price with nothing wasted — you keep everything you're
+      paying for until then.
+      <div style="margin-top:8px"><button class="btn btn-primary" onclick="scheduleAtRenewal()">Schedule it for 27 Jul 2027 instead</button></div>
+    </div></div>` : ''}
+    <p class="mini" style="margin-top:10px">Tax is added at checkout from your billing address. Your renewal date stays
+      <b>27 Jul 2027</b>${CURRENT.coupon ? ` and coupon <b>${CURRENT.coupon}</b> carries over` : ''}. Discounts follow your account, not the plan.</p>`;
+
+  const blocked = guards.some(g => g.sev === 'block');
+  const go = document.getElementById('confirmGo');
+  go.disabled = blocked;
+  go.textContent = blocked ? 'Resolve the issue above'
+    : forfeit > 0 ? `Downgrade now anyway (lose ${money(forfeit)})`
+    : state === 'nocard' ? 'Confirm — bill me later'
+    : `Confirm and pay ${money(dueToday)}`;
+  go.className = 'btn ' + (forfeit > 0 ? 'btn-outlined' : 'btn-primary');
+  openM('mConfirm');
+}
+function scheduleAtRenewal() {
+  const t = total();
+  closeM('mConfirm');
+  toast(`Scheduled. You stay on ${PLANS[CURRENT.plan].name} until 27 Jul 2027, then move to ${PLANS[key()].name} at ${money(t)}/mo. Nothing is charged now and nothing is lost.`);
+  sel = { ...CURRENT };
+  Object.keys(want).forEach(k => delete want[k]);
+  proIsMax = false;
+  renderPlans(); renderAddons(); renderTotal();
+}
+
+function applyChange() {
+  const t = total();
+  CURRENT = { ...sel, monthly: t, coupon: CURRENT.coupon };
+  sel = { ...CURRENT };
+  Object.keys(want).forEach(k => delete want[k]);
+  closeM('mConfirm'); renderAll();
+  toast(`Done — you're on ${PLANS[key()].name} at ${money(t)}/mo. The credit was applied automatically.`);
+}
+
+/* ═══════════════ cancel wizard — real taxonomy from production ═══════════════ */
+const REASONS = {
+  'Too expensive': ['Found a cheaper tool', "My business can't afford it right now", "The price doesn't match the value I got", 'Need it for a short time due to seasonality'],
+  'No longer need Synder': ['Volumes dropped', 'Moved bookkeeping in-house', 'One-off project finished', 'Business is seasonal'],
+  "Didn't understand how to use it": ['Setup was confusing', "Couldn't get my mappings right", "Didn't know what a sync would do", 'No time to learn it'],
+  'Missing features': ['A platform I use is not supported', 'My accounting platform is not supported', 'Reporting was not enough', 'Automation was not flexible enough'],
+  'Had technical issues': ['Syncs failed or duplicated', 'Connection kept dropping', 'Data landed wrong in my books', 'It was too slow'],
+  'Switched to another accounting software': ['Moved to a different accounting platform', 'Moved to a competitor of Synder', 'My accountant chose another tool', 'Consolidated onto one system'],
+  'Closing my business': [],
+  'Other': [],
+};
+const OFFERS = {
+  'Too expensive': { h:'Before you go — you may be on the wrong size', p:`Your busiest month used ${Math.max(...USAGE()).toLocaleString()} of ${PLANS[CURRENT.plan].inc.tx.toLocaleString()} included transactions. A smaller bundle or monthly billing could cut what you pay without losing anything you use.`, cta:'Show me a cheaper option' },
+  'No longer need Synder': { h:'You can pause instead of cancelling', p:'Pausing keeps your mappings, settings and history intact and stops the billing. Come back and pick up where you stopped — useful if your volumes are seasonal.', cta:'Pause my subscription' },
+  "Didn't understand how to use it": { h:'A 30-minute setup call is free on your plan', p:'Most setup confusion is mappings, and it is usually a ten-minute fix with someone watching. No charge, no sales pitch.', cta:'Book a setup call' },
+  'Missing features': { h:'Tell us what was missing', p:'If it is a platform or a report, it may already be on the roadmap or available as a custom development. Worth thirty seconds to check before you leave.', cta:'Talk to our team' },
+  'Had technical issues': { h:'Let us look at what went wrong', p:'Sync failures usually trace to one mapping or one integration permission. Our team can read your logs directly and tell you what happened.', cta:'Get technical help' },
+  'Switched to another accounting software': { h:'You might not need to cancel', p:'Synder syncs to QuickBooks, Xero, Sage Intacct, NetSuite and custom ERPs. If you moved to one of those, you can keep your setup — though a different accounting platform needs a new organization.', cta:'See supported platforms' },
+  'Closing my business': null,
+  'Other': null,
+};
+let cStep = 1, cReason = null, cSub = null;
+function openCancel() { cStep = 1; cReason = null; cSub = null; renderCancel(); openM('mCancel'); }
+function renderCancel() {
+  [1,2,3].forEach(i => document.getElementById('w' + i).classList.toggle('on', i <= cStep));
+  const body = document.getElementById('cancelBody'), foot = document.getElementById('cancelFooter');
+  document.getElementById('cancelTitle').textContent = cStep === 1 ? 'Cancel subscription' : cStep === 2 ? 'One more detail' : 'Confirm cancellation';
+
+  if (cStep === 1) {
+    body.innerHTML = `<p style="font-size:13px;margin:0 0 6px">Your plan stays active until <b>27 Jul 2027</b> — you keep everything until then,
+      and your data is never deleted.</p>
+      <p style="font-size:13px;margin:0 0 14px">What's the main reason? It decides what we can actually offer you.</p>
+      <div class="reasons">${Object.keys(REASONS).map(r =>
+        `<button class="${cReason === r ? 'on' : ''}" onclick="cReason='${r.replace(/'/g, "\\'")}';renderCancel()">${r}</button>`).join('')}</div>`;
+    foot.innerHTML = `<button class="btn btn-outlined" onclick="closeM('mCancel')">Keep my subscription</button>
+      <button class="btn btn-primary" onclick="cStep=2;renderCancel()" ${cReason ? '' : 'disabled'}>Next</button>`;
+    return;
+  }
+  if (cStep === 2) {
+    const subs = REASONS[cReason] || [], offer = OFFERS[cReason];
+    body.innerHTML = (offer ? `<div class="offer"><h4>${offer.h}</h4><p>${offer.p}</p>
+        <button class="btn btn-primary" onclick="closeM('mCancel');toast('${offer.cta} — our team will follow up.')">${offer.cta}</button></div>` : '')
+      + (subs.length ? `<p style="font-size:13px;margin:0 0 10px">If you'd still rather leave — which of these is closest?</p>
+        <div class="reasons">${subs.map(s => `<button class="${cSub === s ? 'on' : ''}" onclick="cSub='${s.replace(/'/g, "\\'")}';renderCancel()">${s}</button>`).join('')}</div>`
+        : `<p style="font-size:13px;margin:0">Understood — nothing more to ask. ${cReason === 'Other' ? 'Anything you want to add is welcome but optional.' : ''}</p>
+           ${cReason === 'Other' ? '<textarea class="input" rows="3" placeholder="Optional" style="margin-top:10px;width:100%"></textarea>' : ''}`);
+    foot.innerHTML = `<button class="btn btn-text" onclick="cStep=1;renderCancel()">Back</button>
+      <button class="btn btn-outlined" onclick="closeM('mCancel')">Keep my subscription</button>
+      <button class="btn btn-primary" onclick="cStep=3;renderCancel()" ${(subs.length === 0 || cSub) ? '' : 'disabled'}>Next</button>`;
+    return;
+  }
+  body.innerHTML = `<div class="alert alert-warning" style="margin-top:0">
+    <div style="flex:1"><strong>Here's exactly what happens.</strong>
+      <ul style="margin:8px 0 0;padding-left:18px;font-size:13px;line-height:1.7">
+        <li>Everything keeps working until <b>27 Jul 2027</b> — you already paid for it.</li>
+        <li>On that date imports stop. Your synced data stays in your books, untouched.</li>
+        <li>Your Synder history becomes read-only. Nothing is deleted.</li>
+        <li>Your ${hist === 1000 ? '0' : hist.toLocaleString()} historical transactions and any unused balance are forfeited.</li>
+        <li>You can reactivate any time before 27 Jul 2027 with one click, at the same price.</li>
+      </ul></div></div>
+    <p class="mini" style="margin-top:12px">Reason recorded: <b>${cReason}</b>${cSub ? ` — ${cSub}` : ''}. It goes to the product team, not to sales.</p>`;
+  foot.innerHTML = `<button class="btn btn-text" onclick="cStep=2;renderCancel()">Back</button>
+    <button class="btn btn-primary" onclick="closeM('mCancel')">Keep my subscription</button>
+    <button class="btn btn-outlined" style="color:var(--c-red);border-color:var(--c-red)" onclick="closeM('mCancel');setState('cancelling')">Cancel subscription</button>`;
+}
+
+/* ═══════════════ plumbing ═══════════════ */
+let hist = 1000;
+function histQty(d) {
+  hist = Math.max(1000, hist + d * 1000);
+  document.getElementById('histVal').textContent = hist.toLocaleString();
+  document.getElementById('histPrice').textContent = money(hist / 1000 * 30);
+  document.getElementById('histTotal').textContent = money(hist / 1000 * 30) + ' USD';
+}
+function openM(id) { document.getElementById(id).classList.add('on'); }
+function closeM(id) { document.getElementById(id).classList.remove('on'); }
+let tt;
+function toast(m) { const t = document.getElementById('toast'); t.innerHTML = m; t.classList.add('on'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('on'), 4600); }
+function stripe(w) { toast(`Opens Stripe's hosted billing portal in a new tab to manage your ${w}.`); }
+function ext(u) { toast(`Opens ${u} in a new tab.`); }
+
+function renderAll() {
+  renderBanner();
+  renderStrip();
+  const ins = document.getElementById('insightSlot');
+  if (ins) ins.innerHTML = renderInsight() +
+    `<p class="mini" style="margin:-4px 0 14px">Scenario: ${SCENARIOS[scenario].note}</p>`;
+  renderAddons(); renderPlans(); renderInvoices(); renderRail(); renderTotal();
+  document.getElementById('cancelHint').innerHTML = state === 'expired'
+    ? 'This subscription has already ended, so there is nothing left to cancel.'
+    : state === 'cancelling'
+      ? 'Already scheduled to end on 27 Jul 2027. You can reactivate any time before then.'
+      : 'You keep everything until 27 Jul 2027. Nothing is deleted, and you can come back at the same price.';
+  document.getElementById('dangerCard').style.display = state === 'expired' ? 'none' : '';
+  document.getElementById('invCard').style.display = '';
+}
+
+/* insight slot sits above the plan card */
+document.querySelector('.grid2 > div').insertAdjacentHTML('afterbegin', '<div id="insightSlot"></div>');
+setState('active');
+addEventListener('keydown', e => { if (e.key === 'Escape') ['mConfirm','mCancel','mHist'].forEach(closeM); });
+</script>
+</body>
+</html>
