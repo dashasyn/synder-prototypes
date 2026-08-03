@@ -34,7 +34,13 @@
   - **Cancel taxonomy is real** — recovered from the April capture `.synder-state/unsub-flow/S4-survey-main-reason.png` + `S5-sub-reason.png`
   - **New findings:** CUR-9 (mid-term downgrade silently forfeits paid balance), CUR-10 (no downgrade validation at all), CUR-11 (billing page never shows usage, so it can never advise paying less), SPEC-5 (8 of 9 states are my proposal — dunning timings/trial length unverified)
   - **New fixed bugs:** FIX-7 (hardcoded current price made a downgrade read "+$0.00"), FIX-8 (both guardrails unreachable on the demo org → scenario data)
-- **Next:** Ignat picks a layout → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
+- **Merged with the April round (2026-08-03):** Ignat pointed me at the older hub — **https://dashasyn.github.io/synder-prototypes/manage-subscription/** — and asked for the new set to be added there. Done; that hub is now the single index for all 11 prototypes across both rounds.
+  - **The two rounds independently converged on the same three shapes:** April's V1 Unified Settings ≈ new A · V2 Billing Hub ≈ new B · V3 Org Health Dashboard ≈ new C. Nothing from April was consulted while building A/B/C, so they're a second pass at the same three ideas, not three more options.
+  - **They disagree on the conclusion:** April's `FEEDBACK-round2.md` scored per persona (Sarah 4/5 → V1, Mike 5/5 → V2, Viktor IA5 → V3) and recommended a **hybrid** — V3 shell + V1's breakdown in a drawer + V2's tone — because "the three audiences genuinely want three different surfaces". My round argues for picking one. **Unresolved; Ignat's call.**
+  - April's `FEEDBACK.md` had already found several of my CUR items independently: no total cost, three inconsistent add-on patterns, no proration preview, Cancel as a plain blue link between two safe links.
+  - **Lead on SPEC-1:** April's docs cite **$0.04 per extra sync** and a **$500 autocharge cap**. If real, that's part of the rate card I reported as non-existent — source unconfirmed, asked Ignat.
+  - **Housekeeping found:** two conflicting V1/V2/V3 naming systems in the older set (`concepts-v1v2v3` uses Ledger / Calm Overview / Unified Grid; the standalone files use Unified Settings / Billing Hub / Org Health Dashboard). Flagged on the hub, not renamed.
+- **Next:** Ignat picks a layout (or the April hybrid) → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
 
 ### Smart Rules — Branch Engine Redesign (2026-06-03)
 - **Status:** 🚧 In progress — 2 prototypes built, awaiting Ignat feedback
