@@ -26,7 +26,15 @@
 - **Bugs found & fixed during build (FIX-1..6):** quantity ratchet inflating price on plan round-trip; C's balance purchase bypassing its own cart; A's autocharge toggle hidden behind Save; B's table caption `display:none` (hidden from screen readers); C's cards not keyboard reachable; "99 included" seat sentinel leaking to UI
 - **Shared design rule adopted:** anything that costs money confirms explicitly; preferences save instantly and say so
 - **My recommendation:** B is strongest for the pricing-blindness problem (only layout where "what does this cost at my volume" is answerable without navigating); A is the smallest shippable change; C best if firms batch changes
-- **Next:** Ignat picks a direction → swap in real rates → validator round 2
+- **Round 2 (2026-08-03) — Manage subscription v2, taken in the B direction:** `/projects/settings-rework/manage-subscription-v2.html`
+  - Ignat said "let's continue with manage subscription"; he didn't pick a layout, so I went with my recommendation (B) and said so
+  - **9 switchable states:** active, trial, past due, cancelling, expired, Premium (quoted), no card on file, loading, billing unavailable
+  - **2 org scenarios:** the captured demo org (over-provisioned) and a Pro org with 3 people + real volume — needed because no guardrail can fire on the demo org's usage
+  - **New behaviour production lacks:** downgrade validation (blocks stripping occupied seats / configured rules / volume below peak, each with a one-click fix); proration that itemises the non-refundable forfeit and offers "Schedule it for renewal instead"; usage-based right-sizing that can recommend paying *less*; real 8-reason cancel flow with per-reason retention
+  - **Cancel taxonomy is real** — recovered from the April capture `.synder-state/unsub-flow/S4-survey-main-reason.png` + `S5-sub-reason.png`
+  - **New findings:** CUR-9 (mid-term downgrade silently forfeits paid balance), CUR-10 (no downgrade validation at all), CUR-11 (billing page never shows usage, so it can never advise paying less), SPEC-5 (8 of 9 states are my proposal — dunning timings/trial length unverified)
+  - **New fixed bugs:** FIX-7 (hardcoded current price made a downgrade read "+$0.00"), FIX-8 (both guardrails unreachable on the demo org → scenario data)
+- **Next:** Ignat picks a layout → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
 
 ### Smart Rules — Branch Engine Redesign (2026-06-03)
 - **Status:** 🚧 In progress — 2 prototypes built, awaiting Ignat feedback
