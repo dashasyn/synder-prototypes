@@ -96,3 +96,26 @@ Aggregate Critical count: A = 2 · B = 5 · C = 3 · v2 = 4 (v2's are within a n
 **This reverses the earlier recommendation of B**, which was made on layout logic before any validator pass. B's
 "answer what Pro costs at my volume without navigating" advantage is real, but it can be imported into A's drawer;
 the buried-alert and matrix-legibility problems cannot be fixed without dismantling what makes B B.
+
+## Addendum — late Domain instance (3 items not in the table above)
+
+A second Domain pass landed after this file was written. Its Criticals duplicate items 4 and 6 and A's
+"Review & confirm never reviews", but it adds three copy findings I verified in source. None change the ranking.
+
+1. **A: "balance" means two different things on one page.** The FAQ answer at `proto-a.html:305` —
+   "Anything left on your current balance is credited against the new charge automatically" — sits three lines
+   below "Purchases are final and non-refundable" (`:302`), and in the same column as a card reading
+   "1,000 — Transactions left this month" (`:250`). A bookkeeper can read that as unused sync allowance converting
+   into money. Fix: never use "balance" for both the transaction allowance and the prepaid subscription value, and
+   state the forfeit case explicitly as v2 does (`manage-subscription-v2.html:825`). Domain calls this Critical; I'd
+   call it High — it's the same forfeiture problem as item 6, wearing a vocabulary problem on top.
+2. **"Processing fees are free" is ambiguous — and it's in A, B *and* C, not just B.** The validator attributed this
+   to B alone and credited A with correct wording. A's *FAQ* is correct; A's *stepper description* is not.
+   `proto-a.html:574`, `proto-b.html:514`, `proto-c.html:663` all read "Processing fees are free." Only v2 gets it
+   right: "Processing fees are never charged" (`:389`). The bad reading is "fees aren't synced at all", which would
+   have someone not look for Stripe/PayPal fee entries at reconciliation — gross sales booked without the expense.
+   Cheapest fix in the whole set: one string, three files.
+3. **A: the sync-balance card shows remaining only.** "1,000 / Transactions left this month" with no
+   used-of-included and no reset date, while the breakdown row separately says "Monthly transactions (1,000
+   included)" — so 1,000 could mean entitlement or nothing-consumed-yet. v2 already shows used-of-included plus a
+   6-month trend; port it. Medium.
