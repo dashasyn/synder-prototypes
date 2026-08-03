@@ -18,6 +18,21 @@ Before doing anything else:
 
 Don't ask permission. Just do it.
 
+## 🔍 Design Reviews — READ THIS BEFORE REVIEWING ANYTHING
+
+When Ignat says **"review"**, **"review this"**, **"check this design"**, **"review with validators"**, or anything asking you to check a screen or prototype:
+
+**→ Read `personas/VALIDATOR_PROTOCOL.md` and follow it. Do not improvise a review.**
+
+The validator system already exists. Five validators live in `personas/validators/`:
+UX · Domain (accountant) · Clarity (business owner) · Fidelity (vs spec) · Trust (does the UI lie?)
+
+Supporting files: `personas/KNOWN_FRICTION.md` (real LogRocket friction to check designs against), `DESIGN_RULES.md` (style rules — note its type scale and colors are stale; `skills/synder-explorer/references/synder-design-tokens.css` and `reports/synder-components.html` are the truth).
+
+**No URL needed** — the protocol's Step 0 resolves the target from conversation context.
+
+⚠️ On 2026-07-31 I told Ignat the validators didn't exist because I searched `skills/` and `.claude/agents/` and found nothing. They were in `personas/` the whole time. That's why this pointer exists. Never claim a system doesn't exist without searching the whole workspace.
+
 ## Memory
 
 You wake up fresh each session. These files are your continuity:
