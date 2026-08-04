@@ -5,6 +5,30 @@
 
 ## 🔧 Active Projects
 
+### Balance Reconciliation — Transaction Reconciliation Results page (2026-08-04)
+- **Status:** 🚧 In progress — copy/tooltip fixes reviewed and mostly applied, table sorting reviewed, awaiting a few Ignat decisions
+- **Jira:** DIS-259
+- **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/balance-recon/ — `projects/balance-recon/index.html`, 6 screens
+- **Scope:** Balance block on the Reconciliation Results page (6 rows × 4 cols: Beginning balance · +Debits · −Credits · Computed ending · Reported ending · Delta) + the Reconciliation list table (sorting, status column)
+- **Status column — CONFIRMED LOCKED (2026-07-16):** replaced old two-column system (Matching/Reconciling) with one unified Status column — In progress (blue) / Error (red) / Attention required (orange) / Reconciled (green). Reconciled does NOT require balance verification to have run — only that all *applicable* checks passed. Full copy + Jira task body drafted and handed to Ignat (read-only Jira access, can't create tickets directly).
+- **Balance block tooltip fixes (2026-08-04 session):**
+  - Fixed: "taken from your accounting" → "taken from your books" (grammatically broken + violated vocabulary.md canonical term "Books"). Bonus: also resolves the old mode-mismatch issue (DOM-2) — accurate for Automated, Assisted, Manual, and non-QBO platforms alike.
+  - Fixed: Calculated-ending tooltip now explains the *why*, not just restating the formula
+  - Open: label/tooltip term mismatch — row label "Accounting beginning balance" vs tooltip "Starting balance." Fix tooltip to say "Beginning balance taken from your books."
+  - Open: formula tooltip uses en dash (–) instead of proper minus sign (−)
+  - Open: Difference/Delta figure has no direction indicator (e.g. "421.22 USD" doesn't say over/under)
+  - Open: "USD" repeated on all 6 line-item figures — show once in block header instead
+  - Open: demo data shows 3 different date ranges simultaneously (header May 1–31 2025 / filter Feb–Mar 2024 / rows May 10 2024) — needs dev clarification on which drives the calc
+  - Open: DOM-1 typo "blanced" → "balanced" in the Balanced-state banner (Figma fix, trivial)
+  - Unverified: does "See details" on an Error-status row actually link to the Process log?
+- **Reconciliation list table — sorting review (2026-08-04):**
+  - Confirmed by Ignat as intentional (my original flags were wrong, retracted): 2-sortable-column limit with black/grey arrows is a consistent cross-page pattern; Date range as default sort is correct (period matters more than record-creation date)
+  - Dropped own suggestion to make Status sortable — locked Status filter already covers "find runs needing attention"
+  - Open: which end of "Date range" drives sort when ranges overlap — start date recommended, end date as tiebreaker
+  - Open: demo data needs varied Date range/Date created values per row to actually test sort behavior
+- **CONFIGURE screens — copy not yet locked:** Manual mode checkbox tooltip + Automated mode "New" badge notice rewrites proposed 2026-07-15/16, not yet confirmed or in Figma
+- **Next:** Ignat to confirm remaining open items → apply fixes to prototype → verify Error status wiring → lock CONFIGURE screen copy
+
 ### Settings & Billing Rework — 3 layouts (2026-07-31)
 - **Status:** 🚧 3 prototypes live, awaiting Ignat's pick
 - **Hub:** https://dashasyn.github.io/synder-prototypes/projects/settings-rework/
@@ -225,23 +249,22 @@
 - **Settings wired:** Clearing account, income/fee/bank accounts, generic customer (+name picker), track fees, include taxes, default product
 - **Data:** 10 Stripe transactions (Pamela Anderson, Marcus Reid, etc.) Jan–Mar 2026
 
-### Filtering Options Prototype (2026-04-30, functional v2 2026-08-04)
-- **Status:** ✅ v2 live — all four variants actually filter
+### Filtering Options Prototype (2026-04-30, functional v2 2026-08-04, multiselect v3 2026-08-04)
+- **Status:** ✅ v3 live — all four variants filter for real, Status/Platform are multiselect
 - **Location:** `filtering-options/index.html` (mirror: `reports/filtering-options/index.html` — keep both in sync)
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/filtering-options/
-- **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Tab navigation between variants; all four filter the same dataset.
+- **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Tab navigation between variants; all four filter the same 24-row dataset.
 - **Variants:**
-  1. **Current** — Full filter bar, 5 selects + Reset/Apply. Staged: changes don't apply until Apply is clicked
-  2. **Popular + Sheet** — Quick chips apply instantly, "All Filters" button opens side sheet with the full set
-  3. **Chips (Stripe style)** — Each filter is a real dropdown chip applying instantly; "Add filter" only offers unset filters
-  4. **Button + Chips** — Single "Filters" button opens a popover; badge shows real active count
-- **v2 (2026-08-04) — made it work.** v1 was purely decorative: every select, chip, button, × and "Clear all" was a no-op, "Apply 3 Filters" was hardcoded text, V4 had no popover at all, and all variants shared 3 static rows.
-  - Shared 24-row dataset + one filter engine (`FILTERS` defs with per-filter match fns) drives all four variants
-  - Filters: date range / status / platform / amount / customer — combine with AND
-  - Date ranges resolve against a fixed `TODAY = 2026-04-30` so the prototype is deterministic
-  - Per-variant state (switching tabs doesn't leak filters); staged drafts for V1 + the V2 sheet + the V4 popover
-  - Row count line, empty state with clear-filters action, click-outside/Escape closing on all dropdowns
-  - **Verified:** all 25 single-filter values agree with a direct filter over raw data; AND-combos correct; empty result reachable
+  1. **Current** — Full filter bar, 5 fields + Reset/Apply. Staged: changes don't apply until Apply is clicked
+  2. **Popular + Sheet** — Date/Status/Platform as instant-apply dropdown fields (same component as everywhere else); "All Filters" opens a sheet with the complete 5-filter set
+  3. **Chips (Stripe style)** — Each filter is one dropdown chip that applies instantly and carries its own inline ×; "Add filter" only offers filters not already on the bar
+  4. **Button + Chips** — Single "Filters" button opens a popover; badge shows real active count; applied chips row below
+- **v2 (2026-08-04) — made it work.** v1 was purely decorative: every select, chip, button, × and "Clear all" was a no-op, "Apply 3 Filters" was hardcoded text, V4 had no popover at all, and all variants shared 3 static rows. Fixed with a shared filter engine (`FILTERS` defs + per-filter match fns) and per-variant state.
+- **v3 (2026-08-04) — multiselect + dedup.** Three follow-up fixes:
+  - **Status and Platform are now multiselect** everywhere (checkbox list, OR within the dimension, AND across dimensions). Built a generic field component (`fieldHtml`/`wireFieldNode`/`refreshFieldNode`/`mountField`) shared by all four variants — each field owns one stable DOM node so toggling a checkbox only rebuilds *that* field, keeping its own dropdown open without disturbing siblings.
+  - **V2's "popular filters" were single-value quick-pick chips** (Last 30 days / Synced only / Stripe) with no dropdown — not what was asked. Replaced with the same select-style dropdown fields used in the full bar (Date range, Status, Platform), applying instantly.
+  - **V3's chips were duplicated** — a separate "applied filters" row (pill + ×) plus the chip trigger itself both showed the same "Label: value". Removed the applied-filters row; each chip now IS the applied-filter display, with its own inline × once active.
+  - **Verified with jsdom** (real DOM, not just visual inspection): 29 checks — multiselect OR/AND matching, panel-stays-open across checkbox toggles (staged and instant-apply contexts), zero `.popular-chip` elements left, chips render as exactly one DOM node with zero duplicate label text, tab-switching with a panel open doesn't throw.
 - **Design decisions:**
   - Consistent Synder styling (Roboto, #0053CC, shadows), Material Icons
   - Status badges (Synced/Pending/Failed) with color coding
