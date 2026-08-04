@@ -217,27 +217,28 @@
 - **Settings wired:** Clearing account, income/fee/bank accounts, generic customer (+name picker), track fees, include taxes, default product
 - **Data:** 10 Stripe transactions (Pamela Anderson, Marcus Reid, etc.) Jan–Mar 2026
 
-### Filtering Options Prototype (2026-04-30)
-- **Status:** ✅ v1 live
-- **Location:** `reports/filtering-options/index.html`
-- **Live URL:** `/filtering-options/index.html` (via reports server + CF tunnel)
-- **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Interactive prototypes with tab navigation between variants.
+### Filtering Options Prototype (2026-04-30, functional v2 2026-08-04)
+- **Status:** ✅ v2 live — all four variants actually filter
+- **Location:** `filtering-options/index.html` (mirror: `reports/filtering-options/index.html` — keep both in sync)
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/filtering-options/
+- **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Tab navigation between variants; all four filter the same dataset.
 - **Variants:**
-  1. **Current** — Full filter bar with all filters visible (5 dropdowns + actions)
-  2. **Popular + Sheet** — Quick filter chips for common filters, "All Filters" button opens side sheet with full filter set
-  3. **Chips (Stripe style)** — Each filter is a dropdown chip, applied filters shown as removable chips with "Add filter" option
-  4. **Button + Chips** — Single "Filters" button with badge count, applied filters displayed as chips next to button
-- **Features:**
-  - Tab navigation between all 4 variants
-  - Interactive sheet panel (variant 2)
-  - Clickable chips and filter buttons
-  - Mock data table in all variants
-  - Responsive design
+  1. **Current** — Full filter bar, 5 selects + Reset/Apply. Staged: changes don't apply until Apply is clicked
+  2. **Popular + Sheet** — Quick chips apply instantly, "All Filters" button opens side sheet with the full set
+  3. **Chips (Stripe style)** — Each filter is a real dropdown chip applying instantly; "Add filter" only offers unset filters
+  4. **Button + Chips** — Single "Filters" button opens a popover; badge shows real active count
+- **v2 (2026-08-04) — made it work.** v1 was purely decorative: every select, chip, button, × and "Clear all" was a no-op, "Apply 3 Filters" was hardcoded text, V4 had no popover at all, and all variants shared 3 static rows.
+  - Shared 24-row dataset + one filter engine (`FILTERS` defs with per-filter match fns) drives all four variants
+  - Filters: date range / status / platform / amount / customer — combine with AND
+  - Date ranges resolve against a fixed `TODAY = 2026-04-30` so the prototype is deterministic
+  - Per-variant state (switching tabs doesn't leak filters); staged drafts for V1 + the V2 sheet + the V4 popover
+  - Row count line, empty state with clear-filters action, click-outside/Escape closing on all dropdowns
+  - **Verified:** all 25 single-filter values agree with a direct filter over raw data; AND-combos correct; empty result reachable
 - **Design decisions:**
-  - Consistent Synder styling (colors, typography, shadows)
-  - Material Icons for actions
+  - Consistent Synder styling (Roboto, #0053CC, shadows), Material Icons
   - Status badges (Synced/Pending/Failed) with color coding
   - Compact filter bar height (64px) for variants 2-4 vs current (variable)
+  - V1 keeps its Apply button (matches Synder today); V2/V3 apply instantly; V4 stages inside the popover
 
 ---
 
