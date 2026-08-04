@@ -111,20 +111,29 @@ a { color: var(--t-link); }
 .ac .aa { display: flex; gap: 8px; align-items: center; }
 .ac .aa .btn:first-child { flex: 1; }
 
-.cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 12px; }
-.conn { border: 1px solid var(--border-default); border-radius: var(--r-md); padding: 14px 16px; position: relative; }
-.conn.warn { border-color: var(--c-yellow); background: var(--c-yellow-light); }
-.conn.err { border-color: var(--c-red); background: var(--c-red-light); }
-.conn .top { display: flex; gap: 10px; margin-bottom: 10px; }
-.conn .logo { width: 28px; height: 28px; border-radius: var(--r-sm); display: grid; place-items: center;
-  font-size: 11px; font-weight: 700; color: #fff; flex: 0 0 auto; }
-.conn .nm { font-weight: 500; font-size: 13px; } .conn .mt { color: var(--t-secondary); font-size: 11.5px; }
-.conn .acts { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.conn .kebab { position: absolute; top: 9px; right: 9px; }
-.addconn { border: 1px dashed var(--c-primary-50); border-radius: var(--r-md); background: var(--c-primary-5);
-  color: var(--c-primary); display: grid; place-items: center; text-align: center; font-size: 13px;
-  font-weight: 500; cursor: pointer; min-height: 92px; padding: 14px; }
-.addconn:hover { background: var(--c-primary-10); }
+/* connections as full-width rows, not cards */
+.ctable { width: 100%; border-collapse: collapse; border: 1px solid var(--border-default);
+  border-radius: var(--r-md); overflow: hidden; background: var(--bg-surface); }
+.ctable th { text-align: left; font-size: 12px; font-weight: 500; color: var(--t-primary);
+  padding: 12px 16px; border-bottom: 1px solid var(--border-default); white-space: nowrap; }
+.ctable td { padding: 13px 16px; border-bottom: 1px solid var(--c-grey-10); font-size: 13px; vertical-align: middle; white-space: nowrap; }
+.ctable col.cn { width: 38%; }
+.ctable .cfoot td { white-space: normal; }
+.ctable tr:last-child td { border-bottom: none; }
+.ctable tr.warn td { background: var(--c-yellow-light); }
+.ctable tr.err td { background: var(--c-red-light); }
+.ctable td.act { text-align: right; white-space: nowrap; }
+.ctable td.act .btn { min-width: 128px; }
+.ctable td.act .lnk { font-size: 12px; margin-right: 12px; }
+.cname { display: flex; align-items: center; gap: 10px; }
+.cname .logo { width: 24px; height: 24px; border-radius: var(--r-sm); display: grid; place-items: center;
+  font-size: 10px; font-weight: 700; color: #fff; flex: 0 0 auto; }
+.cname b { font-weight: 400; }
+.cfoot td { background: var(--c-grey-5); border-top: 1px solid var(--border-default); }
+.cinfo { display: flex; align-items: center; gap: 9px; font-size: 12.5px; color: var(--t-secondary); }
+.cinfo .i { width: 16px; height: 16px; border-radius: var(--r-full); border: 1px solid var(--c-grey-30);
+  display: grid; place-items: center; font-size: 10px; flex: 0 0 auto; }
+.lost { color: var(--c-yellow); font-weight: 500; }
 
 .fg { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
 .field { display: flex; flex-direction: column; gap: 4px; }
@@ -321,16 +330,10 @@ select.input { appearance: none; background-image: url("data:image/svg+xml,%3Csv
     </div>
 
     <div class="pane" id="pane-conn">
-      <div class="card">
-        <h2>Integrations</h2>
-        <p class="ch">Sales platforms and payment processors feeding this organization.</p>
-        <div class="cgrid" id="integGrid"></div>
-      </div>
-      <div class="card">
-        <h2>Accounting company</h2>
-        <p class="ch">Where Synder posts your books. One accounting platform per organization.</p>
-        <div class="cgrid" id="acctGrid"></div>
-      </div>
+      <div class="seclabel" style="margin-top:0">Accounting company</div>
+      <table class="ctable" id="acctTable"></table>
+      <div class="seclabel">Integrations</div>
+      <table class="ctable" id="integTable"></table>
     </div>
 
     <div class="pane" id="pane-people">
@@ -620,6 +623,11 @@ const PRODUCTS = [
   { id:'custom', icon:'▣', n:'Custom development', group:'locked', tiers:null,
     d:'Bespoke integrations, custom ERP connections and workflow changes built by the Synder team.', note:'Quoted per project, any plan.' },
 ];
+const INTEGRATIONS = [
+  { id:'shopify', name:'My ceramic plates (Shopify)', mark:'S', color:'#95BF47', tz:'Europe/Vilnius', revrec:true,  status:'ok' },
+  { id:'stripe',  name:'mzkt.by (Stripe)',            mark:'S', color:'#635BFF', tz:'Europe/Minsk',   revrec:true,  status:'lost', since:'4 Jul 2026' },
+  { id:'amazon',  name:'My great bread (Amazon)',     mark:'a', color:'#FF9900', tz:'Europe/Vilnius', revrec:false, status:'ok' },
+];
 const USAGE = [240, 310, 275, 420, 388, 351];
 const SEATS_IN_USE = 2;
 const STATES = { active:'Active', trial:'Trial', past_due:'Payment failed', cancelling:'Ending', premium:'Premium' };
@@ -659,7 +667,7 @@ function tab(t) {
 }
 
 /* ── attention, above the tabs ── */
-let broken = { stripe: true, qbo: true };
+let broken = { stripe: true, qbo: true };   // stripe mirrors INTEGRATIONS, kept for the banner count
 function renderAttn() {
   const n = (broken.stripe ? 1 : 0) + (broken.qbo ? 1 : 0);
   const bdg = document.getElementById('connBdg');
@@ -673,27 +681,65 @@ function renderAttn() {
     <strong>${n} connection${n > 1 ? 's' : ''} ${n > 1 ? 'are' : 'is'} broken, so sales data isn't reaching your books.</strong>
     <div style="margin-top:7px;display:flex;gap:16px;flex-wrap:wrap">${bits.join('')}</div></div></div>`;
 }
-function fixStripe() { broken.stripe = false; render(); toast('Stripe reconnected. Importing from where it stopped.'); }
+function fixStripe() { INTEGRATIONS.forEach(i => { if (i.status === 'lost') i.status = 'ok'; });
+  broken.stripe = false; render(); toast('Stripe reconnected. Importing from where it stopped.'); }
 function fixQbo() { broken.qbo = false; render(); toast('QuickBooks reconnected.'); }
 function renderConns() {
-  document.getElementById('integGrid').innerHTML = `
-    <div class="conn ${broken.stripe ? 'warn' : ''}" data-fn="O3">
-      <button class="btn-icon kebab" onclick="toast('Menu: Settings · Pause · Disconnect')" data-fn="O6">⋯</button>
-      <div class="top"><div class="logo" style="background:#635BFF">S</div>
-        <div><div class="nm">mzkt.by (Stripe)</div><div class="mt">Europe/Minsk · ${broken.stripe ? 'last import 4 Jul' : 'importing now'}</div></div></div>
-      <div class="acts">${broken.stripe
-        ? `<span class="chip chip-warning">Connection lost</span><button class="btn btn-primary" onclick="fixStripe()" data-fn="O4">Reconnect</button>`
-        : `<span class="chip chip-success">Connected</span>`}</div></div>
-    <div class="addconn" onclick="toast('Integration picker — 30+ platforms')" data-fn="O5">＋ Add integration</div>`;
-  document.getElementById('acctGrid').innerHTML = `
-    <div class="conn ${broken.qbo ? 'err' : ''}" data-fn="O7">
-      <div class="top"><div class="logo" style="background:#2CA01C">qb</div>
-        <div><div class="nm">Sandbox Company_US_1</div><div class="mt">QuickBooks Online · ${broken.qbo ? 'disconnected 3 Jul' : 'connected'}</div></div></div>
-      <div class="acts" style="margin-bottom:9px">${broken.qbo
-        ? `<span class="chip chip-error">Disconnected</span><button class="btn btn-primary" onclick="fixQbo()" data-fn="O8">Reconnect</button>`
-        : `<span class="chip chip-success">Connected</span>`}</div>
-      <p class="mini" style="margin:0">Only this company can be reconnected. For a different platform,
-        <a href="#" onclick="toast('Opens the create-organization flow');return false" data-fn="O9">create a new organization</a>.</p></div>`;
+  document.getElementById('acctTable').innerHTML = `
+    <colgroup><col class="cn"><col><col></colgroup>
+    <thead><tr><th>Integration name</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      <tr class="${broken.qbo ? 'err' : ''}" data-fn="O7">
+        <td><span class="cname"><span class="logo" style="background:#2CA01C">qb</span>
+          <b>Sandbox Company_US_1 (QuickBooks Online)</b></span></td>
+        <td>${broken.qbo ? '<span class="chip chip-error">Disconnected since 3 Jul 2026</span>'
+                         : '<span class="chip chip-success">Connected</span>'}</td>
+        <td class="act">${broken.qbo
+          ? `<button class="btn btn-primary" onclick="fixQbo()" data-fn="O8">Reconnect</button>`
+          : `<button class="btn btn-outlined" onclick="toast('Opens accounting settings.')" data-fn="O8">Accounting settings</button>`}</td>
+      </tr>
+      <tr class="cfoot"><td colspan="3"><span class="cinfo"><span class="i">i</span>
+        If you need to connect another accounting company please
+        <a href="#" onclick="toast('Opens the create-organization flow');return false" data-fn="O9">create a new organization</a>
+        — one accounting platform per organization.</span></td></tr>
+    </tbody>`;
+
+  const rows = INTEGRATIONS.map(i => `
+    <tr class="${i.status === 'lost' ? 'warn' : ''}" data-fn="O3">
+      <td><span class="cname"><span class="logo" style="background:${i.color}">${i.mark}</span><b>${i.name}</b></span></td>
+      <td>${i.tz}</td>
+      <td data-fn="RR"><span class="chip ${i.revrec ? 'chip-success' : 'chip-neutral'}">${i.revrec ? 'Enabled' : 'Off'}</span>
+        <a href="#" class="lnk" style="margin-left:8px" onclick="toggleRevRec('${i.id}');return false">${i.revrec ? 'disable' : 'enable'}</a></td>
+      <td>${i.status === 'lost'
+        ? `<span class="lost">Connection lost since ${i.since}</span>`
+        : '<span class="chip chip-success">Connected</span>'}</td>
+      <td class="act">
+        ${i.status === 'lost'
+          ? `<a href="#" class="lnk" onclick="toast('Opens sync settings.');return false">Sync settings</a>
+             <button class="btn btn-primary" onclick="fixIntegration('${i.id}')" data-fn="O4">Reconnect</button>`
+          : `<button class="btn btn-outlined" onclick="toast('Opens sync settings.')">Sync settings</button>`}
+        <button class="btn-icon" style="margin-left:6px" onclick="toast('Menu: Pause · Rename · Disconnect')" data-fn="O6">⋯</button>
+      </td>
+    </tr>`).join('');
+
+  document.getElementById('integTable').innerHTML = `
+    <colgroup><col class="cn"><col><col><col><col></colgroup>
+    <thead><tr><th>Integration name</th><th>Timezone</th><th>RevRec</th><th>Status</th><th></th></tr></thead>
+    <tbody>${rows}
+      <tr class="cfoot"><td colspan="5">
+        <button class="btn btn-outlined" onclick="toast('Integration picker — 30+ platforms')" data-fn="O5">Add integration</button>
+      </td></tr>
+    </tbody>`;
+}
+function toggleRevRec(id) {
+  const i = INTEGRATIONS.find(x => x.id === id);
+  i.revrec = !i.revrec; renderConns();
+  toast(`RevRec ${i.revrec ? 'enabled' : 'disabled'} for ${i.name}. Revenue recognition ${i.revrec ? 'will now run' : 'stops'} on its transactions.`);
+}
+function fixIntegration(id) {
+  const i = INTEGRATIONS.find(x => x.id === id);
+  i.status = 'ok'; broken.stripe = INTEGRATIONS.some(x => x.status === 'lost');
+  render(); toast(`${i.name} reconnected. Importing from where it stopped.`);
 }
 
 /* ── money ── */
