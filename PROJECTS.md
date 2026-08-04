@@ -40,6 +40,14 @@
   - April's `FEEDBACK.md` had already found several of my CUR items independently: no total cost, three inconsistent add-on patterns, no proration preview, Cancel as a plain blue link between two safe links.
   - **Lead on SPEC-1:** April's docs cite **$0.04 per extra sync** and a **$500 autocharge cap**. If real, that's part of the rate card I reported as non-existent — source unconfirmed, asked Ignat.
   - **Housekeeping found:** two conflicting V1/V2/V3 naming systems in the older set (`concepts-v1v2v3` uses Ledger / Calm Overview / Unified Grid; the standalone files use Unified Settings / Billing Hub / Org Health Dashboard). Flagged on the hub, not renamed.
+- **Round 3 (2026-08-04) — `organization.html`, the proposed structure:** https://dashasyn.github.io/synder-prototypes/projects/settings-rework/organization.html
+  - Ignat redirected: he cares about UX, composition and userflow, not data. Then said "do what you think is better, review with validators later."
+  - **The structural argument:** the three live pages mix four different *kinds* of thing as if they were one kind. Zones now separate them, in urgency order — 1 Needs attention (renders only when a connection is broken, disappears when fixed) · 2 Plan & billing (everything that costs money) · 3 Setup (integrations, accounting, people) · 4 Preferences (details = one save, notifications = instant).
+  - **One flow shape, reused:** plan change is Pick plan → Set amounts → **Review**; cancellation is Reason → Options → Review. The review step is what production has none of.
+  - Guardrails now run while amounts change, not only at confirm.
+  - **Round-2 bugs fixed here:** cancelling updates the page · coupon actually applies and shows in the breakdown · autocharge states its rate and takes a spend cap, explained in transactions not just dollars.
+  - Verified: 5 states, both flows complete, forfeit arithmetic consistent, zero JS errors.
+- **Not yet done:** validator pass on `organization.html` — Ignat asked for it "later".
 - **Next:** Ignat picks a layout (or the April hybrid) → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
 
 ### Smart Rules — Branch Engine Redesign (2026-06-03)
