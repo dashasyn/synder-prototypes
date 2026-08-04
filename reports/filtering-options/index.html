@@ -280,6 +280,20 @@
             display: block;
         }
 
+        /* Trailing action cluster (Reset / Apply, plus All Filters in V2) —
+           shared by the variants whose bar carries its own Apply button. */
+        .bar-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-left: auto;
+        }
+
+        .bar-actions .all-filters-btn,
+        .bar-actions .clear-all {
+            margin-left: 0;
+        }
+
         /* ========== VARIANT 2: POPULAR + SHEET ========== */
         .popular-filters {
             padding: 16px 24px;
@@ -902,7 +916,7 @@
 <body>
     <div class="page-header">
         <h1>Filtering Options</h1>
-        <p>Exploring different filter UI patterns to reduce vertical space while maintaining usability. All four variants filter the same 24-row dataset.</p>
+        <p>Exploring different filter UI patterns to reduce vertical space while maintaining usability. All four variants filter the same 24-row dataset. Every variant stages its filters — the list is only re-queried when you click Apply.</p>
 
         <div class="nav-tabs">
             <button class="nav-tab active" data-variant="current">1. Current</button>
@@ -936,7 +950,7 @@
                 </div>
 
                 <div class="current-filters" id="currentFilterBar"></div>
-                <div class="dirty-hint" id="currentDirtyHint">Unapplied changes — click Apply Filters to update the list.</div>
+                <div class="dirty-hint" id="currentDirtyHint">Unapplied changes — click Apply to update the list.</div>
 
                 <div class="table-toolbar" id="currentCount"></div>
                 <div class="table-container" id="currentTable"></div>
@@ -947,7 +961,7 @@
         <div id="variant-popular" class="variant-section">
             <div class="variant-header">
                 <h2>Popular Filters + All Filters in Sheet</h2>
-                <p>The most-used filter dimensions (Date range, Status, Platform) as dropdown selectors that apply instantly — same look and behavior as the full filter bar. "All Filters" opens a sheet with the complete set, including Amount and Customer.</p>
+                <p>The most-used filter dimensions (Date range, Status, Platform) as dropdown selectors — same look and behavior as the full filter bar. Selections are staged; the list is only re-queried on Apply. "All Filters" opens a sheet with the complete set, including Amount and Customer.</p>
             </div>
 
             <div class="mock-page">
@@ -966,6 +980,7 @@
                 </div>
 
                 <div class="popular-filters" id="popularFilterBar"></div>
+                <div class="dirty-hint" id="popularDirtyHint">Unapplied changes — click Apply to update the list.</div>
 
                 <div class="table-toolbar" id="popularCount"></div>
                 <div class="table-container" id="popularTable"></div>
@@ -993,7 +1008,7 @@
         <div id="variant-chips" class="variant-section">
             <div class="variant-header">
                 <h2>Filters as Chips (Stripe Style)</h2>
-                <p>Each filter is one dropdown chip that applies instantly — the chip itself shows the applied value and carries its own remove (×). "Add filter" only offers filters that aren't already on the bar. Status and Platform support multiple values.</p>
+                <p>Each filter is one dropdown chip — the chip itself shows its selected value and carries its own remove (×). Selections are staged; the list is only re-queried on Apply. "Add filter" only offers filters that aren't already on the bar. Status and Platform support multiple values.</p>
             </div>
 
             <div class="mock-page">
@@ -1012,6 +1027,7 @@
                 </div>
 
                 <div class="chips-bar" id="chipsFilterBar"></div>
+                <div class="dirty-hint" id="chipsDirtyHint">Unapplied changes — click Apply to update the list.</div>
 
                 <div class="table-toolbar" id="chipsCount"></div>
                 <div class="table-container" id="chipsTable"></div>
@@ -1022,7 +1038,7 @@
         <div id="variant-button" class="variant-section">
             <div class="variant-header">
                 <h2>Filters as Button + Applied Chips</h2>
-                <p>Single button opens a filter popover. Applied filters displayed as removable chips. Badge shows the real active count.</p>
+                <p>Single button opens a filter popover. Selected filters appear as removable chips below it. Nothing reaches the list until Apply — removing a chip stages the change too. Badge shows the selected count.</p>
             </div>
 
             <div class="mock-page">
@@ -1041,6 +1057,7 @@
                 </div>
 
                 <div class="compact-filters" id="buttonFilterBar"></div>
+                <div class="dirty-hint" id="buttonDirtyHint">Unapplied changes — click Apply to update the list.</div>
 
                 <div class="table-toolbar" id="buttonCount"></div>
                 <div class="table-container" id="buttonTable"></div>
@@ -1292,6 +1309,20 @@
                 (n ? ' · <strong>' + n + '</strong> filter' + (n > 1 ? 's' : '') + ' applied' : '');
         }
 
+        // Apply-button label. Deliberately counts FILTERS, not results: in the
+        // real product the result count isn't known until the query runs, so
+        // previewing "N results" before Apply would cost exactly the request
+        // the Apply step exists to avoid.
+        function applyLabel(f) {
+            var c = activeKeys(f).length;
+            return c ? 'Apply ' + c + ' filter' + (c > 1 ? 's' : '') : 'Apply';
+        }
+
+        function refreshDirtyHint(hintId, dirty) {
+            var el = document.getElementById(hintId);
+            if (el) el.classList.toggle('show', dirty);
+        }
+
         // Read-only "applied filter" chips (used in Variant 4's row below the
         // Filters button — display + remove only, no dropdown of their own).
         function appliedChipsHtml(f, emptyNote) {
@@ -1306,18 +1337,35 @@
             }).join('') + '<button class="clear-all" type="button" data-clear-all>Clear all</button>';
         }
 
-        // Close any open dropdown/popover when clicking elsewhere.
+        // Open dropdown/popover layers. Layers NEST: a filter dropdown opened
+        // inside Variant 4's popover lives inside that popover, so closing
+        // "everything else" must not close its own container. Each layer
+        // records the element it lives in, and we only close the layers that
+        // don't contain whatever is being interacted with.
         var openLayers = [];
-        function registerLayer(closeFn) { openLayers.push(closeFn); }
-        function closeAllLayers() {
-            var fns = openLayers;
-            openLayers = [];
-            fns.forEach(function (fn) { fn(); });
+
+        function registerLayer(el, closeFn) { openLayers.push({ el: el, close: closeFn }); }
+
+        function dropLayers(shouldDrop) {
+            var keep = [], drop = [];
+            openLayers.forEach(function (l) { (shouldDrop(l) ? drop : keep).push(l); });
+            openLayers = keep;
+            drop.forEach(function (l) { l.close(); });
         }
-        document.addEventListener('click', function (e) {
-            if (e.target.closest('[data-layer]')) return;
-            closeAllLayers();
-        });
+
+        // Close every layer that isn't `node`'s own container or an ancestor of it.
+        function closeLayers(node) {
+            dropLayers(function (l) { return !(node && l.el && l.el.contains(node)); });
+        }
+
+        // Close `el`'s layer plus any layer nested inside it.
+        function closeLayerTree(el) {
+            dropLayers(function (l) { return l.el === el || el.contains(l.el); });
+        }
+
+        function closeAllLayers() { closeLayers(null); }
+
+        document.addEventListener('click', function (e) { closeLayers(e.target); });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape') closeAllLayers();
         });
@@ -1389,16 +1437,24 @@
             trigger.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var wasOpen = panel.classList.contains('active');
-                closeAllLayers();
-                if (!wasOpen) {
+                closeLayers(trigger);
+                if (wasOpen) {
+                    closeLayerTree(rootEl);
+                } else {
                     panel.classList.add('active');
                     trigger.classList.add('open');
-                    registerLayer(function () {
+                    registerLayer(rootEl, function () {
                         panel.classList.remove('active');
                         trigger.classList.remove('open');
                     });
                 }
             });
+
+            // Clicks inside the panel are handled by the item/checkbox handlers
+            // below; stop them here so the document-level handler doesn't treat
+            // them as an outside click. (The panel is often replaced mid-dispatch
+            // by refreshFieldNode, and a detached target reads as "outside".)
+            panel.addEventListener('click', function (e) { e.stopPropagation(); });
 
             if (isMulti(key)) {
                 panel.querySelectorAll('[data-check-value]').forEach(function (cb) {
@@ -1423,6 +1479,7 @@
                 panel.querySelectorAll('[data-pick-value]').forEach(function (item) {
                     item.addEventListener('click', function () {
                         fieldCtx.setValue(key, this.getAttribute('data-pick-value'));
+                        closeLayerTree(rootEl);
                         refreshFieldNode(fieldCtx, key);
                         if (fieldCtx.onChange) fieldCtx.onChange(key);
                     });
@@ -1448,9 +1505,10 @@
             if (opts && opts.keepOpen) {
                 var panel = fieldCtx.rootEl.querySelector('[data-field-panel]');
                 var trigger = fieldCtx.rootEl.querySelector('[data-field-trigger]');
+                closeLayerTree(fieldCtx.rootEl);
                 panel.classList.add('active');
                 trigger.classList.add('open');
-                registerLayer(function () {
+                registerLayer(fieldCtx.rootEl, function () {
                     panel.classList.remove('active');
                     trigger.classList.remove('open');
                 });
@@ -1472,7 +1530,13 @@
         }
 
         // ---------------------------------------------------------------
-        // State — each variant keeps its own so switching tabs is clean
+        // State — each variant keeps its own so switching tabs is clean.
+        //
+        // Every variant is staged: the controls write to `draft`, and only
+        // Apply copies draft → state. The table is rendered from `state`
+        // alone, so no interaction with a filter control can trigger a query.
+        // `draft.sheet` / `draft.popover` are second-level snapshots so the
+        // sheet and popover can be dismissed without keeping their edits.
         // ---------------------------------------------------------------
         var state = {
             current: defaults(),
@@ -1480,9 +1544,11 @@
             chips:   defaults(),
             button:  defaults()
         };
-        // Staged (uncommitted) copies for the two variants with an Apply step.
         var draft = {
             current: defaults(),
+            popular: defaults(),
+            chips:   defaults(),
+            button:  defaults(),
             sheet:   defaults(),
             popover: defaults()
         };
@@ -1507,7 +1573,7 @@
             actions.className = 'filter-actions';
             actions.innerHTML =
                 '<button class="btn btn-ghost" type="button" data-reset>Reset</button>' +
-                '<button class="btn btn-primary" type="button" data-apply>Apply Filters</button>';
+                '<button class="btn btn-primary" type="button" data-apply></button>';
             bar.appendChild(actions);
 
             actions.querySelector('[data-apply]').addEventListener('click', function () {
@@ -1531,9 +1597,12 @@
             var isDefault = sameFilters(state.current, defaults()) && sameFilters(draft.current, defaults());
             var applyBtn = document.querySelector('#currentFilterBar [data-apply]');
             var resetBtn = document.querySelector('#currentFilterBar [data-reset]');
-            if (applyBtn) applyBtn.disabled = !dirty;
+            if (applyBtn) {
+                applyBtn.textContent = applyLabel(draft.current);
+                applyBtn.disabled = !dirty;
+            }
             if (resetBtn) resetBtn.disabled = isDefault;
-            document.getElementById('currentDirtyHint').classList.toggle('show', dirty);
+            refreshDirtyHint('currentDirtyHint', dirty);
         }
 
         function renderCurrentResults() {
@@ -1550,8 +1619,8 @@
         // VARIANT 2 — Popular filter selectors + All Filters sheet
         // ---------------------------------------------------------------
         // The most-used dimensions, surfaced directly in the bar as the same
-        // dropdown fields used everywhere else. They commit instantly
-        // (no Apply step) since there are only three of them.
+        // dropdown fields used everywhere else. Like every other variant they
+        // stage into `draft.popular`; the bar carries its own Apply.
         var QUICK_KEYS = ['date', 'status', 'platform'];
 
         function renderPopular() {
@@ -1559,41 +1628,72 @@
             bar.innerHTML = '<span class="popular-label">Popular filters:</span>';
 
             var ctx = {
-                get: function (k) { return state.popular[k]; },
-                setValue: function (k, v) { state.popular[k] = v; },
+                get: function (k) { return draft.popular[k]; },
+                setValue: function (k, v) { draft.popular[k] = v; },
                 style: 'select',
                 fullWidth: false,
                 onChange: refreshPopularChrome
             };
             QUICK_KEYS.forEach(function (k) { mountField(bar, k, ctx); });
 
-            var allBtn = document.createElement('button');
-            allBtn.type = 'button';
-            allBtn.id = 'allFiltersBtn';
-            allBtn.className = 'btn btn-secondary all-filters-btn';
-            bar.appendChild(allBtn);
-            allBtn.addEventListener('click', openSheet);
+            var actions = document.createElement('div');
+            actions.className = 'bar-actions';
+            actions.innerHTML =
+                '<button class="btn btn-secondary all-filters-btn" type="button" id="allFiltersBtn"></button>' +
+                '<button class="btn btn-ghost" type="button" data-popular-reset>Reset</button>' +
+                '<button class="btn btn-primary" type="button" data-popular-apply></button>';
+            bar.appendChild(actions);
+
+            actions.querySelector('#allFiltersBtn').addEventListener('click', openSheet);
+            actions.querySelector('[data-popular-apply]').addEventListener('click', function () {
+                state.popular = clone(draft.popular);
+                refreshPopularChrome();
+                renderPopularResults();
+            });
+            actions.querySelector('[data-popular-reset]').addEventListener('click', function () {
+                state.popular = defaults();
+                draft.popular = defaults();
+                renderPopular();
+                renderPopularResults();
+            });
 
             refreshPopularChrome();
         }
 
         function refreshPopularChrome() {
-            var count = activeKeys(state.popular).length;
+            var dirty = !sameFilters(draft.popular, state.popular);
+            var isDefault = sameFilters(state.popular, defaults()) && sameFilters(draft.popular, defaults());
+            var count = activeKeys(draft.popular).length;
+
             var allBtn = document.getElementById('allFiltersBtn');
             if (allBtn) {
                 allBtn.innerHTML = '<span class="material-icons">tune</span>All Filters' +
                     (count ? '<span class="badge">' + count + '</span>' : '');
             }
+            var applyBtn = document.querySelector('#popularFilterBar [data-popular-apply]');
+            var resetBtn = document.querySelector('#popularFilterBar [data-popular-reset]');
+            if (applyBtn) {
+                applyBtn.textContent = applyLabel(draft.popular);
+                applyBtn.disabled = !dirty;
+            }
+            if (resetBtn) resetBtn.disabled = isDefault;
+            refreshDirtyHint('popularDirtyHint', dirty);
+        }
+
+        function renderPopularResults() {
             var rows = runFilters(state.popular);
             renderCount('popularCount', rows, state.popular);
             renderTable('popularTable', rows, function () {
                 state.popular = defaults();
+                draft.popular = defaults();
                 renderPopular();
+                renderPopularResults();
             });
         }
 
         function renderSheetBody() {
             var content = document.getElementById('sheetContent');
+            closeLayerTree(content);
             content.innerHTML = '';
             var ctx = {
                 get: function (k) { return draft.sheet[k]; },
@@ -1608,16 +1708,17 @@
         }
 
         function refreshSheetChrome() {
-            var n = runFilters(draft.sheet).length;
             var c = activeKeys(draft.sheet).length;
             document.getElementById('sheetPreview').textContent =
-                n + ' result' + (n === 1 ? '' : 's') + (c ? ' · ' + c + ' filter' + (c > 1 ? 's' : '') : '');
-            document.getElementById('sheetApplyBtn').textContent = c ? 'Apply ' + c + ' filter' + (c > 1 ? 's' : '') : 'Apply';
+                c ? c + ' filter' + (c > 1 ? 's' : '') + ' selected' : 'No filters selected';
+            document.getElementById('sheetApplyBtn').textContent = applyLabel(draft.sheet);
             document.getElementById('sheetResetBtn').disabled = !c;
         }
 
+        // Snapshots the bar's draft, so sheet edits can be dismissed by closing
+        // it without throwing away what's already staged in the bar.
         function openSheet() {
-            draft.sheet = clone(state.popular);
+            draft.sheet = clone(draft.popular);
             renderSheetBody();
             document.getElementById('sheetOverlay').classList.add('active');
             document.getElementById('filterSheet').classList.add('active');
@@ -1636,19 +1737,22 @@
             renderSheetBody();
         });
         document.getElementById('sheetApplyBtn').addEventListener('click', function () {
-            state.popular = clone(draft.sheet);
+            draft.popular = clone(draft.sheet);
+            state.popular = clone(draft.popular);
             closeSheet();
             renderPopular();
+            renderPopularResults();
         });
 
         // ---------------------------------------------------------------
-        // VARIANT 3 — Stripe-style chips (instant apply)
+        // VARIANT 3 — Stripe-style chips (staged, needs Apply)
         // ---------------------------------------------------------------
         // Which filter chips are on the bar. Filters added via "Add filter"
         // join this list; removing a non-default chip drops it again.
-        // Each chip appears exactly once — it IS the applied-filter display
+        // Each chip appears exactly once — it IS the selected-filter display
         // (shows "Label: value" and carries its own × once active), so there
         // is no separate "applied filters" row duplicating the same info.
+        // Chips read/write `draft.chips`; the bar's Apply commits.
         var chipsVisible = ['date', 'status', 'platform'];
         var STICKY_CHIPS = ['date', 'status', 'platform'];
 
@@ -1657,8 +1761,8 @@
             bar.innerHTML = '';
 
             var ctx = {
-                get: function (k) { return state.chips[k]; },
-                setValue: function (k, v) { state.chips[k] = v; },
+                get: function (k) { return draft.chips[k]; },
+                setValue: function (k, v) { draft.chips[k] = v; },
                 style: 'chip',
                 onChange: refreshChipsChrome,
                 onRemove: function (k) {
@@ -1688,14 +1792,17 @@
                 e.stopPropagation();
                 if (this.disabled) return;
                 var wasOpen = addMenu.classList.contains('active');
-                closeAllLayers();
-                if (!wasOpen) {
+                closeLayers(addBtn);
+                if (wasOpen) {
+                    closeLayerTree(addWrap);
+                } else {
                     addMenu.classList.add('active');
-                    registerLayer(function () { addMenu.classList.remove('active'); });
+                    registerLayer(addWrap, function () { addMenu.classList.remove('active'); });
                 }
             });
             addWrap.querySelectorAll('[data-add-key]').forEach(function (item) {
-                item.addEventListener('click', function () {
+                item.addEventListener('click', function (e) {
+                    e.stopPropagation();
                     var k = this.getAttribute('data-add-key');
                     if (chipsVisible.indexOf(k) === -1) chipsVisible.push(k);
                     closeAllLayers();
@@ -1706,34 +1813,58 @@
                         var trig = newField.querySelector('[data-field-trigger]');
                         panel.classList.add('active');
                         trig.classList.add('open');
-                        registerLayer(function () { panel.classList.remove('active'); trig.classList.remove('open'); });
+                        registerLayer(newField, function () {
+                            panel.classList.remove('active');
+                            trig.classList.remove('open');
+                        });
                     }
                 });
             });
 
-            var clearBtn = document.createElement('button');
-            clearBtn.type = 'button';
-            clearBtn.id = 'chipsClearAll';
-            clearBtn.className = 'clear-all';
-            clearBtn.textContent = 'Clear all';
-            clearBtn.addEventListener('click', clearChips);
-            bar.appendChild(clearBtn);
+            var actions = document.createElement('div');
+            actions.className = 'bar-actions';
+            actions.innerHTML =
+                '<button class="clear-all" type="button" id="chipsClearAll">Clear all</button>' +
+                '<button class="btn btn-primary" type="button" data-chips-apply></button>';
+            bar.appendChild(actions);
+
+            actions.querySelector('#chipsClearAll').addEventListener('click', clearChips);
+            actions.querySelector('[data-chips-apply]').addEventListener('click', function () {
+                state.chips = clone(draft.chips);
+                refreshChipsChrome();
+                renderChipsResults();
+            });
 
             refreshChipsChrome();
         }
 
         function refreshChipsChrome() {
+            var dirty = !sameFilters(draft.chips, state.chips);
+            var anySelected = activeKeys(draft.chips).length || activeKeys(state.chips).length;
             var clearBtn = document.getElementById('chipsClearAll');
-            if (clearBtn) clearBtn.style.display = activeKeys(state.chips).length ? '' : 'none';
+            if (clearBtn) clearBtn.style.display = anySelected ? '' : 'none';
+            var applyBtn = document.querySelector('#chipsFilterBar [data-chips-apply]');
+            if (applyBtn) {
+                applyBtn.textContent = applyLabel(draft.chips);
+                applyBtn.disabled = !dirty;
+            }
+            refreshDirtyHint('chipsDirtyHint', dirty);
+        }
+
+        function renderChipsResults() {
             var rows = runFilters(state.chips);
             renderCount('chipsCount', rows, state.chips);
             renderTable('chipsTable', rows, clearChips);
         }
 
+        // "Clear all" is a single deliberate action, so it commits — unlike the
+        // per-chip edits, which only stage.
         function clearChips() {
             state.chips = defaults();
-            chipsVisible = ['date', 'status', 'platform'];
+            draft.chips = defaults();
+            chipsVisible = STICKY_CHIPS.slice();
             renderChips();
+            renderChipsResults();
         }
 
         // ---------------------------------------------------------------
@@ -1753,17 +1884,18 @@
 
             var trigger = document.getElementById('filtersBtn');
             var popover = document.getElementById('filterPopover');
+            var popoverWrap = bar.querySelector('.filters-button-wrap');
 
             trigger.addEventListener('click', function (e) {
                 e.stopPropagation();
                 var wasOpen = popover.classList.contains('active');
                 closeAllLayers();
                 if (!wasOpen) {
-                    draft.popover = clone(state.button);
+                    draft.popover = clone(draft.button);
                     renderPopoverBody();
                     popover.classList.add('active');
                     trigger.classList.add('open');
-                    registerLayer(function () {
+                    registerLayer(popoverWrap, function () {
                         popover.classList.remove('active');
                         trigger.classList.remove('open');
                     });
@@ -1775,17 +1907,21 @@
                 renderPopoverBody();
             });
             bar.querySelector('[data-popover-apply]').addEventListener('click', function () {
-                state.button = clone(draft.popover);
+                draft.button = clone(draft.popover);
+                state.button = clone(draft.button);
                 closeAllLayers();
                 refreshButtonChrome();
+                renderButtonResults();
             });
 
             refreshButtonChrome();
+            renderButtonResults();
         }
 
         function renderPopoverBody() {
             var body = document.getElementById('popoverBody');
             if (!body) return;
+            closeLayerTree(body);
             body.innerHTML = '';
             var ctx = {
                 get: function (k) { return draft.popover[k]; },
@@ -1800,16 +1936,20 @@
         }
 
         function refreshPopoverChrome() {
-            var n = runFilters(draft.popover).length;
             var c = activeKeys(draft.popover).length;
             var applyBtn = document.querySelector('#buttonFilterBar [data-popover-apply]');
             var resetBtn = document.querySelector('#buttonFilterBar [data-popover-reset]');
-            if (applyBtn) applyBtn.textContent = 'Apply · ' + n + ' result' + (n === 1 ? '' : 's');
+            if (applyBtn) applyBtn.textContent = applyLabel(draft.popover);
             if (resetBtn) resetBtn.disabled = !c;
         }
 
+        // The chips row shows the SELECTED set (`draft.button`), not the applied
+        // one, so removing a chip stages like every other control instead of
+        // firing a query. When it diverges from what's applied, the row grows
+        // its own Apply button — the popover may well be closed at that point.
         function refreshButtonChrome() {
-            var f = state.button;
+            var f = draft.button;
+            var dirty = !sameFilters(draft.button, state.button);
             var count = activeKeys(f).length;
             var trigger = document.getElementById('filtersBtn');
             if (trigger) {
@@ -1818,25 +1958,39 @@
             }
             var row = document.getElementById('buttonAppliedRow');
             if (row) {
-                row.innerHTML = appliedChipsHtml(f, 'No filters applied — showing all transactions.');
+                row.innerHTML = appliedChipsHtml(f, 'No filters selected — showing all transactions.') +
+                    (dirty ? '<button class="btn btn-primary" type="button" data-row-apply>' +
+                        esc(applyLabel(f)) + '</button>' : '');
                 row.querySelectorAll('[data-remove-filter]').forEach(function (btn) {
                     btn.addEventListener('click', function () {
                         var k = this.getAttribute('data-remove-filter');
-                        state.button[k] = emptyValue(k);
+                        draft.button[k] = emptyValue(k);
                         refreshButtonChrome();
                     });
                 });
                 var clearBtn = row.querySelector('[data-clear-all]');
                 if (clearBtn) clearBtn.addEventListener('click', function () {
-                    state.button = defaults();
+                    draft.button = defaults();
                     refreshButtonChrome();
                 });
+                var rowApply = row.querySelector('[data-row-apply]');
+                if (rowApply) rowApply.addEventListener('click', function () {
+                    state.button = clone(draft.button);
+                    refreshButtonChrome();
+                    renderButtonResults();
+                });
             }
-            var rows = runFilters(f);
-            renderCount('buttonCount', rows, f);
+            refreshDirtyHint('buttonDirtyHint', dirty);
+        }
+
+        function renderButtonResults() {
+            var rows = runFilters(state.button);
+            renderCount('buttonCount', rows, state.button);
             renderTable('buttonTable', rows, function () {
                 state.button = defaults();
+                draft.button = defaults();
                 refreshButtonChrome();
+                renderButtonResults();
             });
         }
 
@@ -1863,7 +2017,9 @@
         // ---------------------------------------------------------------
         renderCurrent();
         renderPopular();
+        renderPopularResults();
         renderChips();
+        renderChipsResults();
         renderButtonVariant();
     })();
     </script>
