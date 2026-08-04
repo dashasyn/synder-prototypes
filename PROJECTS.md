@@ -249,8 +249,8 @@
 - **Settings wired:** Clearing account, income/fee/bank accounts, generic customer (+name picker), track fees, include taxes, default product
 - **Data:** 10 Stripe transactions (Pamela Anderson, Marcus Reid, etc.) Jan–Mar 2026
 
-### Filtering Options Prototype (2026-04-30, functional v2 2026-08-04, multiselect v3 2026-08-04, Apply-gated v4 2026-08-04)
-- **Status:** ✅ v4 live — all four variants filter for real, Status/Platform are multiselect, every variant is Apply-gated
+### Filtering Options Prototype (2026-04-30; v2 functional, v3 multiselect, v4 Apply-gated, v5 six variants — all 2026-08-04)
+- **Status:** ✅ v5 live — six variants, all Apply-gated, on Synder's real 8-status taxonomy
 - **Location:** `filtering-options/index.html` (mirror: `reports/filtering-options/index.html` — keep both in sync)
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/filtering-options/
 - **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Tab navigation between variants; all four filter the same 24-row dataset.
@@ -259,6 +259,8 @@
   2. **Popular + Sheet** — Date/Status/Platform as dropdown fields in the bar + Reset/Apply (same component as everywhere else); "All Filters" opens a sheet with the complete 5-filter set
   3. **Chips (Stripe style)** — Each filter is one dropdown chip carrying its own inline ×, plus a bar-level Apply; "Add filter" only offers filters not already on the bar
   4. **Button + Chips** — Single "Filters" button opens a popover; badge shows the selected count; selected-chips row below grows its own Apply when it diverges from what's applied
+  5. **Quick filters** — One-click presets over the real status groups (Attention required, Failed, Ready to sync, Pending, Synced with warnings, Skipped), each with a live count, above the standard staged bar
+  6. **Recommended** — My recommendation rather than another layout: status segmented control with counts + 90-day default as a baseline (not a filter) + single source of truth for status. Reasoning notes render under the prototype.
 - **v2 (2026-08-04) — made it work.** v1 was purely decorative: every select, chip, button, × and "Clear all" was a no-op, "Apply 3 Filters" was hardcoded text, V4 had no popover at all, and all variants shared 3 static rows. Fixed with a shared filter engine (`FILTERS` defs + per-filter match fns) and per-variant state.
 - **v3 (2026-08-04) — multiselect + dedup.** Three follow-up fixes:
   - **Status and Platform are now multiselect** everywhere (checkbox list, OR within the dimension, AND across dimensions). Built a generic field component (`fieldHtml`/`wireFieldNode`/`refreshFieldNode`/`mountField`) shared by all four variants — each field owns one stable DOM node so toggling a checkbox only rebuilds *that* field, keeping its own dropdown open without disturbing siblings.
@@ -273,11 +275,22 @@
   - **Removed the "N results" previews** (sheet footer, V4's "Apply · 6 results"). In the real product the count isn't known until the query runs, so previewing it costs exactly the request Apply exists to avoid. Apply labels now count filters ("Apply 2 filters").
   - **Fixed a pre-existing bug that made V4 unusable in a browser:** layers were a flat list, so `closeAllLayers()` from a field trigger inside the popover closed the popover itself — you could never open a dropdown in there. Layers now nest (`registerLayer(el, close)`, `closeLayers(node)` keeps ancestors, `closeLayerTree(el)`); panel clicks stopPropagation because `refreshFieldNode` detaches the target mid-dispatch and a detached target reads as "outside click".
   - **Verified two ways:** 60 jsdom checks (staging, commit, Reset, sheet snapshot/dismiss, chip × staging, row Apply, empty state + recovery, mirror identical) and 21 Playwright checks in real Chromium (nested layers, popover survives checkbox toggles, outside-click/Escape, Apply visible in every bar) + screenshots of all four variants.
+- **v5 (2026-08-04) — two new variants + real Synder data.** Ignat: "add one more variant 5 [with] real quick filters … Attention required, Failed, Ready to sync" and "variant 6 — create there filters which you think will work best for Synder."
+  - **Dataset now uses Synder's real status taxonomy** — 8 statuses in 3 groups (`STATUS_GROUPS`): Errors = Failed / Rule failed / Rollback failed; Completed = Synced / Synced with warnings / Skipped; Queued = Ready to sync / Pending. Taken from the earlier `reports/transactions-prototype` research, not invented. Added a **Type** dimension (Sale/Refund/Payout/Fee) because `All types` is a real production filter. 26 rows; status badges are group-coloured via `statusClass()`.
+  - **V5 Quick filters** — six preset pills with live counts. A preset is a whole status selection in one click, so it **commits** (one click = one query, the same cost as a Summaries status tab) and carries any staged bar changes with it, so there's never a half-applied combination. Clicking the active preset clears it. The bar below stages normally.
+  - **V6 Recommended** — one design idea per logged finding, with the reasoning rendered under the prototype:
+    - *Status as a segmented control with counts* — FLT-1: 986 tab clicks vs ~0 status-dropdown clicks in 30 days. Counts come from one aggregate over the result set the list already fetches, not a per-click preview.
+    - *90-day window as a baseline, not a filter* — dashed, ×-less "Last 90 days (default)" chip; **"Reset to default" does not render until the user leaves the default**; count line reads "last 90 days (default), no filters applied". Fixes Reset appearing on an untouched page.
+    - *One source of truth for status* — a granular status from a dashboard deep-link shows as `From dashboard: Rule failed ×` and puts the containing segment in a dashed **partial** state; clicking any segment replaces it. The FLT-2 critical bug (dropdown says Failed, tab says Ready to sync) becomes structurally impossible. `Simulate dashboard deep-link` button demos it.
+    - Secondary filters (Platform, Type, Amount, Customer) are staged chips behind "Add filter" + Apply.
+  - **`fieldHtml` now takes the ctx** (not `style, fullWidth`) so V6 could add a `baseline` style. `applyBtnText()` stops a disabled Apply from naming a count it isn't going to apply.
+  - **Verified:** 110 jsdom checks — including **all 33 single-filter values cross-checked against an independent filter over the dataset parsed out of the source**, so counts aren't taken on trust — plus 48 Playwright checks in real Chromium across three suites (nested layers, V5/V6 behaviour, variants 1–4 regression). Scripts: `/tmp/verify-filters.cjs`, `/tmp/browser-check.cjs`, `/tmp/browser-check2.cjs`.
+  - **Open questions for Ignat:** presets/segments commit on click rather than staging (flagged — a staged "quick" filter costs two clicks and kills the thing users do 986×/month); segment counts need a status-count aggregate on the list endpoint; the 5 segments collapse 8 statuses but production has ~18, so grouping needs a product decision; production has two reset labels (`Reset filter`, `Reset all filters`) that should become one.
 - **Design decisions:**
   - Consistent Synder styling (Roboto, #0053CC, shadows), Material Icons
-  - Status badges (Synced/Pending/Failed) with color coding
+  - Status badges coloured by status group (Errors red / Completed green-amber-grey / Queued blue)
   - Compact filter bar height (64px) for variants 2-4 vs current (variable)
-  - Every variant is Apply-gated — the four patterns now differ only in *layout*, which is what makes them comparable
+  - Every variant is Apply-gated — variants 1-4 differ only in *layout*, which is what makes them comparable; 5 and 6 add behaviour on top
 
 ---
 
