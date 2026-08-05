@@ -71,6 +71,11 @@
   - Guardrails now run while amounts change, not only at confirm.
   - **Round-2 bugs fixed here:** cancelling updates the page · coupon actually applies and shows in the breakdown · autocharge states its rate and takes a spend cap, explained in transactions not just dollars.
   - Verified: 5 states, both flows complete, forfeit arithmetic consistent, zero JS errors.
+- **Round 3 revisions (2026-08-04, same file):**
+  - v2 — Ignat: "you lost all addons... prefer obvious navigation, maybe tabs at the top... also show side bar". Added the real app shell (org switcher, syncs counter, Synder sidebar with Settings active) and top tabs. Restored the add-ons as a **marketplace**: Synder RevRec, Synder Insights, Invoicing, Smart rules (each with a tier picker showing current total → new total), plus assisted setup / dedicated server / custom development as higher-plan cards, and historical transactions / referral promo / special-plan as top-up cards. Swapped all emoji for geometric glyphs (emoji were rendering as tofu without an emoji font).
+  - **Key structural decision:** the broken-connection banner sits **above** the tab bar, not inside a tab — that was prototype B's failure (status buried behind a non-default tab), so tabs are fine as long as urgency lives above them.
+  - v3 — Ignat: "move addons to the plan page. Also I think that plan can occupy less space". Add-ons tab folded into Plan & billing (4 tabs now). Plan block cut from ~330px to **187px**: three facts + one button, then a single running fact line (transactions left · autocharge rate and cap · historical reserve · invoices) replacing five stacked rows. Active add-ons summarised as "plan + N add-ons below".
+  - Fixed: `.fi { display:flex }` made every text node a flex item, so the comma after "on" rendered detached — inline flow restored.
 - **Not yet done:** validator pass on `organization.html` — Ignat asked for it "later".
 - **Next:** Ignat picks a layout (or the April hybrid) → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
 
