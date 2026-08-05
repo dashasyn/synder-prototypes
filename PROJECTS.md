@@ -30,6 +30,7 @@
   - Presenter bar reserves 44px; sheet and backdrop stop above it (verified sheet bottom == bar top).
 - **Verified:** headless Chromium, 0 JS errors, no horizontal overflow in the list (scrollWidth == clientWidth), 0 `-` placeholders in detail, undo restores, empty state renders, no meta line wraps, notes hidden in Before view, delta styling on the Delta column only, RTL resolves in list + detail.
 - **Corrected claim:** first said "~⅔ of cells are `-`". Measured: 39 of 63 event-describing cells (62%), but 40% of all cells. Cover copy and notes now state the precise figure — it was about to go in front of the team.
+- **Registered on the hub:** first card in Transit Projects at https://dashasyn.github.io/synder-prototypes/projects/ (bell icon, navy `#14274E`, tags ITCS / Dispatcher / HEB + ENG).
 
 ### Balance Reconciliation — Transaction Reconciliation Results page (2026-08-04)
 - **Status:** 🚧 In progress — copy/tooltip fixes reviewed and mostly applied, table sorting reviewed, awaiting a few Ignat decisions
