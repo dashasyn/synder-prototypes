@@ -5,6 +5,19 @@
 
 ## 🔧 Active Projects
 
+### ETC Notifications — bell + side sheet (2026-08-05)
+- **Status:** 🚧 v1 prototype built and published, awaiting Ignat feedback
+- **Client:** ETC Solutions GmbH — ITCS DatNet, Israel Railways (ARAMIS feed). Audience: **dispatchers**.
+- **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-notifications/ — `projects/etc-notifications/index.html`
+- **Problem (from Ignat's screenshot of production):** notifications rendered as a 14-column table (Text, From, To, Delta, Module, Title, Type, Station, Destination, Platform, Actual platform, Event, Count, Time). ~2/3 of cells were `-`, horizontal scroll required, no read state, no bell.
+- **Diagnosis:** structural, not cosmetic. A table forces every type to declare all 14 fields when each uses 3–4. The columns also largely duplicated the Text column, which already contains the whole sentence. Title ≈ Type (identical strings on some rows).
+- **Three kinds mixed in one list:** operational events (ARAMIS: platform change, delay, schedule deviation) · announcements (OPS: facilities, speed restriction, timetable) · system-health alarms (data mapping failure, feed interruption — arguably a different audience).
+- **Ignat's decisions (2026-08-05):** keep the first-column message as the row body · urgency sign (icon/chip/left colour bar) · Unread/All tabs · details available on demand · date+time · newest first · **delete is per-user** · volume varies 5–100/day per user · no "last updated"/refresh — updates arrive automatically · **events do not expire** (so no Active/Past split for now).
+- **Built:** bell + badge (99+ cap) · 424px side sheet · Unread/All tabs with counts · per-type rows (severity left bar + SVG icon, 2-line clamped message, type chip, delay chip, right-aligned time) · sticky Today/Yesterday/date separators · master→detail slide inside the same sheet with `‹ Notifications` back · detail renders **only non-empty fields** · per-row ✕ and detail Delete, both with 5s undo toast · Mark all as read · Mark as unread · Esc closes detail then sheet · "Simulate incoming" demo control (badge pulse + highlight animation)
+- **Two production bugs found in the screenshot, worth fixing regardless:** (1) the list is sorted by **time-of-day ignoring the date** — 12:20 (5 Aug) → 12:55 (4 Aug) → 13:05 (5 Aug) → 13:30 (2 Aug); sort key looks like a time field, not a datetime. Also ascending = oldest first. (2) Pagination + "Rows per page 25" for 7 items, and the "Rows per page" label is rendered twice.
+- **Open questions for Ignat:** does the system-health class (mapping failure / feed interruption) belong in the dispatcher's bell at all, or a separate ops-monitoring surface? · at 100/day with no expiry, does the All tab need a type/module filter or grouping of repeats? · is any notification actionable (dispatcher must respond) vs read-only?
+- **Verified:** headless Chromium, 0 JS errors, no horizontal overflow in the list (scrollWidth == clientWidth), 0 `-` placeholders in detail, undo restores, empty state renders, no meta line wraps.
+
 ### Balance Reconciliation — Transaction Reconciliation Results page (2026-08-04)
 - **Status:** 🚧 In progress — copy/tooltip fixes reviewed and mostly applied, table sorting reviewed, awaiting a few Ignat decisions
 - **Jira:** DIS-259
