@@ -5,6 +5,14 @@
 
 ## 🔧 Active Projects
 
+### Reports / Financials Overview redesign (2026-08-06)
+- **Status:** 🚧 Prototype live, template-description copy set pending
+- **Prototype:** https://dashasyn.github.io/synder-prototypes/reports/financials-overview/ — `reports/financials-overview/index.html`
+- **Scope:** merge 3 report pages → 1 Overview (3 pre-loaded reports) · 3-dot Edit/Delete per card + drag handle replacing Customize mode · Add report modal with category sidebar and AI/scratch buttons pinned to bottom · full-screen editor · live date picker (charts update immediately, no Apply)
+- **2026-08-06 commits:** `ef32dd9` restored live-Synder template descriptions, modal 920→1080px, card min-width 210→258px, 14px card type, "Use this template" → "Use template" · `0e929fd` removed card hover border/shadow + cursor:pointer (card was never clickable), softened "Use template" hover to light blue tint, sidebar buttons 12.5→14px, sidebar 172→205px
+- **Template description audit (2026-08-06):** "new page under construction" copy wins — benefit-focused, semantic chart labels (Summary table / Monthly trend / Ranking / Distribution / Comparison) instead of format badges. 5 copy bugs flagged: Stripe listed as a sales channel · "mini P&L" jargon reintroduced · Gateway Fees card is 3 lines and breaks card rhythm · shipping-country copy drops the revenue dimension · Tax summary lost the negative-amounts caveat. Voice template: "Top 5 expense accounts" → "Where the money went — by account"
+- **Next:** write the corrected full 16 template descriptions in that voice → decide Jira split (one story vs. page-restructure + content-fix as two tickets); draft text ready, ticket NOT created (Jira is read-only for me). Slack summary drafted, not sent.
+
 ### ETC Notifications — bell + side sheet (2026-08-05)
 - **Status:** 🚧 v1 prototype built and published, awaiting Ignat feedback
 - **Client:** ETC Solutions GmbH — ITCS DatNet, Israel Railways (ARAMIS feed). Audience: **dispatchers**.
