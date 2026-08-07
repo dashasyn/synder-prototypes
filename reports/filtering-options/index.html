@@ -355,14 +355,21 @@
             height: 100%;
             background: var(--white);
             box-shadow: var(--shadow-md);
-            transition: right 0.3s ease;
             z-index: 1001;
             display: flex;
             flex-direction: column;
+            /* A closed sheet is parked off-screen, which leaves its controls in
+               the tab order — keyboard users could tab into an invisible panel.
+               `visibility` makes it inert; the 0.3s delay lets the slide-out
+               finish before it disappears, so the animation is unchanged. */
+            visibility: hidden;
+            transition: right 0.3s ease, visibility 0s linear 0.3s;
         }
 
         .filter-sheet.active {
             right: 0;
+            visibility: visible;
+            transition: right 0.3s ease, visibility 0s linear 0s;
         }
 
         .sheet-header {
@@ -397,7 +404,9 @@
             position: relative;
         }
 
-        .sheet-filter-group label {
+        /* Direct child only — the checkbox rows inside a multiselect panel are
+           <label>s too, and were inheriting the uppercase field-label styling. */
+        .sheet-filter-group > label {
             display: block;
             font-size: 12px;
             font-weight: 500;
@@ -1166,6 +1175,101 @@
             margin-right: 6px;
         }
 
+        /* ========== VARIANT 7: BUTTON + SIDE SHEET ========== */
+        .sheetbtn-header {
+            align-items: flex-start;
+        }
+
+        .mock-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .toolbar-search {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            height: 36px;
+            padding: 0 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            background: var(--white);
+        }
+
+        .toolbar-search:focus-within {
+            border-color: var(--primary-blue);
+        }
+
+        .toolbar-search .material-icons {
+            font-size: 18px;
+            color: var(--text-tertiary);
+        }
+
+        .toolbar-search input {
+            border: none;
+            outline: none;
+            font-family: inherit;
+            font-size: 14px;
+            width: 180px;
+            color: var(--text-primary);
+        }
+
+        .filters-trigger {
+            position: relative;
+        }
+
+        .filters-trigger .badge {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            min-width: 20px;
+            height: 20px;
+            padding: 0 6px;
+            margin-left: 4px;
+            border-radius: 10px;
+            background: #EEF1F5;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .filters-trigger .badge.show {
+            display: inline-flex;
+        }
+
+        /* Read-only summary of what's applied. Removable, not editable —
+           all composing happens inside the sheet. */
+        .applied-chips-bar {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 12px 24px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .applied-chips-bar.show {
+            display: flex;
+        }
+
+        .sheet-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            max-width: 280px;
+        }
+
+        /* Scoped to this sheet so Variant 2's footer keeps its own layout. */
+        #sheetbtnSheet .sheet-header {
+            align-items: flex-start;
+        }
+
+        #sheetbtnSheet .sheet-footer .btn {
+            flex: 1;
+            justify-content: center;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .content {
@@ -1201,7 +1305,7 @@
 <body>
     <div class="page-header">
         <h1>Filtering Options</h1>
-        <p>Exploring different filter UI patterns to reduce vertical space while maintaining usability. All six variants filter the same 26-row dataset, using Synder's real 8 statuses. Every variant is Apply-gated — the list is only re-queried when you commit, never on each selection. Variant 6 is a recommendation rather than another layout option.</p>
+        <p>Exploring different filter UI patterns to reduce vertical space while maintaining usability. All seven variants filter the same 26-row dataset, using Synder's real 8 statuses. Every variant is Apply-gated — the list is only re-queried when you commit, never on each selection. Variant 6 is a recommendation rather than another layout option.</p>
 
         <div class="nav-tabs">
             <button class="nav-tab active" data-variant="current">1. Current</button>
@@ -1210,6 +1314,7 @@
             <button class="nav-tab" data-variant="button">4. Button + Chips</button>
             <button class="nav-tab" data-variant="quick">5. Quick filters</button>
             <button class="nav-tab" data-variant="rec">6. Recommended</button>
+            <button class="nav-tab" data-variant="sheetbtn">7. Button + Side sheet</button>
         </div>
     </div>
 
@@ -1435,6 +1540,59 @@
 
                 <h3>Still open</h3>
                 <p>Segment counts need a status-count aggregate on the list endpoint. The 5 segments here collapse Synder's 8 statuses; the real product has ~18, so the grouping needs a product decision about which land in "Attention required". And two reset labels exist in production today — <code>Reset filter</code> and <code>Reset all filters</code> — which should become one.</p>
+            </div>
+        </div>
+
+        <!-- VARIANT 7: BUTTON + SIDE SHEET + READ-ONLY CHIPS -->
+        <div id="variant-sheetbtn" class="variant-section">
+            <div class="variant-header">
+                <h2>Filters as Button + Side Sheet</h2>
+                <p>One <em>Filters</em> button opens a right-hand sheet holding every filter, with Apply and Reset at the bottom. Applied filters appear as read-only chips under the toolbar — they show what's on and can be removed, but not edited. All composing happens in the sheet; the chips are a summary, not a control panel.</p>
+            </div>
+
+            <div class="mock-page">
+                <div class="mock-header sheetbtn-header">
+                    <div>
+                        <h2 class="mock-title">Transactions</h2>
+                        <p class="mock-subtitle">View and find transactions broken down into journal lines.</p>
+                    </div>
+                    <div class="mock-actions">
+                        <div class="toolbar-search">
+                            <span class="material-icons">search</span>
+                            <input type="text" id="sheetbtnSearch" placeholder="Search customer…" aria-label="Search customer">
+                        </div>
+                        <button class="btn btn-secondary filters-trigger" type="button" id="sheetbtnFiltersBtn">
+                            <span class="material-icons">tune</span>Filters<span class="badge" id="sheetbtnBadge"></span>
+                        </button>
+                        <button class="btn btn-secondary" type="button">
+                            <span class="material-icons">download</span>Download report
+                        </button>
+                    </div>
+                </div>
+
+                <div class="applied-chips-bar" id="sheetbtnChips"></div>
+
+                <div class="table-toolbar" id="sheetbtnCount"></div>
+                <div class="table-container" id="sheetbtnTable"></div>
+            </div>
+
+            <div class="sheet-overlay" id="sheetbtnOverlay"></div>
+
+            <div class="filter-sheet" id="sheetbtnSheet">
+                <div class="sheet-header">
+                    <div>
+                        <h3>Filters</h3>
+                        <p class="sheet-subtitle">Configure filters and click Apply to update results.</p>
+                    </div>
+                    <button class="sheet-close" id="sheetbtnCloseBtn" aria-label="Close">
+                        <span class="material-icons">close</span>
+                    </button>
+                </div>
+                <div class="sheet-content" id="sheetbtnContent"></div>
+                <div class="sheet-footer">
+                    <button class="btn btn-primary" id="sheetbtnApplyBtn">Apply filters</button>
+                    <button class="btn btn-secondary" id="sheetbtnResetBtn">Reset filters</button>
+                </div>
             </div>
         </div>
     </div>
@@ -1979,7 +2137,8 @@
             chips:   defaults(),
             button:  defaults(),
             quick:   defaults(),
-            rec:     recBaseline()
+            rec:     recBaseline(),
+            sheetbtn: defaults()
         };
         var draft = {
             current: defaults(),
@@ -1988,6 +2147,7 @@
             button:  defaults(),
             quick:   defaults(),
             rec:     recBaseline(),
+            sheetbtn: defaults(),
             sheet:   defaults(),
             popover: defaults()
         };
@@ -2769,6 +2929,152 @@
         });
 
         // ---------------------------------------------------------------
+        // VARIANT 7 — Filters button + right side sheet + read-only chips
+        // ---------------------------------------------------------------
+        // Everything is composed inside the sheet, which is Apply-gated. The
+        // chips under the toolbar are a SUMMARY, not a control panel: they say
+        // what's on and can be removed, but can't be edited. Removing one is a
+        // single deliberate action, so it commits — same cost as one query,
+        // and there's no Apply button outside the sheet to defer it to.
+        var sheetbtnSearch = '';   // committed search term
+        var searchMatch = function (t, q) {
+            if (!q) return true;
+            q = q.toLowerCase();
+            return t.customer.toLowerCase().indexOf(q) !== -1 ||
+                   t.platform.toLowerCase().indexOf(q) !== -1;
+        };
+
+        function runSheetbtn() {
+            return runFilters(state.sheetbtn).filter(function (t) {
+                return searchMatch(t, sheetbtnSearch);
+            });
+        }
+
+        // The badge counts selected VALUES, not dimensions — "Status: Failed,
+        // Pending + Platform: Stripe" reads as 3, which is what the user picked.
+        function sheetbtnValueCount(f) {
+            return FILTER_KEYS.reduce(function (n, k) {
+                if (isMulti(k)) return n + f[k].length;
+                return n + (f[k] === 'all' ? 0 : 1);
+            }, 0);
+        }
+
+        function renderSheetbtnBody() {
+            var content = document.getElementById('sheetbtnContent');
+            closeLayerTree(content);
+            content.innerHTML = '';
+            var ctx = {
+                get: function (k) { return draft.sheetbtn[k]; },
+                setValue: function (k, v) { draft.sheetbtn[k] = v; },
+                style: 'select',
+                fullWidth: true,
+                wrapperClass: 'sheet-filter-group',
+                onChange: refreshSheetbtnSheetChrome
+            };
+            FILTER_KEYS.forEach(function (k) { mountField(content, k, ctx); });
+            refreshSheetbtnSheetChrome();
+        }
+
+        function refreshSheetbtnSheetChrome() {
+            var n = sheetbtnValueCount(draft.sheetbtn);
+            document.getElementById('sheetbtnApplyBtn').textContent =
+                n ? 'Apply ' + n + ' filter' + (n > 1 ? 's' : '') : 'Apply filters';
+            document.getElementById('sheetbtnResetBtn').disabled = !n;
+        }
+
+        function openSheetbtn() {
+            draft.sheetbtn = clone(state.sheetbtn);
+            renderSheetbtnBody();
+            document.getElementById('sheetbtnOverlay').classList.add('active');
+            document.getElementById('sheetbtnSheet').classList.add('active');
+        }
+
+        function closeSheetbtn() {
+            closeAllLayers();
+            document.getElementById('sheetbtnOverlay').classList.remove('active');
+            document.getElementById('sheetbtnSheet').classList.remove('active');
+        }
+
+        function refreshSheetbtnChrome() {
+            var f = state.sheetbtn;
+            var n = sheetbtnValueCount(f);
+            var badge = document.getElementById('sheetbtnBadge');
+            badge.textContent = n;
+            badge.classList.toggle('show', n > 0);
+
+            var bar = document.getElementById('sheetbtnChips');
+            var keys = activeKeys(f);
+            bar.classList.toggle('show', keys.length > 0);
+            bar.innerHTML = keys.map(function (k) {
+                return '<span class="applied-chip">' + esc(chipTextFull(k, f[k])) +
+                    '<button class="remove" type="button" data-drop="' + k + '" aria-label="Remove ' +
+                    esc(FILTERS[k].label) + ' filter"><span class="material-icons">close</span></button></span>';
+            }).join('') + (keys.length ? '<button class="clear-all" type="button" data-clear>Clear all</button>' : '');
+
+            bar.querySelectorAll('[data-drop]').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var k = this.getAttribute('data-drop');
+                    state.sheetbtn[k] = emptyValue(k);
+                    refreshSheetbtnChrome();
+                    renderSheetbtnResults();
+                });
+            });
+            var clearBtn = bar.querySelector('[data-clear]');
+            if (clearBtn) clearBtn.addEventListener('click', function () {
+                state.sheetbtn = defaults();
+                refreshSheetbtnChrome();
+                renderSheetbtnResults();
+            });
+        }
+
+        // Chips spell out every selected value rather than collapsing to
+        // "3 selected" — the chip is the only place the applied set is visible,
+        // so hiding values behind a count would leave nowhere to read them.
+        function chipTextFull(key, value) {
+            if (isMulti(key)) {
+                return FILTERS[key].label + ': ' + value.map(function (v) {
+                    return optionLabelSingle(key, v);
+                }).join(', ');
+            }
+            return FILTERS[key].label + ': ' + optionLabelSingle(key, value);
+        }
+
+        function renderSheetbtnResults() {
+            var rows = runSheetbtn();
+            var n = activeKeys(state.sheetbtn).length + (sheetbtnSearch ? 1 : 0);
+            renderCount('sheetbtnCount', rows, state.sheetbtn, n);
+            renderTable('sheetbtnTable', rows, function () {
+                state.sheetbtn = defaults();
+                draft.sheetbtn = defaults();
+                sheetbtnSearch = '';
+                document.getElementById('sheetbtnSearch').value = '';
+                refreshSheetbtnChrome();
+                renderSheetbtnResults();
+            });
+        }
+
+        document.getElementById('sheetbtnFiltersBtn').addEventListener('click', openSheetbtn);
+        document.getElementById('sheetbtnOverlay').addEventListener('click', closeSheetbtn);
+        document.getElementById('sheetbtnCloseBtn').addEventListener('click', closeSheetbtn);
+        document.getElementById('sheetbtnApplyBtn').addEventListener('click', function () {
+            state.sheetbtn = clone(draft.sheetbtn);
+            closeSheetbtn();
+            refreshSheetbtnChrome();
+            renderSheetbtnResults();
+        });
+        document.getElementById('sheetbtnResetBtn').addEventListener('click', function () {
+            draft.sheetbtn = defaults();
+            renderSheetbtnBody();
+        });
+        // Search commits on Enter — one deliberate action, one query, same rule
+        // as everything else on the page.
+        document.getElementById('sheetbtnSearch').addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            sheetbtnSearch = this.value.trim();
+            renderSheetbtnResults();
+        });
+
+        // ---------------------------------------------------------------
         // Tab navigation
         // ---------------------------------------------------------------
         document.querySelectorAll('.nav-tab').forEach(function (tab) {
@@ -2776,6 +3082,7 @@
                 var variant = this.getAttribute('data-variant');
                 closeAllLayers();
                 closeSheet();
+                closeSheetbtn();
                 document.querySelectorAll('.variant-section').forEach(function (el) {
                     el.classList.remove('active');
                 });
@@ -2799,6 +3106,8 @@
         renderQuickResults();
         renderRec();
         renderRecResults();
+        refreshSheetbtnChrome();
+        renderSheetbtnResults();
     })();
     </script>
 </body>
