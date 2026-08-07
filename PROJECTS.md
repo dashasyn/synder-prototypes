@@ -289,8 +289,8 @@
 - **Settings wired:** Clearing account, income/fee/bank accounts, generic customer (+name picker), track fees, include taxes, default product
 - **Data:** 10 Stripe transactions (Pamela Anderson, Marcus Reid, etc.) Jan–Mar 2026
 
-### Filtering Options Prototype (2026-04-30; v2 functional, v3 multiselect, v4 Apply-gated, v5 six variants — all 2026-08-04)
-- **Status:** ✅ v5 live — six variants, all Apply-gated, on Synder's real 8-status taxonomy
+### Filtering Options Prototype (2026-04-30; v2 functional, v3 multiselect, v4 Apply-gated, v5 six variants — all 2026-08-04; v7 variant 2026-08-07)
+- **Status:** 🚧 v7 built, NOT yet verified — seven variants, all Apply-gated, on Synder's real 8-status taxonomy
 - **Location:** `filtering-options/index.html` (mirror: `reports/filtering-options/index.html` — keep both in sync)
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/filtering-options/
 - **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Tab navigation between variants; all four filter the same 24-row dataset.
@@ -326,6 +326,9 @@
   - **`fieldHtml` now takes the ctx** (not `style, fullWidth`) so V6 could add a `baseline` style. `applyBtnText()` stops a disabled Apply from naming a count it isn't going to apply.
   - **Verified:** 110 jsdom checks — including **all 33 single-filter values cross-checked against an independent filter over the dataset parsed out of the source**, so counts aren't taken on trust — plus 48 Playwright checks in real Chromium across three suites (nested layers, V5/V6 behaviour, variants 1–4 regression). Scripts: `/tmp/verify-filters.cjs`, `/tmp/browser-check.cjs`, `/tmp/browser-check2.cjs`.
   - **Open questions for Ignat:** presets/segments commit on click rather than staging (flagged — a staged "quick" filter costs two clicks and kills the thing users do 986×/month); segment counts need a status-count aggregate on the list endpoint; the 5 segments collapse 8 statuses but production has ~18, so grouping needs a product decision; production has two reset labels (`Reset filter`, `Reset all filters`) that should become one.
+- **v7 (2026-08-07) — Variant 7: Button + Side sheet + read-only chips.** One `Filters` button opens a right-hand sheet holding every filter, Apply/Reset pinned at the bottom. Badge counts selected **values**, not dimensions ("Status: Failed, Pending + Platform: Stripe" reads as 3). Applied filters render as read-only chips under the toolbar — removable but **not editable**, since all composing happens in the sheet; removing one commits immediately (one deliberate action = one query, and there's no outside Apply to defer to). Added a committed search term matching customer + platform. Intro copy updated to "seven variants".
+  - **Two pre-existing bugs fixed, affecting every sheet variant:** (1) a closed sheet was only parked off-screen via `right`, leaving its controls in the tab order — keyboard users could tab into an invisible panel; added `visibility: hidden` with `transition: ... visibility 0s linear 0.3s` so the slide-out animation is unchanged. (2) `.sheet-filter-group label` was applying the uppercase field-label style to checkbox-row `<label>`s inside multiselect panels; narrowed to `> label`.
+  - **⚠️ NOT VERIFIED.** No jsdom or Playwright artifact exists for v7, unlike v3 (29 checks), v4 (60 + 21) and v5/v6 (110 + 48). Drive it in real Chromium and screenshot before treating it as done. Mirror confirmed byte-identical.
 - **Design decisions:**
   - Consistent Synder styling (Roboto, #0053CC, shadows), Material Icons
   - Status badges coloured by status group (Errors red / Completed green-amber-grey / Queued blue)
