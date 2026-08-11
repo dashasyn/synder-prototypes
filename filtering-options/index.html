@@ -785,6 +785,16 @@
             padding: 6px 16px 8px;
             border-top: 1px solid var(--border-color);
             margin-top: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .btn-panel-apply {
+            padding: 6px 14px;
+            font-size: 13px;
+            margin-left: auto;
         }
 
         .dropdown-panel-footer .clear-all {
@@ -1494,7 +1504,7 @@
                 <p>What the evidence points to, rather than another layout option. Three ideas, each answering a finding we already logged — see the reasoning below the prototype.</p>
                 <ol class="rec-summary">
                     <li><strong>Status becomes a segmented control with counts</strong>, because that's the one filter dimension users actually touch (986 tab clicks vs ~0 status-dropdown clicks in 30 days on Summaries).</li>
-                    <li><strong>The 90-day window is shown as a labeled default, not as a filter</strong>, so "Reset" no longer appears on a page the user hasn't touched.</li>
+                    <li><strong>The 90-day window is shown as a labeled default, not as a filter</strong>, so an untouched page carries no filter chrome at all.</li>
                     <li><strong>Status has exactly one source of truth</strong>, so a granular status arriving from a dashboard deep-link can't silently contradict the segment on screen.</li>
                 </ol>
             </div>
@@ -1516,7 +1526,6 @@
 
                 <div class="rec-segments" id="recSegments"></div>
                 <div class="rec-filter-bar" id="recFilterBar"></div>
-                <div class="dirty-hint" id="recDirtyHint">Unapplied changes — click Apply to update the list.</div>
 
                 <div class="table-toolbar" id="recCount"></div>
                 <div class="table-container" id="recTable"></div>
@@ -1529,14 +1538,14 @@
 
                 <h3>Why the 90-day window is a baseline, not a filter</h3>
                 <p><span class="evidence">Reset-on-clean-page</span>Platform transactions loads with a 90-day filter for backend reasons, so "Reset all filters" is visible before the user has touched anything. That button is lying about what happened, and it makes "reset" ambiguous — back to nothing, or back to 90 days?</p>
-                <p>Here the default is a dashed, ×-less chip reading <em>Last 90 days (default)</em>, and <strong>"Reset to default" doesn't render at all until you leave the default</strong>. The count line says "last 90 days (default), no filters applied" rather than claiming a filter is on. Same query cost, honest UI.</p>
+                <p>Here the default is a dashed, ×-less chip reading <em>Last 90 days (default)</em>, and the count line says "last 90 days (default), no filters applied" rather than claiming a filter is on. Same query cost, honest UI.</p>
 
                 <h3>Why status has exactly one source of truth</h3>
                 <p><span class="evidence">FLT-2 · Critical</span>The bug you hit on Summaries: pick "Failed" in the dropdown, click the "Ready to sync" tab, and you get Ready-to-sync rows while the dropdown still says Failed. Two controls, one dimension, no sync between them.</p>
                 <p>Status here is a single value. A granular status arriving from a dashboard deep-link shows as <em>From dashboard: Rule failed</em> and the containing segment goes to a <strong>dashed "partial" state</strong> — narrower than the segment, and it says so. Clicking any segment replaces the granular status and drops the chip. The two can't disagree because there's only one of them. Try the <em>Simulate dashboard deep-link</em> button above.</p>
 
                 <h3>What stages and what commits</h3>
-                <p>Segments and deep-link removal <strong>commit on click</strong> — one click, one query, exactly what a status tab costs today. Secondary filters (Platform, Type, Amount, Customer) are staged chips behind "Add filter" and wait for Apply. A segment click also commits anything staged, so there's never a half-applied combination on screen.</p>
+                <p>Segments and deep-link removal <strong>commit on click</strong> — one click, one query, exactly what a status tab costs today. Every other filter stages <strong>inside its own dropdown</strong>: opening a panel snapshots what's applied, its Apply commits, and closing without Apply discards. Because staged state can never outlive an open panel, this variant needs no bar-level Apply and no unapplied-changes warning.</p>
 
                 <h3>Still open</h3>
                 <p>Segment counts need a status-count aggregate on the list endpoint. The 5 segments here collapse Synder's 8 statuses; the real product has ~18, so the grouping needs a product decision about which land in "Attention required". And two reset labels exist in production today — <code>Reset filter</code> and <code>Reset all filters</code> — which should become one.</p>
@@ -1955,29 +1964,35 @@
         // toggling a value only rebuilds its own field's markup, never a
         // sibling's, so an open dropdown elsewhere on the bar is untouched.
         // ---------------------------------------------------------------
-        function optionListHtml(key, value) {
-            return FILTERS[key].options.map(function (o) {
+        function optionListHtml(key, value, ctx) {
+            var items = FILTERS[key].options.map(function (o) {
                 var sel = o.value === value;
                 return '<div class="dropdown-item' + (sel ? ' selected' : '') +
                     '" data-pick-value="' + esc(o.value) + '"><span>' + esc(o.label) + '</span>' +
                     (sel ? '<span class="material-icons">check</span>' : '') + '</div>';
             }).join('');
+            return items + (ctx && ctx.applyInPanel
+                ? '<div class="dropdown-panel-footer"><button class="btn btn-primary btn-panel-apply" type="button" data-panel-apply>Apply</button></div>'
+                : '');
         }
 
-        function checkboxListHtml(key, value) {
+        function checkboxListHtml(key, value, ctx) {
             var items = FILTERS[key].options.map(function (o) {
                 var checked = value.indexOf(o.value) !== -1;
                 return '<label class="dropdown-checkbox-item"><input type="checkbox" data-check-value="' +
                     esc(o.value) + '"' + (checked ? ' checked' : '') + '><span>' + esc(o.label) + '</span></label>';
             }).join('');
-            return items + '<div class="dropdown-panel-footer"><button class="clear-all" type="button" data-clear-field>Clear</button></div>';
+            return items + '<div class="dropdown-panel-footer">' +
+                '<button class="clear-all" type="button" data-clear-field>Clear</button>' +
+                (ctx && ctx.applyInPanel ? '<button class="btn btn-primary btn-panel-apply" type="button" data-panel-apply>Apply</button>' : '') +
+                '</div>';
         }
 
         function fieldHtml(key, value, ctx) {
             var multi = isMulti(key);
             var style = ctx.style;
             var fullWidth = ctx.fullWidth;
-            var panelInner = multi ? checkboxListHtml(key, value) : optionListHtml(key, value);
+            var panelInner = multi ? checkboxListHtml(key, value, ctx) : optionListHtml(key, value, ctx);
 
             // Variant 6: a system default rendered as a baseline, not a filter.
             // No ×, and a muted "(default)" suffix until the user changes it, so
@@ -2025,6 +2040,11 @@
                 closeLayers(trigger);
                 if (wasOpen) {
                     closeLayerTree(rootEl);
+                } else if (fieldCtx.applyInPanel) {
+                    // Panel-scoped staging: snapshot what's applied, then re-render
+                    // the panel from that snapshot so it can't show stale edits.
+                    if (fieldCtx.onPanelOpen) fieldCtx.onPanelOpen(key);
+                    refreshFieldNode(fieldCtx, key, { keepOpen: true });
                 } else {
                     panel.classList.add('active');
                     trigger.classList.add('open');
@@ -2071,6 +2091,16 @@
                 });
             }
 
+            var panelApply = panel.querySelector('[data-panel-apply]');
+            if (panelApply) {
+                panelApply.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    // Commit first, then close. The close handler resets the draft
+                    // from committed state, which is a no-op once this has run.
+                    if (fieldCtx.onPanelApply) fieldCtx.onPanelApply(key);
+                });
+            }
+
             var removeBtn = rootEl.querySelector('[data-remove-field]');
             if (removeBtn) {
                 removeBtn.addEventListener('click', function (e) {
@@ -2096,6 +2126,13 @@
                 registerLayer(fieldCtx.rootEl, function () {
                     panel.classList.remove('active');
                     trigger.classList.remove('open');
+                    // Closing without Apply discards the panel's edits — and the
+                    // trigger has to be redrawn, or the chip keeps showing the
+                    // discarded value while the list shows the old one.
+                    if (fieldCtx.onPanelClose) {
+                        fieldCtx.onPanelClose(key);
+                        refreshFieldNode(fieldCtx, key);
+                    }
                 });
             }
         }
@@ -2769,10 +2806,22 @@
             var bar = document.getElementById('recFilterBar');
             bar.innerHTML = '';
 
+            // Each dropdown stages on its own: opening one snapshots what's
+            // applied, its Apply commits, and closing without Apply discards.
+            // That's why there's no bar-level Apply and no unapplied-changes
+            // hint — cross-field staged state can never exist.
             var base = {
+                applyInPanel: true,
                 get: function (k) { return draft.rec[k]; },
                 setValue: function (k, v) { draft.rec[k] = v; },
-                onChange: refreshRecChrome
+                onPanelOpen: function () { draft.rec = clone(state.rec); },
+                onPanelApply: function () {
+                    state.rec = clone(draft.rec);
+                    closeAllLayers();
+                    renderRec();
+                    renderRecResults();
+                },
+                onPanelClose: function () { draft.rec = clone(state.rec); }
             };
 
             // 1. The system default, as a baseline rather than a filter.
@@ -2860,44 +2909,6 @@
                 });
             });
 
-            var actions = document.createElement('div');
-            actions.className = 'bar-actions';
-            actions.innerHTML =
-                '<button class="btn btn-ghost" type="button" data-rec-reset>Reset to default</button>' +
-                '<button class="btn btn-primary" type="button" data-rec-apply></button>';
-            bar.appendChild(actions);
-
-            actions.querySelector('[data-rec-apply]').addEventListener('click', function () {
-                state.rec = clone(draft.rec);
-                refreshRecChrome();
-                renderRecResults();
-            });
-            actions.querySelector('[data-rec-reset]').addEventListener('click', function () {
-                state.rec = recBaseline();
-                draft.rec = recBaseline();
-                recChips = [];
-                recDeepLink = null;
-                renderRec();
-                renderRecResults();
-            });
-
-            refreshRecChrome();
-        }
-
-        function refreshRecChrome() {
-            var dirty = !sameFilters(draft.rec, state.rec);
-            var deviated = recActiveCount(state.rec) > 0 || recActiveCount(draft.rec) > 0;
-            var n = recActiveCount(draft.rec);
-            var applyBtn = document.querySelector('#recFilterBar [data-rec-apply]');
-            var resetBtn = document.querySelector('#recFilterBar [data-rec-reset]');
-            if (applyBtn) {
-                applyBtn.textContent = applyBtnText(draft.rec, dirty, n);
-                applyBtn.disabled = !dirty;
-            }
-            // The finding this variant answers: no Reset on a page the user
-            // hasn't touched. It appears only once they leave the default.
-            if (resetBtn) resetBtn.style.display = deviated ? '' : 'none';
-            refreshDirtyHint('recDirtyHint', dirty);
         }
 
         function renderRecResults() {
@@ -3032,6 +3043,12 @@
         // so hiding values behind a count would leave nowhere to read them.
         function chipTextFull(key, value) {
             if (isMulti(key)) {
+                // 1–2 values are spelled out; 3+ collapse to "First + N more" so a
+                // wide selection can't push the chip past the width of the toolbar.
+                if (value.length >= 3) {
+                    return FILTERS[key].label + ': ' + optionLabelSingle(key, value[0]) +
+                        ' + ' + (value.length - 1) + ' more';
+                }
                 return FILTERS[key].label + ': ' + value.map(function (v) {
                     return optionLabelSingle(key, v);
                 }).join(', ');
