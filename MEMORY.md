@@ -113,3 +113,20 @@
 - When testing Synder settings toggles: errors appear inline on toggle, NOT on save. Don't need to click Update.
 - The "Update unavailable" popover fires on every toggle in headless Chromium — it's a real bug (29 hidden spinners never resolve)
 - Use `setsid` for truly daemonized background processes (nohup still dies with shell session in exec tool)
+
+## Static Review Protocol (2026-07-22)
+- **6-pass checklist order:** scope → FDD internal consistency → undefined behaviors → missing variants → visual details → content
+- **Before reviewing:** fetch Figma frame list, ask which frames exist, request specific ones (all-states matrix, per-component all-variants, each UC state, each banner combo, cold state, tooltips)
+- **Ignat sends all frames he has** — it's on me to identify and request missing ones explicitly
+- See [[figma-review-protocol]] for full detail
+
+## Promoted From Short-Term Memory (2026-08-11)
+
+<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:13:14 -->
+- What production looks like today: His own complaints: looks like a table not notifications · too much detail · horizontal scroll · no way to mark as read. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:13-14]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:17:17 -->
+- What I added to his diagnosis: **It's structural, not cosmetic.** 39 of the 63 event-describing cells are `-` (62%); 40% of all cells. A table makes every type declare all [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:17-17]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:18:19 -->
+- What I added to his diagnosis: 14 fields when each type only uses 3–4. Platform changes use Station/Platform/Actual platform; delays use Delta; announcements use almost nothing. That's the horizontal scroll. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:18-19]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:20:20 -->
+- What I added to his diagnosis: **The columns duplicate the Text column.** "IC/32 3210 Train 10 to Haifa: The platform at Akko [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:20-20]

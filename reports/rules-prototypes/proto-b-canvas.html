@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Rules — Canvas Fork View (Prototype B)</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Roboto, sans-serif; font-size: 14px; color: #222; background: #F0F0F0; height: 100vh; overflow: hidden; }
+
+/* ── TOP NAV ── */
+.topnav {
+  height: 56px; background: white; border-bottom: 1px solid #C8C7CC;
+  display: flex; align-items: center; padding: 0 16px; gap: 12px; z-index: 50; position: relative;
+}
+.logo { font-size: 16px; font-weight: 700; color: #0053CC; display: flex; align-items: center; gap: 6px; }
+.nav-divider { width: 1px; height: 20px; background: #E0E0E0; }
+.nav-breadcrumb { font-size: 13px; color: #888; display: flex; align-items: center; gap: 6px; }
+.nav-breadcrumb span { color: #222; font-weight: 500; }
+.nav-badge { padding: 2px 8px; background: #E3EDFF; color: #0053CC; border-radius: 10px; font-size: 11px; font-weight: 500; margin-left: 4px; }
+.spacer { flex: 1; }
+.btn { padding: 7px 16px; border-radius: 4px; border: none; cursor: pointer; font-size: 13px; font-family: Roboto, sans-serif; font-weight: 500; }
+.btn-primary { background: #0053CC; color: white; }
+.btn-primary:hover { background: #0047B3; }
+.btn-outline { background: white; color: #0053CC; border: 1px solid #0053CC; }
+.btn-outline:hover { background: #F0F5FF; }
+.btn-ghost { background: transparent; color: #555; border: 1px solid #E0E0E0; }
+.nav-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; }
+.toggle { width: 36px; height: 20px; background: #0053CC; border-radius: 10px; position: relative; cursor: pointer; flex-shrink: 0; }
+.toggle::after { content:''; width:16px; height:16px; background:white; border-radius:50%; position:absolute; top:2px; right:2px; }
+
+/* ── LAYOUT ── */
+.layout { display: flex; height: calc(100vh - 56px); }
+
+/* ── LEFT PANEL (editor) ── */
+.edit-panel {
+  width: 280px; min-width: 280px;
+  background: white;
+  border-right: 1px solid #C8C7CC;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  transition: width 0.2s;
+}
+.edit-panel.collapsed { width: 0; min-width: 0; }
+
+.ep-header {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid #F0F0F0;
+  display: flex; align-items: center; gap: 8px;
+  flex-shrink: 0;
+}
+.ep-title { font-size: 13px; font-weight: 500; flex: 1; }
+.ep-close { color: #BDBDBD; cursor: pointer; font-size: 18px; }
+.ep-close:hover { color: #555; }
+.ep-badge { padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+
+.ep-body { padding: 14px; overflow-y: auto; flex: 1; }
+
+.ep-field-group { margin-bottom: 14px; }
+.ep-label { font-size: 11px; font-weight: 600; letter-spacing: 0.4px; color: #888; text-transform: uppercase; margin-bottom: 5px; }
+.ep-select, .ep-input {
+  width: 100%; padding: 7px 10px; border: 1px solid #E0E0E0; border-radius: 4px;
+  font-size: 13px; background: #FAFAFA; color: #333; outline: none;
+  font-family: Roboto, sans-serif; margin-bottom: 5px;
+}
+.ep-select:focus, .ep-input:focus { border-color: #0053CC; }
+.ep-input.val { background: #F0F5FF; border-color: #BAD0F7; color: #0053CC; font-weight: 500; }
+.ep-or { font-size: 11px; font-weight: 700; color: #F9A825; margin: 4px 0; }
+.ep-add-or { font-size: 11px; color: #0053CC; cursor: pointer; padding: 3px 0; display: inline-flex; align-items: center; gap: 3px; }
+.ep-add-or:hover { text-decoration: underline; }
+.ep-divider { height: 1px; background: #F0F0F0; margin: 12px 0; }
+.ep-action-note { font-size: 11px; color: #888; margin-top: 4px; }
+
+.ep-submit { width: 100%; padding: 9px; background: #0053CC; color: white; border: none; border-radius: 4px; font-size: 13px; cursor: pointer; font-family: Roboto, sans-serif; font-weight: 500; margin-top: 8px; }
+.ep-submit:hover { background: #0047B3; }
+
+/* ── CANVAS ── */
+.canvas-wrap {
+  flex: 1; overflow: auto; padding: 40px 40px 80px;
+  display: flex; flex-direction: column; align-items: center;
+  position: relative;
+}
+
+/* Canvas controls */
+.canvas-controls {
+  position: absolute; top: 12px; right: 16px;
+  display: flex; gap: 4px;
+}
+.ctrl-btn {
+  width: 32px; height: 32px; background: white; border: 1px solid #E0E0E0;
+  border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 18px; color: #555;
+}
+.ctrl-btn:hover { background: #F5F5F5; }
+
+/* Trigger node */
+.trigger-node {
+  background: white;
+  border: 2px solid #0053CC;
+  border-radius: 10px;
+  padding: 14px 20px;
+  text-align: center;
+  min-width: 180px;
+  box-shadow: 0 2px 8px rgba(0,83,204,0.15);
+  cursor: pointer;
+  position: relative;
+  z-index: 5;
+}
+.trigger-node:hover { box-shadow: 0 4px 12px rgba(0,83,204,0.25); }
+.trigger-node-label { font-size: 10px; font-weight: 700; letter-spacing: 1px; color: #0053CC; text-transform: uppercase; margin-bottom: 4px; }
+.trigger-node-value { font-size: 14px; font-weight: 500; color: #1a1a1a; }
+.trigger-node-sub { font-size: 12px; color: #888; margin-top: 2px; }
+.trigger-node-edit { font-size: 11px; color: #BDBDBD; margin-top: 6px; cursor: pointer; }
+.trigger-node-edit:hover { color: #0053CC; }
+
+/* Vertical connector from trigger to fork */
+.v-connector { width: 2px; background: #C8C7CC; height: 32px; margin: 0 auto; }
+
+/* Fork node */
+.fork-node {
+  background: white;
+  border: 2px solid #9C27B0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  cursor: default;
+  position: relative;
+  z-index: 5;
+}
+.fork-icon { color: #9C27B0; font-size: 18px; }
+.fork-label { font-size: 12px; font-weight: 600; color: #9C27B0; }
+.fork-count { font-size: 11px; color: #BDBDBD; }
+.fork-add-btn {
+  height: 24px;
+  padding: 0 10px;
+  background: #F3E5F5; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 11px; font-weight: 500; color: #9C27B0;
+  border: 1.5px dashed #CE93D8;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+.fork-add-btn:hover { background: #E1BEE7; }
+.fork-exec-mode { font-size: 10px; color: #9C27B0; background: #F3E5F5; padding: 2px 8px; border-radius: 10px; cursor: pointer; }
+.fork-exec-mode:hover { background: #E1BEE7; }
+
+/* Branches row connector */
+.branches-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin-top: 0;
+}
+
+/* The horizontal line and branches */
+.branches-row {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0;
+  position: relative;
+  width: 100%;
+}
+
+/* Each branch lane */
+.branch-lane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 200px;
+  max-width: 240px;
+  flex: 1;
+  padding: 0 8px;
+  position: relative;
+}
+
+.lane-top-line { width: 2px; height: 24px; background: #C8C7CC; }
+.lane-num-badge {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  font-size: 11px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  z-index: 5;
+}
+.lane-delete {
+  position: absolute;
+  top: 28px;
+  right: 10px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: white;
+  border: 1px solid #E0E0E0;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  font-size: 13px; color: #CCC;
+  z-index: 10;
+}
+.lane-delete:hover { background: #FFEBEE; color: #F44336; border-color: #FFCDD2; }
+
+.lane-drag { cursor: grab; position: absolute; top: 28px; left: 10px; color: #CCC; font-size: 18px; z-index: 10; }
+.lane-drag:active { cursor: grabbing; }
+
+/* Flow nodes in lane */
+.canvas-node {
+  background: white;
+  border: 1.5px solid #E0E0E0;
+  border-radius: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+  position: relative;
+}
+.canvas-node:hover { border-color: #BAD0F7; box-shadow: 0 2px 8px rgba(0,83,204,0.1); }
+.canvas-node.selected { border-color: #0053CC; box-shadow: 0 0 0 2px rgba(0,83,204,0.15); }
+.canvas-node.if-node { border-top: 3px solid #FF9800; }
+.canvas-node.then-node { border-top: 3px solid #4CAF50; }
+.canvas-node.empty-node { border-style: dashed; background: #FAFAFA; }
+.canvas-node.fallback-node { border-top: 3px solid #9E9E9E; background: #FAFAFA; }
+
+.cn-type-label {
+  font-size: 9px; font-weight: 700; letter-spacing: 0.8px; text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.cn-type-label.if { color: #E65100; }
+.cn-type-label.then { color: #1B5E20; }
+.cn-type-label.any { color: #9E9E9E; }
+
+.cn-content { font-size: 12px; color: #333; line-height: 1.4; }
+.cn-field { font-weight: 500; color: #1a1a1a; }
+.cn-op { color: #888; font-style: italic; }
+.cn-val { font-weight: 600; color: #0053CC; }
+.cn-action-val { font-weight: 600; color: #2E7D32; }
+.cn-empty { font-size: 12px; color: #BDBDBD; font-style: italic; }
+.cn-edit-hint { font-size: 10px; color: #BDBDBD; margin-top: 4px; }
+
+/* NO indicator */
+.no-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 10px; font-weight: 700; color: #999;
+  background: #F5F5F5; padding: 2px 6px; border-radius: 3px;
+  margin-top: 5px;
+}
+
+/* YES connector between IF and THEN */
+.yes-connector {
+  display: flex; flex-direction: column; align-items: center; height: 40px;
+}
+.yes-line { width: 2px; flex: 1; background: #C8E6C9; }
+.yes-badge {
+  font-size: 10px; font-weight: 700; color: #2E7D32;
+  background: #E8F5E9; padding: 1px 7px; border-radius: 10px;
+  border: 1px solid #C8E6C9;
+}
+
+/* Add branch lane */
+.add-lane {
+  min-width: 180px;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 0 8px;
+}
+.add-lane-inner {
+  width: 100%;
+  border: 2px dashed #E0E0E0;
+  border-radius: 8px;
+  padding: 20px 12px;
+  text-align: center;
+  color: #BDBDBD;
+  cursor: pointer;
+  margin-top: 50px;
+  transition: 0.12s;
+}
+.add-lane-inner:hover { border-color: #9C27B0; color: #9C27B0; background: #FAF0FF; }
+.add-lane-inner .material-icons { font-size: 24px; display: block; margin: 0 auto 4px; }
+.add-lane-inner span { font-size: 12px; font-weight: 500; }
+
+/* Horizontal line spanning branches */
+.h-line-wrap {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  position: relative;
+  height: 2px;
+  margin: 0;
+}
+.h-line-actual {
+  position: absolute;
+  height: 2px;
+  background: #C8C7CC;
+  top: 0;
+}
+
+/* Execution mode bar */
+.exec-bar {
+  background: #F3E5F5;
+  border: 1px solid #CE93D8;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  color: #6A1B9A;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.exec-bar select {
+  font-size: 12px; border: none; background: transparent; color: #6A1B9A;
+  font-weight: 600; cursor: pointer; outline: none; font-family: Roboto, sans-serif;
+}
+.exec-bar .material-icons { font-size: 16px; }
+
+/* Bottom bar */
+.bottom-bar {
+  position: fixed; bottom: 0; left: 280px; right: 0;
+  background: white; border-top: 1px solid #E8E8E8;
+  padding: 10px 24px; display: flex; align-items: center; gap: 8px;
+  z-index: 20;
+}
+.bottom-bar.panel-closed { left: 0; }
+.save-hint { flex: 1; font-size: 12px; color: #BDBDBD; }
+
+.ai-chip { background:#F0F5FF;border:1px solid #BAD0F7;color:#0053CC;border-radius:12px;padding:4px 10px;font-size:11px;cursor:pointer;font-family:Roboto,sans-serif;transition:0.1s; }
+.ai-chip:hover { background:#E3EDFF;border-color:#0053CC; }
+@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+
+/* Proto label */
+.proto-label {
+  position: fixed; bottom: 60px; right: 16px;
+  background: #1a1a1a; color: #FFE082; font-size: 11px;
+  padding: 4px 10px; border-radius: 12px; z-index: 200; font-weight: 500;
+}
+
+/* Colors */
+.c1 { background:#0053CC; color:white; }
+.c2 { background:#7B1FA2; color:white; }
+.c3 { background:#00796B; color:white; }
+.c4 { background:#E65100; color:white; }
+.c5 { background:#9E9E9E; color:white; }
+.bc1 { background:#E3EDFF; color:#0053CC; }
+.bc2 { background:#F3E5F5; color:#7B1FA2; }
+.bc3 { background:#E0F2F1; color:#00796B; }
+.bc4 { background:#FFF3E0; color:#E65100; }
+.bc5 { background:#F5F5F5; color:#9E9E9E; }
+.hex1 { border-color: #0053CC; }
+.hex2 { border-color: #7B1FA2; }
+.hex3 { border-color: #00796B; }
+.hex4 { border-color: #E65100; }
+.hex5 { border-color: #9E9E9E; }
+</style>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<div class="topnav">
+  <div class="logo">
+    <svg width="28" height="28" viewBox="0 0 40 40" fill="none"><circle cx="20" cy="20" r="20" fill="#0053CC"/><path d="M12 20c0-4.4 3.6-8 8-8s8 3.6 8 8-3.6 8-8 8" stroke="white" stroke-width="2.5" stroke-linecap="round"/><circle cx="20" cy="20" r="3" fill="white"/></svg>
+    synder
+  </div>
+  <div class="nav-divider"></div>
+  <div class="nav-breadcrumb">
+    Smart Rules <span class="material-icons" style="font-size:14px;color:#ccc">chevron_right</span>
+    <span>Rules</span> <span class="material-icons" style="font-size:14px;color:#ccc">chevron_right</span>
+    <span>Create Rule</span>
+    <span class="nav-badge">Prototype B · Canvas Fork</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="nav-toggle">
+    <div class="toggle"></div>
+    Active
+  </div>
+  <button class="btn btn-ghost" style="margin-right:4px" onclick="togglePanel()">
+    <span class="material-icons" style="font-size:16px;vertical-align:middle">tune</span>
+  </button>
+  <button class="btn btn-outline" style="margin-right:4px">Paste rule</button>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT EDIT PANEL -->
+  <div class="edit-panel" id="editPanel">
+    <div class="ep-header">
+      <span class="material-icons" style="color:#BDBDBD;font-size:18px">edit</span>
+      <span class="ep-title" id="epTitle">Select a block to edit</span>
+      <span class="material-icons ep-close" onclick="closePanel()">close</span>
+    </div>
+    <div class="ep-body" id="epBody">
+      <p style="font-size:13px;color:#999;text-align:center;margin-top:20px;">Click any IF or THEN block on the canvas to edit it here.</p>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <div class="canvas-controls">
+      <div class="ctrl-btn" onclick="zoomCanvas(0.15)" title="Zoom in"><span class="material-icons" style="font-size:18px">add</span></div>
+      <div class="ctrl-btn" id="zoomLabel" style="font-size:11px;color:#888;width:auto;padding:0 8px;cursor:default" title="Current zoom">100%</div>
+      <div class="ctrl-btn" onclick="zoomCanvas(-0.15)" title="Zoom out"><span class="material-icons" style="font-size:18px">remove</span></div>
+      <div class="ctrl-btn" onclick="resetZoom()" title="Reset zoom"><span class="material-icons" style="font-size:18px">fit_screen</span></div>
+    </div>
+
+    <!-- Trigger node -->
+    <div class="trigger-node" id="triggerNode" onclick="editTrigger()">
+      <div class="trigger-node-label">Start when</div>
+      <div class="trigger-node-value" id="triggerNodeValue">Invoice</div>
+      <div class="trigger-node-sub" id="triggerNodeSub">Created</div>
+      <div class="trigger-node-edit">Click to edit trigger ›</div>
+    </div>
+
+    <!-- Vertical line to fork -->
+    <div class="v-connector"></div>
+
+    <!-- Fork node -->
+    <div class="fork-node">
+      <span class="material-icons fork-icon">call_split</span>
+      <span class="fork-label">Branch Fork</span>
+      <span class="fork-count" id="forkCount">4 branches</span>
+      <span class="fork-exec-mode" id="forkExecMode" onclick="toggleExecMode()" title="Click to toggle execution mode">First match</span>
+      <div class="fork-add-btn" onclick="openAiModal()" title="Describe rule in plain language" style="background:linear-gradient(135deg,#0053CC,#7B1FA2);color:white;border:none;">✨ AI</div>
+      <div class="fork-add-btn" onclick="addLane(false)" title="Add new branch">+ Branch</div>
+      <div class="fork-add-btn" onclick="addLane(true)" title="Add catch-all branch" style="background:#F5F5F5;color:#888;border-color:#DDD;">+ Default</div>
+    </div>
+
+    <!-- Branches container -->
+    <div class="branches-container">
+      <div class="v-connector" style="height:16px"></div>
+
+      <!-- Execution mode explanation -->
+      <div class="exec-bar">
+        <span class="material-icons">info_outline</span>
+        <span>Execution: </span>
+        <select id="execModeSelect" onchange="renderExecMode()">
+          <option value="first">First match wins — stops at first matching branch</option>
+          <option value="all">Run all — executes every matching branch</option>
+        </select>
+      </div>
+
+      <div class="branches-row" id="branchesRow"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Bottom bar -->
+<div class="bottom-bar" id="bottomBar">
+  <span class="save-hint">Branches are independent — delete or reorder any without affecting others</span>
+  <button class="btn btn-ghost">Back</button>
+  <button class="btn btn-outline">Save Rule</button>
+  <button class="btn btn-primary">Save &amp; Close Rule</button>
+</div>
+
+<!-- AI Rule Builder Modal -->
+<div id="aiModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:300;align-items:center;justify-content:center;">
+  <div style="background:white;border-radius:10px;width:480px;max-width:95vw;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#0053CC,#7B1FA2);padding:18px 20px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:22px">✨</span>
+      <div>
+        <div style="font-size:15px;font-weight:600;color:white">Build rule with AI</div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.75)">Describe what you want — get a ready-to-edit branch</div>
+      </div>
+      <span onclick="closeAiModal()" style="margin-left:auto;color:rgba(255,255,255,0.7);cursor:pointer;font-size:22px;line-height:1">×</span>
+    </div>
+    <div id="aiState1" style="padding:20px;">
+      <div style="font-size:12px;color:#888;margin-bottom:6px;font-weight:500">Describe your rule in plain language</div>
+      <textarea id="aiInput" placeholder='e.g. "Apply CA tax if customer ships to California"&#10;"Set class to Services if product name contains Support"&#10;"Change customer name to John if email has john.com"'
+        style="width:100%;height:90px;padding:10px;border:1.5px solid #E0E0E0;border-radius:6px;font-size:13px;font-family:Roboto,sans-serif;resize:none;outline:none;line-height:1.5"
+        oninput="this.style.borderColor='#0053CC'"></textarea>
+      <div style="margin:10px 0 16px;display:flex;flex-wrap:wrap;gap:6px;">
+        <div style="font-size:11px;color:#888;width:100%;margin-bottom:2px">Try an example:</div>
+        <button onclick="setAiExample(this)" class="ai-chip">Apply CA tax if shipping state is California</button>
+        <button onclick="setAiExample(this)" class="ai-chip">Set class to Services if product contains Support</button>
+        <button onclick="setAiExample(this)" class="ai-chip">Change customer to John if email has john.com</button>
+        <button onclick="setAiExample(this)" class="ai-chip">Set description to Online Sale if memo is empty</button>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeAiModal()" style="padding:9px 16px;background:white;border:1px solid #E0E0E0;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;">Cancel</button>
+        <button onclick="generateAiRule()" style="padding:9px 18px;background:linear-gradient(135deg,#0053CC,#7B1FA2);color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;font-weight:500;">✨ Generate rule</button>
+      </div>
+    </div>
+    <div id="aiState2" style="display:none;padding:40px 20px;text-align:center;">
+      <div style="font-size:28px;margin-bottom:12px;animation:spin 1.5s linear infinite;display:inline-block">✨</div>
+      <div style="font-size:14px;color:#555;font-weight:500" id="aiLoadingText">Parsing your rule…</div>
+      <div style="font-size:12px;color:#BDBDBD;margin-top:4px">Identifying fields, operators, and actions</div>
+    </div>
+    <div id="aiState3" style="display:none;padding:20px;">
+      <div style="font-size:12px;color:#2E7D32;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:6px;">
+        <span style="background:#E8F5E9;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:11px">✓</span>
+        Rule generated — review before adding
+      </div>
+      <div id="aiPreview" style="background:#F8F9FF;border:1.5px solid #BAD0F7;border-radius:8px;padding:14px;margin-bottom:16px;font-size:13px;"></div>
+      <div style="font-size:11px;color:#888;margin-bottom:16px;">You can edit any field after adding the branch.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="aiBack()" style="padding:9px 16px;background:white;border:1px solid #E0E0E0;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;">← Try again</button>
+        <button onclick="applyAiRule()" style="padding:9px 18px;background:#0053CC;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;font-weight:500;">Add as branch →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="proto-label">Prototype B · Canvas Fork</div>
+
+<script>
+const CNUM = ['c1','c2','c3','c4','c5'];
+const BCNUM = ['bc1','bc2','bc3','bc4','bc5'];
+const HEX = ['#0053CC','#7B1FA2','#00796B','#E65100','#9E9E9E'];
+
+let branches = [];
+let nextId = 1;
+const TOP_FIELDS = ['Contact','Currency','Reference','Due date','Txn date','Total Amount','Balance','Line'];
+const LINE_SUB = ['Amount','Description','Item Details','Qty','Tracking Category 1','Tracking Category 2','Tracking Category 3'];
+const CURRENT_ACT_FIELDS = ['Reference','Currency','Due date','Contact','Description','Txn date'];
+const LINE_ACT_FIELDS = ['Tracking Category 1','Tracking Category 2','Tracking Category 3','Description','Item Details','Qty','Amount'];
+let selectedNode = null;
+let panelOpen = false;
+let execMode = 'first';
+let canvasZoom = 1.0;
+let trigger = { entity: 'Invoice', event: 'Created' };
+
+function renderBranches() {
+  const row = document.getElementById('branchesRow');
+  const forkCount = document.getElementById('forkCount');
+  if (forkCount) forkCount.textContent = branches.length + ' branch' + (branches.length!==1?'es':'');
+  row.innerHTML = '';
+
+  if (branches.length === 0) {
+    row.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;padding:32px 24px;background:white;border:2px dashed #E0E0E0;border-radius:8px;min-width:240px;">
+        <span class="material-icons" style="font-size:40px;color:#BDBDBD;margin-bottom:10px">account_tree</span>
+        <p style="font-size:14px;font-weight:500;color:#555;margin-bottom:6px;text-align:center">No branches yet</p>
+        <p style="font-size:12px;color:#999;margin-bottom:16px;text-align:center;max-width:200px">Each branch is an independent IF→THEN path. Add the first one.</p>
+        <button onclick="addLane()" style="padding:8px 18px;background:#0053CC;color:white;border:none;border-radius:4px;cursor:pointer;font-size:13px;font-family:Roboto,sans-serif;font-weight:500;display:flex;align-items:center;gap:6px;">
+          <span class="material-icons" style="font-size:16px">add</span> Add first branch
+        </button>
+      </div>
+    `;
+    return;
+  }
+
+  branches.forEach((b, i) => {
+    const ci = i % CNUM.length;
+    const lane = document.createElement('div');
+    lane.className = 'branch-lane';
+    lane.id = 'lane-' + b.id;
+
+    // Color dot as header
+    lane.innerHTML = `
+      <div class="lane-top-line"></div>
+      <span class="material-icons lane-drag" title="Drag to reorder">drag_indicator</span>
+      <div class="lane-num-badge ${CNUM[ci]}">${i+1}</div>
+      <div class="lane-delete" onclick="deleteLane(${b.id})" title="Delete this branch (others unaffected)">
+        <span class="material-icons" style="font-size:13px">close</span>
+      </div>
+
+      <!-- Branch name label -->
+      <div style="font-size:11px;font-weight:600;color:${HEX[ci]};margin-bottom:8px;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;" onclick="editBranchName(${b.id})">${b.name}</div>
+    `;
+
+    if (b.isFallback) {
+      // Fallback branch — no condition
+      const fallCard = document.createElement('div');
+      fallCard.className = 'canvas-node fallback-node';
+      fallCard.innerHTML = `
+        <div class="cn-type-label any">Any / Default</div>
+        <div class="cn-content cn-empty">No condition — catch-all fallback. Runs if no earlier branch matched.</div>
+      `;
+      lane.appendChild(fallCard);
+    } else {
+      // IF node
+      const ifNode = document.createElement('div');
+      ifNode.className = 'canvas-node if-node' + (selectedNode === 'if-'+b.id ? ' selected' : '');
+      ifNode.innerHTML = `
+        <div class="cn-type-label if">IF · Condition</div>
+        <div class="cn-content">
+          <span class="cn-field">${b.condition.field1} › ${b.condition.field2}</span><br>
+          <span class="cn-op">${b.condition.op}</span>
+          <span class="cn-val">${b.condition.val}</span>
+          ${b.condition.orVal ? `<span class="cn-op"> OR </span><span class="cn-val">${b.condition.orVal}</span>` : ''}
+        </div>
+        <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+          <span class="no-badge"><span class="material-icons" style="font-size:10px">block</span>NO → skip</span>
+        </div>
+      `;
+      ifNode.addEventListener('click', () => editNode('if', b.id));
+      lane.appendChild(ifNode);
+
+      // YES connector
+      const yesConn = document.createElement('div');
+      yesConn.className = 'yes-connector';
+      yesConn.innerHTML = `<div class="yes-line"></div><span class="yes-badge">YES</span><div class="yes-line"></div>`;
+      lane.appendChild(yesConn);
+    }
+
+    // THEN node
+    const thenNode = document.createElement('div');
+    thenNode.className = 'canvas-node then-node' + (selectedNode === 'then-'+b.id ? ' selected' : '');
+    thenNode.innerHTML = `
+      <div class="cn-type-label then">THEN · Action</div>
+      <div class="cn-content">
+        <span class="cn-field">${b.action.field}</span><br>
+        <span class="cn-op">→ </span><span class="cn-action-val">${b.action.val}</span>
+      </div>
+      <div class="cn-edit-hint">Click to edit</div>
+    `;
+    thenNode.addEventListener('click', () => editNode('then', b.id));
+    lane.appendChild(thenNode);
+
+    row.appendChild(lane);
+  });
+
+  // Add lane button
+  const addLaneEl = document.createElement('div');
+  addLaneEl.className = 'add-lane';
+  addLaneEl.innerHTML = `
+    <div style="width:2px;height:24px;background:#E0E0E0;"></div>
+    <div class="add-lane-inner" onclick="addLane(false)">
+      <span class="material-icons">add</span>
+      <span>Add branch</span>
+    </div>
+    <div style="margin-top:8px;font-size:11px;color:#BDBDBD;cursor:pointer;text-align:center;" onclick="addLane(true)">
+      + Default (catch-all)
+    </div>
+  `;
+  row.appendChild(addLaneEl);
+
+  // Draw horizontal line connecting all lanes
+  drawHLine();
+}
+
+function drawHLine() {
+  setTimeout(() => {
+    const row = document.getElementById('branchesRow');
+    if (!row) return;
+    const lanes = row.querySelectorAll('.branch-lane');
+    if (lanes.length < 2) return;
+
+    const rowRect = row.getBoundingClientRect();
+    const firstLane = lanes[0];
+    const lastLane = lanes[lanes.length - 1];
+    const firstRect = firstLane.getBoundingClientRect();
+    const lastRect = lastLane.getBoundingClientRect();
+
+    const left = firstRect.left - rowRect.left + firstRect.width / 2;
+    const right = lastRect.left - rowRect.left + lastRect.width / 2;
+
+    let hLine = row.querySelector('.h-line-dynamic');
+    if (!hLine) {
+      hLine = document.createElement('div');
+      hLine.className = 'h-line-dynamic';
+      row.insertBefore(hLine, row.firstChild);
+    }
+    Object.assign(hLine.style, {
+      position: 'absolute',
+      top: '0',
+      left: left + 'px',
+      width: (right - left) + 'px',
+      height: '2px',
+      background: '#C8C7CC',
+      pointerEvents: 'none',
+      zIndex: '1'
+    });
+  }, 0);
+}
+
+function editNode(type, branchId) {
+  const b = branches.find(x => x.id === branchId);
+  const i = branches.indexOf(b);
+  const ci = i % CNUM.length;
+  selectedNode = type + '-' + branchId;
+  renderBranches();
+
+  // Open panel
+  panelOpen = true;
+  document.getElementById('editPanel').classList.remove('collapsed');
+  document.getElementById('bottomBar').classList.remove('panel-closed');
+
+  const panel = document.getElementById('epBody');
+  const title = document.getElementById('epTitle');
+
+
+  if (type === 'if') {
+    title.innerHTML = `<span style="color:${HEX[ci]};font-weight:600;">Branch ${i+1}</span> · IF Condition`;
+    const c = b.condition;
+    const isLine = c.field1 === 'Line';
+    const isDate = ['Due date','Txn date'].includes(c.field1);
+    const isNum = ['Total Amount','Balance'].includes(c.field1) || (isLine && ['Amount','Qty'].includes(c.field2));
+    const isTracking = isLine && (c.field2||'').startsWith('Tracking');
+    const strOps = ['Contains','Equals','Not equals','Starts with','Ends with','Is empty','Is not empty'];
+    const numOps = ['Equals','Greater than','Less than','Greater than or equal','Less than or equal','Is empty'];
+    const dateOps = ['Equals','Before','After','Is empty','Is not empty'];
+    const opList = isDate ? dateOps : isNum ? numOps : strOps;
+    panel.innerHTML = `
+      <div class="ep-field-group">
+        <div class="ep-label">Field</div>
+        <select class="ep-select" id="condField1" onchange="refreshCondPanel()">${opts(TOP_FIELDS, c.field1)}</select>
+        ${isLine ? `<select class="ep-select" id="condField2" onchange="refreshCondPanel()">${opts(LINE_SUB, c.field2)}</select>` : '<span id="condField2Wrap"></span>'}
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">Operator</div>
+        <select class="ep-select" id="condOp">${opts(opList, c.op)}</select>
+      </div>
+      ${!c.op || (c.op !== 'Is empty' && c.op !== 'Is not empty') ? `
+      <div class="ep-field-group">
+        <div class="ep-label">${isTracking ? 'Category option' : 'Value(s)'}</div>
+        <input class="ep-input val" id="condVal" value="${c.val||''}" placeholder="${isDate?'YYYY-MM-DD':isNum?'0.00':isTracking?'e.g. Auckland, Dept A…':'Enter value…'}" />
+        ${!isTracking ? `<div class="ep-or">OR</div>
+        <input class="ep-input val" id="condOrVal" value="${c.orVal||''}" placeholder="Alternative value (optional)…" />` : ''}
+      </div>` : ''}
+      ${isTracking ? `<p class="ep-action-note" style="color:#5580CC;background:#E3EDFF;padding:6px 8px;border-radius:4px;">Tracking Categories are dropdowns in Xero — enter the exact option name from your Xero config.</p>` : ''}
+      <div class="ep-divider"></div>
+      <button class="ep-submit" onclick="applyCondition(${branchId})">Apply condition</button>
+      <p class="ep-action-note" style="margin-top:8px;">NO path skips this branch and evaluates the next one.</p>
+    `;
+  } else {
+    title.innerHTML = `<span style="color:${HEX[ci]};font-weight:600;">Branch ${i+1}</span> · THEN Action`;
+    const a = b.action;
+    const isXero = a.type === 'Xero Action';
+    const isLine = a.scope === 'Update line';
+    const fieldOpts = isXero ? (isLine ? LINE_ACT_FIELDS : CURRENT_ACT_FIELDS) : [];
+    const isTracking = isXero && isLine && (a.field||'').startsWith('Tracking');
+    panel.innerHTML = `
+      <div class="ep-field-group">
+        <div class="ep-label">Action type</div>
+        <select class="ep-select" id="actType" onchange="refreshActionPanel()">${opts(['Xero Action','Email','SMS','Voice','Post to URL'], a.type)}</select>
+      </div>
+      ${isXero ? `
+      <div class="ep-field-group">
+        <div class="ep-label">Entity</div>
+        <select class="ep-select" id="actEntity">${opts(['Invoice','Bill','Credit Note','Payment'], a.txType||'Invoice')}</select>
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">Scope</div>
+        <select class="ep-select" id="actScope">${opts(['Update current','Update line'], a.scope||'Update current')}</select>
+        ${isLine ? '<p class="ep-action-note" style="margin-top:4px;">Line-level update — applies to each matching line item.</p>' : ''}
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">Set field</div>
+        <select class="ep-select" id="actField">${opts(fieldOpts, a.field)}</select>
+        ${isTracking ? '<p class="ep-action-note" style="color:#5580CC;margin-top:4px;">Tracking Category — must match an existing option in Xero.</p>' : ''}
+      </div>
+      <div class="ep-field-group">
+        <div class="ep-label">To value</div>
+        <input class="ep-input val" id="actVal" value="${a.val||''}" placeholder="${isTracking?'Category option name…':'Enter value…'}" />
+      </div>` : `
+      <div class="ep-field-group">
+        <div class="ep-label">${a.type==='Post to URL'?'Webhook URL':'Recipient'}</div>
+        <input class="ep-input val" id="actVal" value="${a.val||''}" placeholder="${a.type==='Post to URL'?'https://your-webhook.example.com':a.type==='Email'?'email@example.com':'Phone number…'}" />
+      </div>`}
+      <div class="ep-divider"></div>
+      <button class="ep-submit" onclick="applyAction(${branchId})">Apply action</button>
+    `;
+  }
+}
+
+function editTrigger() {
+  panelOpen = true;
+  document.getElementById('editPanel').classList.remove('collapsed');
+  selectedNode = null;
+  renderBranches();
+  document.getElementById('epTitle').textContent = 'Trigger';
+  document.getElementById('epBody').innerHTML = `
+    <div class="ep-field-group">
+      <div class="ep-label">Transaction type</div>
+      <select class="ep-select">${opts(['Invoice','Bill','Credit Note','Payment','Contact','Item'], trigger.entity||'Invoice')}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">Event</div>
+      <select class="ep-select">${opts(['Created','Paid','Sent','Payment reminder'], 'Created')}</select>
+    </div>
+    <div class="ep-divider"></div>
+    <button class="ep-submit" onclick="saveTrigger()">Apply trigger</button>
+  `;
+}
+
+function editBranchName(id) {
+  const b = branches.find(x => x.id === id);
+  const newName = prompt('Branch name:', b.name);
+  if (newName && newName.trim()) { b.name = newName.trim(); renderBranches(); }
+}
+
+function deleteLane(id) {
+  const b = branches.find(x => x.id === id);
+  if (!b) return;
+  if (branches.length <= 1) {
+    if (!confirm('This is the last branch. Deleting it will leave the rule empty. Continue?')) return;
+  } else if (!confirm(`Delete branch "${b.name}"?\n\nOnly this branch will be removed. The other ${branches.length-1} branch${branches.length-1!==1?'es':''} are not affected.`)) {
+    return;
+  }
+  branches = branches.filter(x => x.id !== id);
+  if (selectedNode && selectedNode.endsWith('-'+id)) { selectedNode = null; closePanel(); }
+  renderBranches();
+}
+
+function addLane(asFallback) {
+  const id = nextId++;
+  const newBranch = {
+    id, name: asFallback ? 'Default (catch-all)' : 'Branch ' + id,
+    isFallback: !!asFallback,
+    condition: asFallback ? null : { field1: 'Contact', field2: '', op: 'Equals', val: '', orVal: '' },
+    action: { type: 'Xero Action', txType: trigger.entity || 'Invoice', scope: 'Update current', field: 'Reference', val: '' }
+  };
+  const fallIdx = branches.findIndex(b => b.isFallback);
+  if (!asFallback && fallIdx >= 0) branches.splice(fallIdx, 0, newBranch);
+  else branches.push(newBranch);
+  renderBranches();
+  if (asFallback) editNode('then', id);
+  else editNode('if', id);
+}
+
+function togglePanel() {
+  panelOpen = !panelOpen;
+  document.getElementById('editPanel').classList.toggle('collapsed', !panelOpen);
+  document.getElementById('bottomBar').classList.toggle('panel-closed', !panelOpen);
+}
+
+function zoomCanvas(delta) {
+  canvasZoom = Math.round(Math.min(2.0, Math.max(0.4, canvasZoom + delta)) * 10) / 10;
+  document.getElementById('branchesRow').style.transform = `scale(${canvasZoom})`;
+  document.getElementById('branchesRow').style.transformOrigin = 'top center';
+  document.getElementById('zoomLabel').textContent = Math.round(canvasZoom * 100) + '%';
+}
+
+function resetZoom() {
+  canvasZoom = 1.0;
+  document.getElementById('branchesRow').style.transform = 'none';
+  document.getElementById('zoomLabel').textContent = '100%';
+}
+
+function deleteLaneConfirm(id) {
+  const b = branches.find(x => x.id === id);
+  if (!confirm(`Delete branch "${b.name}"?\n\nOnly this branch will be removed. The other ${branches.length-1} branch${branches.length-1!==1?'es':''} are not affected.`)) return;
+  branches = branches.filter(x => x.id !== id);
+  if (selectedNode && selectedNode.endsWith('-'+id)) {
+    selectedNode = null;
+    closePanel();
+  }
+  renderBranches();
+}
+
+function refreshActionPanel() {
+  const type = document.getElementById('actType')?.value || 'Xero Action';
+  const isXero = type === 'Xero Action';
+  const scope = document.getElementById('actScope')?.value || 'Update current';
+  const isLine = scope === 'Update line';
+  const fieldOpts = isXero ? (isLine ? LINE_ACT_FIELDS : CURRENT_ACT_FIELDS) : [];
+  const xeroHtml = isXero ? `
+    <div class="ep-field-group">
+      <div class="ep-label">Entity</div>
+      <select class="ep-select" id="actEntity">${opts(['Invoice','Bill','Credit Note','Payment'], 'Invoice')}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">Scope</div>
+      <select class="ep-select" id="actScope" onchange="refreshActionPanel()">${opts(['Update current','Update line'], scope)}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">Set field</div>
+      <select class="ep-select" id="actField">${opts(fieldOpts, '')}</select>
+    </div>
+    <div class="ep-field-group">
+      <div class="ep-label">To value</div>
+      <input class="ep-input val" id="actVal" value="" placeholder="Enter value…" />
+    </div>` : `
+    <div class="ep-field-group">
+      <div class="ep-label">${type==='Post to URL'?'Webhook URL':'Recipient'}</div>
+      <input class="ep-input val" id="actVal" value="" placeholder="${type==='Post to URL'?'https://your-webhook.example.com':type==='Email'?'email@example.com':'Phone number…'}" />
+    </div>`;
+  const typeDiv = document.getElementById('actType')?.closest('.ep-field-group');
+  if (!typeDiv) return;
+  // Replace everything after the type row up to the divider
+  const divider = typeDiv.parentElement.querySelector('.ep-divider');
+  const submitBtn = typeDiv.parentElement.querySelector('.ep-submit');
+  // Remove old dynamic fields
+  let next = typeDiv.nextElementSibling;
+  while (next && next !== divider) { const tmp = next.nextElementSibling; next.remove(); next = tmp; }
+  // Insert new fields before divider
+  const tmp = document.createElement('div');
+  tmp.innerHTML = xeroHtml;
+  while (tmp.firstChild) divider.parentElement.insertBefore(tmp.firstChild, divider);
+}
+
+function refreshCondPanel() {
+  const f1 = document.getElementById('condField1')?.value || '';
+  const f2Wrap = document.getElementById('condField2Wrap');
+  // Show/hide Line sub-field
+  if (f1 === 'Line') {
+    if (f2Wrap) f2Wrap.outerHTML = `<select class="ep-select" id="condField2" onchange="refreshCondPanel()">${opts(LINE_SUB, '')}</select>`;
+  } else {
+    const f2 = document.getElementById('condField2');
+    if (f2 && !document.getElementById('condField2Wrap')) f2.outerHTML = '<span id="condField2Wrap"></span>';
+  }
+  const f2Val = document.getElementById('condField2')?.value || '';
+  const isDate = ['Due date','Txn date'].includes(f1);
+  const isNum = ['Total Amount','Balance'].includes(f1) || (f1==='Line' && ['Amount','Qty'].includes(f2Val));
+  const strOps = ['Contains','Equals','Not equals','Starts with','Ends with','Is empty','Is not empty'];
+  const numOps = ['Equals','Greater than','Less than','Greater than or equal','Less than or equal','Is empty'];
+  const dateOps = ['Equals','Before','After','Is empty','Is not empty'];
+  const opList = isDate ? dateOps : isNum ? numOps : strOps;
+  const opSel = document.getElementById('condOp');
+  if (opSel) {
+    const cur = opSel.value;
+    opSel.innerHTML = opList.map(o => `<option${o===cur?' selected':''}>${o}</option>`).join('');
+  }
+}
+
+function applyCondition(id) {
+  const b = branches.find(x => x.id === id);
+  if (!b) return;
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (g('condField1') !== null) b.condition.field1 = g('condField1');
+  if (g('condField2') !== null) b.condition.field2 = g('condField2');
+  if (g('condOp') !== null) b.condition.op = g('condOp');
+  if (g('condVal') !== null) b.condition.val = g('condVal');
+  if (g('condOrVal') !== null) b.condition.orVal = g('condOrVal');
+  renderBranches();
+  const btn = document.querySelector('#epBody .ep-submit');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
+}
+
+function applyAction(id) {
+  const b = branches.find(x => x.id === id);
+  if (!b) return;
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  if (g('actType') !== null) b.action.type = g('actType');
+  if (g('actEntity') !== null) b.action.txType = g('actEntity');
+  if (g('actScope') !== null) b.action.scope = g('actScope');
+  if (g('actField') !== null) b.action.field = g('actField');
+  if (g('actVal') !== null) b.action.val = g('actVal');
+  renderBranches();
+  const btn = document.querySelector('#epBody .ep-submit');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
+}
+
+function saveTrigger() {
+  const entity = document.getElementById('epBody').querySelector('select:nth-child(1)');
+  const event = document.getElementById('epBody').querySelector('select:nth-child(2)');
+  const selects = document.querySelectorAll('#epBody .ep-select');
+  if (selects[0]) trigger.entity = selects[0].value;
+  if (selects[1]) trigger.event = selects[1].value;
+  const nodeVal = document.getElementById('triggerNodeValue');
+  const nodeSub = document.getElementById('triggerNodeSub');
+  if (nodeVal) nodeVal.textContent = trigger.entity;
+  if (nodeSub) nodeSub.textContent = trigger.event;
+  renderBranches();
+  const btn = document.querySelector('#epBody .ep-submit');
+  if (btn) { const orig = btn.textContent; btn.textContent = '✓ Saved'; btn.style.background='#4CAF50'; setTimeout(()=>{btn.textContent=orig;btn.style.background='';},1200); }
+}
+
+function closePanel() {
+  panelOpen = false;
+  document.getElementById('editPanel').classList.add('collapsed');
+  document.getElementById('bottomBar').classList.add('panel-closed');
+  selectedNode = null;
+  renderBranches();
+}
+
+function toggleExecMode() {
+  execMode = execMode === 'first' ? 'all' : 'first';
+  document.getElementById('execModeSelect').value = execMode;
+  renderExecMode();
+}
+
+function renderExecMode() {
+  execMode = document.getElementById('execModeSelect').value;
+  document.getElementById('forkExecMode').textContent = execMode === 'first' ? 'First match' : 'Run all';
+}
+
+function opts(arr, sel) {
+  return arr.map(v => `<option${v===sel?' selected':''}>${v}</option>`).join('');
+}
+
+// ── AI RULE BUILDER ──────────────────────────────────────────
+
+let pendingAiRule = null;
+
+const AI_FIELD_MAP = [
+  { keys: ['tracking category 1','tracking 1','tracking cat 1'], field1:'Line', field2:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2','tracking cat 2'], field1:'Line', field2:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3','tracking cat 3'], field1:'Line', field2:'Tracking Category 3' },
+  { keys: ['line amount','line qty','line description','line item'], field1:'Line', field2:'Amount' },
+  { keys: ['product','item details','item','sku'], field1:'Line', field2:'Item Details' },
+  { keys: ['reference','ref'], field1:'Reference', field2:null },
+  { keys: ['currency'], field1:'Currency', field2:null },
+  { keys: ['due date','due'], field1:'Due date', field2:null },
+  { keys: ['contact name','contact','customer','email'], field1:'Contact', field2:null },
+  { keys: ['description','desc'], field1:'Line', field2:'Description' },
+  { keys: ['total amount','total','balance','amount'], field1:'Total Amount', field2:null },
+  { keys: ['txn date','transaction date','date'], field1:'Txn date', field2:null },
+];
+
+const AI_OP_MAP = [
+  { keys: ['contains','has','includes','with'], op:'Contains' },
+  { keys: ['not equals','is not','!='], op:'Not equals' },
+  { keys: ['equals','is','='], op:'Equals' },
+  { keys: ['starts with','begins with','starts'], op:'Starts with' },
+  { keys: ['ends with','ends'], op:'Ends with' },
+  { keys: ['is empty','is blank','is missing'], op:'Is empty' },
+  { keys: ['is not empty','is set','is filled'], op:'Is not empty' },
+];
+
+const AI_ACTION_MAP = [
+  { keys: ['tracking category 1','tracking 1'], field:'Tracking Category 1' },
+  { keys: ['tracking category 2','tracking 2'], field:'Tracking Category 2' },
+  { keys: ['tracking category 3','tracking 3'], field:'Tracking Category 3' },
+  { keys: ['reference','ref'], field:'Reference' },
+  { keys: ['currency'], field:'Currency' },
+  { keys: ['due date'], field:'Due date' },
+  { keys: ['contact name','contact','customer'], field:'Contact' },
+  { keys: ['description','desc'], field:'Description' },
+  { keys: ['item details','product','item'], field:'Item Details' },
+  { keys: ['qty','quantity'], field:'Qty' },
+];
+
+function parseRuleText(text) {
+  const t = text.toLowerCase().trim();
+  let condText = '', actionText = '';
+  const ifIdx = t.lastIndexOf(' if ');
+  if (ifIdx >= 0) {
+    actionText = t.slice(0, ifIdx).trim();
+    condText = t.slice(ifIdx + 4).trim();
+  } else {
+    const whenIdx = t.lastIndexOf(' when ');
+    if (whenIdx >= 0) { actionText = t.slice(0, whenIdx).trim(); condText = t.slice(whenIdx + 6).trim(); }
+    else { condText = t; actionText = ''; }
+  }
+  let condField = AI_FIELD_MAP[0], condOp = 'Contains', condVal = '';
+  for (const f of AI_FIELD_MAP) { if (f.keys.some(k => condText.includes(k))) { condField = f; break; } }
+  for (const o of AI_OP_MAP) { if (o.keys.some(k => condText.includes(k))) { condOp = o.op; break; } }
+  const opWords = ['contains','has','includes','equals','is not','is','starts with','ends with','begins with','with'];
+  let valStr = '';
+  for (const op of opWords) {
+    const opIdx = condText.indexOf(op);
+    if (opIdx >= 0) { valStr = condText.slice(opIdx + op.length).trim().replace(/^(the|a|an|value|text)\s+/gi,'').replace(/"/g,'').trim(); break; }
+  }
+  if (!valStr) { const quoted = condText.match(/"([^"]+)"/); valStr = quoted ? quoted[1] : condText.split(/\s+/).slice(-1)[0]; }
+  let actionField = 'Transaction Tax code', actionVal = '';
+  for (const a of AI_ACTION_MAP) { if (a.keys.some(k => actionText.includes(k))) { actionField = a.field; break; } }
+  const toMatch = actionText.match(/(?:to|=|:)\s+(.+)$/i);
+  if (toMatch) { actionVal = toMatch[1].replace(/"/g,'').trim(); }
+  else {
+    const parts = actionText.split(/(?:change|set|update|assign|apply)\s+/i).filter(Boolean);
+    if (parts.length > 0) { const words = parts[parts.length-1].trim().split(/\s+/); actionVal = words.slice(-1)[0] || ''; }
+  }
+  const branchName = valStr ? (valStr.charAt(0).toUpperCase() + valStr.slice(1)).split('.')[0] : 'AI Branch';
+  return {
+    name: branchName,
+    condition: { field1: condField.field1, field2: condField.field2||'', op: condOp, val: valStr, orVal: '' },
+    action: { type: 'Xero Action', txType: trigger.entity||'Invoice', scope: 'Update current', field: actionField, val: actionVal }
+  };
+}
+
+function openAiModal() {
+  document.getElementById('aiModal').style.display = 'flex';
+  document.getElementById('aiState1').style.display = 'block';
+  document.getElementById('aiState2').style.display = 'none';
+  document.getElementById('aiState3').style.display = 'none';
+  document.getElementById('aiInput').value = '';
+  setTimeout(() => document.getElementById('aiInput').focus(), 100);
+}
+function closeAiModal() { document.getElementById('aiModal').style.display = 'none'; pendingAiRule = null; }
+function setAiExample(btn) { document.getElementById('aiInput').value = btn.textContent; document.getElementById('aiInput').style.borderColor = '#0053CC'; }
+function aiBack() { document.getElementById('aiState3').style.display = 'none'; document.getElementById('aiState1').style.display = 'block'; }
+
+const AI_LOADING_MSGS = ['Parsing your rule…','Identifying condition fields…','Mapping to Synder fields…','Building IF → THEN structure…','Almost ready…'];
+
+function generateAiRule() {
+  const text = document.getElementById('aiInput').value.trim();
+  if (!text) { document.getElementById('aiInput').focus(); return; }
+  document.getElementById('aiState1').style.display = 'none';
+  document.getElementById('aiState2').style.display = 'block';
+  let msgIdx = 0;
+  const msgEl = document.getElementById('aiLoadingText');
+  const msgInterval = setInterval(() => { msgEl.textContent = AI_LOADING_MSGS[++msgIdx % AI_LOADING_MSGS.length]; }, 400);
+  setTimeout(() => {
+    clearInterval(msgInterval);
+    pendingAiRule = parseRuleText(text);
+    const c = pendingAiRule.condition, a = pendingAiRule.action;
+    const fieldLabel = [c.field1, c.field2].filter(Boolean).join(' › ');
+    document.getElementById('aiState2').style.display = 'none';
+    document.getElementById('aiState3').style.display = 'block';
+    const inputText = document.getElementById('aiInput').value.trim();
+    document.getElementById('aiPreview').innerHTML = `
+      <div style="font-size:11px;color:#888;margin-bottom:8px;font-style:italic;">"${inputText}"</div>
+      <div style="margin-bottom:10px;">
+        <span style="font-size:10px;font-weight:700;color:#E65100;text-transform:uppercase;background:#FFF3E0;padding:2px 6px;border-radius:3px;margin-right:6px">IF</span>
+        <strong>${fieldLabel}</strong> <span style="color:#888;font-style:italic;margin:0 4px">${c.op.toLowerCase()}</span>
+        <span style="color:#0053CC;font-weight:600">"${c.val||'…'}"</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:10px;padding-left:8px;">
+        <div style="width:2px;height:16px;background:#C8E6C9"></div>
+        <span style="font-size:10px;font-weight:700;color:#2E7D32;background:#E8F5E9;padding:2px 8px;border-radius:10px;border:1px solid #C8E6C9">YES</span>
+      </div>
+      <div>
+        <span style="font-size:10px;font-weight:700;color:#1B5E20;text-transform:uppercase;background:#E8F5E9;padding:2px 6px;border-radius:3px;margin-right:6px">THEN</span>
+        Set <strong>${a.field}</strong> <span style="color:#888;margin:0 4px">→</span>
+        <span style="color:#2E7D32;font-weight:600">"${a.val||'…'}"</span>
+      </div>
+      ${!c.val||!a.val ? '<div style="margin-top:10px;font-size:11px;color:#F57C00;background:#FFF3E0;padding:6px 8px;border-radius:4px;">⚠ Some values couldn\'t be detected — fill them in after adding.</div>' : ''}
+    `;
+  }, 1800);
+}
+
+function applyAiRule() {
+  if (!pendingAiRule) return;
+  const id = nextId++;
+  branches.push({ id, name: pendingAiRule.name, isFallback: false, condition: pendingAiRule.condition, action: pendingAiRule.action });
+  closeAiModal();
+  renderBranches();
+  editNode('if', id);
+}
+
+// ── END AI RULE BUILDER ──────────────────────────────────────
+
+// Init
+renderBranches();
+</script>
+</body>
+</html>
