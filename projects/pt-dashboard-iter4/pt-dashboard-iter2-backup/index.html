@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PT Dashboard · Iteration 2 — Synder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #F9FAFB; font-family: 'Roboto', sans-serif; color: #1A1A2E; font-size: 14px; line-height: 1.4; }
+  a { color: #0053CC; text-decoration: none; cursor: pointer; }
+  a:hover { text-decoration: underline; }
+  button { font-family: inherit; cursor: pointer; }
+
+  /* App shell */
+  .app { display: flex; min-height: 100vh; }
+  .sidebar { width: 230px; background: #F4F5F7; border-right: 1px solid #E5E7EB; flex-shrink: 0; }
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  /* Sidebar */
+  .org-switch { display: flex; align-items: center; padding: 14px 16px; gap: 10px; border-bottom: 1px solid #E5E7EB; cursor: pointer; }
+  .org-avatar { width: 32px; height: 32px; border-radius: 50%; background: #D64273; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 12px; }
+  .org-name { font-size: 14px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .org-caret { color: #6B7280; }
+  .nav { padding: 8px 0; }
+  .nav-item { display: flex; align-items: center; padding: 9px 16px; font-size: 14px; color: #1A1A2E; cursor: pointer; gap: 12px; }
+  .nav-item:hover { background: rgba(0,83,204,0.06); }
+  .nav-item.active { background: #E8F0FC; color: #0053CC; font-weight: 500; border-left: 3px solid #0053CC; padding-left: 13px; }
+  .nav-item .icon { width: 18px; text-align: center; }
+  .nav-divider { height: 1px; background: #E5E7EB; margin: 8px 16px; }
+
+  /* Topbar */
+  .topbar { display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; height: 60px; border-bottom: 1px solid #E5E7EB; background: #FFF; gap: 18px; }
+  .syncs-left { font-size: 14px; color: #1A1A2E; }
+  .syncs-left .num { color: #0053CC; font-weight: 700; }
+  .topbar-icon { color: #0053CC; cursor: pointer; font-size: 18px; }
+
+  /* Page */
+  .page { padding: 24px 32px 80px; max-width: 1320px; width: 100%; margin: 0 auto; }
+  .page-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 20px; gap: 24px; }
+  .page-title { font-size: 24px; font-weight: 500; margin-bottom: 2px; }
+  .page-subtitle { font-size: 14px; color: #6B7280; }
+  .period-btn { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid #E5E7EB; background: #FFF; border-radius: 4px; font-size: 14px; color: #1A1A2E; }
+  .period-btn:hover { border-color: #0053CC; }
+
+  /* Banners */
+  .issues-banner { background: #FEF2F2; border: 1px solid #FCA5A5; border-radius: 8px; margin-bottom: 20px; padding: 14px 18px; display: none; align-items: center; gap: 12px; }
+  .issues-banner.show { display: flex; }
+  .issues-banner .icon { width: 24px; height: 24px; background: #DC2626; color: #FFF; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+  .issues-banner .text { flex: 1; }
+  .issues-banner .title { font-weight: 600; color: #991B1B; font-size: 14px; }
+  .issues-banner .sub { font-size: 13px; color: #7F1D1D; margin-top: 2px; }
+
+  /* TOP STRIP — 4 cells */
+  .top-strip { display: grid; grid-template-columns: repeat(4, 1fr); background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; margin-bottom: 20px; }
+  .strip-cell { padding: 18px 22px; border-right: 1px solid #E5E7EB; }
+  .strip-cell:last-child { border-right: none; }
+  .strip-label { font-size: 11px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .strip-number { font-size: 28px; font-weight: 400; line-height: 1.1; margin-bottom: 6px; }
+  .strip-number .unit { font-size: 14px; color: #6B7280; margin-left: 4px; }
+  .strip-context { font-size: 12px; color: #6B7280; }
+  .strip-trend { display: inline-block; font-size: 12px; font-weight: 500; margin-left: 8px; }
+  .strip-trend.up { color: #16A34A; }
+  .strip-trend.down { color: #DC2626; }
+  .strip-trend.neutral { color: #6B7280; }
+  .strip-cell.health .strip-number.healthy { color: #16A34A; }
+  .strip-cell.health .strip-number.warn { color: #D97706; }
+  .strip-cell.health .strip-number.danger { color: #DC2626; }
+  .strip-cell.action .strip-number.warn { color: #D97706; }
+  .strip-cell.action .strip-number.danger { color: #DC2626; }
+  .strip-cell.action .strip-number.ok { color: #16A34A; }
+  .quota-bar { width: 100%; height: 6px; background: #E5E7EB; border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .quota-fill { height: 100%; background: #0053CC; transition: width 0.3s; }
+  .quota-fill.warn { background: #D97706; }
+  .quota-fill.danger { background: #DC2626; }
+
+  /* ACTION QUEUE — the star of the show */
+  .action-queue { background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; margin-bottom: 24px; overflow: hidden; }
+  .aq-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid #E5E7EB; }
+  .aq-title { font-size: 16px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+  .aq-badge { background: #D97706; color: #FFF; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+  .aq-badge.danger { background: #DC2626; }
+  .aq-badge.ok { background: #16A34A; }
+  .aq-link { font-size: 13px; color: #0053CC; }
+  .aq-items { display: flex; flex-direction: column; }
+  .aq-item { display: flex; align-items: center; gap: 14px; padding: 14px 20px; border-bottom: 1px solid #F3F4F6; }
+  .aq-item:last-child { border-bottom: none; }
+  .aq-item:hover { background: #FAFBFC; }
+  .aq-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; flex-shrink: 0; }
+  .aq-icon.error { background: #FEF2F2; color: #DC2626; }
+  .aq-icon.warn { background: #FFFBEB; color: #D97706; }
+  .aq-icon.info { background: #EFF6FF; color: #0053CC; }
+  .aq-text { flex: 1; min-width: 0; }
+  .aq-name { font-size: 14px; font-weight: 500; color: #1A1A2E; margin-bottom: 2px; }
+  .aq-sub { font-size: 12px; color: #6B7280; line-height: 1.5; }
+  .aq-action { padding: 7px 14px; border: 1px solid #0053CC; background: #FFF; color: #0053CC; border-radius: 4px; font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .aq-action:hover { background: #E8F0FC; }
+  .aq-action.danger { color: #DC2626; border-color: #DC2626; }
+  .aq-action.danger:hover { background: #FEF2F2; }
+  .aq-empty { padding: 32px 20px; text-align: center; color: #6B7280; }
+  .aq-empty .check { width: 48px; height: 48px; border-radius: 50%; background: #DCFCE7; color: #16A34A; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 22px; }
+  .aq-empty .msg { font-size: 14px; color: #1A1A2E; margin-bottom: 4px; font-weight: 500; }
+  .aq-empty .sub { font-size: 13px; color: #6B7280; }
+
+  /* PIPELINE */
+  .pipeline-section { margin-bottom: 24px; }
+  .section-title { font-size: 16px; font-weight: 500; margin-bottom: 12px; }
+  .pipeline { display: grid; grid-template-columns: 1fr 20px 1fr 20px 1fr 20px 1fr; align-items: stretch; }
+  .stage { background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 16px 18px; display: flex; flex-direction: column; min-height: 130px; }
+  .stage-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .stage-num { width: 24px; height: 24px; border-radius: 6px; background: #E8F0FC; color: #0053CC; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; }
+  .stage-name { font-size: 14px; font-weight: 500; }
+  .stage-metric { font-size: 22px; font-weight: 400; margin-bottom: 4px; }
+  .stage-context { font-size: 12px; color: #6B7280; line-height: 1.5; margin-bottom: 8px; flex: 1; }
+  .stage-link { font-size: 13px; color: #0053CC; margin-top: auto; }
+  .arrow { display: flex; align-items: center; justify-content: center; color: #9CA3AF; font-size: 18px; }
+
+  /* GRID */
+  .grid-2 { display: grid; grid-template-columns: 1.6fr 1fr; gap: 16px; }
+  .panel { background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 18px 20px; }
+  .panel + .panel { margin-top: 16px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .panel-title { font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .panel-cta { font-size: 13px; color: #0053CC; }
+
+  /* Integrations */
+  .integ-group-label { font-size: 11px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 500; margin: 12px 0 4px; }
+  .integ-group-label:first-child { margin-top: 0; }
+  .integ-row { display: grid; grid-template-columns: 28px 1fr auto auto auto auto; align-items: center; padding: 12px 0; border-bottom: 1px solid #F3F4F6; gap: 12px; }
+  .integ-row:last-child { border-bottom: none; }
+  .integ-logo { width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #FFF; }
+  .integ-logo.stripe { background: #635BFF; }
+  .integ-logo.shopify { background: #95BF47; }
+  .integ-logo.qbo { background: #2CA01C; }
+  .integ-logo.paypal { background: #003087; }
+  .integ-name { font-size: 14px; color: #1A1A2E; }
+  .integ-name .sub { font-size: 12px; color: #6B7280; }
+  .badge { font-size: 11px; padding: 3px 8px; border-radius: 10px; font-weight: 500; white-space: nowrap; }
+  .badge.connected { background: #DCFCE7; color: #15803D; }
+  .badge.lost { background: #FEE2E2; color: #B91C1C; }
+  .badge.warn { background: #FEF3C7; color: #92400E; }
+  .badge.tax-on { background: #DCFCE7; color: #15803D; }
+  .badge.tax-off { background: #FEF3C7; color: #92400E; }
+  .integ-last { font-size: 12px; color: #6B7280; }
+  .integ-link { font-size: 12px; color: #0053CC; }
+
+  /* Customizations row */
+  .cust-row { display: flex; align-items: center; padding: 12px 0; border-bottom: 1px solid #F3F4F6; gap: 12px; }
+  .cust-row:last-child { border-bottom: none; }
+  .cust-text { flex: 1; }
+  .cust-name { font-size: 14px; font-weight: 500; }
+  .cust-sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
+  .cust-count { font-size: 13px; color: #1A1A2E; font-weight: 500; }
+  .cust-count.warn { color: #D97706; }
+
+  /* Account mapping card */
+  .map-row { display: grid; grid-template-columns: 110px 1fr 50px; align-items: center; padding: 7px 0; gap: 10px; font-size: 13px; }
+  .map-name { color: #1A1A2E; }
+  .map-bar { height: 6px; background: #F3F4F6; border-radius: 3px; overflow: hidden; }
+  .map-fill { height: 100%; background: #16A34A; transition: width 0.3s; }
+  .map-fill.warn { background: #D97706; }
+  .map-fill.danger { background: #DC2626; }
+  .map-pct { text-align: right; color: #6B7280; font-weight: 500; }
+  .map-pct.warn { color: #D97706; }
+  .map-pct.danger { color: #DC2626; }
+  .map-foot { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; margin-top: 8px; border-top: 1px solid #F3F4F6; font-size: 13px; }
+  .map-overall { color: #1A1A2E; font-weight: 500; }
+  .map-overall .val { color: #16A34A; }
+  .map-overall .val.warn { color: #D97706; }
+
+  /* Activity log */
+  .activity { display: flex; flex-direction: column; }
+  .act-row { display: grid; grid-template-columns: 100px 70px 1fr; gap: 12px; padding: 9px 0; font-size: 12px; border-bottom: 1px solid #F3F4F6; }
+  .act-row:last-child { border-bottom: none; }
+  .act-time { color: #6B7280; }
+  .act-src { color: #1A1A2E; font-weight: 500; }
+  .act-text { color: #1A1A2E; }
+  .act-text .plus { color: #15803D; font-weight: 500; }
+  .act-text .minus { color: #B91C1C; font-weight: 500; }
+
+  /* Health check */
+  .hc-list { display: flex; flex-direction: column; }
+  .hc-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 0; border-bottom: 1px solid #F3F4F6; }
+  .hc-item:last-child { border-bottom: none; }
+  .hc-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px; }
+  .hc-icon.error { background: #FEE2E2; color: #B91C1C; }
+  .hc-icon.warn { background: #FEF3C7; color: #92400E; }
+  .hc-icon.ok { background: #DCFCE7; color: #15803D; }
+  .hc-text { flex: 1; font-size: 13px; }
+  .hc-text .sub { font-size: 12px; color: #6B7280; margin-top: 2px; }
+  .hc-fix { font-size: 12px; color: #0053CC; }
+  .hc-all-good { padding: 16px 0; text-align: center; color: #15803D; font-size: 13px; }
+
+  /* Tooltip */
+  .tip { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; border: 1px solid #9CA3AF; color: #6B7280; font-size: 9px; cursor: help; position: relative; }
+  .tip:hover .tip-content { display: block; }
+  .tip-content { display: none; position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%); background: #1A1A2E; color: #FFF; padding: 8px 10px; border-radius: 4px; font-size: 12px; font-weight: 400; width: 220px; line-height: 1.5; z-index: 100; text-transform: none; letter-spacing: 0; }
+
+  /* Demo switcher */
+  .demo-switcher { position: fixed; bottom: 20px; left: 20px; background: #FFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 12px 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.08); z-index: 100; }
+  .demo-title { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #6B7280; font-weight: 500; margin-bottom: 8px; }
+  .demo-buttons { display: flex; gap: 6px; flex-wrap: wrap; max-width: 360px; }
+  .demo-btn { padding: 6px 10px; font-size: 12px; border: 1px solid #E5E7EB; background: #FFF; border-radius: 4px; cursor: pointer; color: #1A1A2E; }
+  .demo-btn.active { background: #0053CC; color: #FFF; border-color: #0053CC; }
+  .demo-btn:hover:not(.active) { background: #F9FAFB; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1A1A2E; color: #FFF; padding: 12px 18px; border-radius: 6px; font-size: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.2); opacity: 0; transform: translateY(20px); transition: all 0.2s; pointer-events: none; z-index: 1000; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* Spec ribbon */
+  .spec-ribbon { position: fixed; top: 8px; right: 8px; background: #1A1A2E; color: #FFF; font-size: 11px; padding: 5px 10px; border-radius: 4px; z-index: 100; opacity: 0.85; }
+</style>
+</head>
+<body>
+<div class="spec-ribbon">PT Dashboard · Iteration 2 (validated)</div>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="org-switch">
+      <div class="org-avatar">DT</div>
+      <div class="org-name">Dasha Test Company</div>
+      <span class="org-caret">▾</span>
+    </div>
+    <nav class="nav">
+      <div class="nav-item active"><span class="icon">▦</span> Dashboard</div>
+      <div class="nav-item"><span class="icon">⇄</span> Transactions</div>
+      <div class="nav-item"><span class="icon">📄</span> Transaction reconciliation</div>
+      <div class="nav-item"><span class="icon">⚡</span> Smart rules</div>
+      <div class="nav-item"><span class="icon">🛒</span> Invoicing</div>
+      <div class="nav-item"><span class="icon">✦</span> AI reports</div>
+      <div class="nav-item"><span class="icon">📈</span> Reporting</div>
+      <div class="nav-item"><span class="icon">📅</span> Revenue recognition</div>
+      <div class="nav-divider"></div>
+      <div class="nav-item"><span class="icon">⚙</span> Settings</div>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="syncs-left">Syncs left: <span class="num" id="syncsLeft">153</span></div>
+      <div class="topbar-icon" title="Notifications">🔔</div>
+      <div class="topbar-icon" title="Help">?</div>
+      <div class="topbar-icon" title="Profile">👤</div>
+    </div>
+
+    <div class="page">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">Dashboard</h1>
+          <div class="page-subtitle" id="pageSub">Your sync workflow at a glance · This month</div>
+        </div>
+        <button class="period-btn">Last 30 days ▾</button>
+      </div>
+
+      <!-- Critical banner (only in 'critical' state) -->
+      <div class="issues-banner" id="issuesBanner">
+        <div class="icon">!</div>
+        <div class="text">
+          <div class="title">Sync is paused — Synder can't post to your books</div>
+          <div class="sub">Resolve the connection issues below to resume automatic syncing.</div>
+        </div>
+      </div>
+
+      <!-- TOP STRIP — 4 KPIs -->
+      <div class="top-strip">
+        <div class="strip-cell">
+          <div class="strip-label">Revenue synced
+            <span class="tip">?<span class="tip-content">Total amount of sales successfully posted to your accounting software this period. Does not include refunds or fees.</span></span>
+          </div>
+          <div class="strip-number" id="revNum">$84,215<span class="strip-trend up" id="revTrend">↑ 12%</span></div>
+          <div class="strip-context" id="revCtx">2,847 synced · vs $75,180 last period</div>
+        </div>
+        <div class="strip-cell health">
+          <div class="strip-label">Sync health
+            <span class="tip">?<span class="tip-content">Composite score of connection health, sync success rate, and data quality.</span></span>
+          </div>
+          <div class="strip-number healthy" id="hlthNum">82<span class="unit">/100</span></div>
+          <div class="strip-context" id="hlthCtx">Healthy · 2 minor issues</div>
+        </div>
+        <div class="strip-cell">
+          <div class="strip-label">Plan usage</div>
+          <div class="strip-number" id="planNum">847<span class="unit">of 1,000</span></div>
+          <div class="strip-context" id="planCtx">11 days left in cycle</div>
+          <div class="quota-bar"><div class="quota-fill" id="quotaFill" style="width: 85%;"></div></div>
+        </div>
+        <div class="strip-cell action">
+          <div class="strip-label">Action items</div>
+          <div class="strip-number warn" id="actNum">3</div>
+          <div class="strip-context" id="actCtx"><a onclick="document.querySelector('.action-queue').scrollIntoView({behavior:'smooth'})">See action queue ↓</a></div>
+        </div>
+      </div>
+
+      <!-- ACTION QUEUE — primary differentiator -->
+      <div class="action-queue">
+        <div class="aq-head">
+          <div class="aq-title">
+            <span>Action queue</span>
+            <span class="aq-badge" id="aqBadge">3 items</span>
+          </div>
+          <a class="aq-link" onclick="toast('Open full action queue')">View all →</a>
+        </div>
+        <div class="aq-items" id="aqItems"></div>
+      </div>
+
+      <!-- PIPELINE -->
+      <div class="pipeline-section">
+        <h2 class="section-title">Your sync pipeline</h2>
+        <div class="pipeline">
+          <div class="stage">
+            <div class="stage-head"><div class="stage-num">1</div><div class="stage-name">Import</div></div>
+            <div class="stage-metric" id="pImp">3,241</div>
+            <div class="stage-context">Pulled from your connected sales platforms.</div>
+            <a class="stage-link" onclick="toast('Open imported transactions')">View imported →</a>
+          </div>
+          <div class="arrow">→</div>
+          <div class="stage">
+            <div class="stage-head"><div class="stage-num">2</div><div class="stage-name">Customize</div></div>
+            <div class="stage-metric" id="pCus">4 rules</div>
+            <div class="stage-context">Rules + mappings shaping each transaction.</div>
+            <a class="stage-link" onclick="toast('Open Smart Rules')">View rules →</a>
+          </div>
+          <div class="arrow">→</div>
+          <div class="stage">
+            <div class="stage-head"><div class="stage-num">3</div><div class="stage-name">Sync</div></div>
+            <div class="stage-metric" id="pSyn">2,847</div>
+            <div class="stage-context">Posted to your accounting software.</div>
+            <a class="stage-link" onclick="toast('Open synced transactions')">View synced →</a>
+          </div>
+          <div class="arrow">→</div>
+          <div class="stage">
+            <div class="stage-head"><div class="stage-num">4</div><div class="stage-name">Reconcile</div></div>
+            <div class="stage-metric" id="pRec">93%</div>
+            <div class="stage-context">Matched against your payment platforms.</div>
+            <a class="stage-link" onclick="toast('Open reconciliation')">View unmatched →</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- GRID -->
+      <div class="grid-2">
+        <!-- LEFT column -->
+        <div>
+          <!-- Integrations (with tax capture) -->
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Integrations
+                <span class="tip">?<span class="tip-content">Connected platforms and accounting software with their current sync and tax-capture status.</span></span>
+              </div>
+              <a class="panel-cta" onclick="toast('Open Settings → Integrations')">Manage →</a>
+            </div>
+            <div id="integRows"></div>
+          </div>
+
+          <!-- Customizations (Smart Rules etc.) -->
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Customizations</div>
+              <a class="panel-cta" onclick="toast('Compare plans')">Compare plans →</a>
+            </div>
+            <div class="cust-row">
+              <div class="cust-text">
+                <div class="cust-name">Smart Rules</div>
+                <div class="cust-sub">Auto-categorize by class, location, tax</div>
+              </div>
+              <div class="cust-count">3 of 10 used</div>
+            </div>
+            <div class="cust-row">
+              <div class="cust-text">
+                <div class="cust-name">Custom Import Modifications</div>
+                <div class="cust-sub">Reshape transactions during import</div>
+              </div>
+              <div class="cust-count warn">1 of 1 · At cap</div>
+            </div>
+            <div class="cust-row">
+              <div class="cust-text">
+                <div class="cust-name">Revenue Recognition</div>
+                <div class="cust-sub">Spread subscription revenue over service period</div>
+              </div>
+              <div class="cust-count">342 of 1,000 subs</div>
+            </div>
+          </div>
+
+          <!-- Activity log (collapsed by default look) -->
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Recent activity</div>
+              <a class="panel-cta" onclick="toast('Open full activity log')">View all →</a>
+            </div>
+            <div class="activity">
+              <div class="act-row"><div class="act-time">13:42 today</div><div class="act-src">Stripe</div><div class="act-text"><span class="plus">+47</span> transactions synced to QuickBooks</div></div>
+              <div class="act-row"><div class="act-time">12:35 today</div><div class="act-src">Shopify</div><div class="act-text"><span class="plus">+12</span> orders synced to QuickBooks</div></div>
+              <div class="act-row"><div class="act-time">11:20 today</div><div class="act-src">System</div><div class="act-text">Health check passed — score 82/100</div></div>
+              <div class="act-row"><div class="act-time">22:15 yesterday</div><div class="act-src">Stripe</div><div class="act-text"><span class="plus">+89</span> transactions synced to QuickBooks</div></div>
+              <div class="act-row"><div class="act-time">18:02 yesterday</div><div class="act-src">Shopify</div><div class="act-text"><span class="minus">3</span> orders failed — rule conflict</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT column -->
+        <div>
+          <!-- Account mapping coverage (Sarah's must-have) -->
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">Account mapping
+                <span class="tip">?<span class="tip-content">Percentage of transaction categories mapped to a GL account. Unmapped categories fall back to defaults.</span></span>
+              </div>
+              <a class="panel-cta" onclick="toast('Open account mapping settings')">Fix gaps →</a>
+            </div>
+            <div id="mapRows"></div>
+            <div class="map-foot">
+              <span class="map-overall">Overall coverage: <span class="val" id="mapOverall">80%</span></span>
+              <a class="panel-cta" onclick="toast('Open mapping details')">Details →</a>
+            </div>
+          </div>
+
+          <!-- Health Check -->
+          <div class="panel">
+            <div class="panel-head">
+              <div class="panel-title">⚕ Health check</div>
+              <a class="panel-cta" onclick="toast('Rerunning health check…')">Rerun</a>
+            </div>
+            <div class="hc-list" id="hcList"></div>
+          </div>
+
+          <!-- Time saved (subtle, secondary) -->
+          <div class="panel" style="background: linear-gradient(135deg, #F0F6FF 0%, #FAFBFC 100%);">
+            <div class="panel-head">
+              <div class="panel-title">Time saved this month</div>
+            </div>
+            <div style="font-size: 28px; font-weight: 400;">~47 <span style="font-size: 14px; color: #6B7280;">hours</span></div>
+            <div style="font-size: 12px; color: #6B7280; margin-top: 4px;">Across 2,847 syncs · <a onclick="toast('How we calculate this')">How we calculate this →</a></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Demo switcher -->
+<div class="demo-switcher">
+  <div class="demo-title">Demo state</div>
+  <div class="demo-buttons">
+    <button class="demo-btn active" data-state="default">Default · 3 items</button>
+    <button class="demo-btn" data-state="accountant">Accountant view</button>
+    <button class="demo-btn" data-state="critical">Critical · sync paused</button>
+    <button class="demo-btn" data-state="clear">All clear</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const states = {
+  'default': {
+    banner: false,
+    strip: {
+      rev: '$84,215', revTrendCls: 'up', revTrendTxt: '↑ 12%', revCtx: '2,847 synced · vs $75,180 last period',
+      hlth: '82', hlthCls: 'healthy', hlthCtx: 'Healthy · 2 minor issues',
+      plan: '847', planOf: 'of 1,000', planFillPct: 85, planFillCls: '', planCtx: '11 days left in cycle',
+      act: '3', actCls: 'warn', actCtx: '<a onclick="document.querySelector(\\'.action-queue\\').scrollIntoView({behavior:\\'smooth\\'})">See action queue ↓</a>'
+    },
+    aq: [
+      { type: 'warn', name: 'Shopify sales tax isn\'t being captured', sub: '14 orders this month have $0 tax — may cause reconciliation gaps later', cta: 'Enable tax import →', danger: false },
+      { type: 'warn', name: '23 transactions are waiting to sync to QuickBooks', sub: 'Imported but not yet posted — likely a Smart Rule conflict', cta: 'Review transactions →', danger: false },
+      { type: 'info', name: '2 Smart Rules matched no transactions this month', sub: 'Rules may be outdated or their conditions too narrow', cta: 'Review rules →', danger: false }
+    ],
+    aqBadge: { text: '3 items', cls: '' },
+    pipeline: { imp: '3,241', cus: '4 rules', syn: '2,847', rec: '93%' },
+    integ: [
+      { group: 'Payment platforms', logo: 'stripe', short: 'S', name: 'Stripe', status: 'connected', statusTxt: 'Connected', tax: 'on', taxTxt: 'Tax ✓', last: '12 min ago' },
+      { group: null, logo: 'shopify', short: 'SH', name: 'Shopify (Changolivia)', status: 'connected', statusTxt: 'Connected', tax: 'off', taxTxt: 'Tax ⚠', last: '1 hr ago' },
+      { group: 'Accounting', logo: 'qbo', short: 'QB', name: 'QuickBooks Online', status: 'connected', statusTxt: 'Connected', tax: null, taxTxt: null, last: 'Just now' }
+    ],
+    mapping: [
+      { name: 'Sales income', pct: 100 },
+      { name: 'Fees', pct: 100 },
+      { name: 'Taxes', pct: 68 },
+      { name: 'Refunds', pct: 100 },
+      { name: 'Other / misc', pct: 31 }
+    ],
+    mapOverall: { val: '80%', cls: 'warn' },
+    hc: [
+      { level: 'warn', text: 'Shopify tax import disabled', sub: 'Enable in Settings → Integrations', fix: 'Fix →' },
+      { level: 'warn', text: 'Account mapping coverage below 90%', sub: '2 categories need GL accounts', fix: 'Map →' }
+    ],
+    syncsLeft: 153
+  },
+  'accountant': {
+    banner: false,
+    strip: {
+      rev: '$84,215', revTrendCls: 'up', revTrendTxt: '↑ 12%', revCtx: '2,847 synced · vs $75,180 last period',
+      hlth: '67', hlthCls: 'warn', hlthCtx: 'Needs attention · 5 issues',
+      plan: '847', planOf: 'of 1,000', planFillPct: 85, planFillCls: '', planCtx: '11 days left in cycle',
+      act: '5', actCls: 'warn', actCtx: '<a onclick="document.querySelector(\\'.action-queue\\').scrollIntoView({behavior:\\'smooth\\'})">See action queue ↓</a>'
+    },
+    aq: [
+      { type: 'warn', name: '18 transactions have no GL account assigned', sub: 'They\'re falling back to "Uncategorized income" — review before month-end close', cta: 'Map accounts →', danger: false },
+      { type: 'warn', name: 'Shopify sales tax isn\'t being captured', sub: '14 orders this month have $0 tax — reconciliation will show gaps', cta: 'Enable tax import →', danger: false },
+      { type: 'warn', name: '7 transactions failed to post — currency mismatch', sub: 'EUR transactions in a USD home-currency org', cta: 'Review →', danger: false },
+      { type: 'info', name: '3 duplicate transactions detected', sub: 'Same external IDs across Stripe + Shopify — may double-count revenue', cta: 'Resolve →', danger: false },
+      { type: 'info', name: '2 Smart Rules matched no transactions this month', sub: 'Rules may be outdated', cta: 'Review rules →', danger: false }
+    ],
+    aqBadge: { text: '5 items', cls: '' },
+    pipeline: { imp: '3,241', cus: '4 rules', syn: '2,816', rec: '88%' },
+    integ: [
+      { group: 'Payment platforms', logo: 'stripe', short: 'S', name: 'Stripe', status: 'connected', statusTxt: 'Connected', tax: 'on', taxTxt: 'Tax ✓', last: '12 min ago' },
+      { group: null, logo: 'shopify', short: 'SH', name: 'Shopify (Changolivia)', status: 'connected', statusTxt: 'Connected', tax: 'off', taxTxt: 'Tax ⚠', last: '1 hr ago' },
+      { group: 'Accounting', logo: 'qbo', short: 'QB', name: 'QuickBooks Online', status: 'connected', statusTxt: 'Connected', tax: null, taxTxt: null, last: 'Just now' }
+    ],
+    mapping: [
+      { name: 'Sales income', pct: 100 },
+      { name: 'Fees', pct: 100 },
+      { name: 'Taxes', pct: 45 },
+      { name: 'Refunds', pct: 80 },
+      { name: 'Other / misc', pct: 22 }
+    ],
+    mapOverall: { val: '69%', cls: 'danger' },
+    hc: [
+      { level: 'warn', text: '18 unmapped transaction categories', sub: 'Falling back to Uncategorized income', fix: 'Map →' },
+      { level: 'warn', text: 'Shopify tax import disabled', sub: 'Tax data missing on 14 orders', fix: 'Fix →' },
+      { level: 'warn', text: '7 currency mismatch errors', sub: 'EUR transactions in USD org', fix: 'Review →' }
+    ],
+    syncsLeft: 153
+  },
+  'critical': {
+    banner: true,
+    strip: {
+      rev: '$72,890', revTrendCls: 'down', revTrendTxt: '↓ 14%', revCtx: 'Sync paused — no new data since Tuesday',
+      hlth: '41', hlthCls: 'danger', hlthCtx: 'Action required · 2 critical issues',
+      plan: '847', planOf: 'of 1,000', planFillPct: 85, planFillCls: '', planCtx: '11 days left in cycle',
+      act: '2', actCls: 'danger', actCtx: '<a onclick="document.querySelector(\\'.action-queue\\').scrollIntoView({behavior:\\'smooth\\'})">See action queue ↓</a>'
+    },
+    aq: [
+      { type: 'error', name: 'Stripe connection lost — auto-sync suspended', sub: '405 transactions are waiting to sync. They\'ll post once reconnected.', cta: 'Reconnect Stripe →', danger: true },
+      { type: 'error', name: 'QuickBooks Online token expired', sub: 'Synder can\'t post to your books. Reconnect to resume syncing.', cta: 'Reconnect QBO →', danger: true }
+    ],
+    aqBadge: { text: '2 critical', cls: 'danger' },
+    pipeline: { imp: '3,241', cus: '4 rules', syn: '0 today', rec: '—' },
+    integ: [
+      { group: 'Payment platforms', logo: 'stripe', short: 'S', name: 'Stripe', status: 'lost', statusTxt: 'Connection lost', tax: 'on', taxTxt: 'Tax ✓', last: '3 days ago' },
+      { group: null, logo: 'shopify', short: 'SH', name: 'Shopify (Changolivia)', status: 'connected', statusTxt: 'Connected', tax: 'off', taxTxt: 'Tax ⚠', last: '1 hr ago' },
+      { group: 'Accounting', logo: 'qbo', short: 'QB', name: 'QuickBooks Online', status: 'lost', statusTxt: 'Token expired', tax: null, taxTxt: null, last: 'Yesterday' }
+    ],
+    mapping: [
+      { name: 'Sales income', pct: 100 },
+      { name: 'Fees', pct: 100 },
+      { name: 'Taxes', pct: 68 },
+      { name: 'Refunds', pct: 100 },
+      { name: 'Other / misc', pct: 31 }
+    ],
+    mapOverall: { val: '80%', cls: 'warn' },
+    hc: [
+      { level: 'error', text: 'Stripe connection lost', sub: 'Auto-sync suspended 3 days ago', fix: 'Fix →' },
+      { level: 'error', text: 'QuickBooks Online token expired', sub: 'Posts failing since yesterday', fix: 'Fix →' }
+    ],
+    syncsLeft: 153
+  },
+  'clear': {
+    banner: false,
+    strip: {
+      rev: '$92,540', revTrendCls: 'up', revTrendTxt: '↑ 23%', revCtx: '3,241 synced · vs $75,180 last period',
+      hlth: '98', hlthCls: 'healthy', hlthCtx: 'Excellent · everything is running smoothly',
+      plan: '847', planOf: 'of 1,000', planFillPct: 85, planFillCls: '', planCtx: '11 days left in cycle',
+      act: '0', actCls: 'ok', actCtx: 'No action needed today'
+    },
+    aq: [],
+    aqBadge: { text: 'All clear', cls: 'ok' },
+    pipeline: { imp: '3,241', cus: '4 rules', syn: '3,241', rec: '98%' },
+    integ: [
+      { group: 'Payment platforms', logo: 'stripe', short: 'S', name: 'Stripe', status: 'connected', statusTxt: 'Connected', tax: 'on', taxTxt: 'Tax ✓', last: '12 min ago' },
+      { group: null, logo: 'shopify', short: 'SH', name: 'Shopify (Changolivia)', status: 'connected', statusTxt: 'Connected', tax: 'on', taxTxt: 'Tax ✓', last: '8 min ago' },
+      { group: 'Accounting', logo: 'qbo', short: 'QB', name: 'QuickBooks Online', status: 'connected', statusTxt: 'Connected', tax: null, taxTxt: null, last: 'Just now' }
+    ],
+    mapping: [
+      { name: 'Sales income', pct: 100 },
+      { name: 'Fees', pct: 100 },
+      { name: 'Taxes', pct: 100 },
+      { name: 'Refunds', pct: 100 },
+      { name: 'Other / misc', pct: 100 }
+    ],
+    mapOverall: { val: '100%', cls: '' },
+    hc: [],
+    syncsLeft: 153
+  }
+};
+
+function renderState(key) {
+  const s = states[key];
+  // strip
+  document.getElementById('revNum').innerHTML = s.strip.rev + '<span class="strip-trend ' + s.strip.revTrendCls + '">' + s.strip.revTrendTxt + '</span>';
+  document.getElementById('revCtx').textContent = s.strip.revCtx;
+  document.getElementById('hlthNum').className = 'strip-number ' + s.strip.hlthCls;
+  document.getElementById('hlthNum').innerHTML = s.strip.hlth + '<span class="unit">/100</span>';
+  document.getElementById('hlthCtx').textContent = s.strip.hlthCtx;
+  document.getElementById('planNum').innerHTML = s.strip.plan + '<span class="unit">' + s.strip.planOf + '</span>';
+  document.getElementById('planCtx').textContent = s.strip.planCtx;
+  const fill = document.getElementById('quotaFill');
+  fill.style.width = s.strip.planFillPct + '%';
+  fill.className = 'quota-fill ' + s.strip.planFillCls;
+  document.getElementById('actNum').className = 'strip-number ' + s.strip.actCls;
+  document.getElementById('actNum').textContent = s.strip.act;
+  document.getElementById('actCtx').innerHTML = s.strip.actCtx;
+
+  // banner
+  document.getElementById('issuesBanner').classList.toggle('show', s.banner);
+
+  // action queue
+  const aq = document.getElementById('aqItems');
+  aq.innerHTML = '';
+  if (s.aq.length === 0) {
+    aq.innerHTML = '<div class="aq-empty"><div class="check">✓</div><div class="msg">All caught up</div><div class="sub">No action items right now. Everything is syncing smoothly.</div></div>';
+  } else {
+    s.aq.forEach(item => {
+      const iconChar = item.type === 'error' ? '!' : item.type === 'warn' ? '⚠' : 'i';
+      aq.innerHTML += `
+        <div class="aq-item">
+          <div class="aq-icon ${item.type}">${iconChar}</div>
+          <div class="aq-text">
+            <div class="aq-name">${item.name}</div>
+            <div class="aq-sub">${item.sub}</div>
+          </div>
+          <button class="aq-action ${item.danger ? 'danger' : ''}" onclick="toast('${item.cta.replace(/'/g, "\\'")}')">${item.cta}</button>
+        </div>`;
+    });
+  }
+  const badge = document.getElementById('aqBadge');
+  badge.textContent = s.aqBadge.text;
+  badge.className = 'aq-badge ' + s.aqBadge.cls;
+
+  // pipeline
+  document.getElementById('pImp').textContent = s.pipeline.imp;
+  document.getElementById('pCus').textContent = s.pipeline.cus;
+  document.getElementById('pSyn').textContent = s.pipeline.syn;
+  document.getElementById('pRec').textContent = s.pipeline.rec;
+
+  // integrations
+  const integ = document.getElementById('integRows');
+  integ.innerHTML = '';
+  s.integ.forEach(row => {
+    if (row.group) integ.innerHTML += `<div class="integ-group-label">${row.group}</div>`;
+    const tax = row.tax ? `<span class="badge tax-${row.tax}">${row.taxTxt}</span>` : '<span></span>';
+    integ.innerHTML += `
+      <div class="integ-row">
+        <div class="integ-logo ${row.logo}">${row.short}</div>
+        <div class="integ-name">${row.name}</div>
+        <span class="badge ${row.status}">${row.statusTxt}</span>
+        ${tax}
+        <span class="integ-last">${row.last}</span>
+        <a class="integ-link" onclick="toast('Open ${row.name}')">→</a>
+      </div>`;
+  });
+
+  // mapping
+  const mp = document.getElementById('mapRows');
+  mp.innerHTML = '';
+  s.mapping.forEach(m => {
+    const cls = m.pct >= 90 ? '' : m.pct >= 50 ? 'warn' : 'danger';
+    mp.innerHTML += `
+      <div class="map-row">
+        <div class="map-name">${m.name}</div>
+        <div class="map-bar"><div class="map-fill ${cls}" style="width: ${m.pct}%;"></div></div>
+        <div class="map-pct ${cls}">${m.pct}%</div>
+      </div>`;
+  });
+  const ov = document.getElementById('mapOverall');
+  ov.textContent = s.mapOverall.val;
+  ov.className = 'val ' + s.mapOverall.cls;
+
+  // health check
+  const hc = document.getElementById('hcList');
+  hc.innerHTML = '';
+  if (s.hc.length === 0) {
+    hc.innerHTML = '<div class="hc-all-good">✓ All checks passing</div>';
+  } else {
+    s.hc.forEach(h => {
+      const iconChar = h.level === 'error' ? '!' : h.level === 'warn' ? '⚠' : '✓';
+      hc.innerHTML += `
+        <div class="hc-item">
+          <div class="hc-icon ${h.level}">${iconChar}</div>
+          <div class="hc-text">${h.text}<div class="sub">${h.sub}</div></div>
+          <a class="hc-fix" onclick="toast('${h.fix}')">${h.fix}</a>
+        </div>`;
+    });
+  }
+
+  // syncs left
+  document.getElementById('syncsLeft').textContent = s.syncsLeft;
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(window._toastTimer);
+  window._toastTimer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+document.querySelectorAll('.demo-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.demo-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    renderState(btn.dataset.state);
+  });
+});
+
+renderState('default');
+</script>
+</body>
+</html>
