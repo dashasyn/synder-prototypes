@@ -999,7 +999,7 @@
             margin-bottom: 4px;
         }
 
-        .rec-segments {
+        .status-segments {
             display: flex;
             align-items: stretch;
             gap: 4px;
@@ -1008,7 +1008,7 @@
             flex-wrap: wrap;
         }
 
-        .rec-segment {
+        .status-segment {
             display: inline-flex;
             align-items: center;
             gap: 8px;
@@ -1024,11 +1024,11 @@
             transition: color 0.15s, border-color 0.15s;
         }
 
-        .rec-segment:hover {
+        .status-segment:hover {
             color: var(--text-primary);
         }
 
-        .rec-segment .seg-count {
+        .status-segment .seg-count {
             display: inline-flex;
             align-items: center;
             justify-content: center;
@@ -1043,12 +1043,12 @@
             color: var(--text-secondary);
         }
 
-        .rec-segment.active {
+        .status-segment.active {
             color: var(--primary-blue);
             border-bottom-color: var(--primary-blue);
         }
 
-        .rec-segment.active .seg-count {
+        .status-segment.active .seg-count {
             background: var(--primary-blue);
             color: var(--white);
         }
@@ -1056,19 +1056,19 @@
         /* Set by a deep-link: this segment CONTAINS the active status, but the
            selection is narrower than the segment. Says so instead of pretending
            the whole segment is selected. */
-        .rec-segment.partial {
+        .status-segment.partial {
             color: var(--primary-blue);
             border-bottom-color: #A8C4EC;
             border-bottom-style: dashed;
         }
 
-        .rec-segment.attention .seg-count {
+        .status-segment.attention .seg-count {
             background: #FCE8E8;
             color: #C5221F;
         }
 
-        .rec-segment.attention.active .seg-count,
-        .rec-segment.active.attention .seg-count {
+        .status-segment.attention.active .seg-count,
+        .status-segment.active.attention .seg-count {
             background: #C5221F;
             color: var(--white);
         }
@@ -1530,7 +1530,7 @@
                      matches cause-to-effect, and the tab row sits directly against
                      the table it labels. -->
                 <div class="rec-filter-bar" id="recFilterBar"></div>
-                <div class="rec-segments" id="recSegments"></div>
+                <div class="status-segments" id="recSegments"></div>
 
                 <div class="table-toolbar" id="recCount"></div>
                 <div class="table-container" id="recTable"></div>
@@ -1565,7 +1565,8 @@
         <div id="variant-sheetbtn" class="variant-section">
             <div class="variant-header">
                 <h2>Filters as Button + Side Sheet</h2>
-                <p>One <em>Filters</em> button opens a right-hand sheet holding every filter, with Apply and Reset at the bottom. Applied filters appear as read-only chips under the toolbar — they show what's on and can be removed, but not edited. All composing happens in the sheet; the chips are a summary, not a control panel.</p>
+                <p>One <em>Filters</em> button opens a right-hand sheet, with Apply and Reset at the bottom. Applied filters appear as read-only chips under the toolbar — they show what's on and can be removed, but not edited. All composing happens in the sheet; the chips are a summary, not a control panel.</p>
+                <p><strong>Status is a segmented control above the table, not a field in the sheet</strong> — the same single-source-of-truth rule as variant 6. Segment counts are computed from the filters and search already applied, which is why the filter surface sits above them. Clicking a segment commits immediately; everything in the sheet stays Apply-gated.</p>
             </div>
 
             <div class="mock-page">
@@ -1589,6 +1590,11 @@
                 </div>
 
                 <div class="applied-chips-bar" id="sheetbtnChips"></div>
+
+                <!-- Same order as variant 6: the filter surface (button + chips)
+                     sets the scope, the segments slice it, and the tab row sits
+                     directly against the table it labels. -->
+                <div class="status-segments" id="sheetbtnSegments"></div>
 
                 <div class="table-toolbar" id="sheetbtnCount"></div>
                 <div class="table-container" id="sheetbtnTable"></div>
@@ -2210,10 +2216,36 @@
         // other filter in `f` fixed. One aggregate over the same result set the
         // list already needs — not a filter preview, so it doesn't reintroduce
         // the per-click query that Apply exists to prevent.
-        function countForStatuses(f, statuses) {
+        function countForStatuses(f, statuses, extra) {
             var probe = clone(f);
             probe.status = statuses.slice();
-            return runFilters(probe).length;
+            var rows = runFilters(probe);
+            return extra ? rows.filter(extra).length : rows.length;
+        }
+
+        // Shared status segmented control (variants 6 and 7). Counts are computed
+        // from the filters already applied, so the segments always describe the
+        // set the user is actually looking at — which is why, in both variants,
+        // the filter controls sit ABOVE this row.
+        function renderSegmentsInto(host, applied, current, onPick, extra) {
+            host.innerHTML = '';
+            SEGMENTS.forEach(function (seg) {
+                var exact = sameSet(current, seg.status);
+                // Narrower than the segment but contained by it — e.g. a single
+                // granular status inside "Attention required". Says so instead of
+                // claiming the whole segment is selected.
+                var partial = !exact && current.length > 0 && seg.status.length > 0 &&
+                    current.every(function (s) { return seg.status.indexOf(s) !== -1; });
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'status-segment' + (exact ? ' active' : '') +
+                    (partial ? ' partial' : '') + (seg.attention ? ' attention' : '');
+                btn.setAttribute('data-segment', seg.key);
+                btn.innerHTML = esc(seg.label) +
+                    '<span class="seg-count">' + countForStatuses(applied, seg.status, extra) + '</span>';
+                btn.addEventListener('click', function () { onPick(seg); });
+                host.appendChild(btn);
+            });
         }
 
         // ---------------------------------------------------------------
@@ -2792,29 +2824,14 @@
         }
 
         function renderRecSegments() {
-            var bar = document.getElementById('recSegments');
-            bar.innerHTML = '';
-            var cur = draft.rec.status;
-            SEGMENTS.forEach(function (seg) {
-                var exact = sameSet(cur, seg.status);
-                var partial = !exact && cur.length > 0 && seg.status.length > 0 &&
-                    cur.every(function (s) { return seg.status.indexOf(s) !== -1; });
-                var btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'rec-segment' + (exact ? ' active' : '') +
-                    (partial ? ' partial' : '') + (seg.attention ? ' attention' : '');
-                btn.setAttribute('data-segment', seg.key);
-                btn.innerHTML = esc(seg.label) +
-                    '<span class="seg-count">' + countForStatuses(state.rec, seg.status) + '</span>';
-                btn.addEventListener('click', function () {
+            renderSegmentsInto(document.getElementById('recSegments'), state.rec, draft.rec.status,
+                function (seg) {
                     draft.rec.status = seg.status.slice();
                     recDeepLink = null;            // segment click replaces any granular status
                     state.rec = clone(draft.rec);  // one click = one query, nothing left staged
                     renderRec();
                     renderRecResults();
                 });
-                bar.appendChild(btn);
-            });
         }
 
         function renderRec() {
@@ -2965,6 +2982,13 @@
         // single deliberate action, so it commits — same cost as one query,
         // and there's no Apply button outside the sheet to defer it to.
         var sheetbtnSearch = '';   // committed search term
+
+        // Status is NOT in the sheet: it belongs to the segmented control, which
+        // is the same single-source-of-truth rule variant 6 uses. Two controls on
+        // one dimension is exactly the Summaries bug (pick "Failed" in the
+        // dropdown, click the "Ready to sync" tab, and they disagree).
+        var SHEETBTN_KEYS = FILTER_KEYS.filter(function (k) { return k !== 'status'; });
+
         var searchMatch = function (t, q) {
             if (!q) return true;
             q = q.toLowerCase();
@@ -2980,11 +3004,25 @@
 
         // The badge counts selected VALUES, not dimensions — "Status: Failed,
         // Pending + Platform: Stripe" reads as 3, which is what the user picked.
+        // Status is excluded — the badge counts what's behind the Filters button,
+        // and a segment the user can already see isn't hidden behind it.
         function sheetbtnValueCount(f) {
-            return FILTER_KEYS.reduce(function (n, k) {
+            return SHEETBTN_KEYS.reduce(function (n, k) {
                 if (isMulti(k)) return n + f[k].length;
                 return n + (f[k] === 'all' ? 0 : 1);
             }, 0);
+        }
+
+        function renderSheetbtnSegments() {
+            renderSegmentsInto(document.getElementById('sheetbtnSegments'),
+                state.sheetbtn, state.sheetbtn.status,
+                function (seg) {
+                    // One click, one query — the same cost a status tab has today.
+                    state.sheetbtn.status = seg.status.slice();
+                    refreshSheetbtnChrome();
+                    renderSheetbtnResults();
+                },
+                function (t) { return searchMatch(t, sheetbtnSearch); });
         }
 
         function renderSheetbtnBody() {
@@ -2999,7 +3037,7 @@
                 wrapperClass: 'sheet-filter-group',
                 onChange: refreshSheetbtnSheetChrome
             };
-            FILTER_KEYS.forEach(function (k) { mountField(content, k, ctx); });
+            SHEETBTN_KEYS.forEach(function (k) { mountField(content, k, ctx); });
             refreshSheetbtnSheetChrome();
         }
 
@@ -3030,8 +3068,12 @@
             badge.textContent = n;
             badge.classList.toggle('show', n > 0);
 
+            renderSheetbtnSegments();
+
             var bar = document.getElementById('sheetbtnChips');
-            var keys = activeKeys(f);
+            // No status chip — the segment above the table already shows it, and
+            // a second readout of the same value is one more thing that can lie.
+            var keys = activeKeys(f).filter(function (k) { return k !== 'status'; });
             bar.classList.toggle('show', keys.length > 0);
             bar.innerHTML = keys.map(function (k) {
                 return '<span class="applied-chip">' + esc(chipTextFull(k, f[k])) +
@@ -3049,6 +3091,9 @@
             });
             var clearBtn = bar.querySelector('[data-clear]');
             if (clearBtn) clearBtn.addEventListener('click', function () {
+                // "Clear all" clears the segment too, because that's what the
+                // label says. The segment is on screen and visibly snaps back to
+                // All, so nothing changes silently.
                 state.sheetbtn = defaults();
                 refreshSheetbtnChrome();
                 renderSheetbtnResults();
@@ -3097,7 +3142,11 @@
             renderSheetbtnResults();
         });
         document.getElementById('sheetbtnResetBtn').addEventListener('click', function () {
+            // Resets only what the sheet owns. The segment is outside the sheet,
+            // so a button in here must not silently move it.
+            var keepStatus = draft.sheetbtn.status.slice();
             draft.sheetbtn = defaults();
+            draft.sheetbtn.status = keepStatus;
             renderSheetbtnBody();
         });
         // Search commits on Enter — one deliberate action, one query, same rule
@@ -3105,6 +3154,7 @@
         document.getElementById('sheetbtnSearch').addEventListener('keydown', function (e) {
             if (e.key !== 'Enter') return;
             sheetbtnSearch = this.value.trim();
+            refreshSheetbtnChrome();   // segment counts include the search term
             renderSheetbtnResults();
         });
 

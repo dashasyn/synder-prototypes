@@ -290,7 +290,7 @@
 - **Data:** 10 Stripe transactions (Pamela Anderson, Marcus Reid, etc.) Jan–Mar 2026
 
 ### Filtering Options Prototype (2026-04-30; v2 functional, v3 multiselect, v4 Apply-gated, v5 six variants — all 2026-08-04; v7 variant 2026-08-07; v8 V6/V7 refinements 2026-08-11)
-- **Status:** ✅ v8 live and verified — seven variants, all Apply-gated, on Synder's real 8-status taxonomy. 128 jsdom + 79 Chromium checks across five suites.
+- **Status:** ✅ v8 live and verified — seven variants, all Apply-gated, on Synder's real 8-status taxonomy. 140 jsdom + 85 Chromium checks across five suites.
 - **Location:** `filtering-options/index.html` (mirror: `reports/filtering-options/index.html` — keep both in sync)
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/filtering-options/
 - **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Tab navigation between variants; all four filter the same 24-row dataset.
@@ -336,7 +336,8 @@
   - **V6 filters now sit ABOVE the segments.** Segment counts are `countForStatuses(state.rec, …)` — i.e. computed from the applied filters — so filters set the scope and segments slice it. With them below, a control changed a number above it and the effect read before its cause. Also puts the tab row directly against the table it labels. The alternative (segments first) only works if counts ignore the filters, which would make `Failed 3` return one row. DOM order is now asserted in the jsdom suite so it can't silently revert.
   - **Two bugs of mine, both caught and fixed:** discarding a panel restored the value but left the chip trigger showing the discarded one (chip said "Platform: Stripe" while the list said no filters applied); and the keep-open re-render path called `closeLayerTree`, firing the new discard handler mid-selection so V6 multiselects closed on the second toggle — **Ignat reported this one**, added `dropLayerSilently()`.
   - **Test lesson:** the Playwright check asserted `isChecked()`, which passes fine against a *closed* panel. New suite `/tmp/panel-visibility.cjs` asserts panels stay **visibly** open across three consecutive toggles in all five multiselect variants. When the question is "can the user keep interacting", assert `isVisible()`, never element state.
-  - **Suites:** `/tmp/verify-filters.cjs` (128 jsdom), `/tmp/browser-v6v7.cjs` (19), `/tmp/browser-v7.cjs` (29), `/tmp/browser-check.cjs` (21), `/tmp/panel-visibility.cjs` (10). All green; mirror byte-identical.
+  - **V7 status segments (same session).** Adding the segmented control to variant 7 forced **status out of the sheet** — two controls on one dimension is the FLT-2 Summaries bug. So V7's premise changed: the sheet holds every filter *except* status, and the intro copy was updated to match. No status chip (the segment shows it), badge counts sheet filters only, the sheet's Reset leaves the segment alone, but "Clear all" does reset it because that's what the label says and the segment visibly snaps back. Segment counts respect the committed search. V6 and V7 now share `renderSegmentsInto()`; `.rec-segment*` renamed to `.status-segment*`.
+  - **Suites:** `/tmp/verify-filters.cjs` (140 jsdom), `/tmp/browser-v6v7.cjs` (24), `/tmp/browser-v7.cjs` (30), `/tmp/browser-check.cjs` (21), `/tmp/panel-visibility.cjs` (10). All green; mirror byte-identical.
 - **Design decisions:**
   - Consistent Synder styling (Roboto, #0053CC, shadows), Material Icons
   - Status badges coloured by status group (Errors red / Completed green-amber-grey / Queued blue)
