@@ -120,13 +120,17 @@
 - **Ignat sends all frames he has** — it's on me to identify and request missing ones explicitly
 - See [[figma-review-protocol]] for full detail
 
-## Promoted From Short-Term Memory (2026-08-11)
+## Promoted From Short-Term Memory (2026-08-12)
 
-<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:13:14 -->
-- What production looks like today: His own complaints: looks like a table not notifications · too much detail · horizontal scroll · no way to mark as read. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:13-14]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:17:17 -->
-- What I added to his diagnosis: **It's structural, not cosmetic.** 39 of the 63 event-describing cells are `-` (62%); 40% of all cells. A table makes every type declare all [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:17-17]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:18:19 -->
-- What I added to his diagnosis: 14 fields when each type only uses 3–4. Platform changes use Station/Platform/Actual platform; delays use Delta; announcements use almost nothing. That's the horizontal scroll. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:18-19]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-05.md:20:20 -->
-- What I added to his diagnosis: **The columns duplicate the Text column.** "IC/32 3210 Train 10 to Haifa: The platform at Akko [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-05.md:20-20]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:12:12 -->
+- 2026-08-06 task: template description audit: Ignat sent 3 screenshot sets (current system, earlier prototype, new page under construction) asking which template descriptions are best. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:12-12]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:14:14 -->
+- 2026-08-06 task: template description audit: **Verdict:** "New page under construction" wins — benefit-focused copy, semantic chart labels (Summary table / Monthly trend / Ranking / Distribution / Comparison) instead of format labels (Table/Line chart/Pie chart). Prototype ranked 2nd (right labels, kept old long copy that truncates). Current system ranked last (format badges, technical/dev-note descriptions). [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:14-14]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:16:16 -->
+- 2026-08-06 task: template description audit: **5 fixes flagged on the new page's copy:** [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:16-16]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:17:20 -->
+- 2026-08-06 task: template description audit: "Sales by channel" — lists Stripe as a sales channel (it's a payment gateway, not a channel). Fix: "How revenue splits across Shopify, Amazon, and more"; "Income vs Expenses" — reintroduced "Your mini P&L" jargon/inaccuracy (not a full P&L). Fix: "Income and costs side by side, month by month"; "Gateway Fees (total)" — only card with 3 lines of technical copy, breaks rhythm/card height.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:17-20]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:21:21 -->
+- 2026-08-06 task: template description audit: "Tax summary" — lost the caveat that amounts can appear negative (liabilities convention) — real gotcha, should be tooltip or in-report note. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:21-21]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:6:9 -->
+- Where the project stands: Prototype: https://dashasyn.github.io/synder-prototypes/reports/financials-overview/; Local: `reports/financials-overview/index.html` — last commit `1975f1a` (2026-06-12); Done: single Overview page (3 pre-loaded reports), 3-dot Edit/Delete per card + drag handle, Add report modal with sidebar categories + AI/scratch buttons pinned to bottom, full-screen editor, live date picker (updates charts immediately, no Apply button).; Not yet done: Jira ticket not created (kept read-only per rules) — drafted text ready, open question was whether to split into one story vs.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:6-9]
