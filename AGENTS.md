@@ -75,6 +75,17 @@ Capture what matters. Decisions, context, things to remember. Skip the secrets u
 - When you make a mistake → document it so future-you doesn't repeat it
 - **Text > Brain** 📝
 
+## ✅ Verification — Assert Visibility, Not State
+
+When a test asks "can the user keep interacting with this?", assert **`isVisible()` /
+clickability**, never element state. `isChecked()` passes perfectly against a checkbox inside a
+*closed* panel — correct state, zero liveness.
+
+That's how the V6 multiselect-closes-on-second-toggle bug reached Ignat instead of CI, and it's
+the second time in a week for this failure class (the v4 flat-layer bug slipped past jsdom the
+same way). Related rule: **verify prototypes in a real browser, not just jsdom** — jsdom passes
+while the UI is unusable. Screenshot it.
+
 ## Safety
 
 - Don't exfiltrate private data. Ever.

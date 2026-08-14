@@ -120,17 +120,15 @@
 - **Ignat sends all frames he has** — it's on me to identify and request missing ones explicitly
 - See [[figma-review-protocol]] for full detail
 
-## Promoted From Short-Term Memory (2026-08-12)
+## Promoted From Short-Term Memory (2026-08-14)
 
-<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:12:12 -->
-- 2026-08-06 task: template description audit: Ignat sent 3 screenshot sets (current system, earlier prototype, new page under construction) asking which template descriptions are best. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:12-12]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:14:14 -->
-- 2026-08-06 task: template description audit: **Verdict:** "New page under construction" wins — benefit-focused copy, semantic chart labels (Summary table / Monthly trend / Ranking / Distribution / Comparison) instead of format labels (Table/Line chart/Pie chart). Prototype ranked 2nd (right labels, kept old long copy that truncates). Current system ranked last (format badges, technical/dev-note descriptions). [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:14-14]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:16:16 -->
-- 2026-08-06 task: template description audit: **5 fixes flagged on the new page's copy:** [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:16-16]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:17:20 -->
-- 2026-08-06 task: template description audit: "Sales by channel" — lists Stripe as a sales channel (it's a payment gateway, not a channel). Fix: "How revenue splits across Shopify, Amazon, and more"; "Income vs Expenses" — reintroduced "Your mini P&L" jargon/inaccuracy (not a full P&L). Fix: "Income and costs side by side, month by month"; "Gateway Fees (total)" — only card with 3 lines of technical copy, breaks rhythm/card height.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:17-20]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:21:21 -->
-- 2026-08-06 task: template description audit: "Tax summary" — lost the caveat that amounts can appear negative (liabilities convention) — real gotcha, should be tooltip or in-report note. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:21-21]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-06.md:6:9 -->
-- Where the project stands: Prototype: https://dashasyn.github.io/synder-prototypes/reports/financials-overview/; Local: `reports/financials-overview/index.html` — last commit `1975f1a` (2026-06-12); Done: single Overview page (3 pre-loaded reports), 3-dot Edit/Delete per card + drag handle, Add report modal with sidebar categories + AI/scratch buttons pinned to bottom, full-screen editor, live date picker (updates charts immediately, no Apply button).; Not yet done: Jira ticket not created (kept read-only per rules) — drafted text ready, open question was whether to split into one story vs.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-06.md:6-9]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:10:11 -->
+- Session Summary: `07:08` — `memory/morning-ideas.json` daily idea entry; `16:59` — clawmetry fleet/metrics files [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:10-11]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:19:22 -->
+- Suggested-mapping banner (highest activity, zero sign-off — 2 days stale): 6 banner copy variants + top pick (#1, reassurance-first) awaiting Ignat's choice; Zero-attention-required banner state — drafted, never reviewed; Preview header wording ("We've mapped 7 of 8 groups for you" vs. alternatives); Section label for *suggested* rows (to pair with confirmed "Attention required") [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:19-22]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:13:14 -->
+- Session Summary: Last real working day: **2026-08-07** (Synder demo access recipe, 8-round suggested-mapping banner review, Filtering Options v7). See `memory/2026-08-07.md`. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:13-14]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:8:8 -->
+- Session Summary: `03:00` — dreaming pass (light/rem/deep logs for 2026-08-08, `DREAMS.md`, session corpus for [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:8-8]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:5:6 -->
+- Session Summary: **No work session today.** No messages from Ignat, no design work, no prototype edits, no commits. Only automated background activity touched the workspace: [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:5-6]
