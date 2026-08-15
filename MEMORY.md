@@ -120,15 +120,17 @@
 - **Ignat sends all frames he has** — it's on me to identify and request missing ones explicitly
 - See [[figma-review-protocol]] for full detail
 
-## Promoted From Short-Term Memory (2026-08-14)
+## Promoted From Short-Term Memory (2026-08-15)
 
-<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:10:11 -->
-- Session Summary: `07:08` — `memory/morning-ideas.json` daily idea entry; `16:59` — clawmetry fleet/metrics files [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:10-11]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:19:22 -->
-- Suggested-mapping banner (highest activity, zero sign-off — 2 days stale): 6 banner copy variants + top pick (#1, reassurance-first) awaiting Ignat's choice; Zero-attention-required banner state — drafted, never reviewed; Preview header wording ("We've mapped 7 of 8 groups for you" vs. alternatives); Section label for *suggested* rows (to pair with confirmed "Attention required") [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:19-22]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:13:14 -->
-- Session Summary: Last real working day: **2026-08-07** (Synder demo access recipe, 8-round suggested-mapping banner review, Filtering Options v7). See `memory/2026-08-07.md`. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:13-14]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:8:8 -->
-- Session Summary: `03:00` — dreaming pass (light/rem/deep logs for 2026-08-08, `DREAMS.md`, session corpus for [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:8-8]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-08.md:5:6 -->
-- Session Summary: **No work session today.** No messages from Ignat, no design work, no prototype edits, no commits. Only automated background activity touched the workspace: [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-08.md:5-6]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:10:12 -->
+- Session Summary: `03:00` — dreaming pass (light/rem/deep logs for 2026-08-09, `DREAMS.md`); `07:0x` — `memory/morning-ideas.json` daily idea entry; `~17:00` — clawmetry fleet/metrics files [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:10-12]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:24:27 -->
+- Today's morning idea (worth acting on): R4 established mapping *is* recurring. Putting the count on the sidebar Mapping item does the notifying and lets the banner shrink to a plain instruction line with no dismiss logic at all. The number already exists — the dashboard reads "8 — mappings need configuration." → Next step if actioned: mock the sidebar Mapping item with a count badge beside the current banner [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:24-27]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:20:23 -->
+- Today's morning idea (worth acting on): **Mapping count badge in nav, not banner** — the banner's dismiss/defer control has been a copy placeholder ("Later") for four rounds with no UI. Linear/GitHub/Slack all signal recurring pending work with a count badge on the nav item rather than a repeating in-page banner, because a banner for recurring work needs a dismiss control, and once dismissed it can't report when the count changes. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:20-23]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:14:16 -->
+- Session Summary: Last real working day: **2026-08-07** (Synder demo access recipe, 8-round suggested-mapping banner review, Filtering Options v7). See `memory/2026-08-07.md`. The backlog below is unchanged from yesterday's snapshot — nothing was resolved because nothing was worked. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:14-16]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:5:6 -->
+- Session Summary: **No work session today.** No messages from Ignat, no design work, no prototype edits, no commits. Second consecutive quiet day (2026-08-08 was also empty). [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:5-6]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:8:8 -->
+- Session Summary: Only automated background activity touched the workspace: [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:8-8]
