@@ -120,17 +120,17 @@
 - **Ignat sends all frames he has** — it's on me to identify and request missing ones explicitly
 - See [[figma-review-protocol]] for full detail
 
-## Promoted From Short-Term Memory (2026-08-15)
+## Promoted From Short-Term Memory (2026-08-16)
 
-<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:10:12 -->
-- Session Summary: `03:00` — dreaming pass (light/rem/deep logs for 2026-08-09, `DREAMS.md`); `07:0x` — `memory/morning-ideas.json` daily idea entry; `~17:00` — clawmetry fleet/metrics files [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:10-12]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:24:27 -->
-- Today's morning idea (worth acting on): R4 established mapping *is* recurring. Putting the count on the sidebar Mapping item does the notifying and lets the banner shrink to a plain instruction line with no dismiss logic at all. The number already exists — the dashboard reads "8 — mappings need configuration." → Next step if actioned: mock the sidebar Mapping item with a count badge beside the current banner [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:24-27]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:20:23 -->
-- Today's morning idea (worth acting on): **Mapping count badge in nav, not banner** — the banner's dismiss/defer control has been a copy placeholder ("Later") for four rounds with no UI. Linear/GitHub/Slack all signal recurring pending work with a count badge on the nav item rather than a repeating in-page banner, because a banner for recurring work needs a dismiss control, and once dismissed it can't report when the count changes. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:20-23]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:14:16 -->
-- Session Summary: Last real working day: **2026-08-07** (Synder demo access recipe, 8-round suggested-mapping banner review, Filtering Options v7). See `memory/2026-08-07.md`. The backlog below is unchanged from yesterday's snapshot — nothing was resolved because nothing was worked. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:14-16]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:5:6 -->
-- Session Summary: **No work session today.** No messages from Ignat, no design work, no prototype edits, no commits. Second consecutive quiet day (2026-08-08 was also empty). [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:5-6]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-09.md:8:8 -->
-- Session Summary: Only automated background activity touched the workspace: [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-09.md:8-8]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:12:14 -->
+- Weekly LogRocket friction report (cron, 07:00 UTC): **Galileo API lesson:** chatID must be **server-generated**. Sending a custom chatID (e.g. `weekly-friction-20260810`) → 500 Internal Server Error every time. Correct flow: POST with no chatID → response returns `chatID` (UUIDv7) → follow up in that chatID to retrieve results. This explains the old all-500 results in `.synder-state/logrocket-onb-results.json`. **Rate limit:** ~3 requests then throttled ~410s. Space polls out. **Timing:** queries take 2–5 min (session-watching runs 35–100 sessions).... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:12-14]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:17:20 -->
+- Data (Aug 3–9, 2026): Rage clicks: 657 sessions / 113 page buckets. Top: synder.com (marketing) 92, `/transaction/list` 86, `/*/index` 67, `/sync/show/*` 60, `/controlPanel/index/overview` 45; Dead clicks: `/transaction/list` 104, `/controlPanel/index/overview` 64, `/controlPanel/index` 49, `/organizations/settings` 44, `/company/settings` 37, `/onboarding/index` 23; Element-level attribution NOT resolved — Galileo's per-element metrics returned unfiltered populations.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:17-20]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:30:33 -->
+- Onboarding session (14:10–15:37 UTC, topic 7156): Ignat opened with "let's continue with onboarding" — I reported context (SET-493 splash screens, last touched 2026-07-31) and stopped, per protocol. He then took it somewhere new: two copy asks on the **Connect integrations** step. No files were changed; both outputs are copy specs sitting in chat, awaiting his decision. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:30-33]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:37:39 -->
+- Stripe/Square write-access variant of the Connect card (14:13): Ignat's context (translated): Stripe and Square need write access because of invoicing — when a merchant sends an invoice from their accounting platform, Synder has to create the payment in the merchant's Stripe/Square account. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:37-39]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:21:24 -->
+- Data (Aug 3–9, 2026): Reconciliation: ~2/3 of 90 watched sessions read the "Match transactions to your books" overview/FAQ/video and never clicked Run audit. Also: normalization failures on Stripe/Amazon files (unrecognized date formats, missing columns) in ≥4 sessions.; Onboarding failure mode: "Synder couldn't retrieve necessary information to identify the company" at Connect step, 3 of 35 watched sessions.; Errors: zero untriaged issues in both 7d and 14d windows. Caveat: search covers untriaged only — could be a triage artifact.; Volume: 7,803 sessions vs 8,545 prior week = -8.7%.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:21-24]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:5:6 -->
+- Session Summary: Two pieces of work today: the weekly LogRocket friction report (cron, 07:00 UTC) and a live onboarding copy session with Ignat (14:10–15:37 UTC, Telegram topic 7156 "Onboarding"). [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:5-6]
