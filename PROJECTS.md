@@ -14,7 +14,7 @@
 - **Next:** write the corrected full 16 template descriptions in that voice → decide Jira split (one story vs. page-restructure + content-fix as two tickets); draft text ready, ticket NOT created (Jira is read-only for me). Slack summary drafted, not sent.
 
 ### ETC Notifications — bell + side sheet (2026-08-05)
-- **Status:** 🚧 v1 prototype built and published, awaiting Ignat feedback
+- **Status:** ✅ Delivered — presentation build shipped 2026-08-05; open questions closed 2026-08-19 (resolved in-product). No action pending.
 - **Client:** ETC Solutions GmbH — ITCS DatNet, Israel Railways (ARAMIS feed). Audience: **dispatchers**.
 - **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-notifications/ — `projects/etc-notifications/index.html`
 - **Problem (from Ignat's screenshot of production):** notifications rendered as a 14-column table (Text, From, To, Delta, Module, Title, Type, Station, Destination, Platform, Actual platform, Event, Count, Time). 39 of the 63 event-describing cells were `-` (9 optional columns × 7 rows), horizontal scroll required, no read state, no bell.
@@ -29,7 +29,7 @@
   2. **The current panel is anchored to the left edge** (starts right of the icon rail) and covers nearly the whole viewport for 7 items. A 424px right sheet keeps the Events table visible behind it.
   3. **The product is bilingual HEB/ENG** — Events store "Text output HEB" + "Text output ENG", so notification text will be Hebrew for some users. Added `dir="auto"` on the row and detail text; a hard-coded `dir="ltr"` list would mangle RTL. Seeded a Hebrew notification to prove it renders. **Verified RTL resolves correctly in both list and detail.**
   4. The Events entity has its own lifecycle — **Active / Draft / Finished** — which is very likely where the "New / Passed" tab instinct came from. Kept separate on purpose: event lifecycle ≠ notification read state (a notification about a now-Finished event can still be unread).
-- **Open questions for Ignat:** does the system-health class (mapping failure / feed interruption) belong in the dispatcher's bell at all, or a separate ops-monitoring surface? · at 100/day with no expiry, does the All tab need a type/module filter or grouping of repeats? · is any notification actionable (dispatcher must respond) vs read-only? · does the sheet follow the app UI language, or show whichever text (HEB/ENG) the event carries?
+- **~~Open questions~~ CLOSED (2026-08-19):** Ignat confirmed all four were resolved inside the product itself — system-health routing, filtering/grouping at 100/day, actionability, and the HEB/ENG language question. **Do not re-raise these.** The prototype stands as delivered; no further decisions pending from him.
 - **Presentation build (2026-08-05, for Ignat to show the team):**
   - **Cover slide** on load — problem vs proposal side by side, "Open the demo →" to dismiss.
   - **Before / After toggle** in a presenter bar at the bottom. "Before" is the production panel reconstructed from the screenshot: all 14 columns, the 7 real rows in their original order, left-anchored full-bleed, "Last updated 14:41:19 ⟳", pagination with the duplicated "Rows per page" label. It genuinely needs horizontal scrolling (measured scrollWidth 1515 vs clientWidth 1374 at 1440px) — the point demonstrates itself rather than being asserted.
