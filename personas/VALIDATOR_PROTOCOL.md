@@ -104,6 +104,14 @@ before/after, with screenshots. Then:
 - **Complete every form before judging what's missing.** Conditional fields render only once
   their dependencies are satisfied. Two false flow-breaking findings on the Reconciliation
   overlay came from enumerating fields on a half-filled form.
+- **Exercise the commit path, not just the open.** For every control that opens a panel: open it,
+  *pick or toggle something*, then try to reach its Apply — then do it a second time. Recording
+  "it opens" is not coverage. This is the exact gap that made the first regression test miss a
+  real bug (RECON-2): the state map said the date panel opens, nobody picked a date, and picking
+  one closes the panel before Apply is reachable. Every validator downstream was blind to it,
+  because they read the map rather than the page.
+- **Record what you could not reach.** Any control not fully exercised goes in a `not_exercised`
+  list with the reason. An untested control must not look like a tested one that passed.
 
 Save as `statemap.json` in the round directory. Everything downstream reads this, not the DOM.
 

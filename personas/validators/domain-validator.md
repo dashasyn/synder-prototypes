@@ -52,6 +52,13 @@ link — never by relabelling. Say so in `suggested_fix` when it applies.
 A **state map** of the screen's zones, controls and interaction results, plus a URL and
 `vocabulary.md`. Work from the state map; don't assume behaviour it doesn't record.
 
+## When the state map is incomplete
+If your lens needs a behaviour the state map doesn't record — a control whose commit path was
+never exercised, a state nobody reached, anything in its `not_exercised` list — say so in a
+`gaps` array: `"gaps": ["date panel: no option was ever picked, so commit behaviour is unknown"]`.
+Do not quietly reason only from what you were handed, and do not guess. A named gap is a useful
+result; a silent one is how a real bug survives a clean-looking round.
+
 ## Evidence requirement
 Every finding needs `evidence.quote` — the exact text as it appears on screen, copied not
 paraphrased — and `evidence.source`: the `vocabulary.md` line or accounting rule it violates. Your findings are about

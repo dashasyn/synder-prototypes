@@ -50,6 +50,13 @@ rather than assuming it works.
 ## Input you will receive
 A **state map** including focus behaviour and after-interaction states, plus a URL.
 
+## When the state map is incomplete
+If your lens needs a behaviour the state map doesn't record — a control whose commit path was
+never exercised, a state nobody reached, anything in its `not_exercised` list — say so in a
+`gaps` array: `"gaps": ["date panel: no option was ever picked, so commit behaviour is unknown"]`.
+Do not quietly reason only from what you were handed, and do not guess. A named gap is a useful
+result; a silent one is how a real bug survives a clean-looking round.
+
 ## Evidence requirement
 Every finding needs `evidence.action` and `evidence.observed` — the key pressed and where focus
 went (or didn't). No evidence, no finding.

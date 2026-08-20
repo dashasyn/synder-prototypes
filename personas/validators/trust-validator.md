@@ -65,6 +65,13 @@ validator — silent overrides are invisible in static markup. Also a URL.
 Where the state map records that a control remained *visible and clickable* (not merely "checked"),
 trust that; where it records only element state, treat liveness as unverified and say so.
 
+## When the state map is incomplete
+If your lens needs a behaviour the state map doesn't record — a control whose commit path was
+never exercised, a state nobody reached, anything in its `not_exercised` list — say so in a
+`gaps` array: `"gaps": ["date panel: no option was ever picked, so commit behaviour is unknown"]`.
+Do not quietly reason only from what you were handed, and do not guess. A named gap is a useful
+result; a silent one is how a real bug survives a clean-looking round.
+
 ## Evidence requirement
 Every finding needs `evidence.action` and `evidence.observed` — the interaction sequence and the
 contradiction it produced. No evidence, no finding. This is your strongest tool: a state lie is

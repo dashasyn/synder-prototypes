@@ -135,7 +135,7 @@ function verify(argv) {
     }
 
     const extraKeys = Object.keys(payload).filter(
-      k => !['validator', 'round', 'target', 'checked', 'findings'].includes(k)
+      k => !['validator', 'round', 'target', 'checked', 'findings', 'gaps', 'reference_gaps'].includes(k)
     );
     if (extraKeys.length) {
       problems.push(`SCHEMA DRIFT · ${label}: unexpected top-level key(s) ${extraKeys.join(', ')} (flat contract only — no per_prototype wrappers)`);
@@ -177,6 +177,9 @@ function verify(argv) {
       }
     });
 
+    if (Array.isArray(payload.gaps) && payload.gaps.length) {
+      payload.gaps.forEach(g => console.log(`  note · ${label} reported a state-map gap: ${g}`));
+    }
     summary.push({
       label,
       status: 'ok',

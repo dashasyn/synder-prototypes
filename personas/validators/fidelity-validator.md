@@ -44,6 +44,13 @@ A **state map** of the prototype, a URL, and a reference (Figma screenshots, `re
 Jira, or a described existing screen). If no reference exists, do not run — return an empty payload
 with `reference_gaps: ["no reference supplied"]`.
 
+## When the state map is incomplete
+If your lens needs a behaviour the state map doesn't record — a control whose commit path was
+never exercised, a state nobody reached, anything in its `not_exercised` list — say so in a
+`gaps` array: `"gaps": ["date panel: no option was ever picked, so commit behaviour is unknown"]`.
+Do not quietly reason only from what you were handed, and do not guess. A named gap is a useful
+result; a silent one is how a real bug survives a clean-looking round.
+
 ## Evidence requirement
 Every finding needs `evidence.quote` — the exact text as it appears on screen, copied not
 paraphrased — and `evidence.source`: the reference frame or acceptance-criteria line. Your findings are about
