@@ -57,25 +57,20 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   ok('chip collapses at 3 values', chip === 'Platform: Stripe + 2 more', chip);
   ok('rows still reflect all three', await rows('sheetbtnTable') === 21, await rows('sheetbtnTable'));
 
-  console.log('\n— V7 status now lives in the sheet (reworked 2026-08-20) —');
-  ok('no segments row', await p.locator('#sheetbtnSegments').count() === 0);
+  console.log('\n— V7 segments —');
+  ok('segments visible above the table',
+     await p.locator('#sheetbtnSegments .status-segment').first().isVisible());
+  const segBox = await p.locator('#sheetbtnSegments').boundingBox();
   const chipBox = await p.locator('#sheetbtnChips').boundingBox();
-  const tblBox  = await p.locator('#sheetbtnTable').boundingBox();
-  ok('chips bar sits directly above the table', chipBox.y < tblBox.y, JSON.stringify({chipBox, tblBox}));
-  await p.click('#sheetbtnFiltersBtn');
-  await p.waitForTimeout(400);
-  ok('status field visible in the sheet',
-     await p.locator('#sheetbtnContent [data-field-key="status"]').isVisible());
-  await p.click('#sheetbtnContent [data-field-key="status"] [data-field-trigger]');
-  ok('status panel visible with checkboxes',
-     await p.locator('#sheetbtnContent [data-field-key="status"] [data-check-value="Failed"]').isVisible());
-  await p.click('#sheetbtnContent [data-field-key="status"] label:has([data-check-value="Failed"])');
-  ok('status panel STILL visible after a toggle',
-     await p.locator('#sheetbtnContent [data-field-key="status"] [data-field-panel]').isVisible());
-  await p.click('#sheetbtnApplyBtn');
-  await p.waitForTimeout(400);
-  ok('status now produces a chip',
-     await p.locator('#sheetbtnChips [data-drop="status"]').isVisible());
+  const tblBox  = await p.locator('#sheetbtnCount').boundingBox();
+  ok('chips bar sits above the segments', chipBox.y < segBox.y, JSON.stringify({chipBox, segBox}));
+  ok('segments sit directly above the table toolbar', segBox.y < tblBox.y);
+  await p.click('#sheetbtnSegments [data-segment="attention"]');
+  await p.waitForTimeout(250);
+  ok('segment commits on click without an Apply',
+     await p.locator('#sheetbtnSegments [data-segment="attention"]').evaluate(e => e.classList.contains('active')));
+  ok('segment produced no status chip',
+     await p.locator('#sheetbtnChips [data-drop="status"]').count() === 0);
   await p.screenshot({ path: '/tmp/v7-chip.png', clip: { x: 0, y: 330, width: 1440, height: 400 } });
 
   console.log('\n— Regression across the other variants —');

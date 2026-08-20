@@ -232,28 +232,58 @@ d.querySelector('#quickFilterBar [data-quick-reset]').click();
 eq('Reset → all rows', rows('quickTable'), TOTAL);
 ok('presets cleared by Reset', !presets().some(p => p.classList.contains('active')));
 
-console.log('\n— V6 Recommended (panel-scoped Apply) —');
+console.log('\n— V6 Recommended (reworked 2026-08-20) —');
 const segs = () => Array.from(d.querySelectorAll('#recSegments .status-segment'));
 const segCount = i => parseInt(segs()[i].querySelector('.seg-count').textContent, 10);
 const panelApply = key => field('recFilterBar', key).querySelector('[data-panel-apply]');
+const recBar = () => Array.from(d.querySelectorAll('#recFilterBar [data-field-key]'))
+    .map(e => e.getAttribute('data-field-key'));
+const recChipText = key => field('recFilterBar', key).querySelector('.chip-label-text').textContent.trim();
+
 eq('five segments', segs().length, 5);
-eq('baseline is last 90 days',
-    d.querySelector('#recFilterBar .baseline-chip .field-trigger-text').textContent, 'Last 90 days');
-ok('baseline is labelled as the default', !!d.querySelector('#recFilterBar .baseline-chip .baseline-note'));
+ok('no baseline chip — date is an ordinary filter chip',
+    !d.querySelector('#recFilterBar .baseline-chip') && !!field('recFilterBar', 'date'));
+ok('date chip has no "(default)" note', !d.querySelector('#recFilterBar .baseline-note'));
+eq('date still starts at the real default',
+    /Last 90 days/.test(recChipText('date')), true);
+ok('no count line', !d.getElementById('recCount'));
+ok('no "Showing N of" sentence',
+    !/Showing\s*\d+\s*of/.test(d.querySelector('#variant-rec .mock-page').textContent));
+eq('bar carries date + status from load', recBar().join(','), 'date,status');
+eq('status filter offers all 8 statuses',
+    field('recFilterBar', 'status').querySelectorAll('[data-check-value]').length, 8);
 eq('90-day default shows every row', rows('recTable'), oracle({ date: '90d' }));
-eq('count line does not claim a filter is applied',
-    /no filters applied/.test(d.getElementById('recCount').textContent), true);
 eq('Attention segment count matches the oracle', segCount(1), oracle({ date: '90d', status: ATTENTION }));
+
+// segment -> chip, one value
 segs()[1].click();
 eq('segment commits in one click', rows('recTable'), oracle({ date: '90d', status: ATTENTION }));
 ok('segment marked active', segs()[1].classList.contains('active'));
-// deep-link still narrows the segment
+ok('the status chip followed the segment',
+    /Status: 4 selected/.test(recChipText('status')), recChipText('status'));
+
+// chip -> segment, still one value. One trigger click, then toggle inside the
+// open panel — re-clicking the trigger would CLOSE it and discard the edits.
+trigger('recFilterBar', 'status').click();
+['Failed', 'Rollback failed', 'Synced with warnings'].forEach(v => {
+    const cb = panel('recFilterBar', 'status').querySelector('[data-check-value="' + v + '"]');
+    cb.checked = false;
+    cb.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+});
+panelApply('status').click();
+eq('narrowing in the chip commits', rows('recTable'), oracle({ date: '90d', status: ['Rule failed'] }));
+ok('containing segment drops to partial, not active',
+    segs()[1].classList.contains('partial') && !segs()[1].classList.contains('active'));
+
+// deep-link sets the same value and is labelled, not duplicated
 d.getElementById('recDeepLinkBtn').click();
 eq('deep-link filters to the granular status', rows('recTable'), oracle({ date: '90d', status: ['Rule failed'] }));
-ok('containing segment shows partial, not active',
-    segs()[1].classList.contains('partial') && !segs()[1].classList.contains('active'));
-d.querySelector('#recFilterBar [data-remove-deeplink]').click();
-eq('removing the deep-link chip clears status', rows('recTable'), oracle({ date: '90d' }));
+ok('containing segment shows partial', segs()[1].classList.contains('partial'));
+ok('"From dashboard" is a tag, not a second chip',
+    !!d.querySelector('#recFilterBar [data-deeplink-tag]') && !d.querySelector('#recFilterBar .deeplink-chip'));
+segs()[0].click();
+eq('clicking All clears status', rows('recTable'), oracle({ date: '90d' }));
+ok('and drops the tag', !d.querySelector('#recFilterBar [data-deeplink-tag]'));
 
 // every filter panel carries its own Apply
 d.querySelector('#recFilterBar [data-rec-add]').click();
@@ -261,10 +291,9 @@ d.querySelector('#recFilterBar [data-rec-add-key="platform"]').click();
 ok('added chip exists', !!field('recFilterBar', 'platform'));
 trigger('recFilterBar', 'platform').click();
 ok('platform panel has its own Apply', !!panelApply('platform'));
-ok('baseline date panel has its own Apply too', (() => {
-    trigger('recFilterBar', 'date').click();
-    return !!panelApply('date');
-})());
+trigger('recFilterBar', 'date').click();
+ok('date panel has its own Apply too', !!panelApply('date'));
+trigger('recFilterBar', 'date').click();
 
 // selecting inside a panel does NOT touch the table until its Apply
 trigger('recFilterBar', 'platform').click();
@@ -284,17 +313,23 @@ ok('discarded edit is gone when the panel reopens',
     !panel('recFilterBar', 'platform').querySelector('[data-check-value="Shopify"]').checked);
 trigger('recFilterBar', 'platform').click();
 
-// the date baseline goes through the same panel Apply
+// A single-select pick STAGES and keeps its panel open. Before 2026-08-20 the
+// pick closed the panel, which fired the discard handler and threw the value
+// away — Date, Amount and Customer could not be changed at all.
 trigger('recFilterBar', 'date').click();
 panel('recFilterBar', 'date').querySelector('[data-pick-value="7d"]').click();
 eq('date pick is staged, not applied', rows('recTable'), oracle({ date: '90d', platform: ['Stripe'] }));
-trigger('recFilterBar', 'date').click();
-trigger('recFilterBar', 'date').click();
-panel('recFilterBar', 'date').querySelector('[data-pick-value="7d"]').click();
+ok('the panel is STILL OPEN after the pick',
+    panel('recFilterBar', 'date').classList.contains('active'));
+ok('the trigger already shows the staged value',
+    /Last 7 days/.test(recChipText('date')), recChipText('date'));
 panelApply('date').click();
 eq('date Apply commits', rows('recTable'), oracle({ date: '7d', platform: ['Stripe'] }));
-ok('baseline chip switches to a changed state',
-    d.querySelector('#recFilterBar .baseline-chip').classList.contains('changed'));
+
+// A chip x has no bar-level Apply to defer to, so it must commit.
+field('recFilterBar', 'platform').querySelector('[data-remove-field]').click();
+ok('platform chip left the bar', recBar().indexOf('platform') === -1, recBar().join(','));
+eq('and the list stopped filtering by it', rows('recTable'), oracle({ date: '7d' }));
 
 console.log('\n— V7 Button + Side sheet —');
 const sbBadge = () => d.getElementById('sheetbtnBadge');
@@ -304,35 +339,27 @@ eq('starts unfiltered', rows('sheetbtnTable'), TOTAL);
 ok('chips bar hidden when nothing applied', !d.getElementById('sheetbtnChips').classList.contains('show'));
 ok('badge hidden when nothing applied', !sbBadge().classList.contains('show'));
 ok('sheet closed initially', !sbOpen());
-// Reworked 2026-08-20: the sheet owns EVERY filter, status included, and the
-// segment row is gone. One control per dimension is preserved by there being
-// only one status control on the page, not by splitting it out.
-ok('no segments row in variant 7', !d.getElementById('sheetbtnSegments'));
-ok('no "Showing N of M" count line', !d.getElementById('sheetbtnCount'));
-ok('no count sentence rendered anywhere in the mock page',
-    !/Showing\s*\d+\s*of/.test(d.querySelector('#variant-sheetbtn .mock-page').textContent));
+// Status lives in the segmented control, not the sheet.
+const SEG = {
+    all: [],
+    attention: ['Failed', 'Rule failed', 'Rollback failed', 'Synced with warnings'],
+    ready: ['Ready to sync', 'Pending'],
+    synced: ['Synced'],
+    skipped: ['Skipped']
+};
+const sbSeg      = key => d.querySelector('#sheetbtnSegments [data-segment="' + key + '"]');
+const sbSegCount = key => parseInt(sbSeg(key).querySelector('.seg-count').textContent, 10);
+eq('segments rendered', d.querySelectorAll('#sheetbtnSegments .status-segment').length, 5);
+ok('All is the active segment on load', sbSeg('all').classList.contains('active'));
+ok('unfiltered segment counts match the oracle',
+    Object.keys(SEG).every(k => sbSegCount(k) === oracle({ status: SEG[k] })),
+    Object.keys(SEG).map(k => k + ':' + sbSegCount(k)).join(' '));
 
 d.getElementById('sheetbtnFiltersBtn').click();
 ok('Filters button opens the sheet', sbOpen());
-eq('sheet holds every filter', d.querySelectorAll('#sheetbtnContent [data-field-key]').length, FILTER_KEYS.length);
-ok('status IS a field in the sheet now', !!field('sheetbtnContent', 'status'));
-eq('status offers all 8 statuses',
-    field('sheetbtnContent', 'status').querySelectorAll('[data-check-value]').length, 8);
-
-// Single-select panels are radio rows so every panel reads as the same control.
-['date', 'amount', 'customer'].forEach(k => {
-    ok(k + ' panel uses radio rows',
-        field('sheetbtnContent', k).querySelectorAll('.dropdown-radio-item input[type="radio"]').length > 0);
-    ok(k + ' panel has no bare checkmark rows',
-        field('sheetbtnContent', k).querySelectorAll('.dropdown-item').length === 0);
-});
-['status', 'platform', 'type'].forEach(k => {
-    ok(k + ' panel still uses checkboxes',
-        field('sheetbtnContent', k).querySelectorAll('.dropdown-checkbox-item input[type="checkbox"]').length > 0);
-});
-ok('exactly one date radio is checked',
-    field('sheetbtnContent', 'date').querySelectorAll('.dropdown-radio-item input:checked').length === 1);
-
+eq('status is NOT a field in the sheet — one source of truth',
+    d.querySelectorAll('#sheetbtnContent [data-field-key]').length, FILTER_KEYS.length - 1);
+ok('specifically, no status field in the sheet', !field('sheetbtnContent', 'status'));
 check('sheetbtnContent', 'platform', 'Stripe');
 check('sheetbtnContent', 'platform', 'Shopify');
 check('sheetbtnContent', 'type', 'Sale');
@@ -352,7 +379,11 @@ ok('chips are display-only — no dropdown inside',
 ok('chip has exactly one control, the remove button',
     sbChips()[0].querySelectorAll('button').length === 1 && !!sbChips()[0].querySelector('[data-drop]'));
 
-// 3+ values collapse to "First + N more"
+ok('segment counts narrow with the applied filters',
+    Object.keys(SEG).every(k =>
+        sbSegCount(k) === oracle({ status: SEG[k], platform: ['Stripe', 'Shopify'], type: ['Sale'] })),
+    Object.keys(SEG).map(k => k + ':' + sbSegCount(k)).join(' '));
+
 d.getElementById('sheetbtnFiltersBtn').click();
 check('sheetbtnContent', 'platform', 'PayPal');
 d.getElementById('sheetbtnApplyBtn').click();
@@ -372,40 +403,37 @@ d.getElementById('sheetbtnApplyBtn').click();
 eq('back to 2 values, spelled out again',
     sbChips()[0].textContent.replace('close', '').trim(), 'Platform: Stripe, Shopify');
 
-// Status behaves like any other dimension now: it stages, commits on Apply,
-// gets a chip, and the badge counts it.
-d.getElementById('sheetbtnFiltersBtn').click();
-check('sheetbtnContent', 'status', 'Failed');
-check('sheetbtnContent', 'status', 'Rule failed');
-eq('status stages only', rows('sheetbtnTable'), oracle({ platform: ['Stripe', 'Shopify'], type: ['Sale'] }));
-d.getElementById('sheetbtnApplyBtn').click();
-eq('status commits with the rest', rows('sheetbtnTable'),
-    oracle({ status: ['Failed', 'Rule failed'], platform: ['Stripe', 'Shopify'], type: ['Sale'] }));
-ok('status now HAS a chip', !!d.querySelector('#sheetbtnChips [data-drop="status"]'));
-eq('badge counts status values too', sbBadge().textContent, '5');
+const chipsBefore = sbChips().length;
+sbSeg('attention').click();
+eq('segment click commits at once',
+    rows('sheetbtnTable'), oracle({ status: SEG.attention, platform: ['Stripe', 'Shopify'], type: ['Sale'] }));
+ok('segment becomes active', sbSeg('attention').classList.contains('active'));
+eq('segment adds no chip', sbChips().length, chipsBefore);
+ok('no status chip anywhere', !d.querySelector('#sheetbtnChips [data-drop="status"]'));
+eq('badge ignores status — it counts what is behind the button', sbBadge().textContent, '3');
 
-// Reset clears the whole sheet, status included — nothing lives outside it.
 d.getElementById('sheetbtnFiltersBtn').click();
 d.getElementById('sheetbtnResetBtn').click();
-eq('Reset clears the status draft',
-    field('sheetbtnContent', 'status').querySelectorAll('[data-check-value]:checked').length, 0);
 d.getElementById('sheetbtnApplyBtn').click();
-eq('Reset + Apply clears everything', rows('sheetbtnTable'), TOTAL);
-eq('no chips left', sbChips().length, 0);
+ok('sheet Reset leaves the segment alone', sbSeg('attention').classList.contains('active'));
+eq('sheet Reset clears only the sheet filters',
+    rows('sheetbtnTable'), oracle({ status: SEG.attention }));
 
-// removing a chip commits immediately — there is no Apply outside the sheet
 d.getElementById('sheetbtnFiltersBtn').click();
-check('sheetbtnContent', 'status', 'Synced');
 check('sheetbtnContent', 'platform', 'Stripe');
 d.getElementById('sheetbtnApplyBtn').click();
 d.querySelector('#sheetbtnChips [data-drop="platform"]').click();
-eq('chip x applies at once', rows('sheetbtnTable'), oracle({ status: ['Synced'] }));
+eq('chip x applies at once', rows('sheetbtnTable'), oracle({ status: SEG.attention }));
 d.getElementById('sheetbtnFiltersBtn').click();
 d.getElementById('sheetbtnCloseBtn').click();
-eq('closing without Apply changes nothing', rows('sheetbtnTable'), oracle({ status: ['Synced'] }));
+eq('closing without Apply changes nothing', rows('sheetbtnTable'), oracle({ status: SEG.attention }));
 
+d.getElementById('sheetbtnFiltersBtn').click();
+check('sheetbtnContent', 'platform', 'Stripe');
+d.getElementById('sheetbtnApplyBtn').click();
 d.querySelector('#sheetbtnChips [data-clear]').click();
 eq('Clear all commits', rows('sheetbtnTable'), TOTAL);
+ok('Clear all resets the segment to All', sbSeg('all').classList.contains('active'));
 ok('chips bar hides again', !d.getElementById('sheetbtnChips').classList.contains('show'));
 
 // search commits on Enter and combines with filters
@@ -415,12 +443,12 @@ sbSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'a', bubbl
 eq('typing alone does not search', rows('sheetbtnTable'), TOTAL);
 sbSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 eq('Enter commits the search', rows('sheetbtnTable'), DATA.filter(t => /acme/i.test(t.customer)).length);
-d.getElementById('sheetbtnFiltersBtn').click();
-check('sheetbtnContent', 'status', 'Synced');
-d.getElementById('sheetbtnApplyBtn').click();
-eq('search ANDs with the sheet status',
+eq('segment counts follow the search too', sbSegCount('all'),
+    DATA.filter(t => /acme/i.test(t.customer)).length);
+sbSeg('synced').click();
+eq('search ANDs with the segment',
     rows('sheetbtnTable'), DATA.filter(t => /acme/i.test(t.customer) && t.status === 'Synced').length);
-d.querySelector('#sheetbtnChips [data-clear]').click();
+sbSeg('all').click();
 sbSearch.value = '';
 sbSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 eq('cleared search restores everything', rows('sheetbtnTable'), TOTAL);
@@ -443,8 +471,8 @@ console.log('\n— V6 layout order —');
     const iBar = order.indexOf('recFilterBar');
     const iSeg = order.indexOf('recSegments');
     ok('filter bar precedes segments', iBar !== -1 && iSeg !== -1 && iBar < iSeg, order.join(' → '));
-    ok('segments sit directly above the table toolbar',
-        order[iSeg + 1] === 'recCount', order.join(' → '));
+    ok('segments sit directly above the table',
+        order[iSeg + 1] === 'recTable', order.join(' → '));
 }
 
 console.log('\n— No JS errors, mirror in sync —');

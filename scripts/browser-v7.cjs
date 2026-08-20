@@ -25,15 +25,11 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   ok('sheet is anchored to the right edge', Math.abs((box.x + box.width) - 1440) < 2, JSON.stringify(box));
   ok('Apply + Reset both visible in footer',
      (await p.locator('#sheetbtnApplyBtn').isVisible()) && (await p.locator('#sheetbtnResetBtn').isVisible()));
-  // Reworked 2026-08-20: the sheet owns every filter, status included.
-  ok('all 6 filters in the sheet',
-     await p.locator('#sheetbtnContent [data-field-key]').count() === 6,
+  ok('5 filters in the sheet — status lives in the segmented control',
+     await p.locator('#sheetbtnContent [data-field-key]').count() === 5,
      await p.locator('#sheetbtnContent [data-field-key]').count());
-  ok('status IS a field in the sheet, with all 8 statuses',
-     await p.locator('#sheetbtnContent [data-field-key="status"] [data-check-value]').count() === 8);
-  ok('no segments row anywhere in variant 7',
-     await p.locator('#sheetbtnSegments').count() === 0);
-  ok('no count line in variant 7', await p.locator('#sheetbtnCount').count() === 0);
+  ok('no status field in the sheet',
+     await p.locator('#sheetbtnContent [data-field-key="status"]').count() === 0);
 
   // nested dropdown inside the sheet must not close the sheet
   await p.click('#sheetbtnContent [data-field-key="platform"] [data-field-trigger]');
