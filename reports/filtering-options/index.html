@@ -781,6 +781,10 @@
             flex-shrink: 0;
         }
 
+        /* A commit control must not scroll out of its own panel. The panel is
+           the scroll container (max-height + overflow-y), so with 8 options the
+           Apply rode the list out of view. Sticking it to the scrollport's
+           bottom edge keeps it reachable without scrolling. */
         .dropdown-panel-footer {
             padding: 6px 16px 8px;
             border-top: 1px solid var(--border-color);
@@ -789,6 +793,9 @@
             align-items: center;
             justify-content: space-between;
             gap: 8px;
+            position: sticky;
+            bottom: -4px;
+            background: var(--white);
         }
 
         .btn-panel-apply {
@@ -1185,6 +1192,115 @@
             margin-right: 6px;
         }
 
+        /* ========== VARIANT 8: GROUP TABS + SCOPED STATUSES ========== */
+        /* The second level. It lives BELOW the tab row because it narrows
+           within the active tab — it is the only filter on the page that the
+           tab row scopes, which is exactly why every other filter stays
+           above. */
+        .substatus-row {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 24px;
+            background: #FAFBFC;
+            border-bottom: 1px solid var(--border-color);
+            flex-wrap: wrap;
+        }
+
+        .substatus-row.show { display: flex; }
+
+        .substatus-label {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .sub-pills {
+            display: inline-flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .sub-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 28px;
+            padding: 0 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            background: var(--white);
+            font-family: inherit;
+            font-size: 13px;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s, color 0.15s;
+        }
+
+        .sub-pill:hover { border-color: #A8C4EC; }
+
+        .sub-pill .sub-count {
+            font-size: 11px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-secondary);
+        }
+
+        .sub-pill.active {
+            background: var(--primary-blue);
+            border-color: var(--primary-blue);
+            color: var(--white);
+        }
+
+        .sub-pill.active .sub-count { color: rgba(255, 255, 255, 0.8); }
+
+        .dropdown-checkbox-item .sub-count {
+            margin-left: auto;
+            font-size: 11px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
+            color: var(--text-secondary);
+        }
+
+        /* Says out loud how the two levels relate, so "Rule failed" is never
+           read as a filter standing on its own. */
+        .breadcrumb-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            height: 28px;
+            padding: 0 4px 0 10px;
+            border: 1px solid #A8C4EC;
+            border-radius: 14px;
+            background: #E8F0FE;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--primary-blue);
+        }
+
+        .breadcrumb-chip .source {
+            font-weight: 400;
+            color: var(--text-secondary);
+        }
+
+        .breadcrumb-chip .crumb-sep {
+            color: #8AA9D6;
+            font-weight: 400;
+        }
+
+        .breadcrumb-chip .remove {
+            display: inline-flex;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            padding: 3px;
+            color: var(--primary-blue);
+        }
+
+        .breadcrumb-chip .remove .material-icons { font-size: 14px; }
+
         /* ========== VARIANT 7: BUTTON + SIDE SHEET ========== */
         .sheetbtn-header {
             align-items: flex-start;
@@ -1315,7 +1431,7 @@
 <body>
     <div class="page-header">
         <h1>Filtering Options</h1>
-        <p>Exploring different filter UI patterns to reduce vertical space while maintaining usability. All seven variants filter the same 26-row dataset, using Synder's real 8 statuses. Every variant is Apply-gated — the list is only re-queried when you commit, never on each selection. Variant 6 is a recommendation rather than another layout option.</p>
+        <p>Exploring different filter UI patterns to reduce vertical space while maintaining usability. All eight variants filter the same 26-row dataset, using Synder's real 8 statuses. Every variant is Apply-gated — the list is only re-queried when you commit, never on each selection. Variant 6 is a recommendation rather than another layout option, and variant 8 is the one that combines quick group filters with precise per-status filtering.</p>
 
         <div class="nav-tabs">
             <button class="nav-tab active" data-variant="current">1. Current</button>
@@ -1325,6 +1441,7 @@
             <button class="nav-tab" data-variant="quick">5. Quick filters</button>
             <button class="nav-tab" data-variant="rec">6. Recommended</button>
             <button class="nav-tab" data-variant="sheetbtn">7. Button + Side sheet</button>
+            <button class="nav-tab" data-variant="groups">8. Groups + scoped statuses</button>
         </div>
     </div>
 
@@ -1617,6 +1734,89 @@
                     <button class="btn btn-primary" id="sheetbtnApplyBtn">Apply filters</button>
                     <button class="btn btn-secondary" id="sheetbtnResetBtn">Reset filters</button>
                 </div>
+            </div>
+        </div>
+
+        <!-- VARIANT 8: GROUP TABS + SCOPED STATUSES -->
+        <div id="variant-groups" class="variant-section">
+            <div class="variant-header">
+                <h2>Group Tabs + Scoped Statuses</h2>
+                <p>The answer to the question the other variants left open: how to have <strong>both</strong> one-click group filters (<em>Attention required</em>) and precise per-status filtering (<em>Rule failed</em>) without the two ever contradicting each other.</p>
+                <ol class="rec-summary">
+                    <li><strong>The split is by scope, not by control type.</strong> Date, Platform, Type, Amount and Customer set the universe and sit <em>above</em> the tabs. The tabs slice that universe and carry its counts. Status narrows <em>within</em> the active tab only, so it sits below.</li>
+                    <li><strong>Switching tabs keeps every filter the user invested effort in.</strong> Only the status sub-selection resets — and that one couldn't have carried over anyway, since <em>Rule failed</em> doesn't exist inside <em>Synced</em>. Even that comes back: each tab remembers its own status selection.</li>
+                    <li><strong>A contradictory combination cannot be built.</strong> The status control offers nothing outside the active group, so <em>Attention required + Synced</em> — a query that provably returns zero rows — isn't reachable.</li>
+                </ol>
+            </div>
+
+            <div class="mock-page">
+                <div class="mock-header">
+                    <h2 class="mock-title">Summaries</h2>
+                    <div class="mock-actions">
+                        <span class="chip-wrap" data-layer id="groupsDeepLinkWrap">
+                            <button class="btn btn-secondary" id="groupsDeepLinkBtn" type="button">
+                                <span class="material-icons">open_in_new</span>
+                                Simulate dashboard click
+                                <span class="material-icons">arrow_drop_down</span>
+                            </button>
+                            <div class="dropdown-menu" id="groupsDeepLinkMenu">
+                                <div class="dropdown-item" data-deeplink="Rule failed">Rule failed</div>
+                                <div class="dropdown-item" data-deeplink="Rollback failed">Rollback failed</div>
+                                <div class="dropdown-item" data-deeplink="Pending">Pending</div>
+                                <div class="dropdown-item" data-deeplink="Skipped">Skipped</div>
+                            </div>
+                        </span>
+                        <button class="btn btn-primary">
+                            <span class="material-icons">download</span>
+                            Download report
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LEVEL 1 — scope. Sets the universe the tab counts are
+                     computed over, which is why it has to sit above them. -->
+                <div class="rec-filter-bar" id="groupsFilterBar"></div>
+
+                <!-- LEVEL 2 — groups. Slices the scope, commits on click. -->
+                <div class="status-segments" id="groupsTabs"></div>
+
+                <!-- LEVEL 3 — status within the active group. The only control
+                     the tab row scopes, hence the only one below it. -->
+                <div class="substatus-row" id="groupsSub"></div>
+
+                <div class="table-toolbar" id="groupsCount"></div>
+                <div class="table-container" id="groupsTable"></div>
+            </div>
+
+            <div class="variant-header rec-notes">
+                <h3>Where this came from</h3>
+                <p><span class="evidence">Shopify Orders</span>The leading selector owns one dimension, and that dimension is then <strong>removed</strong> from "Add filter" — pick <em>Unfulfilled</em> and Fulfillment status disappears from the list. One source of truth by removal, no syncing required. It works because every leading value is a <strong>leaf</strong>: <em>Unfulfilled</em> <em>is</em> a fulfillment status.</p>
+                <p>Synder's quick filters aren't leaves. <em>Attention required</em> is four statuses. Copy the removal rule and picking it destroys the ability to see only <em>Rule failed</em> — the thing users do most. So this variant <strong>scopes instead of removing</strong>: the status control stays, but only offers what the active group contains.</p>
+
+                <h3>Why the two levels can't disagree</h3>
+                <p><span class="evidence">FLT-2 · Critical</span>The Summaries bug: pick "Failed" in the dropdown, click the "Ready to sync" tab, get Ready-to-sync rows while the dropdown still says Failed. Two controls, one dimension, no relationship.</p>
+                <p>Here the second level is a <strong>subset of the first by construction</strong>. A subset can narrow its parent but never contradict it, so the disagreement has nowhere to live. That's also the argument against the obvious alternative — leaving the tab row and a full status dropdown independent. That version lets the user build <em>Attention required + Synced</em>, where the tab says 8 and the list says none: FLT-2 in a new coat.</p>
+
+                <h3>Why tab switching isn't destructive</h3>
+                <p>Because only <strong>one</strong> filter is tab-scoped. Platform, Date, Type, Amount and Customer live above the tab row and are untouched by switching — those are the ones that cost effort to set. The status sub-selection is a single click, and it's dropped because it <em>can't</em> survive: there is no <em>Rule failed</em> inside <em>Synced</em>.</p>
+                <p>Even so, nothing is actually lost. Each tab <strong>remembers its own status selection</strong>. Narrow <em>Attention required</em> to <em>Rule failed</em>, go look at <em>Synced</em>, come back — <em>Rule failed</em> is still there. A remembered selection can't read as a mystery filter because the level it belongs to is on screen: the row is labelled <em>Status in Attention required</em>, the pill is lit, and the tab above it goes dashed to say the selection is narrower than the group.</p>
+
+                <h3>Why the tab count doesn't shrink when you narrow</h3>
+                <p>A tab count answers "how many are in here", not "how many am I looking at". If narrowing to <em>Rule failed</em> also rewrote the <em>Attention required</em> count to 1, the tab would stop being a place you can navigate to and the second level would have nothing to be a fraction of. The list header carries the fraction instead — <em>"Showing 1 of 8 in Attention required"</em>.</p>
+
+                <h3>Pills or a dropdown — and why both are here</h3>
+                <p>Groups with a handful of statuses render as a <strong>second row of pills with counts</strong>: contradiction is structurally impossible, counts appear at both levels, and one click is one query — the same cost a status tab has today. The <em>All</em> tab holds all eight statuses, which is too many for a row, so it renders as a <strong>scoped multiselect dropdown</strong> with an Apply inside its own panel.</p>
+                <p>Both are on screen deliberately, because this is the one thing that depends on the open taxonomy question: production has ~18 statuses, not 8. Groups that stay small keep the pills; a group that ends up with eight members has to become the dropdown. The threshold is the only thing that changes.</p>
+
+                <h3>Dashboard deep-links</h3>
+                <p>A status clicked on the dashboard lands here and <strong>selects its own parent group</strong>, then narrows to itself. There is still exactly one status value on the page, so the arriving status and the tab row cannot disagree — the deep-link picks the tab rather than fighting it. A single-status group (<em>Skipped</em>) needs no second level, and doesn't render one.</p>
+                <p>This is the one case that gets a <strong>breadcrumb chip</strong>: <em>From dashboard: Attention required › Rule failed</em>. The user didn't set this filter, so it needs attributing and it needs one obvious way off. Where the user picked a pill themselves, the chip would just repeat the lit pill next to it — that was variant 3's duplicate-chips mistake, so it isn't rendered. The <em>All</em> pill is the way back up. The scoped dropdown on the <em>All</em> tab gets a chip too, since a trigger reading "2 selected" doesn't say which two.</p>
+
+                <h3>What stages and what commits</h3>
+                <p>Tabs and status pills <strong>commit on click</strong> — one click, one query. The scope filters above stage <strong>inside their own dropdowns</strong>: opening a panel snapshots what's applied, its Apply commits, closing without Apply discards. Staged state can never outlive an open panel, so there's no bar-level Apply and no unapplied-changes warning.</p>
+
+                <h3>Still open</h3>
+                <p>Pills are <strong>single-select</strong>, so "two of the four attention statuses" is only reachable through the <em>All</em> tab's dropdown. Making the pills multi-select would cost an Apply and the one-click speed that is the entire point — worth deciding rather than assuming. Also unresolved: the <strong>Is / Is not</strong> operator from Shopify (<em>"Status is not Synced"</em> currently costs seven checkbox clicks) is not built here, and the group counts still need a status-count aggregate on the list endpoint.</p>
             </div>
         </div>
     </div>
@@ -3159,6 +3359,470 @@
         });
 
         // ---------------------------------------------------------------
+        // VARIANT 8 — Group tabs + scoped statuses
+        // ---------------------------------------------------------------
+        // Answers what variants 5-7 left open: how to have BOTH one-click group
+        // filters ("Attention required") and precise per-status filtering
+        // ("Rule failed") without the two contradicting each other.
+        //
+        // The split is by SCOPE, not by control type:
+        //   level 1  Date / Platform / Type / Amount / Customer   above the tabs
+        //            -- they set the universe the tab counts are computed over
+        //   level 2  group tabs, with counts                      the tab row
+        //            -- they slice that universe
+        //   level 3  status within the active group               below the tabs
+        //            -- the ONLY control the tab row scopes, hence the only one
+        //               that belongs underneath it
+        //
+        // Shopify gets one-source-of-truth by REMOVING a dimension from "Add
+        // filter" once the leading selector owns it, which works because its
+        // leading values are single statuses. Ours are groups, so we SCOPE
+        // instead of removing: the status control stays but only offers what
+        // the active group contains. A subset can narrow its parent and never
+        // contradict it, so "Attention required + Synced" -- a query that
+        // provably returns nothing -- is unreachable rather than merely
+        // discouraged.
+        //
+        // Switching tabs therefore drops only the status sub-selection, which
+        // could not have survived anyway (there is no "Rule failed" inside
+        // "Synced"). Everything that cost the user effort lives above the tabs.
+        // And the sub-selection is remembered per group, so even that returns.
+        var GROUPS = SEGMENTS;   // the same agreed grouping variants 6 and 7 use
+        var V8_SCOPE_KEYS = FILTER_KEYS.filter(function (k) { return k !== 'status'; });
+        var V8_SECONDARY = ['platform', 'type', 'amount', 'customer'];
+        var V8_PILL_MAX = 4;     // more members than this and the row becomes a dropdown
+
+        function groupByKey(key) {
+            return GROUPS.filter(function (g) { return g.key === key; })[0];
+        }
+
+        // Every status the group contains. "All" contains the whole taxonomy.
+        function groupMembers(g) {
+            return g.status.length ? g.status.slice() : STATUS_LIST.slice();
+        }
+
+        var v8 = {
+            group: 'all',
+            sub: {},           // group key -> statuses inside it ([] = whole group)
+            deepLink: null     // granular status that arrived from the dashboard
+        };
+        GROUPS.forEach(function (g) { v8.sub[g.key] = []; });
+
+        var groupsChips = [];  // secondary scope filters the user put on the bar
+
+        function v8Baseline() {
+            var d = defaults();
+            d.date = '90d';    // Synder's real default, same as variant 6
+            return d;
+        }
+
+        state.groups = v8Baseline();
+        draft.groups = v8Baseline();
+
+        // The status filter actually in force: the sub-selection if there is
+        // one, otherwise the whole active group.
+        function v8Statuses() {
+            var sub = v8.sub[v8.group];
+            return sub.length ? sub.slice() : groupByKey(v8.group).status.slice();
+        }
+
+        function v8Query() {
+            var f = clone(state.groups);
+            f.status = v8Statuses();
+            return f;
+        }
+
+        // Counts scope filters that DEVIATE from the 90-day baseline, so the
+        // default never inflates the count. Status is excluded: it's the tab
+        // row, which is on screen and speaks for itself.
+        function v8ActiveCount(f) {
+            var base = v8Baseline();
+            return V8_SCOPE_KEYS.filter(function (k) {
+                return isMulti(k) ? !sameSet(f[k], base[k]) : f[k] !== base[k];
+            }).length;
+        }
+
+        function renderGroupTabs() {
+            var host = document.getElementById('groupsTabs');
+            host.innerHTML = '';
+            GROUPS.forEach(function (g) {
+                var isActive = g.key === v8.group;
+                var sub = v8.sub[g.key];
+                // Active but narrower than the whole group -- says so with the
+                // dashed "partial" state instead of claiming the full group.
+                var narrowed = isActive && sub.length > 0 && sub.length < groupMembers(g).length;
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'status-segment' + (isActive && !narrowed ? ' active' : '') +
+                    (narrowed ? ' partial' : '') + (g.attention ? ' attention' : '');
+                btn.setAttribute('data-group', g.key);
+                // The count is the WHOLE group under the current scope filters.
+                // It deliberately does NOT shrink when a status inside it is
+                // selected: a tab count answers "how many are in here", not
+                // "how many am I looking at". The list header carries the
+                // fraction instead.
+                btn.innerHTML = esc(g.label) +
+                    '<span class="seg-count">' + countForStatuses(state.groups, g.status) + '</span>';
+                btn.addEventListener('click', function () {
+                    if (v8.group === g.key) {
+                        v8.sub[g.key] = [];   // clicking the tab you're on = step back up
+                    } else {
+                        v8.group = g.key;     // switching restores this tab's own selection
+                    }
+                    v8.deepLink = null;       // an explicit click owns the choice now
+                    renderGroups();
+                    renderGroupsResults();
+                });
+                host.appendChild(btn);
+            });
+        }
+
+        function v8PickSub(groupKey, statuses) {
+            v8.sub[groupKey] = statuses.slice();
+            v8.deepLink = null;
+            renderGroups();
+            renderGroupsResults();
+        }
+
+        // Few members -> a row of pills. One click is one query, the same cost
+        // a status tab has today, and no combination outside the group exists.
+        function renderSubPills(host, g, members) {
+            var sub = v8.sub[g.key];
+            var wrap = document.createElement('div');
+            wrap.className = 'sub-pills';
+            host.appendChild(wrap);
+
+            function pill(text, active, count, onPick, attr, attrVal) {
+                var b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'sub-pill' + (active ? ' active' : '');
+                b.setAttribute(attr, attrVal);
+                b.innerHTML = esc(text) + '<span class="sub-count">' + count + '</span>';
+                b.addEventListener('click', onPick);
+                wrap.appendChild(b);
+            }
+
+            // "All" is the whole group -- the same thing the tab means, offered
+            // here so stepping back up doesn't require finding the tab again.
+            pill('All', sub.length === 0, countForStatuses(state.groups, g.status),
+                function () { v8PickSub(g.key, []); }, 'data-sub-all', '');
+
+            members.forEach(function (s) {
+                var active = sub.length === 1 && sub[0] === s;
+                pill(s, active, countForStatuses(state.groups, [s]), function () {
+                    // Single-select: clicking the active pill steps back to the group.
+                    v8PickSub(g.key, active ? [] : [s]);
+                }, 'data-sub-status', s);
+            });
+        }
+
+        // Too many members for a row -> a scoped multiselect with its own Apply.
+        // Same state, same guarantee: the options are the group's members and
+        // nothing else. This is the shape a ~18-status taxonomy forces.
+        function renderSubDropdown(host, g, members) {
+            var wrap = document.createElement('span');
+            wrap.className = 'chip-wrap';
+            wrap.setAttribute('data-layer', '');
+            wrap.setAttribute('data-sub-dropdown', '');
+            host.appendChild(wrap);
+
+            var sub = v8.sub[g.key];
+            var staged = sub.slice();   // staged inside the panel until Apply
+            var text = sub.length ? (sub.length <= 2 ? sub.join(', ') : sub.length + ' selected')
+                                  : 'All statuses';
+
+            wrap.innerHTML =
+                '<span class="filter-chip' + (sub.length ? ' active' : '') + '">' +
+                '<button type="button" class="chip-trigger" data-sub-trigger>' +
+                '<span class="chip-label-text">' + esc(text) + '</span>' +
+                '<span class="material-icons">arrow_drop_down</span></button></span>' +
+                '<div class="dropdown-menu field-panel" data-sub-panel>' +
+                members.map(function (s) {
+                    return '<label class="dropdown-checkbox-item"><input type="checkbox" data-sub-check="' +
+                        esc(s) + '"' + (staged.indexOf(s) !== -1 ? ' checked' : '') + '>' +
+                        '<span>' + esc(s) + '</span>' +
+                        '<span class="sub-count">' + countForStatuses(state.groups, [s]) + '</span></label>';
+                }).join('') +
+                '<div class="dropdown-panel-footer">' +
+                '<button class="clear-all" type="button" data-sub-clear>Clear</button>' +
+                '<button class="btn btn-primary btn-panel-apply" type="button" data-sub-apply>Apply</button>' +
+                '</div></div>';
+
+            var trigger = wrap.querySelector('[data-sub-trigger]');
+            var panel = wrap.querySelector('[data-sub-panel]');
+
+            trigger.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var wasOpen = panel.classList.contains('active');
+                closeLayers(trigger);
+                if (wasOpen) { closeLayerTree(wrap); return; }
+                staged = v8.sub[g.key].slice();
+                panel.querySelectorAll('[data-sub-check]').forEach(function (cb) {
+                    cb.checked = staged.indexOf(cb.getAttribute('data-sub-check')) !== -1;
+                });
+                panel.classList.add('active');
+                trigger.classList.add('open');
+                registerLayer(wrap, function () {
+                    panel.classList.remove('active');
+                    trigger.classList.remove('open');
+                });
+            });
+
+            // Checkbox toggles only touch `staged` -- the DOM is left alone, so
+            // the panel can't close underneath the click that opened it.
+            panel.addEventListener('click', function (e) { e.stopPropagation(); });
+            panel.querySelectorAll('[data-sub-check]').forEach(function (cb) {
+                cb.addEventListener('change', function () {
+                    var s = this.getAttribute('data-sub-check');
+                    var i = staged.indexOf(s);
+                    if (this.checked) { if (i === -1) staged.push(s); }
+                    else if (i !== -1) { staged.splice(i, 1); }
+                });
+            });
+            panel.querySelector('[data-sub-clear]').addEventListener('click', function () {
+                staged = [];
+                panel.querySelectorAll('[data-sub-check]').forEach(function (cb) { cb.checked = false; });
+            });
+            panel.querySelector('[data-sub-apply]').addEventListener('click', function () {
+                closeAllLayers();
+                v8PickSub(g.key, staged);
+            });
+        }
+
+        function renderSubRow() {
+            var host = document.getElementById('groupsSub');
+            var g = groupByKey(v8.group);
+            var members = groupMembers(g);
+            var sub = v8.sub[v8.group];
+            // A single-status group has nothing to narrow, so it renders no
+            // second level at all rather than an empty one.
+            var narrowable = members.length > 1;
+
+            var usedDropdown = narrowable && members.length > V8_PILL_MAX;
+
+            host.innerHTML = '';
+            if (!narrowable && !v8.deepLink) { host.classList.remove('show'); return; }
+            host.classList.add('show');
+
+            if (narrowable) {
+                var label = document.createElement('span');
+                label.className = 'substatus-label';
+                label.textContent = 'Status in ' + g.label;
+                host.appendChild(label);
+                if (usedDropdown) renderSubDropdown(host, g, members);
+                else renderSubPills(host, g, members);
+            }
+
+            // Breadcrumb. Says out loud how the two levels relate -- but only
+            // where that ADDS something. With pills on screen, the active pill
+            // plus the "Status in <group>" label already state both levels and
+            // the "All" pill is the way back up, so a chip repeating it would
+            // be variant 3's duplicate-chips mistake again. It earns its place
+            // when the control is a dropdown (whose trigger can read "2
+            // selected") or when the selection arrived from the dashboard and
+            // needs attributing.
+            if ((usedDropdown && sub.length) || v8.deepLink) {
+                var crumb = document.createElement('span');
+                crumb.className = 'breadcrumb-chip';
+                crumb.setAttribute('data-breadcrumb', '');
+                crumb.innerHTML =
+                    (v8.deepLink ? '<span class="source">From dashboard:</span>' : '') +
+                    esc(g.label) +
+                    (sub.length ? '<span class="crumb-sep">&rsaquo;</span>' +
+                        esc(sub.length <= 2 ? sub.join(', ') : sub.length + ' statuses') : '') +
+                    '<button class="remove" type="button" data-clear-crumb aria-label="Show the whole group">' +
+                    '<span class="material-icons">close</span></button>';
+                host.appendChild(crumb);
+                crumb.querySelector('[data-clear-crumb]').addEventListener('click', function () {
+                    v8PickSub(v8.group, []);
+                });
+            }
+        }
+
+        function renderGroupsBar() {
+            var bar = document.getElementById('groupsFilterBar');
+            bar.innerHTML = '';
+
+            // Same per-panel staging as variant 6: opening a dropdown snapshots
+            // what's applied, its Apply commits, closing discards. Staged state
+            // can't outlive an open panel, so no bar-level Apply is needed.
+            var base = {
+                applyInPanel: true,
+                get: function (k) { return draft.groups[k]; },
+                setValue: function (k, v) { draft.groups[k] = v; },
+                onPanelOpen: function () { draft.groups = clone(state.groups); },
+                onPanelApply: function () {
+                    state.groups = clone(draft.groups);
+                    closeAllLayers();
+                    renderGroups();
+                    renderGroupsResults();
+                },
+                onPanelClose: function () { draft.groups = clone(state.groups); }
+            };
+
+            mountField(bar, 'date', Object.assign({}, base, {
+                style: 'baseline',
+                wrapperClass: 'chip-wrap',
+                baselineValue: v8Baseline().date
+            }));
+
+            groupsChips.forEach(function (k) {
+                mountField(bar, k, Object.assign({}, base, {
+                    style: 'chip',
+                    onRemove: function (removedKey) {
+                        groupsChips = groupsChips.filter(function (x) { return x !== removedKey; });
+                        renderGroups();
+                        return true;
+                    }
+                }));
+            });
+
+            // Status is absent from this list on purpose -- it belongs to the
+            // tab row and the scoped control below it. Adding it here would be
+            // a second control on one dimension, which is FLT-2.
+            var hidden = V8_SECONDARY.filter(function (k) { return groupsChips.indexOf(k) === -1; });
+            var addWrap = document.createElement('span');
+            addWrap.className = 'chip-wrap';
+            addWrap.setAttribute('data-layer', '');
+            bar.appendChild(addWrap);
+            addWrap.innerHTML =
+                '<button class="add-filter-btn" type="button" data-groups-add' +
+                (hidden.length ? '' : ' disabled') + '>' +
+                '<span class="material-icons">add</span>Add filter</button>' +
+                '<div class="dropdown-menu" data-groups-add-menu>' +
+                hidden.map(function (k) {
+                    return '<div class="dropdown-item" data-groups-add-key="' + k + '">' +
+                        esc(FILTERS[k].label) + '</div>';
+                }).join('') +
+                '</div>';
+
+            var addBtn = addWrap.querySelector('[data-groups-add]');
+            var addMenu = addWrap.querySelector('[data-groups-add-menu]');
+            addBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                if (this.disabled) return;
+                var wasOpen = addMenu.classList.contains('active');
+                closeLayers(addBtn);
+                if (wasOpen) {
+                    closeLayerTree(addWrap);
+                } else {
+                    addMenu.classList.add('active');
+                    registerLayer(addWrap, function () { addMenu.classList.remove('active'); });
+                }
+            });
+            addWrap.querySelectorAll('[data-groups-add-key]').forEach(function (item) {
+                item.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var k = this.getAttribute('data-groups-add-key');
+                    if (groupsChips.indexOf(k) === -1) groupsChips.push(k);
+                    closeAllLayers();
+                    renderGroups();
+                    var newField = bar.querySelector('[data-field-key="' + k + '"]');
+                    if (newField) {
+                        var panel = newField.querySelector('[data-field-panel]');
+                        var trig = newField.querySelector('[data-field-trigger]');
+                        panel.classList.add('active');
+                        trig.classList.add('open');
+                        registerLayer(newField, function () {
+                            panel.classList.remove('active');
+                            trig.classList.remove('open');
+                        });
+                    }
+                });
+            });
+        }
+
+        function renderGroups() {
+            renderGroupsBar();
+            renderGroupTabs();
+            renderSubRow();
+        }
+
+        function v8Reset() {
+            state.groups = v8Baseline();
+            draft.groups = v8Baseline();
+            groupsChips = [];
+            GROUPS.forEach(function (g) { v8.sub[g.key] = []; });
+            v8.group = 'all';
+            v8.deepLink = null;
+            renderGroups();
+            renderGroupsResults();
+        }
+
+        function renderGroupsResults() {
+            var rows = runFilters(v8Query());
+            var g = groupByKey(v8.group);
+            var sub = v8.sub[v8.group];
+            var n = v8ActiveCount(state.groups);
+            var scopeNote = n
+                ? ' · <strong>' + n + '</strong> filter' + (n > 1 ? 's' : '') + ' applied'
+                : ' · last 90 days (default), no filters applied';
+
+            // With two levels on screen the header has to say how they relate,
+            // which is also where the fraction the tab count refuses to show
+            // ends up living.
+            var head;
+            if (sub.length) {
+                head = 'Showing <strong>' + rows.length + '</strong> of <strong>' +
+                    countForStatuses(state.groups, g.status) + '</strong> in ' + esc(g.label);
+            } else if (g.status.length) {
+                head = 'Showing <strong>' + rows.length + '</strong> in ' + esc(g.label);
+            } else {
+                head = 'Showing <strong>' + rows.length + '</strong> of <strong>' +
+                    TXNS.length + '</strong> transactions';
+            }
+
+            document.getElementById('groupsCount').innerHTML = head + scopeNote;
+            renderTable('groupsTable', rows, v8Reset);
+        }
+
+        // A status clicked on the Synder dashboard lands on Summaries filtered
+        // by that status. It selects its own PARENT GROUP and then narrows to
+        // itself, so the arriving status and the tab row cannot disagree --
+        // there is still exactly one status value on the page.
+        function groupsDeepLink(status) {
+            var parent = GROUPS.filter(function (g) {
+                return g.status.length && g.status.indexOf(status) !== -1;
+            })[0] || groupByKey('all');
+
+            state.groups = v8Baseline();
+            draft.groups = v8Baseline();
+            groupsChips = [];
+            GROUPS.forEach(function (g) { v8.sub[g.key] = []; });
+            v8.group = parent.key;
+            // A single-status group already IS the status. Narrowing it would
+            // imply there was something else in there to pick.
+            v8.sub[parent.key] = parent.status.length > 1 ? [status] : [];
+            v8.deepLink = status;
+            renderGroups();
+            renderGroupsResults();
+        }
+
+        (function wireGroupsDeepLink() {
+            var wrap = document.getElementById('groupsDeepLinkWrap');
+            var btn = document.getElementById('groupsDeepLinkBtn');
+            var menu = document.getElementById('groupsDeepLinkMenu');
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var wasOpen = menu.classList.contains('active');
+                closeLayers(btn);
+                if (wasOpen) {
+                    closeLayerTree(wrap);
+                } else {
+                    menu.classList.add('active');
+                    registerLayer(wrap, function () { menu.classList.remove('active'); });
+                }
+            });
+            menu.querySelectorAll('[data-deeplink]').forEach(function (item) {
+                item.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    closeAllLayers();
+                    groupsDeepLink(this.getAttribute('data-deeplink'));
+                });
+            });
+        })();
+
+        // ---------------------------------------------------------------
         // Tab navigation
         // ---------------------------------------------------------------
         document.querySelectorAll('.nav-tab').forEach(function (tab) {
@@ -3192,6 +3856,8 @@
         renderRecResults();
         refreshSheetbtnChrome();
         renderSheetbtnResults();
+        renderGroups();
+        renderGroupsResults();
     })();
     </script>
 </body>
