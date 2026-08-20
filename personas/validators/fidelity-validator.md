@@ -45,8 +45,10 @@ Jira, or a described existing screen). If no reference exists, do not run — re
 with `reference_gaps: ["no reference supplied"]`.
 
 ## Evidence requirement
-Every finding needs `evidence.action` and `evidence.observed` — the reference item you looked for
-and what the prototype showed instead. No evidence, no finding.
+Every finding needs `evidence.quote` — the exact text as it appears on screen, copied not
+paraphrased — and `evidence.source`: the reference frame or acceptance-criteria line. Your findings are about
+artifacts rather than behaviour, so a quotation is your reproduction step: the string either
+appears on the page or it does not. No quote, no finding.
 
 ## Output format (strict JSON — return NOTHING else):
 ```json
@@ -64,7 +66,7 @@ and what the prototype showed instead. No evidence, no finding.
       "finding": "what is missing or wrong vs. reference — one sentence",
       "user_impact": "how this affects prototype completeness — one sentence",
       "suggested_fix": "specific element or state to add — one sentence",
-      "evidence": { "action": "reference item looked for", "observed": "what the prototype had" }
+      "evidence": { "quote": "reference item as specified", "source": "frame id or acceptance-criteria line" }
     }
   ]
 }

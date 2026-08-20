@@ -18,13 +18,19 @@
 const fs = require('fs');
 const path = require('path');
 
+// Evidence mode differs by lens because "reproduce it" doesn't apply uniformly.
+//   interaction — the finding is a behaviour: name the action and what happened.
+//   artifact    — the finding is a string on screen: quote it exactly and cite the
+//                 authority it violates (vocabulary.md line, accounting rule,
+//                 reference frame). Checkable the same way: the quote either
+//                 appears on the page or it doesn't.
 const SPEC = {
-  ux:       { prefix: 'UX',   cap: 5 },
-  domain:   { prefix: 'DOM',  cap: 3 },
-  clarity:  { prefix: 'CLR',  cap: 3 },
-  fidelity: { prefix: 'FID',  cap: 5 },
-  trust:    { prefix: 'TRU',  cap: 4 },
-  a11y:     { prefix: 'A11Y', cap: 4 },
+  ux:       { prefix: 'UX',   cap: 5, evidence: 'interaction' },
+  domain:   { prefix: 'DOM',  cap: 3, evidence: 'artifact'    },
+  clarity:  { prefix: 'CLR',  cap: 3, evidence: 'artifact'    },
+  fidelity: { prefix: 'FID',  cap: 5, evidence: 'artifact'    },
+  trust:    { prefix: 'TRU',  cap: 4, evidence: 'interaction' },
+  a11y:     { prefix: 'A11Y', cap: 4, evidence: 'interaction' },
 };
 const CONFIDENCE_FLOOR = 70;
 const SEVERITIES = ['Critical', 'High', 'Medium'];
@@ -71,7 +77,7 @@ function writeManifest(argv) {
     round: Number(arg(argv, 'round', '1')),
     target: arg(argv, 'target', ''),
     confidence_floor: CONFIDENCE_FLOOR,
-    expected: slots.map(s => ({ ...s, cap: SPEC[s.validator].cap, prefix: SPEC[s.validator].prefix })),
+    expected: slots.map(s => ({ ...s, cap: SPEC[s.validator].cap, prefix: SPEC[s.validator].prefix, evidence: SPEC[s.validator].evidence })),
   };
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
   console.log(`manifest written: ${path.join(dir, 'manifest.json')}`);
@@ -157,10 +163,17 @@ function verify(argv) {
         }
       }
       // The evidence gate. A confidence score is self-reported and uncalibrated;
-      // a reproduction step is checkable. This is the real filter.
-      const ev = f.evidence;
-      if (!ev || !ev.action || !ev.observed) {
-        problems.push(`UNEVIDENCED · ${at}: needs evidence.action (what was done) and evidence.observed (what happened) — drop the finding if it cannot be reproduced`);
+      // evidence is checkable. This is the real filter.
+      const ev = f.evidence || {};
+      const mode = slot.evidence || SPEC[slot.validator].evidence;
+      if (mode === 'interaction') {
+        if (!ev.action || !ev.observed) {
+          problems.push(`UNEVIDENCED · ${at}: needs evidence.action (what was done) and evidence.observed (what happened) — drop the finding if it cannot be reproduced`);
+        }
+      } else {
+        if (!ev.quote || !ev.source) {
+          problems.push(`UNEVIDENCED · ${at}: needs evidence.quote (the exact text on screen) and evidence.source (the authority it violates — vocabulary.md line, accounting rule, or reference frame)`);
+        }
       }
     });
 

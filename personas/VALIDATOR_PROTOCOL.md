@@ -148,6 +148,16 @@ exists; note in the report when it is omitted, so "skipped" never reads as "pass
 One floor for all six. The confidence number is self-reported and uncalibrated — it is not the
 safety mechanism. **The evidence requirement is.**
 
+**Two evidence modes, because "reproduce it" doesn't apply uniformly.**
+- **Interaction** (UX, Trust, A11Y) — the finding is a behaviour: `evidence.action` +
+  `evidence.observed`. If you can't name the click that shows it, drop it.
+- **Artifact** (Domain, Clarity, Fidelity) — the finding is a string on screen:
+  `evidence.quote` (copied exactly, not paraphrased) + `evidence.source` (the `vocabulary.md`
+  line, accounting rule, or reference frame it violates). A quotation is the reproduction step —
+  the string either appears on the page or it doesn't.
+
+`validator-check.js` enforces the correct mode per lens.
+
 **High-stakes passes:** run UX 3× and tag findings surfaced by 2+ instances as `corroborated`,
 ranked first. Don't triple-run the narrow lenses; it wastes their 3-finding caps.
 

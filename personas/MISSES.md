@@ -20,6 +20,21 @@ the prompt reads.
 | RECON-1 | 2026-08-18 | Two false flow-breaking findings on the Reconciliation details overlay ("upload is on the wrong side", "Any account removes the integration data source") — both artifacts of a half-filled form; a react-select click had silently missed, so dependent fields never rendered | Recon (Step 3) | Enumerated fields before the form was valid. Conditional fields render only after dependencies are satisfied | Synder demo · New reconciliation overlay |
 | PROC-1 | 2026-08-03 → 2026-08-20 | Trust never ran once; caps exceeded 7× (145 findings vs 20); schema drifted to a `per_prototype` wrapper; `findings-log.json` never created | Protocol itself | Every volume control was an instruction with nothing verifying it. Fixed by `scripts/validator-check.js` | `.synder-state/settings-rework/validators-r3/` — replay it, the checker fails it on all four counts |
 
+## Evidence modes — why "reproduce it" isn't universal
+
+Raised by Claude on 2026-08-20 and worth recording, because it splits the six lenses cleanly:
+
+- **Interaction lenses** (UX, Trust, A11Y) find *behaviours*. Their gate is a reproduction step:
+  name the action, name what happened. FLT-2, PROTO-1 and PROTO-2 above are all this shape.
+- **Artifact lenses** (Domain, Clarity, Fidelity) find *strings*. "Reproduce it" is meaningless —
+  a mislabelled button doesn't need clicking. Their gate is an exact quotation plus the authority
+  it violates (`vocabulary.md` line, accounting rule, reference frame). Equally checkable: the
+  quote either appears on the page or it doesn't, and the cited rule either exists or doesn't.
+
+`validator-check.js` enforces the correct mode per lens. Without this split, artifact findings
+would have been forced into a reproduction format they don't fit, and the gate would have become
+a formality — agents writing "action: read the label" to satisfy a field.
+
 ## Open pattern, not yet closed
 
 Four of the six entries above are the same shape: **a claim made before it was verified** — a field

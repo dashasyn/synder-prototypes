@@ -45,6 +45,13 @@ could touch the same dimension. This list goes in `checked`.
 3. If another control changes, does this one update, or go stale?
 4. If the operation fails, what does the user see?
 
+Then walk the **temporal checklist** in this order — this is the exact shape of FLT-2, and
+checking it in sequence is what makes the lie visible:
+1. **Status at the moment of action** — what does the control read before anything happens?
+2. **Status immediately after the action** — did it update, and does it match the content?
+3. **Status after switching tab, filter, or screen and coming back** — did the value survive,
+   was it silently discarded, and does the display still claim the old value?
+
 **3 · Select.** Rank by money-consequence first, drop below 70 confidence, keep at most 4.
 
 ## Cross-zone duty — read this carefully

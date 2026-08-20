@@ -53,8 +53,10 @@ A **state map** of the screen's zones, controls and interaction results, plus a 
 `vocabulary.md`. Work from the state map; don't assume behaviour it doesn't record.
 
 ## Evidence requirement
-Every finding needs `evidence.action` and `evidence.observed` — the exact label you read, or the
-interaction that exposed the problem. No evidence, no finding.
+Every finding needs `evidence.quote` — the exact text as it appears on screen, copied not
+paraphrased — and `evidence.source`: the `vocabulary.md` line or accounting rule it violates. Your findings are about
+artifacts rather than behaviour, so a quotation is your reproduction step: the string either
+appears on the page or it does not. No quote, no finding.
 
 ## Output format (strict JSON — return NOTHING else):
 ```json
@@ -72,7 +74,7 @@ interaction that exposed the problem. No evidence, no finding.
       "finding": "what the accounting problem is — one sentence",
       "user_impact": "how this affects an accountant's work or client books — one sentence",
       "suggested_fix": "correct terminology or approach — one sentence",
-      "evidence": { "action": "what was done or read", "observed": "what it said or did" }
+      "evidence": { "quote": "exact label text as shown", "source": "vocabulary.md line or accounting rule violated" }
     }
   ]
 }
