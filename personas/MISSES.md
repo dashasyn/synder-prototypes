@@ -20,6 +20,37 @@ the prompt reads.
 | RECON-1 | 2026-08-18 | Two false flow-breaking findings on the Reconciliation details overlay ("upload is on the wrong side", "Any account removes the integration data source") — both artifacts of a half-filled form; a react-select click had silently missed, so dependent fields never rendered | Recon (Step 3) | Enumerated fields before the form was valid. Conditional fields render only after dependencies are satisfied | Synder demo · New reconciliation overlay |
 | PROC-1 | 2026-08-03 → 2026-08-20 | Trust never ran once; caps exceeded 7× (145 findings vs 20); schema drifted to a `per_prototype` wrapper; `findings-log.json` never created | Protocol itself | Every volume control was an instruction with nothing verifying it. Fixed by `scripts/validator-check.js` | `.synder-state/settings-rework/validators-r3/` — replay it, the checker fails it on all four counts |
 
+## RECON-2 · 2026-08-20 — the recon pass is now a single point of failure
+
+Found by the first regression test, not by Ignat. Running v1 and v2 of the UX validator against
+the same pre-fix V6 build (`da01381`, extracted to `.synder-state/regression/PROTO-2/`):
+
+- Both found the target bug (multiselect panel collapses on the second toggle).
+- v2 was cleaner: 3 findings, all evidenced, 29 items in `checked`, passes the health check. It
+  also found a real follow-on the v1 arm missed — after the collapse the chip has no remove
+  control and `Add filter` no longer offers the field, so the user is stuck.
+- v1 produced 5 findings with **no evidence field at all** and no coverage array; the health check
+  fails it outright. One of its three "Critical" findings was **false** — it described clicking a
+  chip's `×`, and the chip has no `×` (verified in Chromium: zero remove controls).
+- **But v1 also found a real bug v2 structurally could not.** Picking an option in the *date*
+  single-select panel closes the panel before Apply is reachable — verified true. The v2 arm never
+  saw it because `statemap.json` recorded only that the date panel *opens*; nobody tested picking
+  an option inside it.
+
+**The lesson:** v2 traded breadth for precision, and the recon pass is where breadth now lives.
+If recon doesn't exercise an interaction, no validator downstream can find it — they are reading a
+document, not a page. v1's sloppier "go look yourself" caught something our tidy pipeline was blind
+to.
+
+**Fix to make:** the recon pass needs a completeness rule of its own — for every control that opens
+a panel, exercise a *commit path* (pick/toggle an option, then reach Apply), not just the open. And
+validators should be permitted, in fact expected, to say "the state map doesn't cover X" as an
+output rather than silently reasoning only from what they were handed.
+
+Caveat on the comparison: the v1 arm used Playwright even though the v1 prompt told it to use
+`web_fetch`, so it was *more* capable than a faithful v1 run. The bias favours v1, which makes
+its false Critical and missing evidence more damning, not less.
+
 ## Evidence modes — why "reproduce it" isn't universal
 
 Raised by Claude on 2026-08-20 and worth recording, because it splits the six lenses cleanly:

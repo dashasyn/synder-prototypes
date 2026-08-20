@@ -1,0 +1,50 @@
+{
+  "validator": "ux",
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical",
+      "confidence": 97,
+      "element": "Variant 6 filter bar — single-select panels: \"Last 90 days (default)\" baseline chip, and the Amount and Customer chips added via \"Add filter\"",
+      "finding": "Clicking any option in a single-select panel closes the panel before the user can reach the Apply button that panel-scoped staging requires, so the value is never committed — the date chip silently snaps back to \"Last 90 days (default)\", while Amount and Customer chips display the picked value even though the list was never re-queried.",
+      "user_impact": "Three of the four secondary filter dimensions cannot be applied at all, and in the Amount and Customer cases the chip claims a filter is on while the table still shows all 26 rows and the count line reads \"no filters applied\".",
+      "suggested_fix": "In the single-select branch of wireFieldNode, stop calling closeLayerTree on option pick — leave the panel open so the existing Apply commits it (or commit immediately on pick and drop Apply for single-select fields)."
+    },
+    {
+      "id": "UX-2",
+      "severity": "Critical",
+      "confidence": 95,
+      "element": "Variant 6 filter bar — the \"×\" remove button on an applied chip (e.g. \"Platform: Stripe\")",
+      "finding": "Clicking a chip's × removes the chip from the bar but never commits the removal or re-runs the query, so the filter stays applied to the results with no control left on screen that represents it.",
+      "user_impact": "After removing the Platform filter the list still shows 10 of 26 rows and \"1 filter applied\" with an empty filter bar, and because \"Clear all filters\" only renders inside the zero-results empty state the user has no way to recover short of reloading the page.",
+      "suggested_fix": "Have the chip's onRemove commit the change (state.rec = clone(draft.rec)) and call renderRecResults(), and surface a persistent reset control whenever the active filter count is above zero rather than only in the empty state."
+    },
+    {
+      "id": "UX-3",
+      "severity": "Critical",
+      "confidence": 97,
+      "element": "Variant 6 filter bar — Platform and Type multi-select checkbox panels",
+      "finding": "The first checkbox click keeps the panel open, but the second click collapses the panel and clears every checked box, because the keepOpen re-render fires the previous layer's close handler, which resets the draft and redraws the field closed while the code continues operating on now-detached panel and trigger nodes.",
+      "user_impact": "A multi-select filter can never hold more than one value — selecting Stripe then Shopify loses both selections and hides the Apply button, so nothing is committed and the user is silently returned to an unfiltered list.",
+      "suggested_fix": "Deregister the field's existing layer without invoking its close callback before re-rendering in the keepOpen path, and re-query the panel and trigger references after the re-render instead of reusing the pre-render ones."
+    },
+    {
+      "id": "UX-4",
+      "severity": "Medium",
+      "confidence": 80,
+      "element": "Variant 6 — status segmented control above the filter bar vs. the chip filters in the bar below it",
+      "finding": "Two different commit models sit adjacent on the same screen: clicking a status segment applies instantly and re-queries, while every chip filter stages its value and requires an Apply inside its own dropdown.",
+      "user_impact": "Having learned that a status segment takes effect on click, users reasonably expect a checkbox or option click to take effect too, and so leave chip panels without pressing Apply believing the filter is already on.",
+      "suggested_fix": "Use one commit rule across the whole filter row — either commit chip selections on click like the segments do, or make the per-panel Apply visually unmissable and persistently indicate which chips hold uncommitted edits."
+    },
+    {
+      "id": "UX-5",
+      "severity": "Medium",
+      "confidence": 78,
+      "element": "Variant 6 — \"Last 90 days (default)\" baseline chip date panel",
+      "finding": "The date panel offers only six relative presets (All time, Last 7/30/90 days, This month, Last month) with no custom range and no direct month or year selection.",
+      "user_impact": "A user reconciling a specific historical period such as March 2025 or a past quarter has no way to express it and must fall back to \"All time\" and scan the entire ledger, which is the same dead end recorded as KF-3 in production.",
+      "suggested_fix": "Add a custom date range option with direct month and year pickers to the date panel alongside the existing presets."
+    }
+  ]
+}

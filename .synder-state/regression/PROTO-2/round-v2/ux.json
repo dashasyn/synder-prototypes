@@ -1,0 +1,77 @@
+{
+  "validator": "ux",
+  "round": 2,
+  "target": "filtering-options V6 (Recommended) — pre-fix build da01381",
+  "checked": [
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Layout & hierarchy — region inventory: status segments, baseline date chip, added secondary chips, Add filter button" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Layout & hierarchy — location of the primary action: Apply lives inside each field panel, no bar-level Apply" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Layout & hierarchy — competing focal points: status segments with counts vs the filter bar" },
+    { "zone": "mock header", "item": "Layout & hierarchy — 'Add Transaction' primary button vs the filtering task" },
+    { "zone": "count line (#recCount)", "item": "Layout & hierarchy — where result feedback sits relative to the controls" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Interaction — 'Last 90 days (default)' baseline chip opens a 6-option single-select panel" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Interaction — baseline chip: pick 'Last 30 days' (panel closes on pick, then reopens correctly)" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Interaction — 'Add filter' button opens menu listing Platform, Type, Amount, Customer" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Interaction — Add filter > Platform inserts a chip and auto-opens its panel" },
+    { "zone": "Platform multiselect panel", "item": "Interaction — 'Stripe' checkbox (first toggle in a freshly added panel)" },
+    { "zone": "Platform multiselect panel", "item": "Interaction — 'Shopify' checkbox (second toggle, same panel)" },
+    { "zone": "Platform multiselect panel", "item": "Interaction — 'Clear' button" },
+    { "zone": "Platform multiselect panel", "item": "Interaction — 'Apply' button hittability across successive toggles" },
+    { "zone": "Platform chip", "item": "Interaction — chip trigger clicked repeatedly to reopen the collapsed panel" },
+    { "zone": "Platform chip", "item": "Interaction — presence of the remove (x) affordance while no value is committed" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Interaction — whether 'Add filter' re-offers Platform once its chip is on the bar" },
+    { "zone": "Type chip (multiselect)", "item": "Interaction — same two-toggle sequence on a second multiselect field in the same bar" },
+    { "zone": "Status segmented control (#recSegments)", "item": "Interaction — commit-on-click, one query per click" },
+    { "zone": "mock header", "item": "Interaction — 'Simulate dashboard deep-link' button and removal of the resulting deep-link chip" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "Interaction — primary task in order: Add filter > Platform > select 2+ platforms > Apply" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "States — empty: not reachable from this zone" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "States — loading: none, dataset is local" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "States — error: none present, and no failure signal when a panel collapses mid-selection" },
+    { "zone": "count line (#recCount)", "item": "States — count text after a silently discarded selection" },
+    { "zone": "Platform chip", "item": "States — chip label after a silently discarded selection" },
+    { "zone": "Type chip (multiselect)", "item": "States — same control behaving the same broken way in a second place on this screen" },
+    { "zone": "V3 chips filter bar (control)", "item": "States — identical two-toggle sequence on the chips variant, to isolate this as V6-specific" },
+    { "zone": "Platform multiselect panel", "item": "States — reopened panel vs freshly added panel: which toggle collapses it" },
+    { "zone": "V6 filter bar (#recFilterBar)", "item": "States — KF-7 precedence check: status has one control (segments) only, platform appears once, no duplicate dimension" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical",
+      "confidence": 98,
+      "element": "Platform multiselect panel in the V6 filter bar (#recFilterBar [data-field-key=\"platform\"] [data-field-panel]) — and every other multiselect chip panel in this bar",
+      "finding": "A multiselect filter panel collapses after a single checkbox toggle, taking its Apply button out of reach before any selection can be committed, and the chip cannot be reopened afterwards.",
+      "user_impact": "Selecting more than one platform is impossible, so the primary task — narrowing the list to the platforms you care about — cannot be completed at all.",
+      "suggested_fix": "Stop tearing down and re-creating the panel's DOM on every checkbox toggle in refreshFieldNode (or re-register the open layer against the newly mounted node), so the panel stays mounted and Apply stays hittable across successive toggles.",
+      "evidence": {
+        "action": "In real Chromium: opened V6, clicked 'Add filter' > 'Platform', checked 'Stripe', then checked 'Shopify' in the same panel; then clicked the Platform chip trigger four more times. Repeated the sequence on the 'Type' chip, and ran the identical two-toggle sequence on the V3 chips bar as a control.",
+        "observed": "After 'Stripe' the panel was still visible and Apply hittable. After 'Shopify' the panel was not visible and Apply not hittable; checked boxes read [] and the count line still said 'Showing 26 of 26 transactions · last 90 days (default), no filters applied'. All four subsequent trigger clicks left the panel hidden (panel class stayed 'dropdown-menu field-panel', never 'active'). 'Type' failed identically on its second toggle. The V3 chips bar survived both toggles with its panel still visible, so the defect is specific to V6. On the reopen path it is worse still: after applying one value and reopening the chip, the very first toggle collapsed the panel."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "High",
+      "confidence": 92,
+      "element": "Platform chip and the 'Add filter' menu in the V6 filter bar (#recFilterBar)",
+      "finding": "Once a freshly added chip's panel collapses with nothing committed, the chip renders no remove (x) and 'Add filter' no longer lists that field, leaving no way back to the filter.",
+      "user_impact": "The user is stranded with a dead, unremovable Platform chip and no route to platform filtering for the rest of the session short of reloading the page.",
+      "suggested_fix": "Render the chip's remove (x) even when it carries no committed value, and return the field to the 'Add filter' menu whenever its chip holds no applied value.",
+      "evidence": {
+        "action": "After the collapse described in UX-1, queried the Platform chip for a [data-remove-field] button, reopened the 'Add filter' menu to see which fields it offered, and scanned all V6 buttons for a reset or clear affordance.",
+        "observed": "No [data-remove-field] existed on the chip (the x only renders once a value is active). The 'Add filter' menu listed only 'Type', 'Amount', 'Customer' — Platform was withheld because it is still in recChips — and the button was not disabled. The only clear-like control on screen was the 'Clear' button inside the unreachable panel."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "Medium",
+      "confidence": 85,
+      "element": "Platform chip label and the count line (#recCount) after a panel collapses without Apply",
+      "finding": "When the panel vanishes and discards the staged selection, nothing on screen reports that anything was selected, discarded, or failed.",
+      "user_impact": "The user believes the filter was applied or simply cannot tell what happened, so they either trust an unfiltered 26-row list as filtered or keep re-clicking a control that will never respond.",
+      "suggested_fix": "Show the staged selection on the chip while its panel is open, and when a panel closes without Apply state explicitly that the pending change was discarded.",
+      "evidence": {
+        "action": "Read the chip text and the count line immediately after the panel collapsed on the 'Shopify' toggle.",
+        "observed": "The chip still read 'Platform' in its inactive form and the count line still read 'Showing 26 of 26 transactions · last 90 days (default), no filters applied'. No error, toast, or other state change marked the discarded selection or the failed interaction."
+      }
+    }
+  ]
+}
