@@ -177,6 +177,22 @@ function verify(argv) {
   const logPath = path.join(dir, '..', 'findings-log.json');
   if (!fs.existsSync(logPath)) {
     problems.push(`NO LOG · findings-log.json missing at ${path.resolve(logPath)} — delta mode and the never-re-flag rule cannot work, so every round is a cold re-review`);
+  } else {
+    // An empty or unparseable log is indistinguishable from a clean one at a glance.
+    try {
+      const log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+      if (!log || typeof log !== 'object' || !Array.isArray(log.resolved)) {
+        problems.push(`BAD LOG · findings-log.json has no "resolved" array — round 2 cannot run as a delta`);
+      } else if (manifest.round > 1 && log.resolved.length === 0) {
+        problems.push(`EMPTY LOG · this is round ${manifest.round} but findings-log.json records nothing resolved — either nothing was applied, or the log was never written`);
+      }
+    } catch (e) {
+      problems.push(`BAD LOG · findings-log.json is unparseable: ${e.message}`);
+    }
+  }
+  // The round directory itself must hold the recon artifact everything downstream reads.
+  if (!fs.existsSync(path.join(dir, 'statemap.json'))) {
+    problems.push(`NO STATE MAP · statemap.json missing in ${dir} — validators were given raw HTML or nothing, which is the condition v2 exists to prevent`);
   }
 
   console.log(`\nRound ${manifest.round} · ${manifest.target || '(no target recorded)'}`);
