@@ -5,6 +5,28 @@
 
 ## 🔧 Active Projects
 
+### Platform Transactions + Dashboard drill-through (2026-08-20)
+- **Status:** ✅ Prototype live, 6 validator findings still open
+- **Location:** `reports/transactions-prototype/index.html`
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/reports/transactions-prototype/
+- **Pages:** Dashboard (landing) → Platform transactions list → Transaction detail
+- **Built from:** live Synder audit (`/transaction/list`, `/sync/show/{id}`) + Figma Dashboard `iGOk6pFtz9R0yTCUMzXe6n` node 10248-126263
+- **Done:**
+  - 17 UX improvements from the original audit (platform column, colour-coded amounts, date format, identity header, promo block replaced)
+  - Bulk bar **replaces the table header row** on selection (Synder Summaries pattern) — Sync now · Rollback · Cancel · Archive · Unarchive · Export
+  - Stripe-style filter bar: inline search + 4 chips (Date/Status/Platform/Type) + "More filters" side sheet
+  - Per-chip ✕ clear, clear-search, search inside each dropdown, date presets + custom range
+  - **Dashboard Sync card → Transactions drill-through** with origin note and escapes
+- **Dashboard→table status mapping** (`DASH_STATUS_MAP`) — dashboard groups, table is granular:
+  - Ready to sync → `ready` · Successful → `synced`+`warnings` · Needs attention → `failed` · Deleted → `deleted` · In progress → `inprog`+`pending`
+- **⚠️ Open decisions for Ignat:**
+  - Dashboard counts are Figma mock numbers (30/300/50/30/30) and don't match the demo dataset — real counts would need a shared source
+  - "Needs attention" maps to `failed` only; unclear whether `rule failed` / `rollback failed` belong in it
+  - "Deleted" had no equivalent in the table taxonomy — I added one
+- **Open validator findings (never applied):** `Platform transactions`→`Integration transactions`; `Syncs history` typo; `posting`→`sync` ×2; no inline View error/Retry on failed rows; payout rows blank primary identifier; detail page duplicates 5 fields
+- **Known pre-existing issue:** pagination renders pages 1/2/3 regardless of row count
+- **Verified:** Playwright browser test — all 5 drill-throughs land on real rows, chip and Status panel agree, no JS errors
+
 ### Validator Pipeline v2 — enforcement rework (2026-08-20)
 - **What:** the review system's volume controls were prose with nothing verifying them. Audit of the
   only saved round (`.synder-state/settings-rework/validators-r3/`, 2026-08-03) found: Trust never
