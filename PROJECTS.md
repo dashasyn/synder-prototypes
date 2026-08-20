@@ -349,8 +349,8 @@
 - **Settings wired:** Clearing account, income/fee/bank accounts, generic customer (+name picker), track fees, include taxes, default product
 - **Data:** 10 Stripe transactions (Pamela Anderson, Marcus Reid, etc.) Jan–Mar 2026
 
-### Filtering Options Prototype (2026-04-30; v2 functional, v3 multiselect, v4 Apply-gated, v5 six variants — all 2026-08-04; v7 variant 2026-08-07; v8 V6/V7 refinements 2026-08-11; v9 Variant 8 + v10/v11 V6 rework 2026-08-20)
-- **Status:** ✅ v11 live and verified — eight variants, all Apply-gated, on Synder's real 8-status taxonomy. 329 jsdom + 187 Chromium checks across nine suites, all in `scripts/` (no longer `/tmp/`).
+### Filtering Options Prototype (2026-04-30; v2 functional, v3 multiselect, v4 Apply-gated, v5 six variants — all 2026-08-04; v7 variant 2026-08-07; v8 V6/V7 refinements 2026-08-11; v9 Variant 8 + v10–v12 V6 rework 2026-08-20)
+- **Status:** ✅ v12 live and verified — eight variants, all Apply-gated, on Synder's real 8-status taxonomy. 398 jsdom + 231 Chromium checks across eleven suites, all in `scripts/` (no longer `/tmp/`).
 - **Location:** `filtering-options/index.html` (mirror: `reports/filtering-options/index.html` — keep both in sync)
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/filtering-options/
 - **Description:** Four filter UI patterns to reduce vertical space while maintaining usability. Tab navigation between variants; all four filter the same 24-row dataset.
@@ -419,6 +419,19 @@
     2. **A chip × staged its removal with no bar-level Apply to commit from**, so in V6/V8 the chip left the bar while the list kept filtering by it, and the next panel open put the value back. A control that lies. Now commits in panel-staged contexts; variants with a bar Apply (3, 4) still stage, as they should.
     3. **Active and inactive chips differed by 1px** (the caret's line box), so a bar of chips rendered at two heights. `.chip-trigger` now has a fixed height.
   - **Suites:** `verify-v6.cjs` (70, new) and `browser-v6.cjs` (39, new) join the set; the V6 and V7 blocks in `verify-filters.cjs`, `browser-v7.cjs` and `browser-v6v7.cjs` were rewritten twice today — once for the V7 rework, once back — against whatever design each variant actually has. All nine suites green, mirror byte-identical, live verified byte-for-byte.
+- **v12 (2026-08-20) — richer filter controls, shared across every variant.** Ignat: default view should show Date range + Platform · amount needs *exact number* and *is between* · date range needs custom exact dates · customer needs a search · and the deep-link chip should look like a standard filter chip, no "From dashboard".
+  - **V6 default bar = Date range + Platform.** Status moved into "Add filter" (`REC_DEFAULT_CHIPS = ['platform']`) — the segments already show status, so nothing is actually hidden.
+  - **Amount is operators, not bands.** `Is exactly` / `Greater than` / `Less than` / `Is between`, each with typed numbers. The `Under $100` / `$100–$500` / `Over $500` presets were **removed, not kept alongside** — *Is between* subsumes all three, and keeping both would give two ways to express one query, which is the duplication we keep deleting. Value encodes as `'<op>:<a>:<b>'`, a plain string so `clone`/`sameFilters` need no special case. Apply disabled until a number is typed.
+  - **Date range gains `Custom range…`** with two date fields, encoded `'custom:<from>:<to>'`. Apply waits for at least one end (an empty range would filter to nothing and read as a broken list). A **half-filled range filters on the end that IS filled** — *"From Mar 1"* — rather than quietly matching everything.
+  - **Customer has a search box.** `All customers` is never filtered out, because it's how you clear the field. Rows are hidden **in place** rather than re-rendered, so the caret doesn't jump mid-word. Term clears on each panel open, so it can't leak between variants.
+  - **Deep-link is a plain status chip** — the `From dashboard` tag and `recDeepLink` state are both gone. Marking it special invites "special how?", and the answer is "it isn't".
+  - **Consequences that had to be handled:**
+    - Typed inputs write to the draft **without re-rendering** their field (re-rendering moves focus out of the box mid-word), so the trigger label is updated on its own via new `syncTriggerText()`. Without it the chip read *"Custom range"* while the draft already held a range.
+    - A filter that owns its own `summary()` owns the **null** case too, or an incomplete operator prints its raw encoding (`Amount: between::`). Date's summary therefore had to cover presets as well — the first cut returned null for them and the chip lost its label.
+    - Panels holding typed inputs need `min-width: 260px; max-height: 400px`. At the old 280px the FROM/TO inputs were **clipped behind the sticky footer** — `isVisible()` said fine, a user could not reach them. The browser suite now asserts the inputs sit above the footer's top edge.
+    - An operator panel **stays open** when you pick an operator, since you still have to type the number. V4's suite asserted the opposite and was updated.
+  - **All four control changes live in the shared `FILTERS` set**, so variants 1–8 all get them. Deliberate: one prototype comparing layouts, not eight filter engines.
+  - **Suites:** `verify-new.cjs` (62, new) and `browser-inputs.cjs` (42, new). The oracle in `verify-filters.cjs` was extended to the new amount operators and custom date ranges, and its single-filter cross-check matrix now drives amount through operator+input rather than preset picks. Eleven suites, all green; live verified byte-for-byte.
 - **Design decisions:**
   - Consistent Synder styling (Roboto, #0053CC, shadows), Material Icons
   - Status badges coloured by status group (Errors red / Completed green-amber-grey / Queued blue)
