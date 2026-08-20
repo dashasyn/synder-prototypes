@@ -254,7 +254,8 @@ console.log('\n-- other variants unaffected');
     ok('section ' + v + ' still present', !!q('#variant-' + v));
 });
 ok('V6 segments still render', qa('#recSegments .status-segment').length === 5);
-ok('V7 segments still render', qa('#sheetbtnSegments .status-segment').length === 5);
+ok('V7 has no segments row (reworked 2026-08-20)', !q('#sheetbtnSegments'));
+ok('V7 owns status in its sheet instead', !!q('#variant-sheetbtn'));
 ok('V1 table still renders', qa('#currentTable tbody tr').length > 0 || !!q('#currentTable .empty-state'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

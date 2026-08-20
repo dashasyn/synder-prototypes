@@ -781,6 +781,31 @@
             flex-shrink: 0;
         }
 
+        /* Single-select panels rendered as radio rows, so a Date/Amount/Customer
+           panel reads as the same KIND of control as Platform/Type's checkbox
+           list instead of a bare row with a checkmark. Same behaviour as before
+           -- one choice, commits on pick -- only the affordance changes. */
+        .dropdown-radio-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .dropdown-radio-item:hover {
+            background: var(--bg-hover);
+        }
+
+        .dropdown-radio-item input[type="radio"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--primary-blue);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
         /* A commit control must not scroll out of its own panel. The panel is
            the scroll container (max-height + overflow-y), so with 8 options the
            Apply rode the list out of view. Sticking it to the scrollport's
@@ -1682,8 +1707,9 @@
         <div id="variant-sheetbtn" class="variant-section">
             <div class="variant-header">
                 <h2>Filters as Button + Side Sheet</h2>
-                <p>One <em>Filters</em> button opens a right-hand sheet, with Apply and Reset at the bottom. Applied filters appear as read-only chips under the toolbar — they show what's on and can be removed, but not edited. All composing happens in the sheet; the chips are a summary, not a control panel.</p>
-                <p><strong>Status is a segmented control above the table, not a field in the sheet</strong> — the same single-source-of-truth rule as variant 6. Segment counts are computed from the filters and search already applied, which is why the filter surface sits above them. Clicking a segment commits immediately; everything in the sheet stays Apply-gated.</p>
+                <p>One <em>Filters</em> button opens a right-hand sheet holding <strong>every</strong> filter, status included, with Apply and Reset at the bottom. Applied filters appear as read-only chips under the toolbar — they show what's on and can be removed, but not edited. All composing happens in the sheet; the chips are a summary, not a control panel.</p>
+                <p><strong>No status segments here.</strong> The sheet is the only status control on the page, so there's still exactly one control per dimension — keeping a segment row as well would recreate the Summaries bug where the two disagree. That makes this the "everything in one sheet" shape, and the straight contrast to variant 8, which puts the same taxonomy into group tabs instead. Single-select panels (Date range, Amount, Customer) use radio rows so every panel in the sheet reads as the same kind of control.</p>
+                <p>There's also no <em>"Showing N of M · K filters applied"</em> line: the chips row already names every applied filter and the badge already carries the count, so the sentence was a third readout of the same state.</p>
             </div>
 
             <div class="mock-page">
@@ -1708,12 +1734,6 @@
 
                 <div class="applied-chips-bar" id="sheetbtnChips"></div>
 
-                <!-- Same order as variant 6: the filter surface (button + chips)
-                     sets the scope, the segments slice it, and the tab row sits
-                     directly against the table it labels. -->
-                <div class="status-segments" id="sheetbtnSegments"></div>
-
-                <div class="table-toolbar" id="sheetbtnCount"></div>
                 <div class="table-container" id="sheetbtnTable"></div>
             </div>
 
@@ -2188,6 +2208,21 @@
         // sibling's, so an open dropdown elsewhere on the bar is untouched.
         // ---------------------------------------------------------------
         function optionListHtml(key, value, ctx) {
+            // `radioOptions` renders the same single-select list as radio rows so
+            // it matches the checkbox lists next to it. data-pick-value goes on
+            // the label, so the existing click handler is unchanged.
+            if (ctx && ctx.radioOptions) {
+                var radios = FILTERS[key].options.map(function (o) {
+                    return '<label class="dropdown-radio-item" data-pick-value="' + esc(o.value) + '">' +
+                        '<input type="radio" name="opt-' + esc(key) + '"' +
+                        (o.value === value ? ' checked' : '') + '>' +
+                        '<span>' + esc(o.label) + '</span></label>';
+                }).join('');
+                return radios + (ctx.applyInPanel
+                    ? '<div class="dropdown-panel-footer"><button class="btn btn-primary btn-panel-apply" type="button" data-panel-apply>Apply</button></div>'
+                    : '');
+            }
+
             var items = FILTERS[key].options.map(function (o) {
                 var sel = o.value === value;
                 return '<div class="dropdown-item' + (sel ? ' selected' : '') +
@@ -3183,11 +3218,14 @@
         // and there's no Apply button outside the sheet to defer it to.
         var sheetbtnSearch = '';   // committed search term
 
-        // Status is NOT in the sheet: it belongs to the segmented control, which
-        // is the same single-source-of-truth rule variant 6 uses. Two controls on
-        // one dimension is exactly the Summaries bug (pick "Failed" in the
-        // dropdown, click the "Ready to sync" tab, and they disagree).
-        var SHEETBTN_KEYS = FILTER_KEYS.filter(function (k) { return k !== 'status'; });
+        // Status lives IN the sheet here, with the full 8-status list, and the
+        // status segment row is gone. That's deliberate: the sheet is now the
+        // ONLY status control on the page, so there is still exactly one control
+        // per dimension. Keeping the segments as well would recreate the
+        // Summaries bug (pick "Failed" in the sheet, click the "Ready to sync"
+        // segment, and they disagree) -- so variant 7 becomes the "everything in
+        // one sheet" shape and variant 8 carries the group-tabs idea instead.
+        var SHEETBTN_KEYS = FILTER_KEYS.slice();
 
         var searchMatch = function (t, q) {
             if (!q) return true;
@@ -3204,25 +3242,13 @@
 
         // The badge counts selected VALUES, not dimensions — "Status: Failed,
         // Pending + Platform: Stripe" reads as 3, which is what the user picked.
-        // Status is excluded — the badge counts what's behind the Filters button,
-        // and a segment the user can already see isn't hidden behind it.
+        // Status is included now that the sheet owns it: everything the badge
+        // counts is genuinely hidden behind the button.
         function sheetbtnValueCount(f) {
             return SHEETBTN_KEYS.reduce(function (n, k) {
                 if (isMulti(k)) return n + f[k].length;
                 return n + (f[k] === 'all' ? 0 : 1);
             }, 0);
-        }
-
-        function renderSheetbtnSegments() {
-            renderSegmentsInto(document.getElementById('sheetbtnSegments'),
-                state.sheetbtn, state.sheetbtn.status,
-                function (seg) {
-                    // One click, one query — the same cost a status tab has today.
-                    state.sheetbtn.status = seg.status.slice();
-                    refreshSheetbtnChrome();
-                    renderSheetbtnResults();
-                },
-                function (t) { return searchMatch(t, sheetbtnSearch); });
         }
 
         function renderSheetbtnBody() {
@@ -3234,6 +3260,7 @@
                 setValue: function (k, v) { draft.sheetbtn[k] = v; },
                 style: 'select',
                 fullWidth: true,
+                radioOptions: true,
                 wrapperClass: 'sheet-filter-group',
                 onChange: refreshSheetbtnSheetChrome
             };
@@ -3268,12 +3295,11 @@
             badge.textContent = n;
             badge.classList.toggle('show', n > 0);
 
-            renderSheetbtnSegments();
-
             var bar = document.getElementById('sheetbtnChips');
-            // No status chip — the segment above the table already shows it, and
-            // a second readout of the same value is one more thing that can lie.
-            var keys = activeKeys(f).filter(function (k) { return k !== 'status'; });
+            // Status gets a chip like every other dimension now that the sheet
+            // owns it — with no segment row, the chip is the only place the
+            // applied status is readable outside the sheet.
+            var keys = activeKeys(f);
             bar.classList.toggle('show', keys.length > 0);
             bar.innerHTML = keys.map(function (k) {
                 return '<span class="applied-chip">' + esc(chipTextFull(k, f[k])) +
@@ -3291,9 +3317,6 @@
             });
             var clearBtn = bar.querySelector('[data-clear]');
             if (clearBtn) clearBtn.addEventListener('click', function () {
-                // "Clear all" clears the segment too, because that's what the
-                // label says. The segment is on screen and visibly snaps back to
-                // All, so nothing changes silently.
                 state.sheetbtn = defaults();
                 refreshSheetbtnChrome();
                 renderSheetbtnResults();
@@ -3319,9 +3342,10 @@
         }
 
         function renderSheetbtnResults() {
+            // No "Showing N of M · K filters applied" line. The chips row already
+            // names every applied filter and the badge carries the count, so the
+            // sentence was a third readout of the same state.
             var rows = runSheetbtn();
-            var n = activeKeys(state.sheetbtn).length + (sheetbtnSearch ? 1 : 0);
-            renderCount('sheetbtnCount', rows, state.sheetbtn, n);
             renderTable('sheetbtnTable', rows, function () {
                 state.sheetbtn = defaults();
                 draft.sheetbtn = defaults();
@@ -3342,11 +3366,9 @@
             renderSheetbtnResults();
         });
         document.getElementById('sheetbtnResetBtn').addEventListener('click', function () {
-            // Resets only what the sheet owns. The segment is outside the sheet,
-            // so a button in here must not silently move it.
-            var keepStatus = draft.sheetbtn.status.slice();
+            // The sheet owns every filter now, status included, so Reset clears
+            // the lot. Nothing outside the sheet can be moved by surprise.
             draft.sheetbtn = defaults();
-            draft.sheetbtn.status = keepStatus;
             renderSheetbtnBody();
         });
         // Search commits on Enter — one deliberate action, one query, same rule
