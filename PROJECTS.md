@@ -140,6 +140,18 @@
 - **Not yet done:** validator pass on `organization.html` — Ignat asked for it "later".
 - **Next:** Ignat picks a layout (or the April hybrid) → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
 
+### Transaction Reconciliation — One-Click First Run (2026-08-20)
+- **Status:** ✅ v1 live, awaiting Ignat feedback
+- **URL:** https://dashasyn.github.io/synder-prototypes/projects/recon-oneclick/
+- **Location:** `projects/recon-oneclick/index.html`
+- **Idea:** Idea 1 of 6 proposed 2026-08-20. Replace the Transaction reconciliation explainer/FAQ landing with a pre-filled "Ready to run" card — last full month + only integration + its linked account + Automated, all preselected. One click to run.
+- **Why:** August LogRocket session watch — **~2 of 3 of 90 sessions read the overview/FAQ/video and never clicked Run audit**. Users arrive already interested and get pitched again.
+- **Views:** Side by side / Current / Proposed toggle. Current pane recreates the real explainer wall + 6 FAQ rows; Proposed pane shows the ready-to-run card with editable chips, read-only reassurance next to the CTA, and the pitch demoted to "How it works".
+- **Interactive:** "Run reconciliation" reveals the In progress state with the locked status copy ("You can leave this page — we'll update the status when it's ready"). "Change" links and footer links are stubbed with alerts.
+- **Design:** Synder tokens (Roboto, #0053CC, grey scale from `skills/synder-explorer/references/synder-design-tokens.css`)
+- **Related:** the other 5 ideas from 2026-08-20 (upload validation at drop, "Run again for next period", example result, delta-as-verdict on results, /transaction/list dead-click investigation) are unbuilt.
+- **Context:** exploration captures for the whole create flow in `.synder-state/recon-create-2026-08-19/` (25 states, v11.7.66)
+
 ### Smart Rules — Branch Engine Redesign (2026-06-03)
 - **Status:** 🚧 In progress — 2 prototypes built, awaiting Ignat feedback
 - **Jira:** DIS-336 — Introduce Smart Rules for Xero
