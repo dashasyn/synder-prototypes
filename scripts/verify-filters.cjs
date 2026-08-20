@@ -36,16 +36,31 @@ const DATE_WINDOW = {
 };
 function oracle(f) {
     return DATA.filter(t => {
-        const w = DATE_WINDOW[f.date || 'all'];
-        if (w && !(t.date >= w[0] && t.date <= w[1])) return false;
+        const dv = f.date || 'all';
+        if (String(dv).indexOf('custom:') === 0) {
+            const dp = String(dv).split(':');
+            if (dp[1] && t.date < dp[1]) return false;
+            if (dp[2] && t.date > dp[2]) return false;
+        } else {
+            const w = DATE_WINDOW[dv];
+            if (w && !(t.date >= w[0] && t.date <= w[1])) return false;
+        }
         if (f.status && f.status.length && !f.status.includes(t.status)) return false;
         if (f.platform && f.platform.length && !f.platform.includes(t.platform)) return false;
         if (f.type && f.type.length && !f.type.includes(t.type)) return false;
         if (f.customer && f.customer !== 'all' && t.customer !== f.customer) return false;
         const a = f.amount || 'all';
-        if (a === 'lt100' && !(t.amount < 100)) return false;
-        if (a === '100to500' && !(t.amount >= 100 && t.amount <= 500)) return false;
-        if (a === 'gt500' && !(t.amount > 500)) return false;
+        if (a !== 'all') {
+            const p = String(a).split(':');
+            const x = parseFloat(p[1]), y = parseFloat(p[2]);
+            if (p[0] === 'is' && !(Math.abs(t.amount - x) < 0.005)) return false;
+            if (p[0] === 'gt' && !(t.amount > x)) return false;
+            if (p[0] === 'lt' && !(t.amount < x)) return false;
+            if (p[0] === 'between') {
+                if (!isNaN(x) && t.amount < x) return false;
+                if (!isNaN(y) && t.amount > y) return false;
+            }
+        }
         return true;
     }).length;
 }
@@ -106,7 +121,7 @@ const OPTS = {
     status: ['Failed', 'Rule failed', 'Rollback failed', 'Synced', 'Synced with warnings', 'Skipped', 'Ready to sync', 'Pending'],
     platform: ['Stripe', 'Shopify', 'PayPal', 'Amazon'],
     type: ['Sale', 'Refund', 'Payout', 'Fee'],
-    amount: ['all', 'lt100', '100to500', 'gt500'],
+
     customer: ['all', 'Acme Corp', 'Global Tech', 'Local Store', 'Northwind Ltd', 'Bright Studio', 'Vertex Supply']
 };
 let mismatches = [];
@@ -122,6 +137,63 @@ Object.keys(OPTS).forEach(key => {
 });
 const totalValues = Object.values(OPTS).reduce((a, o) => a + o.length, 0);
 ok('all ' + totalValues + ' single-filter values match the oracle', mismatches.length === 0, mismatches.join('; '));
+
+// Amount is operator + typed numbers now, so it needs its own driver.
+function setAmount(bar, op, a, b) {
+    trigger(bar, 'amount').click();
+    panel(bar, 'amount').querySelector('[data-amount-op="' + op + '"]').click();
+    [['[data-amount-a]', a], ['[data-amount-b]', b]].forEach(([sel, val]) => {
+        if (val === undefined) return;
+        const inp = panel(bar, 'amount').querySelector(sel);
+        inp.value = String(val);
+        inp.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    });
+}
+function setCustomDates(bar, from, to) {
+    trigger(bar, 'date').click();
+    panel(bar, 'date').querySelector('[data-option-value="custom"]').click();
+    [['[data-range-from]', from], ['[data-range-to]', to]].forEach(([sel, val]) => {
+        if (val === undefined) return;
+        const inp = panel(bar, 'date').querySelector(sel);
+        inp.value = val;
+        inp.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+    });
+}
+
+const AMOUNT_CASES = [
+    ['is', 1250, undefined, 'is:1250:'],
+    ['gt', 500, undefined, 'gt:500:'],
+    ['lt', 100, undefined, 'lt:100:'],
+    ['between', 100, 500, 'between:100:500']
+];
+let amtMismatch = [];
+AMOUNT_CASES.forEach(([op, a, b, encoded]) => {
+    v1Reset().click();
+    setAmount('currentFilterBar', op, a, b);
+    v1Apply().click();
+    const want = oracle({ amount: encoded });
+    if (rows('currentTable') !== want) amtMismatch.push(op + ' got ' + rows('currentTable') + ' want ' + want);
+});
+ok('all 4 amount operators match the oracle', amtMismatch.length === 0, amtMismatch.join('; '));
+ok('between subsumes the old $100–$500 band',
+    oracle({ amount: 'between:100:500' }) === DATA.filter(t => t.amount >= 100 && t.amount <= 500).length);
+
+v1Reset().click();
+setCustomDates('currentFilterBar', '2026-03-01', '2026-03-31');
+v1Apply().click();
+eq('custom date range matches the oracle', rows('currentTable'),
+    oracle({ date: 'custom:2026-03-01:2026-03-31' }));
+v1Reset().click();
+setCustomDates('currentFilterBar', '2026-04-01', undefined);
+v1Apply().click();
+eq('half-open custom range filters on the filled end', rows('currentTable'),
+    oracle({ date: 'custom:2026-04-01:' }));
+v1Reset().click();
+
+ok('customer panel has a search box',
+    (() => { trigger('currentFilterBar', 'customer').click();
+             const has = !!panel('currentFilterBar', 'customer').querySelector('[data-panel-search]');
+             trigger('currentFilterBar', 'customer').click(); return has; })());
 
 v1Reset().click();
 check('currentFilterBar', 'status', 'Failed');
@@ -161,16 +233,16 @@ eq('staged only', rows('popularTable'), oracle({ platform: ['Stripe'] }));
 d.getElementById('allFiltersBtn').click();
 ok('sheet inherits the bar draft',
     /Synced/.test(field('sheetContent', 'status').querySelector('.field-trigger-text').textContent));
-pick('sheetContent', 'amount', 'lt100');
+setAmount('sheetContent', 'lt', 100);
 eq('sheet edits do not touch the table', rows('popularTable'), oracle({ platform: ['Stripe'] }));
 d.getElementById('sheetApplyBtn').click();
 eq('sheet Apply commits bar + sheet edits',
-    rows('popularTable'), oracle({ platform: ['Stripe'], status: ['Synced'], amount: 'lt100' }));
+    rows('popularTable'), oracle({ platform: ['Stripe'], status: ['Synced'], amount: 'lt:100:' }));
 d.getElementById('allFiltersBtn').click();
-pick('sheetContent', 'amount', 'gt500');
+setAmount('sheetContent', 'gt', 500);
 d.getElementById('sheetCloseBtn').click();
 eq('closing the sheet applies nothing',
-    rows('popularTable'), oracle({ platform: ['Stripe'], status: ['Synced'], amount: 'lt100' }));
+    rows('popularTable'), oracle({ platform: ['Stripe'], status: ['Synced'], amount: 'lt:100:' }));
 d.querySelector('#popularFilterBar [data-popular-reset]').click();
 eq('Reset → all rows', rows('popularTable'), TOTAL);
 
@@ -249,9 +321,14 @@ eq('date still starts at the real default',
 ok('no count line', !d.getElementById('recCount'));
 ok('no "Showing N of" sentence',
     !/Showing\s*\d+\s*of/.test(d.querySelector('#variant-rec .mock-page').textContent));
-eq('bar carries date + status from load', recBar().join(','), 'date,status');
+eq('bar carries date + platform from load', recBar().join(','), 'date,platform');
+ok('status is not on the bar by default, but is addable',
+    recBar().indexOf('status') === -1 && !!d.querySelector('#recFilterBar [data-rec-add-key="status"]'));
+d.querySelector('#recFilterBar [data-rec-add]').click();
+d.querySelector('#recFilterBar [data-rec-add-key="status"]').click();
 eq('status filter offers all 8 statuses',
     field('recFilterBar', 'status').querySelectorAll('[data-check-value]').length, 8);
+trigger('recFilterBar', 'status').click();   // close the auto-opened panel
 eq('90-day default shows every row', rows('recTable'), oracle({ date: '90d' }));
 eq('Attention segment count matches the oracle', segCount(1), oracle({ date: '90d', status: ATTENTION }));
 
@@ -279,16 +356,19 @@ ok('containing segment drops to partial, not active',
 d.getElementById('recDeepLinkBtn').click();
 eq('deep-link filters to the granular status', rows('recTable'), oracle({ date: '90d', status: ['Rule failed'] }));
 ok('containing segment shows partial', segs()[1].classList.contains('partial'));
-ok('"From dashboard" is a tag, not a second chip',
-    !!d.querySelector('#recFilterBar [data-deeplink-tag]') && !d.querySelector('#recFilterBar .deeplink-chip'));
+// A deep-linked status is an ORDINARY chip now — no attribution label at all.
+ok('no "From dashboard" marker anywhere',
+    !d.querySelector('#recFilterBar [data-deeplink-tag]') &&
+    !d.querySelector('#recFilterBar .deeplink-chip') &&
+    !/From dashboard/.test(d.querySelector('#variant-rec .mock-page').textContent));
+ok('the arriving status is a normal status chip with its own remove',
+    !!field('recFilterBar', 'status') &&
+    !!field('recFilterBar', 'status').querySelector('[data-remove-field]'));
 segs()[0].click();
 eq('clicking All clears status', rows('recTable'), oracle({ date: '90d' }));
-ok('and drops the tag', !d.querySelector('#recFilterBar [data-deeplink-tag]'));
 
-// every filter panel carries its own Apply
-d.querySelector('#recFilterBar [data-rec-add]').click();
-d.querySelector('#recFilterBar [data-rec-add-key="platform"]').click();
-ok('added chip exists', !!field('recFilterBar', 'platform'));
+// every filter panel carries its own Apply (platform is on the bar by default now)
+ok('platform chip is present without adding it', !!field('recFilterBar', 'platform'));
 trigger('recFilterBar', 'platform').click();
 ok('platform panel has its own Apply', !!panelApply('platform'));
 trigger('recFilterBar', 'date').click();

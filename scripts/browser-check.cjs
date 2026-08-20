@@ -32,9 +32,14 @@ const ok = (n, c, x) => { if (c) { pass++; console.log('  ok   ' + n); } else { 
     ok('popover still open after closing a field panel', await open('#filterPopover'));
     await p.click('#popoverBody [data-field-key="amount"] [data-field-trigger]');
     ok('switching fields keeps the popover open', await open('#filterPopover'));
-    await p.click('#popoverBody [data-field-key="amount"] [data-pick-value="gt500"]');
-    ok('single-select pick closes only its own panel', await open('#filterPopover'));
-    ok('picked panel closed', !(await open('#popoverBody [data-field-key="amount"] [data-field-panel]')));
+    // Amount is operator + typed number since 2026-08-20.
+  await p.click('#popoverBody [data-field-key="amount"] [data-amount-op="gt"]');
+  await p.fill('#popoverBody [data-field-key="amount"] [data-amount-a]', '500');
+    ok('popover still open while configuring amount', await open('#filterPopover'));
+    // An operator panel must STAY open — you have to type a number after
+    // picking the operator, so closing on the pick would make it unusable.
+    ok('amount panel stays open after picking an operator',
+       await open('#popoverBody [data-field-key="amount"] [data-field-panel]'));
     await p.click('#buttonFilterBar [data-popover-apply]');
     ok('Apply closes the popover', !(await open('#filterPopover')));
     // Failed (3) + Pending (2), of which 2 are over $500

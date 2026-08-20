@@ -36,17 +36,23 @@ function pickStatuses(list){
   q('[data-panel-apply]',fld('status')).click();
 }
 
-console.log('-- change 1: date is an ordinary chip');
+console.log('-- date is an ordinary chip');
 ok('no baseline chip anywhere in V6', !q('#recFilterBar .baseline-chip'));
 ok('date renders as a filter chip', !!q('.filter-chip',fld('date')));
-ok('date chip uses the same class as platform-style chips',
-   fld('date').className === fld('status').className, fld('date').className+' / '+fld('status').className);
+ok('date chip uses the same class as platform',
+   fld('date').className === fld('platform').className,
+   fld('date').className+' / '+fld('platform').className);
 ok('date still starts on the real default (90 days)',
    /Last 90 days/.test(chipText('date')), chipText('date'));
 ok('no "(default)" suffix', !/default/i.test(fld('date').textContent), fld('date').textContent);
 
-console.log('-- change 2: status filter with all statuses, on the bar from load');
-eq('bar order', bar().join(','), 'date,status');
+console.log('-- default bar is Date range + Platform; status is addable');
+eq('bar order', bar().join(','), 'date,platform');
+ok('status not on the bar', bar().indexOf('status') === -1);
+q('[data-rec-add]').click();
+q('[data-rec-add-key="status"]').click();
+q('[data-field-trigger]',fld('status')).click();   // close the auto-opened panel
+eq('bar after adding status', bar().join(','), 'date,platform,status');
 eq('status offers all 8', qa('[data-check-value]',fld('status')).length, 8);
 ok('status chip reads its label when empty', /^Status$/.test(chipText('status')), chipText('status'));
 
@@ -137,8 +143,7 @@ q('[data-rec-add-key="status"]').click();
 ok('status back on the bar', bar().indexOf('status') !== -1, bar().join(','));
 
 console.log('-- removing a secondary chip commits (was a lying control)');
-q('[data-rec-add]').click();
-q('[data-rec-add-key="platform"]').click();
+q('[data-field-trigger]',fld('platform')).click();
 q('[data-check-value="Stripe"]',fld('platform')).click();
 q('[data-panel-apply]',fld('platform')).click();
 // By now date and status have both been cleared by their own x, so Stripe is
@@ -148,35 +153,43 @@ q('[data-remove-field]',fld('platform')).click();
 ok('platform chip left the bar', bar().indexOf('platform') === -1, bar().join(','));
 eq('and the list stopped filtering by it', rows(), oracle({}));
 
-console.log('-- dashboard deep-link');
+console.log('-- dashboard deep-link is a plain status chip');
 q('#recDeepLinkBtn').click();
 ok('status chip carries the arriving value', /Status: Rule failed/.test(chipText('status')), chipText('status'));
-ok('"From dashboard" tag rendered', !!q('#recFilterBar [data-deeplink-tag]'));
-ok('tag is a label, not a second value readout',
-   q('[data-deeplink-tag]').textContent.trim() === 'From dashboard',
-   q('[data-deeplink-tag]').textContent);
-ok('no old deeplink-chip', !q('#recFilterBar .deeplink-chip'));
+ok('NO attribution marker of any kind',
+   !q('#recFilterBar [data-deeplink-tag]') && !q('#recFilterBar .deeplink-chip') &&
+   !/From dashboard/.test(q('#variant-rec .mock-page').textContent));
+ok('it is the same chip component as platform',
+   q('.filter-chip',fld('status')).className.replace(' active','') ===
+   q('.filter-chip',fld('platform')).className.replace(' active',''));
+ok('it has its own remove button', !!q('[data-remove-field]',fld('status')));
+ok('and its own dropdown', !!q('[data-field-trigger]',fld('status')));
 ok('attention segment partial', seg('attention').classList.contains('partial'));
 eq('rows = Rule failed at the 90-day default', rows(), oracle({date:'90d',status:['Rule failed']}));
 seg('synced').click();
-ok('a segment click drops the tag', !q('#recFilterBar [data-deeplink-tag]'));
-q('#recDeepLinkBtn').click();
-ok('tag back', !!q('#recFilterBar [data-deeplink-tag]'));
-pickStatuses(['Failed']);
-ok('editing status by hand drops the tag', !q('#recFilterBar [data-deeplink-tag]'));
+eq('a segment click replaces it', rows(), oracle({date:'90d',status:['Synced']}));
 
 console.log('-- empty state and recovery');
-q('[data-rec-add]').click();
-q('[data-rec-add-key="platform"]').click();
+// Add whichever chips this point in the run has left off the bar.
+['status','platform'].forEach(k => {
+    if (bar().indexOf(k) !== -1) return;
+    q('[data-rec-add]').click();
+    q('[data-rec-add-key="'+k+'"]').click();
+    q('[data-field-trigger]',fld(k)).click();   // close the auto-opened panel
+});
+q('[data-field-trigger]',fld('platform')).click();
 q('[data-check-value="Shopify"]',fld('platform')).click();
 q('[data-panel-apply]',fld('platform')).click();
-pickStatuses(['Failed']);            // clear Failed -> leaves Rule failed only
-pickStatuses(['Rollback failed']);
+// A Shopify + Rollback-failed combination has no rows in the dataset.
+q('[data-field-trigger]',fld('status')).click();
+qa('[data-check-value]',fld('status')).forEach(cb => { if (cb.checked) cb.click(); });
+q('[data-check-value="Rollback failed"]',fld('status')).click();
+q('[data-panel-apply]',fld('status')).click();
 eq('no rows', rows(), 0);
 ok('empty state shown', !!q('#recTable .empty-state'));
 q('#recTable [data-empty-clear]').click();
 eq('recovered to the 90-day default', rows(), oracle({date:'90d'}));
-eq('bar back to date + status', bar().join(','), 'date,status');
+eq('bar back to the default', bar().join(','), 'date,platform');
 ok('All segment active again', seg('all').classList.contains('active'));
 
 console.log('-- other variants untouched');

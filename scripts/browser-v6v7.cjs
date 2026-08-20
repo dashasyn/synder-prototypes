@@ -14,8 +14,10 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   ok('no Reset to default', await p.locator('#recFilterBar [data-rec-reset]').count() === 0);
   ok('no dirty hint element', await p.locator('#recDirtyHint').count() === 0);
 
-  await p.click('#recFilterBar [data-rec-add]');
-  await p.click('#recFilterBar [data-rec-add-key="platform"]');
+  // Platform is on the bar by default since 2026-08-20.
+  ok('platform chip is on the bar without adding it',
+     await p.locator('#recFilterBar [data-field-key="platform"]').isVisible());
+  await p.click('#recFilterBar [data-field-key="platform"] [data-field-trigger]');
   await p.waitForTimeout(200);
   ok('Apply is visible inside the panel',
      await p.locator('#recFilterBar [data-field-key="platform"] [data-panel-apply]').isVisible());

@@ -20,20 +20,25 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   ok('date is a normal filter chip', await p.locator(f('date')+' .filter-chip').isVisible());
   // Same component, so the only class difference should be `active` (date has
   // a value on load, status doesn't). Compare structure and rendered geometry.
-  ok('date and status use the same chip component',
+  ok('date and platform use the same chip component',
      (await p.locator(f('date')+' span.filter-chip > button.chip-trigger').count()) === 1 &&
-     (await p.locator(f('status')+' span.filter-chip > button.chip-trigger').count()) === 1);
+     (await p.locator(f('platform')+' span.filter-chip > button.chip-trigger').count()) === 1);
   const geo = sel => p.locator(sel+' .chip-trigger').evaluate(e => {
     const c = getComputedStyle(e), r = e.getBoundingClientRect();
     return [Math.round(r.height), c.fontSize, c.fontFamily, c.paddingLeft].join('|');
   });
-  ok('and render identically', (await geo(f('date'))) === (await geo(f('status'))),
-     (await geo(f('date'))) + '  vs  ' + (await geo(f('status'))));
-  ok('date chip class differs only by `active`',
-     (await p.locator(f('date')+' .filter-chip').evaluate(e=>e.className)).replace(' active','') ===
-     (await p.locator(f('status')+' .filter-chip').evaluate(e=>e.className)).replace(' active',''));
-  ok('status chip visible with all 8 statuses', await p.locator(f('status')).isVisible());
-  await p.click(f('status')+' [data-field-trigger]');
+  ok('and render identically', (await geo(f('date'))) === (await geo(f('platform'))),
+     (await geo(f('date'))) + '  vs  ' + (await geo(f('platform'))));
+
+  console.log('-- default bar is Date range + Platform');
+  eq('two chips on the bar', await p.locator('#recFilterBar [data-field-key]').count(), 2);
+  ok('platform chip visible', await p.locator(f('platform')).isVisible());
+  ok('status not on the bar', await p.locator(f('status')).count() === 0);
+  await p.click('#recFilterBar [data-rec-add]');
+  ok('status is offered in Add filter',
+     await p.locator('#recFilterBar [data-rec-add-key="status"]').isVisible());
+  await p.click('#recFilterBar [data-rec-add-key="status"]');
+  ok('status chip visible after adding', await p.locator(f('status')).isVisible());
   eq('8 checkboxes', await p.locator(f('status')+' [data-check-value]').count(), 8);
   await p.keyboard.press('Escape');
   ok('no count line', await p.locator('#recCount').count()===0);
@@ -63,8 +68,7 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
      /Last 30 days/.test(await p.locator(f('date')+' .chip-label-text').innerText()));
 
   console.log('-- BUG FIX 2: a chip x commits, it does not leave the list lying');
-  await p.click('#recFilterBar [data-rec-add]');
-  await p.click('#recFilterBar [data-rec-add-key="platform"]');
+  await p.click(f('platform')+' [data-field-trigger]');
   await p.click(f('platform')+' label:has([data-check-value="Stripe"])');
   ok('platform panel survives the toggle', await p.locator(f('platform')+' [data-field-panel]').isVisible());
   await p.click(f('platform')+' [data-panel-apply]');
@@ -92,14 +96,19 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   ok('segments row still fully clickable',
      await p.locator(seg('ready')).isVisible() && await p.locator(seg('synced')).isVisible());
 
-  console.log('-- deep-link tag');
+  console.log('-- deep-link renders as a plain status chip');
   await p.click('#recDeepLinkBtn');
-  ok('From dashboard tag visible', await p.locator('#recFilterBar [data-deeplink-tag]').isVisible());
-  ok('no old deeplink chip', await p.locator('#recFilterBar .deeplink-chip').count()===0);
+  ok('no attribution marker at all',
+     await p.locator('#recFilterBar [data-deeplink-tag]').count()===0 &&
+     await p.locator('#recFilterBar .deeplink-chip').count()===0 &&
+     !/From dashboard/.test(await p.locator('#variant-rec .mock-page').innerText()));
   ok('status chip carries the value',
      /Rule failed/.test(await p.locator(f('status')+' .chip-label-text').innerText()));
+  ok('and it has a working remove button',
+     await p.locator(f('status')+' [data-remove-field]').isVisible());
   await p.click(seg('synced'));
-  ok('tag gone after a segment click', await p.locator('#recFilterBar [data-deeplink-tag]').count()===0);
+  ok('segment click replaces the value',
+     /Synced/.test(await p.locator(f('status')+' .chip-label-text').innerText()));
 
   console.log('-- V7 and V8 unaffected');
   await p.click('.nav-tab[data-variant="sheetbtn"]');
