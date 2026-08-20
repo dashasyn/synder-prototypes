@@ -36,10 +36,18 @@ Do NOT: write code, edit files, build prototypes, or "improve" anything — not 
 
 When Ignat says **"review"**, **"review this"**, **"check this design"**, **"review with validators"**, or anything asking you to check a screen or prototype:
 
-**→ Read `personas/VALIDATOR_PROTOCOL.md` and follow it. Do not improvise a review.**
+**→ Read `personas/VALIDATOR_PROTOCOL.md` (v2) and follow it. Do not improvise a review.**
 
-The validator system already exists. Five validators live in `personas/validators/`:
-UX · Domain (accountant) · Clarity (business owner) · Fidelity (vs spec) · Trust (does the UI lie?)
+The validator system already exists. **Six** validators live in `personas/validators/`:
+UX (incl. state clarity) · Domain (accountant) · Clarity (business owner) · Fidelity (vs spec) ·
+Trust (does the UI lie?) · A11Y (keyboard/focus/semantics)
+
+⚠️ **Enforcement is not optional.** Run `node scripts/validator-check.js manifest <round-dir> …`
+*before* spawning validators, and `verify <round-dir>` *before* reading any finding. A failed
+verify means the round is void — fix and re-run. In v1 the caps, schema and findings log were
+prose with nothing checking them: one round produced 145 findings against a cap of 20, Trust never
+ran once, and nobody noticed for two weeks. Log anything the validators miss in
+`personas/MISSES.md`.
 
 Supporting files: `personas/KNOWN_FRICTION.md` (real LogRocket friction to check designs against), `DESIGN_RULES.md` (style rules — note its type scale and colors are stale; `skills/synder-explorer/references/synder-design-tokens.css` and `reports/synder-components.html` are the truth).
 

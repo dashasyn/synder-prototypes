@@ -1,213 +1,263 @@
-# Validator Protocol — Orchestrator Instructions
+# Validator Protocol v2 — Orchestrator Instructions
 
-This file defines how the main orchestrator (Dasha) runs the validator pipeline.
+How the orchestrator (Dasha) runs a validator round.
+
+**What changed from v1 and why.** v1's volume controls — finding caps, the strict schema, the
+resolved-findings log — were all instructions in this file, and nothing verified them. On
+2026-08-03 a round produced 145 findings against a cap of 20, the Trust validator never ran, and
+no `findings-log.json` was ever created. Nobody noticed for two weeks. v2 moves enforcement out of
+prose and into `scripts/validator-check.js`, and shrinks each agent's input so there is less to
+over-report. v1 is archived at `VALIDATOR_PROTOCOL-v1-archived.md`.
+
+---
 
 ## Triggers
 
 Any of these fire the pipeline — **a URL is not required**:
-- `Review` / `Review this` / `Review it` / `Check this` / `Check the design`
-- `Review with validators` / `Run the validators`
-- `Review: [prototype name or URL]` — explicit target
-- `Build + Review: [task brief]` — build prototype first, then validate (full flow)
+`Review` · `Review this` · `Review it` · `Check this` · `Check the design` ·
+`Review with validators` · `Run the validators` · `Review: [name or URL]` ·
+`Build + Review: [task brief]`
 
 A Figma link or Jira ticket alone is also a valid target.
 
 ---
 
-## Step 0 — Resolve the target (do this first, always)
+## Step 0 — Resolve the target, then state it
 
-When no URL is given, resolve the target in this order and **state which one you picked**:
+When no URL is given, resolve in this order and **say which one you picked**:
 
-1. **The prototype discussed in this conversation** — the normal case
-2. **The file most recently edited in this session**
-3. **Newest modified prototype in the repo** — `ls -t` across `projects/prototypes/*/index.html` and `reports/*/index.html`
-4. **Ask** — only if genuinely ambiguous. One question: "Which one — [top 2 candidates]?"
+1. The prototype discussed in this conversation — the normal case
+2. The file most recently edited in this session
+3. Newest modified prototype in the repo — `ls -t` across `projects/*/index.html`,
+   `projects/*/*.html`, `reports/*/index.html`
+   *(v1 globbed `projects/prototypes/*/index.html`, which does not exist.)*
+4. Ask — only if genuinely ambiguous. One question, naming the top 2 candidates.
 
-Never stall on a missing URL when context makes the target obvious. Resolving silently and stating the choice beats asking.
-
-If the target is a local file not yet published, review the local file and note that the live URL may lag.
-
-Always open the report with the resolved target so a wrong guess is caught immediately:
+Open the report with the resolved target so a wrong guess is caught immediately:
 
 ```
 Round 1 — Platform Transactions v2
-Target: projects/prototypes/platform-transactions/index.html (most recent edit)
+Target: projects/platform-transactions/index.html (most recent edit)
 ```
 
----
-
-## Step 1 — Pre-flight check (before building)
-Only for `Build + Review`. Confirm:
-- [ ] Task brief has all required fields
-- [ ] Reference material is accessible (fetch Figma/URL if linked)
-- [ ] Required states are listed
-
-If anything is missing, ask Ignat for the one missing thing. Do not start building.
+If the target is a local file not yet published, review the local file and note that the live URL
+may lag.
 
 ---
 
-## Step 2 — Build the prototype
-Only for `Build + Review`. Skip this step for `Review:`.
-- Use Synder design system (Roboto font, #0053CC primary, 8px grid, Material-based components)
-- Load design tokens from: `skills/synder-explorer/references/synder-design-tokens.css`
-- Include ALL required states listed in the brief
-- Save to: `projects/prototypes/[task-slug]/index.html`
+## Step 1 — Scope contract
+
+Write down, before anything is spawned:
+
+- **Primary task, one sentence.** What is the user here to accomplish?
+- **Zones.** Split the screen: header · filters · bulk action bar · table · row actions ·
+  side sheet · pagination · banners · empty/error states. Name only the zones that exist.
+- **Reference?** Figma frames or Jira ticket, or none.
+
+If the screen has more than ~8 zones, run **two rounds** rather than one oversized pass.
+If reviewing multiple prototype variants, that is **one round per variant** — never one round
+covering all of them. (Merging variants is what blew the cap in v1: ids came back as `CLR-A1`,
+`UX-VD3`, one payload holding ten variants' worth of findings.)
+
+**Only for `Build + Review`:** confirm the task brief has task name, source, delta, required
+states, focus area, and known issues to ignore. Assemble it from the conversation and read it
+back for a yes/no — do not send Ignat a blank form; `TASK_BRIEF.md` has never once been filled in,
+which says the form is the wrong instrument, not that he lacks discipline.
 
 ---
 
-## Step 2b — Jira auto-fetch (run if ticket number provided)
-If the task brief or Review trigger includes a Jira ticket (e.g. DIS-336, SD-17432):
-1. Fetch the ticket via Jira API (`scripts/jira-fetch.sh` or direct API call)
-2. Extract: title, description, acceptance criteria, linked Figma frames, reporter
-3. If Figma frames are linked, fetch screenshots of those frames
-4. Store as `reference.json` in the prototype folder
-5. Pass to validators as the authoritative reference — this replaces any manual "reference" field
+## Step 2 — Build (only for `Build + Review`)
 
-If no ticket is provided, skip this step. Fidelity Validator will run without a spec reference.
+Synder design system: Roboto, `#0053CC` primary, 8px grid, Material-based components.
+Tokens: `skills/synder-explorer/references/synder-design-tokens.css`.
+Save to `projects/<task-slug>/index.html` or `reports/<task-slug>/index.html`.
+Include every state the brief lists.
 
 ---
 
-## Step 3 — Auto-scan (always run before validators)
+## Step 2b — Jira auto-fetch (if a ticket is named)
 
-### 3a — Discover interactive elements
-Parse the prototype HTML. Extract every interactive element:
-- Buttons (all `<button>` elements and `role="button"`)
-- Links (`<a>` tags)
-- Form controls (inputs, selects, checkboxes, radios, toggles)
-- Elements with click/change/hover handlers (onclick, data-* triggers, JS-bound classes)
-- Modal/sidesheet triggers, dropdown openers, tab switchers
+Fetch the ticket (DIS-336, SD-17432 …) via `scripts/jira-fetch.sh` or the API. Extract title,
+description, acceptance criteria, linked Figma frames, reporter. Fetch screenshots of linked
+frames. Store as `reference.json` beside the prototype and pass it to Fidelity as the
+authoritative spec. **Read-only** — never write to Jira or Confluence.
 
-Group into a test plan:
+If frames are missing (all-states matrix, per-component variants, cold state, tooltips, banner
+combinations), request them explicitly by name before running Fidelity. Reviewing an incomplete
+frame set produces findings that are artifacts of the gap.
+
+---
+
+## Step 3 — Recon pass → `statemap.json`
+
+One agent, **real browser**, once per round. This is the expensive read, and it happens a single
+time so that no validator ever has to swallow raw HTML.
+
+For each zone, record every control: label, type, and **what actually happens on interaction** —
+before/after, with screenshots. Then:
+
+- **Assert visibility and hittability, not element state.** `isChecked()` passes against a
+  checkbox inside a closed panel: correct state, zero liveness. Record whether the control is
+  still visible and clickable after the interaction.
+- Record silent failures. Programmatic clicks on react-select / MUI option lists fail quietly;
+  read the value back and confirm it changed.
+- **Complete every form before judging what's missing.** Conditional fields render only once
+  their dependencies are satisfied. Two false flow-breaking findings on the Reconciliation
+  overlay came from enumerating fields on a half-filled form.
+
+Save as `statemap.json` in the round directory. Everything downstream reads this, not the DOM.
+
+---
+
+## Step 4 — Deterministic checks (script, no LLM)
+
+Extract every CSS value — fonts, colours, radii, spacing — and diff against `DESIGN_RULES.md` and
+the token file. Flag wrong font, off-palette colour, radius > 4px on action buttons, spacing off
+the 8px grid, contrast failures. Broken handlers and dead controls found in Step 3 land here too.
+
+These become `AUTO-` findings and **never enter a validator prompt**. Keeping mechanical noise out
+of the agents' input is half the reason feedback was generic.
+
+---
+
+## Step 5 — Declare the round *before* spawning
+
 ```
-INTERACTIVE ELEMENTS FOUND:
-- [element label] | type: button/link/input | expected state: [inferred from label/context]
+node scripts/validator-check.js manifest <round-dir> \
+  --target "<name or URL>" --round <n> \
+  --expect ux,ux,ux,domain,clarity,trust,a11y
 ```
 
-### 3b — Run browser interaction tests
-Open the prototype in the browser. For each interactive element:
-1. Click/interact with it
-2. Screenshot before + after state
-3. Mark: ✅ works | ❌ broken | ⚠️ partial
-
-Broken elements → automatic Critical findings (ID prefix: AUTO-). No validator needed.
-
-**On round 2+:** Only test elements that were modified since the previous round. Skip elements already marked ✅ in `findings-log.json`. Pass the diff to validators instead of the full prototype.
-
-### 3c — Style consistency check
-Auto-extract all CSS values from the prototype:
-- Font families and sizes
-- Color values (hex, rgb, hsl)
-- Border-radius values
-- Spacing (padding, margin, gap)
-
-Compare against `DESIGN_RULES.md`. Flag every deviation:
-- Wrong font → flag
-- Color not in palette → flag
-- Border-radius > 4px on action buttons → flag
-- Spacing not on 8px grid → flag
+Without a declared expectation, a validator that never runs is undetectable — precisely how Trust
+stayed silent from 2026-08-03 until someone asked. Include `fidelity` only when a reference
+exists; note in the report when it is omitted, so "skipped" never reads as "passed".
 
 ---
 
-## Step 4 — Spawn validators in parallel
-Read each validator prompt from `personas/validators/`.
-Run all 5 by default. Skip Fidelity only if no reference exists.
+## Step 6 — Fan out
 
-| Validator | File | Prefix | Max findings |
-|---|---|---|---|
-| UX | `ux-validator.md` | UX-n | 5 |
-| Domain (accountant) | `domain-validator.md` | DOM-n | 3 |
-| Clarity (business owner) | `clarity-validator.md` | CLR-n | 3 |
-| Fidelity (QA vs spec) | `fidelity-validator.md` | FID-n | 5 |
-| Trust (does the UI lie?) | `trust-validator.md` | TRU-n | 4 |
+| Lens | File | Prefix | Cap | Floor |
+|---|---|---|---|---|
+| UX (incl. state clarity) | `ux-validator.md` | UX-n | 5 | 70 |
+| Domain (accounting) | `domain-validator.md` | DOM-n | 3 | 70 |
+| Clarity (business owner) | `clarity-validator.md` | CLR-n | 3 | 70 |
+| Fidelity (vs spec) | `fidelity-validator.md` | FID-n | 5 | 70 |
+| Trust (does the UI lie?) | `trust-validator.md` | TRU-n | 4 | 70 |
+| A11Y (keyboard/focus/semantics) | `a11y-validator.md` | A11Y-n | 4 | 70 |
 
-**Multi-instance rule:** for high-stakes reviews (pre-handoff, exec-facing, or when Ignat asks for a thorough pass), run the UX validator **3× in parallel** and cross-check. Findings surfaced by 2+ instances are tagged `corroborated` and ranked first. Don't triple-run the narrow-scope validators — wasteful against their 3-finding caps.
+One floor for all six. The confidence number is self-reported and uncalibrated — it is not the
+safety mechanism. **The evidence requirement is.**
 
-**Do NOT embed HTML in subagent prompts.** Pass the URL — validators fetch the prototype themselves using web_fetch. This keeps spawned prompts small and avoids token/payload limits.
+**High-stakes passes:** run UX 3× and tag findings surfaced by 2+ instances as `corroborated`,
+ranked first. Don't triple-run the narrow lenses; it wastes their 3-finding caps.
 
-**On round 1:** send URL + rendered state observations + style deviations.
-**On round 2+:** send URL + diff description (what changed since round N) + new screenshots. Include the full findings-log so validators know what's already resolved.
+Each agent receives — and nothing more:
 
-Each subagent receives:
 ```
-SYSTEM: [full content of validator's .md file]
+SYSTEM: [full content of the validator's .md file]
 
 USER:
+## Primary task
+[one sentence]
+
+## Your slice of the state map
+[the zone(s) this agent owns — controls, labels, after-interaction behaviour.
+ Trust and A11Y get the whole map: their failures are cross-zone by nature.]
+
 ## Prototype URL
-[URL — validator must fetch this with web_fetch before analyzing]
+[fetch only if the state map doesn't cover something]
 
-## Rendered state observations
-[bullet-point description of interactive states, what appears after each action, dynamic behavior that isn't visible in static HTML]
+## Canonical terminology
+[vocabulary.md — Domain, Clarity, Fidelity only]
 
-## Style deviations found
-[output from Step 3c]
+## Reference
+[reference.json / Figma screenshots — Fidelity only]
 
-## Reference (from Jira or manual)
-[reference.json content / Figma screenshots / description]
-
-## Known real friction (check the design against these)
-[relevant entries from personas/KNOWN_FRICTION.md]
+## Known real friction to check against
+[only the 2-3 relevant KNOWN_FRICTION entries — never all nine]
 
 ## Already resolved (do not re-flag)
 [findings-log.json resolved list]
 
 ## Known issues to ignore
-[from task brief, or "none"]
+[from the brief, or "none"]
 
-Return findings as JSON. Return NOTHING else.
+Return the strict JSON payload. Return NOTHING else.
 ```
 
-Spawn all validators simultaneously. Wait for all to complete.
+**Never embed raw HTML in a subagent prompt.** Validators need read and fetch, never write.
+
+**Round 2+:** send the diff — what changed since round N — plus new screenshots and the full
+resolved list, not the whole state map again.
 
 ---
 
-## Step 5 — Aggregate findings
-1. Prepend AUTO- findings from Step 3b (broken elements)
-2. Parse all validator JSON responses
-3. Filter: Critical and High only (Medium → polish list)
-4. Deduplicate: merge findings about the same element from multiple validators
-5. Sort: Critical first, then High
-6. Tag with `iteration: N`
+## Step 7 — Verify the round before reading a single finding
 
----
-
-## Step 6 — Present to Ignat
 ```
-Round [N] — [prototype name]
-
-🔴 Critical ([count]):
-• [ID] [element]: [finding] → [fix]
-
-🟠 High ([count]):
-• [ID] [element]: [finding] → [fix]
-
-🔧 Auto-applying:
-• [style deviations + safe fixes]
-
-❓ Need your call (max 3):
-• [ID]: [2-option choice or yes/no]
+node scripts/validator-check.js verify <round-dir>
 ```
 
----
+It fails the round on: a missing validator, unparseable output, wrong lens, schema drift
+(`per_prototype` wrappers, stray top-level keys), over-cap payloads, malformed ids, sub-floor
+confidence, empty required fields, an empty or absent `checked` array, unevidenced findings, and a
+missing `findings-log.json`.
 
-## Step 7 — Apply + auto-publish
-1. Apply auto-fixes immediately
-2. Apply Ignat-approved fixes
-3. Mark resolved findings in `findings-log.json`
-4. Rebuild the HTML
-5. **Auto-publish:** `git add [file] && git commit -m "[prototype name]: round N fixes" && git push`
-6. Send Ignat the live GitHub Pages URL
-
----
-
-## Step 8 — Loop or stop
-- If iteration < 3 AND Critical/High remain: go to Step 3 (delta mode)
-- If iteration = 3: "3 rounds complete. Remaining: [list]. Ship or hold?"
-- If zero Critical/High: "All critical issues resolved. Live: [URL]"
+**If it fails, fix and re-run. Do not report findings from a failed round.** The `checked` array is
+what distinguishes a validator that inspected everything and found nothing from one that inspected
+nothing — without it, both return `[]`.
 
 ---
 
-## Locked items rule
-Never re-flag a finding marked RESOLVED in `findings-log.json`.
+## Step 8 — Aggregate
 
-## Iteration budget
-Hard limit: 3 iterations. After that, Ignat decides.
+1. Prepend `AUTO-` findings from Step 4
+2. Keep Critical and High (Medium → polish list)
+3. Deduplicate by element across lenses; a finding two lenses hit independently ranks first
+4. Apply the Domain/Clarity tiebreak: on book-affecting or compliance-relevant terms the precise
+   term stays and Clarity's fix becomes an added explanation — tooltip, helper text, "what's
+   this?" link — never a relabel. Clarity wins outright on navigation, action-discovery and
+   reassurance copy.
+5. Tag with `iteration: N`
+
+---
+
+## Step 9 — Report
+
+**Max 7 items to Ignat, in chat, in plain words.** Verdict line, then short bullets. No finding
+ids, no per-validator rankings, no severity tallies — he reads these on a phone. Detail goes in
+the published HTML report.
+
+State explicitly which validators ran and which were skipped, and why.
+
+---
+
+## Step 10 — Apply, log, publish
+
+1. Apply auto-fixes, then Ignat-approved fixes
+2. **Write resolved findings to `findings-log.json`** at the project root — this is what makes
+   round 2 a delta instead of a cold re-review
+3. Rebuild, commit, push, send the GitHub Pages URL
+
+---
+
+## Step 11 — Loop
+
+Max 3 iterations. Then: "3 rounds complete. Remaining: [list]. Ship or hold?"
+Zero Critical/High: "All critical issues resolved. Live: [URL]"
+Never re-flag anything marked RESOLVED in `findings-log.json`.
+
+---
+
+## Improving the validators over time
+
+Every scope line should come from an observed failure, never from theory. Trust is the sharpest
+lens because it was written from one real bug; the others were written top-down.
+
+When something reaches Ignat that a validator should have caught:
+1. Log it in `personas/MISSES.md` — what it was, which lens owned it, why it was missed
+2. Add it as a scope line to that validator, citing the case id
+3. Keep the prototype as a regression case, so the next prompt change can be tested against known
+   bugs instead of judged by feel
+
+Ignat's side of this is one sentence in chat. No forms, no terminal.

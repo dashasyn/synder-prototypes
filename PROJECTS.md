@@ -5,6 +5,32 @@
 
 ## 🔧 Active Projects
 
+### Validator Pipeline v2 — enforcement rework (2026-08-20)
+- **What:** the review system's volume controls were prose with nothing verifying them. Audit of the
+  only saved round (`.synder-state/settings-rework/validators-r3/`, 2026-08-03) found: Trust never
+  ran, 145 findings against a cap of 20, schema drift to a `per_prototype` wrapper, `findings-log.json`
+  never created, and a dead `projects/prototypes/` path. No harness existed at all.
+- **Built:**
+  - `scripts/validator-check.js` — first enforcement code in the system. `manifest` declares the round
+    before spawning; `verify` fails it on missing validators, schema drift, over-cap, unevidenced
+    findings, empty `checked`, or a missing findings log. Replaying the Aug-3 round fails on all four
+    historical counts. Tested both directions.
+  - `personas/VALIDATOR_PROTOCOL.md` v2 (v1 archived alongside) — 11 steps: scope contract → recon
+    `statemap.json` → deterministic checks → manifest → fan-out → verify → aggregate → report → log.
+  - All six validators rewritten with a three-phase method (inventory → interrogate → select),
+    required `checked` coverage array, and an evidence requirement (`action` + `observed`).
+  - **New:** `personas/validators/a11y-validator.md` (keyboard, focus, semantics; contrast stays in
+    the script).
+  - `vocabulary.md` now injected into Domain, Clarity, Fidelity — it had never been passed to any agent.
+  - Domain/Clarity tiebreak: book-affecting terms keep the precise word, Clarity's fix becomes an
+    added explanation, never a relabel.
+  - `personas/MISSES.md` — failure corpus with 5 seeded cases and regression prototypes.
+  - `personas/WORKFLOW_AS_IS.md` + `HOW_WE_WORK.md` — review-ready descriptions for colleagues.
+- **Not done:** no prompt change has been measured against the regression cases yet, so v2's
+  improvement is argued, not demonstrated. Docs not pushed to the Pages hub (needs Ignat's go).
+- **Origin:** Ignat's complaint that agents were "overloaded with information"; cross-reviewed by
+  Claude, whose tiebreak rule and health-check idea were adopted.
+
 ### Reports / Financials Overview redesign (2026-08-06)
 - **Status:** 🚧 Prototype live, template-description copy set pending
 - **Prototype:** https://dashasyn.github.io/synder-prototypes/reports/financials-overview/ — `reports/financials-overview/index.html`
