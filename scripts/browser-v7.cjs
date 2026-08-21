@@ -38,13 +38,13 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   await p.click('#sheetbtnContent [data-field-key="platform"] label:has([data-check-value="Shopify"])');
   ok('panel stays open across toggles',
      await p.locator('#sheetbtnContent [data-field-key="platform"] [data-field-panel]').evaluate(e=>e.classList.contains('active')));
-  ok('table untouched while composing', await rows('sheetbtnTable') === 26, await rows('sheetbtnTable'));
+  ok('table untouched while composing', await rows('sheetbtnTable') === 45, await rows('sheetbtnTable'));
   await p.screenshot({ path: '/tmp/v7-sheet.png' });
 
   await p.click('#sheetbtnApplyBtn');
   await p.waitForTimeout(450);
   ok('Apply closes the sheet', !(await p.locator('#sheetbtnSheet').isVisible()));
-  ok('Apply commits', await rows('sheetbtnTable') === 16, await rows('sheetbtnTable'));
+  ok('Apply commits', await rows('sheetbtnTable') === 27, await rows('sheetbtnTable'));
   ok('chips bar now visible', await p.locator('#sheetbtnChips').isVisible());
   ok('badge visible on the button', await p.locator('#sheetbtnBadge').isVisible());
   ok('chip is not clickable as a control',
@@ -57,10 +57,10 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   await p.click('#sheetbtnOverlay', { position: { x: 100, y: 400 } });
   await p.waitForTimeout(400);
   ok('clicking the overlay closes the sheet', !(await p.locator('#sheetbtnSheet').isVisible()));
-  ok('nothing changed', await rows('sheetbtnTable') === 16, await rows('sheetbtnTable'));
+  ok('nothing changed', await rows('sheetbtnTable') === 27, await rows('sheetbtnTable'));
 
   await p.click('#sheetbtnChips [data-drop="platform"]');
-  ok('chip removal applies immediately', await rows('sheetbtnTable') === 26, await rows('sheetbtnTable'));
+  ok('chip removal applies immediately', await rows('sheetbtnTable') === 45, await rows('sheetbtnTable'));
   ok('chips bar hides when empty', !(await p.locator('#sheetbtnChips').isVisible()));
 
   console.log('\n— Regression: other variants still render —');

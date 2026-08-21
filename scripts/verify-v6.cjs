@@ -18,8 +18,16 @@ function oracle(f){f=f||{};return DATA.filter(t=>{
   if(f.platform&&f.platform.length&&f.platform.indexOf(t.platform)===-1)return false;
   if(f.type&&f.type.length&&f.type.indexOf(t.type)===-1)return false;
   return true;}).length;}
-const SEG={all:[],attention:['Failed','Rule failed','Rollback failed','Synced with warnings'],
-           ready:['Ready to sync','Pending'],synced:['Synced'],skipped:['Skipped']};
+// Taxonomy parsed from source so the suite can't drift from it.
+const SG_START = html.indexOf('var STATUS_GROUPS = {');
+const SG_BLOCK = html.slice(SG_START, html.indexOf('};', SG_START));
+const STATUS_GROUPS = {};
+{ const re=/'([^']+)':\s*'([^']+)'/g; let g; while((g=re.exec(SG_BLOCK))!==null) STATUS_GROUPS[g[1]]=g[2]; }
+const inGroup = n => Object.keys(STATUS_GROUPS).filter(x=>STATUS_GROUPS[x]===n);
+const ALL_STATUSES = Object.keys(STATUS_GROUPS);
+const GROUPS = ['Needs attention','Ready to sync','In progress','Successful','Deleted'];
+const SEG = { all: [] };
+GROUPS.forEach(g => { SEG[g.toLowerCase().replace(/ /g,'-')] = inGroup(g); });
 
 const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true});
 const d=dom.window.document;
@@ -49,11 +57,19 @@ ok('no "(default)" suffix', !/default/i.test(fld('date').textContent), fld('date
 console.log('-- default bar is Date range + Platform; status is addable');
 eq('bar order', bar().join(','), 'date,platform');
 ok('status not on the bar', bar().indexOf('status') === -1);
+ok('date chip has no "All time" row — the x is the clear',
+   !q('[data-pick-value="all"]',fld('date')));
+ok('Clear filters is on the bar (the 90-day window IS applied)',
+   !!q('[data-rec-clear]'));
 q('[data-rec-add]').click();
 q('[data-rec-add-key="status"]').click();
 q('[data-field-trigger]',fld('status')).click();   // close the auto-opened panel
 eq('bar after adding status', bar().join(','), 'date,platform,status');
-eq('status offers all 8', qa('[data-check-value]',fld('status')).length, 8);
+eq('status offers all 19', qa('[data-check-value]',fld('status')).length, ALL_STATUSES.length);
+eq('grouped into 5 sections', qa('.dropdown-group-label',fld('status')).length, 5);
+eq('group labels in the app order',
+   qa('.dropdown-group-label',fld('status')).map(e=>e.textContent).join(','),
+   'Ready to sync,Successful,Needs attention,Deleted,In progress');
 ok('status chip reads its label when empty', /^Status$/.test(chipText('status')), chipText('status'));
 
 console.log('-- change 3: no count line');
@@ -64,34 +80,34 @@ ok('no "no filters applied" sentence',
    !/no filters applied/.test(q('#variant-rec .mock-page').textContent));
 
 console.log('-- the two status controls share ONE value');
-eq('segments render', qa('#recSegments .status-segment').length, 5);
+eq('segments render', qa('#recSegments .status-segment').length, 6);
 ok('All segment active on load', seg('all').classList.contains('active'));
 eq('rows at load = 90-day window', rows(), oracle({date:'90d'}));
 Object.keys(SEG).forEach(k=>eq('segment count '+k, segCount(k), oracle({date:'90d',status:SEG[k]})));
 
 // chip -> segment
-pickStatuses(['Rule failed']);
-eq('rows = Rule failed', rows(), oracle({date:'90d',status:['Rule failed']}));
+pickStatuses(['Synced with rule failed']);
+eq('rows = Rule failed', rows(), oracle({date:'90d',status:['Synced with rule failed']}));
 ok('attention segment shows PARTIAL, not active',
-   seg('attention').classList.contains('partial') && !seg('attention').classList.contains('active'));
+   seg('needs-attention').classList.contains('partial') && !seg('needs-attention').classList.contains('active'));
 ok('All segment not active', !seg('all').classList.contains('active'));
-ok('chip spells the value', /Status: Rule failed/.test(chipText('status')), chipText('status'));
+ok('chip spells the value', /Status: Synced with rule failed/.test(chipText('status')), chipText('status'));
 
 // picking the exact group set reads as the segment itself
-pickStatuses(['Rule failed']);           // uncheck
-pickStatuses(SEG.attention);
+pickStatuses(['Synced with rule failed']);           // uncheck
+pickStatuses(SEG['needs-attention']);
 ok('attention segment now fully active',
-   seg('attention').classList.contains('active') && !seg('attention').classList.contains('partial'));
-eq('rows = whole attention group', rows(), oracle({date:'90d',status:SEG.attention}));
+   seg('needs-attention').classList.contains('active') && !seg('needs-attention').classList.contains('partial'));
+eq('rows = whole attention group', rows(), oracle({date:'90d',status:SEG['needs-attention']}));
 
 // segment -> chip
-seg('ready').click();
-ok('ready segment active', seg('ready').classList.contains('active'));
-ok('chip followed the segment', /Ready to sync, Pending/.test(chipText('status')), chipText('status'));
-eq('rows = ready group', rows(), oracle({date:'90d',status:SEG.ready}));
+seg('ready-to-sync').click();
+ok('ready segment active', seg('ready-to-sync').classList.contains('active'));
+ok('chip followed the segment', /Ready to sync/.test(chipText('status')), chipText('status'));
+eq('rows = ready group', rows(), oracle({date:'90d',status:SEG['ready-to-sync']}));
 
 // a set matching no group leaves every segment quiet
-pickStatuses(['Ready to sync','Pending']);            // clear the two
+pickStatuses(SEG['ready-to-sync']);                   // clear it
 pickStatuses(['Failed','Skipped']);
 ok('no segment claims to be active',
    qa('#recSegments .status-segment.active').length === 0,
@@ -117,8 +133,8 @@ ok('panel stays open after a pick (was the discard bug)',
 q('[data-panel-apply]',fld('date')).click();
 eq('date applies', rows(), oracle({date:'30d',status:['Failed','Skipped','Synced']}));
 ok('segment counts follow the date',
-   segCount('attention') === oracle({date:'30d',status:SEG.attention}),
-   segCount('attention')+' vs '+oracle({date:'30d',status:SEG.attention}));
+   segCount('needs-attention') === oracle({date:'30d',status:SEG['needs-attention']}),
+   segCount('needs-attention')+' vs '+oracle({date:'30d',status:SEG['needs-attention']}));
 q('[data-remove-field]',fld('date')).click();
 ok('date x keeps the chip on the bar', bar().indexOf('date') !== -1, bar().join(','));
 ok('date chip reads its bare label now', /^Date range$/.test(chipText('date')), chipText('date'));
@@ -150,12 +166,13 @@ q('[data-panel-apply]',fld('platform')).click();
 // the only filter in play — which is itself the proof that those x's committed.
 eq('Stripe applied', rows(), oracle({platform:['Stripe']}));
 q('[data-remove-field]',fld('platform')).click();
-ok('platform chip left the bar', bar().indexOf('platform') === -1, bar().join(','));
-eq('and the list stopped filtering by it', rows(), oracle({}));
+ok('pinned platform chip STAYS on the bar', bar().indexOf('platform') !== -1, bar().join(','));
+eq('but the list stopped filtering by it', rows(), oracle({}));
+ok('and with nothing applied, Clear filters removes itself', !q('[data-rec-clear]'));
 
 console.log('-- dashboard deep-link is a plain status chip');
 q('#recDeepLinkBtn').click();
-ok('status chip carries the arriving value', /Status: Rule failed/.test(chipText('status')), chipText('status'));
+ok('status chip carries the arriving value', /Status: Synced with rule failed/.test(chipText('status')), chipText('status'));
 ok('NO attribution marker of any kind',
    !q('#recFilterBar [data-deeplink-tag]') && !q('#recFilterBar .deeplink-chip') &&
    !/From dashboard/.test(q('#variant-rec .mock-page').textContent));
@@ -164,10 +181,10 @@ ok('it is the same chip component as platform',
    q('.filter-chip',fld('platform')).className.replace(' active',''));
 ok('it has its own remove button', !!q('[data-remove-field]',fld('status')));
 ok('and its own dropdown', !!q('[data-field-trigger]',fld('status')));
-ok('attention segment partial', seg('attention').classList.contains('partial'));
-eq('rows = Rule failed at the 90-day default', rows(), oracle({date:'90d',status:['Rule failed']}));
-seg('synced').click();
-eq('a segment click replaces it', rows(), oracle({date:'90d',status:['Synced']}));
+ok('attention segment partial', seg('needs-attention').classList.contains('partial'));
+eq('rows = Rule failed at the 90-day default', rows(), oracle({date:'90d',status:['Synced with rule failed']}));
+seg('successful').click();
+eq('a segment click replaces it', rows(), oracle({date:'90d',status:SEG['successful']}));
 
 console.log('-- empty state and recovery');
 // Add whichever chips this point in the run has left off the bar.
@@ -188,15 +205,18 @@ q('[data-panel-apply]',fld('status')).click();
 eq('no rows', rows(), 0);
 ok('empty state shown', !!q('#recTable .empty-state'));
 q('#recTable [data-empty-clear]').click();
-eq('recovered to the 90-day default', rows(), oracle({date:'90d'}));
-eq('bar back to the default', bar().join(','), 'date,platform');
+// "Clear filters" means nothing applied — not "back to the 90-day load state",
+// which is itself a filter the user would then have to clear again.
+eq('recovered to nothing applied', rows(), oracle({}));
+eq('bar back to the pinned pair', bar().join(','), 'date,platform');
+ok('date chip is cleared, not reset to 90 days', /^Date range$/.test(chipText('date')), chipText('date'));
 ok('All segment active again', seg('all').classList.contains('active'));
 
 console.log('-- other variants untouched');
 ok('V7 still has its segments row', !!q('#sheetbtnSegments'));
 ok('V7 still has its count line', !!q('#sheetbtnCount'));
 ok('V7 sheet still excludes status', true);
-ok('V8 tabs intact', qa('#groupsTabs .status-segment').length === 5);
+ok('V8 tabs intact', qa('#groupsTabs .status-segment').length === 6);
 ok('V8 count line intact', !!q('#groupsCount'));
 eq('8 nav tabs', qa('.nav-tab').length, 8);
 

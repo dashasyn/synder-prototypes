@@ -24,7 +24,7 @@ const ok = (n, c, x) => { if (c) { pass++; console.log('  ok   ' + n); } else { 
     ok('multiselect panel stays open across toggles', await open('#popoverBody [data-field-key="status"] [data-field-panel]'));
     await p.click('#popoverBody [data-field-key="status"] label:has([data-check-value="Pending"])');
     ok('popover survives a second toggle', await open('#filterPopover'));
-    ok('table untouched while staging in the popover', (await rows('buttonTable')) === 26, await rows('buttonTable'));
+    ok('table untouched while staging in the popover', (await rows('buttonTable')) === 45, await rows('buttonTable'));
     // The open Status panel physically overlays the fields below it, so close it
     // the way a user would (click the trigger again) before reaching for Amount.
     await p.click('#popoverBody [data-field-key="status"] [data-field-trigger]');
@@ -60,7 +60,7 @@ const ok = (n, c, x) => { if (c) { pass++; console.log('  ok   ' + n); } else { 
     await p.click('#chipsFilterBar [data-add-key="customer"]');
     ok('new chip panel auto-opens and stays open',
         await open('#chipsFilterBar [data-field-key="customer"] [data-field-panel]'));
-    ok('table untouched by adding a chip', (await rows('chipsTable')) === 26, await rows('chipsTable'));
+    ok('table untouched by adding a chip', (await rows('chipsTable')) === 45, await rows('chipsTable'));
 
     console.log('\n— Apply buttons are visible in every bar —');
     for (const [tab, sel] of [['current', '#currentFilterBar [data-apply]'],

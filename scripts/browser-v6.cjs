@@ -39,7 +39,8 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
      await p.locator('#recFilterBar [data-rec-add-key="status"]').isVisible());
   await p.click('#recFilterBar [data-rec-add-key="status"]');
   ok('status chip visible after adding', await p.locator(f('status')).isVisible());
-  eq('8 checkboxes', await p.locator(f('status')+' [data-check-value]').count(), 8);
+  eq('19 checkboxes', await p.locator(f('status')+' [data-check-value]').count(), 19);
+  eq('5 group headers', await p.locator(f('status')+' .dropdown-group-label').count(), 5);
   await p.keyboard.press('Escape');
   ok('no count line', await p.locator('#recCount').count()===0);
   ok('no "Showing N of" text',
@@ -63,7 +64,7 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   ok('Apply reachable in the panel', await p.locator(f('date')+' [data-panel-apply]').isVisible());
   await p.click(f('date')+' [data-panel-apply]');
   ok('panel closed after Apply', !(await p.locator(f('date')+' [data-field-panel]').isVisible()));
-  eq('date committed', await rows(), 19);
+  eq('date committed', await rows(), 31);
   ok('chip shows the applied value',
      /Last 30 days/.test(await p.locator(f('date')+' .chip-label-text').innerText()));
 
@@ -75,26 +76,36 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   const withStripe = await rows();
   ok('Stripe applied', withStripe < 19, withStripe);
   await p.click(f('platform')+' [data-remove-field]');
-  ok('platform chip gone from the bar', await p.locator(f('platform')).count()===0);
-  eq('and the list stopped filtering by it', await rows(), 19);
+  // Platform is PINNED: its x clears the value and leaves the chip in place.
+  ok('pinned platform chip stays on the bar', await p.locator(f('platform')).isVisible());
+  eq('but the list stopped filtering by it', await rows(), 31);
+  ok('Clear filters is on the bar while the date filter is applied',
+     await p.locator('#recFilterBar [data-rec-clear]').isVisible());
+  await p.click('#recFilterBar [data-rec-clear]');
+  eq('Clear filters clears everything', await rows(), 45);
+  ok('and then removes itself', await p.locator('#recFilterBar [data-rec-clear]').count()===0);
 
   console.log('-- the two status controls stay in step');
-  await p.click(seg('attention'));
-  ok('attention segment active', await p.locator(seg('attention')+'.active').count()===1);
+  // Clear filters emptied the bar back to the pinned pair, so put status back.
+  await p.click('#recFilterBar [data-rec-add]');
+  await p.click('#recFilterBar [data-rec-add-key="status"]');
+  await p.keyboard.press('Escape');
+  await p.click(seg('needs-attention'));
+  ok('attention segment active', await p.locator(seg('needs-attention')+'.active').count()===1);
   ok('status chip followed it',
      /Status:/.test(await p.locator(f('status')+' .chip-label-text').innerText()),
      await p.locator(f('status')+' .chip-label-text').innerText());
   await p.click(f('status')+' [data-field-trigger]');
-  for (const v of ['Failed','Rollback failed','Synced with warnings'])
+  for (const v of ['Failed','Rollback failed','Synced with warnings','Canceled','Not parsed'])
     await p.click(f('status')+' label:has([data-check-value="'+v+'"])');
   ok('status panel STILL VISIBLE after three toggles',
      await p.locator(f('status')+' [data-field-panel]').isVisible());
   await p.click(f('status')+' [data-panel-apply]');
   ok('segment drops to dashed partial',
-     await p.locator(seg('attention')+'.partial').count()===1 &&
-     await p.locator(seg('attention')+'.active').count()===0);
+     await p.locator(seg('needs-attention')+'.partial').count()===1 &&
+     await p.locator(seg('needs-attention')+'.active').count()===0);
   ok('segments row still fully clickable',
-     await p.locator(seg('ready')).isVisible() && await p.locator(seg('synced')).isVisible());
+     await p.locator(seg('ready-to-sync')).isVisible() && await p.locator(seg('successful')).isVisible());
 
   console.log('-- deep-link renders as a plain status chip');
   await p.click('#recDeepLinkBtn');
@@ -103,12 +114,12 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
      await p.locator('#recFilterBar .deeplink-chip').count()===0 &&
      !/From dashboard/.test(await p.locator('#variant-rec .mock-page').innerText()));
   ok('status chip carries the value',
-     /Rule failed/.test(await p.locator(f('status')+' .chip-label-text').innerText()));
+     /Synced with rule failed/.test(await p.locator(f('status')+' .chip-label-text').innerText()));
   ok('and it has a working remove button',
      await p.locator(f('status')+' [data-remove-field]').isVisible());
-  await p.click(seg('synced'));
+  await p.click(seg('successful'));
   ok('segment click replaces the value',
-     /Synced/.test(await p.locator(f('status')+' .chip-label-text').innerText()));
+     /selected|Synced/.test(await p.locator(f('status')+' .chip-label-text').innerText()));
 
   console.log('-- V7 and V8 unaffected');
   await p.click('.nav-tab[data-variant="sheetbtn"]');
@@ -125,7 +136,7 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   ok('V8 date panel also stays open on pick (same fix)',
      await p.locator('#groupsFilterBar [data-field-key="date"] [data-field-panel]').isVisible());
   await p.click('#groupsFilterBar [data-field-key="date"] [data-panel-apply]');
-  eq('V8 date commits', await rows.call && await p.locator('#groupsTable tbody tr').count(), 6);
+  eq('V8 date commits', await p.locator('#groupsTable tbody tr').count(), 8);
 
   console.log('-- screenshots');
   await p.addStyleTag({content:'.page-header{position:static !important}'});

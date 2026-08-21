@@ -23,10 +23,10 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
      await p.locator('#recFilterBar [data-field-key="platform"] [data-panel-apply]').isVisible());
   await p.click('#recFilterBar [data-field-key="platform"] label:has([data-check-value="Stripe"])');
   ok('panel stays open after checking', await p.locator('#recFilterBar [data-field-key="platform"] [data-field-panel]').evaluate(e=>e.classList.contains('active')));
-  ok('table untouched while staged', await rows('recTable') === 26, await rows('recTable'));
+  ok('table untouched while staged', await rows('recTable') === 43, await rows('recTable'));
   await p.click('#recFilterBar [data-field-key="platform"] [data-panel-apply]');
   await p.waitForTimeout(300);
-  ok('panel Apply commits', await rows('recTable') === 10, await rows('recTable'));
+  ok('panel Apply commits', await rows('recTable') === 15, await rows('recTable'));
   ok('panel closed after Apply',
      await p.locator('#recFilterBar [data-field-key="platform"] [data-field-panel]').count() === 0
      || !(await p.locator('#recFilterBar [data-field-key="platform"] [data-field-panel]').evaluate(e=>e.classList.contains('active'))));
@@ -35,7 +35,7 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   await p.click('#recFilterBar [data-field-key="platform"] label:has([data-check-value="Amazon"])');
   await p.click('h1');   // click outside = close without Apply
   await p.waitForTimeout(300);
-  ok('clicking away discards the edit', await rows('recTable') === 10, await rows('recTable'));
+  ok('clicking away discards the edit', await rows('recTable') === 15, await rows('recTable'));
   ok('discarded value does not linger on the chip label',
      (await p.locator('#recFilterBar [data-field-key="platform"] .chip-label-text').innerText()) === 'Platform: Stripe',
      await p.locator('#recFilterBar [data-field-key="platform"] .chip-label-text').innerText());
@@ -57,7 +57,7 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   await p.waitForTimeout(400);
   const chip = (await p.locator('#sheetbtnChips .applied-chip').first().innerText()).replace('close','').trim();
   ok('chip collapses at 3 values', chip === 'Platform: Stripe + 2 more', chip);
-  ok('rows still reflect all three', await rows('sheetbtnTable') === 21, await rows('sheetbtnTable'));
+  ok('rows still reflect all three', await rows('sheetbtnTable') === 35, await rows('sheetbtnTable'));
 
   console.log('\n— V7 segments —');
   ok('segments visible above the table',
@@ -67,10 +67,10 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
   const tblBox  = await p.locator('#sheetbtnCount').boundingBox();
   ok('chips bar sits above the segments', chipBox.y < segBox.y, JSON.stringify({chipBox, segBox}));
   ok('segments sit directly above the table toolbar', segBox.y < tblBox.y);
-  await p.click('#sheetbtnSegments [data-segment="attention"]');
+  await p.click('#sheetbtnSegments [data-segment="needs-attention"]');
   await p.waitForTimeout(250);
   ok('segment commits on click without an Apply',
-     await p.locator('#sheetbtnSegments [data-segment="attention"]').evaluate(e => e.classList.contains('active')));
+     await p.locator('#sheetbtnSegments [data-segment="needs-attention"]').evaluate(e => e.classList.contains('active')));
   ok('segment produced no status chip',
      await p.locator('#sheetbtnChips [data-drop="status"]').count() === 0);
   await p.screenshot({ path: '/tmp/v7-chip.png', clip: { x: 0, y: 330, width: 1440, height: 400 } });

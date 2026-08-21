@@ -64,6 +64,18 @@ function oracle(f) {
         return true;
     }).length;
 }
+// Taxonomy parsed out of the source, so the suite can't drift from it.
+const SG_START = html.indexOf('var STATUS_GROUPS = {');
+const SG_BLOCK = html.slice(SG_START, html.indexOf('};', SG_START));
+const STATUS_GROUPS = {};
+{
+    const re = /'([^']+)':\s*'([^']+)'/g;
+    let g;
+    while ((g = re.exec(SG_BLOCK)) !== null) STATUS_GROUPS[g[1]] = g[2];
+}
+const inGroup = name => Object.keys(STATUS_GROUPS).filter(x => STATUS_GROUPS[x] === name);
+const ALL_STATUSES = Object.keys(STATUS_GROUPS);
+
 const TOTAL = DATA.length;
 const FILTER_KEYS = ['date', 'status', 'platform', 'type', 'amount', 'customer'];
 
@@ -87,14 +99,18 @@ function check(bar, key, value, on) {
 }
 
 console.log('\n— Dataset —');
-eq('parsed rows', TOTAL, 26);
-eq('distinct statuses', new Set(DATA.map(r => r.status)).size, 8);
+eq('parsed rows', TOTAL, 45);
+eq('distinct statuses', new Set(DATA.map(r => r.status)).size, 19);
+ok('every status in the taxonomy appears in the dataset',
+    ALL_STATUSES.every(x => DATA.some(r => r.status === x)),
+    ALL_STATUSES.filter(x => !DATA.some(r => r.status === x)).join(', '));
+eq('5 status groups', new Set(Object.values(STATUS_GROUPS)).size, 5);
 ok('V6 has no bar-level Apply and no dirty hint',
     !d.querySelector('#recFilterBar [data-rec-apply]') && !d.getElementById('recDirtyHint'));
 ok('V6 has no Reset to default', !d.querySelector('#recFilterBar [data-rec-reset]'));
-ok('all four status groups represented in the table markup',
-    ['status-failed', 'status-synced', 'status-ready-to-sync', 'status-skipped']
-        .every(c => html.includes('.' + c) || html.includes(c)));
+ok('every tone class is defined in the stylesheet',
+    ['tone-danger', 'tone-warn', 'tone-ok', 'tone-info', 'tone-busy', 'tone-muted']
+        .every(c => html.includes('.' + c + ' ')));
 
 console.log('\n— Structure: six variants, every one Apply-gated —');
 eq('nav tabs', d.querySelectorAll('.nav-tab').length, 8);
@@ -118,7 +134,7 @@ const v1Apply = () => d.querySelector('#currentFilterBar [data-apply]');
 const v1Reset = () => d.querySelector('#currentFilterBar [data-reset]');
 const OPTS = {
     date: ['all', '7d', '30d', '90d', 'month', 'lastmonth'],
-    status: ['Failed', 'Rule failed', 'Rollback failed', 'Synced', 'Synced with warnings', 'Skipped', 'Ready to sync', 'Pending'],
+    status: ALL_STATUSES,
     platform: ['Stripe', 'Shopify', 'PayPal', 'Amazon'],
     type: ['Sale', 'Refund', 'Payout', 'Fee'],
 
@@ -278,18 +294,19 @@ eq('row Apply commits', rows('buttonTable'), TOTAL);
 console.log('\n— V5 Quick filters —');
 const presets = () => Array.from(d.querySelectorAll('#quickPresetBar .preset-pill'));
 eq('six presets rendered', presets().length, 6);
-eq('first preset is Attention required',
-    presets()[0].textContent.replace(/[0-9]+$/, '').replace('error_outline', '').trim(), 'Attention required');
-const ATTENTION = ['Failed', 'Rule failed', 'Rollback failed', 'Synced with warnings'];
+eq('first preset is Needs attention',
+    presets()[0].textContent.replace(/[0-9]+$/, '').replace('error_outline', '').trim(), 'Needs attention');
+const ATTENTION = inGroup('Needs attention');
 const presetCount = i => parseInt(presets()[i].querySelector('.preset-count').textContent, 10);
 eq('Attention count matches the oracle', presetCount(0), oracle({ status: ATTENTION }));
 eq('Failed count matches the oracle', presetCount(1), oracle({ status: ['Failed'] }));
-eq('Ready to sync count matches the oracle', presetCount(2), oracle({ status: ['Ready to sync'] }));
+eq('Ready to sync count matches the oracle', presetCount(2), oracle({ status: inGroup('Ready to sync') }));
 presets()[0].click();
 eq('preset commits in one click', rows('quickTable'), oracle({ status: ATTENTION }));
 ok('preset pill shows active', presets()[0].classList.contains('active'));
 ok('no unapplied-changes hint after a preset', !hint('quickDirtyHint'));
-eq('bar reflects the preset', field('quickFilterBar', 'status').querySelector('.field-trigger-text').textContent, '4 selected');
+eq('bar reflects the preset', field('quickFilterBar', 'status').querySelector('.field-trigger-text').textContent,
+    ATTENTION.length + ' selected');
 presets()[0].click();
 eq('clicking the active preset clears it', rows('quickTable'), TOTAL);
 // a preset carries staged bar changes with it, so nothing is left half-applied
@@ -312,7 +329,7 @@ const recBar = () => Array.from(d.querySelectorAll('#recFilterBar [data-field-ke
     .map(e => e.getAttribute('data-field-key'));
 const recChipText = key => field('recFilterBar', key).querySelector('.chip-label-text').textContent.trim();
 
-eq('five segments', segs().length, 5);
+eq('six segments', segs().length, 6);
 ok('no baseline chip — date is an ordinary filter chip',
     !d.querySelector('#recFilterBar .baseline-chip') && !!field('recFilterBar', 'date'));
 ok('date chip has no "(default)" note', !d.querySelector('#recFilterBar .baseline-note'));
@@ -326,8 +343,10 @@ ok('status is not on the bar by default, but is addable',
     recBar().indexOf('status') === -1 && !!d.querySelector('#recFilterBar [data-rec-add-key="status"]'));
 d.querySelector('#recFilterBar [data-rec-add]').click();
 d.querySelector('#recFilterBar [data-rec-add-key="status"]').click();
-eq('status filter offers all 8 statuses',
-    field('recFilterBar', 'status').querySelectorAll('[data-check-value]').length, 8);
+eq('status filter offers all 19 statuses',
+    field('recFilterBar', 'status').querySelectorAll('[data-check-value]').length, ALL_STATUSES.length);
+eq('grouped into 5 labelled sections',
+    field('recFilterBar', 'status').querySelectorAll('.dropdown-group-label').length, 5);
 trigger('recFilterBar', 'status').click();   // close the auto-opened panel
 eq('90-day default shows every row', rows('recTable'), oracle({ date: '90d' }));
 eq('Attention segment count matches the oracle', segCount(1), oracle({ date: '90d', status: ATTENTION }));
@@ -337,24 +356,26 @@ segs()[1].click();
 eq('segment commits in one click', rows('recTable'), oracle({ date: '90d', status: ATTENTION }));
 ok('segment marked active', segs()[1].classList.contains('active'));
 ok('the status chip followed the segment',
-    /Status: 4 selected/.test(recChipText('status')), recChipText('status'));
+    recChipText('status') === 'Status: ' + ATTENTION.length + ' selected', recChipText('status'));
 
 // chip -> segment, still one value. One trigger click, then toggle inside the
 // open panel — re-clicking the trigger would CLOSE it and discard the edits.
 trigger('recFilterBar', 'status').click();
-['Failed', 'Rollback failed', 'Synced with warnings'].forEach(v => {
+ATTENTION.filter(x => x !== 'Synced with rule failed').forEach(v => {
     const cb = panel('recFilterBar', 'status').querySelector('[data-check-value="' + v + '"]');
     cb.checked = false;
     cb.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
 });
 panelApply('status').click();
-eq('narrowing in the chip commits', rows('recTable'), oracle({ date: '90d', status: ['Rule failed'] }));
+eq('narrowing in the chip commits', rows('recTable'),
+    oracle({ date: '90d', status: ['Synced with rule failed'] }));
 ok('containing segment drops to partial, not active',
     segs()[1].classList.contains('partial') && !segs()[1].classList.contains('active'));
 
 // deep-link sets the same value and is labelled, not duplicated
 d.getElementById('recDeepLinkBtn').click();
-eq('deep-link filters to the granular status', rows('recTable'), oracle({ date: '90d', status: ['Rule failed'] }));
+eq('deep-link filters to the granular status', rows('recTable'),
+    oracle({ date: '90d', status: ['Synced with rule failed'] }));
 ok('containing segment shows partial', segs()[1].classList.contains('partial'));
 // A deep-linked status is an ORDINARY chip now — no attribution label at all.
 ok('no "From dashboard" marker anywhere',
@@ -406,10 +427,17 @@ ok('the trigger already shows the staged value',
 panelApply('date').click();
 eq('date Apply commits', rows('recTable'), oracle({ date: '7d', platform: ['Stripe'] }));
 
-// A chip x has no bar-level Apply to defer to, so it must commit.
+// A chip x has no bar-level Apply to defer to, so it must commit. Platform is
+// PINNED, so its x clears the value and leaves the chip in place.
 field('recFilterBar', 'platform').querySelector('[data-remove-field]').click();
-ok('platform chip left the bar', recBar().indexOf('platform') === -1, recBar().join(','));
-eq('and the list stopped filtering by it', rows('recTable'), oracle({ date: '7d' }));
+ok('pinned platform chip stays on the bar', recBar().indexOf('platform') !== -1, recBar().join(','));
+eq('but the list stopped filtering by it', rows('recTable'), oracle({ date: '7d' }));
+ok('Clear filters is on the bar while something is applied',
+    !!d.querySelector('#recFilterBar [data-rec-clear]'));
+d.querySelector('#recFilterBar [data-rec-clear]').click();
+eq('Clear filters clears everything', rows('recTable'), TOTAL);
+ok('and then removes itself', !d.querySelector('#recFilterBar [data-rec-clear]'));
+ok('the pinned pair is still there', recBar().join(',') === 'date,platform', recBar().join(','));
 
 console.log('\n— V7 Button + Side sheet —');
 const sbBadge = () => d.getElementById('sheetbtnBadge');
@@ -420,16 +448,13 @@ ok('chips bar hidden when nothing applied', !d.getElementById('sheetbtnChips').c
 ok('badge hidden when nothing applied', !sbBadge().classList.contains('show'));
 ok('sheet closed initially', !sbOpen());
 // Status lives in the segmented control, not the sheet.
-const SEG = {
-    all: [],
-    attention: ['Failed', 'Rule failed', 'Rollback failed', 'Synced with warnings'],
-    ready: ['Ready to sync', 'Pending'],
-    synced: ['Synced'],
-    skipped: ['Skipped']
-};
+const SEG = { all: [] };
+['Needs attention', 'Ready to sync', 'In progress', 'Successful', 'Deleted'].forEach(g => {
+    SEG[g.toLowerCase().replace(/ /g, '-')] = inGroup(g);
+});
 const sbSeg      = key => d.querySelector('#sheetbtnSegments [data-segment="' + key + '"]');
 const sbSegCount = key => parseInt(sbSeg(key).querySelector('.seg-count').textContent, 10);
-eq('segments rendered', d.querySelectorAll('#sheetbtnSegments .status-segment').length, 5);
+eq('segments rendered', d.querySelectorAll('#sheetbtnSegments .status-segment').length, Object.keys(SEG).length);
 ok('All is the active segment on load', sbSeg('all').classList.contains('active'));
 ok('unfiltered segment counts match the oracle',
     Object.keys(SEG).every(k => sbSegCount(k) === oracle({ status: SEG[k] })),
@@ -484,10 +509,10 @@ eq('back to 2 values, spelled out again',
     sbChips()[0].textContent.replace('close', '').trim(), 'Platform: Stripe, Shopify');
 
 const chipsBefore = sbChips().length;
-sbSeg('attention').click();
+sbSeg('needs-attention').click();
 eq('segment click commits at once',
-    rows('sheetbtnTable'), oracle({ status: SEG.attention, platform: ['Stripe', 'Shopify'], type: ['Sale'] }));
-ok('segment becomes active', sbSeg('attention').classList.contains('active'));
+    rows('sheetbtnTable'), oracle({ status: SEG['needs-attention'], platform: ['Stripe', 'Shopify'], type: ['Sale'] }));
+ok('segment becomes active', sbSeg('needs-attention').classList.contains('active'));
 eq('segment adds no chip', sbChips().length, chipsBefore);
 ok('no status chip anywhere', !d.querySelector('#sheetbtnChips [data-drop="status"]'));
 eq('badge ignores status — it counts what is behind the button', sbBadge().textContent, '3');
@@ -495,18 +520,18 @@ eq('badge ignores status — it counts what is behind the button', sbBadge().tex
 d.getElementById('sheetbtnFiltersBtn').click();
 d.getElementById('sheetbtnResetBtn').click();
 d.getElementById('sheetbtnApplyBtn').click();
-ok('sheet Reset leaves the segment alone', sbSeg('attention').classList.contains('active'));
+ok('sheet Reset leaves the segment alone', sbSeg('needs-attention').classList.contains('active'));
 eq('sheet Reset clears only the sheet filters',
-    rows('sheetbtnTable'), oracle({ status: SEG.attention }));
+    rows('sheetbtnTable'), oracle({ status: SEG['needs-attention'] }));
 
 d.getElementById('sheetbtnFiltersBtn').click();
 check('sheetbtnContent', 'platform', 'Stripe');
 d.getElementById('sheetbtnApplyBtn').click();
 d.querySelector('#sheetbtnChips [data-drop="platform"]').click();
-eq('chip x applies at once', rows('sheetbtnTable'), oracle({ status: SEG.attention }));
+eq('chip x applies at once', rows('sheetbtnTable'), oracle({ status: SEG['needs-attention'] }));
 d.getElementById('sheetbtnFiltersBtn').click();
 d.getElementById('sheetbtnCloseBtn').click();
-eq('closing without Apply changes nothing', rows('sheetbtnTable'), oracle({ status: SEG.attention }));
+eq('closing without Apply changes nothing', rows('sheetbtnTable'), oracle({ status: SEG['needs-attention'] }));
 
 d.getElementById('sheetbtnFiltersBtn').click();
 check('sheetbtnContent', 'platform', 'Stripe');
@@ -525,16 +550,16 @@ sbSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', b
 eq('Enter commits the search', rows('sheetbtnTable'), DATA.filter(t => /acme/i.test(t.customer)).length);
 eq('segment counts follow the search too', sbSegCount('all'),
     DATA.filter(t => /acme/i.test(t.customer)).length);
-sbSeg('synced').click();
-eq('search ANDs with the segment',
-    rows('sheetbtnTable'), DATA.filter(t => /acme/i.test(t.customer) && t.status === 'Synced').length);
+sbSeg('successful').click();
+eq('search ANDs with the segment', rows('sheetbtnTable'),
+    DATA.filter(t => /acme/i.test(t.customer) && inGroup('Successful').includes(t.status)).length);
 sbSeg('all').click();
 sbSearch.value = '';
 sbSearch.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 eq('cleared search restores everything', rows('sheetbtnTable'), TOTAL);
 
 console.log('\n— Empty state is reachable and recovers —');
-check('currentFilterBar', 'status', 'Rule failed');
+check('currentFilterBar', 'status', 'Synced with rule failed');
 pick('currentFilterBar', 'customer', 'Local Store');
 v1Apply().click();
 eq('no rows for that combination', rows('currentTable'), 0);

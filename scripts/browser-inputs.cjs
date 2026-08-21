@@ -55,7 +55,7 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
      /\$100\.00 – \$500\.00/.test(await p.locator(f('amount')+' .chip-label-text').innerText()),
      await p.locator(f('amount')+' .chip-label-text').innerText());
   await p.click(f('amount')+' [data-panel-apply]');
-  eq('between 100 and 500 applied', await rows(), 8);
+  eq('between 100 and 500 applied', await rows(), 14);
   ok('chip reads the range',
      /\$100\.00 – \$500\.00/.test(await p.locator(f('amount')+' .chip-label-text').innerText()),
      await p.locator(f('amount')+' .chip-label-text').innerText());
@@ -91,7 +91,7 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
      await p.locator(f('date')+' [data-range-to]').evaluate(e=>document.activeElement===e));
   await p.locator('#variant-rec .mock-page').screenshot({path:'/tmp/v6-daterange.png'});
   await p.click(f('date')+' [data-panel-apply]');
-  eq('custom range applied', await rows(), 6);
+  eq('custom range applied', await rows(), 11);
   ok('chip reads both dates',
      /Mar 1, 2026 – Mar 31, 2026/.test(await p.locator(f('date')+' .chip-label-text').innerText()),
      await p.locator(f('date')+' .chip-label-text').innerText());
@@ -100,7 +100,7 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
      (await p.locator(f('date')+' [data-range-from]').inputValue()) === '2026-03-01');
   await p.click(f('date')+' [data-pick-value="90d"]');
   await p.click(f('date')+' [data-panel-apply]');
-  eq('back to a preset', await rows(), 26);
+  eq('back to a preset', await rows(), 43);
 
   console.log('-- customer search');
   await add('customer');
@@ -113,8 +113,9 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   ok('focus stayed in the search box',
      await p.locator(f('customer')+' [data-panel-search]').evaluate(e=>document.activeElement===e));
   ok('list narrowed', (await shown()) < all, await shown());
-  ok('"All customers" still clickable',
-     await p.locator(f('customer')+' [data-option-value="all"]').isVisible());
+  // A chip has its own x, so there is no "All customers" row to keep visible.
+  ok('no "All customers" row on a chip',
+     await p.locator(f('customer')+' [data-option-value="all"]').count() === 0);
   ok('Vertex Supply is a visible match',
      await p.locator(f('customer')+' [data-pick-value="Vertex Supply"]').isVisible());
   await p.locator('#variant-rec .mock-page').screenshot({path:'/tmp/v6-search.png'});
@@ -123,7 +124,7 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   await p.locator(f('customer')+' [data-panel-search]').fill('vertex');
   await p.click(f('customer')+' [data-pick-value="Vertex Supply"]');
   await p.click(f('customer')+' [data-panel-apply]');
-  eq('picked from a searched list', await rows(), 5);
+  eq('picked from a searched list', await rows(), 8);
   await p.click(f('customer')+' [data-field-trigger]');
   ok('search box empty on reopen',
      (await p.locator(f('customer')+' [data-panel-search]').inputValue()) === '');

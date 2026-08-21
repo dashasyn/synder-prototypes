@@ -40,17 +40,20 @@ function oracle(f) {
     });
 }
 const BASE = { date: '90d' };
-const GROUPS = {
-    all: [],
-    attention: ['Failed', 'Rule failed', 'Rollback failed', 'Synced with warnings'],
-    ready: ['Ready to sync', 'Pending'],
-    synced: ['Synced'],
-    skipped: ['Skipped']
-};
-const ALL_STATUSES = ['Failed','Rule failed','Rollback failed','Synced','Synced with warnings','Skipped','Ready to sync','Pending'];
+// Taxonomy parsed from source so the suite can't drift from it.
+const SG_START = html.indexOf('var STATUS_GROUPS = {');
+const SG_BLOCK = html.slice(SG_START, html.indexOf('};', SG_START));
+const STATUS_GROUPS = {};
+{ const re=/'([^']+)':\s*'([^']+)'/g; let g; while((g=re.exec(SG_BLOCK))!==null) STATUS_GROUPS[g[1]]=g[2]; }
+const inGroup = n => Object.keys(STATUS_GROUPS).filter(x=>STATUS_GROUPS[x]===n);
+const GROUP_NAMES = ['Needs attention','Ready to sync','In progress','Successful','Deleted'];
+const GROUPS = { all: [] };
+GROUP_NAMES.forEach(g => { GROUPS[g.toLowerCase().replace(/ /g,'-')] = inGroup(g); });
+const PILL_MAX = 4;
+const ALL_STATUSES = Object.keys(STATUS_GROUPS);
 
 console.log('dataset rows parsed: ' + DATA.length);
-eq('oracle sees 26 rows', DATA.length, 26);
+eq('oracle sees 45 rows', DATA.length, 45);
 
 const dom = new JSDOM(html, { runScripts: 'dangerously', pretendToBeVisual: true });
 const D = dom.window.document;
@@ -75,9 +78,9 @@ const chipKeys  = () => qa('#groupsFilterBar [data-field-key]').map(e => e.getAt
 console.log('\n-- variant 8 exists and is wired');
 ok('nav tab 8 present', !!q('.nav-tab[data-variant="groups"]'));
 ok('section present', !!q('#variant-groups'));
-eq('5 group tabs', tabs().length, 5);
+eq('6 group tabs', tabs().length, 6);
 eq('tab order', tabs().map(t => t.getAttribute('data-group')).join(','),
-    'all,attention,ready,synced,skipped');
+    Object.keys(GROUPS).join(','));
 
 console.log('\n-- initial state: All tab, 90-day baseline');
 ok('All tab active', tab('all').classList.contains('active'));
@@ -93,47 +96,69 @@ Object.keys(GROUPS).forEach(k => {
     eq('tab count ' + k, tabCount(k), oracle(Object.assign({}, BASE, { status: GROUPS[k] })).length);
 });
 
-console.log('\n-- narrowing inside Attention required');
-tab('attention').click();
-ok('attention tab active', tab('attention').classList.contains('active'));
-ok('pills row rendered (4 members <= 4)', pills().length > 0);
-eq('pills = All + 4 members', pills().length, 5);
-eq('pill labels', pills().slice(1).map(p => p.getAttribute('data-sub-status')).join('|'),
-    GROUPS.attention.join('|'));
-eq('rows = oracle(attention)', rows().length, oracle(Object.assign({}, BASE, { status: GROUPS.attention })).length);
-ok('All pill active by default', allPill().classList.contains('active'));
+// With the real taxonomy in place, the pills-vs-dropdown threshold now falls
+// out on its own: Needs attention has 8 members and In progress has 6, so both
+// render the scoped dropdown; Successful has 3, so it renders pills; Ready to
+// sync and Deleted have one each, so they render no second level at all.
+console.log('\n-- big group (Needs attention, 8) renders the scoped dropdown');
+tab('needs-attention').click();
+ok('attention tab active', tab('needs-attention').classList.contains('active'));
+ok('8 members is over the pill threshold', GROUPS['needs-attention'].length > PILL_MAX);
+eq('no pills', pills().length, 0);
+ok('scoped dropdown rendered', !!q('#groupsSub [data-sub-dropdown]'));
+eq('dropdown offers exactly the group members',
+    qa('#groupsSub [data-sub-check]').length, GROUPS['needs-attention'].length);
+eq('rows = oracle(needs attention)', rows().length,
+    oracle(Object.assign({}, BASE, { status: GROUPS['needs-attention'] })).length);
 
 console.log('\n-- CONTRADICTION IS UNREACHABLE: no control offers a status outside the group');
-const outside = ALL_STATUSES.filter(s => GROUPS.attention.indexOf(s) === -1);
+const outside = ALL_STATUSES.filter(s => GROUPS['needs-attention'].indexOf(s) === -1);
 outside.forEach(s => {
-    ok('no "' + s + '" control inside Attention required',
+    ok('no "' + s + '" control inside Needs attention',
         !q('#groupsSub [data-sub-status="' + s + '"]') && !q('#groupsSub [data-sub-check="' + s + '"]'));
 });
 ok('status is NOT offered in Add filter', !q('#groupsFilterBar [data-groups-add-key="status"]'));
 
-console.log('\n-- every member pill count matches the oracle');
-GROUPS.attention.forEach(s => {
-    eq('pill count ' + s, pillCount(s), oracle(Object.assign({}, BASE, { status: [s] })).length);
+console.log('\n-- small group (Successful, 3) renders pills with counts');
+tab('successful').click();
+ok('3 members is within the pill threshold', GROUPS['successful'].length <= PILL_MAX);
+eq('pills = All + 3 members', pills().length, GROUPS['successful'].length + 1);
+eq('pill labels', pills().slice(1).map(p => p.getAttribute('data-sub-status')).join('|'),
+    GROUPS['successful'].join('|'));
+ok('All pill active by default', allPill().classList.contains('active'));
+GROUPS['successful'].forEach(st => {
+    eq('pill count ' + st, pillCount(st), oracle(Object.assign({}, BASE, { status: [st] })).length);
 });
 
-console.log('\n-- picking one status');
-pill('Rule failed').click();
-eq('rows = oracle(Rule failed)', rows().length, oracle(Object.assign({}, BASE, { status: ['Rule failed'] })).length);
-ok('every row IS Rule failed', statusCol().every(s => s === 'Rule failed'), statusCol().join(','));
-ok('Rule failed pill active', pill('Rule failed').classList.contains('active'));
+console.log('\n-- single-status groups render no second level');
+['ready-to-sync', 'deleted'].forEach(k => {
+    tab(k).click();
+    eq(k + ' has one member', GROUPS[k].length, 1);
+    eq('no pills', pills().length, 0);
+    ok('no dropdown', !q('#groupsSub [data-sub-dropdown]'));
+    ok('sub row hidden', !subRow().classList.contains('show'));
+});
+
+console.log('\n-- picking one status inside a pills group');
+tab('successful').click();
+pill('Skipped').click();
+eq('rows = oracle(Skipped)', rows().length, oracle(Object.assign({}, BASE, { status: ['Skipped'] })).length);
+ok('every row IS Skipped', statusCol().every(x => x === 'Skipped'), statusCol().join(','));
+ok('Skipped pill active', pill('Skipped').classList.contains('active'));
 ok('All pill no longer active', !allPill().classList.contains('active'));
-ok('tab shows PARTIAL, not active', tab('attention').classList.contains('partial') &&
-    !tab('attention').classList.contains('active'));
-eq('tab count still whole group', tabCount('attention'),
-    oracle(Object.assign({}, BASE, { status: GROUPS.attention })).length);
+ok('tab shows PARTIAL, not active', tab('successful').classList.contains('partial') &&
+    !tab('successful').classList.contains('active'));
+eq('tab count still whole group', tabCount('successful'),
+    oracle(Object.assign({}, BASE, { status: GROUPS['successful'] })).length);
 ok('header carries the fraction',
-    new RegExp('Showing\\s*1\\s*of\\s*' + oracle(Object.assign({}, BASE, { status: GROUPS.attention })).length +
-        '\\s*in Attention required').test(countText().replace(/\s+/g, ' ')), countText());
+    new RegExp('Showing\\s*' + oracle(Object.assign({}, BASE, { status: ['Skipped'] })).length +
+        '\\s*of\\s*' + oracle(Object.assign({}, BASE, { status: GROUPS['successful'] })).length +
+        '\\s*in Successful').test(countText().replace(/\s+/g, ' ')), countText());
 // With pills on screen the lit pill + row label already state both levels,
 // so a breadcrumb chip would duplicate them (variant 3's mistake).
 ok('NO breadcrumb next to pills (would duplicate the lit pill)', !crumb());
 ok('row label names the parent group',
-    /Status in Attention required/.test(q('.substatus-label').textContent),
+    /Status in Successful/.test(q('.substatus-label').textContent),
     q('.substatus-label').textContent);
 
 console.log('\n-- scope filters survive a tab switch (the whole point)');
@@ -151,43 +176,61 @@ eq('rows after Apply', rows().length,
 ok('count line names 1 filter', /1<\/strong> filter applied|1 filter applied/.test(q('#groupsCount').innerHTML),
     q('#groupsCount').textContent);
 
-tab('ready').click();
+tab('ready-to-sync').click();
 ok('platform chip STILL on the bar after switching tabs', chipKeys().indexOf('platform') !== -1);
 eq('rows on ready tab keep Stripe scope', rows().length,
-    oracle({ date: '90d', status: GROUPS.ready, platform: ['Stripe'] }).length);
+    oracle({ date: '90d', status: GROUPS['ready-to-sync'], platform: ['Stripe'] }).length);
 Object.keys(GROUPS).forEach(k => {
     eq('tab count ' + k + ' respects scope', tabCount(k),
         oracle({ date: '90d', status: GROUPS[k], platform: ['Stripe'] }).length);
 });
 
+// Helper: commit a selection inside a scoped dropdown.
+function pickInDropdown(statuses) {
+    const dd = q('#groupsSub [data-sub-dropdown]');
+    q('[data-sub-trigger]', dd).click();
+    qa('[data-sub-check]', dd).forEach(cb => {
+        const want = statuses.indexOf(cb.getAttribute('data-sub-check')) !== -1;
+        if (cb.checked !== want) cb.click();
+    });
+    q('[data-sub-apply]', dd).click();
+}
+
 console.log('\n-- each tab remembers its own status selection');
-ok('ready tab starts at whole group', allPill().classList.contains('active'));
-pill('Pending').click();
-tab('attention').click();
-ok('attention remembered Rule failed', pill('Rule failed').classList.contains('active'));
-tab('ready').click();
-ok('ready remembered Pending', pill('Pending').classList.contains('active'));
+tab('successful').click();
+allPill().click();   // clear what the earlier block left selected
+ok('successful tab back at the whole group', allPill().classList.contains('active'));
+pill('Skipped').click();
+tab('needs-attention').click();
+pickInDropdown(['Failed']);
+eq('dropdown selection applied', rows().length,
+    oracle({ date: '90d', status: ['Failed'], platform: ['Stripe'] }).length);
+tab('successful').click();
+ok('successful remembered Skipped', pill('Skipped').classList.contains('active'));
+tab('needs-attention').click();
+ok('needs-attention remembered its dropdown selection', !!crumb() && /Failed/.test(crumb().textContent),
+    crumb() && crumb().textContent);
 
 console.log('\n-- clicking the active tab steps back up to the whole group');
-tab('ready').click();
-ok('ready sub cleared', allPill().classList.contains('active'));
-eq('rows = whole ready group', rows().length,
-    oracle({ date: '90d', status: GROUPS.ready, platform: ['Stripe'] }).length);
+tab('needs-attention').click();
+ok('sub selection cleared', !crumb());
+eq('rows = whole needs-attention group', rows().length,
+    oracle({ date: '90d', status: GROUPS['needs-attention'], platform: ['Stripe'] }).length);
 
 console.log('\n-- the All pill is the way back up when pills are showing');
-tab('attention').click();
-ok('remembered Rule failed still lit', pill('Rule failed').classList.contains('active'));
-ok('still no breadcrumb', !crumb());
+tab('successful').click();
+ok('remembered Skipped still lit', pill('Skipped').classList.contains('active'));
+ok('still no breadcrumb beside pills', !crumb());
 allPill().click();
 ok('All pill active', allPill().classList.contains('active'));
-ok('Rule failed no longer lit', !pill('Rule failed').classList.contains('active'));
+ok('Skipped no longer lit', !pill('Skipped').classList.contains('active'));
 ok('tab back to solid active, not partial',
-    tab('attention').classList.contains('active') && !tab('attention').classList.contains('partial'));
+    tab('successful').classList.contains('active') && !tab('successful').classList.contains('partial'));
 
-console.log('\n-- All tab dropdown: scoped, multiselect, Apply-gated');
+console.log('\n-- All tab dropdown: scoped to the whole taxonomy, Apply-gated');
 tab('all').click();
 const dd = q('#groupsSub [data-sub-dropdown]');
-eq('dropdown offers all 8 statuses', qa('[data-sub-check]', dd).length, 8);
+eq('dropdown offers every status', qa('[data-sub-check]', dd).length, ALL_STATUSES.length);
 q('[data-sub-trigger]', dd).click();
 ok('panel open', q('[data-sub-panel]', dd).classList.contains('active'));
 const beforeDd = rows().length;
@@ -199,7 +242,7 @@ q('[data-sub-apply]', dd).click();
 eq('rows after Apply', rows().length,
     oracle({ date: '90d', status: ['Failed', 'Skipped'], platform: ['Stripe'] }).length);
 ok('rows are only Failed/Skipped',
-    statusCol().every(s => s === 'Failed' || s === 'Skipped'), statusCol().join(','));
+    statusCol().every(x => x === 'Failed' || x === 'Skipped'), statusCol().join(','));
 ok('dropdown DOES get a breadcrumb ("2 selected" names nothing)', !!crumb());
 ok('breadcrumb says 2 statuses', /2 statuses|Failed, Skipped/.test(crumb().textContent), crumb().textContent);
 q('[data-clear-crumb]', crumb()).click();
@@ -208,34 +251,36 @@ eq('back to whole scope', rows().length, oracle({ date: '90d', platform: ['Strip
 
 console.log('\n-- dashboard deep-link picks the parent tab');
 q('#groupsDeepLinkBtn').click();
-q('[data-deeplink="Rule failed"]').click();
-ok('attention tab is the active one', tab('attention').classList.contains('partial'));
-ok('Rule failed pill active', pill('Rule failed').classList.contains('active'));
+q('[data-deeplink="Synced with rule failed"]').click();
+ok('attention tab is the active one', tab('needs-attention').classList.contains('partial'));
 ok('breadcrumb marked From dashboard', /From dashboard/.test(crumb().textContent), crumb().textContent);
+ok('breadcrumb names the arriving status',
+    /Synced with rule failed/.test(crumb().textContent), crumb().textContent);
 eq('deep-link reset scope to baseline', chipKeys().join(','), 'date');
-eq('rows = oracle(Rule failed, 90d)', rows().length,
-    oracle({ date: '90d', status: ['Rule failed'] }).length);
-ok('every row IS Rule failed', statusCol().every(s => s === 'Rule failed'));
+eq('rows = oracle(Synced with rule failed, 90d)', rows().length,
+    oracle({ date: '90d', status: ['Synced with rule failed'] }).length);
+ok('every row IS Synced with rule failed', statusCol().every(x => x === 'Synced with rule failed'));
 
 console.log('\n-- deep-link into a single-status group renders no second level');
 q('#groupsDeepLinkBtn').click();
-q('[data-deeplink="Skipped"]').click();
-ok('skipped tab active (whole group == the status)', tab('skipped').classList.contains('active'));
+q('[data-deeplink="Deleted"]').click();
+ok('deleted tab active (whole group == the status)', tab('deleted').classList.contains('active'));
 eq('no pills', pills().length, 0);
 ok('no dropdown', !q('#groupsSub [data-sub-dropdown]'));
 ok('breadcrumb still explains where it came from',
     !!crumb() && /From dashboard/.test(crumb().textContent));
-eq('rows = oracle(Skipped)', rows().length, oracle({ date: '90d', status: ['Skipped'] }).length);
+eq('rows = oracle(Deleted)', rows().length, oracle({ date: '90d', status: ['Deleted'] }).length);
 
 console.log('\n-- an explicit tab click drops the dashboard marker');
-tab('synced').click();
+tab('ready-to-sync').click();
 ok('no breadcrumb on a clean single-status tab', !crumb());
 ok('sub row hidden', !subRow().classList.contains('show'));
-eq('rows = oracle(Synced)', rows().length, oracle({ date: '90d', status: ['Synced'] }).length);
+eq('rows = oracle(Ready to sync)', rows().length,
+    oracle({ date: '90d', status: GROUPS['ready-to-sync'] }).length);
 
 console.log('\n-- empty state and recovery');
-tab('attention').click();
-pill('Rollback failed').click();
+tab('successful').click();
+pill('Skipped').click();
 q('[data-groups-add]').click();
 q('[data-groups-add-key="platform"]').click();
 const pf2 = q('#groupsFilterBar [data-field-key="platform"]');
@@ -253,8 +298,8 @@ console.log('\n-- other variants unaffected');
     ok('nav tab ' + v + ' still present', !!q('.nav-tab[data-variant="' + v + '"]'));
     ok('section ' + v + ' still present', !!q('#variant-' + v));
 });
-ok('V6 segments still render', qa('#recSegments .status-segment').length === 5);
-ok('V7 segments still render', qa('#sheetbtnSegments .status-segment').length === 5);
+ok('V6 segments still render', qa('#recSegments .status-segment').length === 6);
+ok('V7 segments still render', qa('#sheetbtnSegments .status-segment').length === 6);
 ok('V1 table still renders', qa('#currentTable tbody tr').length > 0 || !!q('#currentTable .empty-state'));
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');

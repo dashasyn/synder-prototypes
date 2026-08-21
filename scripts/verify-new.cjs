@@ -25,6 +25,7 @@ const setInput=(el,v)=>{el.value=v;el.dispatchEvent(new dom.window.Event('input'
 
 console.log('-- change 1: default bar is Date range + Platform');
 eq('bar on load', bar().join(','), 'date,platform');
+ok('Clear filters is present (the 90-day window is applied)', !!q('[data-rec-clear]'));
 ok('date is first', bar()[0]==='date');
 ok('status is NOT on the bar by default', bar().indexOf('status')===-1);
 ok('status is still addable', !!q('#recFilterBar [data-rec-add-key="status"]'));
@@ -33,13 +34,18 @@ eq('rows at load = 90-day default', rows(), DATA.filter(t=>t.date>='2026-01-30')
 console.log('-- change 2: amount operators');
 addChip('amount');
 const amt = fld('amount');
-eq('5 operator rows', qa('[data-amount-op]',amt).length, 5);
+// A chip carries its own x, so the "Any amount" operator row is gone from it —
+// clearing is the x's job. Select-style fields (V1's bar, the sheets) keep it.
+eq('4 operator rows on a chip', qa('[data-amount-op]',amt).length, 4);
 eq('operators', qa('[data-amount-op]',amt).map(e=>e.getAttribute('data-amount-op')).join(','),
-   'all,is,gt,lt,between');
+   'is,gt,lt,between');
+ok('no "Any amount" row on a chip', !q('[data-amount-op="all"]',amt));
+ok('but V1\'s select-style amount keeps it',
+   !!q('#currentFilterBar [data-field-key="amount"] [data-amount-op="all"]'));
 ok('old band presets are gone',
    !q('[data-pick-value="lt100"]',amt) && !q('[data-pick-value="gt500"]',amt) &&
    !q('[data-pick-value="100to500"]',amt));
-ok('Any amount selected, no inputs shown', !q('[data-amount-a]',amt));
+ok('no inputs until an operator is picked', !q('[data-amount-a]',amt));
 
 // exact number
 q('[data-amount-op="is"]',amt).click();
@@ -82,15 +88,16 @@ setInput(q('[data-amount-a]',fld('amount')), '100');
 q('[data-panel-apply]',fld('amount')).click();
 eq('less than 100 == the old "Under $100"', rows(),
    DATA.filter(t=>t.date>='2026-01-30'&&t.amount<100).length);
-openF('amount');
-q('[data-amount-op="all"]',fld('amount')).click();
-q('[data-panel-apply]',fld('amount')).click();
-eq('Any amount clears it', rows(), DATA.filter(t=>t.date>='2026-01-30').length);
-ok('an inactive chip has no x (nothing to remove)', !q('[data-remove-field]',fld('amount')));
+q('[data-remove-field]',fld('amount')).click();
+eq('the chip x clears the amount filter', rows(), DATA.filter(t=>t.date>='2026-01-30').length);
+// Amount is a secondary chip, so its x also takes it off the bar — unlike the
+// pinned date/platform pair, whose x clears the value and leaves the chip.
+ok('the secondary amount chip left the bar', bar().indexOf('amount') === -1, bar().join(','));
 
 console.log('-- change 3: custom date range');
 openF('date');
 ok('Custom range option present', !!q('[data-option-value="custom"]',fld('date')));
+ok('no "All time" row on a chip — the x is the clear', !q('[data-option-value="all"]',fld('date')));
 ok('no date inputs until it is picked', !q('[data-range-from]',fld('date')));
 q('[data-option-value="custom"]',fld('date')).click();
 ok('two date inputs appear',
@@ -120,18 +127,17 @@ console.log('-- change 4: customer search');
 addChip('customer');
 const cust=fld('customer');
 ok('search box present', !!q('[data-panel-search]',cust));
+ok('no "All customers" row on a chip', !q('[data-option-value="all"]',cust));
 const allRows=()=>qa('[data-pick-value]',fld('customer'));
 const visible=()=>allRows().filter(r=>!r.classList.contains('row-hidden'));
 eq('all options visible initially', visible().length, allRows().length);
 setInput(q('[data-panel-search]',fld('customer')), 'acme');
-eq('search narrows to Acme + the All row', visible().length, 2);
-ok('"All customers" is never hidden',
-   visible().some(r=>r.getAttribute('data-option-value')==='all'));
-ok('Acme is one of the survivors', visible().some(r=>/Acme/.test(r.textContent)));
+eq('search narrows to Acme alone', visible().length, 1);
+ok('Acme is the survivor', visible().some(r=>/Acme/.test(r.textContent)));
 ok('panel still open while typing',
    q('[data-field-panel]',fld('customer')).classList.contains('active'));
 setInput(q('[data-panel-search]',fld('customer')), 'zzzz');
-eq('no matches hides every customer row', visible().length, 1);
+eq('no matches hides every customer row', visible().length, 0);
 ok('"No matches" is shown', q('[data-panel-empty]',fld('customer')).classList.contains('show'));
 setInput(q('[data-panel-search]',fld('customer')), 'vertex');
 q(visible().filter(r=>/Vertex/.test(r.textContent))[0].tagName+'[data-pick-value="Vertex Supply"]',fld('customer')).click();
@@ -154,9 +160,10 @@ ok('it is an ordinary chip', !!q('.filter-chip',fld('status')));
 ok('chip class matches platform\'s', 
    q('.filter-chip',fld('status')).className.replace(' active','') ===
    q('.filter-chip',fld('platform')).className.replace(' active',''));
-ok('chip reads the status', /Status: Rule failed/.test(chipText('status')), chipText('status'));
+ok('chip reads the status',
+   /Status: Synced with rule failed/.test(chipText('status')), chipText('status'));
 ok('it has its own remove button', !!q('[data-remove-field]',fld('status')));
-ok('segment still shows partial', seg('attention').classList.contains('partial'));
+ok('segment still shows partial', seg('needs-attention').classList.contains('partial'));
 ok('and it is editable like any other filter', !!q('[data-field-trigger]',fld('status')));
 
 console.log('-- other variants get the shared filter upgrades');
@@ -169,7 +176,7 @@ console.log('-- other variants get the shared filter upgrades');
   ok('V1 customer has a search box', !!q('[data-panel-search]',c));
 });
 ok('V7 sheet still has 5 fields', qa('#sheetbtnContent [data-field-key]').length===0 || true);
-ok('V8 tabs intact', qa('#groupsTabs .status-segment').length===5);
+ok('V8 tabs intact', qa('#groupsTabs .status-segment').length===6);
 eq('8 nav tabs', qa('.nav-tab').length, 8);
 
 console.log('\n'+pass+' passed, '+fail+' failed');
