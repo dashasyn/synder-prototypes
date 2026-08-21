@@ -2184,7 +2184,25 @@ th.th-gear{width:44px;text-align:right;padding-right:16px}
     <!-- ══ V6 filter bar — every filter is an ordinary chip; date + platform pinned ══
          Filters sit ABOVE the segments because the segment counts are computed from
          the filters already applied: the filters set the scope, the segments slice it. -->
-    <div class="filter-bar-row">
+    <!-- ══ Variant 2 filter surface — V7: one Filters button, a right side sheet,
+         and read-only applied chips. Status is deliberately NOT in the sheet: it
+         belongs to the segmented control below, and two controls on one dimension
+         is the Summaries bug. ══ -->
+    <div id="v7-surface" style="display:none">
+      <div class="search-toolbar">
+        <div class="toolbar-search toolbar-search-wide">
+          <span class="material-icons">search</span>
+          <input type="text" id="v7-search" placeholder="Search customer, ID&hellip; (press Enter)" aria-label="Search transactions">
+        </div>
+        <button class="btn btn-secondary filters-trigger" type="button" id="v7-filters-btn">
+          <span class="material-icons">tune</span>Filters<span class="badge" id="v7-badge"></span>
+        </button>
+      </div>
+      <!-- Read-only summary: says what's applied and can remove, but not edit. -->
+      <div class="applied-chips-bar" id="v7-chips"></div>
+    </div>
+
+    <div class="filter-bar-row" id="v6-surface">
       <div class="search-wrap" id="search-wrap">
         <span class="search-icon">&#8981;</span>
         <input type="text" id="search-input" placeholder="Search customer, ID&hellip;" oninput="onSearchInput(this)">
@@ -2258,6 +2276,23 @@ th.th-gear{width:44px;text-align:right;padding-right:16px}
             <button class="btn btn-default" onclick="toggleDropdown('chip-date')">Change date range</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- V7 side sheet — all composing happens in here, Apply-gated. -->
+    <div class="sheet-overlay" id="v7-overlay"></div>
+    <div class="filter-sheet" id="v7-sheet">
+      <div class="sheet-header">
+        <div>
+          <h3>Filters</h3>
+          <p class="sheet-subtitle">Configure filters and click Apply to update results.</p>
+        </div>
+        <button class="sheet-close" id="v7-close" aria-label="Close"><span class="material-icons">close</span></button>
+      </div>
+      <div class="sheet-content" id="v7-content"></div>
+      <div class="sheet-footer">
+        <button class="btn btn-primary" id="v7-apply">Apply filters</button>
+        <button class="btn btn-secondary" id="v7-reset">Reset filters</button>
       </div>
     </div>
 
@@ -3842,6 +3877,7 @@ function setSyncVariant(v) {
   // Switching logic mid-flight would leave the list holding the other
   // variant's filters, which reads as a bug rather than a comparison.
   resetTransactionFilters();
+  renderFilterSurface();
 }
 
 // Counts are computed from the same rows the drill-through will show, inside the
@@ -3903,7 +3939,8 @@ function landOnTransactions(mutate) {
   var search = document.getElementById('search-input');
   if (search) { search.value = ''; recSearch = ''; document.getElementById('search-wrap').classList.remove('has-value'); }
   mutate();                          // filter 2: variant-specific
-  renderRec();
+  var v7s = document.getElementById('v7-search'); if (v7s) v7s.value = '';
+  renderFilterSurface();
   renderRecResults();
 }
 
@@ -3933,9 +3970,142 @@ function resetTransactionFilters() {
   state.rec = clone(draft.rec);
   recGroup = 'all';
   recChips = [];
+  recSearch = '';
+  var a = document.getElementById('search-input'); if (a) a.value = '';
+  var b = document.getElementById('v7-search');    if (b) b.value = '';
+  document.getElementById('search-wrap')?.classList.remove('has-value');
   renderRec();
   renderRecResults();
 }
+
+
+// ══════════════════════════════════════════════════════════════════
+// VARIANT 2 FILTER SURFACE — V7 (Filters button + side sheet + read-only chips)
+// Ignat, 2026-08-21: variant 2 uses V7's filters.
+//
+// It shares ONE filter state with V6 (state.rec / recGroup / recSearch) rather
+// than keeping its own, so the dashboard drill-through doesn't have to fork and
+// switching variants can't leave two disagreeing copies behind. Only the surface
+// differs: V6 composes on the bar, V7 composes in the sheet.
+//
+// Status is excluded from the sheet on purpose — it belongs to the segmented
+// control, and variant 2's whole point is that a dashboard click lands on a tab.
+// ══════════════════════════════════════════════════════════════════
+var V7_KEYS = FILTER_KEYS.filter(function (k) { return k !== 'status'; });
+
+function v7ValueCount(f) {
+    return V7_KEYS.reduce(function (n, k) { return n + (isFieldActive(k, f[k]) ? 1 : 0); }, 0);
+}
+
+function renderV7Body() {
+    var content = document.getElementById('v7-content');
+    content.innerHTML = '';
+    // Fields stage into draft; only the sheet's Apply copies draft -> state.
+    var ctx = {
+        style: 'group',
+        get: function (k) { return draft.rec[k]; },
+        setValue: function (k, v) { draft.rec[k] = v; }
+    };
+    V7_KEYS.forEach(function (k) { mountField(content, k, ctx); });
+}
+
+function openV7Sheet() {
+    draft.rec = clone(state.rec);
+    renderV7Body();
+    document.getElementById('v7-sheet').classList.add('active');
+    document.getElementById('v7-overlay').classList.add('active');
+}
+function closeV7Sheet() {
+    closeAllLayers();
+    document.getElementById('v7-sheet').classList.remove('active');
+    document.getElementById('v7-overlay').classList.remove('active');
+    draft.rec = clone(state.rec);
+}
+
+// Chips spell out the applied values, because the chips row is the only place
+// they are visible once composing moved into the sheet.
+function v7ChipText(key, value) {
+    if (isMulti(key)) {
+        if (value.length >= 3) {
+            return FILTERS[key].label + ': ' + optionLabelSingle(key, value[0]) + ' + ' + (value.length - 1) + ' more';
+        }
+        return FILTERS[key].label + ': ' + value.map(function (v) { return optionLabelSingle(key, v); }).join(', ');
+    }
+    return FILTERS[key].label + ': ' + optionLabelSingle(key, value);
+}
+
+function refreshV7Chrome() {
+    var f = state.rec;
+    var badge = document.getElementById('v7-badge');
+    var n = v7ValueCount(f);
+    badge.textContent = n;
+    badge.classList.toggle('show', n > 0);
+
+    var bar = document.getElementById('v7-chips');
+    // No status chip: the segment above the table already states it, and a second
+    // readout of one value is one more thing that can drift out of sync.
+    var keys = activeKeys(f).filter(function (k) { return k !== 'status'; });
+    bar.classList.toggle('show', keys.length > 0);
+    bar.innerHTML = keys.map(function (k) {
+        return '<span class="applied-chip">' + esc(v7ChipText(k, f[k])) +
+            '<button class="remove" type="button" data-v7drop="' + k + '" aria-label="Remove ' +
+            esc(FILTERS[k].label) + ' filter"><span class="material-icons">close</span></button></span>';
+    }).join('') + (keys.length ? '<button class="clear-all" type="button" data-v7clear>Clear all</button>' : '');
+
+    bar.querySelectorAll('[data-v7drop]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var k = this.getAttribute('data-v7drop');
+            state.rec[k] = emptyValue(k);
+            draft.rec = clone(state.rec);
+            renderFilterSurface();
+            renderRecResults();
+        });
+    });
+    var clearBtn = bar.querySelector('[data-v7clear]');
+    if (clearBtn) clearBtn.addEventListener('click', function () {
+        // "Clear all" clears the segment too, because that is what the label says.
+        // The segment is on screen and visibly snaps back to All.
+        state.rec = defaults();
+        draft.rec = clone(state.rec);
+        recGroup = 'all';
+        renderFilterSurface();
+        renderRecResults();
+    });
+}
+
+// ── Surface router: V6 bar for variant 1, V7 button + sheet for variant 2 ──
+function renderFilterSurface() {
+    var v7 = syncVariant === 2;
+    document.getElementById('v6-surface').style.display = v7 ? 'none' : '';
+    document.getElementById('v7-surface').style.display = v7 ? '' : 'none';
+    if (v7) { refreshV7Chrome(); renderRecSegments(); }
+    else    { closeV7Sheet(); renderRec(); }
+}
+
+document.getElementById('v7-filters-btn').addEventListener('click', openV7Sheet);
+document.getElementById('v7-overlay').addEventListener('click', closeV7Sheet);
+document.getElementById('v7-close').addEventListener('click', closeV7Sheet);
+document.getElementById('v7-apply').addEventListener('click', function () {
+    state.rec = clone(draft.rec);
+    closeV7Sheet();
+    renderFilterSurface();
+    renderRecResults();
+});
+document.getElementById('v7-reset').addEventListener('click', function () {
+    // Resets only what the sheet owns. The segment lives outside it, so a button
+    // in here must not move it silently.
+    var keepStatus = draft.rec.status.slice();
+    draft.rec = defaults();
+    draft.rec.status = keepStatus;
+    renderV7Body();
+});
+// Search commits on Enter — one deliberate action, one query.
+document.getElementById('v7-search').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    recSearch = this.value.trim();
+    renderFilterSurface();     // segment counts include the search term
+    renderRecResults();
+});
 
 function toggleSub() {
   const sub = document.getElementById('txn-sub');
@@ -3977,6 +4147,7 @@ function clearSearch() {
 renderRec();
 renderRecResults();
 setSyncVariant(1);
+renderFilterSurface();
 </script>
 </body>
 </html>
