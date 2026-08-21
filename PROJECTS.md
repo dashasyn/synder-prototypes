@@ -34,6 +34,9 @@
   - Switcher is a dark bar at the top; switching resets the list so stale filters can't look like a bug
   - Sync counts now computed from the same 90-day window the drill-through uses — the Figma mock numbers (30/300/50/30/30) are gone, and dashboard count == list count
   - Trade-off to weigh: v1's card is 19 rows tall and dominates the dashboard column; v2 stays compact but needs a second click to reach a specific status
+- **Table styling = Summaries list (2026-08-21):** one type scale — 14px Roboto / w400 / #1E1E1E for header *and* body. Only links (blue) and status badges (semantic tone) differ, both still 14px; the 20px logo chip keeps a 10px glyph. Tabs sit inside the table card; single-line Date and Amount; Integration shows connection name + platform (`mzkt.by (Stripe)`); Actions column with one primary verb per row; column-settings gear.
+  - `Platform` column renamed **`Integration`** — canonical Synder term, matches the reference, and the vocabulary rule already required it. Column order unchanged. The unlabelled row-menu column gained the header `Actions`.
+  - Pagination now derived from the row count (was a hardcoded 1/2/3 next to "Showing 1–8 of 8")
 - **Removed on 08-21:** the origin/deep-link note (V6 rejects special deep-link chrome) and the More-filters side sheet (that's variant 7)
 - **⚠️ Still open for Ignat:** dashboard counts are Figma mock numbers (30/300/50/30/30) and don't match the dataset — real counts need a shared aggregate. V6 also notes segment counts need a status-count aggregate on the list endpoint.
 - **Open validator findings (never applied):** `Platform transactions`→`Integration transactions`; `Syncs history` typo; `posting`→`sync` ×2; no inline View error/Retry on failed rows; payout rows blank primary identifier; detail page duplicates 5 fields
