@@ -17,12 +17,18 @@
   - Stripe-style filter bar: inline search + 4 chips (Date/Status/Platform/Type) + "More filters" side sheet
   - Per-chip ✕ clear, clear-search, search inside each dropdown, date presets + custom range
   - **Dashboard Sync card → Transactions drill-through** with origin note and escapes
-- **Dashboard→table status mapping** (`DASH_STATUS_MAP`) — dashboard groups, table is granular:
-  - Ready to sync → `ready` · Successful → `synced`+`warnings` · Needs attention → `failed` · Deleted → `deleted` · In progress → `inprog`+`pending`
-- **⚠️ Open decisions for Ignat:**
-  - Dashboard counts are Figma mock numbers (30/300/50/30/30) and don't match the demo dataset — real counts would need a shared source
-  - "Needs attention" maps to `failed` only; unclear whether `rule failed` / `rollback failed` belong in it
-  - "Deleted" had no equivalent in the table taxonomy — I added one
+- **Filters = variant 6 ("Recommended for Synder"), ported 2026-08-21** from `filtering-options/index.html`:
+  - Status has a **segmented control with counts** *and* an ordinary **19-status chip**; independent, ANDed
+  - Filter bar sits **above** the segments (counts are computed from the applied filters)
+  - All chips identical, date included; Date + Platform pinned, rest via "Add filter"
+  - Per-panel Apply (staging can't outlive an open panel) → no bar-level Apply
+  - Amount = operators, date = presets + Custom range, customer = searchable
+  - Segment counts respect the search, so a tab that would strand you reads 0 first
+- **Dashboard→table mapping** — resolved by adopting production taxonomy (19 statuses / 5 groups):
+  - Ready to sync · Successful · **Needs attention (8 statuses incl. rule failed, rollback failed, warnings)** · Deleted · In progress
+  - Both of my 20 Aug open questions are now answered by the real taxonomy: `rule failed`/`rollback failed` **do** belong under Needs attention, and `Deleted` **is** a real production group
+- **Removed on 08-21:** the origin/deep-link note (V6 rejects special deep-link chrome) and the More-filters side sheet (that's variant 7)
+- **⚠️ Still open for Ignat:** dashboard counts are Figma mock numbers (30/300/50/30/30) and don't match the dataset — real counts need a shared aggregate. V6 also notes segment counts need a status-count aggregate on the list endpoint.
 - **Open validator findings (never applied):** `Platform transactions`→`Integration transactions`; `Syncs history` typo; `posting`→`sync` ×2; no inline View error/Retry on failed rows; payout rows blank primary identifier; detail page duplicates 5 fields
 - **Known pre-existing issue:** pagination renders pages 1/2/3 regardless of row count
 - **Verified:** Playwright browser test — all 5 drill-throughs land on real rows, chip and Status panel agree, no JS errors
