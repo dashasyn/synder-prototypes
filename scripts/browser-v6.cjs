@@ -91,19 +91,28 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   await p.click('#recFilterBar [data-rec-add-key="status"]');
   await p.keyboard.press('Escape');
   await p.click(seg('needs-attention'));
-  ok('attention segment active', await p.locator(seg('needs-attention')+'.active').count()===1);
-  ok('status chip followed it',
-     /Status:/.test(await p.locator(f('status')+' .chip-label-text').innerText()),
+  ok('attention tab active', await p.locator(seg('needs-attention')+'.active').count()===1);
+  // The tab and the status filter are INDEPENDENT: a tab click must not touch
+  // the chip.
+  ok('status chip untouched by the tab click',
+     (await p.locator(f('status')+' .chip-label-text').innerText()).trim() === 'Status',
      await p.locator(f('status')+' .chip-label-text').innerText());
   await p.click(f('status')+' [data-field-trigger]');
-  for (const v of ['Failed','Rollback failed','Synced with warnings','Canceled','Not parsed'])
+  for (const v of ['Synced'])
     await p.click(f('status')+' label:has([data-check-value="'+v+'"])');
   ok('status panel STILL VISIBLE after three toggles',
      await p.locator(f('status')+' [data-field-panel]').isVisible());
   await p.click(f('status')+' [data-panel-apply]');
-  ok('segment drops to dashed partial',
-     await p.locator(seg('needs-attention')+'.partial').count()===1 &&
-     await p.locator(seg('needs-attention')+'.active').count()===0);
+  ok('tab stays active, no partial state (separate values now)',
+     await p.locator(seg('needs-attention')+'.active').count()===1 &&
+     await p.locator('#recSegments .status-segment.partial').count()===0);
+  ok('the tab count states the contradiction in advance',
+     (await p.locator(seg('needs-attention')+' .seg-count').innerText()).trim() === '0',
+     await p.locator(seg('needs-attention')+' .seg-count').innerText());
+  await p.click(seg('successful'));
+  ok('switching tabs leaves the chip exactly as it was',
+     /Synced/.test(await p.locator(f('status')+' .chip-label-text').innerText()),
+     await p.locator(f('status')+' .chip-label-text').innerText());
   ok('segments row still fully clickable',
      await p.locator(seg('ready-to-sync')).isVisible() && await p.locator(seg('successful')).isVisible());
 
@@ -124,7 +133,10 @@ const eq=(n,a,e)=>ok(n+' (= '+JSON.stringify(e)+')',a===e,'got '+JSON.stringify(
   console.log('-- V7 and V8 unaffected');
   await p.click('.nav-tab[data-variant="sheetbtn"]');
   ok('V7 segments row is back', await p.locator('#sheetbtnSegments .status-segment').first().isVisible());
-  ok('V7 count line is back', await p.locator('#sheetbtnCount').isVisible());
+  ok('V7 has no count line', await p.locator('#sheetbtnCount').count()===0);
+  ok('V7 search + Filters sit on their own row below the header',
+     await p.locator('#variant-sheetbtn .search-toolbar #sheetbtnSearch').isVisible() &&
+     await p.locator('#variant-sheetbtn .search-toolbar #sheetbtnFiltersBtn').isVisible());
   await p.click('#sheetbtnFiltersBtn');
   await p.waitForTimeout(400);
   eq('V7 sheet has 5 fields (no status)', await p.locator('#sheetbtnContent [data-field-key]').count(), 5);

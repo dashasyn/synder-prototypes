@@ -64,9 +64,9 @@ const ok=(n,c,x)=>{if(c){pass++;console.log('  ok   '+n)}else{fail++;console.log
      await p.locator('#sheetbtnSegments .status-segment').first().isVisible());
   const segBox = await p.locator('#sheetbtnSegments').boundingBox();
   const chipBox = await p.locator('#sheetbtnChips').boundingBox();
-  const tblBox  = await p.locator('#sheetbtnCount').boundingBox();
+  const tblBox  = await p.locator('#sheetbtnTable').boundingBox();
   ok('chips bar sits above the segments', chipBox.y < segBox.y, JSON.stringify({chipBox, segBox}));
-  ok('segments sit directly above the table toolbar', segBox.y < tblBox.y);
+  ok('segments sit above the table', segBox.y < tblBox.y);
   await p.click('#sheetbtnSegments [data-segment="needs-attention"]');
   await p.waitForTimeout(250);
   ok('segment commits on click without an Apply',

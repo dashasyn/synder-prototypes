@@ -163,7 +163,11 @@ ok('chip class matches platform\'s',
 ok('chip reads the status',
    /Status: Synced with rule failed/.test(chipText('status')), chipText('status'));
 ok('it has its own remove button', !!q('[data-remove-field]',fld('status')));
-ok('segment still shows partial', seg('needs-attention').classList.contains('partial'));
+// Tab and status filter are independent now, so there is no partial state —
+// the deep-link resets the tab to All and fills the status filter.
+ok('deep-link resets the tab to All', seg('all').classList.contains('active'));
+ok('no partial state anywhere',
+   qa('#recSegments .status-segment.partial').length === 0);
 ok('and it is editable like any other filter', !!q('[data-field-trigger]',fld('status')));
 
 console.log('-- other variants get the shared filter upgrades');

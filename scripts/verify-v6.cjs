@@ -1,5 +1,5 @@
 // Verifies the reworked variant 6: ordinary date chip, status filter with all
-// 8 statuses wired to the SAME value as the segments, no count line.
+// 19 statuses independent of the tab row, no count line.
 const fs = require('fs');
 const { JSDOM } = require('/tmp/node_modules/jsdom');
 const FILE = '/home/ubuntu/.openclaw/workspace/filtering-options/index.html';
@@ -79,40 +79,53 @@ ok('no "Showing N of" sentence in the mock page',
 ok('no "no filters applied" sentence',
    !/no filters applied/.test(q('#variant-rec .mock-page').textContent));
 
-console.log('-- the two status controls share ONE value');
+console.log('-- the tab and the status filter are INDEPENDENT');
 eq('segments render', qa('#recSegments .status-segment').length, 6);
 ok('All segment active on load', seg('all').classList.contains('active'));
 eq('rows at load = 90-day window', rows(), oracle({date:'90d'}));
 Object.keys(SEG).forEach(k=>eq('segment count '+k, segCount(k), oracle({date:'90d',status:SEG[k]})));
 
-// chip -> segment
-pickStatuses(['Synced with rule failed']);
-eq('rows = Rule failed', rows(), oracle({date:'90d',status:['Synced with rule failed']}));
-ok('attention segment shows PARTIAL, not active',
-   seg('needs-attention').classList.contains('partial') && !seg('needs-attention').classList.contains('active'));
-ok('All segment not active', !seg('all').classList.contains('active'));
-ok('chip spells the value', /Status: Synced with rule failed/.test(chipText('status')), chipText('status'));
+// tab -> does NOT touch the chip
+seg('needs-attention').click();
+ok('tab active', seg('needs-attention').classList.contains('active'));
+eq('rows = the group', rows(), oracle({date:'90d',status:SEG['needs-attention']}));
+eq('the status chip is untouched', chipText('status'), 'Status');
 
-// picking the exact group set reads as the segment itself
-pickStatuses(['Synced with rule failed']);           // uncheck
-pickStatuses(SEG['needs-attention']);
-ok('attention segment now fully active',
-   seg('needs-attention').classList.contains('active') && !seg('needs-attention').classList.contains('partial'));
-eq('rows = whole attention group', rows(), oracle({date:'90d',status:SEG['needs-attention']}));
+// chip -> does NOT touch the tab
+pickStatuses(['Synced']);
+ok('tab still active', seg('needs-attention').classList.contains('active'));
+eq('a contradictory pair returns nothing', rows(), 0);
+eq('...and the tab said 0 before the click', segCount('needs-attention'), 0);
+ok('but the Successful tab shows the real number',
+   segCount('successful') === oracle({date:'90d',status:['Synced']}),
+   segCount('successful')+' vs '+oracle({date:'90d',status:['Synced']}));
 
-// segment -> chip
-seg('ready-to-sync').click();
-ok('ready segment active', seg('ready-to-sync').classList.contains('active'));
-ok('chip followed the segment', /Ready to sync/.test(chipText('status')), chipText('status'));
-eq('rows = ready group', rows(), oracle({date:'90d',status:SEG['ready-to-sync']}));
+// switching tabs leaves the chip exactly as it was — the whole point
+seg('successful').click();
+eq('chip survived the tab switch', chipText('status'), 'Status: Synced');
+eq('rows = Successful tab AND Synced chip', rows(), oracle({date:'90d',status:['Synced']}));
+seg('all').click();
+eq('chip still there on All', chipText('status'), 'Status: Synced');
+eq('rows = just the chip', rows(), oracle({date:'90d',status:['Synced']}));
 
-// a set matching no group leaves every segment quiet
-pickStatuses(SEG['ready-to-sync']);                   // clear it
-pickStatuses(['Failed','Skipped']);
-ok('no segment claims to be active',
-   qa('#recSegments .status-segment.active').length === 0,
-   qa('#recSegments .status-segment.active').map(e=>e.textContent).join(','));
-eq('rows = Failed + Skipped', rows(), oracle({date:'90d',status:['Failed','Skipped']}));
+// no partial state any more: the two are separate values, so a tab is either
+// the active one or it isn't.
+ok('no segment renders the dashed partial state',
+   qa('#recSegments .status-segment.partial').length === 0);
+pickStatuses(['Synced']);   // clear it
+eq('scope restored', rows(), oracle({date:'90d'}));
+
+// Tab-aware oracle for the sections below: the tab ANDs with everything else.
+function recOracle(f){
+  f = f || {};
+  const g = f.group ? SEG[f.group] : [];
+  return DATA.filter(t=>{
+    const w=W[f.date||'all']; if(w&&!(t.date>=w[0]&&t.date<=w[1]))return false;
+    if(f.status&&f.status.length&&f.status.indexOf(t.status)===-1)return false;
+    if(f.platform&&f.platform.length&&f.platform.indexOf(t.platform)===-1)return false;
+    if(g.length&&g.indexOf(t.status)===-1)return false;
+    return true;}).length;
+}
 
 console.log('-- status stages inside its own panel (Apply-gated)');
 const before = rows();
@@ -121,7 +134,7 @@ q('[data-check-value="Synced"]',fld('status')).click();
 eq('checkbox toggle does NOT re-query', rows(), before);
 ok('panel still open', q('[data-field-panel]',fld('status')).classList.contains('active'));
 q('[data-panel-apply]',fld('status')).click();
-eq('Apply commits', rows(), oracle({date:'90d',status:['Failed','Skipped','Synced']}));
+eq('Apply commits', rows(), recOracle({date:'90d',status:['Synced']}));
 
 console.log('-- date chip behaves like any other chip');
 q('[data-field-trigger]',fld('date')).click();
@@ -131,27 +144,32 @@ eq('picking a date STAGES, does not re-query', rows(), dateRowsBefore);
 ok('panel stays open after a pick (was the discard bug)',
    q('[data-field-panel]',fld('date')).classList.contains('active'));
 q('[data-panel-apply]',fld('date')).click();
-eq('date applies', rows(), oracle({date:'30d',status:['Failed','Skipped','Synced']}));
-ok('segment counts follow the date',
-   segCount('needs-attention') === oracle({date:'30d',status:SEG['needs-attention']}),
-   segCount('needs-attention')+' vs '+oracle({date:'30d',status:SEG['needs-attention']}));
+eq('date applies', rows(), recOracle({date:'30d',status:['Synced']}));
+// The count reflects the status chip too, so with Synced selected the
+// Needs-attention tab honestly reads 0.
+ok('tab counts follow the date AND the status chip',
+   segCount('needs-attention') === recOracle({date:'30d',status:['Synced'],group:'needs-attention'}),
+   segCount('needs-attention')+' vs '+recOracle({date:'30d',status:['Synced'],group:'needs-attention'}));
+ok('and the Successful tab reflects both',
+   segCount('successful') === recOracle({date:'30d',status:['Synced'],group:'successful'}),
+   segCount('successful')+' vs '+recOracle({date:'30d',status:['Synced'],group:'successful'}));
 q('[data-remove-field]',fld('date')).click();
 ok('date x keeps the chip on the bar', bar().indexOf('date') !== -1, bar().join(','));
 ok('date chip reads its bare label now', /^Date range$/.test(chipText('date')), chipText('date'));
 eq('date x COMMITS — list stops filtering by date', rows(),
-   oracle({status:['Failed','Skipped','Synced']}));
+   recOracle({status:['Synced']}));
 
 console.log('-- open/close without Apply changes nothing and reverts nothing');
 q('[data-field-trigger]',fld('date')).click();
 q('[data-field-trigger]',fld('date')).click();
 ok('date chip still cleared after an open/close round trip',
    /^Date range$/.test(chipText('date')), chipText('date'));
-eq('rows unchanged by open/close', rows(), oracle({status:['Failed','Skipped','Synced']}));
+eq('rows unchanged by open/close', rows(), recOracle({status:['Synced']}));
 
 console.log('-- status is removable and re-addable like any other filter');
 q('[data-remove-field]',fld('status')).click();
 ok('status chip gone from the bar', bar().indexOf('status') === -1, bar().join(','));
-ok('removing status resets the segment to All', seg('all').classList.contains('active'));
+ok('the tab is unaffected by removing the status chip', seg('all').classList.contains('active'));
 eq('and it COMMITTED — no status filter left on the list', rows(), oracle({}));
 ok('status is offered in Add filter', !!q('#recFilterBar [data-rec-add-key="status"]'));
 q('[data-rec-add]').click();
@@ -181,10 +199,12 @@ ok('it is the same chip component as platform',
    q('.filter-chip',fld('platform')).className.replace(' active',''));
 ok('it has its own remove button', !!q('[data-remove-field]',fld('status')));
 ok('and its own dropdown', !!q('[data-field-trigger]',fld('status')));
-ok('attention segment partial', seg('needs-attention').classList.contains('partial'));
+ok('deep-link resets the tab to All', seg('all').classList.contains('active'));
 eq('rows = Rule failed at the 90-day default', rows(), oracle({date:'90d',status:['Synced with rule failed']}));
 seg('successful').click();
-eq('a segment click replaces it', rows(), oracle({date:'90d',status:SEG['successful']}));
+eq('a tab click narrows WITHIN the deep-linked status', rows(), 0);
+eq('and the chip is still the deep-linked status', chipText('status'), 'Status: Synced with rule failed');
+seg('all').click();
 
 console.log('-- empty state and recovery');
 // Add whichever chips this point in the run has left off the bar.
@@ -214,7 +234,10 @@ ok('All segment active again', seg('all').classList.contains('active'));
 
 console.log('-- other variants untouched');
 ok('V7 still has its segments row', !!q('#sheetbtnSegments'));
-ok('V7 still has its count line', !!q('#sheetbtnCount'));
+ok('V7 count line is gone', !q('#sheetbtnCount'));
+ok('V7 search + Filters sit on their own row below the header',
+   !!q('#variant-sheetbtn .search-toolbar #sheetbtnSearch') &&
+   !!q('#variant-sheetbtn .search-toolbar #sheetbtnFiltersBtn'));
 ok('V7 sheet still excludes status', true);
 ok('V8 tabs intact', qa('#groupsTabs .status-segment').length === 6);
 ok('V8 count line intact', !!q('#groupsCount'));

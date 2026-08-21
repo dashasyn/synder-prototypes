@@ -1307,6 +1307,20 @@
             margin-right: 6px;
         }
 
+        /* Search + Filters on their own row beneath the header. The search takes
+           the width it needs to be usable; the button sits at its end. */
+        .search-toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 24px 16px;
+        }
+
+        .toolbar-search-wide {
+            flex: 1;
+            min-width: 0;
+        }
+
         /* ========== VARIANT 8: GROUP TABS + SCOPED STATUSES ========== */
         /* The second level. It lives BELOW the tab row because it narrows
            within the active tab — it is the only filter on the page that the
@@ -1736,7 +1750,7 @@
                 <p>What the evidence points to, rather than another layout option. Three ideas, each answering a finding we already logged — see the reasoning below the prototype.</p>
                 <ol class="rec-summary">
                     <li><strong>Status gets a segmented control with counts</strong>, because that's the one filter dimension users actually touch (986 tab clicks vs ~0 status-dropdown clicks in 30 days on Summaries).</li>
-                    <li><strong>It also gets an ordinary status filter with all 19 statuses, grouped as the app groups them</strong>, for the precise picks the segments can't express — and the two are wired to the <em>same value</em>, so they're two views of one thing rather than two sources of truth.</li>
+                    <li><strong>It also gets an ordinary status filter with all 19 statuses, grouped as the app groups them</strong>, for the precise picks the tabs can't express. The two work <em>independently</em>: switching tabs never touches what's selected in the filter.</li>
                     <li><strong>Every filter on the bar looks and behaves the same</strong> — date included, and a status arriving from a dashboard deep-link included. No special-cased chrome, and no count sentence repeating what the chips and the segment counts already say.</li>
                 </ol>
             </div>
@@ -1768,9 +1782,9 @@
             </div>
 
             <div class="variant-header rec-notes" id="recNotes">
-                <h3>Why status has both a segmented control and a filter</h3>
+                <h3>Why status has both a tab row and a filter</h3>
                 <p><span class="evidence">FLT-1 · LogRocket</span>On Summaries, the status tabs took <strong>986 clicks in 30 days</strong> while the status dropdown took roughly <strong>zero</strong>. Users filter by status constantly — they just don't do it from a select. Production's own click index confirms the shape of the problem: <code>All statuses</code>, <code>All types</code> and <code>All payment platforms</code> are all logged as click targets, i.e. users open the dropdowns and mostly close them again.</p>
-                <p>That says the <em>common</em> path should be one click with a count on it, not that the precise path should be impossible. So both exist: the segments carry the groups and their counts ("how many are broken right now?"), and the status chip carries all 19 statuses, grouped exactly as the app groups them, for the picks a group can't express — <em>Synced with rule failed</em> on its own, or <em>Failed</em> plus <em>Rollback failed</em> without the other six.</p>
+                <p>That says the <em>common</em> path should be one click with a count on it, not that the precise path should be impossible. So both exist: the tabs carry the groups and their counts ("how many are broken right now?"), and the status chip carries all 19 statuses, grouped exactly as the app groups them, for the picks a group can't express — <em>Synced with rule failed</em> on its own, or <em>Failed</em> plus <em>Rollback failed</em> without the other six.</p>
                 <p>The counts come from one aggregate over the same result set the list already fetches — not a per-click preview, so this doesn't smuggle the query cost back in.</p>
 
                 <h3>Why the filters sit above the segments</h3>
@@ -1781,10 +1795,11 @@
                 <p>Date used to get its own dashed <em>Last 90 days (default)</em> treatment, to make the point that Synder's 90-day window is a system default rather than something the user applied. It still <em>starts</em> at 90 days — but it's now an ordinary chip like the rest, because a bar where one control is shaped differently makes the reader stop and work out why. The count sentence that explained the distinction is gone too, so the special chip had nothing left to lean on.</p>
                 <p>The <em>Reset-on-a-clean-page</em> problem it was answering is real and still unsolved: Platform transactions shows "Reset all filters" before the user has touched anything. That needs fixing in the reset copy, which is a separate open item, not in the date control.</p>
 
-                <h3>Why two status controls don't reproduce FLT-2</h3>
-                <p><span class="evidence">FLT-2 · Critical</span>The bug on Summaries: pick "Failed" in the dropdown, click the "Ready to sync" tab, and you get Ready-to-sync rows while the dropdown still says Failed. That bug isn't caused by there being two controls — it's caused by there being <strong>two values</strong>, with nothing keeping them equal.</p>
-                <p>Here the segments and the status chip read and write <strong>the same value</strong>. Pick <em>Synced with rule failed</em> in the chip and the <em>Needs attention</em> segment goes to its dashed <strong>partial</strong> state: narrower than the segment, and it says so. Click a segment and the chip fills in with exactly that segment's statuses. Select a set that matches no group and every segment goes quiet. They can't disagree, because there is only one thing to disagree about.</p>
-                <p>A status arriving from a dashboard click sets that same value and renders as an <strong>ordinary status chip</strong> — no "from dashboard" label. It's a filter like any other: editable, removable, and reflected in the segment above. Marking it as special would invite the question "special how?", and the answer would be "it isn't". Try <em>Simulate dashboard deep-link</em> above.</p>
+                <h3>Tabs and the status filter are independent — and what that costs</h3>
+                <p>Switching tabs leaves the status filter exactly as it was, and changing the status filter leaves the tab where it is. They're two separate dimensions that <strong>AND together</strong>: the tab narrows to a group, the filter narrows to specific statuses, and a row has to satisfy both.</p>
+                <p><span class="evidence">Known trade-off</span>That makes a contradictory pair buildable. <em>Needs attention</em> + <em>Synced</em> is a query with no possible result, and the list will be empty. This is the behaviour asked for on 2026-08-21, chosen over scoping — and <strong>variant 8 is the same taxonomy with the opposite decision</strong>, where the status control only ever offers the active group's members so the contradiction can't be expressed at all. The two variants exist to be compared on exactly this point.</p>
+                <p>What softens it here: <strong>the tab counts are computed with the status filter already applied.</strong> Select <em>Synced</em> in the filter and <em>Needs attention</em> reads <em>0</em> — before you click it, not after. A tab that would strand you says so in advance, which is the difference between a trade-off and a trap.</p>
+                <p><span class="evidence">FLT-2 · Critical</span>The original Summaries bug was worse than this in one specific way: there the two controls disagreed <strong>silently</strong> — the dropdown kept saying "Failed" while the tab served Ready-to-sync rows, so the screen asserted something untrue. Here both controls always show exactly what they are doing, and the count states the result in advance. An empty list you can predict is a different thing from a label that lies.</p>
 
                 <h3>Amount, dates and long lists</h3>
                 <p><strong>Amount is operators, not bands.</strong> <em>Is exactly</em>, <em>Greater than</em>, <em>Less than</em> and <em>Is between</em>, each with typed numbers. The old <em>Under $100 / $100–$500 / Over $500</em> presets are gone because <em>Is between</em> subsumes all three — keeping both would give two ways to express one query, and then the chip has to explain which one you used.</p>
@@ -1793,7 +1808,7 @@
                 <p>All three are defined once in the shared filter set, so <strong>every variant gets them</strong> — this is one prototype comparing layouts, not eight different filter engines.</p>
 
                 <h3>What stages and what commits</h3>
-                <p>Segments <strong>commit on click</strong> — one click, one query, exactly what a status tab costs today. Every filter chip, status included, stages <strong>inside its own dropdown</strong>: opening a panel snapshots what's applied, its Apply commits, and closing without Apply discards. Because staged state can never outlive an open panel, this variant needs no bar-level Apply and no unapplied-changes warning.</p>
+                <p>Tabs <strong>commit on click</strong> — one click, one query, exactly what a status tab costs today. <em>Clear filters</em> clears both levels, tab included — it's a filter too. Every filter chip, status included, stages <strong>inside its own dropdown</strong>: opening a panel snapshots what's applied, its Apply commits, and closing without Apply discards. Because staged state can never outlive an open panel, this variant needs no bar-level Apply and no unapplied-changes warning.</p>
                 <p>That asymmetry is deliberate and it's the one thing worth arguing about: the fast path stays one click, and the precise path costs an Apply. If the precise path also has to be instant, the segments and the chip have to agree on a commit model and one of them gets worse.</p>
 
                 <h3>Still open</h3>
@@ -1807,6 +1822,7 @@
             <div class="variant-header">
                 <h2>Filters as Button + Side Sheet</h2>
                 <p>One <em>Filters</em> button opens a right-hand sheet, with Apply and Reset at the bottom. Applied filters appear as read-only chips under the toolbar — they show what's on and can be removed, but not edited. All composing happens in the sheet; the chips are a summary, not a control panel.</p>
+                <p><strong>Search and Filters sit on their own row below the header</strong> rather than in the header's action group, so the header says what the page is and the row beneath it says how to narrow it. There's no <em>"Showing N of M · K filters applied"</em> line: the chips name every applied filter and the badge carries the count.</p>
                 <p><strong>Status is a segmented control above the table, not a field in the sheet</strong> — the same single-source-of-truth rule as variant 6. Segment counts are computed from the filters and search already applied, which is why the filter surface sits above them. Clicking a segment commits immediately; everything in the sheet stays Apply-gated.</p>
             </div>
 
@@ -1817,17 +1833,23 @@
                         <p class="mock-subtitle">View and find transactions broken down into journal lines.</p>
                     </div>
                     <div class="mock-actions">
-                        <div class="toolbar-search">
-                            <span class="material-icons">search</span>
-                            <input type="text" id="sheetbtnSearch" placeholder="Search customer…" aria-label="Search customer">
-                        </div>
-                        <button class="btn btn-secondary filters-trigger" type="button" id="sheetbtnFiltersBtn">
-                            <span class="material-icons">tune</span>Filters<span class="badge" id="sheetbtnBadge"></span>
-                        </button>
                         <button class="btn btn-secondary" type="button">
                             <span class="material-icons">download</span>Download report
                         </button>
                     </div>
+                </div>
+
+                <!-- Search + Filters sit on their own row under the header, not in
+                     the header's action group. The header then says what the page
+                     is; the row below says how to narrow it. -->
+                <div class="search-toolbar">
+                    <div class="toolbar-search toolbar-search-wide">
+                        <span class="material-icons">search</span>
+                        <input type="text" id="sheetbtnSearch" placeholder="Search by customer" aria-label="Search by customer">
+                    </div>
+                    <button class="btn btn-secondary filters-trigger" type="button" id="sheetbtnFiltersBtn">
+                        <span class="material-icons">tune</span>Filters<span class="badge" id="sheetbtnBadge"></span>
+                    </button>
                 </div>
 
                 <div class="applied-chips-bar" id="sheetbtnChips"></div>
@@ -1837,7 +1859,6 @@
                      directly against the table it labels. -->
                 <div class="status-segments" id="sheetbtnSegments"></div>
 
-                <div class="table-toolbar" id="sheetbtnCount"></div>
                 <div class="table-container" id="sheetbtnTable"></div>
             </div>
 
@@ -3509,14 +3530,56 @@
         var REC_SECONDARY = ['status', 'type', 'amount', 'customer'];
         var recChips = [];
 
+        // The tab is now its OWN dimension, independent of the status chip: they
+        // AND together rather than being two views of one value. Switching tabs
+        // leaves the chip untouched, which is what Ignat asked for on
+        // 2026-08-21 — and it means a contradictory pair (Needs attention +
+        // Synced) is now buildable and returns nothing. The mitigation is that
+        // the tab counts are computed WITH the status chip applied, so a tab
+        // that would return nothing says 0 before you click it rather than
+        // after. See the notes under the prototype.
+        var recGroup = 'all';
+
+        function recGroupSeg() {
+            return SEGMENTS.filter(function (s) { return s.key === recGroup; })[0] || SEGMENTS[0];
+        }
+
+        function recRows() {
+            var g = recGroupSeg().status;
+            return runFilters(state.rec).filter(function (t) {
+                return !g.length || g.indexOf(t.status) !== -1;
+            });
+        }
+
+        // How many rows a tab would show under everything else that's applied,
+        // the status chip included. That's the honest number: if the chip says
+        // Synced, "Needs attention" reads 0 rather than 13.
+        function recGroupCount(seg) {
+            var rows = runFilters(state.rec);
+            if (!seg.status.length) return rows.length;
+            return rows.filter(function (t) { return seg.status.indexOf(t.status) !== -1; }).length;
+        }
+
         function renderRecSegments() {
-            renderSegmentsInto(document.getElementById('recSegments'), state.rec, draft.rec.status,
-                function (seg) {
-                    draft.rec.status = seg.status.slice();
-                    state.rec = clone(draft.rec);  // one click = one query, nothing left staged
+            var host = document.getElementById('recSegments');
+            host.innerHTML = '';
+            SEGMENTS.forEach(function (seg) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'status-segment' + (seg.key === recGroup ? ' active' : '') +
+                    (seg.attention ? ' attention' : '');
+                btn.setAttribute('data-segment', seg.key);
+                btn.innerHTML = esc(seg.label) +
+                    '<span class="seg-count">' + recGroupCount(seg) + '</span>';
+                btn.addEventListener('click', function () {
+                    // One click, one query. The status chip is deliberately left
+                    // exactly as it was.
+                    recGroup = seg.key;
                     renderRec();
                     renderRecResults();
                 });
+                host.appendChild(btn);
+            });
         }
 
         function renderRec() {
@@ -3582,7 +3645,7 @@
             // filter (the chip says so), so the button is there from the start:
             // the old objection was that Reset appeared while the page claimed
             // nothing was applied, and that contradiction is gone.
-            if (activeKeys(state.rec).length) {
+            if (recAnythingApplied()) {
                 var clear = document.createElement('button');
                 clear.type = 'button';
                 clear.className = 'clear-all';
@@ -3635,8 +3698,15 @@
             state.rec = defaults();
             draft.rec = defaults();
             recChips = [];
+            recGroup = 'all';   // the tab is a filter too, so "clear" clears it
             renderRec();
             renderRecResults();
+        }
+
+        // The tab counts as an applied filter for the purposes of showing
+        // "Clear filters" — it narrows the list just like a chip does.
+        function recAnythingApplied() {
+            return activeKeys(state.rec).length > 0 || recGroup !== 'all';
         }
 
         function renderRecResults() {
@@ -3644,8 +3714,7 @@
             // name every applied filter and the segment counts already say how
             // many rows each status group holds, so the sentence was a third
             // readout of state that's on screen twice already.
-            var rows = runFilters(state.rec);
-            renderTable('recTable', rows, recClearAll);
+            renderTable('recTable', recRows(), recClearAll);
         }
 
         document.getElementById('recDeepLinkBtn').addEventListener('click', function () {
@@ -3657,6 +3726,10 @@
             draft.rec = recBaseline();
             draft.rec.status = ['Synced with rule failed'];
             state.rec = clone(draft.rec);
+            // The tab goes back to All. With the two controls independent, landing
+            // on a tab that doesn't contain the arriving status would show an
+            // empty list for a link the user just clicked.
+            recGroup = 'all';
             // It still needs a visible control, so put the status chip on the bar
             // if the user had removed it.
             if (recChips.indexOf('status') === -1) recChips.push('status');
@@ -3810,10 +3883,9 @@
         }
 
         function renderSheetbtnResults() {
-            var rows = runSheetbtn();
-            var n = activeKeys(state.sheetbtn).length + (sheetbtnSearch ? 1 : 0);
-            renderCount('sheetbtnCount', rows, state.sheetbtn, n);
-            renderTable('sheetbtnTable', rows, function () {
+            // No count line: the chips row names every applied filter and the
+            // badge on the Filters button carries the count.
+            renderTable('sheetbtnTable', runSheetbtn(), function () {
                 state.sheetbtn = defaults();
                 draft.sheetbtn = defaults();
                 sheetbtnSearch = '';

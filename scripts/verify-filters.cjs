@@ -351,33 +351,58 @@ trigger('recFilterBar', 'status').click();   // close the auto-opened panel
 eq('90-day default shows every row', rows('recTable'), oracle({ date: '90d' }));
 eq('Attention segment count matches the oracle', segCount(1), oracle({ date: '90d', status: ATTENTION }));
 
-// segment -> chip, one value
+// The tab and the status filter are INDEPENDENT dimensions now: they AND
+// together, and neither touches the other's value.
+const REC_GROUPS = { all: [] };
+['Needs attention', 'Ready to sync', 'In progress', 'Successful', 'Deleted'].forEach(g => {
+    REC_GROUPS[g.toLowerCase().replace(/ /g, '-')] = inGroup(g);
+});
+const recRows = f => {
+    const g = f.group ? REC_GROUPS[f.group] : [];
+    return DATA.filter(t => {
+        const w = DATE_WINDOW[f.date || 'all'];
+        if (w && !(t.date >= w[0] && t.date <= w[1])) return false;
+        if (f.status && f.status.length && !f.status.includes(t.status)) return false;
+        if (f.platform && f.platform.length && !f.platform.includes(t.platform)) return false;
+        if (g.length && !g.includes(t.status)) return false;
+        return true;
+    }).length;
+};
 segs()[1].click();
-eq('segment commits in one click', rows('recTable'), oracle({ date: '90d', status: ATTENTION }));
-ok('segment marked active', segs()[1].classList.contains('active'));
-ok('the status chip followed the segment',
-    recChipText('status') === 'Status: ' + ATTENTION.length + ' selected', recChipText('status'));
+eq('tab commits in one click', rows('recTable'), recRows({ date: '90d', group: 'needs-attention' }));
+ok('tab marked active', segs()[1].classList.contains('active'));
+eq('the status chip is untouched by the tab', recChipText('status'), 'Status');
 
-// chip -> segment, still one value. One trigger click, then toggle inside the
-// open panel — re-clicking the trigger would CLOSE it and discard the edits.
+// One trigger click, then toggle inside the open panel — re-clicking the
+// trigger would CLOSE it and discard the edits.
 trigger('recFilterBar', 'status').click();
-ATTENTION.filter(x => x !== 'Synced with rule failed').forEach(v => {
+['Synced'].forEach(v => {
     const cb = panel('recFilterBar', 'status').querySelector('[data-check-value="' + v + '"]');
-    cb.checked = false;
+    cb.checked = true;
     cb.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
 });
 panelApply('status').click();
-eq('narrowing in the chip commits', rows('recTable'),
-    oracle({ date: '90d', status: ['Synced with rule failed'] }));
-ok('containing segment drops to partial, not active',
-    segs()[1].classList.contains('partial') && !segs()[1].classList.contains('active'));
+ok('the tab is untouched by the chip', segs()[1].classList.contains('active'));
+eq('a contradictory pair returns nothing', rows('recTable'),
+    recRows({ date: '90d', group: 'needs-attention', status: ['Synced'] }));
+eq('...and the tab count says 0 BEFORE you click it', segCount(1),
+    recRows({ date: '90d', status: ['Synced'], group: 'needs-attention' }));
+segs()[0].click();
+eq('the All tab keeps the status filter', rows('recTable'),
+    recRows({ date: '90d', status: ['Synced'] }));
+ok('status chip still reads Synced', /Synced/.test(recChipText('status')), recChipText('status'));
+trigger('recFilterBar', 'status').click();
+panel('recFilterBar', 'status').querySelector('[data-check-value="Synced"]').checked = false;
+panel('recFilterBar', 'status').querySelector('[data-check-value="Synced"]')
+    .dispatchEvent(new dom.window.Event('change', { bubbles: true }));
+panelApply('status').click();
+eq('clearing the chip restores the scope', rows('recTable'), recRows({ date: '90d' }));
 
-// deep-link sets the same value and is labelled, not duplicated
+// deep-link fills the status filter and resets the tab to All
 d.getElementById('recDeepLinkBtn').click();
 eq('deep-link filters to the granular status', rows('recTable'),
-    oracle({ date: '90d', status: ['Synced with rule failed'] }));
-ok('containing segment shows partial', segs()[1].classList.contains('partial'));
-// A deep-linked status is an ORDINARY chip now — no attribution label at all.
+    recRows({ date: '90d', status: ['Synced with rule failed'] }));
+ok('deep-link resets the tab to All', segs()[0].classList.contains('active'));
 ok('no "From dashboard" marker anywhere',
     !d.querySelector('#recFilterBar [data-deeplink-tag]') &&
     !d.querySelector('#recFilterBar .deeplink-chip') &&
@@ -385,8 +410,8 @@ ok('no "From dashboard" marker anywhere',
 ok('the arriving status is a normal status chip with its own remove',
     !!field('recFilterBar', 'status') &&
     !!field('recFilterBar', 'status').querySelector('[data-remove-field]'));
-segs()[0].click();
-eq('clicking All clears status', rows('recTable'), oracle({ date: '90d' }));
+field('recFilterBar', 'status').querySelector('[data-remove-field]').click();
+eq('removing it clears the status filter', rows('recTable'), recRows({ date: '90d' }));
 
 // every filter panel carries its own Apply (platform is on the bar by default now)
 ok('platform chip is present without adding it', !!field('recFilterBar', 'platform'));
