@@ -1721,6 +1721,20 @@ td:first-child,th:first-child{padding-left:14px;width:38px}
 .b-inprog{background:#E3F2FD;color:#1565C0}
 .b-deleted{background:#EEEEEE;color:#616161}
 
+/* ── Variant switcher (prototype control, deliberately not product chrome) ── */
+.variant-switch{display:flex;align-items:center;gap:12px;background:#1E1E1E;color:#fff;
+  padding:8px 20px;flex-shrink:0;font-size:13px}
+.variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:12px;
+  text-transform:uppercase}
+.variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+  border-radius:6px;padding:3px}
+.variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+  font-family:inherit;font-size:13px;padding:5px 12px;border-radius:4px;cursor:pointer;
+  white-space:nowrap}
+.variant-switch button:hover{color:#fff}
+.variant-switch button.on{background:#fff;color:#1E1E1E;font-weight:500}
+.variant-switch .vs-note{margin-left:auto;opacity:.6;font-size:12px}
+
 /* ── Dashboard ── */
 .dash-greeting{font-size:22px;font-weight:400;letter-spacing:-.01em}
 .dash-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;align-items:start;margin-top:20px}
@@ -1741,6 +1755,8 @@ td:first-child,th:first-child{padding-left:14px;width:38px}
 .sync-row-count{margin-left:auto;font-size:13px;color:#1E1E1E;font-variant-numeric:tabular-nums}
 .sync-row-caret{color:#9E9E9E;font-size:11px;flex-shrink:0}
 .sync-row:hover .sync-row-caret{color:#0053CC}
+.sync-group-head{font-size:10px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 3px;padding:0 8px}
+#sync-rows .sync-group-head:first-child{margin-top:0}
 .dash-row{display:flex;align-items:center;gap:8px;padding:7px 0;font-size:13px}
 .dash-row + .dash-row{border-top:1px solid #F0F0F0}
 .dash-int{padding:9px 12px;border:1px solid #E0E0E0;border-radius:6px;margin-bottom:8px}
@@ -1896,6 +1912,17 @@ input[type=checkbox]{accent-color:#0053CC;cursor:pointer;width:14px;height:14px}
 
 <!-- ── MAIN ── -->
 <div class="main">
+
+  <!-- Prototype-only control. Dark bar so it never reads as product chrome. -->
+  <div class="variant-switch">
+    <span class="vs-label">Sync block logic</span>
+    <div class="vs-opts">
+      <button id="vs-1" class="on" onclick="setSyncVariant(1)">1 · All 19 statuses &rarr; status filter</button>
+      <button id="vs-2" onclick="setSyncVariant(2)">2 · 5 groups &rarr; matching tab</button>
+    </div>
+    <span class="vs-note" id="vs-note"></span>
+  </div>
+
   <div class="topbar">
     <div class="topbar-balance"><strong>1000</strong> syncs left <div class="syncs-bar" style="width:60px"><div class="syncs-fill"></div></div></div>
     <button class="topbar-btn">🔔</button>
@@ -1956,29 +1983,10 @@ input[type=checkbox]{accent-color:#0053CC;cursor:pointer;width:14px;height:14px}
 
         <div class="dash-card" id="sync-card">
           <div class="dash-card-title">Sync <span class="dash-hint" title="Transactions synced to your accounting platform, by status">?</span></div>
-          <div class="dash-metric-link" onclick="goToTransactions(null)">1,200 transactions synchronized to books</div>
-          <div style="margin-top:10px">
-            <button class="sync-row" onclick="goToTransactions('ready')">
-              <span class="badge b-ready">Ready to sync</span>
-              <span class="sync-row-count">30</span><span class="sync-row-caret">›</span>
-            </button>
-            <button class="sync-row" onclick="goToTransactions('successful')">
-              <span class="badge b-synced">Successful</span>
-              <span class="sync-row-count">300</span><span class="sync-row-caret">›</span>
-            </button>
-            <button class="sync-row" onclick="goToTransactions('attention')">
-              <span class="badge b-failed">Needs attention</span>
-              <span class="sync-row-count">50</span><span class="sync-row-caret">›</span>
-            </button>
-            <button class="sync-row" onclick="goToTransactions('deleted')">
-              <span class="badge b-deleted">Deleted</span>
-              <span class="sync-row-count">30</span><span class="sync-row-caret">›</span>
-            </button>
-            <button class="sync-row" onclick="goToTransactions('inprogress')">
-              <span class="badge b-inprog">In progress</span>
-              <span class="sync-row-count">30</span><span class="sync-row-caret">›</span>
-            </button>
-          </div>
+          <div class="dash-metric-link" onclick="goToAll()"><span id="sync-total">0</span> transactions synchronized to books</div>
+          <!-- Rows are rendered by renderSyncCard(): 19 statuses in variant 1,
+               5 groups in variant 2. -->
+          <div style="margin-top:10px" id="sync-rows"></div>
         </div>
       </div>
 
@@ -3689,44 +3697,126 @@ function showPage(name) {
   document.querySelector('.page.active .page-scroll')?.scrollTo(0, 0);
 }
 
-// ── Dashboard → Transactions drill-through ──
-// Ignat, 2026-08-21: land on the transactions page with TWO filters applied —
-// the 90-day range and the status that was clicked.
+// ══════════════════════════════════════════════════════════════════
+// Dashboard Sync block — TWO VARIANTS, switched at the top of the page.
+// Ignat, 2026-08-21: build both, decide later.
 //
-// Following V6: the arriving status is an ORDINARY status chip, with no
-// "from dashboard" banner. V6 rejects special-cased chrome on principle — a
-// filter that arrived from a link should read as one the user can edit or
-// remove like any other. That's why the origin note from the 20 Aug build is
-// gone rather than ported.
-const DASH_GROUPS = {
-  ready:      'Ready to sync',
-  successful: 'Successful',
-  attention:  'Needs attention',
-  deleted:    'Deleted',
-  inprogress: 'In progress',
-};
+//   Variant 1 — Sync block lists all 19 statuses individually. Clicking one
+//               lands on Transactions with a STATUS FILTER for that single
+//               status + the 90-day range. The tab stays on All.
+//
+//   Variant 2 — Sync block keeps the 5 groups. Clicking one lands on the
+//               MATCHING TAB + the 90-day range, and applies no status chip.
+//
+// The difference that matters: v1 drives the granular status chip, v2 drives
+// the segmented control. Same destination, two different controls doing the
+// filtering — which is exactly the comparison worth making, because V6 gives
+// status two independent controls and this decides which one a deep-link owns.
+// ══════════════════════════════════════════════════════════════════
+var syncVariant = 1;
 
-function goToTransactions(dashKey) {
+function setSyncVariant(v) {
+  syncVariant = v;
+  document.getElementById('vs-1').classList.toggle('on', v === 1);
+  document.getElementById('vs-2').classList.toggle('on', v === 2);
+  document.getElementById('vs-note').textContent = v === 1
+    ? 'Click a status \u2192 status filter + last 90 days'
+    : 'Click a group \u2192 matching tab + last 90 days';
+  renderSyncCard();
+  // Switching logic mid-flight would leave the list holding the other
+  // variant's filters, which reads as a bug rather than a comparison.
+  resetTransactionFilters();
+}
+
+// Counts are computed from the same rows the drill-through will show, inside the
+// same 90-day window. The Figma mock numbers (30/300/50/30/30) are deliberately
+// not used: variant 1 needs a number per status and Figma has none, and a
+// dashboard that promises 300 then shows 8 is the lying-UI problem again.
+function syncWindowRows() {
+  return TXNS.filter(function (t) { return FILTERS.date.match(t, '90d'); });
+}
+function countStatus(name)  { return syncWindowRows().filter(function (t) { return t.status === name; }).length; }
+function countGroup(group)  { var m = statusesInGroup(group);
+                              return syncWindowRows().filter(function (t) { return m.indexOf(t.status) !== -1; }).length; }
+
+function renderSyncCard() {
+  var host = document.getElementById('sync-rows');
+  if (!host) return;
+  host.innerHTML = '';
+  document.getElementById('sync-total').textContent = syncWindowRows().length;
+
+  if (syncVariant === 1) {
+    // All 19, under their group headings so the list reads the way the app
+    // groups them rather than as a flat wall of 19.
+    STATUS_GROUP_ORDER.forEach(function (group) {
+      var head = document.createElement('div');
+      head.className = 'sync-group-head';
+      head.textContent = group;
+      host.appendChild(head);
+      statusesInGroup(group).forEach(function (st) {
+        host.appendChild(syncRowEl(st, countStatus(st), function () { goToStatus(st); }));
+      });
+    });
+  } else {
+    STATUS_GROUP_ORDER.forEach(function (group) {
+      host.appendChild(syncRowEl(group, countGroup(group), function () { goToGroup(group); }));
+    });
+  }
+}
+
+function syncRowEl(label, count, onClick) {
+  var b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'sync-row';
+  b.innerHTML = '<span class="badge ' + statusClass(label) + '">' + esc(label) + '</span>' +
+                '<span class="sync-row-count">' + count + '</span>' +
+                '<span class="sync-row-caret">\u203A</span>';
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+// ── Shared landing behaviour ──
+// Both variants apply the 90-day range; they differ only in which control
+// carries the status.
+function landOnTransactions(mutate) {
   showPage('list');
   clearSelection();
-
-  // Filter 1 — Synder's real default window.
-  draft.rec = recBaseline();          // sets date '90d'
-
-  // Filter 2 — the clicked status group, expanded to its production statuses.
-  var group = DASH_GROUPS[dashKey];
-  draft.rec.status = group ? statusesInGroup(group) : [];
+  draft.rec = recBaseline();        // filter 1: last 90 days
   state.rec = clone(draft.rec);
-
-  // Tabs and the status chip are independent and AND together, so landing on a
-  // tab that excludes the arriving status would show an empty list for a link
-  // the user just clicked. Stay on All and let the chip carry the filter.
   recGroup = 'all';
-  if (group && recChips.indexOf('status') === -1) recChips.push('status');
-
   var search = document.getElementById('search-input');
-  if (search) { search.value = ''; document.getElementById('search-wrap').classList.remove('has-value'); }
+  if (search) { search.value = ''; recSearch = ''; document.getElementById('search-wrap').classList.remove('has-value'); }
+  mutate();                          // filter 2: variant-specific
+  renderRec();
+  renderRecResults();
+}
 
+// Variant 1 — one granular status, carried by the status chip.
+function goToStatus(statusName) {
+  landOnTransactions(function () {
+    draft.rec.status = [statusName];
+    state.rec = clone(draft.rec);
+    if (recChips.indexOf('status') === -1) recChips.push('status');
+  });
+}
+
+// Variant 2 — a group, carried by the segmented control. No status chip: the
+// tab IS the status filter here, and adding a chip too would state the same
+// constraint twice and let the two drift apart.
+function goToGroup(group) {
+  landOnTransactions(function () {
+    var seg = SEGMENTS.filter(function (x) { return x.label === group; })[0];
+    recGroup = seg ? seg.key : 'all';
+  });
+}
+
+function goToAll() { landOnTransactions(function () {}); }
+
+function resetTransactionFilters() {
+  draft.rec = recBaseline();
+  state.rec = clone(draft.rec);
+  recGroup = 'all';
+  recChips = [];
   renderRec();
   renderRecResults();
 }
@@ -3770,6 +3860,7 @@ function clearSearch() {
 // ── Init ──
 renderRec();
 renderRecResults();
+setSyncVariant(1);
 </script>
 </body>
 </html>
