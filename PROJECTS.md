@@ -30,6 +30,9 @@
 - **Dashboard Sync block — TWO VARIANTS behind a switcher (2026-08-21, awaiting Ignat's decision):**
   - **Variant 1** — all 19 statuses listed under the 5 group headings; click → **status chip** for that one status + 90 days, tab stays All
   - **Variant 2** — the 5 groups; click → **matching tab** + 90 days, no status chip (the tab *is* the status filter)
+  - **The switcher also picks the filter surface:** variant 1 = V6 chip bar (compose inline, per-chip Apply) · variant 2 = **V7** Filters button + right side sheet + read-only applied chips (compose in the sheet, one Apply)
+  - Both surfaces share **one** filter state (`state.rec`/`recGroup`/`recSearch`), so the drill-through doesn't fork and switching can't leave two disagreeing copies
+  - V7 keeps **Status out of the sheet** — it belongs to the segments; that's why it fits variant 2. Reset touches only sheet-owned fields; Clear all does clear the segment. Search commits on Enter.
   - The real question: which of V6's two independent status controls should a deep-link own?
   - Switcher is a dark bar at the top; switching resets the list so stale filters can't look like a bug
   - Sync counts now computed from the same 90-day window the drill-through uses — the Figma mock numbers (30/300/50/30/30) are gone, and dashboard count == list count
