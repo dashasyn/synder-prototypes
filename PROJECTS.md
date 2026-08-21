@@ -27,6 +27,13 @@
 - **Dashboard→table mapping** — resolved by adopting production taxonomy (19 statuses / 5 groups):
   - Ready to sync · Successful · **Needs attention (8 statuses incl. rule failed, rollback failed, warnings)** · Deleted · In progress
   - Both of my 20 Aug open questions are now answered by the real taxonomy: `rule failed`/`rollback failed` **do** belong under Needs attention, and `Deleted` **is** a real production group
+- **Dashboard Sync block — TWO VARIANTS behind a switcher (2026-08-21, awaiting Ignat's decision):**
+  - **Variant 1** — all 19 statuses listed under the 5 group headings; click → **status chip** for that one status + 90 days, tab stays All
+  - **Variant 2** — the 5 groups; click → **matching tab** + 90 days, no status chip (the tab *is* the status filter)
+  - The real question: which of V6's two independent status controls should a deep-link own?
+  - Switcher is a dark bar at the top; switching resets the list so stale filters can't look like a bug
+  - Sync counts now computed from the same 90-day window the drill-through uses — the Figma mock numbers (30/300/50/30/30) are gone, and dashboard count == list count
+  - Trade-off to weigh: v1's card is 19 rows tall and dominates the dashboard column; v2 stays compact but needs a second click to reach a specific status
 - **Removed on 08-21:** the origin/deep-link note (V6 rejects special deep-link chrome) and the More-filters side sheet (that's variant 7)
 - **⚠️ Still open for Ignat:** dashboard counts are Figma mock numbers (30/300/50/30/30) and don't match the dataset — real counts need a shared aggregate. V6 also notes segment counts need a status-count aggregate on the list endpoint.
 - **Open validator findings (never applied):** `Platform transactions`→`Integration transactions`; `Syncs history` typo; `posting`→`sync` ×2; no inline View error/Retry on failed rows; payout rows blank primary identifier; detail page duplicates 5 fields
