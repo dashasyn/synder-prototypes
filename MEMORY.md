@@ -120,17 +120,21 @@
 - **Ignat sends all frames he has** — it's on me to identify and request missing ones explicitly
 - See [[figma-review-protocol]] for full detail
 
-## Promoted From Short-Term Memory (2026-08-16)
+## Promoted From Short-Term Memory (2026-08-24)
 
-<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:12:14 -->
-- Weekly LogRocket friction report (cron, 07:00 UTC): **Galileo API lesson:** chatID must be **server-generated**. Sending a custom chatID (e.g. `weekly-friction-20260810`) → 500 Internal Server Error every time. Correct flow: POST with no chatID → response returns `chatID` (UUIDv7) → follow up in that chatID to retrieve results. This explains the old all-500 results in `.synder-state/logrocket-onb-results.json`. **Rate limit:** ~3 requests then throttled ~410s. Space polls out. **Timing:** queries take 2–5 min (session-watching runs 35–100 sessions).... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:12-14]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:17:20 -->
-- Data (Aug 3–9, 2026): Rage clicks: 657 sessions / 113 page buckets. Top: synder.com (marketing) 92, `/transaction/list` 86, `/*/index` 67, `/sync/show/*` 60, `/controlPanel/index/overview` 45; Dead clicks: `/transaction/list` 104, `/controlPanel/index/overview` 64, `/controlPanel/index` 49, `/organizations/settings` 44, `/company/settings` 37, `/onboarding/index` 23; Element-level attribution NOT resolved — Galileo's per-element metrics returned unfiltered populations.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:17-20]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:30:33 -->
-- Onboarding session (14:10–15:37 UTC, topic 7156): Ignat opened with "let's continue with onboarding" — I reported context (SET-493 splash screens, last touched 2026-07-31) and stopped, per protocol. He then took it somewhere new: two copy asks on the **Connect integrations** step. No files were changed; both outputs are copy specs sitting in chat, awaiting his decision. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:30-33]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:37:39 -->
-- Stripe/Square write-access variant of the Connect card (14:13): Ignat's context (translated): Stripe and Square need write access because of invoicing — when a merchant sends an invoice from their accounting platform, Synder has to create the payment in the merchant's Stripe/Square account. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:37-39]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:21:24 -->
-- Data (Aug 3–9, 2026): Reconciliation: ~2/3 of 90 watched sessions read the "Match transactions to your books" overview/FAQ/video and never clicked Run audit. Also: normalization failures on Stripe/Amazon files (unrecognized date formats, missing columns) in ≥4 sessions.; Onboarding failure mode: "Synder couldn't retrieve necessary information to identify the company" at Connect step, 3 of 35 watched sessions.; Errors: zero untriaged issues in both 7d and 14d windows. Caveat: search covers untriaged only — could be a triage artifact.; Volume: 7,803 sessions vs 8,545 prior week = -8.7%.... [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:21-24]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-10.md:5:6 -->
-- Session Summary: Two pieces of work today: the weekly LogRocket friction report (cron, 07:00 UTC) and a live onboarding copy session with Ignat (14:10–15:37 UTC, Telegram topic 7156 "Onboarding"). [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-10.md:5-6]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-19.md:5:7 -->
+- Session resumed — ETC notifications follow-up + security finding (10:15–10:29 UTC, Telegram topic 7433): Ignat opened asking for help on "a transportation product" with no further detail. I surfaced the ETC notifications context (three open questions from 2026-08-05: system-health alerts in dispatcher bell, filtering/collapsing at 100/day volume, actionable-vs-deletable notifications). [score=0.833 recalls=0 avg=0.620 source=memory/2026-08-19.md:5-7]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-19.md:9:11 -->
+- Session resumed — ETC notifications follow-up + security finding (10:15–10:29 UTC, Telegram topic 7433): **Ignat's answer: those three are resolved — fixed inside the product already.** No further detail given on how; not asked, since he indicated no questions remain. This closes out the open items list carried in MEMORY.md/PROJECTS.md from the 2026-08-05 session. [score=0.833 recalls=0 avg=0.620 source=memory/2026-08-19.md:9-11]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:12:12 -->
+- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): `07:09` — `memory/morning-ideas.json` appended: **import-success-toast-carries-the-sync-action** [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:12-12]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:17:17 -->
+- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): funnel query should narrow the Import→Sync gap. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:17-17]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:13:16 -->
+- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): — grounded in yesterday's friction-report number (639 sessions imported but never synced). Two label/toast changes on existing UI, no new screens: (1) success toast becomes actionable ("Imported 1,733 transactions. Sync them to QuickBooks?" with Sync as the toast button), (2) put the count in the Sync button label itself. Verification already wired — next Monday's [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:13-16]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:5:6 -->
+- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): **Seventh quiet day.** No commits, no prototype edits, no messages from Ignat. Only background automation touched the workspace: [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:5-6]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:8:8 -->
+- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): `03:00` — dreaming pass wrote `memory/dreaming/{light,deep,rem}/2026-08-18.md`, updated [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:8-8]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:9:11 -->
+- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): `DREAMS.md` and `memory/.dreams/events.jsonl`; MEMORY.md promotion block rotated (2026-08-16 promotions replaced by 2026-08-12 ones — ETC notifications 62%-empty-cells diagnosis stepped aside for the Reports/Financials 5-copy-bugs verdict) [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:9-11]
