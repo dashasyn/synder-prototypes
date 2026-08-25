@@ -763,6 +763,34 @@
     display: flex;
   }
 
+  /* Scheduling blocked for a fixed custom date range */
+  .schedule-section.sched-disabled { background: #F9FAFB; }
+  .schedule-section.sched-disabled .schedule-toggle-row,
+  .schedule-section.sched-disabled .schedule-toggle-row input[type="checkbox"] { cursor: not-allowed; color: #9CA3AF; }
+  .sched-note {
+    display: none;
+    margin-top: 12px;
+    padding: 10px 12px;
+    background: #FFFBEB;
+    border: 1px solid #FDE68A;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.55;
+    color: #92400E;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .sched-note.visible { display: flex; }
+  .sched-note .material-icons { font-size: 16px; color: #D97706; flex-shrink: 0; }
+  .sched-note-link {
+    background: none; border: none; padding: 0; margin-left: 4px;
+    font-size: 12px; font-weight: 500; color: #2563EB;
+    text-decoration: underline; cursor: pointer;
+  }
+  #sched-edit-blocked-note { margin: 0 0 16px 0; }
+  .btn-preset:disabled { opacity: 0.45; cursor: not-allowed; border-color: #E5E7EB; color: #9CA3AF; }
+  .btn-preset:disabled:hover { border-color: #E5E7EB; color: #9CA3AF; }
+
   /* ── SUCCESS STATE ────────────────────────────────────────── */
   .success-banner {
     display: none;
@@ -2268,13 +2296,17 @@
 
           <!-- Scheduling -->
           <div class="schedule-section" id="schedule-section">
-            <div class="schedule-toggle-row" onclick="toggleSchedule()">
+            <div class="schedule-toggle-row" onclick="toggleScheduleRow()">
               <input type="checkbox" id="schedule-checkbox" onclick="event.stopPropagation(); toggleSchedule()">
               <div style="flex:1;">
                 <div data-i18n="schedule_label">Set up as scheduled report</div>
                 <div class="schedule-note" data-i18n="schedule_note">Create an automated report. Data is available with a 2-day delay.</div>
               </div>
               <span class="material-icons" style="font-size:18px; color:#9CA3AF;">event_repeat</span>
+            </div>
+            <div class="sched-note" id="schedule-blocked-note">
+              <span class="material-icons">info</span>
+              <span><span data-i18n="schedule_blocked">A custom date range cannot be scheduled — every run would return the same fixed period. Choose a rolling period (e.g. Last 7 Days, Current Month) to schedule this report.</span><button type="button" class="sched-note-link" onclick="goToStep(1)" data-i18n="schedule_blocked_link">Change period</button></span>
             </div>
             <div class="schedule-fields" id="schedule-fields">
               <div class="form-group">
@@ -2347,6 +2379,11 @@
               </div>
 
             </div>
+          </div>
+
+          <div class="sched-note" id="sched-edit-blocked-note">
+            <span class="material-icons">info</span>
+            <span><span data-i18n="sched_edit_blocked">A scheduled report needs a rolling period. Pick a preset before saving.</span><button type="button" class="sched-note-link" onclick="goToStep(1)" data-i18n="schedule_blocked_link">Change period</button></span>
           </div>
 
           <div class="wizard-actions">
@@ -4004,6 +4041,10 @@
       notify_label: 'Notify me by email when ready',
       schedule_label: 'Set up as scheduled report',
       schedule_note: 'Create an automated report. Data is available with a 2-day delay.',
+      schedule_blocked: 'A custom date range cannot be scheduled — every run would return the same fixed period. Choose a rolling period (e.g. Last 7 Days, Current Month) to schedule this report.',
+      schedule_blocked_link: 'Change period',
+      schedule_custom_locked: 'Scheduled reports need a rolling period — a custom date range cannot be scheduled.',
+      sched_edit_blocked: 'A scheduled report needs a rolling period. Pick a preset before saving.',
       schedule_run_on: 'Run on',
       schedule_run_at: 'Run at',
       of_month: 'of the month',
@@ -4303,6 +4344,10 @@
       notify_label: 'Per E-Mail benachrichtigen, wenn fertig',
       schedule_label: 'Als geplanten Bericht einrichten',
       schedule_note: 'Erstellt einen automatisierten Bericht. Daten stehen mit 2 Tagen Verzögerung zur Verfügung.',
+      schedule_blocked: 'Ein benutzerdefinierter Zeitraum kann nicht geplant werden — jede Ausführung würde denselben fixen Zeitraum liefern. Wählen Sie einen rollierenden Zeitraum (z. B. Letzte 7 Tage, Aktueller Monat), um diesen Bericht zu planen.',
+      schedule_blocked_link: 'Zeitraum ändern',
+      schedule_custom_locked: 'Geplante Berichte benötigen einen rollierenden Zeitraum — ein benutzerdefinierter Zeitraum kann nicht geplant werden.',
+      sched_edit_blocked: 'Ein geplanter Bericht benötigt einen rollierenden Zeitraum. Wählen Sie vor dem Speichern einen Zeitraum.',
       schedule_run_on: 'Ausführen am',
       schedule_run_at: 'Ausführen um',
       of_month: 'des Monats',
@@ -4583,6 +4628,9 @@
       runBtn.innerHTML = '<span class="material-icons">play_arrow</span> <span>' + t('btn_run_now') + '</span>';
     }
 
+    // Refresh scheduling-eligibility copy
+    updateScheduleAvailability();
+
     // Recalculate auto-generated name
     updateAutoName();
 
@@ -4703,6 +4751,7 @@
     const curMonthBtn = document.querySelector('.btn-preset[data-preset="cur_month"]');
     if (curMonthBtn) curMonthBtn.classList.add('active');
     document.getElementById('custom-dates').classList.remove('visible');
+    updateScheduleAvailability();
 
     goToStep(1);
     showView('wizard');
@@ -4737,7 +4786,7 @@
       }
     }
 
-    if (step === 3) populateSummary();
+    if (step === 3) { updateScheduleAvailability(); populateSummary(); }
   }
 
   // ── Presets ─────────────────────────────────────────────────
@@ -4752,7 +4801,45 @@
     } else {
       dates.classList.remove('visible');
     }
+    updateScheduleAvailability();
     updateAutoName();
+  }
+
+  // ── Scheduling eligibility ───────────────────────────────────
+  // A fixed custom range can't be scheduled: every run would return
+  // the same period, so the schedule is meaningless.
+  function isSchedulingAllowed() {
+    return state.selectedPeriod !== 'custom';
+  }
+
+  function updateScheduleAvailability() {
+    const blocked  = !isSchedulingAllowed();
+    const section  = document.getElementById('schedule-section');
+    const cb       = document.getElementById('schedule-checkbox');
+    const fields   = document.getElementById('schedule-fields');
+    const note     = document.getElementById('schedule-blocked-note');
+    const customBtn= document.getElementById('btn-custom');
+    const saveBtn  = document.getElementById('save-schedule-btn');
+    const editNote = document.getElementById('sched-edit-blocked-note');
+
+    // New-report path: the "set up as scheduled report" toggle is unavailable
+    if (cb) {
+      cb.disabled = blocked;
+      if (blocked) cb.checked = false;
+    }
+    if (fields && blocked) fields.classList.remove('visible');
+    if (section) section.classList.toggle('sched-disabled', blocked);
+    if (note) note.classList.toggle('visible', blocked && !state.isEditingSchedule);
+
+    // Editing an existing schedule: a fixed range is never valid here,
+    // so the Custom preset itself is locked and saving is blocked.
+    if (customBtn) {
+      customBtn.disabled = !!state.isEditingSchedule;
+      customBtn.title = state.isEditingSchedule ? t('schedule_custom_locked') : '';
+    }
+    const editBlocked = !!state.isEditingSchedule && blocked;
+    if (saveBtn)  saveBtn.disabled = editBlocked;
+    if (editNote) editNote.classList.toggle('visible', editBlocked);
   }
 
   // ── Auto name generation ─────────────────────────────────────
@@ -4980,6 +5067,7 @@
     document.getElementById('run-btn').style.display = 'none';
     document.getElementById('save-schedule-btn').style.display = '';
     document.getElementById('schedule-section').style.display = 'none';
+    updateScheduleAvailability();
   }
 
   function wizardBack() {
@@ -5416,9 +5504,23 @@
   }
 
   // ── Scheduling ───────────────────────────────────────────────
+  // Clicking the row (not just the box) flips the checkbox
+  function toggleScheduleRow() {
+    const cb = document.getElementById('schedule-checkbox');
+    if (cb.disabled || !isSchedulingAllowed()) { updateScheduleAvailability(); return; }
+    cb.checked = !cb.checked;
+    toggleSchedule();
+  }
+
   function toggleSchedule() {
     const cb = document.getElementById('schedule-checkbox');
     const fields = document.getElementById('schedule-fields');
+    if (cb.disabled || !isSchedulingAllowed()) {
+      cb.checked = false;
+      fields.classList.remove('visible');
+      updateScheduleAvailability();
+      return;
+    }
     fields.classList.toggle('visible', cb.checked);
     if (cb.checked) updateFreqOptions();
   }
