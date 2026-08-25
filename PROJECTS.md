@@ -493,7 +493,8 @@
 - **Design:** Classic Material Design (MUI) — blue `#1976D2` app bar, white drawer with blue left-border active indicator, Roboto, MUI elevation shadows
 - **Data model:** Stations → directions (2 per station: exit side) + stationNameFile + transferFiles[] + specialAnnouncements[] + triggerArrival/triggerDeparture + displayTexts[]
 - **Completeness formula:** 4 required fields (stationNameFile, both exit sides, triggerArrival, triggerDeparture)
-- **Sample data:** 10 stations (Alexanderplatz → Nollendorfplatz), 15 sound files, 4 special announcements, 5 display texts
+- **Sample data:** 10 stations (Alexanderplatz → Nollendorfplatz), 15 sound files, 4 special announcements, 28 display texts
+- **Display Texts page (2026-08-25):** position input moved to first column (after drag handle + checkbox), multiselect (per-row + select-all-on-page + shift-click range, selection survives paging), bulk bar with "Move to position N" + bulk delete + clear, block drag (dragging one selected row moves the whole selection), pagination (10/25/50 per page)
 
 ### ETC Station Area Editor (2026-06-15)
 - **Status:** ✅ v1 prototype live
