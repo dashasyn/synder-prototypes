@@ -21,6 +21,10 @@ fi
 
 # Create cache key from endpoint (replace special chars)
 CACHE_KEY=$(echo "$ENDPOINT" | sed 's/[^a-zA-Z0-9]/_/g')
+# Long node-id lists overflow the 255-byte filename limit — hash them instead.
+if [ ${#CACHE_KEY} -gt 150 ]; then
+  CACHE_KEY="$(echo "$CACHE_KEY" | cut -c1-60)_$(printf %s "$ENDPOINT" | md5sum | cut -c1-16)"
+fi
 CACHE_FILE="$CACHE_DIR/$CACHE_KEY.json"
 
 # Check cache freshness
