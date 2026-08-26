@@ -54,7 +54,15 @@
 ## Figma Design System
 - **UI Kit:** `tSZzqtd28HCrnaY0Ku0Y6z` — Synder's React component library (Modified Material Design)
 - **Pages:** Colors, Typography, Buttons, Select/Input, Alerts, Checkbox, Radio, Toggle, Popup, Table, Tabs, Toast, Tooltip, Sidebar, Icons, Box, Menu, Status_and_chips, Settings, Page elements, Link, Drag_and_drop, General rules, How_to
-- **CSS tokens file:** `skills/synder-explorer/references/synder-design-tokens.css`
+- **⭐ SINGLE SOURCE OF TRUTH (React/MUI):** `ui-kit/synder-ui-kit.css` →
+  https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css
+  Link this whole file in every new prototype. Gallery: `ui-kit/index.html`.
+  Consolidated 2026-08-26 from 5 divergent stylesheets; 14 value conflicts resolved.
+  All legacy token names (`--c-*`, `--primary`, `--sp-*`, `--fs-*`, `--r`) are aliased,
+  so old prototypes keep working. The 5 old files now `@import` this one.
+- **Legacy GSP/Bootstrap stack:** root `synder-design-system.css` (`.sds-*` namespace).
+  NOT drift — a genuinely different production stack (red #D74A4A, bold 900, radii 3/4/5px).
+  Never link it on the same page as the React/MUI kit; `.btn`/`.card`/`.table` collide.
 - **Font:** Roboto (all weights: 300–700), NOT Inter
 - **Primary blue:** #0053CC — rgb(0, 83, 204) — NOT Material blue 700
 - **Marketing site:** Poppins + different palette — separate system

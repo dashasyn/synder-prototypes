@@ -576,3 +576,49 @@
 1. **Best:** Say "Check PROJECTS.md, let's continue [project name]"
 2. **If it's not listed:** Send a screenshot or describe it — I'll rebuild and register it
 3. **If I built something in a session:** Remind me to update PROJECTS.md before we stop
+
+## Synder UI Kit — Single Source of Truth (2026-08-26)
+
+- **Canonical file:** `ui-kit/synder-ui-kit.css` (46 KB)
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css
+- **Component gallery:** `ui-kit/index.html` → https://dashasyn.github.io/synder-prototypes/ui-kit/
+- **Why:** five divergent stylesheets existed for one design system. Prototypes were
+  picking whichever one was nearest, so button sizes, radii and status colours differed
+  between prototypes.
+
+**Precedence rule baked into the file:** production (live computed styles, 2026-06-17)
+beats Figma (REST API extraction, 2026-04-02) beats hand-authored. Prototypes are judged
+against the shipped app, so production wins and every delta is annotated inline.
+
+**14 value conflicts resolved** — see the file header for the full table. Highlights:
+`--warning` #FF9400→#CB7515 (off-palette), `--r-md` 8px→6px, `--r-pill` 14px→12px,
+sidebar 224/220px→230px, topbar 48/56px→59px, button 36px→32px and 8px 16px→6px 19px.
+
+**Backwards compatible:** every legacy token name from all five files is aliased inside
+`:root`, and legacy class names (`.synder-*`, `.nav-item`, `.tabs-bar`, `.btn-outline`)
+are kept. The five superseded files now contain only an `@import` of the canonical file,
+so the 11 existing prototypes that link them keep working untouched. Old contents are in
+git history.
+
+**Superseded (now @import shims):**
+- `prototypes/synder-ui-kit.css`
+- `reports/synder-design-system.css`
+- `unsubscribe-flow/synder-design-system.css`
+- `skills/synder-explorer/references/synder-design-tokens.css`
+- `skills/synder-explorer/references/synder-prototype.css`
+
+**NOT superseded — second production stack:** root `synder-design-system.css` uses the
+`.sds-*` namespace and documents the legacy GSP/Bootstrap pages. Its differing values
+(red #D74A4A, orange #E18013, bold weight 900, radii 3/4/5/10px) are accurate for that
+stack, not drift. Left intact with a pointer header. Do not link both on one page —
+`.btn`, `.card` and `.table` collide.
+
+**Verified in Chromium (not jsdom)** at 1440px and 700px: computed button height 32px,
+padding 6px 19px, letter-spacing normal, sidebar 230px, topbar 59px, `--warning` resolving
+to #CB7515, zero unresolved custom properties. Four existing consumers re-rendered clean
+(`reports/mapping-prototype.html`, `prototypes/synder-ui-kit.html`,
+`unsubscribe-flow/index.html`, `onboarding/index.html`).
+
+**Open item for Ignat:** production's active sidebar item is #007AFF (MUI/iOS system blue)
+with dark text — off the Figma palette and a contrast risk. Kept as truth and flagged in
+the file header rather than silently "fixed". Needs a design-system decision.
