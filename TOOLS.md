@@ -54,12 +54,18 @@
 ## Figma Design System
 - **UI Kit:** `tSZzqtd28HCrnaY0Ku0Y6z` — Synder's React component library (Modified Material Design)
 - **Pages:** Colors, Typography, Buttons, Select/Input, Alerts, Checkbox, Radio, Toggle, Popup, Table, Tabs, Toast, Tooltip, Sidebar, Icons, Box, Menu, Status_and_chips, Settings, Page elements, Link, Drag_and_drop, General rules, How_to
-- **⭐ SINGLE SOURCE OF TRUTH (React/MUI):** `ui-kit/synder-ui-kit.css` →
+- **⭐ THE DEFAULT — every prototype links this and only this** (React/MUI):
+  `ui-kit/synder-ui-kit.css` →
   https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css
   Link this whole file in every new prototype. Gallery: `ui-kit/index.html`.
-  Consolidated 2026-08-26 from 5 divergent stylesheets; 14 value conflicts resolved.
-  All legacy token names (`--c-*`, `--primary`, `--sp-*`, `--fs-*`, `--r`) are aliased,
-  so old prototypes keep working. The 5 old files now `@import` this one.
+  Rebuilt 2026-08-26 directly from the Figma REST API, then made the default: all
+  14 prototypes now link it and nothing else. Legacy token names (`--c-*`,
+  `--primary`, `--sp-*`, `--fs-*`, `--r`, `--text-1`, `--sds-*`) are all aliased
+  inside it, so no prototype markup needed rewriting.
+  **Rule for new work: no raw hex in a prototype.** Use `var(--color-*)` etc.
+  The only allowed exceptions are third-party brand colours (Stripe #635BFF,
+  Amazon #FF9900, QuickBooks #2CA01C, Xero #13B5EA …) — those are not ours to
+  tokenise.
 - **Legacy GSP/Bootstrap stack:** root `synder-design-system.css` (`.sds-*` namespace).
   NOT drift — a genuinely different production stack (red #D74A4A, bold 900, radii 3/4/5px).
   Never link it on the same page as the React/MUI kit; `.btn`/`.card`/`.table` collide.

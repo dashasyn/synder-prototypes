@@ -647,3 +647,33 @@ to #CB7515, zero unresolved custom properties. Four existing consumers re-render
 **Open item for Ignat:** production's active sidebar item is #007AFF (MUI/iOS system blue)
 with dark text — off the Figma palette and a contrast risk. Kept as truth and flagged in
 the file header rather than silently "fixed". Needs a design-system decision.
+
+### UI Kit made the default (2026-08-26, later same day)
+
+Ignat: "Please make it default. All prototypes should use only this one source of colors and
+elements." Done.
+
+- **All 14 prototypes** now link `ui-kit/synder-ui-kit.css` and nothing else. Previously they
+  linked whichever of five stylesheets was nearest by relative path; two of them
+  (`onboarding`, `projects/pt-dashboard-prototype`) were linking the `.sds-*`-only root file
+  and so were getting **no** kit styling at all for their canonical class names.
+- **`--sds-*` tokens folded into the kit** so the one prototype that referenced them
+  (`onboarding`) resolves from the single file. The GSP values are preserved as-is — they are
+  a different production stack, not drift.
+- **293 raw hex values audited across the prototypes.** 60 replaced with `var(--…)` (12 exact
+  palette matches, 48 same-hue near matches inside a weighted-distance threshold of 42).
+  16 third-party brand colours deliberately left raw. **59 left raw pending Ignat's call** —
+  mostly Material/Tailwind defaults that drifted in (#4CAF50, #F59E0B, #FFE082, #E5E7EB) plus
+  legacy GSP values (#D74A4A, #E18013, #2F303A, #C8C7CC).
+- Substitution was restricted to `<style>` blocks only, never `<script>`, so chart/JS colour
+  strings were untouched.
+
+**Verified:** all 14 prototypes load the kit, resolve `--color-primary` to #0053CC and
+`--sds-black` to #1A1B24, with zero CSS 404s and zero JS errors. Zero unresolved `var()`
+introduced (one pre-existing `--accent` in `reports/prototype-hub.html` predates this work).
+In-place before/after pixel diffs: mapping-prototype 0.4%, unsubscribe-flow 3.5% (colour
+nudges only, max delta ≤21); onboarding 5.4% and pt-dashboard 17.2%, both because they gained
+kit styling they never had — screenshotted and confirmed correct, not regressions.
+
+**Open for Ignat:** the 59 remaining raw values. Worth deciding as a batch — most are
+Material/Tailwind defaults that should map to the Synder palette.
