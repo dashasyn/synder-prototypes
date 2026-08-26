@@ -6,7 +6,17 @@
 ## 🔧 Active Projects
 
 ### Platform Transactions + Dashboard drill-through (2026-08-20)
-- **Status:** ✅ Prototype live, 6 validator findings still open
+- **Status:** ✅ Prototype live — validator round 1 done, all Critical + High FIXED (2026-08-26)
+- **Round 1 (2026-08-26):** 7/7 lenses, gate PASS, 27 findings (6 Critical / 14 High / 7 Medium).
+  All 6 Critical + 14 High fixed and pushed (`da9d7d4`); verified in real Chromium, 43 assertions.
+  Fix table: `reports/transactions-prototype/review/FIXES-round-1.md`. Raw payloads:
+  `reports/transactions-prototype/review/round-1/`.
+  **Open:** the 7 Medium findings; the 4 AUTO- dead controls (column sort, gear,
+  pagination, rows-per-page); round 2 for variant 2 / V7 side sheet + detail page.
+  **Changed by the fixes** (supersedes bullets below): the bulk bar no longer replaces
+  the table header row — it is a `role="toolbar"` region ABOVE the table; `Skipped` and
+  `Excluded from sync` moved out of **Successful** into a new **Not synced** group
+  (7 tabs now); the Status chip renders on the bar from load.
 - **Location:** `reports/transactions-prototype/index.html`
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/reports/transactions-prototype/
 - **Pages:** Dashboard (landing) → Platform transactions list → Transaction detail
