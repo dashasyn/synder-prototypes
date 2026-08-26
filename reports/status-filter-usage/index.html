@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Status filter usage — Platform transactions (LogRocket, 90 days)</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+  body{font-family:Roboto,system-ui,sans-serif;margin:0;background:#f5f6f8;color:#1a1a1a}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:28px;margin:0 0 4px}
+  .sub{color:#666;margin:0 0 28px;font-size:14px}
+  .card{background:#fff;border:1px solid #e3e5e8;border-radius:8px;padding:20px 24px;margin:0 0 20px}
+  h2{font-size:19px;margin:0 0 12px}
+  h3{font-size:15px;margin:20px 0 8px}
+  table{width:100%;border-collapse:collapse;font-size:14px;margin:8px 0 4px}
+  th,td{text-align:left;padding:7px 10px;border-bottom:1px solid #eceef0}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:#666;font-weight:500}
+  td.n{text-align:right;font-variant-numeric:tabular-nums}
+  .verdict{background:#eef4ff;border-left:3px solid #0053CC;padding:14px 18px;border-radius:0 6px 6px 0;margin:0 0 20px}
+  .warn{background:#fff8e6;border-left:3px solid #E8A33D}
+  .bad{background:#fdeeee;border-left:3px solid #D74A4A}
+  ul{margin:8px 0;padding-left:20px}li{margin:5px 0}
+  code{background:#f2f3f5;padding:1px 5px;border-radius:3px;font-size:12.5px}
+  .meta{font-size:12.5px;color:#777}
+</style>
+</head>
+<body><div class="wrap">
+
+<h1>Status filter usage — Platform transactions</h1>
+<p class="sub">LogRocket, last 90 days (≈2026-05-28 → 2026-08-26) · <code>go.synder.com/transaction/list</code> · sessions whose user email or user ID contains <code>synder.com</code> excluded · Galileo AI metrics + DOM inspection of the live app</p>
+
+<div class="verdict">
+  <strong>Verdict on the main question: no, users do not select whole status groups.</strong>
+  Exhaustive group selection is rare — 107 sessions clicked all three <em>Successful</em> statuses, 13 clicked all eight <em>Needs attention</em>, 106 clicked all six <em>In progress</em>. Meanwhile 1,391 sessions clicked <em>exactly one</em> Successful status (1,236 of them Synced alone). Single-status filtering outweighs whole-group selection roughly <strong>13:1</strong>.
+  <br><br>
+  But read the next box before deciding anything — the current UI charges 8 clicks for a group and 0 for "everything", so this measures cost as much as intent.
+</div>
+
+<div class="verdict warn">
+  <strong>The interpretation caveat that matters.</strong> In production the group headers in the status dropdown (<code>li.dropdown-header</code>: <em>Ready to sync · Successful · Needs attention · Deleted · In progress</em>) are <strong>not clickable</strong> — they have no <code>&lt;a&gt;</code>, no handler. There is no way to select a group in one action today. So "users don't select whole groups" cannot be read as "users don't want groups": selecting <em>Needs attention</em> costs 8 clicks plus Apply, while <em>Select All</em> (everything) costs one. The behaviour is consistent with people avoiding an expensive action.
+</div>
+
+<div class="card">
+<h2>1 · Do they select all statuses from one group?</h2>
+<p>Session-count metrics, AND-ed click conditions, internal traffic excluded.</p>
+<table>
+<tr><th>Pattern</th><th class="n">Sessions</th></tr>
+<tr><td><strong>Successful</strong> — clicked all 3 (Synced + Skipped + Excluded from sync)</td><td class="n">107</td></tr>
+<tr><td><strong>Needs attention</strong> — clicked all 8</td><td class="n">13</td></tr>
+<tr><td><strong>In progress</strong> — clicked all 6</td><td class="n">106</td></tr>
+<tr><td>Clicked <strong>exactly one</strong> Successful status</td><td class="n">1,391</td></tr>
+<tr><td>— of which Synced alone</td><td class="n">1,236</td></tr>
+<tr><td>— Skipped alone</td><td class="n">118</td></tr>
+<tr><td>— Excluded from sync alone</td><td class="n">37</td></tr>
+<tr><td>Sessions clicking Synced at all</td><td class="n">1,386</td></tr>
+</table>
+<h3>Partial within-group selection is the real pattern</h3>
+<p>Inside <em>Needs attention</em>, the two most-used members co-occur heavily:</p>
+<table>
+<tr><th>Pattern</th><th class="n">Sessions</th></tr>
+<tr><td>Failed <strong>and</strong> Canceled in the same session</td><td class="n">688</td></tr>
+<tr><td>Failed without Canceled</td><td class="n">502</td></tr>
+<tr><td>Canceled without Failed</td><td class="n">618</td></tr>
+</table>
+<p>Of the ~1,190 sessions clicking Failed, <strong>688 (58%) also clicked Canceled</strong>. So multi-status selection within a group is real and common — it just stops at two of eight, not seven or eight of eight. Exhaustive selection of that group (13 sessions) is <strong>50× rarer</strong> than the Failed+Canceled pair.</p>
+<p class="meta">Not measurable: "exactly one member" for the 8- and 6-option groups (needs 7 or 5 AND-ed exclusions in one session definition — LogRocket wouldn't express it), and a true "two or more different groups" count (needs an OR of three conditions). The one cross-group figure that did build: <strong>Synced AND (Failed OR Canceled) = 261 sessions</strong>.</p>
+</div>
+
+<div class="card">
+<h2>2 · Do they select all then deselect a couple? / 3 · Select all, deselect all</h2>
+<p>The dropdown is a bootstrap-select with an actions box — <code>button.bs-select-all</code> and <code>button.bs-deselect-all</code> sit above the option list.</p>
+<table>
+<tr><th>Control</th><th class="n">Clicks</th><th class="n">Sessions</th></tr>
+<tr><td><strong>Select All</strong> <code>.bs-select-all</code></td><td class="n">2,430</td><td class="n">1,554</td></tr>
+<tr><td><strong>Deselect All</strong> <code>.bs-deselect-all</code></td><td class="n">1,091</td><td class="n">696</td></tr>
+</table>
+<p><strong>Select All is used in more sessions (1,554) than any whole-group selection, and about as many as single-status filtering (1,391).</strong> Both average ~1.5 clicks per session.</p>
+<p>On the "select all then deselect a couple" hypothesis: it can't be confirmed or denied from click counts alone. <em>Deselect All</em> is a clear-everything button, not a per-item deselect — deselecting one option is an ordinary option click, indistinguishable in the data from selecting it. What can be said: Select All is followed by <em>some</em> further option clicks often enough that its 2,430 clicks spread over 1,554 sessions, and Deselect All's 696 sessions are a subset of the same population. Confirming the pattern needs watched replays, not metrics.</p>
+<p class="meta">Note: Select All in this control selects all 19 statuses, which is the same result as the default "All statuses" — so a share of these 1,554 sessions are using it as a reset, not to build a selection.</p>
+</div>
+
+<div class="card">
+<h2>4 · Common patterns of filtering</h2>
+<table>
+<tr><th>Signal</th><th class="n">Clicks</th></tr>
+<tr><td><code>Apply filter</code> (all column-header filter dropdowns)</td><td class="n">25,591</td></tr>
+<tr><td>All 15 matched status labels, combined</td><td class="n">24,912</td></tr>
+<tr><td><code>Reset all filters</code> (page-level button)</td><td class="n">4,699</td></tr>
+<tr><td><code>Reset filter</code> (inside a filter dropdown)</td><td class="n">3,499</td></tr>
+<tr><td>"All statuses" trigger (opens the dropdown)</td><td class="n">8,030</td></tr>
+</table>
+<h3>Which statuses actually get filtered</h3>
+<p>Element-scoped where possible. <em>Ready to sync</em> is the only label where the filter option and the row badge could be cleanly separated:</p>
+<table>
+<tr><th>Label</th><th class="n">Filter option <code>a.dropdown-item.opt</code></th><th class="n">Row badge <code>span.label</code></th></tr>
+<tr><td>Ready to sync</td><td class="n">5,188</td><td class="n">3,740</td></tr>
+</table>
+<p>Text-matched totals (filter option + row badge combined — an upper bound on filter use):</p>
+<table>
+<tr><th>Label</th><th class="n">Clicks</th></tr>
+<tr><td>Synced</td><td class="n">2,621</td></tr>
+<tr><td>Failed</td><td class="n">2,111</td></tr>
+<tr><td>Skipped</td><td class="n">717</td></tr>
+<tr><td>Rollback failed</td><td class="n">667</td></tr>
+<tr><td>Synced with warnings</td><td class="n">595</td></tr>
+<tr><td>Not parsed</td><td class="n">509</td></tr>
+<tr><td>Excluded from sync</td><td class="n">499</td></tr>
+<tr><td>Delayed</td><td class="n">448</td></tr>
+<tr><td>Synced with rule failed</td><td class="n">37</td></tr>
+</table>
+<p><strong>Failure triage is a routine workflow, not an edge case</strong> — Failed, Rollback failed, Synced with warnings and Not parsed together account for ~3,880 clicks.</p>
+<p><strong>"Synced with rule failed" only appears from 2026-08-19 onward</strong> (37 clicks over 8 days, zero before). Consistent with a recently added or renamed label rather than falling usage.</p>
+<p>Reset is used heavily and by two different controls: <code>Reset all filters</code> on the page (4,699) and <code>Reset filter</code> inside the dropdown (3,499). Two affordances, two labels, one intent.</p>
+</div>
+
+<div class="card">
+<h2>What this means for tabs on Platform transactions</h2>
+<ul>
+<li><strong>Group tabs alone won't fit the observed behaviour.</strong> The dominant act is picking one status (Synced 1,236 sessions alone) or a pair within a group (Failed+Canceled 688). A tab row whose units are the five groups serves neither directly — <em>Needs attention</em> as a tab returns 8 statuses when the user wanted 2.</li>
+<li><strong>Tabs plus a status control inside the tab does fit it.</strong> That is exactly the V8 shape in the filters prototype: group tab narrows the universe, a scoped status control picks the 1–2 members. It also matches the 58% Failed+Canceled pair without making them hunt through all 19.</li>
+<li><strong>Do not read the low group numbers as low intent.</strong> Group headers are inert today; the cheap action is Select All. Cost explains a lot of this data.</li>
+<li><strong>Whatever ships, keep single-status fast.</strong> Synced alone is 1,236 sessions; anything that makes one status cost more than it does today is a regression for the most common case.</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>Method &amp; limits</h2>
+<ul>
+<li>Galileo AI metrics over the LogRocket app <code>vn4kxj/synder_test</code>, 90-day range, with <em>email does not contain synder.com</em> AND <em>user ID does not contain synder.com</em> applied. One metric — Canceled row-badge clicks — was built without the exclusion and is flagged in place.</li>
+<li><strong>The badge/filter confound is real and only partly resolved.</strong> Every table row renders the same status words as <code>&lt;span class="label label-default not-synched"&gt; Ready to sync&lt;/span&gt;</code> (note the leading space). Exact-text matching therefore fails on badges for most labels — Synced/Failed/Canceled badge counts returned 0, which means "not matched", not "never clicked". Only Ready to sync got a clean split (5,188 filter vs 3,740 badge, 1.4:1). Treat the text-matched label totals as upper bounds.</li>
+<li>Distinct-session counts are capped at 100 sample sessions per event-count metric, so per-label session numbers above 100 are truncated. The session figures quoted here come from session-count metrics, which are not capped.</li>
+<li>Two capitalisations of one status exist in the data: <code>Ready to sync</code> and <code>Ready to Sync</code>. Worth fixing regardless of this research.</li>
+<li>Selectors verified by logging into <code>demo.synderapp.com/transaction/list</code> and inspecting the live DOM, not assumed.</li>
+</ul>
+</div>
+
+<p class="meta">Dasha · 2026-08-26</p>
+</div></body></html>
