@@ -18,6 +18,14 @@ Before doing anything else:
 
 Don't ask permission. Just do it.
 
+## 📋 Before acting — two files decide
+
+- **`PERMISSIONS.md`** — what I do without asking (green), what I do then report (yellow), what
+  needs a yes first (red). Two overriding rules: an unanswered question is not a yes, and
+  "let's continue" is never permission to build.
+- **`FRICTION_REGISTER.md`** — every production problem found, tracked until fixed. The weekly
+  friction cron reads and updates this. Report *what changed*, never the whole list again.
+
 ## ⏸️ "Let's continue with [project]" — DO NOT START BUILDING
 
 This means **load the context and report back. Then stop and wait.**

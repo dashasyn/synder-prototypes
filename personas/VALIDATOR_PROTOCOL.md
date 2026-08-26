@@ -115,6 +115,36 @@ before/after, with screenshots. Then:
 
 Save as `statemap.json` in the round directory. Everything downstream reads this, not the DOM.
 
+**Shape** — every panel-opening control carries a `commit_path`:
+
+```json
+{
+  "target": "<name or URL>",
+  "not_exercised": [{ "control": "Export menu", "reason": "requires a paid seat" }],
+  "controls": [
+    { "zone": "filter bar", "label": "Date range", "type": "dropdown panel",
+      "commit_path": { "picked": true, "reached_apply": false,
+                       "second_interaction": true,
+                       "still_visible": false, "still_clickable": false } }
+  ]
+}
+```
+
+`reached_apply: false` is a *result*, not a failure of recon — it is exactly the bug validators
+should then report. What fails is never having tried.
+
+**Then gate the round — this is mandatory, not advisory:**
+
+```
+node scripts/validator-check.js statemap <round-dir>
+```
+
+It fails the round when a panel-opening control has no commit path, was only opened, never had
+Apply verified, was interacted with once instead of twice, or records element state instead of
+liveness. Do not spawn validators until it passes. The commit-path rule lived here as prose from
+2026-08-20 with nothing checking it — the same shape as PROC-1, where every volume control was an
+instruction and one round produced 145 findings against a cap of 20.
+
 ---
 
 ## Step 4 — Deterministic checks (script, no LLM)

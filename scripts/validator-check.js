@@ -232,12 +232,124 @@ function verify(argv) {
   console.log('\nPASS — round is complete, within caps, evidenced, and schema-clean.\n');
 }
 
+// ── statemap ────────────────────────────────────────────────────────────────
+// Verifies the recon pass actually exercised what it claims to cover, BEFORE
+// validators are spawned. RECON-2: the map said the date panel "opens", nobody
+// picked a date, and picking one closes the panel before Apply is reachable.
+// Every validator downstream was blind to it — they read the map, not the page.
+// The commit-path rule was prose in Step 3 with nothing checking it, which is
+// the same shape as PROC-1. This is the check.
+function statemap(argv) {
+  const dir = argv[0];
+  if (!dir) die('statemap needs a round directory');
+  const p = path.join(dir, 'statemap.json');
+  if (!fs.existsSync(p)) {
+    die(`no statemap.json in ${dir} — Step 3 recon never produced a map, so nothing downstream can be trusted.`);
+  }
+
+  let map;
+  try {
+    map = JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch (e) {
+    die(`statemap.json is unparseable: ${e.message}`);
+  }
+
+  const problems = [];
+  const controls = [];
+
+  // Accept either a flat controls array or zone-grouped controls.
+  if (Array.isArray(map.controls)) controls.push(...map.controls);
+  if (Array.isArray(map.zones)) {
+    for (const z of map.zones) {
+      if (Array.isArray(z.controls)) {
+        controls.push(...z.controls.map(c => ({ ...c, zone: c.zone || z.zone || z.name })));
+      }
+    }
+  }
+
+  if (!controls.length) {
+    die('statemap.json records no controls — either the map is empty or the shape is wrong (expected `controls[]` or `zones[].controls[]`).');
+  }
+
+  const notExercised = Array.isArray(map.not_exercised) ? map.not_exercised : null;
+  if (!notExercised) {
+    problems.push('NO GAP LIST · `not_exercised` array missing — an untested control must not look like a tested one that passed. Use [] if everything was exercised.');
+  }
+  const excused = new Set(
+    (notExercised || []).map(e => (typeof e === 'string' ? e : e.control || e.label || '')).filter(Boolean)
+  );
+
+  // A control that opens a panel needs a commit path: open → pick/toggle →
+  // reach Apply. "It opens" is not coverage.
+  const OPENS = /panel|dropdown|select|menu|popover|sheet|modal|picker|accordion|combobox/i;
+  const stats = { total: controls.length, openers: 0, committed: 0, excused: 0, stateOnly: 0 };
+
+  for (const c of controls) {
+    const label = c.label || c.name || c.selector || '(unlabelled control)';
+    const where = c.zone ? `${c.zone} · ${label}` : label;
+    const type = String(c.type || '');
+    const opensPanel = c.opens_panel === true || OPENS.test(type) || OPENS.test(label);
+
+    if (!opensPanel) continue;
+    stats.openers++;
+
+    if (excused.has(label)) { stats.excused++; continue; }
+
+    const committed = c.commit_path && (c.commit_path.picked || c.commit_path.toggled);
+    const reachedApply = c.commit_path && c.commit_path.reached_apply !== undefined;
+    const repeated = c.commit_path && c.commit_path.second_interaction !== undefined;
+
+    if (!c.commit_path) {
+      problems.push(`NO COMMIT PATH · ${where}: opens a panel but no \`commit_path\` recorded. Open it, pick or toggle something, then try to reach Apply — twice. (RECON-2)`);
+      continue;
+    }
+    if (!committed) {
+      problems.push(`OPEN ONLY · ${where}: \`commit_path\` records no picked/toggled option. "It opens" is not coverage.`);
+      continue;
+    }
+    if (!reachedApply) {
+      problems.push(`APPLY UNVERIFIED · ${where}: picked an option but never recorded whether Apply was reachable afterwards — this is the exact RECON-2 failure.`);
+      continue;
+    }
+    if (!repeated) {
+      problems.push(`SINGLE PASS · ${where}: interacted once. PROTO-2 (multiselect closing on the *second* toggle) only appears on repeat — record \`second_interaction\`.`);
+      continue;
+    }
+    stats.committed++;
+
+    // Liveness, not element state. isChecked() passes inside a closed panel.
+    if (c.commit_path.still_visible === undefined && c.commit_path.still_clickable === undefined) {
+      problems.push(`STATE NOT LIVENESS · ${where}: records no \`still_visible\`/\`still_clickable\` after interaction. Element state passes against controls inside a closed panel (PROTO-1, PROTO-2).`);
+      stats.stateOnly++;
+    }
+  }
+
+  console.log(`\nStatemap · ${dir}`);
+  console.log('─'.repeat(60));
+  console.log(`  controls recorded      ${stats.total}`);
+  console.log(`  panel-opening controls ${stats.openers}`);
+  console.log(`  commit path exercised  ${stats.committed}`);
+  console.log(`  declared not_exercised ${excused.size}`);
+  console.log('─'.repeat(60));
+
+  if (problems.length) {
+    console.log(`\n${problems.length} problem(s):\n`);
+    problems.forEach(x => console.log(`  • ${x}`));
+    console.log('\nFAIL — do not spawn validators. They read this map, not the page:');
+    console.log('       an unexercised interaction is invisible to every lens downstream.\n');
+    process.exit(1);
+  }
+  console.log('\nPASS — every panel-opening control has a commit path or a declared reason.\n');
+}
+
 const [cmd, ...rest] = process.argv.slice(2);
 if (cmd === 'manifest') writeManifest(rest);
+else if (cmd === 'statemap') statemap(rest);
 else if (cmd === 'verify') verify(rest);
 else {
   console.log('usage:');
   console.log('  node scripts/validator-check.js manifest <round-dir> --target <t> --round <n> --expect ux,ux,ux,domain,clarity,trust,a11y');
+  console.log('  node scripts/validator-check.js statemap <round-dir>   # run after Step 3, before spawning');
   console.log('  node scripts/validator-check.js verify <round-dir>');
   process.exit(2);
 }

@@ -120,21 +120,13 @@
 - **Ignat sends all frames he has** — it's on me to identify and request missing ones explicitly
 - See [[figma-review-protocol]] for full detail
 
-## Promoted From Short-Term Memory (2026-08-24)
+## Promoted From Short-Term Memory (2026-08-26)
 
-<!-- openclaw-memory-promotion:memory:memory/2026-08-19.md:5:7 -->
-- Session resumed — ETC notifications follow-up + security finding (10:15–10:29 UTC, Telegram topic 7433): Ignat opened asking for help on "a transportation product" with no further detail. I surfaced the ETC notifications context (three open questions from 2026-08-05: system-health alerts in dispatcher bell, filtering/collapsing at 100/day volume, actionable-vs-deletable notifications). [score=0.833 recalls=0 avg=0.620 source=memory/2026-08-19.md:5-7]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-19.md:9:11 -->
-- Session resumed — ETC notifications follow-up + security finding (10:15–10:29 UTC, Telegram topic 7433): **Ignat's answer: those three are resolved — fixed inside the product already.** No further detail given on how; not asked, since he indicated no questions remain. This closes out the open items list carried in MEMORY.md/PROJECTS.md from the 2026-08-05 session. [score=0.833 recalls=0 avg=0.620 source=memory/2026-08-19.md:9-11]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:12:12 -->
-- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): `07:09` — `memory/morning-ideas.json` appended: **import-success-toast-carries-the-sync-action** [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:12-12]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:17:17 -->
-- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): funnel query should narrow the Import→Sync gap. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:17-17]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:13:16 -->
-- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): — grounded in yesterday's friction-report number (639 sessions imported but never synced). Two label/toast changes on existing UI, no new screens: (1) success toast becomes actionable ("Imported 1,733 transactions. Sync them to QuickBooks?" with Sync as the toast button), (2) put the count in the Sync button label itself. Verification already wired — next Monday's [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:13-16]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:5:6 -->
-- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): **Seventh quiet day.** No commits, no prototype edits, no messages from Ignat. Only background automation touched the workspace: [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:5-6]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:8:8 -->
-- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): `03:00` — dreaming pass wrote `memory/dreaming/{light,deep,rem}/2026-08-18.md`, updated [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:8-8]
-<!-- openclaw-memory-promotion:memory:memory/2026-08-18.md:9:11 -->
-- Snapshot (23:00 Vilnius / 20:00 UTC, scheduled end-of-day review): `DREAMS.md` and `memory/.dreams/events.jsonl`; MEMORY.md promotion block rotated (2026-08-16 promotions replaced by 2026-08-12 ones — ETC notifications 62%-empty-cells diagnosis stepped aside for the Reports/Financials 5-copy-bugs verdict) [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-18.md:9-11]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-20.md:10:13 -->
+- Validator pipeline v2 — enforcement rework (main work of the day): Trust validator never ran — not once. The one lens written from a real bug (FLT-2).; 145 findings against a cap of 20. Cap had been applied per prototype variant (`CLR-A1`, `UX-VD3`).; Schema drift: `per_prototype` wrapper instead of the flat contract.; `findings-log.json` never existed anywhere → every round was a cold full re-review. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-20.md:10-13]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-20.md:14:16 -->
+- Validator pipeline v2 — enforcement rework (main work of the day): Protocol saved to and globbed `projects/prototypes/<slug>/`, which doesn't exist.; `TASK_BRIEF.md` never filled in once; no `reference.json` ever produced.; **No harness at all.** `scripts/` had two unrelated files. Nothing spawned validators, truncated [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-20.md:14-16]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-20.md:17:17 -->
+- Validator pipeline v2 — enforcement rework (main work of the day): findings, or wrote the log. Every volume control was a sentence in markdown. [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-20.md:17-17]
+<!-- openclaw-memory-promotion:memory:memory/2026-08-20.md:19:19 -->
+- Validator pipeline v2 — enforcement rework (main work of the day): **Built today** (Ignat: "Update everything that needs to be updated"): [score=0.812 recalls=0 avg=0.620 source=memory/2026-08-20.md:19-19]
