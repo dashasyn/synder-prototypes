@@ -25,6 +25,8 @@
  *      Figma colours + type scale. Superseded by #2.
  *
  * PRECEDENCE RULE: production (#1) beats Figma (#2) beats hand-authored (#3,#4).
+ * CAVEAT: #2 has been caught misreporting Figma (button height). Treat #2 as a
+ * secondary source and re-verify against the Figma file directly where it matters.
  * Where production and Figma disagree, production wins and the delta is noted
  * inline, because prototypes are judged against the shipped app.
  *
@@ -33,6 +35,11 @@
  * alias names below will now render with these corrected values.
  * ----------------------------------------------------------------------------
  *   TOKEN              WAS (source)              NOW           WHY
+ *   chip font          Caption 12/16 ls.4        Chip 13/20    Figma has a dedicated Chip
+ *                                                ls .1px       text style; caption was wrong
+ *   checkbox           16px accent-color         18px MD box   Material spec (MUI)
+ *   radio              (none)                    20px MD       Material spec (MUI)
+ *   switch/.toggle     36x14 track, 16px thumb   34x14, 20px   MUI default proportions
  *   --warning          #FF9400 (#3)              #CB7515       #FF9400 not in Figma palette
  *   --success-bg       #DDF5C7 (#3)              #ECFDDC       off-palette
  *   --error-bg         #FDE8E8 (#3)              #FFECE8       off-palette
@@ -43,7 +50,9 @@
  *   --sidebar-w        224px (#3) / 220px (#2)   230px         production truth
  *   --topbar-h         48px (#3) / 56px (#2)     59px          production truth
  *   --shadow-sm/md/dd  rgba(129,141,164,…) (#3)  Figma set     see shadows below
- *   btn height         36px (#2)                 32px          production overrides Figma
+ *   btn height         36px (#2)                 32px          #2 MISREPORTED Figma —
+ *                                                             Figma is 32px too
+ *                                                             (confirmed by Ignat 2026-08-26)
  *   btn padding        8px 16px (#2)             6px 19px      production overrides Figma
  *   btn letter-spacing 1.25px (#2)               normal        MUI strips it in production
  *
@@ -117,6 +126,11 @@ button { font-family: inherit; }
   --color-purple:             #310BB0;
   --color-purple-light:       #E2D7FF;
   --color-selection:          #7B61FF;
+
+  /* ---- Selection-control states (Material alpha-on-surface, not palette greys) ---- */
+  --control-unchecked:  rgba(26, 27, 36, 0.54);   /* MD unchecked stroke */
+  --control-track:      rgba(26, 27, 36, 0.38);   /* MD switch track, off */
+  --control-track-on:   rgba(0, 83, 204, 0.50);   /* MD switch track, on */
 
   /* ---- Colour: production-only, off-palette (see header) ---- */
   --color-sidebar-active:     #007AFF;
@@ -489,28 +503,114 @@ input:focus, select:focus, textarea:focus {
 .form-hint { font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 16px; }
 .form-error-msg { font-size: 12px; color: var(--color-red); margin-top: 4px; }
 
-.checkbox-wrap, .radio-wrap, .synder-checkbox {
+/* ---- Selection controls — Material Design (MUI) geometry ----
+   Checkbox: 18px box, 2px stroke, 2px radius.
+   Radio:    20px circle, 2px stroke, 10px inner dot.
+   Switch:   34x14 track, 20px thumb, 14px travel (MUI default).
+   Unchecked stroke/track use MD's alpha-on-surface, not a palette grey. */
+.checkbox-wrap, .radio-wrap, .synder-checkbox, .form-check {
   display: inline-flex; align-items: center; gap: 8px;
-  cursor: pointer; font-size: 14px; color: var(--text-primary);
-}
-.checkbox-wrap input, .radio-wrap input, .synder-checkbox input[type="checkbox"] {
-  width: 16px; height: 16px; min-height: auto;
-  accent-color: var(--color-primary); cursor: pointer;
+  cursor: pointer; font-size: 14px; line-height: 20px; color: var(--text-primary);
 }
 
+input.checkbox[type="checkbox"],
+.checkbox-wrap input[type="checkbox"],
+.synder-checkbox input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  position: relative; flex-shrink: 0; margin: 0;
+  width: 18px; height: 18px; min-height: auto;
+  border: 2px solid var(--control-unchecked);
+  border-radius: 2px; background: var(--color-white);
+  cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease;
+}
+input.checkbox[type="checkbox"]:hover,
+.checkbox-wrap input[type="checkbox"]:hover,
+.synder-checkbox input[type="checkbox"]:hover { border-color: var(--text-primary); }
+input.checkbox[type="checkbox"]:checked,
+.checkbox-wrap input[type="checkbox"]:checked,
+.synder-checkbox input[type="checkbox"]:checked {
+  background: var(--color-primary); border-color: var(--color-primary);
+}
+input.checkbox[type="checkbox"]:checked::after,
+.checkbox-wrap input[type="checkbox"]:checked::after,
+.synder-checkbox input[type="checkbox"]:checked::after {
+  content: ''; position: absolute; left: 4px; top: 0;
+  width: 5px; height: 9px;
+  border: solid var(--color-white); border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+input.checkbox[type="checkbox"]:indeterminate {
+  background: var(--color-primary); border-color: var(--color-primary);
+}
+input.checkbox[type="checkbox"]:indeterminate::after {
+  content: ''; position: absolute; left: 2px; top: 5px;
+  width: 10px; height: 2px; background: var(--color-white);
+}
+input.checkbox[type="checkbox"]:focus-visible,
+.checkbox-wrap input[type="checkbox"]:focus-visible {
+  outline: 2px solid var(--border-focus); outline-offset: 2px;
+}
+input.checkbox[type="checkbox"]:disabled { border-color: var(--text-disabled); background: var(--color-grey-10); }
+
+input.radio[type="radio"], .radio-wrap input[type="radio"] {
+  appearance: none; -webkit-appearance: none;
+  position: relative; flex-shrink: 0; margin: 0;
+  width: 20px; height: 20px;
+  border: 2px solid var(--control-unchecked);
+  border-radius: var(--radius-full); background: var(--color-white);
+  cursor: pointer; transition: border-color 0.15s ease;
+}
+input.radio[type="radio"]:hover, .radio-wrap input[type="radio"]:hover { border-color: var(--text-primary); }
+input.radio[type="radio"]:checked, .radio-wrap input[type="radio"]:checked { border-color: var(--color-primary); }
+input.radio[type="radio"]:checked::after, .radio-wrap input[type="radio"]:checked::after {
+  content: ''; position: absolute; inset: 0; margin: auto;
+  width: 10px; height: 10px; border-radius: var(--radius-full);
+  background: var(--color-primary);
+}
+input.radio[type="radio"]:focus-visible, .radio-wrap input[type="radio"]:focus-visible {
+  outline: 2px solid var(--border-focus); outline-offset: 2px;
+}
+input.radio[type="radio"]:disabled { border-color: var(--text-disabled); }
+
+/* Switch — MUI default proportions */
+input.switch[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  position: relative; flex-shrink: 0; margin: 0;
+  width: 34px; height: 14px;
+  background: var(--control-track); border: none; border-radius: 7px;
+  cursor: pointer; transition: background 0.2s ease;
+}
+input.switch[type="checkbox"]::after {
+  content: ''; position: absolute; top: -3px; left: 0;
+  width: 20px; height: 20px; border-radius: var(--radius-full);
+  background: var(--color-white); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+input.switch[type="checkbox"]:checked { background: var(--control-track-on); }
+input.switch[type="checkbox"]:checked::after {
+  transform: translateX(14px); background: var(--color-primary);
+}
+input.switch[type="checkbox"]:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 4px; }
+input.switch[type="checkbox"]:disabled { background: var(--color-grey-10); }
+input.switch[type="checkbox"]:disabled::after { background: var(--color-grey-20); }
+
+/* .toggle — legacy div-based switch, restyled to MUI geometry so existing
+   markup (<div class="toggle on">) gets Material proportions. */
 .toggle {
-  position: relative; width: 36px; height: 20px; flex-shrink: 0;
-  background: var(--border-default); border-radius: 10px;
-  cursor: pointer; transition: background 0.2s;
+  position: relative; width: 34px; height: 14px; flex-shrink: 0;
+  background: var(--control-track); border-radius: 7px;
+  cursor: pointer; transition: background 0.2s ease;
 }
-.toggle.on, .toggle--on { background: var(--color-primary); }
+.toggle.on, .toggle--on { background: var(--control-track-on); }
 .toggle::after {
-  content: ''; position: absolute; top: 2px; left: 2px;
-  width: 16px; height: 16px; border-radius: var(--radius-full);
-  background: var(--color-white); box-shadow: var(--shadow-card);
-  transition: transform 0.2s;
+  content: ''; position: absolute; top: -3px; left: 0;
+  width: 20px; height: 20px; border-radius: var(--radius-full);
+  background: var(--color-white); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease, background 0.2s ease;
 }
-.toggle.on::after, .toggle--on::after { transform: translateX(16px); }
+.toggle.on::after, .toggle--on::after {
+  transform: translateX(14px); background: var(--color-primary);
+}
 
 /* ============================================================================
    6. TABLE — production GSP styles
@@ -621,13 +721,15 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
 /* ============================================================================
    9. CHIPS / BADGES
    ============================================================================ */
+/* Figma publishes a dedicated "Chip" text style (13/20, ls 0.1px).
+   Previously this used Caption (12/16, ls 0.4px) — that was wrong. */
 .chip, .badge {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 2px 8px; border-radius: var(--radius-pill);
   font-family: var(--font-family);
-  font-size: var(--font-caption); font-weight: 400;
-  line-height: var(--font-caption-line-height);
-  letter-spacing: var(--font-caption-letter-spacing);
+  font-size: var(--font-chip); font-weight: var(--font-chip-weight);
+  line-height: var(--font-chip-line-height);
+  letter-spacing: var(--font-chip-letter-spacing);
   white-space: nowrap;
 }
 .chip-success, .badge-success, .badge-green   { background: var(--color-green-light);  color: var(--color-green); }
