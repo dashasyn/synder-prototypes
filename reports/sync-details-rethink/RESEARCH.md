@@ -108,3 +108,57 @@ in their filtered list. Best paired with the transactions-table work, not instea
 ## Do this first
 Design the **Failed** and **Not parsed** variants before touching the success variant. That is the
 case the page exists for, it is the one with no design, and it is the one I could not observe.
+
+---
+
+# Addendum — "Synced with warnings", admin view (Ignat, 2026-08-26 17:17)
+Source: 3 screenshots, org `set-890 (2121)`, sync `747262`, Shopify → Synder,
+Manual Order refund, −103.29 USD, status **Synced with warnings**.
+This fills the gap the demo org could not: a real non-success variant.
+
+## The warning row is the best copy on the page
+```
+Adjust Inventory | Linen Wrap Dress; CHV-LWD-001; Linen Wrap Dress | (no object link) |
+"Inventory adjustment synchronization for the product 'Linen Wrap Dress' is skipped as this
+ product is not tracked as an inventory one. Convert the product to inventory in your sales
+ channel for successful synchronization."
+```
+Amber-highlighted row. It names **the object, the reason, and the fix** — which is exactly the
+"explain" the rest of the page never does. **The pattern already exists; it is just buried.**
+It sits at row 2 of a table below Sync info, with nothing above it saying a warning happened.
+
+## What this changes in the rethink
+1. **Promote the warning, don't invent one.** The outcome line at the top should *be* this
+   message when a warning exists: *"Recorded as Refund Receipt 3721 — but inventory was not
+   adjusted for Linen Wrap Dress, because it isn't tracked as an inventory product."*
+   The fix sentence belongs with it.
+2. **"Synced with warnings" never says how many or which.** You have to read every log row to
+   find the amber one — and in the Invoice-payment shape, two of five rows are collapsed by
+   default, so a nested warning would be **invisible**. Warning count belongs in the status,
+   and any log row with a warning must force its parent open.
+3. **Warning rows have no `Object` link** (nothing was created), so the column is empty exactly
+   where the user most wants somewhere to go. The fix target — the product in the sales channel —
+   is named in prose but not linked.
+
+## Admin view: ~10 extra `(A)` fields
+`Webhook Id` · `Import id` · `Organization` · `Date Created (UTC)` · `Initiated by` ·
+`Sync Start/Date Finished (UTC)` · **`Rollback initiated by` / `Rollback Start Date` /
+`Rollback Date Finished`** · `Transaction type` · `JS modifications` · `JS verifications` ·
+`Cached internal transactions` · `Cached imported transactions` · `Credits Used`
+
+Three observations:
+- **The three Rollback fields are blank on every sync that was never rolled back** — three
+  permanently-empty rows in the common case. They should appear only once a rollback exists.
+- **`Credits Used` leaks an internal note into the UI:** *"No credit ledger entry for this sync
+  yet (launch-forward-only, pre-SD-17495 syncs will not have data)."* That is a Jira ticket
+  number in a customer-adjacent surface.
+- **`Transaction type` is admin-only** — and it is the field that determines the entire shape of
+  the Sync log. A customer sees `Refund Receipt` / `Invoice` / `Transfer` appear with no stated
+  cause, while the one field that would explain it is hidden from them. **Surface transaction
+  type in the customer view.** This is the cheapest single improvement on the page.
+
+## Action set is inconsistent across contexts
+Customer view (`Per transaction test`): `Transactions list` · `Syncs history` · `Rollback sync`.
+Admin view (`set-890`): `Transactions list` · `Rollback sync` — **no Syncs history**.
+Same page, different action sets, no stated rule. Reinforces: actions are not role- or
+state-aware, they are just whatever that template happened to render.
