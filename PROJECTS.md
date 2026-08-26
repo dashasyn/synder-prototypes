@@ -487,6 +487,21 @@
 
 ---
 
+### Status Filter Usage Research — Platform transactions (2026-08-26)
+
+- **Report:** `reports/status-filter-usage/index.html` — https://dashasyn.github.io/synder-prototypes/reports/status-filter-usage/
+- **Question from Ignat:** should Platform transactions group statuses into tabs? Specifically — do users select all statuses from one group, do they select-all-then-deselect, do they use Select/Deselect All, what are the common patterns. Team sessions (synder.com email/user ID) excluded.
+- **Source:** LogRocket Galileo AI metrics, 90 days, `go.synder.com/transaction/list` + live DOM inspection of `demo.synderapp.com`.
+- **Answer: no, users do not select whole groups.** Successful all-3 = 107 sessions · Needs attention all-8 = 13 · In progress all-6 = 106, vs **1,391 sessions clicking exactly one Successful status** (1,236 Synced alone) — ~13:1. **But partial within-group selection is the real pattern: Failed AND Canceled = 688 sessions**, 58% of the ~1,190 Failed sessions, and 50× more common than exhausting that group.
+- **Decisive caveat:** production group headers are `li.dropdown-header` with **no `<a>`, no handler — inert**. No one-action group selection exists today; a group costs 8 clicks + Apply while **Select All** costs one. The data measures cost as much as intent.
+- **Bulk controls (selector-scoped, clean):** `.bs-select-all` 2,430 clicks / **1,554 sessions** · `.bs-deselect-all` 1,091 / 696.
+- **Also:** `Apply filter` 25,591 · `Reset all filters` 4,699 vs `Reset filter` 3,499 (duplicate-reset item now has data) · failure triage ≈3,880 clicks across Failed/Rollback failed/Synced with warnings/Not parsed · `Synced with rule failed` has **zero clicks before 2026-08-19** · two capitalisations in the data (`Ready to sync` / `Ready to Sync`).
+- **Unresolved confound:** row badges (`span.label.label-default`) carry the same status words, so text-matched label totals pool badge + filter clicks and are **upper bounds**. Only *Ready to sync* split cleanly — 5,188 filter vs 3,740 badge. Redoing it properly needs contains-matching per badge.
+- **Reading for the tabs decision:** group tabs alone don't fit (a *Needs attention* tab returns 8 when the user wanted 2); **tabs + scoped status control inside the tab** does — the V8 shape already built in filtering-options. Keep single-status fast.
+- **Tooling:** `scripts/galileo.sh` (new) — `ask` / `get` wrapper that always saves the full response, because the chatID appears only in the `ask` response and there is no chat-list endpoint.
+
+---
+
 ## 🔀 Side Projects
 
 ### PIMS · Grunddaten Editor (2026-07-09)
