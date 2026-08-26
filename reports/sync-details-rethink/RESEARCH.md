@@ -61,6 +61,12 @@ that point was read-only `/sync/show`.
 
 # Rethink — the conclusion
 
+> ⚠️ **SUPERSEDED IN PART.** Ignat corrected two premises on 2026-08-26 17:22:
+> Explain is not shown for failed syncs (nothing was synced → nothing to explain), and a warning
+> row legitimately has no Object link because nothing was created. The "design the error variant
+> first" recommendation below is therefore void. Read the corrected version instead:
+> `reports/sync-details-rethink/index.html`
+
 ## The core problem
 The page is organised around **Synder's process** — Sync info, Sync log, Sync time, Rules —
 but the question a user brings to it is **"what did this do to my books, and is it right?"**
