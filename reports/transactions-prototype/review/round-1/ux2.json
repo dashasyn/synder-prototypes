@@ -1,0 +1,105 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "reports/transactions-prototype/index.html (variant 1)",
+  "checked": [
+    { "zone": "table / layout & hierarchy", "item": "Column header row (Integration, Transaction info, Type, Amount, Date, Sync status, Actions, gear) — scan order and what competes for attention" },
+    { "zone": "table / layout & hierarchy", "item": "Where the primary act-on-it action sits per row: 'Actions' link column vs the trailing ⋯ menu vs the leading checkbox" },
+    { "zone": "table / layout & hierarchy", "item": "Bulk action header row (#head-bulk) that replaces the normal header row (#head-normal) once any row is selected" },
+    { "zone": "table / layout & hierarchy", "item": "Sync status badge column as the signal for 'needs my attention'" },
+    { "zone": "table / interaction & task completion", "item": "Row checkbox (.row-chk → toggleRow)" },
+    { "zone": "table / interaction & task completion", "item": "Select-all-on-page checkbox (#chk-all-bulk → toggleAllOnPage)" },
+    { "zone": "table / interaction & task completion", "item": "'Select all N' escape-hatch link (#scope-msg → selectAllTotal)" },
+    { "zone": "table / interaction & task completion", "item": "Transaction info cell — customer name + transaction id link (navigates to detail)" },
+    { "zone": "row actions / interaction & task completion", "item": "'Actions' column link — primary verb is Sync / View sync / Retry depending on status" },
+    { "zone": "row actions / interaction & task completion", "item": "Row ⋯ menu items: Sync now, View sync details, Rollback sync, Archive" },
+    { "zone": "bulk bar / interaction & task completion", "item": "⟳ Sync now, ↩ Rollback, Cancel, Archive, Unarchive, Export ▾, clear-selection ×" },
+    { "zone": "primary task steps", "item": "Step order: arrive filtered from Dashboard → scan for rows needing attention → identify the row → act on it individually → or select several and act in bulk" },
+    { "zone": "pagination / interaction & task completion", "item": "Page buttons « 1 2 » and the 'Showing 1–25 of 31' counter" },
+    { "zone": "pagination / interaction & task completion", "item": "Rows-per-page select (25/50/100)" },
+    { "zone": "states", "item": "Selection state — header row swap, count readout, indeterminate select-all, scope message above 25 rows" },
+    { "zone": "states", "item": "Post-action feedback — confirm() prompts and alert() results for bulk Sync / Rollback / Cancel / Archive / Unarchive" },
+    { "zone": "states", "item": "Empty state (#empty-state) shown when the filter set returns no rows; pagination hidden alongside it" },
+    { "zone": "states", "item": "Loading state — none found between filter change and re-render" },
+    { "zone": "states", "item": "Error state — none found for a failed sync/rollback action" },
+    { "zone": "states", "item": "Same verb in two places: 'Sync' as a row link vs '⟳ Sync now' in the bulk bar vs 'Sync now' in the ⋯ menu" },
+    { "zone": "states", "item": "Rows with missing customer name — fallback rendering in the Transaction info cell" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "Row ⋯ menu items — 'Sync now', 'Rollback sync', 'Archive'",
+      "finding": "Three of the four items in the per-row ⋯ menu carry no click handler at all, so choosing them does nothing and the menu gives no response.",
+      "user_impact": "A user who opens the row menu to sync, roll back or archive one transaction clicks the item, sees nothing change, and has no way to tell whether the action ran, failed, or was ignored.",
+      "suggested_fix": "Wire each ⋯ item to the same handler its bulk-bar twin uses (single-row Sync/Rollback/Archive with the same confirm and result message), so the menu commits an action rather than swallowing the click.",
+      "evidence": {
+        "action": "Read the row template in index.html:2604-2611 where each ⋯ menu item is emitted, and cross-checked against the recon record for 'Row ⋯ menu'.",
+        "observed": "Only 'View sync details' has an onclick (showPage('detail')). 'Sync now', 'Rollback sync' and 'Archive' render as bare <div class=\"dd-item\">…</div> with no onclick and no handler bound elsewhere — the recon note 'actions fire directly' is not supported by any code path."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "High",
+      "confidence": 88,
+      "element": "'Actions' column link on every row (label is 'Sync', 'Retry' or 'View sync' depending on status)",
+      "finding": "The row action link is labelled with an imperative verb but always navigates to the transaction detail page instead of performing the action, while the identical verbs in the bulk bar act on the spot.",
+      "user_impact": "A user who clicks 'Sync' or 'Retry' on one row expecting it to sync is taken off the list, loses their filtered position and selection, and has to find the row again — the same word does two different things on one screen.",
+      "suggested_fix": "Make the row link perform the action in place with the same confirm/result feedback as the bulk bar, and rename the navigational case to an explicit 'View details'.",
+      "evidence": {
+        "action": "Read index.html:2591-2603 (primary verb chosen by status, then rendered as <a class=\"row-action\" onclick=\"showPage('detail')\">) and compared with the recon record for the Actions link.",
+        "observed": "All three verbs — Sync, Retry, View sync — share one handler, showPage('detail'); recon confirms 'verbs present: Retry, View sync, Sync; all navigate to the detail page'. Meanwhile bulkSync()/bulkRollback()/bulkArchive() (index.html:2657-2695) execute immediately."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Bulk action bar — '⟳ Sync now' button (#head-bulk, index.html:2298)",
+      "finding": "Sync now is the only bulk action that fires with no confirmation step; Rollback, Cancel, Archive and Unarchive all confirm first.",
+      "user_impact": "A user who mis-clicks Sync now — the leftmost button, right where the selection count draws the eye — immediately pushes the whole selection into their accounting books with no chance to back out, even though syncing is the hardest of these actions to undo.",
+      "suggested_fix": "Give Sync now the same confirm step as the other bulk actions, naming the count and the destination books, or offer an undo window in the result toast.",
+      "evidence": {
+        "action": "Read the five bulk handlers in index.html:2657-2712 and compared their commit paths.",
+        "observed": "bulkSync() goes straight to alert('Syncing N transactions…') + clearSelection(); bulkRollback(), bulkCancel(), bulkArchive() and bulkUnarchive() each gate on confirm(...) before acting."
+      }
+    },
+    {
+      "id": "UX-4",
+      "severity": "Medium",
+      "confidence": 78,
+      "element": "Bulk confirm dialogs + 'Select all N' scope link (#scope-msg → selectAllTotal, index.html:2313-2315)",
+      "finding": "Destructive bulk confirms identify the selection only by count, and 'Select all' extends it to rows the user has never seen because only 25 of the 31 filtered rows are rendered.",
+      "user_impact": "A user who clicks 'Select all 31' then Rollback is asked to approve 'Rollback 31 transactions? The records created in your accounting platform will be deleted' while having laid eyes on 25 of them, so they cannot check what they are about to destroy.",
+      "suggested_fix": "List or summarise the affected rows in the confirm (e.g. counts by status and integration, plus the out-of-view remainder) instead of a bare number.",
+      "evidence": {
+        "action": "Read updateBulkBar()/selectAllTotal() (index.html:2650-2656, 2704-2726) and bulkRollback() (index.html:2680-2686) against renderRows(), which slices to rows.slice(0,25), and the recon pagination record 'Showing 1–25 of 31'.",
+        "observed": "selectAllTotal() adds every id in currentRows (31) while only 25 rows are ever rendered; the confirm string interpolates only the count, naming no transaction."
+      }
+    },
+    {
+      "id": "UX-5",
+      "severity": "Medium",
+      "confidence": 80,
+      "element": "Transaction info cell (.txn-cell) on rows with no customer",
+      "finding": "When a transaction has no customer name the cell falls back to nothing and renders only the raw gateway id, with no placeholder explaining why.",
+      "user_impact": "On 3 of the 25 visible rows the user sees only 'ch_3TKnP2E4p' and cannot tell whose transaction it is, so identifying the right row — the step before every action on this page — forces a detour into the detail page.",
+      "suggested_fix": "Render an explicit fallback in the customer slot (e.g. 'No customer on record' in muted text) and surface a secondary identifier such as the source order or description.",
+      "evidence": {
+        "action": "Read the Transaction info cell template (index.html:2597) and cross-checked the recon record for that cell.",
+        "observed": "Template is `${t.customer ? '<span class=\"txn-customer\">…</span>' : ''}` — an empty string when customer is absent; recon observed '3 of 25 visible rows have no customer name — only the raw ID renders'."
+      }
+    }
+  ],
+  "gaps": [
+    "Row checkbox, select-all checkbox, the 'Select all N' scope link and the entire bulk action bar are absent from the state map, even though bulk action is half the stated primary task — no recon record exists of what any bulk button actually does in a browser.",
+    "Row ⋯ menu: the map notes 'items: Archive — no Apply concept, actions fire directly' but records no post-click outcome, and the source contradicts it (no handler on Sync now / Rollback sync / Archive). The menu's commit behaviour was never actually verified.",
+    "The confirm()/alert() dialogs for bulk Rollback, Cancel, Archive and Unarchive were never exercised — whether they render, block, or are suppressed in the prototype is unknown; my reading is from source, not from a run.",
+    "Whether a selection survives switching status tab, changing a filter chip, or paging to page 2 is not recorded anywhere — selectedIds persistence across re-render is untested.",
+    "The empty state (#empty-state) was never reached in recon, so its copy and its recovery path ('clear filters'?) are unverified for a user who filters down to zero rows.",
+    "No loading state and no per-action error state appear anywhere in the map or the source; whether a sync that fails ever tells the user is unknown.",
+    "The Sync status column header carries an ⓘ affordance that was never exercised — whether it explains the 19 statuses or does nothing is unrecorded.",
+    "Detail page is out of scope for round 1, so the destination of every row action link (UX-2) could not be evaluated — the friction may be worse or better than reported."
+  ]
+}
