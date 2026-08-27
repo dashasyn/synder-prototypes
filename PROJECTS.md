@@ -5,6 +5,30 @@
 
 ## 🔧 Active Projects
 
+### ETC PIS Config — Optics & Station Announcements Timing (2026-08-27)
+- **Status:** 🚧 v1 prototype live, awaiting Ignat feedback
+- **Client:** ETC Solutions GmbH — ISR (Israel Railways), PIS Configuration module
+- **Jira:** DATNETISR-233 (Feature 132, Aramis Optic settings) + DATNETISR-668 (Station Announcements Timing). Built as **one prototype** at Ignat's request — "they are connected".
+- **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-optic-timing/ — `projects/etc-optic-timing/index.html`
+- **The problem:** PA announcement timing is derived from Aramis *estimated* arrival/departure times. At some stations that estimate is too inaccurate (ISR clarification, Yehuda Yatskan, May 2026). Fix: allow timing to be driven by a real trackside **optic** event (Aramis 2806 telegram) instead of a prediction.
+- **What 233 owns:** optic master data (Optic ID, station, platform, Aramis track, location/direction, properties) · periodic import from FMSILA.XML · 2806 ingestion via Kafka · continuous train location from type-80 events.
+- **What 668 owns:** per-station lead times (arrival/departure) + repeat interval over a system-wide default · the Station Announcements Timing table keyed by Station + Business rule + Platform, each row choosing Estimated time or Optic (2806).
+- **Screens built:**
+  1. **Aramis optics** — search + station/platform filters, 6 optics, list showing which timing rows use each. Detail drawer separates **imported (locked, `FMSILA` badge, lock icon)** from **maintained-here (open, `Manual` badge)** fields, states the last-import time, and cross-links to the timing rows using that optic.
+  2. **Station announcements timing** — System defaults card · per-station table with `Default`/`Override` chips per value and a Reset-to-default action · the timing table with the shared trigger control.
+- **The shared "Based on" control** lives in the timing row editor, badged `SHARED CONTROL · 233 + 668`. Estimated time reveals only an offset; Optic (2806) reveals optic picker (filtered by station+platform, showing track designation because a platform can have several optics — station 1220 platform 1 has two), 2806 type, time source and fallback. Every row renders a **plain-English preview** of what it will actually do — the config is too abstract to read otherwise.
+- **Visible assumptions** (presenter bar toggle), each mapped to a ticket open question:
+  - **A1** lead time / repeat overridden per *station only*, not per Station+BR+Platform (668 open q3). If the finer grain wins, those values move into the table as columns and the per-station card disappears.
+  - **A2** the "fall back to estimated time" checkbox is invented (open q2 in *both* tickets). If the answer is "always fall back" or "announce nothing", the control disappears.
+  - **A3** offset counts from the selected **time source**, not message reception. The tickets say both; they can't both be the anchor. Picked time source, else the Planned/Forecast/Actual selector does nothing.
+  - **A4** type 50 is offered but flagged — 233 calls it "informational only", 668 uses it as the trigger in 3 of 4 example rows.
+- **Contradiction to settle with the 2806 owner:** the offset anchor (A3) and the type-50 status (A4). A developer will implement whichever sentence they read first.
+- **Still missing:** the **station track schematic** 233 says will be attached (two running tracks, central platform loop, optics along the approach, upper westbound / lower eastbound). Travel direction is a plain two-value select until that image arrives.
+- **Sample data:** only what the tickets provide — stations 1500 Acre, 1820 Ahihud, 5900 Ashkelon, 1220 (no name given); rules BR12 Arrival, BR99 Departure; optics HA2 14T87, HA2 24T45 (from 668's rows) and HA6 131113/131111/131121/131124 (from 233's FMSILA example). Timing values are illustrative — the tickets specify no numbers.
+- **Verified:** headless Chromium, 33 DOM assertions passing, 0 JS errors, no page-level horizontal overflow. Covers filters, empty state, locked-vs-editable field counts, Default/Override chip counts, basis toggle hiding/showing the optic block, picker filtering by station, offset sign → before/after phrasing, add/edit row, reset-to-default, and both cross-link directions.
+- **Registered on the hub:** first card in Transit Projects.
+
+
 ### Platform Transactions + Dashboard drill-through (2026-08-20)
 - **Status:** ✅ Prototype live — validator round 1 done, all Critical + High FIXED (2026-08-26)
 - **Round 1 (2026-08-26):** 7/7 lenses, gate PASS, 27 findings (6 Critical / 14 High / 7 Medium).
