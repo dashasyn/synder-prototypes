@@ -571,6 +571,13 @@
   - Seed data = Ignat's three use cases: daily classical radio 09:00–12:00, Christmas-train trigger (W-2412, 400 m before arrival), Madonna 3-day 15:00–18:00.
   - `<html lang>` now follows the DE/EN switcher so native date/time inputs render in the right locale.
   - Deferred by Ignat: priority handling between events, interruption behaviour (not a UI concern), timeline/calendar view, volume, weekday patterns.
+- **Open questions for BVG/ETC managers (2026-08-27)** — sent to Ignat, unanswered:
+  - Trigger identity (train number vs Umlauf vs vehicle no.), fire-per-run vs once-per-day, trigger point (reuse station trigger metres?), behaviour on delay/reroute, non-train triggers
+  - Conflicts: overlapping music events on one station, music vs everrunning text, trigger interrupting a running schedule
+  - Playback rules that shape UI: resume vs restart after an announcement, playlist loop vs stop, radio dropout fallback, volume scope (system / event / station / night)
+  - Operations: who may create events + approval step, whole station forever or speaker zones later, weekday/holiday patterns, global kill switch during disruptions
+  - Legal: GEMA licensing owner + whether the tool must store licence reference/expiry per track, and play-out logging for proof
+  - Scale: how many events/stations expected (decides bulk edit / templates)
 - **Display Texts page (2026-08-25):** position input moved to first column (after drag handle + checkbox), multiselect (per-row + select-all-on-page + shift-click range, selection survives paging), bulk bar with "Move to position N" + bulk delete + clear, block drag (dragging one selected row moves the whole selection), pagination (10/25/50 per page)
 
 ### ETC Station Area Editor (2026-06-15)
