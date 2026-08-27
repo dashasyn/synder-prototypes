@@ -504,6 +504,34 @@
 
 ## 🔀 Side Projects
 
+### ETC Q-Explorer / Q.Daba — QMS RPV CH prototype (2026-05-26 → 2026-08-27)
+- **Status:** 🔧 Active · reviewed, nothing from the review applied yet
+- **Location:** `projects/q-explorer-prototype/index.html` (single file, ~7 000 lines)
+- **Live:** https://dashasyn.github.io/synder-prototypes/projects/q-explorer-prototype/
+- **Topic:** Telegram group, topic 4309 "ETC_Q.Daba" — client is ETC Solutions GmbH / BAV
+- **What it is:** Swiss public-transport quality-management tool. 13 views: login, evaluations list,
+  6 report-type cards, 3-step wizard (period → filters → run/schedule), Geplante Berichte, and the
+  report views — Anschlusspünktlichkeit, Fahrtausfälle + Ausfallmaske + treemap, Pünktlichkeit +
+  chart popup + Pünktlichkeitsdaten (4 950 rows). German-first with an EN/DE switch.
+- **2026-08-25:** custom period can no longer be saved as a scheduled report (toggle disabled with a
+  reason, clears itself, edit path blocked); Impressum / Dokumente / Support / Kontaktdaten added as a
+  bottom utility bar on the sign-in screen matching the ISR/N8 pattern, plus a sidebar footer copy.
+- **2026-08-27 · Round 1 review:** `projects/q-explorer-prototype/review-2026-08-27/`
+  → report `index.html`, state maps, validator payloads, AUTO findings, 21 screenshots.
+  Live: https://dashasyn.github.io/synder-prototypes/projects/q-explorer-prototype/review-2026-08-27/
+  - **Verdict:** structure is understandable; ~50 inputs/selects/buttons have no handler at all.
+  - 3 corroborated Criticals: centre-mounted clear-✕ wipes filter values on all six filters ·
+    edit-schedule shows a blank config under a saved schedule's name · 10 of 19 finished evaluations
+    have no way to be opened.
+  - Both report breakdown ("Aufschlüsseln") controls are inert; 27 raw-data column filters and the
+    Ausfallmaske Apply/Reset buttons are unwired; 37 i18n keys missing from both dictionaries.
+  - **Round incomplete:** A11Y and the whole read-a-report validator pass never ran (subagent service
+    died mid-round). `validator-check.js verify` fails on `MISSING · a11y`. Re-run when it is back.
+  - The 29 June review (UX-1…UX-9) is still entirely unapplied and is folded into this report.
+- **Next:** Ignat to pick the fix order. Suggested: clear-✕ (one CSS line) → bundle-row first-click →
+  six unwired buttons → decide whether Rohdaten/Linienanalyse/DQI get report views → breakdown +
+  column filters (the real work).
+
 ### PIMS · Grunddaten Editor (2026-07-09)
 - **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
 - **Client:** ETC Solutions GmbH — PIMS product for BVG (Berlin transport authority)
