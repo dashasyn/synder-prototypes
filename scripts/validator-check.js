@@ -73,8 +73,14 @@ function writeManifest(argv) {
   }
 
   fs.mkdirSync(dir, { recursive: true });
+  // A round can be either an ITERATION on a flow already reviewed (delta mode:
+  // must not re-flag what was resolved) or a FIRST pass over a DIFFERENT flow of
+  // the same prototype (parallel-flow mode). Conflating the two made verify demand
+  // a resolved-findings log from a round that had nothing to be a delta of.
+  const flow = arg(argv, 'flow', '');
   const manifest = {
     round: Number(arg(argv, 'round', '1')),
+    ...(flow ? { mode: 'parallel-flow', flow } : {}),
     target: arg(argv, 'target', ''),
     confidence_floor: CONFIDENCE_FLOOR,
     expected: slots.map(s => ({ ...s, cap: SPEC[s.validator].cap, prefix: SPEC[s.validator].prefix, evidence: SPEC[s.validator].evidence })),
@@ -199,6 +205,13 @@ function verify(argv) {
       const log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
       if (!log || typeof log !== 'object' || !Array.isArray(log.resolved)) {
         problems.push(`BAD LOG · findings-log.json has no "resolved" array — round 2 cannot run as a delta`);
+      } else if (manifest.mode === 'parallel-flow') {
+        // First pass over a different flow: there is nothing to be a delta of, so an
+        // empty resolved[] is honest. The label is mandatory instead — an unlabelled
+        // parallel-flow round is just a delta round dodging the log check.
+        if (!manifest.flow || !String(manifest.flow).trim()) {
+          problems.push(`UNLABELLED FLOW · manifest declares mode "parallel-flow" but no "flow" label — parallel-flow mode must name the distinct flow it covers, otherwise it is an iteration evading the resolved-findings check`);
+        }
       } else if (manifest.round > 1 && log.resolved.length === 0) {
         problems.push(`EMPTY LOG · this is round ${manifest.round} but findings-log.json records nothing resolved — either nothing was applied, or the log was never written`);
       }
@@ -348,7 +361,8 @@ else if (cmd === 'statemap') statemap(rest);
 else if (cmd === 'verify') verify(rest);
 else {
   console.log('usage:');
-  console.log('  node scripts/validator-check.js manifest <round-dir> --target <t> --round <n> --expect ux,ux,ux,domain,clarity,trust,a11y');
+  console.log('  node scripts/validator-check.js manifest <round-dir> --target <t> --round <n> [--flow <label>] --expect ux,ux,ux,domain,clarity,trust,a11y');
+  console.log('    --flow <label>  this round is a FIRST pass over a different flow, not an iteration (skips the resolved-log delta check)');
   console.log('  node scripts/validator-check.js statemap <round-dir>   # run after Step 3, before spawning');
   console.log('  node scripts/validator-check.js verify <round-dir>');
   process.exit(2);

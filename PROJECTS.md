@@ -516,18 +516,30 @@
 - **2026-08-25:** custom period can no longer be saved as a scheduled report (toggle disabled with a
   reason, clears itself, edit path blocked); Impressum / Dokumente / Support / Kontaktdaten added as a
   bottom utility bar on the sign-in screen matching the ISR/N8 pattern, plus a sidebar footer copy.
-- **2026-08-27 · Round 1 review:** `projects/q-explorer-prototype/review-2026-08-27/`
-  → report `index.html`, state maps, validator payloads, AUTO findings, 21 screenshots.
+- **2026-08-27 · Full review, 2 rounds, both PASS:** `projects/q-explorer-prototype/review-2026-08-27/`
+  → report `index.html`, 2 state maps, 12 validator payloads, 9 AUTO findings, 22 screenshots.
   Live: https://dashasyn.github.io/synder-prototypes/projects/q-explorer-prototype/review-2026-08-27/
-  - **Verdict:** structure is understandable; ~50 inputs/selects/buttons have no handler at all.
-  - 3 corroborated Criticals: centre-mounted clear-✕ wipes filter values on all six filters ·
-    edit-schedule shows a blank config under a saved schedule's name · 10 of 19 finished evaluations
-    have no way to be opened.
-  - Both report breakdown ("Aufschlüsseln") controls are inert; 27 raw-data column filters and the
-    Ausfallmaske Apply/Reset buttons are unwired; 37 i18n keys missing from both dictionaries.
-  - **Round incomplete:** A11Y and the whole read-a-report validator pass never ran (subagent service
-    died mid-round). `validator-check.js verify` fails on `MISSING · a11y`. Re-run when it is back.
+  - Round 1 = create & manage (26 findings). Round 2 = read a report (26 findings). 6 lenses each
+    (UX ×3, Clarity, Trust, A11Y). Fidelity skipped — no spec exists. **52 findings total.**
+  - **Verdict:** structure is easy to understand; what it shows cannot be trusted, and the controls
+    that would let you interrogate it are decorative (~50 inputs/selects/buttons with no handler).
+  - **6 Criticals:** centre-mounted clear-✕ wipes filter values on all six filters · edit-schedule
+    shows a blank config under a saved schedule's name · 9 of 19 finished evaluations can't be opened
+    · "Aufschlüsseln" (the main analysis control) is inert on all three reports · no keyboard route
+    into the tool at all (type cards, all six filter triggers, sidebar nav are unfocusable divs) ·
+    the chart popup is not a modal (focus stays behind it, Escape does nothing, 41 Tabs to reach it).
+  - **The report lies about its own contents** — the round-2 Trust/Clarity findings, and the reason
+    the verdict is "untrustworthy" not just "unfinished": Total row sums a population 13.8× larger
+    than the 19 rows beneath it with no truncation marker · two evaluations with different periods
+    and scopes render a byte-identical table · one row's list period and report period differ by a
+    month (hardcoded fallback at index.html:7239) · every report title contradicts its own date chip.
+  - Also: 27 raw-data column filters, 6 buttons and the Ausfallmaske Apply/Reset are unwired;
+    37 i18n keys missing from both dictionaries + 5 breakdown options with no key at all.
   - The 29 June review (UX-1…UX-9) is still entirely unapplied and is folded into this report.
+  - **Suggested first fixes:** the filter ✕ (one CSS line) · the two-click bundle expander (one class)
+    · truncation row + single-source period · the 6 unwired buttons · a "Demodaten" badge.
+  - Protocol fix: `validator-check.js manifest --flow <label>` added so parallel-flow rounds aren't
+    forced to be deltas of the previous round. Logged in `personas/MISSES.md`.
 - **Next:** Ignat to pick the fix order. Suggested: clear-✕ (one CSS line) → bundle-row first-click →
   six unwired buttons → decide whether Rohdaten/Linienanalyse/DQI get report views → breakdown +
   column filters (the real work).

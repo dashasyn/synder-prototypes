@@ -2,7 +2,7 @@
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Q-Explorer prototype — validator review, 27 Aug 2026</title>
-<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght300;400;500;700&display=swap" rel="stylesheet">
 <style>
  :root { --navy:#1C2848; --blue:#2563EB; --crit:#DC2626; --high:#D97706; --med:#6B7280; --ok:#059669; }
  * { box-sizing:border-box }
@@ -33,240 +33,414 @@
  ol.med b { font-weight:500 }
  ul.works li { margin-bottom:10px; font-size:14.5px }
  .warn { background:#FFFBEB; border:1px solid #FDE68A; border-radius:8px; padding:14px 18px; font-size:14px; color:#92400E; margin-bottom:22px }
+ .good { background:#ECFDF5; border:1px solid #A7F3D0; border-radius:8px; padding:14px 18px; font-size:14px; color:#065F46; margin-bottom:22px }
  table { width:100%; border-collapse:collapse; font-size:13.5px }
  th,td { text-align:left; padding:7px 10px; border-bottom:1px solid #F3F4F6 }
  th { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--med) }
  .pill { font-size:11px; padding:2px 8px; border-radius:10px; background:#ECFDF5; color:var(--ok); font-weight:500 }
  .pill-no { background:#FEF2F2; color:var(--crit) }
+ .pill-sk { background:#F3F4F6; color:var(--med) }
  footer { text-align:center; color:var(--med); font-size:12.5px; padding-bottom:40px }
 </style></head><body>
 <header>
-  <h1>Q-Explorer — prototype review</h1>
-  <p>QMS RPV CH · <code style="background:rgba(255,255,255,.14);color:#fff">projects/q-explorer-prototype/index.html</code> · Round 1 · 27 August 2026</p>
+  <h1>Q-Explorer &mdash; prototype review</h1>
+  <p>QMS RPV CH &middot; <code style="background:rgba(255,255,255,.14);color:#fff">projects/q-explorer-prototype/index.html</code> &middot; Rounds 1 &amp; 2, both verified &middot; 27 August 2026</p>
 </header>
 <main>
 
 <div class="card verdict">
   <h2>Verdict</h2>
-  <p><strong>The structure is understandable; a lot of the controls are not connected to anything.</strong>
-  Someone sat in front of this tool can work out what it is for — the landing list, the three-step wizard and the report
-  layout all read correctly, and the auto-generated evaluation name is a genuinely good piece of design. The problems are
-  not comprehension problems. They are three ways to lose or fail to reach your work
-  (<a href="#C1">C1</a>, <a href="#C2">C2</a>, <a href="#C3">C3</a>), and roughly
-  <strong>50 inputs, selects and buttons that look interactive and have no handler at all</strong> — including the breakdown
-  control on both DPM reports and every column filter on the raw-data tables.</p>
-  <p>Read another way: the parts that show you numbers are in good shape, and the parts that let you
-  <em>change what you are looking at</em> are mostly not wired up yet.</p>
+  <p><strong>The structure is easy to understand. What it shows you cannot be trusted, and the controls that would let you
+  change what you are looking at are mostly not wired up.</strong>
+  Someone sat in front of this tool works out what it is for without help &mdash; the landing list, the three-step wizard and the
+  report layout all read correctly, and the wizard&rsquo;s live auto-naming is genuinely good design. Comprehension is not the problem.</p>
+  <p>Two rounds, twelve independent validator passes, 52 findings. They split cleanly into two different faults:</p>
+  <p><strong>Creating an evaluation is understandable but lossy.</strong> Three ways to lose or fail to reach your work
+  (<a href="#C1">C1</a>, <a href="#C2">C2</a>, <a href="#C3">C3</a>), and no keyboard route into the tool at all (<a href="#C5">C5</a>).</p>
+  <p><strong>Reading a report is the reverse &mdash; it looks finished and misstates its own contents.</strong> The main analysis
+  control does nothing (<a href="#C4">C4</a>). A Total row aggregates a population 13.8&times; larger than the rows under it with no
+  disclosure (<a href="#H1">H1</a>). Two evaluations with different periods and different scopes render the identical table
+  (<a href="#H2">H2</a>). One row&rsquo;s list period and report period disagree by a month (<a href="#H3">H3</a>), and every report
+  title contradicts its own date chip (<a href="#H4">H4</a>).</p>
+  <p>The single sentence version: <strong>the parts that show you numbers look trustworthy and are not; the parts that let you
+  interrogate the numbers are decorative.</strong> Roughly 50 inputs, selects and buttons carry no handler at all.</p>
 </div>
 
 <div class="card">
-  <h2>Method, and what did not run</h2>
-  <p>Followed <code>personas/VALIDATOR_PROTOCOL.md</code> v2. Recon was a real Chromium pass (Playwright) over all 13 views
-  and three user flows — create an evaluation, manage saved and scheduled reports, read a finished report — in German and
-  English. Both state maps passed <code>validator-check.js statemap</code>, so every panel-opening control has a recorded
-  commit path (open → pick → reach Apply → repeat) rather than just “it opens”.</p>
+  <h2>Method</h2>
+  <p>Followed <code>personas/VALIDATOR_PROTOCOL.md</code> v2. Recon was a real Chromium pass (Playwright) over all 13 views in
+  German and English, split into two flows, each with its own state map, manifest and six independent validators run blind to
+  each other. Both state maps passed <code>validator-check.js statemap</code>, so every panel-opening control has a recorded
+  commit path (open &rarr; pick &rarr; reach Apply &rarr; repeat) rather than just &ldquo;it opens&rdquo;.</p>
   <table>
-    <tr><th>Lens</th><th>Create &amp; manage flow</th><th>Read-a-report flow</th></tr>
-    <tr><td>UX ×3</td><td><span class="pill">ran · 15 findings</span></td><td><span class="pill pill-no">did not run</span></td></tr>
-    <tr><td>Clarity</td><td><span class="pill">ran · 3 findings</span></td><td><span class="pill pill-no">did not run</span></td></tr>
-    <tr><td>Trust</td><td><span class="pill">ran · 4 findings</span></td><td><span class="pill pill-no">did not run</span></td></tr>
-    <tr><td>A11Y</td><td><span class="pill pill-no">did not run</span></td><td><span class="pill pill-no">did not run</span></td></tr>
-    <tr><td>Fidelity</td><td colspan="2"><span class="pill pill-no">skipped — no spec or Figma reference exists for this prototype</span></td></tr>
-    <tr><td>Deterministic pass</td><td><span class="pill">ran · 4 AUTO findings</span></td><td><span class="pill">ran · 5 AUTO findings</span></td></tr>
+    <tr><th>Lens</th><th>Round 1 &mdash; create &amp; manage</th><th>Round 2 &mdash; read a report</th></tr>
+    <tr><td>UX &times;3</td><td><span class="pill">ran &middot; 15 findings</span></td><td><span class="pill">ran &middot; 15 findings</span></td></tr>
+    <tr><td>Clarity</td><td><span class="pill">ran &middot; 3 findings</span></td><td><span class="pill">ran &middot; 3 findings</span></td></tr>
+    <tr><td>Trust</td><td><span class="pill">ran &middot; 4 findings</span></td><td><span class="pill">ran &middot; 4 findings</span></td></tr>
+    <tr><td>A11Y</td><td><span class="pill">ran &middot; 4 findings</span></td><td><span class="pill">ran &middot; 4 findings</span></td></tr>
+    <tr><td>Fidelity</td><td colspan="2"><span class="pill-sk pill">skipped &mdash; no spec or Figma reference exists for this prototype. Recorded as skipped, not passed.</span></td></tr>
+    <tr><td>Deterministic pass</td><td><span class="pill">ran &middot; 4 AUTO findings</span></td><td><span class="pill">ran &middot; 5 AUTO findings</span></td></tr>
+    <tr><td>Domain (accountant)</td><td colspan="2"><span class="pill-sk pill">not applicable &mdash; this is a Swiss public-transport quality tool, not an accounting screen</span></td></tr>
   </table>
-  <div class="warn" style="margin-top:16px">
-    <strong>This round is formally incomplete.</strong> The subagent service went down after the first five validators
-    returned, so A11Y never ran on either flow and the read-a-report flow got no validator pass at all.
-    <code>validator-check.js verify</code> therefore <strong>fails</strong> round 1 on <code>MISSING · a11y</code> — recorded rather
-    than worked around. Findings H1, H2, H3, H7 and H8 below come from my own instrumented recon plus the deterministic
-    pass, not from an independent lens. They are reproducible (steps are given for each) but they have not been
-    adversarially checked. The remaining lenses should be re-run when the service is back.
+  <div class="good" style="margin-top:16px">
+    <strong>Both rounds PASS <code>validator-check.js verify</code></strong> &mdash; complete, within caps, evidenced, schema-clean.
+    Round 1: 6 lenses, 26 findings. Round 2: 6 lenses, 26 findings.
   </div>
-  <p>Three UX instances ran independently on the same state map. All three ranked the same three problems as Critical,
-  and Trust reached two of them by a different route — that agreement is the reason C1–C3 lead this report.</p>
+  <p><strong>Convergence.</strong> Three UX instances ran independently on each state map. In round 1 all three ranked the same
+  three problems Critical. In round 2 all three named the dead breakdown control as the Critical, all three named the two-click
+  expander, all three flagged the missing KPI cards, and Trust reached two of those by a different route. That agreement is why
+  C1&ndash;C4 lead this report.</p>
+  <p><strong>One correction to the interim report.</strong> The count of unopenable finished evaluations is <strong>nine of nineteen</strong>,
+  not ten &mdash; counted row by row from the DOM in round 2. And the unreachable report-type cards are <strong>six</strong>, not three.</p>
+  <p style="font-size:13px;color:#6B7280">Protocol note: <code>verify</code> initially failed round 2 on <code>EMPTY LOG</code>, because it treated
+  any round &gt; 1 as an iteration that must show resolved findings from the previous one. These two rounds are parallel first
+  passes over different flows, not iterations. <code>validator-check.js</code> now takes an explicit <code>--flow</code> label for that
+  case and requires the label to be present &mdash; an unlabelled parallel-flow round still fails. Logged in <code>personas/MISSES.md</code>.</p>
 </div>
 
 <div class="card">
-  <h2>Critical — corroborated by 4+ independent lenses</h2>
+  <h2>Critical</h2>
   <a id="C1"></a>
     <div class="f f-critical">
       <div class="f-head"><span class="f-id">C1</span><h3>Clicking the middle of a filled filter wipes it</h3>
         <span class="f-sev">Critical</span></div>
-      <div class="f-meta">Wizard step 2 — all six filter controls (Kantone, TU's, RPV, Verkehrsmittel, Linien, Haltestellen) · <span class="lens">UX ×3 + Trust (4 independent lenses)</span></div>
-      <p><code>.custom-select-trigger</code> lays out three children — label, clear-✕, caret — with
-   <code>justify-content: space-between</code>. That puts the ✕ at the <strong>horizontal centre</strong> of the control.
-   Measured: the trigger is 542px wide, the ✕ occupies x=769–789, and the centre is x=789.
+      <div class="f-meta">Wizard step 2 &mdash; all six filter controls (Kantone, TU&rsquo;s, RPV, Verkehrsmittel, Linien, Haltestellen) &middot; <span class="lens">UX &times;3 + Trust &mdash; 4 independent lenses, conf 95</span></div>
+      <p><code>.custom-select-trigger</code> lays out three children &mdash; label, clear-&#10005;, caret &mdash; with
+   <code>justify-content: space-between</code>. That puts the &#10005; at the <strong>horizontal centre</strong> of the control.
+   Measured: the trigger is 542px wide, the &#10005; occupies x=769&ndash;789, and the centre is x=789.
    <code>document.elementFromPoint(centre)</code> returns <code>canton-clear</code>.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Picked Kanton AG (state <code>['AG']</code>, label "AG"). Closed the panel. Clicked the trigger to reopen it →
-   panel did <strong>not</strong> open, state became <code>[]</code>, label reverted to "All cantons". Same on TU's:
-   <code>['BLS']</code> → <code>[]</code>. No message, no undo.</div>
+      <div class="ev"><span class="ev-l">Reproduced</span>Picked Kanton AG (state <code>['AG']</code>, label &ldquo;AG&rdquo;). Closed the panel. Clicked the trigger to reopen it &rarr;
+   panel did <strong>not</strong> open, state became <code>[]</code>, label reverted to &ldquo;All cantons&rdquo;. Same on TU&rsquo;s:
+   <code>['BLS']</code> &rarr; <code>[]</code>. No message, no undo.</div>
       <p class="why"><strong>Why it matters.</strong> An analyst reopening a filter to check or extend it destroys the scope instead, then runs the evaluation across every canton believing it is still restricted.</p>
-      <p class="fix"><strong>Fix.</strong> Put the ✕ and the caret in one right-aligned group (or give the label <code>flex:1</code>) so the centre of the control always opens the panel. Shrink the ✕ hit area to its glyph and add a “Cleared — undo” toast.</p>
+      <p class="fix"><strong>Fix.</strong> Put the &#10005; and the caret in one right-aligned group (or give the label <code>flex:1</code>) so the centre of the control always opens the panel. Shrink the &#10005; hit area to its glyph and add a &ldquo;Cleared &mdash; undo&rdquo; toast.</p>
     </div><a id="C2"></a>
     <div class="f f-critical">
       <div class="f-head"><span class="f-id">C2</span><h3>Editing a saved schedule shows a blank configuration under its name</h3>
         <span class="f-sev">Critical</span></div>
-      <div class="f-meta">Geplante Berichte → Edit · <span class="lens">UX ×3 + Trust</span></div>
-      <p>The wizard opens titled <em>“Fahrtausfälle DPM – Wöchentlich”</em> with a “Scheduled” badge, but none of the
+      <div class="f-meta">Geplante Berichte &rarr; Edit &middot; <span class="lens">UX &times;3 + Trust</span></div>
+      <p>The wizard opens titled <em>&ldquo;Fahrtausf&auml;lle DPM &ndash; W&ouml;chentlich&rdquo;</em> with a &ldquo;Scheduled&rdquo; badge, but none of the
    saved configuration is loaded, and the schedule section is hidden (<code>display:none</code>) so the frequency
    cannot be seen or changed.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Clicked Edit on the weekly Fahrtausfälle schedule. Read state: <code>selectedPeriod: 'cur_month'</code>,
-   <code>selectedTU: []</code>, <code>selectedCantons: []</code>, <code>selectedLines: []</code> — the defaults, not the schedule.</div>
+      <div class="ev"><span class="ev-l">Reproduced</span>Clicked Edit on the weekly Fahrtausf&auml;lle schedule. Read state: <code>selectedPeriod: 'cur_month'</code>,
+   <code>selectedTU: []</code>, <code>selectedCantons: []</code>, <code>selectedLines: []</code> &mdash; the defaults, not the schedule.</div>
       <p class="why"><strong>Why it matters.</strong> The screen asserts it is one specific schedule while showing something else. A user changing one canton can replace a scoped BAV report with an unscoped default, or simply misread what is being measured.</p>
-      <p class="fix"><strong>Fix.</strong> Hydrate the wizard from the stored schedule and keep the schedule section visible in edit mode. If hydration isn’t built yet, title the screen “New evaluation from schedule” instead of the schedule’s name.</p>
+      <p class="fix"><strong>Fix.</strong> Hydrate the wizard from the stored schedule and keep the schedule section visible in edit mode. If hydration isn&rsquo;t built yet, title the screen &ldquo;New evaluation from schedule&rdquo; instead of the schedule&rsquo;s name.</p>
     </div><a id="C3"></a>
     <div class="f f-critical">
-      <div class="f-head"><span class="f-id">C3</span><h3>Ten finished evaluations cannot be opened at all</h3>
+      <div class="f-head"><span class="f-id">C3</span><h3>Nine of the nineteen finished evaluations cannot be opened at all</h3>
         <span class="f-sev">Critical</span></div>
-      <div class="f-meta">Evaluations list — every Rohdaten Export, Linienanalyse DPM and Datenqualitätsindex row · <span class="lens">UX ×3 + Clarity</span></div>
-      <p>Only 9 of 28 rows carry an “Anzeigen” button. 10 of the 19 rows with status <em>Fertig</em> have no open
-   action, and the row name is not clickable either (<code>onclick</code> absent, <code>cursor:auto</code>). The only
-   remaining row action is Delete.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Counted in the live DOM: 28 visible rows, 9 with an open action, 19 with status <code>done</code>, of which 10 have none.
-   Named examples: “Rohdaten Export – Gestern”, “Linienanalyse DPM – Letztes Jahr, Kanton BE”.</div>
-      <p class="why"><strong>Why it matters.</strong> The list says the work is finished and offers no way to see it. That is the create-and-read task failing outright for three of the six report types.</p>
-      <p class="fix"><strong>Fix.</strong> Give every <em>Fertig</em> row an open path (clickable name + Anzeigen). Where a type genuinely has no viewable output, say so — e.g. “Datei bereit” with a download action.</p>
+      <div class="f-meta">Evaluations list &mdash; every Rohdaten Export, Linienanalyse DPM and Datenqualit&auml;tsindex row, plus two Fahrtausf&auml;lle rows &middot; <span class="lens">UX &times;3 round 1 + UX &times;3 round 2 + Clarity, conf 90</span></div>
+      <p>19 rows show status <em>Fertig</em>. Ten expose <code>['Anzeigen','delete']</code>; nine expose only <code>['delete']</code>, and the
+   row name is not clickable either (<code>onclick</code> absent, <code>cursor:auto</code>). No tooltip, no empty state, no explanation.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Row by row from the DOM. The nine: Rohdaten Export &ndash; Gestern / &ndash; Letzte Woche / &ndash; April 2026 komplett;
+   Linienanalyse DPM &ndash; Letztes Jahr, Kanton BE / &ndash; Letzter Monat, S 1, S 5 / &ndash; Aktueller Monat, RE 7, BLS;
+   Datenqualit&auml;tsindex DPM &ndash; Letzter Monat, alle TU / &ndash; Letztes Jahr, SBB, BLS, ZVV; and
+   <strong>Fahrtausf&auml;lle DPM &ndash; Letzter Monat, BLS, Kanton BE</strong> and <strong>&ndash; Letztes Jahr, Bahn Normalspur</strong>, which sit two rows below
+   Fahrtausf&auml;lle entries that <em>do</em> have Anzeigen. Same type, same status, different actions.</div>
+      <p class="why"><strong>Why it matters.</strong> The first step of reading a report dead-ends on half the finished evaluations. The status says the work succeeded and the only offered action is delete.</p>
+      <p class="fix"><strong>Fix.</strong> Give every <em>Fertig</em> row an open path (clickable name + Anzeigen). Where a type genuinely has no viewable output, say so in the row &mdash; a disabled action with &ldquo;Ergebnis nur als Download&rdquo; / &ldquo;Keine Berichtsansicht f&uuml;r diesen Typ&rdquo;.</p>
+    </div><a id="C4"></a>
+    <div class="f f-critical">
+      <div class="f-head"><span class="f-id">C4</span><h3>&ldquo;Aufschl&uuml;sseln&rdquo; &mdash; the main analysis control &mdash; does nothing on any report</h3>
+        <span class="f-sev">Critical</span></div>
+      <div class="f-meta">Anschlusspünktlichkeit &ldquo;Aufschl&uuml;sseln nach&rdquo; &middot; P&uuml;nktlichkeit and Fahrtausf&auml;lle &ldquo;Aufschl&uuml;sseln&rdquo; &middot; <span class="lens">UX &times;3 round 2, all Critical, conf 95 &middot; + deterministic pass</span></div>
+      <p>The three-level breakdown is what makes a DPM report a report rather than a single number. On V5 the three selects
+   (<code>#rpt-aufschluss-1/-2/-3</code>) have <strong>no <code>onchange</code> attribute at all</strong>. On V8 and V11 the selects do have a
+   handler, but it only drives the option-disabling cascade &mdash; never the table. The cascade is the trap: greying out the dimension
+   already used one level up is visible feedback, so the control feels alive while the numbers stay grouped the old way.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>V11: switched level 1 Linienb&uuml;ndel &rarr; Haltestelle &rarr; TU konzessioniert &rarr; Monat. Table signature captured after each &mdash;
+   byte-identical every time (20 rows, first column header still &ldquo;Name / Linienb&uuml;ndel&rdquo;, same first row, same Total).
+   Setting all three levels changed nothing. V5: level 1 to &ldquo;TU (connector)&rdquo;, then &ldquo;Line (connector)&rdquo; &mdash; 30 rows unchanged.
+   No toast, no message, no loading state.</div>
+      <p class="why"><strong>Why it matters.</strong> Reading a DPM report means slicing it. The user picks a dimension, sees the cascade react, reads the same table, and concludes the network looks the same by stop as by line bundle.</p>
+      <p class="fix"><strong>Fix.</strong> Wire the selects to re-render and re-aggregate the table, and relabel the first column to the chosen dimension. Until then, disable them.</p>
+    </div><a id="C5"></a>
+    <div class="f f-critical">
+      <div class="f-head"><span class="f-id">C5</span><h3>There is no keyboard route into the tool</h3>
+        <span class="f-sev">Critical</span></div>
+      <div class="f-meta">Type-selection screen, wizard step 2, sidebar nav &middot; <span class="lens">A11Y round 1 &mdash; 3 Critical findings, conf 95&ndash;98</span></div>
+      <p>Every entry point is a <code>&lt;div onclick&gt;</code> with no role and no tabindex:</p>
+      <ul style="font-size:14.5px">
+        <li><strong>The six report-type cards.</strong> 40 Tab presses from a blurred document: 11 stops, all page chrome (topbar &times;5, language select, Log out, the four footer links), then it wraps. Not one card. <code>.focus()</code> called directly on a card also fails &mdash; <code>tabIndex</code> is &minus;1.</li>
+        <li><strong>All six filter dropdowns in step 2.</strong> 45 Tab presses: the whole cycle is chrome &rarr; Back &rarr; Back &rarr; Next &rarr; wrap. No filter trigger appears at all. None has <code>tabindex</code>, <code>role</code>, <code>aria-expanded</code> or <code>aria-haspopup</code>.</li>
+        <li><strong>The sidebar nav items.</strong> 53 presses, 18 unique stops, not one <code>div.nav-item</code>. Scheduled Reports is only reachable by mouse, even though everything inside it is keyboard-operable.</li>
+      </ul>
+      <p class="why"><strong>Why it matters.</strong> This is a BAV-facing reporting tool. A keyboard-only or screen-reader user cannot start an evaluation, cannot set a single filter, and cannot reach the scheduled-reports screen. Not degraded &mdash; impossible.</p>
+      <p class="fix"><strong>Fix.</strong> Real <code>&lt;button&gt;</code>s for the type cards (accessible name = title + description). <code>role="combobox"</code> + <code>tabindex="0"</code> + <code>aria-expanded</code> + <code>aria-haspopup="listbox"</code> on the filter triggers, with Enter/Space/Arrows to open and Escape to close. <code>&lt;nav&gt;</code> with real buttons or links and <code>aria-current</code> for the sidebar.</p>
+    </div><a id="C6"></a>
+    <div class="f f-critical">
+      <div class="f-head"><span class="f-id">C6</span><h3>The chart popup is not a modal &mdash; focus stays behind it and Escape does nothing</h3>
+        <span class="f-sev">Critical</span></div>
+      <div class="f-meta">P&uuml;nktlichkeit chart overlay <code>#punct-chart-overlay</code> &middot; <span class="lens">A11Y round 2, Critical, conf 95</span></div>
+      <p>A plain div with no <code>role</code> and no <code>aria-modal</code> that never receives focus, never contains it, and never closes on Escape.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Enter on the row&rsquo;s Chart button &rarr; overlay opens, focus stays on the trigger <em>behind</em> it. The next 8 Tabs all land on
+   background table buttons the overlay is covering. <strong>41 Tab presses</strong> to reach the overlay&rsquo;s own first control.
+   Escape leaves it open (<code>display:flex</code> unchanged) &mdash; only &times; or an outside click dismisses it.</div>
+      <p class="why"><strong>Why it matters.</strong> Opening a chart is an explicit step of the read-a-report task. A keyboard user lands behind the thing they just opened, tabs blind through 40 hidden buttons, and cannot dismiss it. The Info modals added this week <em>do</em> handle Escape &mdash; so the app is inconsistent with itself.</p>
+      <p class="fix"><strong>Fix.</strong> <code>role="dialog" aria-modal="true"</code> plus an accessible name, move focus to the heading or close button on open, trap Tab/Shift+Tab, close on Escape, return focus to the row&rsquo;s Chart button.</p>
     </div>
 </div>
 
 <div class="card">
-  <h2>The dead controls, and the rest of the High findings</h2>
-  
-    <div class="f f-critical">
-      <div class="f-head"><span class="f-id">H1</span><h3>Both report breakdown controls do nothing</h3>
-        <span class="f-sev">Critical (report flow)</span></div>
-      <div class="f-meta">Anschlusspünktlichkeit “Aufschlüsseln nach” · Pünktlichkeit “Aufschlüsseln” · <span class="lens">Recon + deterministic pass</span></div>
-      <p>The three-level breakdown is the main analysis control of the DPM reports. On V5 the three selects
-   (<code>#rpt-aufschluss-1/-2/-3</code>) have <strong>no <code>onchange</code> attribute at all</strong>. On V11 the selects do
-   have a handler, but it only drives the option-disabling cascade — never the table.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>V5: switched level 1 to “TU (connector)”, then “Line (connector)” — table stayed at 30 rows with an identical Total row and
-   identical columns. V11: switched level 1 Linienbündel → Haltestelle → TU konzessioniert — table stayed byte-identical
-   (20 rows, first column header still “Name / Linienbündel”, same first row). Setting all three levels changed nothing.</div>
-      <p class="why"><strong>Why it matters.</strong> Reading a DPM report means slicing it. The control that does that looks fully functional and is inert on both reports.</p>
-      <p class="fix"><strong>Fix.</strong> Wire the selects to re-render the table (and to relabel the first column to the chosen dimension).</p>
+  <h2>High &mdash; the report lies about its own contents</h2>
+  <p style="font-size:14px;color:#6B7280;margin-top:-6px">These four came from the Trust and Clarity lenses in round 2 and are new since the interim report. They are the reason the verdict changed from &ldquo;unfinished&rdquo; to &ldquo;untrustworthy&rdquo;.</p>
+  <a id="H1"></a>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H1</span><h3>The Total row sums a population 13.8&times; larger than the rows beneath it, undisclosed</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">P&uuml;nktlichkeit report &mdash; <code>tr.punct-row-gesamt</code> over 19 displayed Linienb&uuml;ndel rows &middot; <span class="lens">Trust round 2, conf 88</span></div>
+      <p>The table shows 19 bundle rows under a Total. The Total is not their sum &mdash; it is the whole network. Nothing on the screen says the list is truncated.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Summed the 19 <code>tr.punct-row-bundle</code> rows column by column: Soll 152&thinsp;727 / Ist 149&thinsp;078.
+   Total row: 2&thinsp;101&thinsp;488 / 2&thinsp;048&thinsp;996 / 1&thinsp;861&thinsp;401 / 52&thinsp;492 / 90,84% &mdash; <strong>13.8&times; the visible rows</strong>.
+   Paginator present: <code>false</code>. Search for &ldquo;of N&rdquo; / &ldquo;von N&rdquo; / &ldquo;weitere&rdquo;: <code>[]</code>. The chips on the same screen read
+   &ldquo;37 TU&rsquo;s&rdquo;, &ldquo;17 Kantone&rdquo;, &ldquo;All lines&rdquo; while 15 distinct TUs are displayed.</div>
+      <p class="why"><strong>Why it matters.</strong> An analyst computing a TU&rsquo;s share of the network gets ARAG at 15&thinsp;854 / 2&thinsp;101&thinsp;488 = 0,75% instead of roughly 10%. Or reads &ldquo;no TU after BBA has a punctuality problem&rdquo; off a list that stops at B. Either goes to the BAV as a materially wrong figure, and the screen gives no reason to doubt it.</p>
+      <p class="fix"><strong>Fix.</strong> Paginate with an explicit &ldquo;19 von 37 Transportunternehmen&rdquo;, or reuse the prototype&rsquo;s own truncation pattern &mdash; the &ldquo;+ 29 weitere Linien&rdquo; row already used in the chip dropdowns &mdash; as the last table row. Label the aggregate &ldquo;Total (alle 37 TU)&rdquo;.</p>
+    </div><a id="H2"></a>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H2</span><h3>Two evaluations with different periods and different scopes render the identical table</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">P&uuml;nktlichkeit report &mdash; params chips vs. table body &middot; <span class="lens">Trust round 2, conf 78</span></div>
+      <div class="ev"><span class="ev-l">Reproduced</span>Opened &ldquo;P&uuml;nktlichkeit &ndash; Letzter Monat, Kanton ZH&rdquo;: period 01.04.2026&ndash;30.04.2026, Total
+   2.101.488 / 2.048.996 / 1.861.401 / 52.492 / 90,84%, 26 rows. Returned to the list, opened
+   &ldquo;P&uuml;nktlichkeit &ndash; Letztes Jahr, alle Kantone&rdquo;: period 01.01.2025&ndash;31.12.2025, Total
+   <strong>identical to the digit</strong>, 26 rows. One month of one canton and a full calendar year of the whole country
+   produce the same 2&thinsp;101&thinsp;488 scheduled trips.</div>
+      <p class="why"><strong>Why it matters.</strong> Because the figures never move when the stated scope does, there is no way for a user to notice a mislabelled report &mdash; which is exactly what H3 produces. Someone signs off an annual 2025 figure that is in fact an April 2026 table.</p>
+      <p class="fix"><strong>Fix.</strong> Derive the table from the evaluation&rsquo;s period and scope. While there is no backend, mark the figures explicitly &mdash; a &ldquo;Demodaten&rdquo; badge next to the params chips &mdash; so they cannot be read as period-specific.</p>
+    </div><a id="H3"></a>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H3</span><h3>One evaluation states two different periods, a month apart</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">Fahrtausf&auml;lle DPM &ndash; Letzte 7 Tage, SBB &mdash; list PERIOD cell vs. <code>#fa-p-von</code>/<code>#fa-p-bis</code> &middot; <span class="lens">Trust round 2, conf 90</span></div>
+      <div class="ev"><span class="ev-l">Reproduced</span>List row PERIOD cell: <strong>19.05&ndash;25.05.2026</strong>. The same row&rsquo;s attributes: <code>von=10.06.2026 bis=23.06.2026</code>.
+   Opened report header: <strong>10.06.2026 &ndash; 23.06.2026</strong>. The other eight openable rows match, so this row is the one that
+   diverges &mdash; but the hardcoded fallback in <code>showFAReport</code> (<code>index.html:7239-7240</code>) would mislabel <em>any</em> row whose
+   attributes are missing. No report view shows a generation timestamp to arbitrate.</div>
+      <p class="why"><strong>Why it matters.</strong> An analyst who picked this evaluation because the list said 19.05&ndash;25.05 attributes 33&thinsp;483 cancelled trips to the wrong two weeks &mdash; and reports a May cancellation rate to the BAV using June data.</p>
+      <p class="fix"><strong>Fix.</strong> Render the list&rsquo;s PERIOD cell from the same <code>data-von</code>/<code>data-bis</code> the report reads, so the two cannot diverge. Replace the hardcoded date fallback with an explicit &ldquo;Zeitraum unbekannt&rdquo;.</p>
+    </div><a id="H4"></a>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H4</span><h3>Every report title contradicts the date chip directly beneath it</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">All three report views &middot; <span class="lens">Clarity round 2, conf 88</span></div>
+      <p>&ldquo;P&uuml;nktlichkeit &ndash; <strong>Letzte 30 Tage</strong>, Tarifverbund A&rdquo; sits directly above the chip
+   &ldquo;<strong>26.04.2026 &ndash; 25.05.2026</strong>&rdquo;. Same on V5 (&ldquo;Anschlusspünktlichkeit &ndash; Letzte 30 Tage&rdquo; over
+   &ldquo;01.04.2026 &ndash; 30.04.2026&rdquo;) and V8. Two answers to &ldquo;what period is this?&rdquo; on one screen.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>V11 renders a reconciling subtitle &mdash; <code>Auswertung: Punctuality DPM (25.06.2026 22:54:42)</code> in
+   <code>#punct-eval-sub</code> &mdash; but V5 and V8 have none at all, so on those two there is nothing to resolve the contradiction with.
+   (The state map recorded all three as blank; it queried <code>.page-subtitle</code>, a class those headers never use. Corrected here.)</div>
+      <p class="fix"><strong>Fix.</strong> Render the period from the stored evaluation window (&ldquo;P&uuml;nktlichkeit &middot; 26.04.2026&ndash;25.05.2026, Tarifverbund A&rdquo;), keep any user-given name as a secondary line, and put V11&rsquo;s &ldquo;Auswertung &hellip; (timestamp)&rdquo; subtitle on V5 and V8 too.</p>
     </div>
-    <div class="f f-critical">
-      <div class="f-head"><span class="f-id">H2</span><h3>Every raw-data column filter is decorative</h3>
-        <span class="f-sev">Critical (report flow)</span></div>
-      <div class="f-meta">Pünktlichkeitsdaten (16 inputs + 3 selects) · Rohdaten Anschluss (11 inputs) · <span class="lens">Deterministic pass + recon</span></div>
-      <p>27 column search inputs and 3 column selects carry no <code>oninput</code>, <code>onchange</code> or
-   <code>onkeyup</code> attribute. They render as a full filter row under the table headers.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Typed a no-match value (“ZZZZ”) and a real value (“10.06.2026” + Enter) into the first column filter of
-   Pünktlichkeitsdaten: row count stayed 10, info line stayed “of 4950 entries”, no empty state.</div>
-      <p class="why"><strong>Why it matters.</strong> 4 950 rows across 18 columns with a filter row that filters nothing. The one control a user needs on a table that size is fake.</p>
-      <p class="fix"><strong>Fix.</strong> Wire them to the existing render function, or remove the filter row until it works. Pagination, by contrast, works correctly.</p>
+</div>
+
+<div class="card">
+  <h2>High &mdash; dead controls and inconsistency</h2>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H5</span><h3>Every raw-data column filter is decorative</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">P&uuml;nktlichkeitsdaten (16 inputs + 3 selects) &middot; Rohdaten Anschluss (11 inputs) &middot; <span class="lens">Deterministic pass + recon</span></div>
+      <p>27 column search inputs and 3 column selects carry no <code>oninput</code>, <code>onchange</code> or <code>onkeyup</code> attribute. They render as a full filter row under the table headers.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Typed a no-match value (&ldquo;ZZZZ&rdquo;) and a real value (&ldquo;10.06.2026&rdquo; + Enter) into the first column filter:
+   row count stayed 10, info line stayed &ldquo;of 4950 entries&rdquo;, no empty state.</div>
+      <p class="why"><strong>Why it matters.</strong> 4&thinsp;950 rows across 18 columns with a filter row that filters nothing. The one control a user needs on a table that size is fake. Pagination, by contrast, works correctly.</p>
+      <p class="fix"><strong>Fix.</strong> Wire them to the existing render function, or remove the filter row until they work.</p>
     </div>
     <div class="f f-high">
-      <div class="f-head"><span class="f-id">H3</span><h3>The first click on a bundle row does nothing</h3>
+      <div class="f-head"><span class="f-id">H6</span><h3>The first click on a bundle row does nothing, and the caret never changes</h3>
         <span class="f-sev">High</span></div>
-      <div class="f-meta">Pünktlichkeit report — bundle expander caret · <span class="lens">Recon</span></div>
-      <p>The caret button ships without the <code>collapsed</code> class while its line rows ship hidden, so the first
-   click re-hides already-hidden rows and only flips the flag. The caret icon is also always <code>expand_more</code>,
-   expanded or not.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Reproduced 4× from a fresh load: 20 rows → click → 20 rows (nothing) → click → 26 rows → click → 20 rows.</div>
-      <p class="why"><strong>Why it matters.</strong> This is the same second-toggle failure class already logged in MISSES.md. A user clicks, nothing happens, and most people conclude the row has no detail.</p>
-      <p class="fix"><strong>Fix.</strong> Add <code>collapsed</code> to the button’s initial markup (or invert the initial test) and swap the caret icon on toggle.</p>
+      <div class="f-meta">P&uuml;nktlichkeit report &mdash; <code>button.punct-expand-btn</code> &middot; <span class="lens">UX &times;3 round 2 + Trust, conf 92&ndash;95</span></div>
+      <p>The button renders <em>without</em> the <code>collapsed</code> class while its line rows render already hidden, so the first click
+   re-hides hidden rows and only flips the flag. The icon is <code>expand_more</code> in every state and <code>aria-expanded</code> is <code>null</code>.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Fresh load, four clicks with a probe after each: 20/26 visible, icon <code>expand_more</code>, no <code>.collapsed</code> &rarr;
+   click 1: <strong>20/26 unchanged</strong>, class gains <code>.collapsed</code>, icon unchanged &rarr; click 2: 26/26 &rarr; click 3: 20/26 &rarr; click 4: 26/26.
+   The button reported <code>isVisible() &amp;&amp; isEnabled()</code> throughout &mdash; the first click really is absorbed.</div>
+      <p class="why"><strong>Why it matters.</strong> An analyst drilling into ARAG Bus&Uuml; 1 &mdash; 77,40%, the worst bundle on screen and 12,6 points under threshold &mdash; clicks the caret, sees nothing, and concludes the bundle has no line-level detail. Same failure class as the V6 multiselect bug logged in <code>personas/MISSES.md</code>.</p>
+      <p class="fix"><strong>Fix.</strong> Render the expander with <code>.collapsed</code> already applied so its state matches the hidden rows, swap the glyph to <code>expand_less</code> when open, and set <code>aria-expanded</code>.</p>
     </div>
     <div class="f f-high">
-      <div class="f-head"><span class="f-id">H4</span><h3>Run Now with a schedule ticked confirms only half the action</h3>
+      <div class="f-head"><span class="f-id">H7</span><h3>The param chips look like the report&rsquo;s filters and are read-only</h3>
         <span class="f-sev">High</span></div>
-      <div class="f-meta">Wizard step 3 · <span class="lens">UX ×3 + Trust + Clarity (5 lenses)</span></div>
-      <p>Ticking “Als geplanten Bericht einrichten”, choosing Monthly and pressing Run Now produces the toast
-   <em>“Evaluation started — running now”</em>. Nothing mentions the schedule, and no new entry appears in Geplante Berichte.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Ticked the schedule box, set frequency Monthly, clicked Run Now, then opened Geplante Berichte — only the six pre-existing demo schedules were there.</div>
-      <p class="why"><strong>Why it matters.</strong> A TU quality lead sets up a monthly DPM report, sees a success message and stops thinking about it. The report never runs.</p>
-      <p class="fix"><strong>Fix.</strong> State both outcomes (“Auswertung gestartet · Monatlicher Zeitplan gespeichert”) with a link to the new row, and add it to the list immediately. If only one can be committed, disable the combination instead of confirming ambiguously.</p>
+      <div class="f-meta">Chips &ldquo;37 TU&rsquo;s &#9662;&rdquo;, &ldquo;17 Kantone &#9662;&rdquo;, &ldquo;42 Linien &#9662;&rdquo; on V5/V8/V11 &middot; <span class="lens">UX &times;2 round 2 + Clarity, conf 80&ndash;85</span></div>
+      <p>Caret, pointer cursor, a dropdown that opens and lists TU names &mdash; every affordance of an editable multi-select.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Opened the &ldquo;15 TU&rsquo;s&rdquo; chip on V5: panel lists AAGL, AAGR, AB, ABI, &hellip; Every
+   <code>.rpt-chip-dd-item</code> has <code>cursor:auto</code> and <code>onclick=false</code>. <strong>Zero</strong> buttons inside the dropdown, zero
+   Apply/Anwenden/&Uuml;bernehmen anywhere in the view. A second click just collapses it.</div>
+      <p class="why"><strong>Why it matters.</strong> To change one canton you have to abandon the report and rebuild the whole evaluation in the wizard &mdash; and nothing on the screen tells you that.</p>
+      <p class="fix"><strong>Fix.</strong> Either drop the caret and pointer cursor and present them as a plain read-only &ldquo;Parameter dieser Auswertung&rdquo; summary, or keep the panel and add the route out: &ldquo;Umfang fixiert &mdash; Parameter &auml;ndern &rarr; neue Auswertung&rdquo;.</p>
     </div>
     <div class="f f-high">
-      <div class="f-head"><span class="f-id">H5</span><h3>Kantone is the only filter that closes when you pick something</h3>
+      <div class="f-head"><span class="f-id">H8</span><h3>The punctuality report never says what counts as good</h3>
         <span class="f-sev">High</span></div>
-      <div class="f-meta">Wizard step 2 · <span class="lens">UX ×3</span></div>
+      <div class="f-meta">V11 &mdash; no KPI cards, column header &ldquo;Wert&rdquo;, chart legend &ldquo;Value&rdquo; &middot; <span class="lens">UX &times;3 round 2 + Clarity, conf 80&ndash;85</span></div>
+      <p>Zero KPI cards, against 4 on Anschlusspünktlichkeit (each labelled &ldquo;Threshold: 90%&rdquo;) and 3 on Fahrtausf&auml;lle. The only
+   summary figure is <strong>90,84%</strong> sitting in the Total row of a 20-row table, in a column headed just &ldquo;Wert&rdquo;, with no pass/fail
+   colouring. The chart legend reads &ldquo;Value&rdquo; with no reference line &mdash; while the Fahrtausf&auml;lle chart draws its 3% line.</p>
+      <p class="why"><strong>Why it matters.</strong> The one report whose whole purpose is a percentage against a threshold is the one that omits the threshold. The reader cannot tell whether 90,84% &mdash; or a bundle&rsquo;s 77,40% &mdash; passed. The same product answers &ldquo;how did we do&rdquo; three different ways.</p>
+      <p class="fix"><strong>Fix.</strong> Give V11 V5&rsquo;s KPI row with &ldquo;Schwelle: 90%&rdquo; and pass/fail colouring, rename the column &ldquo;P&uuml;nktlichkeit (%)&rdquo;, and draw the 90% line in the chart.</p>
+    </div>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H9</span><h3>Run Now with a schedule ticked confirms only half the action</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">Wizard step 3 &middot; <span class="lens">UX &times;3 + Trust + Clarity &mdash; 5 lenses</span></div>
+      <p>Ticking &ldquo;Als geplanten Bericht einrichten&rdquo;, choosing Monthly and pressing Run Now produces the toast
+   <em>&ldquo;Evaluation started &mdash; running now&rdquo;</em>. Nothing mentions the schedule, and no new entry appears in Geplante Berichte.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Ticked the box, set Monthly, clicked Run Now, opened Geplante Berichte &mdash; only the six pre-existing demo schedules.</div>
+      <p class="why"><strong>Why it matters.</strong> A TU quality lead sets up a monthly DPM report, sees a success message, stops thinking about it. The report never runs.</p>
+      <p class="fix"><strong>Fix.</strong> State both outcomes (&ldquo;Auswertung gestartet &middot; Monatlicher Zeitplan gespeichert&rdquo;) with a link to the new row, and add the row immediately. If only one can be committed, disable the combination instead of confirming ambiguously.</p>
+    </div>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H10</span><h3>Kantone is the only filter that closes when you pick something</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">Wizard step 2 &middot; <span class="lens">UX &times;3</span></div>
       <p>Of six visually identical multi-select panels, five stay open after a pick and Kantone closes.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Tested all six in one pass: RPV, Verkehrsmittel, TU's, Linien, Haltestellen → “stays open”; Kantone → “CLOSES on pick”. Adding a second canton by mouse then failed in two attempts, because reopening lands on the centre-mounted ✕ (C1).</div>
+      <div class="ev"><span class="ev-l">Reproduced</span>All six in one pass: RPV, Verkehrsmittel, TU&rsquo;s, Linien, Haltestellen &rarr; stays open; Kantone &rarr; CLOSES on pick.
+   Adding a second canton by mouse then failed twice, because reopening lands on the centre-mounted &#10005; (C1).</div>
       <p class="why"><strong>Why it matters.</strong> The two defects compound: the user learns multi-select from five controls, the sixth breaks the rhythm, and the recovery click destroys the first pick.</p>
       <p class="fix"><strong>Fix.</strong> Keep the Kantone panel open after a pick, closing only on outside click, Esc or an explicit Done.</p>
     </div>
     <div class="f f-high">
-      <div class="f-head"><span class="f-id">H6</span><h3>A paused schedule still advertises its next run</h3>
+      <div class="f-head"><span class="f-id">H11</span><h3>A paused schedule still advertises its next run</h3>
         <span class="f-sev">High</span></div>
-      <div class="f-meta">Geplante Berichte table · <span class="lens">Trust</span></div>
-      <p>Status reads “Paused” while Next Run still shows a concrete date on the same row.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Paused the weekly Fahrtausfälle schedule: Status Active → Paused, action title Pause → Resume, Next Run unchanged at 01.06.2026.</div>
-      <p class="why"><strong>Why it matters.</strong> Someone checking whether the June reporting period is covered reads a firm date, assumes it is handled, and does not run it manually.</p>
-      <p class="fix"><strong>Fix.</strong> Show “— Paused” in Next Run while paused and recalculate on resume.</p>
+      <div class="f-meta">Geplante Berichte table &middot; <span class="lens">Trust round 1</span></div>
+      <p>Status reads &ldquo;Paused&rdquo; while Next Run still shows a concrete date on the same row.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Paused the weekly Fahrtausf&auml;lle schedule: Status Active &rarr; Paused, action title Pause &rarr; Resume, Next Run unchanged at 01.06.2026.</div>
+      <p class="fix"><strong>Fix.</strong> Show &ldquo;&mdash; Pausiert&rdquo; in Next Run while paused and recalculate on resume.</p>
     </div>
     <div class="f f-high">
-      <div class="f-head"><span class="f-id">H7</span><h3>Four toolbar buttons are wired to nothing</h3>
+      <div class="f-head"><span class="f-id">H12</span><h3>Six buttons are wired to nothing</h3>
         <span class="f-sev">High</span></div>
-      <div class="f-meta">Fahrtausfälle report · Pünktlichkeit chart popup · Ausfallmaske · <span class="lens">Deterministic pass</span></div>
-      <p>No <code>onclick</code> attribute: <strong>CSV Export on the Fahrtausfälle report</strong>, the treemap camera button,
-   and <strong>Snapshot + fullscreen</strong> in the chart popup. Separately, the Ausfallmaske’s
-   <strong>“Anwenden” and “Zurücksetzen”</strong> buttons are also unwired — that filter form has no working commit or reset.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Clicked V8 CSV Export with the snackbar cleared first: no snackbar, no toast, nothing. The identical-looking button on V5 and V11 shows “Preparing CSV export…”. Chart Snapshot: same, no feedback.</div>
-      <p class="why"><strong>Why it matters.</strong> Two buttons that look the same behave differently on adjacent reports, and the Ausfallmaske filter cannot be applied at all.</p>
-      <p class="fix"><strong>Fix.</strong> Wire the six buttons to the existing handlers, or remove them until they exist.</p>
+      <div class="f-meta">Fahrtausf&auml;lle report &middot; chart popup &middot; Ausfallmaske &middot; <span class="lens">Deterministic pass</span></div>
+      <p>No <code>onclick</code> attribute: <strong>CSV Export on Fahrtausf&auml;lle</strong>, the treemap camera button,
+   <strong>Snapshot and fullscreen</strong> in the chart popup, and the Ausfallmaske&rsquo;s <strong>Anwenden and Zur&uuml;cksetzen</strong> &mdash;
+   so that filter form has no working commit or reset.</p>
+      <div class="ev"><span class="ev-l">Reproduced</span>Clicked V8 CSV Export with the snackbar cleared first: nothing. The identical-looking button on V5 and V11 shows &ldquo;Preparing CSV export&hellip;&rdquo;. Chart Snapshot: no feedback.</div>
+      <p class="fix"><strong>Fix.</strong> Wire them to the handlers that already exist on the sibling views, or remove them until they exist.</p>
     </div>
     <div class="f f-high">
-      <div class="f-head"><span class="f-id">H8</span><h3>Escape doesn’t close the chart popup, and focus never enters it</h3>
+      <div class="f-head"><span class="f-id">H13</span><h3>A failed evaluation is a dead end</h3>
         <span class="f-sev">High</span></div>
-      <div class="f-meta">Pünktlichkeit chart popup · <span class="lens">Recon (A11Y lens did not run)</span></div>
-      <p>Escape does not close the overlay — only × or a click outside. Focus is not moved into the modal and not trapped.</p>
-      <div class="ev"><span class="ev-l">Reproduced</span>Opened the popup, pressed Escape → overlay <code>display:flex</code> unchanged. Two Tab presses landed on a background button outside the overlay (<code>closest('#punct-chart-overlay')</code> null).</div>
-      <p class="why"><strong>Why it matters.</strong> Keyboard users cannot dismiss the popup and tab straight out of it into the page behind. The Info modals added this week do handle Escape — so the app is inconsistent with itself.</p>
-      <p class="fix"><strong>Fix.</strong> Close on Escape, move focus to the modal on open, trap it while open and restore it on close.</p>
+      <div class="f-meta">Evaluations list &mdash; 4 rows with a red Failed badge &middot; <span class="lens">UX round 2, conf 85</span></div>
+      <p>The badge is a <code>&lt;span class="badge badge-red"&gt;</code> with no <code>title</code>; row and cell <code>onclick</code> are both <code>null</code>;
+   clicking it changes nothing (page text length identical before and after). The row&rsquo;s only action is Delete.</p>
+      <p class="why"><strong>Why it matters.</strong> The analyst is told it failed but not why or what to do, so the only move the UI offers is to destroy the evidence and rebuild the whole evaluation &mdash; without knowing whether it will fail the same way.</p>
+      <p class="fix"><strong>Fix.</strong> Make the badge open a short reason (&ldquo;keine Daten f&uuml;r den gew&auml;hlten Zeitraum&rdquo;, &ldquo;Import unvollst&auml;ndig&rdquo;) and add a Retry action alongside delete.</p>
+    </div>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H14</span><h3>Three report views have no keyboard route back to the list</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">V5 Anschlusspünktlichkeit, V8 Fahrtausf&auml;lle, V10 Ausfallmaske &middot; <span class="lens">A11Y round 2, Critical, conf 92</span></div>
+      <p>The breadcrumb &ldquo;Evaluations&rdquo; is a <code>&lt;span&gt;</code> with <code>onclick</code> and <code>tabIndex</code> &minus;1; the sidebar items are
+   <code>&lt;div&gt;</code>s with <code>tabIndex</code> &minus;1; all five topbar links are <code>href="#" onclick="return false"</code>; and unlike V11 and the
+   raw view, these three ship no Close button. A keyboard user who opens one of them is stuck there.</p>
+      <p class="fix"><strong>Fix.</strong> Fix the breadcrumb and sidebar focusability (C5 covers both) and add the &ldquo;Schlie&szlig;en&rdquo; button V11 already has &mdash; which also resolves the consistency finding in the Medium list.</p>
+    </div>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H15</span><h3>Screen readers get no announcement on view change, and 60 row buttons announce as &ldquo;bar_chart&rdquo;</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">Every view transition &middot; <code>button.punct-act-btn</code> / <code>.rpt-act-btn</code> &middot; <span class="lens">A11Y round 2, conf 88&ndash;90</span></div>
+      <p>Activating anything that swaps the view (Anzeigen &rarr; report, Raw data &rarr; table, Close &rarr; report) leaves
+   <code>document.activeElement</code> on <code>&lt;body&gt;</code>, and there is no <code>aria-live</code> region or focus target &mdash; so nothing is announced.
+   Separately, the row-level Chart and Raw-data buttons are named by their Material-icon ligature text, which
+   <em>overrides</em> the <code>title</code> attribute: all 60 buttons on a report announce as either &ldquo;bar_chart&rdquo; or &ldquo;table_chart&rdquo;, with no row context.</p>
+      <p class="fix"><strong>Fix.</strong> Move focus to the new view&rsquo;s heading on transition (or announce it in a live region). Give the icon spans <code>aria-hidden="true"</code> and the buttons a real <code>aria-label</code> including the row &mdash; &ldquo;Diagramm f&uuml;r ARAG Bus&Uuml; 1&rdquo;.</p>
+    </div>
+    <div class="f f-high">
+      <div class="f-head"><span class="f-id">H16</span><h3>The disabled Delete is mouse-blocked and keyboard-live</h3>
+        <span class="f-sev">High</span></div>
+      <div class="f-meta">In-Progress rows &mdash; <code>button.action-icon.danger</code> &middot; <span class="lens">A11Y round 1, conf 95</span></div>
+      <p>Disabled only visually: <code>pointer-events:none</code> and <code>opacity:.35</code>, with no <code>disabled</code> attribute and no
+   <code>aria-disabled</code>. Hit-testing the pixel returns <code>div.action-icons</code>, not the button &mdash; but it stays at <code>tabIndex 0</code>,
+   and Enter fires the real <code>confirm()</code> and deletes the row.</p>
+      <p class="why"><strong>Why it matters.</strong> The one destructive action in the tool is unreachable by the users it is meant to work for and fully live for the users it is meant to be blocked for.</p>
+      <p class="fix"><strong>Fix.</strong> Set the real <code>disabled</code> attribute (or <code>aria-disabled</code> plus a guard in the handler) and name it with the reason: &ldquo;L&ouml;schen &mdash; nicht m&ouml;glich, solange die Auswertung l&auml;uft&rdquo;.</p>
     </div>
 </div>
 
 <div class="card">
-  <h2>Medium — worth fixing, not urgent</h2>
+  <h2>Medium &mdash; worth fixing, not urgent</h2>
   <ol class="med">
-  <li><b>37 translation keys exist in neither dictionary.</b> <code>data-i18n</code> keys used in the markup that are missing from <em>both</em> the <code>en</code> and <code>de</code>
-  dictionaries, so those elements never translate and keep their hardcoded German. They cluster in the Ausfallmaske
-  (<code>fa_mask_*</code>, <code>fa_col_*</code>, <code>fa_opt_*</code>) and the raw punctuality columns
-  (<code>punct_raw_col_*</code>, <code>punct_col_ist</code>, <code>punct_col_delta</code>). Visible effect: in EN mode the three
-  breakdown selects still read “Linienbündel”, “Haltestelle”, “Monat”, “TU konzessioniert”, “TU fahrend” — 12 options,
-  identical count in both languages.</li><li><b>“Transport companies” in English inside the German UI.</b> The expandable chip dropdown header on all three report views. Flagged in the June review as UX-1 and still open.</li><li><b>No report tells you when it was generated.</b> The subtitle is empty on all three report views. For a scheduled report that may be days old, there is no way to tell how fresh the figures are. June review UX-4, still open.</li><li><b>Pünktlichkeit has no KPI cards.</b> Anschlusspünktlichkeit has 4 (with a 90% threshold and warning icons), Fahrtausfälle has 3, Pünktlichkeit has 0 and opens straight into the breakdown selects. June review UX-5, still open.</li><li><b>“Schließen” exists on two views out of six.</b> Present on Pünktlichkeit and the raw punctuality view; absent on Anschlusspünktlichkeit, Fahrtausfälle and the Ausfallmaske. June review UX-3, still open.</li><li><b>Four acronyms carry the meaning and none is expanded.</b> DPM, RPV, TU, DQI appear on the type cards and filter labels with no expansion or tooltip anywhere (Clarity, CLR-3).</li><li><b>Deleting uses the browser’s native confirm().</b> <code>confirm('Delete this evaluation? This action cannot be undone.')</code> — an unstyled OS dialog in a
-  designed tool, and the toast afterwards offers no undo despite the warning. The scheduled list uses a second,
-  separate implementation of the same pattern.</li><li><b>Two design languages in one file.</b> 109 distinct hex values, 41 used exactly once, with two grey ramps mixed — #9CA3AF/#E5E7EB/#374151 alongside
-  #9E9E9E/#E0E0E0/#424242 — plus 13 font sizes and 10 border radii. <code>.rpt-params-bar</code> and
-  <code>.fa-params-bar</code> are byte-identical duplicates (June UX-7).</li><li><b>Secondary text fails contrast.</b> Declared text colours below 4.5:1 on white: #D1D5DB 1.47, #BDBDBD 1.88, #9CA3AF 2.54 (used 40×), #9E9E9E 2.68, #D97706 3.19.</li><li><b>Type cards can’t be reached by keyboard.</b> The six report-type cards are <code>&lt;div onclick&gt;</code> with no role and no tabindex. Tab skips the entire entry point of the tool.</li><li><b>A reversed date range is accepted silently.</b> Entered from 20.08.2026 to 01.08.2026: no validation, no error, Next stays enabled, and the generated name reads “Trip Failures DPM – 20.08.2026 – 01.08.2026”.</li><li><b>Login accepts empty credentials.</b> Clicking Anmelden with both fields blank logs straight in — no validation and no required-field marker. Acceptable as a prototype shortcut, but the screen shows no validation design at all.</li><li><b>Step-3 summary concatenates the filters.</b> “RPV: Tarifverbund ATransport Mode: Bahn NormalspurCantons: AGLines: Bus 10Stops: Aarau” — no separators between the filter values on the confirmation card.</li><li><b>The sidebar shows no location inside a report.</b> No <code>.nav-item</code> is active while a report is open, so the navigation gives no sense of where you are.</li>
+  <li><b>37 translation keys exist in neither dictionary.</b> <code>data-i18n</code> keys used in the markup that are missing from
+  <em>both</em> the <code>en</code> and <code>de</code> dictionaries, so those elements never translate. They cluster in the Ausfallmaske
+  (<code>fa_mask_*</code>, <code>fa_col_*</code>, <code>fa_opt_*</code>) and the raw punctuality columns (<code>punct_raw_col_*</code>,
+  <code>punct_col_ist</code>, <code>punct_col_delta</code>).</li>
+  <li><b>The breakdown dropdown is half-translated &mdash; a different fault.</b> In EN mode five of eleven options stay German:
+  Linienb&uuml;ndel, Haltestelle, Monat, TU konzessioniert, TU fahrend. Those five have <em>no i18n key at all</em>, so they are not among
+  the 37 above. One dropdown reads &ldquo;No selection, Operating day, Linienb&uuml;ndel, Line, Haltestelle, Monat, CW, TU konzessioniert,
+  TU fahrend, Transport mode, Region&rdquo;.</li>
+  <li><b>&ldquo;Transport companies&rdquo; in English inside the German UI.</b> The chip dropdown header on all three report views. Flagged in the June review as UX-1 and still open.</li>
+  <li><b>Only V11 tells you when it was generated.</b> <code>#punct-eval-sub</code> renders &ldquo;Auswertung: Punctuality DPM (25.06.2026 22:54:42)&rdquo;; V5 and V8 have nothing. For a scheduled report that may be days old there is no way to judge freshness. June review UX-4, still open.</li>
+  <li><b>&ldquo;Schlie&szlig;en&rdquo; exists on two views out of six.</b> Present on P&uuml;nktlichkeit and the raw punctuality view; absent on Anschlusspünktlichkeit, Fahrtausf&auml;lle and the Ausfallmaske. June review UX-3, still open &mdash; and now also an accessibility blocker (H14).</li>
+  <li><b>Four acronyms carry the meaning and none is expanded.</b> DPM, RPV, TU, DQI appear on the type cards and filter labels with no expansion or tooltip anywhere.</li>
+  <li><b>Deleting uses the browser&rsquo;s native <code>confirm()</code>.</b> An unstyled OS dialog in a designed tool, and the toast afterwards offers no undo despite warning the action cannot be undone. The scheduled list uses a second, separate implementation of the same pattern.</li>
+  <li><b>Two design languages in one file.</b> 109 distinct hex values, 41 used exactly once, two grey ramps mixed
+  (#9CA3AF/#E5E7EB/#374151 alongside #9E9E9E/#E0E0E0/#424242), 13 font sizes, 10 border radii.
+  <code>.rpt-params-bar</code> and <code>.fa-params-bar</code> are byte-identical duplicates (June UX-7).</li>
+  <li><b>Secondary text fails contrast.</b> Declared text colours below 4.5:1 on white: #D1D5DB 1.47, #BDBDBD 1.88, #9CA3AF 2.54 (used 40&times;), #9E9E9E 2.68, #D97706 3.19.</li>
+  <li><b>A reversed date range is accepted silently.</b> From 20.08.2026 to 01.08.2026: no validation, no error, Next stays enabled, and the generated name reads &ldquo;Trip Failures DPM &ndash; 20.08.2026 &ndash; 01.08.2026&rdquo;.</li>
+  <li><b>Login accepts empty credentials.</b> Anmelden with both fields blank logs straight in. Acceptable as a prototype shortcut, but the screen shows no validation design at all.</li>
+  <li><b>Step-3 summary concatenates the filters.</b> &ldquo;RPV: Tarifverbund ATransport Mode: Bahn NormalspurCantons: AGLines: Bus 10Stops: Aarau&rdquo; &mdash; no separators between values on the confirmation card.</li>
+  <li><b>The sidebar shows no location inside a report.</b> No <code>.nav-item</code> is active while a report is open, so the navigation gives no sense of where you are.</li>
+  <li><b>The bordered-field params style on V10 and V12 is intentional, not drift.</b> Raw and detail views keep the field-column style while V5/V8/V11 use grey chips. Documented so a future review does not re-flag it.</li>
   </ol>
-  <p style="font-size:13px;color:#6B7280;margin-top:14px">M2–M5 and M8 were all raised in the 29 June review and have
-  been open since. Nothing from that round was ever applied.</p>
+  <p style="font-size:13px;color:#6B7280;margin-top:14px">Items 3, 4, 5 and 8 were raised in the 29 June review and have been
+  open since. <strong>Nothing from that round was ever applied</strong>, so all nine of its findings are folded into this report.</p>
 </div>
 
 <div class="card">
   <h2>What works, and should not be touched</h2>
-  <ul class="works"><li><strong>The numbers hold up.</strong> On the Pünktlichkeit report, Delta = Soll − Ist exactly and Wert % = pünktlich / Ist, on the Total row (2 101 488 / 2 048 996 / 1 861 401 / 52 492 / 90,84%) and on all five bundle rows spot-checked. Nothing in the data contradicts itself.</li><li><strong>The wizard’s auto-naming is genuinely good.</strong> Every choice feeds the evaluation name live — “Trip Failures DPM – Current Month, all lines” becomes “…, Mon–Fri” the moment you untick Sat and Sun. It’s the clearest feedback mechanism in the tool.</li><li><strong>Landing on the evaluations list, not an empty form, is the right call.</strong> Grouped by report type, with search, status and period filters that all apply instantly and a real empty state for no-match searches.</li><li><strong>Pagination on 4 950 rows works properly</strong> — First/Previous/1/2/…/495/Next/Last, with the “1 to 10 of 4950” line updating correctly.</li><li><strong>The custom-period rule shipped this week holds.</strong> Selecting a custom range disables scheduling with a reason, clears an already-ticked box, and blocks the edit path — verified in both languages.</li><li><strong>Chart zoom and reset work</strong> (svg width 1044 → 1566 → back), and the Ausfallmaske request does what it promises: the icon becomes a check and a data-sheet link appears.</li><li><strong>KPI cards with thresholds are the strongest piece of design in the tool</strong> — “All day 89,53% ⚠ · Threshold: 90%” tells an analyst the answer before they read a single table row. Which is exactly why Pünktlichkeit not having them stands out.</li></ul>
+  <ul class="works">
+  <li><strong>The arithmetic holds up.</strong> On the P&uuml;nktlichkeit report Delta = Soll &minus; Ist exactly and Wert % = p&uuml;nktlich / Ist, on the Total row (2&thinsp;101&thinsp;488 / 2&thinsp;048&thinsp;996 / 1&thinsp;861&thinsp;401 / 52&thinsp;492 / 90,84%) and on all five bundle rows spot-checked. Every figure is internally consistent &mdash; which is exactly why H1 and H2 are dangerous rather than obvious.</li>
+  <li><strong>The wizard&rsquo;s auto-naming is genuinely good.</strong> Every choice feeds the evaluation name live &mdash; &ldquo;Trip Failures DPM &ndash; Current Month, all lines&rdquo; becomes &ldquo;&hellip;, Mon&ndash;Fri&rdquo; the moment you untick Sat and Sun. The clearest feedback mechanism in the tool.</li>
+  <li><strong>Landing on the evaluations list, not an empty form, is the right call.</strong> Grouped by report type, with search, status and period filters that all apply instantly and a real empty state for no-match searches.</li>
+  <li><strong>Pagination on 4&thinsp;950 rows works properly</strong> &mdash; First/Previous/1/2/&hellip;/495/Next/Last, with the &ldquo;1 to 10 of 4950&rdquo; line updating correctly.</li>
+  <li><strong>The custom-period rule shipped this week holds.</strong> Selecting a custom range disables scheduling with a stated reason, clears an already-ticked box, and blocks the edit path &mdash; verified in both languages.</li>
+  <li><strong>Chart zoom and reset work</strong> (svg width 1044 &rarr; 1566 &rarr; back), and the Ausfallmaske request does what it promises: the icon becomes a check and a data-sheet link appears.</li>
+  <li><strong>KPI cards with thresholds are the strongest piece of design in the tool</strong> &mdash; &ldquo;All day 89,53% &#9888; &middot; Threshold: 90%&rdquo; answers the question before you read a table row. Which is exactly why P&uuml;nktlichkeit not having them stands out (H8).</li>
+  </ul>
 </div>
 
 <div class="card">
   <h2>Suggested order</h2>
   <ol class="med">
-    <li><b>C1 — the filter ✕.</b> One CSS change, and it is currently destroying user input.</li>
-    <li><b>H3 — first click on a bundle row.</b> One class in the markup.</li>
-    <li><b>H7 — the six unwired buttons.</b> Copy the handlers that already exist on the sibling views.</li>
-    <li><b>C3 — open finished evaluations.</b> Needs a decision: do Rohdaten/Linienanalyse/DQI get report views, or a download action?</li>
-    <li><b>H1 + H2 — breakdown selects and column filters.</b> The largest piece of real work, and what makes the reports usable rather than illustrative.</li>
-    <li><b>C2 — hydrate the edit-schedule wizard,</b> or rename that screen until it does.</li>
-    <li><b>H4, H6 — tell the truth about schedules</b> (confirm both outcomes; no next-run date while paused).</li>
+    <li><b>C1 &mdash; the filter &#10005;.</b> One CSS change, and it is currently destroying user input.</li>
+    <li><b>H6 &mdash; first click on a bundle row.</b> One class in the markup, plus the caret glyph.</li>
+    <li><b>H1 + H3 &mdash; stop the report misstating its own contents.</b> A truncation row and a period read from one source. Small, and they are the findings that could put a wrong number in front of the BAV.</li>
+    <li><b>H12 &mdash; the six unwired buttons.</b> Copy the handlers that already exist on sibling views.</li>
+    <li><b>H2 &mdash; a &ldquo;Demodaten&rdquo; badge.</b> One chip, and it neutralises the worst consequence of every data finding until there is a backend.</li>
+    <li><b>C5 &mdash; the keyboard route in.</b> Buttons for the type cards, <code>role="combobox"</code> on the six filter triggers, real nav elements in the sidebar. Mechanical, and without it the tool is unusable without a mouse.</li>
+    <li><b>C3 &mdash; open finished evaluations.</b> Needs a decision from you: do Rohdaten / Linienanalyse / DQI get report views, or a download action?</li>
+    <li><b>C4 + H5 &mdash; breakdown selects and column filters.</b> The largest piece of real work, and what makes the reports usable rather than illustrative.</li>
+    <li><b>C2 &mdash; hydrate the edit-schedule wizard,</b> or rename that screen until it does.</li>
+    <li><b>H4, H7, H8 &mdash; header truth and the missing threshold.</b> Period from the stored window, chips that admit they are read-only, KPI cards on V11.</li>
+    <li><b>C6, H14, H15, H16 &mdash; the rest of the accessibility set.</b> Modal semantics, a Close button on three views, focus on view change, a real <code>disabled</code> on Delete.</li>
   </ol>
 </div>
 
 <div class="card">
   <h2>Known gaps in this review</h2>
-  <p style="font-size:14px">Recorded by the validators themselves so that “not checked” never reads as “passed”:</p>
+  <p style="font-size:14px">Recorded by the validators themselves so that &ldquo;not checked&rdquo; never reads as &ldquo;passed&rdquo;.</p>
+  <p style="font-size:14px;margin-bottom:4px"><strong>Never reached at all</strong></p>
   <ol class="med">
-    <li>No <b>loading or in-progress state</b> is recorded anywhere between Run Now and the list reappearing, so progress feedback for a long evaluation is unassessed.</li>
-    <li><b>No error state was ever produced</b> in the whole flow — login accepts empty fields, the reversed date range raises nothing — so error copy and recovery are entirely unexamined.</li>
-    <li>The <b>notify-by-email</b> toggle and address field were never exercised; a control that promises a notification is exactly where an unkept promise hides.</li>
-    <li>Whether <b>completing</b> the edit-schedule wizard overwrites the original, duplicates it, or does nothing was not tested — C2’s data-loss consequence is inferred from the blank form, not observed.</li>
-    <li>Whether <b>filter cascading is intended</b> at all is unknown, so it is unclear whether the Linien picker can offer lines outside the selected cantons.</li>
-    <li>The <b>Failed</b> status appears in the filter but no failed row was inspected, so what a failed evaluation tells the user is unknown.</li>
-    <li>The <b>first-run empty states</b> of the evaluations list and Geplante Berichte were never reached.</li>
+    <li><b>Rohdaten Export, Linienanalyse DPM and Datenqualit&auml;tsindex DPM have no report view</b>, so three of the five evaluation types were not assessed for reading at all &mdash; only for the missing open action (C3).</li>
+    <li><b>The three full-page chart views</b> (<code>view-chart-punct</code>, <code>-connection</code>, <code>-fa</code>) were never opened &mdash; the row Chart button opens the popup instead. Their behaviour and keyboard handling are unknown.</li>
+    <li><b><code>view-raw-connection</code></b> was not exercised; it is assumed structurally identical to the punctuality raw view, and its paginator and return path are unverified.</li>
+    <li><b>No loading, error or empty-result state exists anywhere in either flow.</b> Login accepts empty fields, the reversed date range raises nothing, reports render instantly from in-page data. So error copy, recovery and progress feedback are entirely unexamined &mdash; and for a tool that will fetch real BAV data, that is the largest untested surface.</li>
+    <li><b>The first-run empty states</b> of the evaluations list and Geplante Berichte were never reached.</li>
+  </ol>
+  <p style="font-size:14px;margin-bottom:4px"><strong>Partially checked</strong></p>
+  <ol class="med" start="6">
+    <li><b>No screen reader was actually run.</b> No NVDA, VoiceOver or Orca available &mdash; every announcement claim is computed from the browser&rsquo;s ARIA tree and DOM semantics, not heard. Wording will differ by AT.</li>
+    <li><b>The notify-by-email toggle and address field were never exercised.</b> A control that promises a notification is exactly where an unkept promise hides.</li>
+    <li><b>Whether completing the edit-schedule wizard overwrites, duplicates or discards</b> was not tested &mdash; C2&rsquo;s data-loss consequence is inferred from the blank form, not observed.</li>
+    <li><b>Whether filter cascading is intended at all is unknown,</b> so it is unclear whether the Linien picker can offer lines outside the selected cantons, or whether an impossible combination can be committed.</li>
+    <li><b>Enter/Space activation of the type cards could not be tested</b> &mdash; they are not focusable, so only the absence of any keyboard route is proven.</li>
+    <li><b>V5 and V8 were only read in EN mode</b> this round, so whether their chips and thresholds read cleanly in German is unverified.</li>
+    <li><b>Whether the title/period contradiction (H4) is demo data or systematic</b> is unknown &mdash; no evaluation was opened whose stored period actually matched the last 30 days relative to its generation date.</li>
   </ol>
 </div>
 
-<footer>Round 1 · 27 August 2026 · artifacts in <code>projects/q-explorer-prototype/review-2026-08-27/</code>
-(state maps, five validator payloads, AUTO findings, 21 screenshots)</footer>
+<footer>Rounds 1 &amp; 2, both PASS &middot; 27 August 2026 &middot; 12 validator payloads, 2 state maps, 9 AUTO findings, 22 screenshots<br>
+artifacts in <code>projects/q-explorer-prototype/review-2026-08-27/</code></footer>
 </main></body></html>

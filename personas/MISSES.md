@@ -72,3 +72,18 @@ Four of the six entries above are the same shape: **a claim made before it was v
 declared missing, a test believed to prove usability, a validator assumed to have run. The Step 3
 recon rules and the Step 7 verify gate address the mechanical half. The judgement half is
 unaddressed, and Ignat noticing remains the only backstop.
+
+## 2026-08-27 — `verify` conflated "second round" with "second iteration"
+
+The Q-Explorer review ran two rounds over two *different* flows (create & manage; read a report),
+each a first pass. `validator-check.js verify` failed round 2 on `EMPTY LOG`, because it treated
+any `round > 1` as an iteration that must show resolved findings from the previous one. Nothing had
+been applied between them — correctly, since round 2 was not a delta of round 1.
+
+Left as-is, the protocol's "a failed verify voids the round" rule would void every multi-flow
+review. Fixed by adding an explicit `--flow <label>` to `manifest`, which sets
+`mode: "parallel-flow"` and skips the resolved-log check — and *requires* the label, so an
+unlabelled parallel-flow round still fails. The check got narrower in scope, not weaker.
+
+Worth noting because the temptation was to edit the round number instead. That would have made the
+check pass by falsifying the artifact, which is exactly the v1 failure this file exists to record.
