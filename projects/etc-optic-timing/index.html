@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIS Configuration — Optics &amp; Station Announcements Timing</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #2d3748; font-size: 13px; padding-bottom: 44px; }
+
+  /* ── ISR ITCS chrome ── */
+  .nav { background: #14274e; color: #fff; height: 34px; display: flex; align-items: center; position: sticky; top: 0; z-index: 1000; }
+  .nav-logo { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .nav-items { display: flex; height: 100%; }
+  .nav-item { padding: 0 12px; height: 100%; display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #dfe6f0; cursor: pointer; white-space: nowrap; }
+  .nav-item:hover { background: rgba(255,255,255,.09); color: #fff; }
+  .nav-item.active { background: rgba(255,255,255,.14); color: #fff; }
+  .nav-chevron { font-size: 8px; opacity: .75; }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; padding-right: 10px; color: #dfe6f0; }
+
+  .layout { display: flex; min-height: calc(100vh - 34px); }
+  .rail { width: 32px; background: #14274e; display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 12px; flex-shrink: 0; }
+  .rail-btn { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; color: #9fb0cc; }
+  .rail-btn.active { color: #fff; }
+
+  /* section sidebar */
+  .side { width: 208px; border-right: 1px solid #e3e7ec; background: #fafbfc; flex-shrink: 0; padding: 12px 0; }
+  .side-title { font-size: 10.5px; letter-spacing: .9px; text-transform: uppercase; color: #98a2ae; padding: 0 14px 8px; font-weight: 700; }
+  .side-item { padding: 8px 14px; font-size: 13px; color: #3c4652; cursor: pointer; border-left: 3px solid transparent; }
+  .side-item:hover { background: #f0f3f6; }
+  .side-item.active { background: #eaf1fb; border-left-color: #1976d2; color: #14274e; font-weight: 700; }
+  .side-item .sub { display: block; font-size: 11px; color: #98a2ae; font-weight: 400; margin-top: 2px; }
+
+  .main { flex: 1; padding: 16px 20px; min-width: 0; }
+  .screen { display: none; }
+  .screen.on { display: block; }
+
+  .page-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .page-title { font-size: 18px; color: #26323f; font-weight: 400; }
+  .tkt { background: #eef1f5; color: #6b7480; border-radius: 3px; padding: 2px 7px; font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+  .page-sub { color: #77808c; font-size: 12.5px; margin-bottom: 16px; max-width: 780px; line-height: 1.5; }
+
+  .card { border: 1px solid #e3e7ec; border-radius: 4px; margin-bottom: 16px; }
+  .card-h { display: flex; align-items: center; gap: 9px; padding: 10px 14px; border-bottom: 1px solid #eef1f5; }
+  .card-t { font-size: 13.5px; font-weight: 700; color: #26323f; }
+  .card-note { font-size: 11.5px; color: #98a2ae; }
+  .card-h .right { margin-left: auto; display: flex; gap: 8px; }
+  .card-b { padding: 14px; }
+
+  .btn { font-family: inherit; font-size: 12.5px; border-radius: 3px; padding: 6px 13px; cursor: pointer; border: 1px solid transparent; }
+  .btn-p { background: #1976d2; color: #fff; }
+  .btn-p:hover { background: #1565c0; }
+  .btn-s { background: #fff; border-color: #cfd6e0; color: #3c4652; }
+  .btn-s:hover { background: #f5f7f9; }
+  .btn-d { background: #fff; border-color: #f0c2c2; color: #c22; }
+  .btn-d:hover { background: #fdecec; }
+  .btn-sm { padding: 4px 9px; font-size: 12px; }
+
+  .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+  .fld { display: flex; flex-direction: column; gap: 4px; }
+  .fld label { font-size: 11px; color: #77808c; }
+  input, select { font-family: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid #cfd6e0; border-radius: 3px; color: #26323f; background: #fff; height: 32px; }
+  input:focus, select:focus { outline: none; border-color: #1976d2; box-shadow: 0 0 0 2px rgba(25,118,210,.14); }
+  input[readonly], input:disabled, select:disabled { background: #f4f6f8; color: #6b7480; cursor: not-allowed; }
+  .search { min-width: 220px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { background: #f4f6f8; color: #77808c; font-weight: 500; text-align: left; padding: 8px 10px; border-bottom: 1px solid #e3e7ec; white-space: nowrap; }
+  td { padding: 8px 10px; border-bottom: 1px solid #eef1f5; color: #3c4652; vertical-align: middle; }
+  tr.clickable { cursor: pointer; }
+  tr.clickable:hover td { background: #f7f9fb; }
+  .mono { font-family: "Courier New", monospace; font-size: 12.5px; }
+  .dim { color: #a8b0ba; }
+  .acts { white-space: nowrap; text-align: right; }
+  .empty-row td { text-align: center; color: #98a2ae; padding: 26px; }
+
+  .chip { display: inline-block; border-radius: 3px; padding: 2px 7px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .c-default { background: #eef1f5; color: #6b7480; }
+  .c-override { background: #e7f1fb; color: #1a6fc4; }
+  .c-optic { background: #e8f0e9; color: #2b6b3d; }
+  .c-est { background: #f2eef8; color: #5b3f96; }
+  .c-import { background: #fff4e2; color: #8a5a00; }
+  .c-manual { background: #eaf1fb; color: #1a6fc4; }
+  .link { color: #1976d2; cursor: pointer; text-decoration: none; }
+  .link:hover { text-decoration: underline; }
+
+  /* right drawer */
+  .backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 44px; background: rgba(15,23,42,.28); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 1400; }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .drawer { position: fixed; top: 0; right: 0; bottom: 44px; width: 540px; background: #fff; box-shadow: -4px 0 24px rgba(15,23,42,.16); z-index: 1500; transform: translateX(100%); transition: transform .22s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; }
+  .drawer.open { transform: translateX(0); }
+  .dr-h { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid #e3e7ec; flex-shrink: 0; }
+  .dr-t { font-size: 15px; font-weight: 700; color: #26323f; }
+  .dr-x { margin-left: auto; border: none; background: none; font-size: 15px; color: #77808c; cursor: pointer; width: 26px; height: 26px; border-radius: 3px; }
+  .dr-x:hover { background: #f0f3f6; }
+  .dr-b { flex: 1; overflow-y: auto; padding: 16px; }
+  .dr-f { border-top: 1px solid #e3e7ec; padding: 11px 16px; display: flex; gap: 8px; flex-shrink: 0; }
+  .dr-f .right { margin-left: auto; display: flex; gap: 8px; }
+
+  .sec { font-size: 10.5px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: #98a2ae; padding-bottom: 7px; border-bottom: 1px solid #eef1f5; margin: 20px 0 12px; }
+  .sec:first-child { margin-top: 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .f { margin-bottom: 12px; }
+  .f > label { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #6b7480; margin-bottom: 4px; }
+  .f input, .f select { width: 100%; }
+  .hint { font-size: 11px; color: #98a2ae; margin-top: 4px; line-height: 1.45; }
+  .lock { color: #b0a06a; }
+
+  /* Based-on segmented control (the shared component) */
+  .shared-badge { background: #14274e; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .5px; border-radius: 3px; padding: 2px 6px; }
+  .seg2 { display: flex; border: 1px solid #cfd6e0; border-radius: 3px; overflow: hidden; }
+  .seg2 button { flex: 1; font-family: inherit; font-size: 12.5px; padding: 8px 10px; background: #fff; border: none; cursor: pointer; color: #3c4652; }
+  .seg2 button + button { border-left: 1px solid #cfd6e0; }
+  .seg2 button:hover { background: #f5f7f9; }
+  .seg2 button.on { background: #1976d2; color: #fff; font-weight: 700; }
+  .reveal { border-left: 2px solid #1976d2; padding-left: 12px; margin-top: 12px; }
+  .reveal.hide { display: none; }
+
+  .preview { background: #f4f8fd; border: 1px solid #cfe0f5; border-radius: 3px; padding: 11px 12px; font-size: 12.5px; color: #14274e; line-height: 1.55; margin-top: 14px; }
+  .preview b { color: #1976d2; }
+  .preview .lbl { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #7d93b3; margin-bottom: 5px; }
+
+  .assume { background: #fff8e6; border: 1px solid #f0d98a; border-radius: 3px; padding: 8px 11px; font-size: 11.5px; color: #7a5c00; line-height: 1.5; margin-top: 10px; display: none; }
+  body.assume-on .assume { display: block; }
+  .assume b { color: #5e4700; }
+
+  .banner { display: flex; align-items: flex-start; gap: 9px; background: #fff4e2; border: 1px solid #f3d9ae; border-radius: 3px; padding: 9px 12px; font-size: 12px; color: #7a5c00; line-height: 1.5; margin-bottom: 14px; }
+  .banner b { color: #5e4700; }
+
+  /* cover */
+  .cover { position: fixed; inset: 0; background: #14274e; color: #fff; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 40px; transition: opacity .3s; }
+  .cover.gone { opacity: 0; pointer-events: none; }
+  .cv { max-width: 780px; }
+  .cv-k { font-size: 11.5px; letter-spacing: 1.6px; text-transform: uppercase; color: #7fa5dd; margin-bottom: 13px; }
+  .cv-h { font-size: 31px; font-weight: 400; line-height: 1.25; margin-bottom: 8px; }
+  .cv-s { font-size: 15px; color: #b9c9e2; margin-bottom: 26px; line-height: 1.5; }
+  .cv-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 26px; }
+  .cv-col h4 { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #7fa5dd; margin-bottom: 9px; }
+  .cv-col ul { list-style: none; }
+  .cv-col li { font-size: 13px; color: #dbe5f2; line-height: 1.5; padding-left: 15px; position: relative; margin-bottom: 7px; }
+  .cv-col li::before { content: '—'; position: absolute; left: 0; color: #557bb0; }
+  .cv-btn { background: #fff; color: #14274e; border: none; border-radius: 3px; padding: 11px 24px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .cv-btn:hover { background: #e7eef8; }
+  .cv-hint { font-size: 12px; color: #7fa5dd; margin-top: 13px; line-height: 1.5; }
+
+  /* presenter */
+  .presenter { position: fixed; left: 0; right: 0; bottom: 0; height: 44px; background: #202a3c; display: flex; align-items: center; gap: 8px; padding: 0 12px; z-index: 1700; }
+  .presenter .lb { font-size: 10.5px; letter-spacing: .9px; text-transform: uppercase; color: #8b9bb4; }
+  .pbtn { font-family: inherit; font-size: 12px; padding: 5px 12px; background: none; border: 1px solid #3c4759; border-radius: 3px; color: #b9c4d4; cursor: pointer; }
+  .pbtn:hover { background: rgba(255,255,255,.07); color: #fff; }
+  .pbtn.on { background: #3b82f6; border-color: #3b82f6; color: #fff; font-weight: 700; }
+  .presenter .cap { margin-left: auto; font-size: 12px; color: #8b9bb4; text-align: right; max-width: 48%; line-height: 1.35; }
+
+  .toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(160%); bottom: 58px; background: #1a2535; color: #fff; border-radius: 4px; padding: 10px 16px; font-size: 12.5px; z-index: 1800; transition: transform .2s; box-shadow: 0 4px 14px rgba(15,23,42,.3); }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="nav-logo">
+    <svg width="26" height="16" viewBox="0 0 40 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+      <path d="M3 17c6-11 16-13 25-8"/><path d="M8 21c5-8 13-9.5 20-5.5"/>
+    </svg>
+  </div>
+  <div class="nav-items">
+    <div class="nav-item">Maps <span class="nav-chevron">▼</span></div>
+    <div class="nav-item">Station view</div>
+    <div class="nav-item">Events</div>
+    <div class="nav-item">Journeys <span class="nav-chevron">▼</span></div>
+    <div class="nav-item active">PIS Configuration <span class="nav-chevron">▼</span></div>
+    <div class="nav-item">Pax <span class="nav-chevron">▼</span></div>
+  </div>
+  <div class="nav-right">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="rail">
+    <div class="rail-btn" title="Maps"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z"/><path d="M9 3v16M15 5v16"/></svg></div>
+    <div class="rail-btn" title="Analytics"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 17l6-6 4 4 7-7"/></svg></div>
+    <div class="rail-btn active" title="Configuration"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></div>
+    <div class="rail-btn" title="Schedule"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+  </div>
+
+  <div class="side">
+    <div class="side-title">PIS Configuration</div>
+    <div class="side-item active" data-screen="optics">Aramis optics <span class="sub">DATNETISR-233</span></div>
+    <div class="side-item" data-screen="timing">Station announcements timing <span class="sub">DATNETISR-668</span></div>
+  </div>
+
+  <div class="main">
+
+    <!-- ══════════ OPTICS (233) ══════════ -->
+    <div class="screen on" id="sc-optics">
+      <div class="page-h"><span class="page-title">Aramis optics</span><span class="tkt">DATNETISR-233</span></div>
+      <div class="page-sub">Master data for trackside optics. Station, platform and Aramis track are imported from the Operational System; location, direction and properties are maintained here.</div>
+
+      <div class="banner">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" style="flex-shrink:0;margin-top:1px"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/></svg>
+        <div><b>Imported from FMSILA.XML</b> — last import 27 Aug 2026, 03:00. Station, platform and Aramis track are overwritten on each import. Location, direction and properties are never touched.</div>
+      </div>
+
+      <div class="toolbar">
+        <div class="fld"><label>Search</label><input class="search" id="o-q" placeholder="Optic ID, station or track…"></div>
+        <div class="fld"><label>Station</label><select id="o-station"></select></div>
+        <div class="fld"><label>Platform</label><select id="o-plat"></select></div>
+        <div class="fld"><label>&nbsp;</label><button class="btn btn-s" id="o-clear">Clear</button></div>
+        <div class="fld" style="margin-left:auto"><label>&nbsp;</label><button class="btn btn-p" id="o-add">+ Add optic</button></div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr>
+            <th>Optic ID</th><th>Station</th><th>Platform</th><th>Aramis track</th>
+            <th>Location / direction</th><th>Properties</th><th>Used by timing</th><th></th>
+          </tr></thead>
+          <tbody id="o-body"></tbody>
+        </table>
+      </div>
+      <div class="card-note" id="o-count"></div>
+    </div>
+
+    <!-- ══════════ TIMING (668) ══════════ -->
+    <div class="screen" id="sc-timing">
+      <div class="page-h"><span class="page-title">Station announcements timing</span><span class="tkt">DATNETISR-668</span></div>
+      <div class="page-sub">Lead times and repeat intervals per station, plus the trigger source for specific Station + Business rule + Platform combinations.</div>
+
+      <!-- system defaults -->
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">System defaults</span>
+          <span class="card-note">Applied at every station unless overridden below.</span>
+          <span class="right"><button class="btn btn-s btn-sm" id="d-edit">Edit defaults</button></span>
+        </div>
+        <div class="card-b">
+          <div style="display:flex;gap:34px;flex-wrap:wrap">
+            <div><div class="hint" style="margin:0 0 3px">Arrival lead time</div><div style="font-size:17px;color:#26323f" id="d-arr">–</div></div>
+            <div><div class="hint" style="margin:0 0 3px">Departure lead time</div><div style="font-size:17px;color:#26323f" id="d-dep">–</div></div>
+            <div><div class="hint" style="margin:0 0 3px">Repeat interval</div><div style="font-size:17px;color:#26323f" id="d-rep">–</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- per-station -->
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">Per-station timing</span>
+          <span class="card-note">A value shown as <span class="chip c-override">Override</span> replaces the system default for that station only.</span>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Station</th><th>Arrival lead time</th><th>Departure lead time</th><th>Repeat interval</th><th></th>
+          </tr></thead>
+          <tbody id="s-body"></tbody>
+        </table>
+      </div>
+      <div class="assume" style="margin-bottom:16px">
+        <b>Assumption A1 —</b> lead time and repeat interval are overridden <b>per station only</b>, not per Station + Business rule + Platform.
+        Open question 3 in DATNETISR-668. If the answer is the finer grain, these three values move into the table below as extra columns and this card disappears.
+      </div>
+
+      <!-- timing table -->
+      <div class="card">
+        <div class="card-h">
+          <span class="card-t">Station announcements timing table</span>
+          <span class="card-note">What clock each announcement counts from.</span>
+          <span class="right"><button class="btn btn-p btn-sm" id="t-add">+ Add row</button></span>
+        </div>
+        <table>
+          <thead><tr>
+            <th>Station ID</th><th>Business rule</th><th>Platform</th><th>Based on</th>
+            <th>Optic ID</th><th>2806 type</th><th>Offset</th><th>Time source</th><th></th>
+          </tr></thead>
+          <tbody id="t-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ══════════ Drawers ══════════ -->
+<div class="backdrop" id="backdrop"></div>
+
+<!-- Optic detail -->
+<div class="drawer" id="dr-optic">
+  <div class="dr-h"><span class="dr-t" id="do-title">Optic</span><button class="dr-x" data-close>✕</button></div>
+  <div class="dr-b" id="do-body"></div>
+  <div class="dr-f">
+    <button class="btn btn-p" data-close>Save</button>
+    <button class="btn btn-s" data-close>Cancel</button>
+    <span class="right"><button class="btn btn-d" data-close>Delete</button></span>
+  </div>
+</div>
+
+<!-- Timing row editor -->
+<div class="drawer" id="dr-row">
+  <div class="dr-h"><span class="dr-t" id="dt-title">Timing row</span><button class="dr-x" data-close>✕</button></div>
+  <div class="dr-b" id="dt-body"></div>
+  <div class="dr-f">
+    <button class="btn btn-p" id="dt-save">Save row</button>
+    <button class="btn btn-s" data-close>Cancel</button>
+  </div>
+</div>
+
+<!-- Station timing editor -->
+<div class="drawer" id="dr-station">
+  <div class="dr-h"><span class="dr-t" id="ds-title">Station timing</span><button class="dr-x" data-close>✕</button></div>
+  <div class="dr-b" id="ds-body"></div>
+  <div class="dr-f">
+    <button class="btn btn-p" id="ds-save">Save</button>
+    <button class="btn btn-s" data-close>Cancel</button>
+  </div>
+</div>
+
+<!-- ══════════ Cover ══════════ -->
+<div class="cover" id="cover">
+  <div class="cv">
+    <div class="cv-k">ISR · PIS Configuration · DATNETISR-233 + 668</div>
+    <div class="cv-h">Optics &amp; station announcement timing</div>
+    <div class="cv-s">Announcing from a sensor instead of an estimate.</div>
+    <div class="cv-cols">
+      <div class="cv-col">
+        <h4>233 — the optics</h4>
+        <ul>
+          <li>Master data for trackside optics: station, platform, Aramis track, location, direction, properties</li>
+          <li>Station / platform / track arrive by import from FMSILA.XML and are read-only here</li>
+          <li>Re-import must never overwrite the hand-maintained fields</li>
+          <li>Each optic reports state on the Aramis 2806 message</li>
+        </ul>
+      </div>
+      <div class="cv-col">
+        <h4>668 — the timing</h4>
+        <ul>
+          <li>Lead times and repeat interval per station, over a system-wide default</li>
+          <li>Per Station + Business rule + Platform, choose the trigger: estimated time or a real optic event</li>
+          <li>One shared “Based on” control, defined in 233 and reused here</li>
+          <li>Every optic reference links back to its record in 233</li>
+        </ul>
+      </div>
+    </div>
+    <button class="cv-btn" id="cv-go">Open the demo →</button>
+    <div class="cv-hint">Two open questions in the tickets change the layout rather than the styling. Turn on <b>Assumptions</b> in the bottom bar to see exactly where I guessed and what would change.</div>
+  </div>
+</div>
+
+<!-- ══════════ Presenter ══════════ -->
+<div class="presenter">
+  <span class="lb">Screen</span>
+  <button class="pbtn on" id="p-optics">Optics · 233</button>
+  <button class="pbtn" id="p-timing">Timing · 668</button>
+  <button class="pbtn" id="p-assume" style="margin-left:10px">Show assumptions</button>
+  <div class="cap" id="cap">Search or filter the optics, then open one.</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ═════════ Data — every value below comes from the two tickets ═════════ */
+
+const STATIONS = [
+  { id: '1500', name: 'Acre' },
+  { id: '1820', name: 'Ahihud' },
+  { id: '5900', name: 'Ashkelon' },
+  { id: '1220', name: '' },          // ticket 233 gives the ID and its optics, no name
+];
+const stationLabel = id => {
+  const s = STATIONS.find(x => x.id === id);
+  return s ? (s.name ? `${s.id} (${s.name})` : s.id) : id;
+};
+
+const RULES = [
+  { id: 'BR12', name: 'Arrival',   kind: 'arrival'   },
+  { id: 'BR99', name: 'Departure', kind: 'departure' },
+];
+const ruleLabel = id => { const r = RULES.find(x => x.id === id); return r ? `${r.id} (${r.name})` : id; };
+const ruleKind  = id => { const r = RULES.find(x => x.id === id); return r ? r.kind : 'arrival'; };
+
+/* 2806 sub-message types, full list from ticket 233 */
+const TYPES = [
+  { v: '1',  label: 'Train-number input',        note: '' },
+  { v: '5',  label: 'Train-number jump',         note: '' },
+  { v: '6',  label: 'Train-number replacement',  note: '' },
+  { v: '7',  label: 'Train-number change',       note: '' },
+  { v: '50', label: 'Forecast',                  note: 'Early notification of an upcoming optic event. Ticket 233 marks this informational only — see assumption A4.' },
+  { v: '70', label: 'Track occupied',            note: '' },
+  { v: '71', label: 'Track released',            note: '' },
+  { v: '80', label: 'Train position update',     note: 'Core movement logic.' },
+  { v: '90', label: 'Platform arrival',          note: 'Occupation of destination track.' },
+];
+const typeLabel = v => { const t = TYPES.find(x => x.v === v); return t ? `${t.v} — ${t.label}` : v; };
+
+const SOURCES = ['Planned', 'Forecast', 'Actual'];
+
+/* Optics. HA2 pair from ticket 668's example rows; HA6 four from ticket 233's FMSILA example. */
+let OPTICS = [
+  { id: 'HA2 14T87', station: '1500', platform: '2', track: '14', loc: 'Approach, 420 m before platform', dir: 'Westbound',  props: 'Arrival trigger' },
+  { id: 'HA2 24T45', station: '1820', platform: '2', track: '24', loc: 'Approach, 380 m before platform', dir: 'Eastbound',  props: 'Arrival trigger' },
+  { id: 'HA6 131113', station: '1220', platform: '1', track: '13', loc: '', dir: '', props: '' },
+  { id: 'HA6 131111', station: '1220', platform: '1', track: '13', loc: '', dir: '', props: '' },
+  { id: 'HA6 131121', station: '1220', platform: '2', track: '21', loc: '', dir: '', props: '' },
+  { id: 'HA6 131124', station: '1220', platform: '2', track: '21', loc: '', dir: '', props: '' },
+];
+
+/* System defaults + per-station overrides. Values are illustrative; the ticket gives no numbers. */
+let DEFAULTS = { arrival: '-2:00', departure: '-0:30', repeat: '3:00' };
+let STATION_TIMING = {
+  '1500': { arrival: '-3:00', departure: null,    repeat: null   },
+  '1820': { arrival: null,    departure: null,    repeat: '2:00' },
+  '5900': { arrival: null,    departure: '-0:45', repeat: null   },
+  '1220': { arrival: null,    departure: null,    repeat: null   },
+};
+
+/* The four example rows, verbatim from ticket 668. */
+let ROWS = [
+  { station: '1500', rule: 'BR12', platform: '2', basis: 'optic', optic: 'HA2 14T87',  type: '50', offset: '0:00',  source: 'Actual',   fallback: true },
+  { station: '1820', rule: 'BR12', platform: '1', basis: 'est',   optic: '',           type: '',   offset: '-2:00', source: '',         fallback: false },
+  { station: '1820', rule: 'BR12', platform: '2', basis: 'optic', optic: 'HA2 24T45',  type: '50', offset: '+2:00', source: 'Forecast', fallback: true },
+  { station: '5900', rule: 'BR99', platform: '',  basis: 'est',   optic: '',           type: '',   offset: '0:30',  source: '',         fallback: false },
+];
+
+/* ═════════ Helpers ═════════ */
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $ = id => document.getElementById(id);
+const dash = v => (v === '' || v == null) ? '<span class="dim">–</span>' : esc(v);
+
+/* Turn "-2:00" / "+2:00" / "0:00" into a readable phrase */
+function offsetPhrase(off) {
+  const t = String(off || '').trim();
+  if (!t) return 'at';
+  const abs = t.replace(/^[+-]/, '');
+  if (/^0*:?0*0$/.test(abs.replace(':', ':'))) {
+    if (abs === '0:00' || abs === '00:00' || abs === '0') return 'exactly at';
+  }
+  if (t.startsWith('-')) return `<b>${esc(abs)}</b> before`;
+  return `<b>${esc(abs)}</b> after`;
+}
+
+function opticsUsedBy(opticId) {
+  return ROWS.filter(r => r.basis === 'optic' && r.optic === opticId);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  $('toast').textContent = msg;
+  $('toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 2600);
+}
+
+/* ═════════ Screen switching ═════════ */
+function setScreen(name) {
+  $('sc-optics').classList.toggle('on', name === 'optics');
+  $('sc-timing').classList.toggle('on', name === 'timing');
+  document.querySelectorAll('.side-item').forEach(el => el.classList.toggle('active', el.dataset.screen === name));
+  $('p-optics').classList.toggle('on', name === 'optics');
+  $('p-timing').classList.toggle('on', name === 'timing');
+  $('cap').textContent = name === 'optics'
+    ? 'Search or filter the optics, then open one.'
+    : 'Open a timing row to see the shared “Based on” control.';
+}
+document.querySelectorAll('.side-item').forEach(el => el.addEventListener('click', () => setScreen(el.dataset.screen)));
+$('p-optics').addEventListener('click', () => setScreen('optics'));
+$('p-timing').addEventListener('click', () => setScreen('timing'));
+
+/* ═════════ Optics list ═════════ */
+function fillOpticFilters() {
+  const st = $('o-station'), pl = $('o-plat');
+  st.innerHTML = '<option value="">All stations</option>' +
+    STATIONS.map(s => `<option value="${s.id}">${esc(stationLabel(s.id))}</option>`).join('');
+  const plats = [...new Set(OPTICS.map(o => o.platform))].sort();
+  pl.innerHTML = '<option value="">All platforms</option>' +
+    plats.map(p => `<option value="${esc(p)}">Platform ${esc(p)}</option>`).join('');
+}
+
+function renderOptics() {
+  const q = $('o-q').value.trim().toLowerCase();
+  const st = $('o-station').value, pl = $('o-plat').value;
+  const list = OPTICS.filter(o => {
+    if (st && o.station !== st) return false;
+    if (pl && o.platform !== pl) return false;
+    if (!q) return true;
+    return (o.id + ' ' + stationLabel(o.station) + ' ' + o.track + ' ' + o.loc + ' ' + o.dir).toLowerCase().includes(q);
+  });
+
+  $('o-body').innerHTML = list.length ? list.map(o => {
+    const used = opticsUsedBy(o.id).length;
+    return `<tr class="clickable" data-optic="${esc(o.id)}">
+      <td class="mono">${esc(o.id)}</td>
+      <td>${esc(stationLabel(o.station))}</td>
+      <td>${dash(o.platform)}</td>
+      <td>${dash(o.track)}</td>
+      <td>${o.loc ? esc(o.loc) + (o.dir ? ' · ' + esc(o.dir) : '') : '<span class="dim">Not set</span>'}</td>
+      <td>${o.props ? esc(o.props) : '<span class="dim">–</span>'}</td>
+      <td>${used ? `<span class="chip c-optic">${used} row${used > 1 ? 's' : ''}</span>` : '<span class="dim">–</span>'}</td>
+      <td class="acts"><button class="btn btn-s btn-sm" data-edit="${esc(o.id)}">Edit</button></td>
+    </tr>`;
+  }).join('') : `<tr class="empty-row"><td colspan="8">No optics match these filters.</td></tr>`;
+
+  $('o-count').textContent = `${list.length} of ${OPTICS.length} optics`;
+}
+
+$('o-q').addEventListener('input', renderOptics);
+$('o-station').addEventListener('change', renderOptics);
+$('o-plat').addEventListener('change', renderOptics);
+$('o-clear').addEventListener('click', () => { $('o-q').value = ''; $('o-station').value = ''; $('o-plat').value = ''; renderOptics(); });
+$('o-body').addEventListener('click', e => {
+  const row = e.target.closest('[data-optic]');
+  if (row) openOptic(row.dataset.optic);
+});
+$('o-add').addEventListener('click', () => openOptic(null));
+
+/* ═════════ Optic detail drawer ═════════ */
+const IMPORTED_HINT = 'Imported from FMSILA.XML — overwritten on the next import.';
+
+function openOptic(id) {
+  const o = id ? OPTICS.find(x => x.id === id) : { id: '', station: '', platform: '', track: '', loc: '', dir: '', props: '' };
+  $('do-title').textContent = id ? `Optic ${id}` : 'New optic';
+
+  const used = id ? opticsUsedBy(id) : [];
+  const usedHtml = used.length
+    ? used.map(r => `<div style="padding:7px 0;border-bottom:1px solid #f2f4f7">
+         <span class="link" data-goto-row="${esc(r.station)}|${esc(r.rule)}|${esc(r.platform)}">${esc(stationLabel(r.station))} · ${esc(ruleLabel(r.rule))}${r.platform ? ' · Platform ' + esc(r.platform) : ''}</span>
+         <div class="hint" style="margin-top:2px">Triggers on type ${esc(r.type)} at offset ${esc(r.offset)}, ${esc(r.source)} time.</div>
+       </div>`).join('')
+    : '<div class="hint">Not used by any timing row yet.</div>';
+
+  $('do-body').innerHTML = `
+    <div class="sec">Identity</div>
+    <div class="f">
+      <label>Optic ID ${id ? '<span class="chip c-import">FMSILA / manual</span>' : ''}</label>
+      <input value="${esc(o.id)}" ${id ? 'readonly' : ''} placeholder="e.g. HA2 14T87">
+      <div class="hint">${id ? 'Unique identifier. Not editable once created.' : 'No fixed format — both <span class="mono">HA2 14T87</span> and <span class="mono">HA6 131113</span> are valid.'}</div>
+    </div>
+
+    <div class="sec">Imported from the Operational System</div>
+    <div class="grid2">
+      <div class="f">
+        <label><svg class="lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Station ID <span class="chip c-import">FMSILA</span></label>
+        <input value="${esc(o.station ? stationLabel(o.station) : '')}" disabled>
+      </div>
+      <div class="f">
+        <label><svg class="lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Platform <span class="chip c-import">FMSILA</span></label>
+        <input value="${esc(o.platform)}" disabled>
+      </div>
+      <div class="f">
+        <label><svg class="lock" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Aramis track <span class="chip c-import">FMSILA</span></label>
+        <input value="${esc(o.track)}" disabled>
+      </div>
+      <div class="f">
+        <label>Last import</label>
+        <input value="27 Aug 2026, 03:00" disabled>
+      </div>
+    </div>
+    <div class="hint">${IMPORTED_HINT}</div>
+
+    <div class="sec">Maintained here</div>
+    <div class="f">
+      <label>Location on the network <span class="chip c-manual">Manual</span></label>
+      <input value="${esc(o.loc)}" placeholder="e.g. Approach, 420 m before platform">
+    </div>
+    <div class="f">
+      <label>Travel direction <span class="chip c-manual">Manual</span></label>
+      <select>
+        <option value="" ${!o.dir ? 'selected' : ''}>Not set</option>
+        <option ${o.dir === 'Westbound' ? 'selected' : ''}>Westbound</option>
+        <option ${o.dir === 'Eastbound' ? 'selected' : ''}>Eastbound</option>
+      </select>
+      <div class="hint">Ticket 233 describes a track schematic — upper track westbound, lower eastbound. I have not seen that image, so this is a plain two-value list for now.</div>
+    </div>
+    <div class="f">
+      <label>Properties <span class="chip c-manual">Manual</span></label>
+      <input value="${esc(o.props)}" placeholder="Attributes used by the business rules">
+      <div class="hint">Ticket 233 lists the exact property set as TBD in the dev phase, so this is a free-text field.</div>
+    </div>
+    <div class="assume">
+      <b>Protected on re-import.</b> The three fields in this section are never overwritten by FMSILA.XML — acceptance criterion 2 of DATNETISR-233. The lock icons above mark the fields that <i>are</i>.
+    </div>
+
+    <div class="sec">Announcement triggers using this optic</div>
+    ${usedHtml}
+    <div class="hint" style="margin-top:8px">Maintained in <span class="link" data-goto-timing>Station announcements timing (668)</span>.</div>
+  `;
+  openDrawer('dr-optic');
+}
+
+/* ═════════ Per-station timing ═════════ */
+function effective(stationId, key) {
+  const ov = STATION_TIMING[stationId] && STATION_TIMING[stationId][key];
+  return ov != null ? { value: ov, override: true } : { value: DEFAULTS[key], override: false };
+}
+
+function cellTiming(stationId, key) {
+  const e = effective(stationId, key);
+  return `${esc(e.value)} <span class="chip ${e.override ? 'c-override' : 'c-default'}">${e.override ? 'Override' : 'Default'}</span>`;
+}
+
+function renderDefaults() {
+  $('d-arr').textContent = DEFAULTS.arrival;
+  $('d-dep').textContent = DEFAULTS.departure;
+  $('d-rep').textContent = DEFAULTS.repeat;
+}
+
+function renderStations() {
+  $('s-body').innerHTML = STATIONS.map(s => `
+    <tr>
+      <td>${esc(stationLabel(s.id))}</td>
+      <td>${cellTiming(s.id, 'arrival')}</td>
+      <td>${cellTiming(s.id, 'departure')}</td>
+      <td>${cellTiming(s.id, 'repeat')}</td>
+      <td class="acts"><button class="btn btn-s btn-sm" data-station="${esc(s.id)}">Edit</button></td>
+    </tr>`).join('');
+}
+
+$('s-body').addEventListener('click', e => {
+  const b = e.target.closest('[data-station]');
+  if (b) openStation(b.dataset.station);
+});
+
+function openStation(sid) {
+  $('ds-title').textContent = `Timing — ${stationLabel(sid)}`;
+  const rowFor = (key, label) => {
+    const e = effective(sid, key);
+    return `<div class="f">
+      <label>${label} <span class="chip ${e.override ? 'c-override' : 'c-default'}">${e.override ? 'Override' : 'Default'}</span></label>
+      <div style="display:flex;gap:8px">
+        <input id="st-${key}" value="${esc(e.value)}" style="flex:1">
+        <button class="btn btn-s" data-reset="${key}" ${e.override ? '' : 'disabled'}>Reset to default</button>
+      </div>
+      <div class="hint">System default: ${esc(DEFAULTS[key])}. Format ±mm:ss.</div>
+    </div>`;
+  };
+  $('ds-body').innerHTML = `
+    <div class="sec">Lead times</div>
+    ${rowFor('arrival', 'Arrival lead time')}
+    ${rowFor('departure', 'Departure lead time')}
+    <div class="sec">Repeat</div>
+    ${rowFor('repeat', 'Repeat interval')}
+    <div class="hint">Applies to ongoing announcement types such as delay messages.</div>
+    <div class="assume">
+      <b>Assumption A1 —</b> one repeat interval per station. Ticket 668 says “allowing different repetition cadences”, which could also mean one interval per announcement type. If so, this becomes a small table rather than a field.
+    </div>`;
+  $('ds-body').querySelectorAll('[data-reset]').forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.reset;
+    STATION_TIMING[sid][k] = null;
+    openStation(sid); renderStations();
+    toast('Reset to system default');
+  }));
+  $('ds-save').onclick = () => {
+    ['arrival', 'departure', 'repeat'].forEach(k => {
+      const v = $('st-' + k).value.trim();
+      STATION_TIMING[sid][k] = (v === '' || v === DEFAULTS[k]) ? null : v;
+    });
+    renderStations(); closeDrawers(); toast('Station timing saved');
+  };
+  openDrawer('dr-station');
+}
+
+/* ═════════ Timing table ═════════ */
+function renderRows() {
+  $('t-body').innerHTML = ROWS.length ? ROWS.map((r, i) => `
+    <tr class="clickable" data-row="${i}">
+      <td>${esc(stationLabel(r.station))}</td>
+      <td>${esc(ruleLabel(r.rule))}</td>
+      <td>${dash(r.platform)}</td>
+      <td><span class="chip ${r.basis === 'optic' ? 'c-optic' : 'c-est'}">${r.basis === 'optic' ? 'Optic (2806)' : 'Estimated ' + ruleKind(r.rule) + ' time'}</span></td>
+      <td>${r.basis === 'optic' ? `<span class="link mono" data-goto-optic="${esc(r.optic)}">${esc(r.optic)}</span>` : '<span class="dim">–</span>'}</td>
+      <td>${r.type ? esc(r.type) : '<span class="dim">–</span>'}</td>
+      <td class="mono">${esc(r.offset)}</td>
+      <td>${r.source ? esc(r.source) : '<span class="dim">–</span>'}</td>
+      <td class="acts"><button class="btn btn-s btn-sm" data-edit-row="${i}">Edit</button></td>
+    </tr>`).join('') : `<tr class="empty-row"><td colspan="9">No timing rows. Every station falls back to the estimated time from the business rules.</td></tr>`;
+}
+
+$('t-add').addEventListener('click', () => openRow(null));
+$('t-body').addEventListener('click', e => {
+  const g = e.target.closest('[data-goto-optic]');
+  if (g) { e.stopPropagation(); setScreen('optics'); openOptic(g.dataset.gotoOptic); return; }
+  const row = e.target.closest('[data-row]');
+  if (row) openRow(Number(row.dataset.row));
+});
+
+/* The shared "Based on" control lives here. */
+function openRow(idx) {
+  const isNew = idx == null;
+  const r = isNew
+    ? { station: '1500', rule: 'BR12', platform: '', basis: 'est', optic: '', type: '80', offset: '0:00', source: 'Actual', fallback: true }
+    : JSON.parse(JSON.stringify(ROWS[idx]));
+
+  $('dt-title').textContent = isNew ? 'Add timing row' : 'Edit timing row';
+
+  $('dt-body').innerHTML = `
+    <div class="sec">Applies to</div>
+    <div class="grid2">
+      <div class="f"><label>Station</label>
+        <select id="r-station">${STATIONS.map(s => `<option value="${s.id}" ${s.id === r.station ? 'selected' : ''}>${esc(stationLabel(s.id))}</option>`).join('')}</select>
+      </div>
+      <div class="f"><label>Business rule</label>
+        <select id="r-rule">${RULES.map(x => `<option value="${x.id}" ${x.id === r.rule ? 'selected' : ''}>${esc(ruleLabel(x.id))}</option>`).join('')}</select>
+      </div>
+    </div>
+    <div class="f" style="max-width:50%"><label>Platform <span class="hint" style="margin:0">optional</span></label>
+      <select id="r-plat"><option value="">All platforms</option></select>
+    </div>
+
+    <div class="sec">Based on <span class="shared-badge">SHARED CONTROL · 233 + 668</span></div>
+    <div class="seg2" id="r-seg">
+      <button data-basis="est" class="${r.basis === 'est' ? 'on' : ''}">Estimated time</button>
+      <button data-basis="optic" class="${r.basis === 'optic' ? 'on' : ''}">Optic (2806)</button>
+    </div>
+
+    <div class="reveal ${r.basis === 'optic' ? '' : 'hide'}" id="r-optic-block">
+      <div class="f"><label>Optic</label>
+        <select id="r-optic"></select>
+        <div class="hint" id="r-optic-hint"></div>
+      </div>
+      <div class="grid2">
+        <div class="f"><label>2806 sub-message type</label>
+          <select id="r-type">${TYPES.map(t => `<option value="${t.v}" ${t.v === r.type ? 'selected' : ''}>${esc(typeLabel(t.v))}</option>`).join('')}</select>
+        </div>
+        <div class="f"><label>Time source</label>
+          <select id="r-source">${SOURCES.map(s => `<option ${s === r.source ? 'selected' : ''}>${s}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="hint" id="r-type-note"></div>
+      <div class="f" style="margin-top:12px">
+        <label><input type="checkbox" id="r-fallback" ${r.fallback ? 'checked' : ''} style="width:auto;height:auto"> Fall back to the estimated time if this event never arrives</label>
+      </div>
+      <div class="assume">
+        <b>Assumption A2 —</b> the fallback checkbox is my invention. Open question 2 in both tickets asks what happens when the configured 2806 event never arrives. If the answer is “always fall back”, this control disappears and becomes fixed behaviour. If it is “announce nothing”, it disappears too.
+      </div>
+    </div>
+
+    <div class="f" style="margin-top:14px;max-width:50%">
+      <label>Offset</label>
+      <input id="r-offset" value="${esc(r.offset)}" placeholder="±mm:ss">
+      <div class="hint">Negative announces before the reference moment, positive after.</div>
+    </div>
+    <div class="assume">
+      <b>Assumption A3 —</b> the offset counts from the selected <b>time source</b>. Ticket 668 says “offset from message reception”, but it also asks you to choose Planned / Forecast / Actual — both cannot be the anchor. I picked the time source, because otherwise that selector has no effect.
+    </div>
+
+    <div class="preview" id="r-preview"><span class="lbl">What this row does</span><span id="r-preview-txt"></span></div>
+  `;
+
+  /* platform options depend on station */
+  function fillPlatforms() {
+    const sid = $('r-station').value;
+    const plats = [...new Set(OPTICS.filter(o => o.station === sid).map(o => o.platform))].sort();
+    $('r-plat').innerHTML = '<option value="">All platforms</option>' +
+      plats.map(p => `<option value="${esc(p)}" ${p === r.platform ? 'selected' : ''}>Platform ${esc(p)}</option>`).join('');
+    if (r.platform && !plats.includes(r.platform)) {
+      $('r-plat').innerHTML += `<option value="${esc(r.platform)}" selected>Platform ${esc(r.platform)}</option>`;
+    }
+  }
+
+  /* optic picker is filtered by station + platform — optics are physical */
+  function fillOptics() {
+    const sid = $('r-station').value, pid = $('r-plat').value;
+    const list = OPTICS.filter(o => o.station === sid && (!pid || o.platform === pid));
+    $('r-optic').innerHTML = list.length
+      ? list.map(o => `<option value="${esc(o.id)}" ${o.id === r.optic ? 'selected' : ''}>${esc(o.id)} — track ${esc(o.track)}, platform ${esc(o.platform)}</option>`).join('')
+      : '<option value="">No optics at this station</option>';
+    $('r-optic-hint').innerHTML = list.length > 1
+      ? `${list.length} optics match. A platform can have more than one — station 1220 platform 1 has two — so the track designation is shown to tell them apart.`
+      : (list.length === 1 ? 'One optic matches this station and platform.' : 'This station has no optics in DATNETISR-233 yet.');
+  }
+
+  function currentBasis() { return $('r-seg').querySelector('.on').dataset.basis; }
+
+  function updatePreview() {
+    const basis = currentBasis();
+    const sid = $('r-station').value, rid = $('r-rule').value, pid = $('r-plat').value;
+    const off = $('r-offset').value;
+    const where = `${stationLabel(sid)}${pid ? ', platform ' + pid : ', all platforms'}`;
+    let txt;
+    if (basis === 'est') {
+      txt = `Announce ${offsetPhrase(off)} the estimated <b>${ruleKind(rid)}</b> time at ${esc(where)}.`;
+    } else {
+      const oid = $('r-optic').value, ty = $('r-type').value, src = $('r-source').value;
+      const tl = (TYPES.find(t => t.v === ty) || {}).label || ty;
+      txt = `At ${esc(where)}, announce ${offsetPhrase(off)} the <b>${esc(tl)}</b> (type ${esc(ty)}) event at optic <b>${esc(oid || '—')}</b>, using the <b>${esc(src)}</b> time from Aramis.`;
+      txt += $('r-fallback').checked
+        ? ' If that event never arrives, fall back to the estimated time.'
+        : ' If that event never arrives, no announcement is made.';
+    }
+    $('r-preview-txt').innerHTML = txt;
+
+    const note = (TYPES.find(t => t.v === $('r-type').value) || {}).note || '';
+    $('r-type-note').innerHTML = note ? esc(note) : '';
+  }
+
+  function syncBasis() {
+    const optic = currentBasis() === 'optic';
+    $('r-optic-block').classList.toggle('hide', !optic);
+    updatePreview();
+  }
+
+  fillPlatforms(); fillOptics(); syncBasis();
+
+  $('r-seg').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+    $('r-seg').querySelectorAll('button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    syncBasis();
+  }));
+  $('r-station').addEventListener('change', () => { r.platform = ''; fillPlatforms(); fillOptics(); updatePreview(); });
+  $('r-plat').addEventListener('change', () => { fillOptics(); updatePreview(); });
+  ['r-type', 'r-source', 'r-optic'].forEach(id => $(id).addEventListener('change', updatePreview));
+  $('r-offset').addEventListener('input', updatePreview);
+  $('r-fallback').addEventListener('change', updatePreview);
+
+  $('dt-save').onclick = () => {
+    const basis = currentBasis();
+    const out = {
+      station: $('r-station').value,
+      rule: $('r-rule').value,
+      platform: $('r-plat').value,
+      basis,
+      optic:  basis === 'optic' ? $('r-optic').value  : '',
+      type:   basis === 'optic' ? $('r-type').value   : '',
+      source: basis === 'optic' ? $('r-source').value : '',
+      offset: $('r-offset').value.trim() || '0:00',
+      fallback: basis === 'optic' ? $('r-fallback').checked : false,
+    };
+    if (isNew) ROWS.push(out); else ROWS[idx] = out;
+    renderRows(); renderOptics(); closeDrawers();
+    toast(isNew ? 'Timing row added' : 'Timing row saved');
+  };
+
+  openDrawer('dr-row');
+}
+
+/* ═════════ Drawer plumbing ═════════ */
+function openDrawer(id) {
+  closeDrawers(true);
+  $(id).classList.add('open');
+  $('backdrop').classList.add('open');
+}
+function closeDrawers(keepBackdrop) {
+  document.querySelectorAll('.drawer').forEach(d => d.classList.remove('open'));
+  if (!keepBackdrop) $('backdrop').classList.remove('open');
+}
+document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => closeDrawers()));
+$('backdrop').addEventListener('click', () => closeDrawers());
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawers(); });
+
+/* cross-links out of the optic drawer */
+$('do-body').addEventListener('click', e => {
+  if (e.target.closest('[data-goto-timing]')) { closeDrawers(); setScreen('timing'); return; }
+  const g = e.target.closest('[data-goto-row]');
+  if (g) {
+    const [s, ru, p] = g.dataset.gotoRow.split('|');
+    const i = ROWS.findIndex(x => x.station === s && x.rule === ru && x.platform === p);
+    closeDrawers(); setScreen('timing');
+    if (i >= 0) setTimeout(() => openRow(i), 260);
+  }
+});
+
+/* defaults editor */
+$('d-edit').addEventListener('click', () => {
+  $('ds-title').textContent = 'System default timing';
+  $('ds-body').innerHTML = `
+    <div class="sec">Applied at every station unless overridden</div>
+    <div class="f"><label>Arrival lead time</label><input id="dd-arrival" value="${esc(DEFAULTS.arrival)}"></div>
+    <div class="f"><label>Departure lead time</label><input id="dd-departure" value="${esc(DEFAULTS.departure)}"></div>
+    <div class="f"><label>Repeat interval</label><input id="dd-repeat" value="${esc(DEFAULTS.repeat)}"></div>
+    <div class="hint">Format ±mm:ss. Changing a default immediately changes every station that has not overridden it.</div>`;
+  $('ds-save').onclick = () => {
+    DEFAULTS = { arrival: $('dd-arrival').value.trim(), departure: $('dd-departure').value.trim(), repeat: $('dd-repeat').value.trim() };
+    renderDefaults(); renderStations(); closeDrawers(); toast('System defaults saved');
+  };
+  openDrawer('dr-station');
+});
+
+/* ═════════ Presenter ═════════ */
+$('cv-go').addEventListener('click', () => $('cover').classList.add('gone'));
+$('p-assume').addEventListener('click', () => {
+  const on = document.body.classList.toggle('assume-on');
+  $('p-assume').classList.toggle('on', on);
+  $('p-assume').textContent = on ? 'Hide assumptions' : 'Show assumptions';
+});
+
+/* ═════════ Boot ═════════ */
+fillOpticFilters();
+renderOptics();
+renderDefaults();
+renderStations();
+renderRows();
+setScreen('optics');
+</script>
+</body>
+</html>
