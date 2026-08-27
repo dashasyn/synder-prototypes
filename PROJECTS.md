@@ -561,6 +561,16 @@
 - **Data model:** Stations → directions (2 per station: exit side) + stationNameFile + transferFiles[] + specialAnnouncements[] + triggerArrival/triggerDeparture + displayTexts[]
 - **Completeness formula:** 4 required fields (stationNameFile, both exit sides, triggerArrival, triggerDeparture)
 - **Sample data:** 10 stations (Alexanderplatz → Nollendorfplatz), 15 sound files, 4 special announcements, 28 display texts
+- **Everrunning music (2026-08-27):** new feature area for playing music/radio on stations.
+  - *Audio library* now has a tab bar — **Tracks · Playlists · Radio**. 10 music tracks added (type `music`, with duration); type filter and upload modal extended.
+  - *Playlists* — list + detail editor: name, playback mode (in order / shuffle), ordered track table with drag reorder + position input, add/remove tracks, "used by N events".
+  - *Radio* — reusable streams (name, genre, URL) with add/edit modal and URL validation.
+  - New top-nav **Everrunning** dropdown (Text · Music) — Music opens the event page. `EVR_VIEWS` drives its active state.
+  - *Event editor* — 4 cards: Basics (name, active) · Audio source (segmented Radio/Playlist/Single track + source select + preview) · Timing (Scheduled = date range + time window · On trigger = train number + metres before arrival + arming date range and window) · Stations (line-grouped picker with per-line select-all, search) + Selected stations table with **per-station time window overrides** (Custom chip, reset).
+  - Edits go through a **draft clone** — Cancel discards, Save validates name/source/at-least-one-station.
+  - Seed data = Ignat's three use cases: daily classical radio 09:00–12:00, Christmas-train trigger (W-2412, 400 m before arrival), Madonna 3-day 15:00–18:00.
+  - `<html lang>` now follows the DE/EN switcher so native date/time inputs render in the right locale.
+  - Deferred by Ignat: priority handling between events, interruption behaviour (not a UI concern), timeline/calendar view, volume, weekday patterns.
 - **Display Texts page (2026-08-25):** position input moved to first column (after drag handle + checkbox), multiselect (per-row + select-all-on-page + shift-click range, selection survives paging), bulk bar with "Move to position N" + bulk delete + clear, block drag (dragging one selected row moves the whole selection), pagination (10/25/50 per page)
 
 ### ETC Station Area Editor (2026-06-15)
