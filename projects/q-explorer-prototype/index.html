@@ -1469,6 +1469,16 @@
   .rpt-chip-dd-header { padding: 6px 14px 4px; font-size: 11px; font-weight: 600; color: #9E9E9E; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid #F0F0F0; margin-bottom: 4px; }
   .rpt-chip-dd-item { padding: 5px 14px; color: #374151; line-height: 1.4; }
   .rpt-chip-dd-item:hover { background: #F5F7FF; }
+  .rpt-chip-dd-foot {
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: 6px; padding: 8px 14px 2px; border-top: 1px solid #F0F0F0;
+    font-size: 11px; color: #9E9E9E;
+  }
+  .rpt-chip-dd-foot .material-icons { font-size: 13px; }
+  .rpt-chip-dd-link {
+    background: none; border: none; padding: 0; font-family: inherit;
+    font-size: 11px; font-weight: 500; color: #2563EB; cursor: pointer; text-decoration: underline;
+  }
 
   /* KPI summary cards */
   .rpt-kpi-grid {
@@ -3247,6 +3257,7 @@
             <span id="rpt-eval-name">–</span>
             <span class="rpt-topbar-tag" id="rpt-eval-tag" style="display:none"></span>
           </div>
+          <div style="font-size:13px;color:#9E9E9E;margin-top:2px" id="rpt-eval-sub"></div>
         </div>
       </div>
       <div>
@@ -3486,6 +3497,7 @@
             <span class="page-bc-current" data-i18n="type_trip_failures">Fahrtausfälle DPM</span>
           </nav>
           <div class="page-title"><span id="fa-eval-name">–</span></div>
+          <div style="font-size:13px;color:#9E9E9E;margin-top:2px" id="fa-eval-sub"></div>
         </div>
       </div>
       <div>
@@ -3845,6 +3857,8 @@
         <option value="region" data-i18n="fa_opt_region">Region</option>
       </select>
     </div>
+
+    <div class="rpt-kpi-grid" id="punct-kpi-grid"></div>
 
     <div class="punct-scroll">
       <div class="punct-table-section">
@@ -4234,6 +4248,20 @@
       fa_mask_applied_all: 'Filter cleared — showing all cancellations',
       fa_mask_reset_done: 'Filter reset',
       fa_mask_no_match: 'No cancellations in this period.',
+      rpt_period_label: 'Period',
+      rpt_generated_at: 'generated',
+      rpt_note_demo_data: 'Figures are demo data scaled per evaluation.',
+      toast_eval_queued_scheduled: 'Evaluation started · {freq} schedule saved — see Scheduled Reports',
+      sched_pause: 'Pause',
+      sched_resume: 'Resume',
+      sched_edit: 'Edit',
+      punct_kpi_overall: 'Punctuality, all trips',
+      punct_kpi_planned_foot: 'scheduled trips in this period',
+      punct_kpi_actual_foot: 'trips actually operated',
+      punct_kpi_delta_foot: 'scheduled minus operated',
+      chip_readonly: 'View only',
+      chip_change_scope: 'Change scope',
+      chip_readonly_title: 'Shows the parameters this evaluation was run with — read only',
       act_unavailable_running: 'Not available while the evaluation is still running',
       util_dokumente: 'Documents',
       util_support: 'Support',
@@ -4573,6 +4601,20 @@
       fa_mask_applied_all: 'Filter geleert — alle Ausfälle werden angezeigt',
       fa_mask_reset_done: 'Filter zurückgesetzt',
       fa_mask_no_match: 'Keine Ausfälle in diesem Zeitraum.',
+      rpt_period_label: 'Auswertungszeitraum',
+      rpt_generated_at: 'erstellt',
+      rpt_note_demo_data: 'Die Zahlen sind Beispieldaten, pro Auswertung skaliert.',
+      toast_eval_queued_scheduled: 'Auswertung gestartet · Zeitplan {freq} gespeichert — siehe Geplante Berichte',
+      sched_pause: 'Pausieren',
+      sched_resume: 'Fortsetzen',
+      sched_edit: 'Bearbeiten',
+      punct_kpi_overall: 'Pünktlichkeit, alle Fahrten',
+      punct_kpi_planned_foot: 'Sollfahrten im Zeitraum',
+      punct_kpi_actual_foot: 'tatsächlich gefahren',
+      punct_kpi_delta_foot: 'Soll minus Ist',
+      chip_readonly: 'Nur Ansicht',
+      chip_change_scope: 'Auswahl ändern',
+      chip_readonly_title: 'Zeigt die Parameter dieser Auswertung — nur Ansicht',
       act_unavailable_running: 'Nicht verfügbar, solange die Auswertung noch läuft',
       util_dokumente: 'Dokumente',
       util_support: 'Support',
@@ -4954,6 +4996,10 @@
     document.getElementById('run-btn').style.display = '';
     document.getElementById('save-schedule-btn').style.display = 'none';
     document.getElementById('schedule-section').style.display = '';
+    // A new evaluation must not inherit the schedule state of the last one edited
+    const schedCb = document.getElementById('schedule-checkbox');
+    if (schedCb) schedCb.checked = false;
+    document.getElementById('schedule-fields').classList.remove('visible');
 
     // Reset RPV
     updateRPVLabel();
@@ -5209,9 +5255,14 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="material-icons" style="animation: spin 1s linear infinite; font-size:16px;">refresh</span> ' + t('btn_starting');
 
+    const scheduled = document.getElementById('schedule-checkbox').checked && isSchedulingAllowed();
+    const freq = (document.getElementById('freq-select') || {}).value || 'monthly';
+    if (scheduled) addScheduleRow(document.getElementById('final-name') ? document.getElementById('final-name').value : '', freq);
     setTimeout(() => {
       showView('reports-list');
-      showToast(t('toast_eval_queued'));
+      showToast(scheduled
+        ? t('toast_eval_queued_scheduled').replace('{freq}', t('freq_' + freq))
+        : t('toast_eval_queued'));
       btn.disabled = false;
       btn.innerHTML = '<span class="material-icons">play_arrow</span> <span>' + t('btn_run_now') + '</span>';
     }, 900);
@@ -5327,6 +5378,78 @@
     if (e.key === 'Escape' && state.openInfoKey) closeInfo();
   });
 
+  // ── Evaluation period + provenance ─────────────────────────────
+  // Rows without data-von fell back to a hardcoded 10.06–23.06.2026, so the list
+  // and the opened report could state two different periods for the same row.
+  const PROTO_TODAY = new Date(2026, 5, 25);   // fixed "today" for the prototype
+
+  function fmtDMY(d) {
+    const p2 = n => String(n).padStart(2, '0');
+    return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.${d.getFullYear()}`;
+  }
+
+  function periodFromKey(key) {
+    const end = new Date(PROTO_TODAY), start = new Date(PROTO_TODAY);
+    switch (key) {
+      case 'last_7_days':  start.setDate(end.getDate() - 6); break;
+      case 'last_30_days': start.setDate(end.getDate() - 29); break;
+      case 'this_month':   start.setDate(1); break;
+      case 'last_month':
+        start.setMonth(start.getMonth() - 1, 1);
+        end.setMonth(end.getMonth(), 0);
+        break;
+      case 'this_year':    start.setMonth(0, 1); break;
+      case 'last_year':
+        start.setFullYear(start.getFullYear() - 1, 0, 1);
+        end.setFullYear(end.getFullYear() - 1, 11, 31);
+        break;
+      default:             start.setDate(end.getDate() - 13);
+    }
+    return { von: fmtDMY(start), bis: fmtDMY(end), days: Math.round((end - start) / 86400000) + 1 };
+  }
+
+  // One resolved answer to "what period is this?", used by list and report alike.
+  function rowPeriod(row) {
+    if (row && row.dataset.von && row.dataset.bis) {
+      const days = (() => {
+        const a = faMaskStamp(row.dataset.von), b = faMaskStamp(row.dataset.bis);
+        if (!a || !b) return 14;
+        const d = x => new Date(Math.floor(x / 100000000), Math.floor((x % 100000000) / 1000000) - 1, Math.floor((x % 1000000) / 10000));
+        return Math.round((d(b) - d(a)) / 86400000) + 1;
+      })();
+      return { von: row.dataset.von, bis: row.dataset.bis, days };
+    }
+    return periodFromKey(row ? row.dataset.period : '');
+  }
+
+  function evalStamp(row) {
+    return row && row.dataset.created ? row.dataset.created : '25.06.2026 22:54:42';
+  }
+
+  function evalHash(row) {
+    const name = (row && row.dataset.name) || '';
+    let h = 0;
+    for (const ch of name) h = (h * 33 + ch.charCodeAt(0)) % 1009;
+    return h;
+  }
+
+  // A small deterministic shift so two different scopes do not report the same
+  // punctuality percentage to the second decimal.
+  function evalPctShift(row) {
+    return 1 + ((evalHash(row) % 31) - 15) / 1000;
+  }
+
+  // Figures are demo data. Deriving a deterministic factor per evaluation at least
+  // stops two different scopes from rendering a byte-identical table.
+  function evalScale(row, period) {
+    const name = (row && row.dataset.name) || '';
+    const scoped = /Kanton|SBB|BLS|Tarifverbund|ZH|BE|PostAuto/i.test(name);
+    const base = Math.min(3, Math.max(0.25, (period.days || 14) / 30));
+    let h = 0;
+    for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
+    return (scoped ? base * 0.35 : base) * (0.92 + (h % 17) / 100);
+  }
+
   // ── Controls that previously had no handler at all ─────────────
   function punctChartSnapshot() {
     showRptApplyToast(t('chart_snapshot_done'));
@@ -5421,6 +5544,63 @@
 
   // In-progress rows: faded is not the same as unavailable. Mark them properly
   // so the control leaves the tab order and states its reason.
+  // The schedule the user just configured never appeared anywhere, so there was
+  // no way to tell whether it had been saved.
+  function addScheduleRow(name, freq) {
+    const tbody = document.getElementById('sched-tbody');
+    if (!tbody) return;
+    const next = periodFromKey('last_7_days');
+    const tr = document.createElement('tr');
+    tr.dataset.name = name || t('type_' + state.selectedType);
+    tr.dataset.freq = freq;
+    tr.dataset.status = 'active';
+    tr.dataset.new = 'true';
+    tr.innerHTML = `
+      <td class="report-name">${tr.dataset.name}</td>
+      <td><span class="badge badge-blue">${t('freq_' + freq)}</span></td>
+      <td class="text-muted">${next.bis}</td>
+      <td class="text-muted">—</td>
+      <td><span class="badge badge-green"><span class="material-icons" style="font-size:11px" aria-hidden="true">circle</span><span data-i18n="status_active">${t('status_active')}</span></span></td>
+      <td><div class="action-icons">
+        <button class="action-icon" title="${t('sched_pause')}" aria-label="${t('sched_pause')}" onclick="togglePause(this)"><span class="material-icons" aria-hidden="true">pause_circle</span></button>
+        <button class="action-icon" title="${t('sched_edit')}" aria-label="${t('sched_edit')}" onclick="editSchedule(this)"><span class="material-icons" aria-hidden="true">edit</span></button>
+        <button class="action-icon danger" title="${t('cf_delete')}" aria-label="${t('cf_delete')}" onclick="confirmDelete(this)"><span class="material-icons" aria-hidden="true">delete</span></button>
+      </div></td>`;
+    const empty = document.getElementById('sched-empty-row');
+    tbody.insertBefore(tr, empty ? empty.nextSibling : tbody.firstChild);
+    refreshSchedEmptyRow();
+  }
+
+  // The chips carry a caret and a pointer cursor, so they read as the report's
+  // filters — but the list is read-only and there is no Apply anywhere.
+  // Say so, and offer the route that does change the scope.
+  function annotateParamChips() {
+    document.querySelectorAll('.rpt-chip-dropdown').forEach(dd => {
+      if (dd.querySelector('.rpt-chip-dd-foot')) return;
+      const foot = document.createElement('div');
+      foot.className = 'rpt-chip-dd-foot';
+      foot.innerHTML = `<span class="material-icons" aria-hidden="true">visibility</span>
+        <span>${t('chip_readonly')}</span>
+        <button class="rpt-chip-dd-link" onclick="showView('type-selection')">${t('chip_change_scope')}</button>`;
+      dd.appendChild(foot);
+    });
+    document.querySelectorAll('.rpt-param-chip--partial').forEach(c => {
+      c.setAttribute('title', t('chip_readonly_title'));
+      c.setAttribute('role', 'button');
+      if (!c.hasAttribute('tabindex')) c.setAttribute('tabindex', '0');
+      c.setAttribute('aria-expanded', c.classList.contains('open') ? 'true' : 'false');
+    });
+  }
+
+  function normalisePausedSchedules() {
+    document.querySelectorAll('#sched-tbody tr[data-status="paused"]').forEach(row => {
+      const cell = row.querySelectorAll('td')[2];
+      if (!cell || cell.querySelector('.text-muted')) return;
+      row.dataset.nextRun = cell.textContent.trim();
+      cell.innerHTML = `<span class="text-muted">— ${t('status_paused')}</span>`;
+    });
+  }
+
   function markUnavailableActions() {
     document.querySelectorAll('#view-reports-list tr[data-status="in_progress"] .action-icon, #view-reports-list tr[data-status="running"] .action-icon')
       .forEach(b => { b.disabled = true; b.setAttribute('aria-disabled', 'true'); b.title = t('act_unavailable_running'); });
@@ -5496,10 +5676,57 @@
 
     const iconSpan = link.querySelector('.material-icons');
     if (iconSpan) iconSpan.textContent = isPaused ? 'pause_circle' : 'play_circle';
-    link.title = isPaused ? 'Pause' : 'Resume';
+    link.title = isPaused ? t('sched_pause') : t('sched_resume');
+    link.setAttribute('aria-label', link.title);
+
+    // Status "Paused" next to a concrete Next Run date is two cells contradicting
+    // each other about whether the report will produce anything.
+    const nextCell = row.querySelectorAll('td')[2];
+    if (nextCell) {
+      if (newStatus === 'paused') {
+        row.dataset.nextRun = row.dataset.nextRun || nextCell.textContent.trim();
+        nextCell.innerHTML = `<span class="text-muted">— ${t('status_paused')}</span>`;
+      } else {
+        nextCell.textContent = row.dataset.nextRun || nextCell.textContent.trim();
+      }
+    }
 
     showToast(t(newStatus === 'paused' ? 'toast_sched_paused' : 'toast_sched_resumed'));
     if (typeof filterScheduled === 'function') filterScheduled();
+  }
+
+  // Opening a saved schedule used to show a blank default config under that
+  // schedule's name — the form's contents were not the schedule's contents.
+  const SCHED_CONFIG = {
+    'Fahrtausfälle DPM – Wöchentlich':      { period: 'last_7',    freq: 'weekly',  tu: [],        cantons: [],     lines: [] },
+    'Pünktlichkeit – Kanton ZH, Monatlich': { period: 'last_month',freq: 'monthly', tu: [],        cantons: ['ZH'], lines: [] },
+    'Rohdaten Export – Täglich':            { period: 'last_7',    freq: 'daily',   tu: [],        cantons: [],     lines: [] },
+    'Linienanalyse – SBB Monatlich':        { period: 'last_month',freq: 'monthly', tu: ['SBB'],   cantons: [],     lines: [] },
+    'Datenqualitätsindex – Wöchentlich BE/FR': { period: 'last_7', freq: 'weekly',  tu: [],        cantons: ['BE','FR'], lines: [] },
+    'Jahresbericht Pünktlichkeit 2025':     { period: 'last_year', freq: 'yearly',  tu: [],        cantons: [],     lines: [] },
+  };
+
+  function hydrateWizardFromSchedule(cfg) {
+    if (!cfg) return;
+    state.selectedPeriod = cfg.period || 'cur_month';
+    document.querySelectorAll('.btn-preset').forEach(b => b.classList.remove('active'));
+    const presetBtn = document.querySelector(`.btn-preset[data-preset="${state.selectedPeriod}"]`);
+    if (presetBtn) presetBtn.classList.add('active');
+    document.getElementById('custom-dates').classList.remove('visible');
+
+    state.selectedTU = (cfg.tu || []).slice();
+    state.selectedCantons = (cfg.cantons || []).slice();
+    state.selectedLines = (cfg.lines || []).slice();
+    updateTULabel(); updateCantonLabel(); updateLinesLabel();
+    renderCantonOptions(''); renderLinesOptions();
+
+    const freq = document.getElementById('freq-select');
+    if (freq && cfg.freq) { freq.value = cfg.freq; updateFreqOptions(); }
+    const cb = document.getElementById('schedule-checkbox');
+    if (cb) { cb.checked = true; document.getElementById('schedule-fields').classList.add('visible'); }
+    updateCascade();
+    updateScheduleAvailability();
+    updateAutoName();
   }
 
   function editSchedule(link) {
@@ -5517,7 +5744,14 @@
     document.getElementById('wizard-scheduled-badge').style.display = '';
     document.getElementById('run-btn').style.display = 'none';
     document.getElementById('save-schedule-btn').style.display = '';
-    document.getElementById('schedule-section').style.display = 'none';
+    // The frequency is exactly what a user opens Edit to change — keep it visible.
+    document.getElementById('schedule-section').style.display = '';
+    state.nameManuallyEdited = true;
+    const nameInput = document.getElementById('auto-name-preview');
+    if (nameInput) nameInput.value = name;
+    const finalName = document.getElementById('final-name');
+    if (finalName) finalName.value = name;
+    hydrateWizardFromSchedule(SCHED_CONFIG[name] || { period: 'last_month', freq: row.dataset.freq || 'monthly' });
     updateScheduleAvailability();
   }
 
@@ -6715,8 +6949,10 @@
   function showConnectionReport(btn) {
     const row = btn.closest('tr');
     const name = row.dataset.name || t('type_connection');
-    const von = row.dataset.von || '10.06.2026';
-    const bis = row.dataset.bis || '23.06.2026';
+    const period = rowPeriod(row);
+    const von = period.von, bis = period.bis;
+    const subEl = document.getElementById('rpt-eval-sub');
+    if (subEl) subEl.textContent = `${t('rpt_period_label')} ${von} – ${bis} · ${t('rpt_generated_at')} ${evalStamp(row)}`;
     const vonEl = document.getElementById('rpt-p-von');
     const bisEl = document.getElementById('rpt-p-bis');
     if (vonEl) vonEl.textContent = von;
@@ -6745,7 +6981,12 @@
     const isOpen = dd.classList.contains('open');
     document.querySelectorAll('.rpt-chip-dropdown.open').forEach(d => d.classList.remove('open'));
     document.querySelectorAll('.rpt-param-chip--partial.open').forEach(c => c.classList.remove('open'));
-    if (!isOpen) { dd.classList.add('open'); chipEl.classList.add('open'); }
+    document.querySelectorAll('.rpt-param-chip--partial').forEach(c => c.setAttribute('aria-expanded', 'false'));
+    if (!isOpen) {
+      dd.classList.add('open');
+      chipEl.classList.add('open');
+      chipEl.setAttribute('aria-expanded', 'true');
+    }
   }
   document.addEventListener('click', e => {
     if (!e.target.closest('.rpt-chip-wrap')) {
@@ -6819,6 +7060,8 @@
 
     applyLang();
     markUnavailableActions();
+    normalisePausedSchedules();
+    annotateParamChips();
 
     const hashParts = location.hash.slice(1).split('/');
     if (hashParts[0] === 'mask' && hashParts[1]) {
@@ -7424,8 +7667,10 @@
   function showPunctReport(btn) {
     const row = btn.closest('tr');
     const name = row.dataset.name || t('type_punctuality');
-    const von = row.dataset.von || '10.06.2026';
-    const bis = row.dataset.bis || '23.06.2026';
+    const period = rowPeriod(row);
+    const von = period.von, bis = period.bis;
+    _punctScale = evalScale(row, period);
+    _punctPctShift = evalPctShift(row);
     const nameEl = document.getElementById('punct-eval-name');
     const subEl  = document.getElementById('punct-eval-sub');
     const vonEl  = document.getElementById('punct-p-von');
@@ -7433,7 +7678,7 @@
     const rawVon = document.getElementById('punct-raw-p-von');
     const rawBis = document.getElementById('punct-raw-p-bis');
     if (nameEl) nameEl.textContent = name;
-    if (subEl)  subEl.textContent  = `Auswertung: ${t('type_punctuality')} (25.06.2026 22:54:42)`;
+    if (subEl)  subEl.textContent  = `${t('rpt_period_label')} ${von} – ${bis} · ${t('rpt_generated_at')} ${evalStamp(row)}`;
     if (vonEl)  vonEl.textContent  = von;
     if (bisEl)  bisEl.textContent  = bis;
     if (rawVon) rawVon.textContent = von;
@@ -7455,6 +7700,9 @@
   // Dimensions we can derive from the loaded data vs. ones the prototype buckets
   // for illustration only. The note under the table says which is which.
   const PUNCT_REAL_DIMS = ['linienbuendel','linie','tu_konz','tu_fahr','vm'];
+  let _punctScale = 1, _punctPctShift = 1;
+  const scl = n => Math.round((n || 0) * _punctScale);
+  const sclPunkt = (punkt, ist) => Math.min(scl(ist), Math.round(scl(punkt) * _punctPctShift));
 
   const PUNCT_MONTHS = ['Januar','Februar','März','April','Mai','Juni'];
   const PUNCT_DAYS   = ['Mo','Di','Mi','Do','Fr','Sa','So'];
@@ -7470,7 +7718,11 @@
         const n = out.length;
         const place = (r.label.match(/\d+\s+([^\-–]+)/) || [])[1];
         out.push({
-          soll: r.soll, ist: r.ist, punkt: r.punkt, delta: r.delta,
+          _soll: r.soll, _ist: r.ist, _punkt: r.punkt,
+          get soll() { return scl(this._soll); },
+          get ist()  { return scl(this._ist);  },
+          get punkt(){ return sclPunkt(this._punkt, this._ist);},
+          get delta(){ return scl(this._soll) - scl(this._ist); },
           bundleIdx: bi,
           linienbuendel: b.label,
           linie: r.collective ? `${b.label} (${t('punct_collective')})` : r.label,
@@ -7519,11 +7771,40 @@
     }));
   }
 
+  const PUNCT_THRESHOLD = 90;
+
+  // The punctuality report — the one whose whole point is a percentage against a
+  // threshold — opened straight into a table with no headline figure at all.
+  function renderPunctKpi(g) {
+    const el = document.getElementById('punct-kpi-grid');
+    if (!el) return;
+    const good = g.wert !== null && g.wert >= PUNCT_THRESHOLD;
+    const pctTxt = g.wert === null ? 'n/a' : g.wert.toFixed(2).replace('.', ',') + '%';
+    const cards = [
+      { label: t('punct_kpi_overall'), value: pctTxt, cls: g.wert === null ? '' : good ? 'rpt-kpi-good' : 'rpt-kpi-bad',
+        foot: `<span class="material-icons" style="color:${good ? '#2E7D32' : '#C62828'};font-size:13px" aria-hidden="true">${good ? 'check_circle' : 'warning'}</span>
+               <span>${t('rpt_threshold_label')}: ${PUNCT_THRESHOLD}%</span>` },
+      { label: t('punct_col_soll'),  value: fmtN(g.soll),  foot: `<span>${t('punct_kpi_planned_foot')}</span>` },
+      { label: t('punct_col_ist'),   value: fmtN(g.ist),   foot: `<span>${t('punct_kpi_actual_foot')}</span>` },
+      { label: t('punct_col_delta'), value: fmtN(g.delta), foot: `<span>${t('punct_kpi_delta_foot')}</span>` },
+    ];
+    el.innerHTML = cards.map(c => `<div class="rpt-kpi-card">
+      <div class="rpt-kpi-label">${c.label}</div>
+      <div class="rpt-kpi-value ${c.cls || ''}">${c.value}</div>
+      <div class="rpt-kpi-threshold">${c.foot}</div>
+    </div>`).join('');
+  }
+
   function renderPunctReport() {
     const tbody = document.getElementById('punct-tbody');
     if (!tbody) return;
     const dims = punctDims();
-    const g = PUNCT_DATA.gesamt;
+    const gRaw = PUNCT_DATA.gesamt;
+    const g = (() => {
+      const soll = scl(gRaw.soll), ist = scl(gRaw.ist), punkt = sclPunkt(gRaw.punkt, gRaw.ist);
+      return { soll, ist, punkt, delta: soll - ist, wert: ist > 0 ? (punkt / ist) * 100 : null };
+    })();
+    renderPunctKpi(g);
     const pct = v => v === null || v === undefined
       ? '<span class="punct-wert-na">n/a</span>'
       : `<span class="punct-wert-pct">${v.toFixed(2).replace('.', ',')}%</span>`;
@@ -7581,7 +7862,7 @@
     const note = document.getElementById('punct-table-note');
     if (note) {
       const demo = dims.filter(d => !PUNCT_REAL_DIMS.includes(d));
-      const parts = [ t('punct_note_gesamt').replace('{n}', shown) ];
+      const parts = [ t('punct_note_gesamt').replace('{n}', shown), t('rpt_note_demo_data') ];
       if (demo.length) parts.push(t('punct_note_demo').replace('{dims}', demo.map(d => t(PUNCT_DIM_LABELS[d] || d)).join(', ')));
       note.innerHTML = `<span class="material-icons" aria-hidden="true">info</span><span>${parts.join(' ')}</span>`;
     }
@@ -7775,9 +8056,11 @@
   function showFAReport(btn) {
     const row=btn.closest('tr');
     const name=row.dataset.name||'Fahrtausfälle DPM';
-    const von=row.dataset.von||'10.06.2026';
-    const bis=row.dataset.bis||'23.06.2026';
+    const faPeriod = rowPeriod(row);
+    const von = faPeriod.von, bis = faPeriod.bis;
     document.getElementById('fa-eval-name').textContent=name;
+    const faSub = document.getElementById('fa-eval-sub');
+    if (faSub) faSub.textContent = `${t('rpt_period_label')} ${von} – ${bis} · ${t('rpt_generated_at')} ${evalStamp(row)}`;
     document.getElementById('fa-p-von').textContent=von;
     document.getElementById('fa-p-bis').textContent=bis;
     renderFAKpi();
