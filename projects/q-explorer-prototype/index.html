@@ -1125,6 +1125,9 @@
   #view-reports-list tr[data-status="in_progress"] .action-icon:hover,
   #view-reports-list tr[data-status="running"] .action-icon:hover { background: transparent; color: #9CA3AF; }
 
+  .fail-reason { font-size: 11.5px; color: #B91C1C; margin-top: 3px; }
+  .action-retry { color: #2563EB; }
+  .action-retry:hover { background: #EFF6FF; color: #1D4ED8; }
   .table-empty-state {
     text-align: center;
     padding: 48px 20px;
@@ -1345,6 +1348,9 @@
     cursor: pointer; margin-top: 8px; transition: background 0.15s;
   }
   .btn-login:hover { background: #253563; }
+  .input-error { border-color: #DC2626 !important; box-shadow: 0 0 0 3px rgba(220,38,38,0.08) !important; }
+  .login-error { display: none; margin-top: 12px; font-size: 13px; color: #B91C1C; text-align: center; }
+  .login-error.visible { display: block; }
   .login-forgot { display: block; text-align: center; margin-top: 16px; font-size: 13px; color: #2563EB; cursor: pointer; text-decoration: none; }
   .login-forgot:hover { text-decoration: underline; }
 
@@ -2007,7 +2013,8 @@
       <label for="login-password">Passwort</label>
       <input type="password" id="login-password" placeholder="••••••••">
     </div>
-    <button class="btn-login" onclick="doLogin()">Anmelden</button>
+    <button class="btn-login" onclick="doLogin(true)">Anmelden</button>
+    <div class="login-error" id="login-error"></div>
     <a class="login-forgot" href="#" onclick="return false">Passwort vergessen?</a>
   </div>
   <div class="login-utility-bar">
@@ -2206,13 +2213,15 @@
           <div class="date-inputs" id="custom-dates">
             <div class="form-group">
               <label class="form-label" data-i18n="label_from">From</label>
-              <input type="date" class="form-input" id="date-from" oninput="updateAutoName()">
+              <input type="date" class="form-input" id="date-from" oninput="validateCustomRange();updateAutoName()">
             </div>
             <div class="form-group">
               <label class="form-label" data-i18n="label_to">To</label>
-              <input type="date" class="form-input" id="date-to" oninput="updateAutoName()">
+              <input type="date" class="form-input" id="date-to" oninput="validateCustomRange();updateAutoName()">
             </div>
           </div>
+
+          <div class="sched-note" id="date-range-error" style="margin-top:0"></div>
 
           <div class="form-group name-preview-row">
             <label class="form-label" data-i18n="label_eval_name">Evaluation Name</label>
@@ -2477,12 +2486,7 @@
               <div id="freq-options-monthly" class="freq-option-block">
                 <label class="form-label"><span data-i18n="schedule_run_on">Run on day</span></label>
                 <div class="day-of-month-row">
-                  <select class="form-input form-input-narrow" id="month-day-select">
-                    <option value="1">1st</option><option value="2">2nd</option><option value="3" selected>3rd</option>
-                    <option value="4">4th</option><option value="5">5th</option><option value="7">7th</option>
-                    <option value="10">10th</option><option value="14">14th</option><option value="15">15th</option>
-                    <option value="20">20th</option><option value="28">28th</option>
-                  </select>
+                  <select class="form-input form-input-narrow" id="month-day-select"></select>
                   <span class="freq-of-month" data-i18n="of_month">of the month</span>
                 </div>
                 <div class="freq-hint"><span class="material-icons" style="font-size:14px;vertical-align:middle;">info</span> <span data-i18n="hint_monthly">3rd of the month = previous month's data available (2-day delay)</span></div>
@@ -2491,19 +2495,8 @@
               <div id="freq-options-yearly" class="freq-option-block" style="display:none;">
                 <label class="form-label"><span data-i18n="schedule_run_on">Run on</span></label>
                 <div class="day-of-month-row">
-                  <select class="form-input form-input-narrow" id="yearly-month-select">
-                    <option value="1" selected>January</option><option value="2">February</option>
-                    <option value="3">March</option><option value="4">April</option>
-                    <option value="5">May</option><option value="6">June</option>
-                    <option value="7">July</option><option value="8">August</option>
-                    <option value="9">September</option><option value="10">October</option>
-                    <option value="11">November</option><option value="12">December</option>
-                  </select>
-                  <select class="form-input form-input-narrow" id="yearly-day-select">
-                    <option value="1">1st</option><option value="2">2nd</option><option value="3" selected>3rd</option>
-                    <option value="4">4th</option><option value="5">5th</option><option value="7">7th</option>
-                    <option value="10">10th</option>
-                  </select>
+                  <select class="form-input form-input-narrow" id="yearly-month-select"></select>
+                  <select class="form-input form-input-narrow" id="yearly-day-select"></select>
                 </div>
                 <div class="freq-hint"><span class="material-icons" style="font-size:14px;vertical-align:middle;">info</span> <span data-i18n="hint_yearly">January 3rd = previous year's data available (2-day delay)</span></div>
               </div>
@@ -3260,11 +3253,12 @@
           <div style="font-size:13px;color:#9E9E9E;margin-top:2px" id="rpt-eval-sub"></div>
         </div>
       </div>
-      <div>
+      <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-secondary" onclick="showRptApplyToast(t('rpt_csv_preparing'))">
           <span class="material-icons">download</span>
           <span data-i18n="export_csv">CSV Export</span>
         </button>
+          <button class="btn btn-secondary" onclick="showView('reports-list')" data-i18n="rpt_close">schließen</button>
       </div>
     </div>
 
@@ -3276,21 +3270,21 @@
       <div class="rpt-chip-wrap">
         <span class="rpt-param-chip rpt-param-chip--partial" onclick="toggleChipDd(this)"><span class="material-icons">business</span>15 TU's<span class="material-icons rpt-chip-caret">expand_more</span></span>
         <div class="rpt-chip-dropdown">
-          <div class="rpt-chip-dd-header">Transport companies</div>
+          <div class="rpt-chip-dd-header" data-i18n="chip_dd_tu">Transportunternehmen</div>
           <div class="rpt-chip-dd-item">AAGL</div><div class="rpt-chip-dd-item">AAGR</div><div class="rpt-chip-dd-item">AB</div><div class="rpt-chip-dd-item">ABI</div><div class="rpt-chip-dd-item">AFA</div><div class="rpt-chip-dd-item">AMSA</div><div class="rpt-chip-dd-item">ARAG</div><div class="rpt-chip-dd-item">ARL</div><div class="rpt-chip-dd-item">AVA</div><div class="rpt-chip-dd-item">AVJ</div><div class="rpt-chip-dd-item">BBA</div><div class="rpt-chip-dd-item">BLAG</div><div class="rpt-chip-dd-item">BLS</div><div class="rpt-chip-dd-item">PostAuto AG</div><div class="rpt-chip-dd-item">RhB</div>
         </div>
       </div>
       <div class="rpt-chip-wrap">
         <span class="rpt-param-chip rpt-param-chip--partial" onclick="toggleChipDd(this)"><span class="material-icons">map</span>8 Kantone<span class="material-icons rpt-chip-caret">expand_more</span></span>
         <div class="rpt-chip-dropdown">
-          <div class="rpt-chip-dd-header">Kantone</div>
+          <div class="rpt-chip-dd-header" data-i18n="chip_dd_kantone">Kantone</div>
           <div class="rpt-chip-dd-item">Aargau</div><div class="rpt-chip-dd-item">Basel-Landschaft</div><div class="rpt-chip-dd-item">Basel-Stadt</div><div class="rpt-chip-dd-item">Bern</div><div class="rpt-chip-dd-item">Luzern</div><div class="rpt-chip-dd-item">St. Gallen</div><div class="rpt-chip-dd-item">Zürich</div><div class="rpt-chip-dd-item">Zug</div>
         </div>
       </div>
       <div class="rpt-chip-wrap">
         <span class="rpt-param-chip rpt-param-chip--partial" onclick="toggleChipDd(this)"><span class="material-icons">route</span>42 Linien<span class="material-icons rpt-chip-caret">expand_more</span></span>
         <div class="rpt-chip-dropdown">
-          <div class="rpt-chip-dd-header">Linien</div>
+          <div class="rpt-chip-dd-header" data-i18n="chip_dd_linien">Linien</div>
           <div class="rpt-chip-dd-item">72 Augst – Artisdorf – Liestal</div><div class="rpt-chip-dd-item">81 Liestal – Augst – Basel</div><div class="rpt-chip-dd-item">40 Littau – Wankdorf</div><div class="rpt-chip-dd-item">S21/S22 Appenzell – St. Gallen</div><div class="rpt-chip-dd-item">S23 Gossau – Wasserauen</div><div class="rpt-chip-dd-item">S15 Frauenfeld – Wil SG</div><div class="rpt-chip-dd-item">131 Biasca – Acquarossa – Olivone</div><div class="rpt-chip-dd-item">132 Biasca – Ludiano – Malvaglia</div><div class="rpt-chip-dd-item">133 Acquarossa – Leontica</div><div class="rpt-chip-dd-item">140 Disentis – Lucomagno – Biasca</div><div class="rpt-chip-dd-item">AMSA Hauptlinie Mendrisiotto</div><div class="rpt-chip-dd-item">ARAG Hauptlinie Aargau Ost</div><div class="rpt-chip-dd-item">ARL Linie Appenzell AR</div><div class="rpt-chip-dd-item" style="color:#9E9E9E;font-style:italic">+ 29 weitere Linien</div>
         </div>
       </div>
@@ -3433,6 +3427,7 @@
             <span class="page-bc-current" data-i18n="rpt_action_raw">Raw Data</span>
           </nav>
           <div class="page-title" id="rpt-raw-title" data-i18n="rpt_raw_title">Raw Data</div>
+          <div style="margin-top:8px"><button class="btn btn-secondary" onclick="showView('report-connection')" data-i18n="rpt_close">schließen</button></div>
         </div>
       </div>
     </div>
@@ -3500,11 +3495,12 @@
           <div style="font-size:13px;color:#9E9E9E;margin-top:2px" id="fa-eval-sub"></div>
         </div>
       </div>
-      <div>
+      <div style="display:flex;gap:8px;align-items:center">
         <button class="btn btn-secondary" onclick="showRptApplyToast(t('rpt_csv_preparing'))">
           <span class="material-icons" aria-hidden="true">download</span>
           <span data-i18n="export_csv">CSV Export</span>
         </button>
+          <button class="btn btn-secondary" onclick="showView('reports-list')" data-i18n="rpt_close">schließen</button>
       </div>
     </div>
 
@@ -3516,7 +3512,7 @@
       <div class="rpt-chip-wrap">
         <span class="rpt-param-chip rpt-param-chip--partial" onclick="toggleChipDd(this)"><span class="material-icons">business</span>15 TU's<span class="material-icons rpt-chip-caret">expand_more</span></span>
         <div class="rpt-chip-dropdown">
-          <div class="rpt-chip-dd-header">Transport companies</div>
+          <div class="rpt-chip-dd-header" data-i18n="chip_dd_tu">Transportunternehmen</div>
           <div class="rpt-chip-dd-item">AAGL</div><div class="rpt-chip-dd-item">AAGR</div><div class="rpt-chip-dd-item">AAGS</div><div class="rpt-chip-dd-item">AAGU</div><div class="rpt-chip-dd-item">AB</div><div class="rpt-chip-dd-item">ABI</div><div class="rpt-chip-dd-item">AVA</div><div class="rpt-chip-dd-item">AVJ</div><div class="rpt-chip-dd-item">AWA</div><div class="rpt-chip-dd-item">BBA</div><div class="rpt-chip-dd-item">BLAG</div><div class="rpt-chip-dd-item">BLS</div><div class="rpt-chip-dd-item">PostAuto AG</div><div class="rpt-chip-dd-item">RhB</div><div class="rpt-chip-dd-item">SBB</div>
         </div>
       </div>
@@ -3713,6 +3709,7 @@
             <span class="page-bc-current" data-i18n="fa_mask_title">Ausfallmaske</span>
           </nav>
           <div class="page-title" id="fa-mask-title" data-i18n="fa_mask_title">Ausfallmaske</div>
+          <div style="margin-top:8px"><button class="btn btn-secondary" onclick="showView('report-fa')" data-i18n="rpt_close">schließen</button></div>
         </div>
       </div>
     </div>
@@ -3800,14 +3797,14 @@
       <div class="rpt-chip-wrap">
         <span class="rpt-param-chip rpt-param-chip--partial" onclick="toggleChipDd(this)"><span class="material-icons">business</span>37 TU's<span class="material-icons rpt-chip-caret">expand_more</span></span>
         <div class="rpt-chip-dropdown">
-          <div class="rpt-chip-dd-header">Transport companies</div>
+          <div class="rpt-chip-dd-header" data-i18n="chip_dd_tu">Transportunternehmen</div>
           <div class="rpt-chip-dd-item">AAGL</div><div class="rpt-chip-dd-item">AAGR</div><div class="rpt-chip-dd-item">AAGS</div><div class="rpt-chip-dd-item">AAGU</div><div class="rpt-chip-dd-item">AB</div><div class="rpt-chip-dd-item">ABI</div><div class="rpt-chip-dd-item">AFA</div><div class="rpt-chip-dd-item">AMSA</div><div class="rpt-chip-dd-item">ARAG</div><div class="rpt-chip-dd-item">ARL</div><div class="rpt-chip-dd-item">AS</div><div class="rpt-chip-dd-item">asm</div><div class="rpt-chip-dd-item">AVA</div><div class="rpt-chip-dd-item">AVJ</div><div class="rpt-chip-dd-item">AWA</div><div class="rpt-chip-dd-item">BBA</div><div class="rpt-chip-dd-item">BLAG</div><div class="rpt-chip-dd-item">BLS</div><div class="rpt-chip-dd-item">BLT</div><div class="rpt-chip-dd-item">BLWE</div><div class="rpt-chip-dd-item">BOB</div><div class="rpt-chip-dd-item">BOGG</div><div class="rpt-chip-dd-item">BOS</div><div class="rpt-chip-dd-item">BRER</div><div class="rpt-chip-dd-item">BuS</div><div class="rpt-chip-dd-item">BVB</div><div class="rpt-chip-dd-item">BWS</div><div class="rpt-chip-dd-item">CJ</div><div class="rpt-chip-dd-item">FART</div><div class="rpt-chip-dd-item">FB</div><div class="rpt-chip-dd-item">FLP</div><div class="rpt-chip-dd-item">LEB</div><div class="rpt-chip-dd-item">LLB</div><div class="rpt-chip-dd-item">MBC</div><div class="rpt-chip-dd-item">MGB</div><div class="rpt-chip-dd-item">MOB</div><div class="rpt-chip-dd-item">MVR</div>
         </div>
       </div>
       <div class="rpt-chip-wrap">
         <span class="rpt-param-chip rpt-param-chip--partial" onclick="toggleChipDd(this)"><span class="material-icons">map</span>17 Kantone<span class="material-icons rpt-chip-caret">expand_more</span></span>
         <div class="rpt-chip-dropdown">
-          <div class="rpt-chip-dd-header">Kantone</div>
+          <div class="rpt-chip-dd-header" data-i18n="chip_dd_kantone">Kantone</div>
           <div class="rpt-chip-dd-item">Aargau</div><div class="rpt-chip-dd-item">Appenzell Ausserrhoden</div><div class="rpt-chip-dd-item">Appenzell Innerrhoden</div><div class="rpt-chip-dd-item">Ausland</div><div class="rpt-chip-dd-item">Basel-Landschaft</div><div class="rpt-chip-dd-item">Basel-Stadt</div><div class="rpt-chip-dd-item">Bern</div><div class="rpt-chip-dd-item">Freiburg</div><div class="rpt-chip-dd-item">Genf</div><div class="rpt-chip-dd-item">Glarus</div><div class="rpt-chip-dd-item">Graubünden</div><div class="rpt-chip-dd-item">Jura</div><div class="rpt-chip-dd-item">Luzern</div><div class="rpt-chip-dd-item">Neuenburg</div><div class="rpt-chip-dd-item">Nidwalden</div><div class="rpt-chip-dd-item">Obwalden</div><div class="rpt-chip-dd-item">Schaffhausen</div>
         </div>
       </div>
@@ -3820,39 +3817,39 @@
       <select class="rpt-select" id="punct-auf-1" onchange="punctCascade()" style="min-width:145px">
         <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
         <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
-        <option value="linienbuendel" selected>Linienbündel</option>
+        <option value="linienbuendel" selected data-i18n="fa_opt_lb">Linienbündel</option>
         <option value="linie" data-i18n="fa_opt_linie">Linie</option>
-        <option value="haltestelle">Haltestelle</option>
-        <option value="monat">Monat</option>
+        <option value="haltestelle" data-i18n="punct_dim_haltestelle">Haltestelle</option>
+        <option value="monat" data-i18n="punct_dim_monat">Monat</option>
         <option value="kw" data-i18n="rpt_opt_kw">KW</option>
-        <option value="tu_konz">TU konzessioniert</option>
-        <option value="tu_fahr">TU fahrend</option>
+        <option value="tu_konz" data-i18n="punct_dim_tu_konz">TU konzessioniert</option>
+        <option value="tu_fahr" data-i18n="punct_dim_tu_fahr">TU fahrend</option>
         <option value="vm" data-i18n="fa_opt_vm">Verkehrsmittel</option>
         <option value="region" data-i18n="fa_opt_region">Region</option>
       </select>
       <select class="rpt-select" id="punct-auf-2" onchange="punctCascade()" style="min-width:145px">
         <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
         <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
-        <option value="linienbuendel">Linienbündel</option>
+        <option value="linienbuendel" data-i18n="fa_opt_lb">Linienbündel</option>
         <option value="linie" selected data-i18n="fa_opt_linie">Linie</option>
-        <option value="haltestelle">Haltestelle</option>
-        <option value="monat">Monat</option>
+        <option value="haltestelle" data-i18n="punct_dim_haltestelle">Haltestelle</option>
+        <option value="monat" data-i18n="punct_dim_monat">Monat</option>
         <option value="kw" data-i18n="rpt_opt_kw">KW</option>
-        <option value="tu_konz">TU konzessioniert</option>
-        <option value="tu_fahr">TU fahrend</option>
+        <option value="tu_konz" data-i18n="punct_dim_tu_konz">TU konzessioniert</option>
+        <option value="tu_fahr" data-i18n="punct_dim_tu_fahr">TU fahrend</option>
         <option value="vm" data-i18n="fa_opt_vm">Verkehrsmittel</option>
         <option value="region" data-i18n="fa_opt_region">Region</option>
       </select>
       <select class="rpt-select" id="punct-auf-3" onchange="punctCascade()" style="min-width:145px">
         <option value="" selected data-i18n="fa_opt_none">keine Auswahl</option>
         <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
-        <option value="linienbuendel">Linienbündel</option>
+        <option value="linienbuendel" data-i18n="fa_opt_lb">Linienbündel</option>
         <option value="linie" data-i18n="fa_opt_linie">Linie</option>
-        <option value="haltestelle">Haltestelle</option>
-        <option value="monat">Monat</option>
+        <option value="haltestelle" data-i18n="punct_dim_haltestelle">Haltestelle</option>
+        <option value="monat" data-i18n="punct_dim_monat">Monat</option>
         <option value="kw" data-i18n="rpt_opt_kw">KW</option>
-        <option value="tu_konz">TU konzessioniert</option>
-        <option value="tu_fahr">TU fahrend</option>
+        <option value="tu_konz" data-i18n="punct_dim_tu_konz">TU konzessioniert</option>
+        <option value="tu_fahr" data-i18n="punct_dim_tu_fahr">TU fahrend</option>
         <option value="vm" data-i18n="fa_opt_vm">Verkehrsmittel</option>
         <option value="region" data-i18n="fa_opt_region">Region</option>
       </select>
@@ -3969,10 +3966,10 @@
           <tr class="punct-raw-search">
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="0" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="1" oninput="punctRawFilterChanged()"></th>
-            <th><select class="punct-raw-filter" data-col="2" onchange="punctRawFilterChanged()"><option>[Alle]</option><option>ja</option><option>nein</option></select></th>
+            <th><select class="punct-raw-filter" data-col="2" onchange="punctRawFilterChanged()"><option data-i18n="filter_all_bracket">[Alle]</option><option>ja</option><option>nein</option></select></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="3" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="4" oninput="punctRawFilterChanged()"></th>
-            <th><select class="punct-raw-filter" data-col="5" onchange="punctRawFilterChanged()"><option>[Alle]</option><option>Hinrichtung</option><option>Rückrichtung</option></select></th>
+            <th><select class="punct-raw-filter" data-col="5" onchange="punctRawFilterChanged()"><option data-i18n="filter_all_bracket">[Alle]</option><option>Hinrichtung</option><option>Rückrichtung</option></select></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="6" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="7" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="8" oninput="punctRawFilterChanged()"></th>
@@ -4001,6 +3998,9 @@
 <!-- ══════════════════════════════════════════════════════════
      INFO MODAL — Impressum / Dokumente / Support / Kontaktdaten
 ══════════════════════════════════════════════════════════ -->
+<div id="a11y-live" aria-live="polite" aria-atomic="true"
+     style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap"></div>
+
 <div class="cf-overlay" id="cf-overlay" onclick="if(event.target===this) cfCancel()">
   <div class="cf-modal" role="dialog" aria-modal="true" aria-labelledby="cf-title">
     <div class="cf-title" id="cf-title"><span class="material-icons">warning</span><span id="cf-title-text"></span></div>
@@ -4030,7 +4030,20 @@
 ══════════════════════════════════════════════════════════ -->
 <script>
   // ── Login ────────────────────────────────────────────────────
-  function doLogin() {
+  function doLogin(validate) {
+    if (validate) {
+      const email = document.getElementById('login-email');
+      const pass  = document.getElementById('login-password');
+      const err   = document.getElementById('login-error');
+      const missing = !((email.value || '').trim()) || !((pass.value || '').trim());
+      if (err) { err.textContent = missing ? t('err_login_required') : ''; err.classList.toggle('visible', missing); }
+      [email, pass].forEach(i => i.classList.toggle('input-error', missing && !(i.value || '').trim()));
+      if (missing) { (!(email.value || '').trim() ? email : pass).focus(); return; }
+    }
+    return doLoginInner();
+  }
+
+  function doLoginInner() {
     document.getElementById('view-login').style.display = 'none';
   }
 
@@ -4262,6 +4275,21 @@
       chip_readonly: 'View only',
       chip_change_scope: 'Change scope',
       chip_readonly_title: 'Shows the parameters this evaluation was run with — read only',
+      chip_dd_tu: 'Transport companies',
+      chip_dd_kantone: 'Cantons',
+      chip_dd_linien: 'Lines',
+      filter_all_bracket: '[All]',
+      err_range_reversed: 'The end date is before the start date — the evaluation cannot run over a negative period.',
+      err_login_required: 'Please enter your e-mail address and password.',
+      acr_dpm: 'DPM — Durchschnittliche Pünktlichkeitsmessung (average punctuality measurement)',
+      acr_rpv: 'RPV — Regionaler Personenverkehr (regional passenger transport)',
+      acr_tu: 'TU — Transportunternehmen (transport company)',
+      acr_dqi: 'DQI — Datenqualitätsindex (data quality index)',
+      act_retry: 'Run again',
+      toast_retry_started: 'Evaluation restarted',
+      fail_reason_source: 'Data source was unreachable',
+      fail_reason_timeout: 'Timed out after 30 minutes',
+      fail_reason_nodata: 'No data delivered for this period',
       act_unavailable_running: 'Not available while the evaluation is still running',
       util_dokumente: 'Documents',
       util_support: 'Support',
@@ -4615,6 +4643,21 @@
       chip_readonly: 'Nur Ansicht',
       chip_change_scope: 'Auswahl ändern',
       chip_readonly_title: 'Zeigt die Parameter dieser Auswertung — nur Ansicht',
+      chip_dd_tu: 'Transportunternehmen',
+      chip_dd_kantone: 'Kantone',
+      chip_dd_linien: 'Linien',
+      filter_all_bracket: '[Alle]',
+      err_range_reversed: 'Das Enddatum liegt vor dem Startdatum — die Auswertung kann keinen negativen Zeitraum verarbeiten.',
+      err_login_required: 'Bitte E-Mail-Adresse und Passwort eingeben.',
+      acr_dpm: 'DPM — Durchschnittliche Pünktlichkeitsmessung',
+      acr_rpv: 'RPV — Regionaler Personenverkehr',
+      acr_tu: 'TU — Transportunternehmen',
+      acr_dqi: 'DQI — Datenqualitätsindex',
+      act_retry: 'Erneut ausführen',
+      toast_retry_started: 'Auswertung neu gestartet',
+      fail_reason_source: 'Datenquelle nicht erreichbar',
+      fail_reason_timeout: 'Zeitüberschreitung nach 30 Minuten',
+      fail_reason_nodata: 'Keine Daten für diesen Zeitraum geliefert',
       act_unavailable_running: 'Nicht verfügbar, solange die Auswertung noch läuft',
       util_dokumente: 'Dokumente',
       util_support: 'Support',
@@ -4904,6 +4947,8 @@
     // Re-render an open info page in the new language
     if (state.openInfoKey) openInfo(state.openInfoKey);
     markUnavailableActions();
+    buildScheduleDateSelects();
+    annotateParamChips();
 
     // Refresh scheduling-eligibility copy
     updateScheduleAvailability();
@@ -4960,6 +5005,11 @@
   const VIEW_HASH = { 'reports-list': '#reports', 'scheduled': '#scheduled' };
   const HASH_VIEW = { '#reports': 'reports-list', '#scheduled': 'scheduled' };
 
+  function announce(msg) {
+    const el = document.getElementById('a11y-live');
+    if (el) { el.textContent = ''; setTimeout(() => { el.textContent = msg; }, 40); }
+  }
+
   function showView(viewName) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
@@ -4970,6 +5020,28 @@
 
     if (viewName === 'wizard') {
       document.querySelector('.nav-item[data-view="type-selection"]').classList.add('active');
+    }
+
+    // Report and detail views have no nav item of their own, so the sidebar showed
+    // no location at all once a report was open.
+    const OWNER_NAV = {
+      'report-connection': 'reports-list', 'report-fa': 'reports-list', 'report-punct': 'reports-list',
+      'ausfallmaske': 'reports-list', 'raw-punct': 'reports-list', 'raw-connection': 'reports-list',
+      'chart-connection': 'reports-list', 'chart-fa': 'reports-list',
+    };
+    if (OWNER_NAV[viewName]) {
+      const owner = document.querySelector(`.nav-item[data-view="${OWNER_NAV[viewName]}"]`);
+      if (owner) owner.classList.add('active');
+    }
+
+    // Moving focus into the new screen — otherwise activating a view swap leaves
+    // focus on <body> and a screen reader announces nothing.
+    const view = document.getElementById('view-' + viewName);
+    const heading = view && view.querySelector('.page-title, .form-section-title, h2');
+    if (heading) {
+      heading.setAttribute('tabindex', '-1');
+      heading.focus({ preventScroll: true });
+      announce(heading.textContent.trim());
     }
 
     if (VIEW_HASH[viewName]) {
@@ -5083,6 +5155,7 @@
       dates.classList.remove('visible');
     }
     updateScheduleAvailability();
+    validateCustomRange();
     updateAutoName();
   }
 
@@ -5136,6 +5209,22 @@
 
     const finalName = document.getElementById('final-name');
     if (finalName) finalName.value = name;
+  }
+
+  // A range running backwards was accepted, printed into the evaluation name and
+  // left Next enabled.
+  function validateCustomRange() {
+    const from = document.getElementById('date-from');
+    const to = document.getElementById('date-to');
+    const err = document.getElementById('date-range-error');
+    const next = document.querySelector('#wizard-step-1 [onclick="goToStep(2)"]');
+    if (!from || !to || !err) return true;
+    const bad = state.selectedPeriod === 'custom' && from.value && to.value && from.value > to.value;
+    err.classList.toggle('visible', bad);
+    err.textContent = bad ? t('err_range_reversed') : '';
+    [from, to].forEach(i => i.classList.toggle('input-error', bad));
+    if (next) next.disabled = bad;
+    return !bad;
   }
 
   function getPeriodLabel() {
@@ -5589,6 +5678,94 @@
       c.setAttribute('role', 'button');
       if (!c.hasAttribute('tabindex')) c.setAttribute('tabindex', '0');
       c.setAttribute('aria-expanded', c.classList.contains('open') ? 'true' : 'false');
+    });
+  }
+
+  // "1st / 2nd / January" stayed English inside the German schedule form.
+  const MONTH_NAMES = {
+    en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
+    de: ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'],
+  };
+  const ORDINAL_EN = n => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
+  const DAY_CHOICES = [1,2,3,4,5,7,10,14,15,20,28];
+
+  function buildScheduleDateSelects() {
+    const dayLabel = n => lang === 'de' ? n + '.' : ORDINAL_EN(n);
+    ['month-day-select','yearly-day-select'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const prev = sel.value || (id === 'month-day-select' ? '3' : '1');
+      sel.innerHTML = DAY_CHOICES.map(n => `<option value="${n}">${dayLabel(n)}</option>`).join('');
+      sel.value = prev;
+    });
+    const msel = document.getElementById('yearly-month-select');
+    if (msel) {
+      const prev = msel.value || '1';
+      msel.innerHTML = (MONTH_NAMES[lang] || MONTH_NAMES.en)
+        .map((m, i) => `<option value="${i + 1}">${m}</option>`).join('');
+      msel.value = prev;
+    }
+  }
+
+  // DPM / RPV / TU / DQI carried the meaning of the choose-a-report and
+  // choose-a-filter steps with no expansion anywhere on screen.
+  const ACRONYMS = ['DPM','RPV','DQI','TU'];
+
+  // A red Failed badge with no reason, no tooltip and delete as the only action.
+  const FAIL_REASONS = ['fail_reason_source','fail_reason_timeout','fail_reason_nodata'];
+
+  function annotateFailedRows() {
+    document.querySelectorAll('#view-reports-list tr[data-status="failed"]').forEach((row, i) => {
+      const badge = row.querySelector('.badge');
+      if (badge && !badge.dataset.reasoned) {
+        badge.dataset.reasoned = '1';
+        badge.title = t(FAIL_REASONS[i % FAIL_REASONS.length]);
+        badge.style.cursor = 'help';
+      }
+      const cell = row.querySelector('td:last-child .action-icons');
+      if (cell && !cell.querySelector('.action-retry')) {
+        const btn = document.createElement('button');
+        btn.className = 'action-icon action-retry';
+        btn.title = t('act_retry');
+        btn.setAttribute('aria-label', t('act_retry'));
+        btn.innerHTML = '<span class="material-icons" aria-hidden="true">refresh</span>';
+        btn.onclick = () => retryEvaluation(row);
+        cell.insertBefore(btn, cell.firstChild);
+      }
+      const nameCell = row.querySelector('td:first-child');
+      if (nameCell && !nameCell.querySelector('.fail-reason')) {
+        const span = document.createElement('div');
+        span.className = 'fail-reason';
+        span.textContent = t(FAIL_REASONS[i % FAIL_REASONS.length]);
+        nameCell.appendChild(span);
+      }
+    });
+  }
+
+  function retryEvaluation(row) {
+    row.dataset.status = 'in_progress';
+    const badge = row.querySelector('.badge');
+    if (badge) {
+      badge.className = 'badge badge-orange';
+      const txt = badge.querySelector('span:last-child');
+      if (txt) { txt.setAttribute('data-i18n', 'status_in_progress'); txt.textContent = t('status_in_progress'); }
+      badge.title = '';
+    }
+    const reason = row.querySelector('.fail-reason');
+    if (reason) reason.remove();
+    const retry = row.querySelector('.action-retry');
+    if (retry) retry.remove();
+    markUnavailableActions();
+    showToast(t('toast_retry_started'));
+  }
+
+  function annotateAcronyms() {
+    const scopes = ['#view-type-selection', '#wizard-step-2', '#view-reports-list'];
+    scopes.forEach(sel => {
+      document.querySelectorAll(`${sel} h3, ${sel} .filter-label, ${sel} .group-title, ${sel} .type-card p`).forEach(el => {
+        const hit = ACRONYMS.find(a => new RegExp(`\\b${a}\\b`).test(el.textContent));
+        if (hit) el.title = t('acr_' + hit.toLowerCase());
+      });
     });
   }
 
@@ -7062,6 +7239,9 @@
     markUnavailableActions();
     normalisePausedSchedules();
     annotateParamChips();
+    annotateAcronyms();
+    annotateFailedRows();
+    buildScheduleDateSelects();
 
     const hashParts = location.hash.slice(1).split('/');
     if (hashParts[0] === 'mask' && hashParts[1]) {
