@@ -609,6 +609,11 @@
   a page (`view-chart-punct`, breadcrumb Auswertungen › report › Diagramm), matching raw data and
   the Ausfallmaske. **Rule now in the source:** row-end drill-in = page with breadcrumb; single-cell
   detail = dialog. The DQI per-cell export dialog therefore stays a dialog, as in production.
+- **2026-08-28 · DQI aligned to the Pünktlichkeit page** (commit `500ddbc`) after Ignat's "chaos of
+  elements": toolbar right (the DQI/Rohdaten headers used `.rpt-topbar`, **a class with no CSS rule
+  at all**, so the buttons fell left — both now use `.page-header`), row actions moved to a trailing
+  Aktionen column, and the table restyled to inherit `.punct-table` metrics. **Pünktlichkeit DPM is
+  the reference page for report layout** from here on.
 - **Open:** only **Linienanalyse DPM** is left. Ignat sent screenshots at 12:57–12:58 UTC on 08-28 but
   they never reached the workspace — asked him to resend. Unopenable finished evaluations: 4 of 19,
   down from 9.
