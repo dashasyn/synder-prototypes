@@ -588,8 +588,22 @@
   - Params use the prototype's grey chips, not the production bordered fields, to keep all report
     views consistent — flagged to Ignat.
   - Also closed June UX-6: the breakdown label is now "Aufschlüsseln" everywhere.
-- **Open:** Rohdaten Export and Linienanalyse DPM still need their own report views (Ignat is
-  supplying screenshots). 7 of 19 finished evaluations remain unopenable, down from 9.
+- **2026-08-28 · Rohdaten Export DPM mask built** (commit `03e487f`) from 6 production screenshots.
+  Ignat confirmed **Rohdaten produces a file, not an on-screen report**, so this is the configuration
+  mask + a download action. Chevron section headers (Zeitraum · Pünktlichkeitsgrenzwert ·
+  Transportunternehmen · Richtungen · Linien · Haltestellen), a full **two-month date-range picker**
+  (aktueller/letzter Monat presets, month+year selects, ISO KW column, Monday-first grid, range
+  highlight, Anwenden), the five Grenzwert options, TU single-select with search (code over full
+  name), Richtungen incl. "Alle auswählen", Linien grouped by Linienbündel with per-bundle
+  select-all, Haltestellen by code + name, Ausführen with threshold validation, and an
+  "Erstellte Exporte" list with Datei bereit / Herunterladen / delete+undo. The Rohdaten type card
+  now opens this mask instead of the generic wizard.
+  - Two bugs found while building, both classes already seen: the picker closed on the first day
+    click (re-render detaches the clicked node → `closest()` null, same as the Kantone panel), and
+    "Alle auswählen" did nothing (row click doesn't flip its own checkbox, same as the schedule row).
+- **Open:** only **Linienanalyse DPM** is left. Ignat sent screenshots at 12:57–12:58 UTC on 08-28 but
+  they never reached the workspace — asked him to resend. Unopenable finished evaluations: 4 of 19,
+  down from 9.
 
 ### PIMS · Grunddaten Editor (2026-07-09)
 - **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
