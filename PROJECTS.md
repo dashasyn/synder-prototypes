@@ -601,6 +601,14 @@
   - Two bugs found while building, both classes already seen: the picker closed on the first day
     click (re-render detaches the clicked node → `closest()` null, same as the Kantone panel), and
     "Alle auswählen" did nothing (row click doesn't flip its own checkbox, same as the schedule row).
+- **2026-08-28 · Ignat's list/preview feedback applied** (commit `1e06736`):
+  row actions are icons only (Anzeigen → eye, Rohdaten → download, beside retry and delete);
+  the close button is gone from all seven report/detail views since every one has a breadcrumb;
+  "Change scope" removed from the param chips (the "nur Ansicht" hint stays and now follows the
+  language); and **one drill-in logic** — the Pünktlichkeit and DQI charts moved from an overlay to
+  a page (`view-chart-punct`, breadcrumb Auswertungen › report › Diagramm), matching raw data and
+  the Ausfallmaske. **Rule now in the source:** row-end drill-in = page with breadcrumb; single-cell
+  detail = dialog. The DQI per-cell export dialog therefore stays a dialog, as in production.
 - **Open:** only **Linienanalyse DPM** is left. Ignat sent screenshots at 12:57–12:58 UTC on 08-28 but
   they never reached the workspace — asked him to resend. Unopenable finished evaluations: 4 of 19,
   down from 9.
