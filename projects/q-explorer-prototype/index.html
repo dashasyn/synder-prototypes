@@ -781,6 +781,21 @@
     align-items: flex-start;
   }
   .sched-note.visible { display: flex; }
+
+  /* Confirm dialog — replaces the browser's native confirm() */
+  .cf-overlay { position: fixed; inset: 0; z-index: 950; background: rgba(17,24,39,0.45); display: none; align-items: center; justify-content: center; }
+  .cf-overlay.open { display: flex; }
+  .cf-modal { background: #fff; border-radius: 12px; width: 440px; max-width: calc(100vw - 40px); box-shadow: 0 12px 40px rgba(0,0,0,0.22); padding: 22px 24px; }
+  .cf-title { font-size: 17px; font-weight: 600; color: #111827; margin-bottom: 8px; display: flex; align-items: center; gap: 9px; }
+  .cf-title .material-icons { color: #DC2626; font-size: 20px; }
+  .cf-body { font-size: 14px; color: #4B5563; line-height: 1.6; }
+  .cf-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+  .cf-btn { font-family: 'Roboto', sans-serif; font-size: 14px; font-weight: 500; padding: 9px 16px; border-radius: 6px; cursor: pointer; border: 1px solid transparent; }
+  .cf-btn-cancel { background: #fff; border-color: #D1D5DB; color: #374151; }
+  .cf-btn-cancel:hover { background: #F9FAFB; }
+  .cf-btn-danger { background: #DC2626; color: #fff; }
+  .cf-btn-danger:hover { background: #B91C1C; }
+  .app-toast .toast-undo { background: none; border: none; color: #93C5FD; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; margin-left: 10px; text-decoration: underline; }
   .sched-note .material-icons { font-size: 16px; color: #D97706; flex-shrink: 0; }
   .sched-note-link {
     background: none; border: none; padding: 0; margin-left: 4px;
@@ -1103,8 +1118,12 @@
   .action-icon:disabled { opacity: 0.35; cursor: not-allowed; pointer-events: none; }
   #view-reports-list tr[data-status="in_progress"] .action-icon,
   #view-reports-list tr[data-status="running"] .action-icon {
-    opacity: 0.35; cursor: not-allowed; pointer-events: none;
+    opacity: 0.35; cursor: not-allowed;
   }
+  /* pointer-events:none used to hide the control from hit-testing entirely while
+     leaving it in the tab order — faded but still keyboard-firing. */
+  #view-reports-list tr[data-status="in_progress"] .action-icon:hover,
+  #view-reports-list tr[data-status="running"] .action-icon:hover { background: transparent; color: #9CA3AF; }
 
   .table-empty-state {
     text-align: center;
@@ -1233,6 +1252,13 @@
   /* ── CANTON DROPDOWN ─────────────────────────────────────── */
   .canton-dropdown { max-height: 240px; overflow-y: auto; }
   .custom-select-trigger.has-selection { background: #EFF6FF; border-color: #93C5FD; }
+  /* The label takes the free space so the ✕ and the caret sit hard right.
+     Previously three children + space-between put the ✕ at the horizontal
+     centre of the control, so a click aimed at reopening the panel cleared it. */
+  .custom-select-trigger > span:first-child {
+    flex: 1 1 auto; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .clear-x { font-size: 16px !important; color: #9CA3AF; cursor: pointer; padding: 2px; border-radius: 50%; margin-right: 4px; transition: all 0.15s; display: none; vertical-align: middle; flex-shrink: 0; }
   .clear-x:hover { background: #F3F4F6; color: #2563EB; }
 
@@ -3949,6 +3975,17 @@
 <!-- ══════════════════════════════════════════════════════════
      INFO MODAL — Impressum / Dokumente / Support / Kontaktdaten
 ══════════════════════════════════════════════════════════ -->
+<div class="cf-overlay" id="cf-overlay" onclick="if(event.target===this) cfCancel()">
+  <div class="cf-modal" role="dialog" aria-modal="true" aria-labelledby="cf-title">
+    <div class="cf-title" id="cf-title"><span class="material-icons">warning</span><span id="cf-title-text"></span></div>
+    <div class="cf-body" id="cf-body"></div>
+    <div class="cf-actions">
+      <button class="cf-btn cf-btn-cancel" id="cf-cancel" onclick="cfCancel()"></button>
+      <button class="cf-btn cf-btn-danger" id="cf-ok" onclick="cfConfirm()"></button>
+    </div>
+  </div>
+</div>
+
 <div class="info-overlay" id="info-overlay" onclick="if(event.target===this) closeInfo()">
   <div class="info-modal" role="dialog" aria-modal="true" aria-labelledby="info-modal-title">
     <div class="info-modal-head">
@@ -4154,6 +4191,16 @@
       schedule_blocked: 'A custom date range cannot be scheduled — every run would return the same fixed period. Choose a rolling period (e.g. Last 7 Days, Current Month) to schedule this report.',
       schedule_blocked_link: 'Change period',
       util_impressum: 'Imprint',
+      cf_cancel: 'Cancel',
+      cf_delete: 'Delete',
+      undo: 'Undo',
+      cf_del_eval_title: 'Delete this evaluation?',
+      cf_del_eval_body: 'The evaluation and its result will be removed from the list. You can undo this for a few seconds afterwards.',
+      cf_del_sched_title: 'Delete this scheduled report?',
+      cf_del_sched_body: 'The schedule will stop running. Evaluations it already produced are not affected. You can undo this for a few seconds afterwards.',
+      toast_sched_deleted: 'Scheduled report deleted',
+      toast_eval_deleted: 'Evaluation deleted',
+      act_unavailable_running: 'Not available while the evaluation is still running',
       util_dokumente: 'Documents',
       util_support: 'Support',
       util_kontakt: 'Contact',
@@ -4461,6 +4508,16 @@
       schedule_blocked: 'Ein benutzerdefinierter Zeitraum kann nicht geplant werden — jede Ausführung würde denselben fixen Zeitraum liefern. Wählen Sie einen rollierenden Zeitraum (z. B. Letzte 7 Tage, Aktueller Monat), um diesen Bericht zu planen.',
       schedule_blocked_link: 'Zeitraum ändern',
       util_impressum: 'Impressum',
+      cf_cancel: 'Abbrechen',
+      cf_delete: 'Löschen',
+      undo: 'Rückgängig',
+      cf_del_eval_title: 'Diese Auswertung löschen?',
+      cf_del_eval_body: 'Die Auswertung und ihr Ergebnis werden aus der Liste entfernt. Sie können dies einige Sekunden lang rückgängig machen.',
+      cf_del_sched_title: 'Diesen geplanten Bericht löschen?',
+      cf_del_sched_body: 'Der Zeitplan wird nicht mehr ausgeführt. Bereits erstellte Auswertungen bleiben erhalten. Sie können dies einige Sekunden lang rückgängig machen.',
+      toast_sched_deleted: 'Geplanter Bericht gelöscht',
+      toast_eval_deleted: 'Auswertung gelöscht',
+      act_unavailable_running: 'Nicht verfügbar, solange die Auswertung noch läuft',
       util_dokumente: 'Dokumente',
       util_support: 'Support',
       util_kontakt: 'Kontaktdaten',
@@ -4748,6 +4805,7 @@
 
     // Re-render an open info page in the new language
     if (state.openInfoKey) openInfo(state.openInfoKey);
+    markUnavailableActions();
 
     // Refresh scheduling-eligibility copy
     updateScheduleAvailability();
@@ -5213,6 +5271,61 @@
     if (e.key === 'Escape' && state.openInfoKey) closeInfo();
   });
 
+  // ── Confirm dialog ────────────────────────────────────────────
+  // Replaces the native confirm(): an unstyled OS dialog inside a designed tool,
+  // and one that cannot offer the undo the copy implies.
+  let _cfResolve = null, _cfPrevFocus = null;
+
+  function cfAsk(titleKey, bodyKey, okKey) {
+    const ov = document.getElementById('cf-overlay');
+    document.getElementById('cf-title-text').textContent = t(titleKey);
+    document.getElementById('cf-body').textContent = t(bodyKey);
+    document.getElementById('cf-ok').textContent = t(okKey);
+    document.getElementById('cf-cancel').textContent = t('cf_cancel');
+    _cfPrevFocus = document.activeElement;
+    ov.classList.add('open');
+    document.getElementById('cf-cancel').focus();
+    return new Promise(res => { _cfResolve = res; });
+  }
+
+  function cfClose(result) {
+    document.getElementById('cf-overlay').classList.remove('open');
+    if (_cfPrevFocus && _cfPrevFocus.focus) _cfPrevFocus.focus();
+    const r = _cfResolve; _cfResolve = null;
+    if (r) r(result);
+  }
+  function cfConfirm() { cfClose(true); }
+  function cfCancel()  { cfClose(false); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && document.getElementById('cf-overlay').classList.contains('open')) cfCancel();
+  });
+
+  function showUndoToast(msg, onUndo) {
+    const existing = document.getElementById('app-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.className = 'app-toast';
+    toast.innerHTML = '<span class="material-icons">check_circle</span><span></span>';
+    toast.querySelector('span:last-child').textContent = msg;
+    const btn = document.createElement('button');
+    btn.className = 'toast-undo';
+    btn.textContent = t('undo');
+    btn.onclick = () => { onUndo(); toast.remove(); };
+    toast.appendChild(btn);
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add('visible'));
+    setTimeout(() => { toast.classList.remove('visible'); setTimeout(() => toast.remove(), 300); }, 6000);
+  }
+
+  // In-progress rows: faded is not the same as unavailable. Mark them properly
+  // so the control leaves the tab order and states its reason.
+  function markUnavailableActions() {
+    document.querySelectorAll('#view-reports-list tr[data-status="in_progress"] .action-icon, #view-reports-list tr[data-status="running"] .action-icon')
+      .forEach(b => { b.disabled = true; b.setAttribute('aria-disabled', 'true'); b.title = t('act_unavailable_running'); });
+  }
+
   function showToast(msg) {
     const existing = document.getElementById('app-toast');
     if (existing) existing.remove();
@@ -5229,37 +5342,44 @@
   }
 
   function deleteEvaluation(link) {
-    const msg = lang === 'en'
-      ? 'Delete this evaluation? This action cannot be undone.'
-      : 'Diese Auswertung löschen? Diese Aktion kann nicht rückgängig gemacht werden.';
-    if (!confirm(msg)) return;
     const row = link.closest('tr');
     const group = row.closest('.report-group');
-    row.style.transition = 'opacity 0.3s';
-    row.style.opacity = '0';
-    setTimeout(() => {
-      row.remove();
-      if (group) {
-        const remaining = group.querySelectorAll('tbody tr').length;
-        const countEl = group.querySelector('.group-count');
-        if (countEl) {
-          const numEl = countEl.querySelector('.num');
-          const wordEl = countEl.querySelector('[data-i18n]');
-          if (numEl) numEl.textContent = remaining;
-          if (wordEl) {
-            const key = remaining === 1 ? 'evaluation_word' : 'evaluations_word';
-            wordEl.setAttribute('data-i18n', key);
-            wordEl.textContent = t(key);
-          }
-        }
-        if (remaining === 0) group.style.display = 'none';
-      }
-      const anyGroupVisible = [...document.querySelectorAll('.report-group')].some(g => g.style.display !== 'none');
-      const reportsEmpty = document.getElementById('reports-empty');
-      if (reportsEmpty) reportsEmpty.style.display = anyGroupVisible ? 'none' : 'block';
-      showToast(lang === 'en' ? 'Evaluation deleted' : 'Auswertung gelöscht');
-    }, 300);
+    cfAsk('cf_del_eval_title', 'cf_del_eval_body', 'cf_delete').then(ok => {
+      if (!ok) return;
+      const next = row.nextSibling;
+      const parent = row.parentNode;
+      row.style.transition = 'opacity 0.3s';
+      row.style.opacity = '0';
+      setTimeout(() => {
+        row.remove();
+        recountGroup(group);
+        filterReports();
+        showUndoToast(t('toast_eval_deleted'), () => {
+          row.style.opacity = '1';
+          parent.insertBefore(row, next);
+          recountGroup(group);
+          filterReports();
+          markUnavailableActions();
+        });
+      }, 300);
+    });
   }
+
+  function recountGroup(group) {
+    if (!group) return;
+    const remaining = group.querySelectorAll('tbody tr').length;
+    const countEl = group.querySelector('.group-count');
+    if (!countEl) return;
+    const numEl = countEl.querySelector('.num');
+    const wordEl = countEl.querySelector('[data-i18n]');
+    if (numEl) numEl.textContent = remaining;
+    if (wordEl) {
+      const key = remaining === 1 ? 'evaluation_word' : 'evaluations_word';
+      wordEl.setAttribute('data-i18n', key);
+      wordEl.textContent = t(key);
+    }
+  }
+
 
   function togglePause(link) {
     const row = link.closest('tr');
@@ -5344,6 +5464,10 @@
   }
 
   document.addEventListener('click', function(e) {
+    // A list that re-renders on pick (Kantone) detaches the clicked node before
+    // this runs, so closest() finds nothing and the panel closed on first pick —
+    // the only one of six panels that behaved that way.
+    if (!e.target.isConnected) return;
     if (!e.target.closest('.custom-select-wrapper')) {
       document.querySelectorAll('.custom-select-dropdown').forEach(d => d.classList.remove('open'));
       document.querySelectorAll('.custom-select-trigger').forEach(t => t.classList.remove('open'));
@@ -5917,21 +6041,31 @@
 
   // ── Delete confirmation ──────────────────────────────────────
   function confirmDelete(link) {
-    const msg = lang === 'en'
-      ? 'Really delete this scheduled report? This action cannot be undone.'
-      : 'Geplanten Bericht wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.';
-    if (confirm(msg)) {
-      const row = link.closest('tr');
+    const row = link.closest('tr');
+    const parent = row.parentNode;
+    const next = row.nextSibling;
+    cfAsk('cf_del_sched_title', 'cf_del_sched_body', 'cf_delete').then(ok => {
+      if (!ok) return;
       row.style.transition = 'opacity 0.3s';
       row.style.opacity = '0';
       setTimeout(() => {
         row.remove();
-        const anySchedVisible = [...document.querySelectorAll('#sched-tbody tr:not(#sched-empty-row)')].some(r => r.style.display !== 'none');
-        const schedEmpty = document.getElementById('sched-empty-row');
-        if (schedEmpty) schedEmpty.style.display = anySchedVisible ? 'none' : '';
+        refreshSchedEmptyRow();
+        showUndoToast(t('toast_sched_deleted'), () => {
+          row.style.opacity = '1';
+          parent.insertBefore(row, next);
+          refreshSchedEmptyRow();
+        });
       }, 300);
-    }
+    });
   }
+
+  function refreshSchedEmptyRow() {
+    const anyVisible = [...document.querySelectorAll('#sched-tbody tr:not(#sched-empty-row)')].some(r => r.style.display !== 'none');
+    const empty = document.getElementById('sched-empty-row');
+    if (empty) empty.style.display = anyVisible ? 'none' : '';
+  }
+
 
   // ── Cascade engine ────────────────────────────────────────────
   function updateCascade() {
@@ -6447,6 +6581,7 @@
     document.getElementById('date-from').value = firstOfMonth.toISOString().split('T')[0];
 
     applyLang();
+    markUnavailableActions();
 
     const hashParts = location.hash.slice(1).split('/');
     if (hashParts[0] === 'mask' && hashParts[1]) {
@@ -7079,7 +7214,7 @@
         : `<span class="punct-wert-na">n/a</span>`;
       const hasLines = b.lines && b.lines.length > 0;
       const expandBtn = hasLines
-        ? `<button class="punct-expand-btn" onclick="togglePunctBundle(this,${bi})" title="${t('rpt_toggle_lines')}"><span class="material-icons">expand_more</span></button>`
+        ? `<button class="punct-expand-btn collapsed" onclick="togglePunctBundle(this,${bi})" aria-expanded="false" title="${t('rpt_toggle_lines')}"><span class="material-icons">expand_more</span></button>`
         : `<span style="width:22px;display:inline-block"></span>`;
       html += `<tr class="punct-row-bundle" id="punct-bundle-${bi}">
         <td><div class="punct-cell-name">${expandBtn}<span>${b.label}</span></div></td>
@@ -7110,6 +7245,7 @@
       if (row) { collapsed ? row.classList.remove('punct-hidden') : row.classList.add('punct-hidden'); }
     });
     btn.classList.toggle('collapsed', !collapsed);
+    btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
   }
 
   function punctCascade() {
