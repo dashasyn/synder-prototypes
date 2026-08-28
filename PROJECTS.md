@@ -567,9 +567,17 @@
     · truncation row + single-source period · the 6 unwired buttons · a "Demodaten" badge.
   - Protocol fix: `validator-check.js manifest --flow <label>` added so parallel-flow rounds aren't
     forced to be deltas of the previous round. Logged in `personas/MISSES.md`.
-- **Next:** Ignat to pick the fix order. Suggested: clear-✕ (one CSS line) → bundle-row first-click →
-  six unwired buttons → decide whether Rohdaten/Linienanalyse/DQI get report views → breakdown +
-  column filters (the real work).
+- **2026-08-28 · review applied:** 35 of 37 findings fixed in 5 commits
+  (`7a4c0c1` interaction · `5a23366` dead controls · `32f0bb1` truthfulness · `626e9b6` content/i18n ·
+  `489ac3b` a11y/CSS). All verified in real Chromium. Resolved/withdrawn/open list:
+  `projects/q-explorer-prototype/findings-log.json`.
+  - **2 findings withdrawn as my own measurement artifacts:** the "37 missing i18n keys" count came
+    from a regex that only matched one-key-per-line dictionary entries (real count: zero missing; the
+    actual defect was 15 `<option>` elements with no `data-i18n` at all), and the "summary
+    concatenates filter values" reading came from `textContent`, not the rendered flex layout.
+- **Open — the only thing left:** Rohdaten Export, Linienanalyse DPM and Datenqualitätsindex need
+  their own report views. Ignat is supplying reference screenshots. Until then those 9 finished
+  evaluations still have no way to be opened.
 
 ### PIMS · Grunddaten Editor (2026-07-09)
 - **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
