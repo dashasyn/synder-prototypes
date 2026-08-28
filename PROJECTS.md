@@ -575,9 +575,21 @@
     from a regex that only matched one-key-per-line dictionary entries (real count: zero missing; the
     actual defect was 15 `<option>` elements with no `data-i18n` at all), and the "summary
     concatenates filter values" reading came from `textContent`, not the rendered flex layout.
-- **Open — the only thing left:** Rohdaten Export, Linienanalyse DPM and Datenqualitätsindex need
-  their own report views. Ignat is supplying reference screenshots. Until then those 9 finished
-  evaluations still have no way to be opened.
+- **2026-08-28 · Datenqualitätsindex DPM report built** (commit `8d8e16f`) from 9 production
+  screenshots. Two tabs: **Übersicht** (10 indicator rows, each with the schweizweit band, the black
+  RPV-average diamond, the blue entity diamond, 12-month/14-day trend sparklines and the hover
+  tooltip; Anzeigen switches TU ↔ Kanton) and **Tabelle** (10 indicator columns with info icons,
+  dark "schweizweiter Durchschnitt (RPV)" row, TU → GO-Nr. → Region hierarchy, chart/calendar/LOG
+  row actions, below-average values in red, "nur unterdurchschnittliche Einträge" filter,
+  3-level Aufschlüsseln). Per-cell detail modal with Ergebnis / negative Fälle / Export erstellen —
+  calibrated so indicator 3 at 98.60% reproduces the production 31 168. Plus a grouped-bar chart
+  modal per child entity. Values transcribed from the production table; the band is computed over
+  the loaded entities; trend sparklines are illustrative and labelled as such.
+  - Params use the prototype's grey chips, not the production bordered fields, to keep all report
+    views consistent — flagged to Ignat.
+  - Also closed June UX-6: the breakdown label is now "Aufschlüsseln" everywhere.
+- **Open:** Rohdaten Export and Linienanalyse DPM still need their own report views (Ignat is
+  supplying screenshots). 7 of 19 finished evaluations remain unopenable, down from 9.
 
 ### PIMS · Grunddaten Editor (2026-07-09)
 - **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
