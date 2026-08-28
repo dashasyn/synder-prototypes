@@ -74,6 +74,16 @@
   .acts { white-space: nowrap; text-align: right; }
   .empty-row td { text-align: center; color: #98a2ae; padding: 26px; }
 
+  /* nested trigger rows under a station */
+  .station-row td { border-bottom: 1px solid #e3e7ec; }
+  .station-row .chev { color: #98a2ae; text-align: center; font-size: 10px; user-select: none; }
+  .station-row:hover .chev { color: #1976d2; }
+  tr.sub td { background: #fafbfc; border-bottom: 1px solid #f2f4f7; font-size: 12px; padding-top: 6px; padding-bottom: 6px; }
+  tr.sub:hover td { background: #f4f7fa; }
+  tr.sub .sub-first { border-left: 2px solid #cfd9e6; padding-left: 12px; }
+  tr.sub-head td { color: #98a2ae; font-size: 11px; text-transform: uppercase; letter-spacing: .4px; padding-top: 8px; }
+  tr.sub-head:hover td { background: #fafbfc; }
+
   .chip { display: inline-block; border-radius: 3px; padding: 2px 7px; font-size: 11px; font-weight: 600; white-space: nowrap; }
   .c-default { background: #eef1f5; color: #6b7480; }
   .c-override { background: #e7f1fb; color: #1a6fc4; }
@@ -243,38 +253,27 @@
         </div>
       </div>
 
-      <!-- per-station -->
+      <!-- one table: station rows carrying lead times, expandable to their triggers -->
       <div class="card">
         <div class="card-h">
-          <span class="card-t">Per-station timing</span>
-          <span class="card-note">A value shown as <span class="chip c-override">Override</span> replaces the system default for that station only.</span>
+          <span class="card-t">Station announcements timing</span>
+          <span class="card-note">Lead times per station. Expand a station to see what each announcement counts from.</span>
+          <span class="right"><button class="btn btn-p btn-sm" id="t-add">+ Add trigger</button></span>
         </div>
         <table>
           <thead><tr>
-            <th>Station</th><th>Arrival lead time</th><th>Departure lead time</th><th>Repeat interval</th><th></th>
+            <th style="width:28px"></th>
+            <th>Station</th><th>Arrival lead time</th><th>Departure lead time</th><th>Repeat interval</th>
+            <th>Triggers</th><th></th>
           </tr></thead>
-          <tbody id="s-body"></tbody>
+          <tbody id="tm-body"></tbody>
         </table>
       </div>
-      <div class="assume" style="margin-bottom:16px">
-        <b>Assumption A1 —</b> lead time and repeat interval are overridden <b>per station only</b>, not per Station + Business rule + Platform.
-        Open question 3 in DATNETISR-668. If the answer is the finer grain, these three values move into the table below as extra columns and this card disappears.
-      </div>
-
-      <!-- timing table -->
-      <div class="card">
-        <div class="card-h">
-          <span class="card-t">Station announcements timing table</span>
-          <span class="card-note">What clock each announcement counts from.</span>
-          <span class="right"><button class="btn btn-p btn-sm" id="t-add">+ Add row</button></span>
-        </div>
-        <table>
-          <thead><tr>
-            <th>Station ID</th><th>Business rule</th><th>Platform</th><th>Based on</th>
-            <th>Optic ID</th><th>2806 type</th><th>Offset</th><th>Time source</th><th></th>
-          </tr></thead>
-          <tbody id="t-body"></tbody>
-        </table>
+      <div class="assume">
+        <b>Assumption A1 —</b> lead time and repeat interval are set <b>per station</b>, and the trigger source is set per
+        <b>Business rule + Platform</b> underneath it. That is why the station row carries three values and the nested rows carry the rest.
+        Open question 3 in DATNETISR-668. If overrides turn out to be per Station + Business rule + Platform too, the three
+        values move down into the nested rows and the station row becomes a plain group header.
       </div>
     </div>
 
@@ -459,7 +458,7 @@ function setScreen(name) {
   $('p-timing').classList.toggle('on', name === 'timing');
   $('cap').textContent = name === 'optics'
     ? 'Search or filter the optics, then open one.'
-    : 'Open a timing row to see the shared “Based on” control.';
+    : 'Expand a station, then open a trigger to see the shared “Based on” control.';
 }
 document.querySelectorAll('.side-item').forEach(el => el.addEventListener('click', () => setScreen(el.dataset.screen)));
 $('p-optics').addEventListener('click', () => setScreen('optics'));
@@ -603,20 +602,75 @@ function renderDefaults() {
   $('d-rep').textContent = DEFAULTS.repeat;
 }
 
-function renderStations() {
-  $('s-body').innerHTML = STATIONS.map(s => `
-    <tr>
-      <td>${esc(stationLabel(s.id))}</td>
-      <td>${cellTiming(s.id, 'arrival')}</td>
-      <td>${cellTiming(s.id, 'departure')}</td>
-      <td>${cellTiming(s.id, 'repeat')}</td>
-      <td class="acts"><button class="btn btn-s btn-sm" data-station="${esc(s.id)}">Edit</button></td>
-    </tr>`).join('');
+/* One table: a station row carrying its lead times, expandable to its trigger rows. */
+let EXPANDED = new Set(['1820']);   // 1820 has two triggers — open by default so the nesting is visible
+
+function triggersFor(sid) {
+  return ROWS.map((r, i) => ({ r, i })).filter(x => x.r.station === sid);
 }
 
-$('s-body').addEventListener('click', e => {
-  const b = e.target.closest('[data-station]');
-  if (b) openStation(b.dataset.station);
+function triggerSubRow(r, i) {
+  return `<tr class="sub clickable" data-row="${i}">
+    <td></td>
+    <td class="sub-first">${esc(ruleLabel(r.rule))}</td>
+    <td>${r.platform ? 'Platform ' + esc(r.platform) : '<span class="dim">All platforms</span>'}</td>
+    <td><span class="chip ${r.basis === 'optic' ? 'c-optic' : 'c-est'}">${r.basis === 'optic' ? 'Optic (2806)' : 'Estimated ' + ruleKind(r.rule) + ' time'}</span></td>
+    <td>${r.basis === 'optic'
+        ? `<span class="link mono" data-goto-optic="${esc(r.optic)}">${esc(r.optic)}</span> <span class="dim">· type ${esc(r.type)}</span>`
+        : '<span class="dim">–</span>'}</td>
+    <td class="mono">${esc(r.offset)}${r.source ? ` <span class="dim">· ${esc(r.source)}</span>` : ''}</td>
+    <td class="acts"><button class="btn btn-s btn-sm" data-row="${i}">Edit</button></td>
+  </tr>`;
+}
+
+function renderTiming() {
+  const html = STATIONS.map(st => {
+    const trig = triggersFor(st.id);
+    const open = EXPANDED.has(st.id);
+    let out = `<tr class="station-row clickable" data-toggle="${esc(st.id)}">
+      <td class="chev">${open ? '▾' : '▸'}</td>
+      <td><b>${esc(stationLabel(st.id))}</b></td>
+      <td>${cellTiming(st.id, 'arrival')}</td>
+      <td>${cellTiming(st.id, 'departure')}</td>
+      <td>${cellTiming(st.id, 'repeat')}</td>
+      <td>${trig.length
+          ? `<span class="chip c-optic">${trig.length} trigger${trig.length > 1 ? 's' : ''}</span>`
+          : '<span class="dim">Estimated time only</span>'}</td>
+      <td class="acts"><button class="btn btn-s btn-sm" data-station="${esc(st.id)}">Edit lead times</button></td>
+    </tr>`;
+
+    if (open) {
+      out += `<tr class="sub sub-head"><td></td><td class="sub-first">Business rule</td><td>Platform</td><td>Based on</td><td>Optic</td><td>Offset · time source</td><td></td></tr>`;
+      out += trig.length
+        ? trig.map(x => triggerSubRow(x.r, x.i)).join('')
+        : `<tr class="sub"><td></td><td class="sub-first" colspan="6"><span class="dim">No trigger configured — announcements use the estimated time with this station's lead times.</span></td></tr>`;
+      out += `<tr class="sub"><td></td><td class="sub-first" colspan="6">
+        <button class="btn btn-s btn-sm" data-add-station="${esc(st.id)}">+ Add trigger at ${esc(stationLabel(st.id))}</button></td></tr>`;
+    }
+    return out;
+  }).join('');
+  $('tm-body').innerHTML = html;
+}
+
+$('tm-body').addEventListener('click', e => {
+  const g = e.target.closest('[data-goto-optic]');
+  if (g) { e.stopPropagation(); setScreen('optics'); openOptic(g.dataset.gotoOptic); return; }
+
+  const add = e.target.closest('[data-add-station]');
+  if (add) { e.stopPropagation(); openRow(null, add.dataset.addStation); return; }
+
+  const ed = e.target.closest('[data-station]');
+  if (ed) { e.stopPropagation(); openStation(ed.dataset.station); return; }
+
+  const sub = e.target.closest('[data-row]');
+  if (sub) { e.stopPropagation(); openRow(Number(sub.dataset.row)); return; }
+
+  const tog = e.target.closest('[data-toggle]');
+  if (tog) {
+    const id = tog.dataset.toggle;
+    EXPANDED.has(id) ? EXPANDED.delete(id) : EXPANDED.add(id);
+    renderTiming();
+  }
 });
 
 function openStation(sid) {
@@ -645,7 +699,7 @@ function openStation(sid) {
   $('ds-body').querySelectorAll('[data-reset]').forEach(b => b.addEventListener('click', () => {
     const k = b.dataset.reset;
     STATION_TIMING[sid][k] = null;
-    openStation(sid); renderStations();
+    openStation(sid); renderTiming();
     toast('Reset to system default');
   }));
   $('ds-save').onclick = () => {
@@ -653,43 +707,21 @@ function openStation(sid) {
       const v = $('st-' + k).value.trim();
       STATION_TIMING[sid][k] = (v === '' || v === DEFAULTS[k]) ? null : v;
     });
-    renderStations(); closeDrawers(); toast('Station timing saved');
+    renderTiming(); closeDrawers(); toast('Station timing saved');
   };
   openDrawer('dr-station');
 }
 
-/* ═════════ Timing table ═════════ */
-function renderRows() {
-  $('t-body').innerHTML = ROWS.length ? ROWS.map((r, i) => `
-    <tr class="clickable" data-row="${i}">
-      <td>${esc(stationLabel(r.station))}</td>
-      <td>${esc(ruleLabel(r.rule))}</td>
-      <td>${dash(r.platform)}</td>
-      <td><span class="chip ${r.basis === 'optic' ? 'c-optic' : 'c-est'}">${r.basis === 'optic' ? 'Optic (2806)' : 'Estimated ' + ruleKind(r.rule) + ' time'}</span></td>
-      <td>${r.basis === 'optic' ? `<span class="link mono" data-goto-optic="${esc(r.optic)}">${esc(r.optic)}</span>` : '<span class="dim">–</span>'}</td>
-      <td>${r.type ? esc(r.type) : '<span class="dim">–</span>'}</td>
-      <td class="mono">${esc(r.offset)}</td>
-      <td>${r.source ? esc(r.source) : '<span class="dim">–</span>'}</td>
-      <td class="acts"><button class="btn btn-s btn-sm" data-edit-row="${i}">Edit</button></td>
-    </tr>`).join('') : `<tr class="empty-row"><td colspan="9">No timing rows. Every station falls back to the estimated time from the business rules.</td></tr>`;
-}
-
 $('t-add').addEventListener('click', () => openRow(null));
-$('t-body').addEventListener('click', e => {
-  const g = e.target.closest('[data-goto-optic]');
-  if (g) { e.stopPropagation(); setScreen('optics'); openOptic(g.dataset.gotoOptic); return; }
-  const row = e.target.closest('[data-row]');
-  if (row) openRow(Number(row.dataset.row));
-});
 
 /* The shared "Based on" control lives here. */
-function openRow(idx) {
+function openRow(idx, presetStation) {
   const isNew = idx == null;
   const r = isNew
-    ? { station: '1500', rule: 'BR12', platform: '', basis: 'est', optic: '', type: '80', offset: '0:00', source: 'Actual', fallback: true }
+    ? { station: presetStation || '1500', rule: 'BR12', platform: '', basis: 'est', optic: '', type: '80', offset: '0:00', source: 'Actual', fallback: true }
     : JSON.parse(JSON.stringify(ROWS[idx]));
 
-  $('dt-title').textContent = isNew ? 'Add timing row' : 'Edit timing row';
+  $('dt-title').textContent = isNew ? 'Add trigger' : 'Edit trigger';
 
   $('dt-body').innerHTML = `
     <div class="sec">Applies to</div>
@@ -825,8 +857,9 @@ function openRow(idx) {
       fallback: basis === 'optic' ? $('r-fallback').checked : false,
     };
     if (isNew) ROWS.push(out); else ROWS[idx] = out;
-    renderRows(); renderOptics(); closeDrawers();
-    toast(isNew ? 'Timing row added' : 'Timing row saved');
+    EXPANDED.add(out.station);
+    renderTiming(); renderOptics(); closeDrawers();
+    toast(isNew ? 'Trigger added' : 'Trigger saved');
   };
 
   openDrawer('dr-row');
@@ -854,6 +887,7 @@ $('do-body').addEventListener('click', e => {
     const [s, ru, p] = g.dataset.gotoRow.split('|');
     const i = ROWS.findIndex(x => x.station === s && x.rule === ru && x.platform === p);
     closeDrawers(); setScreen('timing');
+    EXPANDED.add(s); renderTiming();
     if (i >= 0) setTimeout(() => openRow(i), 260);
   }
 });
@@ -869,7 +903,7 @@ $('d-edit').addEventListener('click', () => {
     <div class="hint">Format ±mm:ss. Changing a default immediately changes every station that has not overridden it.</div>`;
   $('ds-save').onclick = () => {
     DEFAULTS = { arrival: $('dd-arrival').value.trim(), departure: $('dd-departure').value.trim(), repeat: $('dd-repeat').value.trim() };
-    renderDefaults(); renderStations(); closeDrawers(); toast('System defaults saved');
+    renderDefaults(); renderTiming(); closeDrawers(); toast('System defaults saved');
   };
   openDrawer('dr-station');
 });
@@ -886,8 +920,7 @@ $('p-assume').addEventListener('click', () => {
 fillOpticFilters();
 renderOptics();
 renderDefaults();
-renderStations();
-renderRows();
+renderTiming();
 setScreen('optics');
 </script>
 </body>
