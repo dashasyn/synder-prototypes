@@ -232,6 +232,20 @@
 - **Related:** the other 5 ideas from 2026-08-20 (upload validation at drop, "Run again for next period", example result, delta-as-verdict on results, /transaction/list dead-click investigation) are unbuilt.
 - **Context:** exploration captures for the whole create flow in `.synder-state/recon-create-2026-08-19/` (25 states, v11.7.66)
 
+### Transaction Reconciliation — Dashboard "Checks" block (2026-08-31)
+- **Status:** ✅ v1 live, awaiting Ignat feedback
+- **URL:** https://dashasyn.github.io/synder-prototypes/projects/recon-checks/
+- **Location:** `projects/recon-checks/index.html`
+- **Origin:** Ignat wants to advertise reconciliation on the dashboard (reconciliation became the first entry page for all users — experiment, live in the Aug 24–31 data: 954 of 3,672 sessions hit the funnel, 26%, vs 1.3% before). Two banner sketches were reviewed; the logic discussion produced eight banner states, which was the signal the banner is the wrong container.
+- **Idea:** stop treating it as an advert. A permanent **Checks** panel beside Data readiness / Posting to books, showing coverage per month — Checked · Partly checked · Not checked · Still receiving data. The state *is* the message, so there is no appear/disappear logic, no dismiss state, no frequency cap and no banner blindness.
+- **Rules encoded in the prototype (not faked):** a month is only offered once its data has settled (August shows "ready to check from Sep 4"); **coverage is tracked per integration** because one run covers one integration; coverage is **day-level**, so a partly-checked month names the gap; the **oldest** unchecked month gets the primary action (May), later gaps get secondary (July → "Check PayPal"). A day only counts for the month once *every* integration has covered it — which is why July's header strip shows 6 days while Stripe is fully done.
+- **Evidence behind those rules** (from `.synder-state/recon-create-2026-08-19/`, since live demo access is blocked): date range is a single contiguous from–to picker, so gap-filling needs multiple runs; the Get-started panel states *"Reconciliation is done one integration at a time"*; a record is created per run keyed by account + integration + date range, even on failure.
+- **Verified:** headless Chromium, 30 DOM assertions green, 0 JS errors, no horizontal overflow, screenshot reviewed. Expand/collapse asserted on **visibility** across two toggles (the v6 multiselect failure class).
+- **Caught in build:** nested `<button>` (action button inside the row-header button) — invalid HTML, the parser split the row apart. Restructured so the action button is a sibling of the toggle.
+- **Design:** links `ui-kit/synder-ui-kit.css` only; `var(--color-*)` throughout. Only raw hex is third-party brand colour (Shopify/Amazon/Stripe/PayPal/QuickBooks chips).
+- **Also fixed here:** the demo numbers. The sketches had Failed 3,000 / Rollback failed 2,800 against Synced 1,200, which describes a broken product and derails the meeting; replaced with plausible values.
+- **Open:** needs live-app answers on whether re-running a period duplicates or updates the record, what counts as "activity in a period", and whether a per-period import-complete flag exists. Blocked by Cloudflare Access (see below).
+
 ### Smart Rules — Branch Engine Redesign (2026-06-03)
 - **Status:** 🚧 In progress — 2 prototypes built, awaiting Ignat feedback
 - **Jira:** DIS-336 — Introduce Smart Rules for Xero
