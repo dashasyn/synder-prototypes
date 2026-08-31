@@ -44,6 +44,23 @@
   the table header row — it is a `role="toolbar"` region ABOVE the table; `Skipped` and
   `Excluded from sync` moved out of **Successful** into a new **Not synced** group
   (7 tabs now); the Status chip renders on the bar from load.
+- **UI-kit adoption (2026-08-31):** the prototype now links `ui-kit/synder-ui-kit.css` and
+  nothing else. `be0172c` had swapped 14 prototypes onto the kit but only touched this
+  project's *review report*, so the prototype itself was still on raw hex. 350 raw values
+  → tokens; 3 brand colours (Stripe, Shopify, QuickBooks) left raw on purpose; 0 unmapped.
+  Its `:root` used to redeclare `--text-primary`/`--text-secondary`/`--bg-page`/`--bg-hover`/
+  `--primary-hover`/`--shadow-*` with its own values, which shadowed the kit and would have
+  made the link cosmetic — removed, those now resolve from the kit. Sidebar adopted the kit's
+  230px. Tools: `scripts/kit-adopt.cjs` (reproducible conversion + role pass),
+  `scripts/kit-collisions.cjs`, `scripts/verify-txn-kit.cjs` (33 assertions, real Chromium),
+  `scripts/txn-contrast.cjs`, `scripts/txn-shots.cjs`, `scripts/png-diff.cjs`.
+  **⚠️ Open for Ignat:** adopting the kit costs contrast. 18 text nodes dropped below AA
+  because the kit's neutral secondary (`--color-grey-50`/`--text-secondary` #6B778C) is
+  4.0:1 on `--color-grey-10`, where the prototype previously used a darker Material grey —
+  busy/muted badges, segment counts, and white-on-`--color-green` at 4.46:1. 225 nodes
+  improved. Fixable inside the palette; needs his call, and it is a design-system issue.
+  **Pre-existing, slightly worse:** the table overflows its wrapper (36px before, 49px now
+  at 1440 — the ⚙ column is clipped).
 - **Location:** `reports/transactions-prototype/index.html`
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/reports/transactions-prototype/
 - **Pages:** Dashboard (landing) → Platform transactions list → Transaction detail
