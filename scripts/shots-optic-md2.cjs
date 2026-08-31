@@ -1,0 +1,21 @@
+const { chromium } = require('playwright');
+const path = require('path');
+const URL = 'file://' + path.resolve('/home/ubuntu/.openclaw/workspace/projects/etc-optic-timing/index.html');
+const dir = '/home/ubuntu/.openclaw/workspace/projects/etc-optic-timing/shots/';
+(async () => {
+  const b = await chromium.launch();
+  const p = await b.newPage({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 2 });
+  await p.goto(URL); await p.waitForTimeout(600);
+  await p.screenshot({ path: dir + '01-optics-list.png' });
+  await p.click('#o-body tr:first-child'); await p.waitForTimeout(400);
+  await p.screenshot({ path: dir + '02-optic-detail.png', fullPage: true });
+  await p.click('.crumbs [data-back-to-optics]'); await p.click('#o-add'); await p.waitForTimeout(400);
+  await p.screenshot({ path: dir + '06-add-optic-fullpage.png', fullPage: true });
+  await p.click('.side-item[data-screen="timing"]'); await p.waitForTimeout(400);
+  await p.screenshot({ path: dir + '03-timing-screen.png' });
+  await p.click('#tm-body tr.sub.clickable >> nth=0'); await p.waitForTimeout(500);
+  await p.screenshot({ path: dir + '04-based-on-control.png' });
+  await p.keyboard.press('Escape'); await p.click('#p-assume'); await p.waitForTimeout(400);
+  await p.screenshot({ path: dir + '05-assumptions.png' });
+  await b.close();
+})();
