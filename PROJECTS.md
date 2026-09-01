@@ -651,6 +651,29 @@
   they never reached the workspace — asked him to resend. Unopenable finished evaluations: 4 of 19,
   down from 9.
 
+### PIMS · ELA-Meldungsgenerator — AI announcement copy (2026-09-01)
+- **Status:** 🚧 v1 prototype live, awaiting Ignat feedback
+- **Client:** ETC Solutions GmbH — PIMS for BVG. Audience: **Leitstelle dispatchers**.
+- **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-message-generator/ — `projects/etc-message-generator/index.html`
+- **Verification:** `projects/etc-message-generator/verify.js` — 46 Chromium checks, all passing (`node projects/etc-message-generator/verify.js`)
+- **Brief (Ignat, 2026-09-01, + screenshot of the dev's "Meldung bearbeiten" panel):** station and problem selection are out of scope. DAISY display text is predefined; the spoken ELA text must be **generated in DE + EN** with a selectable tone of voice (kind / funny / straightforward), re-generated as often as wanted, hand-editable, then rendered to an audio file to check the result. Ignat's sketch: auto-generated prompt + tone selector + generate EN/DE + generate audio. He also asked for a critique.
+- **Screens/states built (one screen, 8 states):** initial · generating · generated · edited + EN out of date · audio stale · release-ready · emergency (tone locked) · service failure
+- **Structure:** left = read-only event context (U2 · Kein Halt · Grund · Stationen · Gleis · Zeitraum · Kategorie) + Mitteilungen + audit link. Right = DAISY (read-only, 160-char counter, repeat interval) → Quelle + Prompt → Tonalität & Stimme → Meldungen DE/EN → Audio → Freigabe gate.
+- **Design calls made on top of Ignat's sketch** (all flagged to him for review):
+  1. **Quelle** segmented — Standardtext / KI-generiert / Manuell. The template path is the fallback when the text service is down; without it the tool has a hard LLM dependency during a live disruption.
+  2. **Prompt is assembled from structured facts, not typed.** Alternative transport is a select constrained to the line network (anti-hallucination — the model must not invent a bus line); one free "Zusatzhinweis" field carries the human bits ("Wir wünschen dem Berliner Team viel Erfolg"). Prompt shown read-only, expert mode decouples it with a visible warning.
+  3. **Tone gated by event category.** Locker + Humorvoll are locked for Störung/Personenschaden; a locked tone falls back to Sachlich with a toast. Funny copy over a Notarzteinsatz is the biggest reputational risk in the feature.
+  4. **Tonalität (wording) split from Stimme (TTS voice, per language)** — the dev mock conflated them in one "Tonfall: Berliner (Unkompliziert)" field.
+  5. **Faktenabgleich mit DAISY** — per-fact presence check in both languages. Missing mandatory fact blocks release; a fact present in speech but not on the display raises "Sprechtext sagt mehr als die Anzeige".
+  6. **Audio state per language**, invalidated by text / voice / pronunciation change. The dev mock had one global GENERATE AUDIO + LISTEN GENERATED pair, which happily plays audio that no longer matches the text.
+  7. **Spoken duration instead of a char count** for audio, checked against the 5-min repeat interval (25 s guidance).
+  8. **Aussprache-Ausnahmen** — per-token overrides (U2 → "U zwei", M41, Bhf., station names in EN).
+  9. **Version history per language** with restore + confirm before regenerating an edited text.
+  10. **Freigabe gate** — no release until both texts exist, both audio files are current, both were listened to and the fact check passes. Everything lands in the Freigabe-Protokoll.
+- **Deliberately not built:** priority/conflict handling with other message types, real LLM/TTS wiring, station + problem selection (out of scope per brief), UI language switcher (UI is German only).
+- **Open questions raised with the critique:** GEMA/licensing is not an issue here but political neutrality is ("we wish the Berlin team to win" — Hertha vs Union); who may pick a non-factual tone; whether EN is a translation of DE or independently generated; whether an approval role is needed before public speakers get AI copy; what happens when the LLM invents a replacement line.
+- **Implementation note (bug class worth remembering):** a full re-render on `blur` destroys the button the user is clicking before `mouseup`, so the first click after editing text is silently swallowed. `commitEdit()` now only records the edit; all text-dependent UI updates happen in `oninput` via surgical DOM updates that never replace the textarea.
+
 ### PIMS · Grunddaten Editor (2026-07-09)
 - **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
 - **Client:** ETC Solutions GmbH — PIMS product for BVG (Berlin transport authority)
