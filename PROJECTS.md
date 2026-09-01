@@ -5,6 +5,28 @@
 
 ## 🔧 Active Projects
 
+### Configurable payment application engine (2026-09-01)
+- **Status:** 🚧 v1 prototype live, awaiting Ignat feedback
+- **Source:** Confluence `[Settings] Configurable payment application engine` (page 3160113208) · Jira SD-16243 (tech) / SD-16110 (mock) · DIS-333
+- **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/payment-application-engine/ — `projects/payment-application-engine/index.html`
+- **What it is:** a per-integration setting that replaces Synder's default payment→invoice matcher with a rule the user builds. Iteration 1 = QBO only, Per-Transaction only, Pro+, one integration (social token) at a time.
+- **The constraint that shapes the whole UI:** QBO's query language is AND-only and cannot filter on `PrivateNote`. So the rule splits in two — a **scope** (three rows QBO *can* filter: CustomerRef, TxnDate ± N days, DocNumber) that returns an ordered snapshot, and a **condition box** Synder evaluates in memory against that snapshot. Scope's match row offers only the 4 pushable operands; the condition box gets all 10 (negations, is empty).
+- **Screens built:**
+  1. **GSP integration settings** — Apply payments to invoices (prerequisite), the new *Payment application* row with a Default/Custom-rule chip and a Configure/Edit-rule button, and *Cancel sync if there is no matching open invoice found for a payment*. Plan gate disables the button on Starter and states the requirement.
+  2. **Overlay configurator** — master switch (off shows default behaviour as non-editable reference text, nothing pre-filled), section 1 scope, section 2 condition box with an ALL/ANY segmented control, section 3 outcomes (Apply as overpayment · Cancel sync), then three disclosures: **In plain terms** (generated live), **the exact QBO query** (generated live, incl. `ORDERBY TxnDate ASC, Id ASC` and no `Balance > 0`), and a sample-payment runner.
+- **Rules actually implemented, not just drawn:** scope validity guard (both bounding rows off = save blocked, FDD copy verbatim) · customer inheritance required while Customer is off · metadata source needs a key · date-off is admin-gated with a lock affordance and discloses no-limit · 21-char DocNumber truncation applied symmetrically · absent-vs-empty (absent → row skipped) · empty box = scope-only → first in snapshot · failed applicable box and all-rows-not-applicable → process as usual, *never* first-in-snapshot · overpayment vs cancel kept visibly distinct from cancel-on-no-match · cancel-sync is **one value across both surfaces** (edit it on GSP, the overlay inherits it, and back).
+- **Sample-payment runner** — badged `PROTOTYPE AID · DRY-RUN IS OUT OF SCOPE`. Runs the real engine over a fixed ledger for the FDD's own worked examples A (two invoices satisfy one row → snapshot order decides), B (Sales Receipt, every invoice-sourced row absent → process as usual, do *not* apply to TW-5510), C (applicable box matched nothing → process as usual) plus an overpayment case. It exists so the logic can be checked against the doc while reviewing, not as a shipped feature.
+- **Visible assumptions** (presenter-bar toggle), each mapped to an open question in the FDD:
+  - **A0** marketable name — the FDD requires one and doesn't give it. Working name: *Payment application*.
+  - **A1** the default-behaviour reference paragraph is placeholder copy; product owns the wording.
+  - **A2** Generic customer (Q4) — surfaced as a warning at configuration time, not a block.
+  - **A3** day count default/maximum (Q3) — using default 90, max 365.
+  - **A4** one condition box only; no "add group" control, since nested groups and named presets are out of scope.
+- **Not covered, deliberately:** Xero (Iteration 2), QBD, Datasource/Summary Sync, snapshot page ceiling (Q3), per-payment match explanation, duplicate-path unification with the invoice-sync check (Q5).
+- **Presenter bar** switches plan, Apply-payments, the admin no-limit flag, Generic customer, and assumption visibility — every gate in §2 Prerequisites is reachable without editing code.
+- **Verified:** headless Chromium, **86 DOM assertions** passing, 0 JS errors, no page-level horizontal overflow at 1440, no raw hex in the prototype's own CSS (`scripts/verify-payapp.cjs`; screenshots `scripts/shots-payapp.cjs`). Asserts visibility/clickability rather than element state, and covers the typed-metadata-key case that a blur re-render would have broken.
+- **Registered on the hub:** Synder Prototypes → Settings & Billing.
+
 ### ETC PIS Config — Optics & Station Announcements Timing (2026-08-27)
 - **Status:** 🚧 v1 prototype live, awaiting Ignat feedback
 - **Client:** ETC Solutions GmbH — ISR (Israel Railways), PIS Configuration module
