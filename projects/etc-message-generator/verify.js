@@ -19,6 +19,18 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.waitForTimeout(350);
 
   // ── structure matches the screenshot ────────────────────────
+  // ── side sheet, not a centred panel ──────────────────────────
+  const box = await page.locator('#sheet').boundingBox();
+  const vw = page.viewportSize().width;
+  check('sheet is anchored to the right edge', Math.abs((box.x + box.width) - vw) < 2,
+    'right=' + Math.round(box.x + box.width) + ' vw=' + vw);
+  check('sheet leaves the left side uncovered', box.x > 120, 'x=' + Math.round(box.x));
+  check('scrim behind it carries no fake content',
+    (await page.locator('.scrim').textContent()).trim() === '');
+  check('no history button', (await page.locator('.foot').textContent()).toLowerCase().indexOf('verlauf') === -1,
+    (await page.locator('.foot').textContent()).replace(/\s+/g,' '));
+  check('no history drawer in the DOM', (await page.locator('#drawer').count()) === 0);
+
   const secs = await page.locator('.sec-t, .sub-t').allTextContents();
   check('sections in screenshot order',
     secs.join('|') === 'Daisy|ELA|Meldungen|Stationen|Geplant', secs.join('|'));
@@ -26,7 +38,7 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   check('meta row has Mitteilungen/Typ/Stationen', /Mitteilungen.*Typ.*Stationen/s.test(meta));
   check('meta row has no Gleis', !/Gleis/.test(meta), meta.replace(/\s+/g, ' '));
   check('no Actual stations anywhere',
-    !/Actual|Tatsächlich/i.test(await page.locator('.panel').textContent()));
+    !/Actual|Tatsächlich/i.test(await page.locator('#sheet').textContent()));
   check('meta Stationen mirrors the Planned selects', /Rp - No/.test(meta), meta.replace(/\s+/g,' '));
   await page.selectOption('#stBis', 'Gleisdreieck (Gu)');
   await page.waitForTimeout(200);
@@ -34,12 +46,38 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     /Rp - Gu/.test(await page.locator('#metaRow').textContent()));
   await page.selectOption('#stBis', 'Nollendorfplatz (No)');
 
-  check('DAISY read-only', await page.locator('#daisy').getAttribute('readonly') !== null);
+  // ── DAISY is editable now ───────────────────────────────────
+  check('DAISY editable', await page.locator('#daisy').getAttribute('readonly') === null);
   check('DAISY counter live', (await page.locator('#daisyCount').textContent()) !== '0');
-  check('prompt read-only', await page.locator('#prompt').getAttribute('readonly') !== null);
+  await page.locator('#daisy').click();
+  await page.locator('#daisy').press('Control+End');
+  await page.keyboard.type(' Zusatz.');
+  check('typing into DAISY updates the counter',
+    (await page.locator('#daisyCount').textContent()) === String((await page.locator('#daisy').inputValue()).length));
+  await page.locator('#daisy').fill('x'.repeat(170));
+  await page.waitForTimeout(150);
+  check('DAISY over 160 is flagged',
+    await page.locator('#daisyCounter').evaluate(el => el.classList.contains('over')));
+  check('over-length DAISY warns on the save line',
+    (await page.locator('#state-save').textContent()).includes('160 Zeichen'));
+  await page.locator('#daisy').fill('{U2}: Kein Halt {Stadtmitte} aufgrund {Störung}. Weitere Informationen folgen in Kürze. ***');
+  await page.waitForTimeout(150);
+
+  // ── one editable prompt field + reset to default ────────────
+  check('prompt editable', await page.locator('#prompt').getAttribute('readonly') === null);
+  check('no separate extra-note field', (await page.locator('#zusatz').count()) === 0);
   check('prompt built from the event',
     /U2/.test(await page.locator('#prompt').inputValue())
     && /Stadtmitte/.test(await page.locator('#prompt').inputValue()));
+  check('DEFAULT switch disabled while the prompt is untouched',
+    await page.locator('#btnDefault').isDisabled());
+  const defPrompt = await page.locator('#prompt').inputValue();
+  await page.locator('#prompt').click();
+  await page.locator('#prompt').press('Control+End');
+  await page.keyboard.type(' Viel Spaß beim Konzert!');
+  await page.waitForTimeout(150);
+  check('DEFAULT switch enables once the prompt is edited',
+    await page.locator('#btnDefault').isEnabled());
   check('default tone is Neutral', (await page.locator('#tonfall').inputValue()) === 'neutral');
   check('two intervals, independent',
     (await page.locator('#intDaisy').inputValue()) === '5 min'
@@ -58,6 +96,9 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.screenshot({ path: out('mg-1-initial.png'), fullPage: true });
 
   // ── generate: EN is a real translation, station name verbatim ──
+  check('generate button is called GENERATE ELA',
+    (await page.locator('#btnGen').textContent()).trim() === 'ELA GENERIEREN',
+    (await page.locator('#btnGen').textContent()).trim());
   await page.click('#btnGen');
   await page.waitForTimeout(1400);
   const de1 = await page.locator('#ta-de').inputValue();
@@ -67,9 +108,30 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   check('EN keeps the station name verbatim', en1.includes('Stadtmitte'), en1);
   check('EN never says "city center"', !/city cent/i.test(en1), en1);
   check('EN keeps the line name verbatim', en1.includes('U2'));
-  check('state line shows Generiert + tone',
-    /Generiert.*Neutral/s.test(await page.locator('#state-de').textContent()),
+  check('state line shows Generiert + tone + variant',
+    /Generiert.*Neutral.*Variante 1\/3/s.test(await page.locator('#state-de').textContent()),
     (await page.locator('#state-de').textContent()).trim());
+  check('prompt addition landed in DE', de1.includes('Viel Spaß beim Konzert!'), de1);
+  check('known phrase landed translated in EN', en1.includes('Enjoy the concert!'), en1);
+
+  // ── each click gives a genuinely different variant ──────────
+  const seen = [de1];
+  for (let i = 0; i < 3; i++) {
+    await page.click('#btnGen');
+    await page.waitForTimeout(1200);
+    seen.push(await page.locator('#ta-de').inputValue());
+  }
+  check('three distinct variants, then it cycles',
+    new Set(seen.slice(0, 3)).size === 3 && seen[3] === seen[0],
+    seen.map((x, i) => i + ':' + x.slice(0, 26)).join(' | '));
+  check('variant number shown in the state line',
+    /Variante \d\/3/.test(await page.locator('#state-de').textContent()));
+
+  // back to the plain default prompt for the rest of the run
+  await page.click('#btnDefault');
+  await page.waitForTimeout(150);
+  check('DEFAULT restores the assembled prompt',
+    (await page.locator('#prompt').inputValue()) === defPrompt);
 
   // ── Erstmeldung vs Hauptmeldung detail level ────────────────
   check('Erstmeldung has no alternative or duration',
@@ -146,32 +208,22 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     (await page.locator('#state-audio').textContent()).replace(/\s+/g,' '));
   await page.screenshot({ path: out('mg-2-generated.png'), fullPage: true });
 
-  // ── Zusatz: known phrase is bilingual, free text is DE only ──
-  await page.locator('#zusatz').fill('Viel Spaß beim Konzert!');
+  // ── free text in the prompt is German only, and says so ─────
+  await page.locator('#prompt').click();
+  await page.locator('#prompt').press('Control+End');
+  await page.keyboard.type(' Der Kiosk am Ausgang Nord ist geschlossen.');
   await page.click('#btnGen');
-  await page.waitForTimeout(1400);
-  check('known Zusatz lands in DE',
-    (await page.locator('#ta-de').inputValue()).includes('Viel Spaß beim Konzert!'));
-  check('known Zusatz lands translated in EN',
-    (await page.locator('#ta-en').inputValue()).includes('Enjoy the concert!'),
-    await page.locator('#ta-en').inputValue());
-  check('no translation warning for a known phrase',
-    !(await page.locator('#state-en').textContent()).includes('nur auf Deutsch'));
-
-  await page.locator('#zusatz').fill('Der Kiosk am Ausgang Nord ist geschlossen.');
-  await page.click('#btnGen');
-  await page.waitForTimeout(1400);
-  check('free-text Zusatz lands in DE',
+  await page.waitForTimeout(1200);
+  check('free-text prompt addition lands in DE',
     (await page.locator('#ta-de').inputValue()).includes('Kiosk am Ausgang Nord'));
-  check('free-text Zusatz is NOT invented in EN',
+  check('free-text addition is NOT invented in EN',
     !(await page.locator('#ta-en').inputValue()).includes('Kiosk'));
-  check('EN state line warns the note is German only',
+  check('EN state line warns the addition is German only',
     (await page.locator('#state-en').textContent()).includes('nur auf Deutsch'),
     (await page.locator('#state-en').textContent()).trim());
-  check('prompt shows the Zusatz',
-    (await page.locator('#prompt').inputValue()).includes('Kiosk'));
-  await page.screenshot({ path: out('mg-3-zusatz.png'), fullPage: true });
-  await page.locator('#zusatz').fill('');
+  await page.screenshot({ path: out('mg-3-prompt.png'), fullPage: true });
+  await page.click('#btnDefault');
+  await page.waitForTimeout(150);
 
   // ── Source: Library ────────────────────────────────────────
   await page.selectOption('#source', 'library');
@@ -225,7 +277,10 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   const secsEn = await page.locator('.sec-t, .sub-t').allTextContents();
   check('UI switches to English', secsEn.join('|') === 'Daisy|ELA|Messages|Stations|Planned',
     secsEn.join('|'));
-  check('buttons relabel', (await page.locator('#btnSave').textContent()) === 'SAVE');
+  check('buttons relabel',
+    (await page.locator('#btnSave').textContent()) === 'SAVE'
+    && (await page.locator('#btnGen').textContent()).trim() === 'GENERATE ELA'
+    && (await page.locator('#btnDefault').textContent()).trim() === 'DEFAULT');
   check('meta row relabels', /Notices.*Type.*Stations/s.test(await page.locator('#metaRow').textContent()));
   check('html lang follows the switcher',
     (await page.locator('html').getAttribute('lang')) === 'en');
@@ -235,18 +290,6 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     (await page.locator('#tonfall option').allTextContents()).join('|').includes('Berlin (easy-going)'));
   await page.screenshot({ path: out('mg-5-english.png'), fullPage: true });
   await page.click('#uiDe');
-
-  // ── history + restore ──────────────────────────────────────
-  await page.click('#btnHist');
-  await page.waitForTimeout(400);
-  check('history drawer opens', await page.locator('#drawer.open').isVisible());
-  check('history lists earlier versions',
-    await page.locator('#drBody').getByText('Wiederherstellen').first().isVisible());
-  await page.locator('#drBody').getByText('Wiederherstellen').first().click();
-  await page.waitForTimeout(400);
-  check('restore closes the drawer',
-    !(await page.locator('#drawer').evaluate(el => el.classList.contains('open'))));
-  check('restore changed the text', (await page.locator('#ta-de').inputValue()) !== keep);
 
   check('no console/page errors', errors.length === 0, errors.join(' | '));
 

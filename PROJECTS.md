@@ -674,10 +674,10 @@
   down from 9.
 
 ### PIMS · ELA-Meldungsgenerator — AI announcement copy (2026-09-01)
-- **Status:** 🚧 v2 live (panel rebuilt to Ignat's screenshot), awaiting feedback
+- **Status:** 🚧 v3 live (side sheet), awaiting feedback
 - **Client:** ETC Solutions GmbH — PIMS for BVG. Audience: **Leitstelle dispatchers**.
 - **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-message-generator/ — `projects/etc-message-generator/index.html`
-- **Verification:** `projects/etc-message-generator/verify.js` — 74 Chromium checks, all passing
+- **Verification:** `projects/etc-message-generator/verify.js` — 83 Chromium checks, all passing
 - **Brief:** station + problem selection out of scope. DAISY display text is predefined and **short**; the spoken ELA text is generated in DE + EN with a tone of voice, re-generated freely, hand-editable, then rendered to audio.
 - **⚠️ Process lesson (2026-09-01):** v1 was built from the one-paragraph brief with the critique delivered *afterwards*, and when Ignat asked for fewer inputs I answered with a brand-new three-card layout. Both were wrong — see the AGENTS.md rule "Ask questions BEFORE building a big prototype". v2 reproduces **his** panel structure exactly.
 - **Structure = Ignat's screenshot, 1:1:** title + DE/EN switcher · meta row (Mitteilungen · Typ · Linie · Grund · Stationen) · **Daisy** (read-only template, 160 counter, Intervall) · **ELA** (Quelle · Prompt · Zusatz · Tonfall + GENERIEREN) · **Meldungen** (ELA DE | ELA EN + Intervall, one AUDIO ERZEUGEN / ANHÖREN pair) · **Stationen** (Geplant only) · footer.
@@ -698,6 +698,14 @@
   - A full re-render from `onblur` replaced the button being clicked, so the first click after editing text was silently swallowed. Blur now only records the edit.
   - Playback could stick on STOP forever where `speechSynthesis` has no voice installed and never fires `onend` — there is now a duration-based safety timeout plus `onerror`.
   - Changing the event type marked the text as "manually edited", which raised a false "overwrite your changes?" confirm about text nobody had touched. It is now its own `Ereignis geändert` state.
+- **v3 changes (Ignat, 2026-09-01 11:58):**
+  - **Right-hand side sheet** over a plain scrim, as in his screenshot — the Ereignis screen behind it is deliberately not drawn ("no need to add details to the background").
+  - **DAISY is editable.** The 160 counter turns red over the limit and the footer warns that the display will cut it off.
+  - **Prompt and extra note merged into one editable field** plus a `STANDARD` / `DEFAULT` switch that restores the assembled default (disabled while untouched). Text appended beyond the default is treated as the extra note: known bilingual phrases land in both languages, anything else lands in German only and the EN state line says so.
+  - Button renamed **GENERATE ELA** (`ELA GENERIEREN` in the German UI), kept outlined as in the screenshot.
+  - **Three real variants per tone per notice type** (18 DE + 18 EN texts). Every click cycles to the next wording and the state line shows `Variante 2/3`, so regeneration behaves like the real thing instead of returning the same string.
+  - **History button and drawer removed**; per-language version tracking dropped with it.
+
 - **Still open with the client:** why DAISY is predefined at all (Ignat doesn't know — it's the customer's request that only ELA be playful; if it's habit rather than approval/legal, generating both from the same facts removes the drift and the need for a fact check), and whether the proper-noun glossary lives in Konfiguration.
 
 ### PIMS · Grunddaten Editor (2026-07-09)
