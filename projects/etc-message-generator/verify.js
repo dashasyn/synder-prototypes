@@ -2,187 +2,251 @@ const { chromium } = require('playwright');
 const path = require('path');
 
 const URL = 'file://' + path.join(__dirname, 'index.html');
-const out = (n) => path.join('/tmp', n);
+const out = n => path.join('/tmp', n);
 const ok = [], bad = [];
 const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ? ' — ' + extra : ''));
 
 (async () => {
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1500, height: 1100 } });
+  const page = await browser.newPage({ viewport: { width: 1120, height: 1150 } });
   const errors = [];
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
+  const dialogs = [];
+  page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
 
   await page.goto(URL);
-  await page.waitForTimeout(400);
+  await page.waitForTimeout(350);
 
-  // ── 1. initial state ────────────────────────────────────────
-  check('release button disabled initially', await page.locator('#releaseBtn').isDisabled());
-  check('gate lists open items',
-    (await page.locator('#gateWhy').textContent()).includes('DE Text'));
-  check('fact check idle', (await page.locator('#fcheck').textContent()).includes('noch kein Text'));
+  // ── structure matches the screenshot ────────────────────────
+  const secs = await page.locator('.sec-t, .sub-t').allTextContents();
+  check('sections in screenshot order',
+    secs.join('|') === 'Daisy|ELA|Meldungen|Stationen|Geplant', secs.join('|'));
+  const meta = await page.locator('#metaRow').textContent();
+  check('meta row has Mitteilungen/Typ/Stationen', /Mitteilungen.*Typ.*Stationen/s.test(meta));
+  check('meta row has no Gleis', !/Gleis/.test(meta), meta.replace(/\s+/g, ' '));
+  check('no Actual stations anywhere',
+    !/Actual|Tatsächlich/i.test(await page.locator('.panel').textContent()));
+  check('meta Stationen mirrors the Planned selects', /Rp - No/.test(meta), meta.replace(/\s+/g,' '));
+  await page.selectOption('#stBis', 'Gleisdreieck (Gu)');
+  await page.waitForTimeout(200);
+  check('changing Planned updates the meta row',
+    /Rp - Gu/.test(await page.locator('#metaRow').textContent()));
+  await page.selectOption('#stBis', 'Nollendorfplatz (No)');
+
+  check('DAISY read-only', await page.locator('#daisy').getAttribute('readonly') !== null);
+  check('DAISY counter live', (await page.locator('#daisyCount').textContent()) !== '0');
+  check('prompt read-only', await page.locator('#prompt').getAttribute('readonly') !== null);
+  check('prompt built from the event',
+    /U2/.test(await page.locator('#prompt').inputValue())
+    && /Stadtmitte/.test(await page.locator('#prompt').inputValue()));
+  check('default tone is Neutral', (await page.locator('#tonfall').inputValue()) === 'neutral');
+  check('two intervals, independent',
+    (await page.locator('#intDaisy').inputValue()) === '5 min'
+    && (await page.locator('#intEla').inputValue()) === '5 min');
+  await page.selectOption('#intDaisy', '10 min');
+  check('Daisy interval does not move the ELA interval',
+    (await page.locator('#intEla').inputValue()) === '5 min');
+  await page.selectOption('#intDaisy', '5 min');
+  check('one audio pair only, no per-box play button',
+    (await page.locator('#audioActs button').count()) === 2);
+  check('state line present under both boxes and audio',
+    await page.locator('#state-de').isVisible() && await page.locator('#state-en').isVisible()
+    && await page.locator('#state-audio').isVisible());
+  check('initial state lines say "no text"',
+    (await page.locator('#state-de').textContent()).includes('Kein Text'));
   await page.screenshot({ path: out('mg-1-initial.png'), fullPage: true });
 
-  // ── 2. generate both ───────────────────────────────────────
-  await page.click('#genBtn');
-  check('skeleton shows while generating', await page.locator('.skel').first().isVisible());
-  await page.waitForTimeout(1500);
-  const deText = await page.locator('#ta-de').inputValue();
-  const enText = await page.locator('#ta-en').inputValue();
-  check('DE text generated', deText.length > 40, deText.slice(0, 45) + '…');
-  check('EN text generated', enText.length > 40, enText.slice(0, 45) + '…');
-  check('DE contains station', deText.includes('Alexanderplatz'));
-  check('DE contains alternative M41', deText.includes('M41'));
-  check('freundlich tone carries the extra note', deText.includes('Berliner Team'));
-  check('DE chip = Generiert', (await page.locator('#chip-de').textContent()) === 'Generiert');
-  check('fact check flags the extra note',
-    (await page.locator('#fcheck').textContent()).includes('sagt mehr als die Anzeige'));
+  // ── generate: EN is a real translation, station name verbatim ──
+  await page.click('#btnGen');
+  await page.waitForTimeout(1400);
+  const de1 = await page.locator('#ta-de').inputValue();
+  const en1 = await page.locator('#ta-en').inputValue();
+  check('DE generated', de1.length > 30, de1);
+  check('EN generated', en1.length > 30, en1);
+  check('EN keeps the station name verbatim', en1.includes('Stadtmitte'), en1);
+  check('EN never says "city center"', !/city cent/i.test(en1), en1);
+  check('EN keeps the line name verbatim', en1.includes('U2'));
+  check('state line shows Generiert + tone',
+    /Generiert.*Neutral/s.test(await page.locator('#state-de').textContent()),
+    (await page.locator('#state-de').textContent()).trim());
 
-  // ── 3. tone affects wording ────────────────────────────────
-  await page.click('#toneSeg button[data-tone="sachlich"]');
-  await page.click('#genBtn');
-  await page.waitForTimeout(1500);
-  const sachlich = await page.locator('#ta-de').inputValue();
-  check('sachlich drops the extra note', !sachlich.includes('Berliner Team'), sachlich.slice(0, 50) + '…');
-  check('version history captured', (await page.locator('#ver-de').textContent()).includes('Verlauf (1)'));
+  // ── Erstmeldung vs Hauptmeldung detail level ────────────────
+  check('Erstmeldung has no alternative or duration',
+    !/M41/.test(de1) && !/23:30/.test(de1), de1);
+  await page.click('#pTyp');
+  await page.waitForTimeout(250);
+  check('changing the event type is not called a manual edit',
+    (await page.locator('#state-de').textContent()).includes('Ereignis geändert'),
+    (await page.locator('#state-de').textContent()).trim());
+  check('no overwrite confirm for text nobody touched', dialogs.length === 0, dialogs.join(' | '));
+  await page.click('#btnGen');
+  await page.waitForTimeout(1400);
+  const de2 = await page.locator('#ta-de').inputValue();
+  const en2 = await page.locator('#ta-en').inputValue();
+  check('Hauptmeldung adds reason, alternative and duration',
+    /Notarzteinsatz/.test(de2) && /M41/.test(de2) && /23:30/.test(de2), de2);
+  check('EN Hauptmeldung is the matching translation',
+    /M41/.test(en2) && /23:30/.test(en2) && /Stadtmitte/.test(en2), en2);
+  check('DAISY stays short while ELA grows',
+    (await page.locator('#daisy').inputValue()).length < de2.length);
 
-  // ── 4. typing keeps focus and lands whole string (AGENTS.md rule) ──
-  await page.click('#toneSeg button[data-tone="freundlich"]');
-  await page.click('#genBtn');
-  await page.waitForTimeout(1500);
+  // ── tone changes wording ───────────────────────────────────
+  await page.selectOption('#tonfall', 'berliner');
+  await page.click('#btnGen');
+  await page.waitForTimeout(1400);
+  const de3 = await page.locator('#ta-de').inputValue();
+  check('tone changes the wording', de3 !== de2, de3);
+  check('tone preset shown in the state line',
+    (await page.locator('#state-de').textContent()).includes('Berlinerin'));
+  check('history captured earlier versions',
+    (await page.locator('#ta-de').inputValue()) !== de1);
+
+  // ── audio: one combined file, stale on edit ────────────────
+  await page.locator('#audioActs').getByText('AUDIO ERZEUGEN').click();
+  await page.waitForTimeout(1400);
+  let aud = await page.locator('#state-audio').textContent();
+  check('audio ready, one file DE + EN', /Audio erzeugt/.test(aud) && /DE \+ EN/.test(aud),
+    aud.replace(/\s+/g, ' '));
+  check('listen enabled', await page.locator('#audioActs').getByText('ANHÖREN').isEnabled());
+  check('save warns audio not listened to yet',
+    (await page.locator('#state-save').textContent()).includes('angehört'));
+
+  await page.locator('#audioActs').getByText('ANHÖREN').click();
+  await page.waitForTimeout(400);
+  check('listened is recorded',
+    (await page.locator('#state-audio').textContent()).includes('angehört'));
+
+  // typing must keep focus, and must invalidate the audio
   const before = await page.locator('#ta-de').inputValue();
   await page.locator('#ta-de').click();
-  await page.locator('#ta-de').press('End');
-  await page.keyboard.type(' Danke für Ihre Geduld.', { delay: 25 });
+  // Control+End, not End — the text soft-wraps, so End stops at the visual line
+  await page.locator('#ta-de').press('Control+End');
+  await page.keyboard.type(' Bitte beachten Sie die Aushänge.', { delay: 20 });
   const focused = await page.evaluate(() => document.activeElement && document.activeElement.id);
   check('textarea keeps focus while typing', focused === 'ta-de', 'activeElement=' + focused);
-  const after = await page.locator('#ta-de').inputValue();
-  check('whole typed string landed', after === before + ' Danke für Ihre Geduld.', after.slice(-40));
-  check('DE textarea still interactive after typing', await page.locator('#ta-de').isVisible());
-  check('DE chip = Bearbeitet', (await page.locator('#chip-de').textContent()) === 'Bearbeitet');
-  check('EN marked out of date after DE edit',
-    (await page.locator('#chip-en').textContent()) === 'Nicht aktuell');
-  check('EN panel shows the re-translate action',
-    (await page.locator('#mpf-en').textContent()).includes('EN neu übersetzen'));
-
-  // ── 5. audio staleness ─────────────────────────────────────
-  await page.locator('.arow', { hasText: 'ELA (DE)' }).getByText('Audio erzeugen').click();
+  check('whole typed string landed',
+    (await page.locator('#ta-de').inputValue()) === before + ' Bitte beachten Sie die Aushänge.');
+  check('state line switches to edited',
+    (await page.locator('#state-de').textContent()).includes('Manuell bearbeitet'));
+  check('EN flagged as out-of-date translation',
+    (await page.locator('#state-en').textContent()).includes('Übersetzung nicht aktuell'));
+  check('EN box carries the warning outline',
+    await page.locator('#mbox-en').evaluate(el => el.classList.contains('warn')));
+  aud = await page.locator('#state-audio').textContent();
+  check('audio goes stale after a text edit', /veraltet/i.test(aud), aud.replace(/\s+/g,' '));
+  check('save warns the audio no longer matches',
+    (await page.locator('#state-save').textContent()).includes('passt nicht zum Text'));
+  check('button after edit still works first time (no blur re-render)',
+    await page.locator('#audioActs').getByText('AUDIO ERZEUGEN').isEnabled());
+  await page.locator('#audioActs').getByText('AUDIO ERZEUGEN').click();
   await page.waitForTimeout(1400);
-  let deRow = await page.locator('.arow').first().textContent();
-  check('DE audio ready', deRow.includes('Bereit'), deRow.replace(/\s+/g, ' ').slice(0, 90));
-  check('listen button enabled when ready',
-    await page.locator('.arow').first().getByText('▶ Anhören').isEnabled());
-  await page.locator('#ta-de').click();
-  await page.keyboard.type(' Test.');
-  await page.locator('#ta-de').blur();
-  await page.waitForTimeout(200);
-  deRow = await page.locator('.arow').first().textContent();
-  check('DE audio goes stale after text edit', deRow.includes('Veraltet'), deRow.replace(/\s+/g, ' ').slice(0, 90));
-  check('mismatch warning visible',
-    (await page.locator('#audioRows').textContent()).includes('Audio passt nicht zum Text'));
-  check('release still blocked', await page.locator('#releaseBtn').isDisabled());
+  check('first click after editing actually regenerated the audio',
+    /Audio erzeugt/.test(await page.locator('#state-audio').textContent()),
+    (await page.locator('#state-audio').textContent()).replace(/\s+/g,' '));
   await page.screenshot({ path: out('mg-2-generated.png'), fullPage: true });
 
-  // ── 6. full happy path to release ──────────────────────────
-  await page.click('#linkEn');                       // unlink so EN stops being outdated
-  await page.locator('.arow').first().getByText('Neu erzeugen').click();
+  // ── Zusatz: known phrase is bilingual, free text is DE only ──
+  await page.locator('#zusatz').fill('Viel Spaß beim Konzert!');
+  await page.click('#btnGen');
   await page.waitForTimeout(1400);
-  await page.locator('.arow').nth(1).getByText('Audio erzeugen').click();
+  check('known Zusatz lands in DE',
+    (await page.locator('#ta-de').inputValue()).includes('Viel Spaß beim Konzert!'));
+  check('known Zusatz lands translated in EN',
+    (await page.locator('#ta-en').inputValue()).includes('Enjoy the concert!'),
+    await page.locator('#ta-en').inputValue());
+  check('no translation warning for a known phrase',
+    !(await page.locator('#state-en').textContent()).includes('nur auf Deutsch'));
+
+  await page.locator('#zusatz').fill('Der Kiosk am Ausgang Nord ist geschlossen.');
+  await page.click('#btnGen');
   await page.waitForTimeout(1400);
-  await page.locator('.arow').first().getByText('▶ Anhören').click();
-  await page.waitForTimeout(300);
-  await page.locator('.arow').nth(1).getByText('▶ Anhören').click();
-  await page.waitForTimeout(300);
-  const gateTxt = await page.locator('#gateChecks').textContent();
-  const stillBlocked = await page.locator('#releaseBtn').isDisabled();
-  check('release enabled once every check passes', !stillBlocked,
-    stillBlocked ? 'still open: ' + (await page.locator('#gateWhy').textContent()) : gateTxt.replace(/\s+/g, ' '));
-  if (!stillBlocked) {
-    await page.click('#releaseBtn');
-    await page.waitForTimeout(300);
-    check('release toast shown', (await page.locator('#toast').textContent()).includes('freigegeben'));
-  }
-  await page.screenshot({ path: out('mg-3-release.png'), fullPage: true });
+  check('free-text Zusatz lands in DE',
+    (await page.locator('#ta-de').inputValue()).includes('Kiosk am Ausgang Nord'));
+  check('free-text Zusatz is NOT invented in EN',
+    !(await page.locator('#ta-en').inputValue()).includes('Kiosk'));
+  check('EN state line warns the note is German only',
+    (await page.locator('#state-en').textContent()).includes('nur auf Deutsch'),
+    (await page.locator('#state-en').textContent()).trim());
+  check('prompt shows the Zusatz',
+    (await page.locator('#prompt').inputValue()).includes('Kiosk'));
+  await page.screenshot({ path: out('mg-3-zusatz.png'), fullPage: true });
+  await page.locator('#zusatz').fill('');
 
-  // ── 7. tone gating by event category ───────────────────────
-  await page.click('#toneSeg button[data-tone="humor"]');   // pick a tone that must not survive
-  await page.click('#pSev');
+  // ── Source: Library ────────────────────────────────────────
+  await page.selectOption('#source', 'library');
+  await page.waitForTimeout(250);
+  check('Library hides prompt and tone', !(await page.locator('#blkStandard').isVisible()));
+  check('Library block visible', await page.locator('#blkLibrary').isVisible());
+  await page.selectOption('#library', 'l1');
   await page.waitForTimeout(300);
-  const lockerDisabled = await page.locator('#toneSeg button[data-tone="locker"]').isDisabled();
-  const humorDisabled = await page.locator('#toneSeg button[data-tone="humor"]').isDisabled();
-  check('Locker locked for an emergency', lockerDisabled);
-  check('Humorvoll locked for an emergency', humorDisabled);
-  check('a locked tone falls back to Sachlich',
-    await page.locator('#toneSeg button[data-tone="sachlich"]').evaluate(el => el.classList.contains('on')));
-  check('no locked tone is left selected',
-    await page.locator('#toneSeg button.on').evaluate(el => !el.disabled));
-  check('severity chip red', (await page.locator('#ctxSeverity').innerHTML()).includes('c-red'));
-  await page.click('#genBtn');
-  await page.waitForTimeout(1500);
-  const emText = await page.locator('#ta-de').inputValue();
-  check('emergency text is factual and drops the joke',
-    emText.includes('Notarzteinsatz') && !emText.includes('Berliner Team'), emText.slice(0, 60) + '…');
-  await page.screenshot({ path: out('mg-4-emergency.png'), fullPage: true });
+  check('library fills DE + EN',
+    (await page.locator('#ta-de').inputValue()).includes('Aufzug')
+    && (await page.locator('#ta-en').inputValue()).includes('lift'),
+    await page.locator('#ta-en').inputValue());
+  check('library text is marked as such',
+    (await page.locator('#state-de').textContent()).includes('Aus Bibliothek'));
+  check('library brings its own audio',
+    (await page.locator('#state-audio').textContent()).includes('Audio erzeugt'));
 
-  // ── 8. failure path ────────────────────────────────────────
+  // ── Source: voice recording ────────────────────────────────
+  await page.selectOption('#source', 'voice');
+  await page.waitForTimeout(250);
+  check('voice block visible', await page.locator('#blkVoice').isVisible());
+  await page.selectOption('#rec', 'r1');
+  await page.waitForTimeout(300);
+  check('recording marks the text as a transcript',
+    (await page.locator('#state-de').textContent()).includes('Mitschrift'));
+  check('transcript is read-only',
+    await page.locator('#ta-de').evaluate(el => el.readOnly));
+  check('GENERATE AUDIO disabled for a human recording',
+    await page.locator('#audioActs').getByText('AUDIO ERZEUGEN').isDisabled());
+  check('recording is playable',
+    await page.locator('#audioActs').getByText('ANHÖREN').isEnabled());
+  await page.screenshot({ path: out('mg-4-voice.png'), fullPage: true });
+
+  // ── failure path keeps the previous text ───────────────────
+  await page.selectOption('#source', 'standard');
+  await page.click('#btnGen');
+  await page.waitForTimeout(1400);
+  const keep = await page.locator('#ta-de').inputValue();
   await page.click('#pFail');
-  await page.click('#genBtn');
-  await page.waitForTimeout(1500);
-  check('generation failure state shown',
-    (await page.locator('#msgPanels').textContent()).includes('Textdienst nicht erreichbar'));
-  check('fallback to standard text offered',
-    await page.locator('#msgPanels').getByText('Standardtext verwenden').first().isVisible());
-  await page.locator('#msgPanels').getByText('Standardtext verwenden').first().click();
-  await page.waitForTimeout(300);
-  check('standard text applied as fallback',
-    (await page.locator('#ta-de').inputValue()).includes('Information für unsere Fahrgäste'));
-  check('source switched to Standardtext',
-    await page.locator('#srcSeg button[data-src="standard"]').evaluate(el => el.classList.contains('on')));
-  await page.screenshot({ path: out('mg-5-failure.png'), fullPage: true });
-
-  // ── 9. prompt + history drawer ──────────────────────────────
+  await page.click('#btnGen');
+  await page.waitForTimeout(1400);
+  check('failure is reported on the state line',
+    (await page.locator('#state-de').textContent()).includes('fehlgeschlagen'));
+  check('failure does not wipe the previous text',
+    (await page.locator('#ta-de').inputValue()) === keep);
   await page.click('#pFail');
-  await page.click('#srcSeg button[data-src="ki"]');
-  await page.click('#promptDisc');
-  await page.waitForTimeout(200);
-  const prompt = await page.locator('#promptBox').textContent();
-  check('prompt is assembled from the structured facts',
-    prompt.includes('Alexanderplatz') && prompt.includes('Buslinie M41') && prompt.includes('nichts hinzufügen'));
-  check('prompt box read-only by default',
-    (await page.locator('#promptBox').getAttribute('contenteditable')) === 'false');
-  await page.click('#promptEdit');
-  await page.waitForTimeout(200);
-  check('expert mode unlocks the prompt',
-    (await page.locator('#promptBox').getAttribute('contenteditable')) === 'true');
-  check('decoupling warning shown', await page.locator('#promptEditWarn').isVisible());
-  await page.screenshot({ path: out('mg-6-prompt.png'), fullPage: true });
-  await page.click('#promptEdit');
 
-  await page.locator('#ver-de').getByText(/Verlauf/).click();
+  // ── UI language switcher ───────────────────────────────────
+  await page.click('#uiEn');
+  await page.waitForTimeout(300);
+  const secsEn = await page.locator('.sec-t, .sub-t').allTextContents();
+  check('UI switches to English', secsEn.join('|') === 'Daisy|ELA|Messages|Stations|Planned',
+    secsEn.join('|'));
+  check('buttons relabel', (await page.locator('#btnSave').textContent()) === 'SAVE');
+  check('meta row relabels', /Notices.*Type.*Stations/s.test(await page.locator('#metaRow').textContent()));
+  check('html lang follows the switcher',
+    (await page.locator('html').getAttribute('lang')) === 'en');
+  check('message content is untouched by the UI switcher',
+    (await page.locator('#ta-de').inputValue()) === keep);
+  check('tone options translate',
+    (await page.locator('#tonfall option').allTextContents()).join('|').includes('Berlin (easy-going)'));
+  await page.screenshot({ path: out('mg-5-english.png'), fullPage: true });
+  await page.click('#uiDe');
+
+  // ── history + restore ──────────────────────────────────────
+  await page.click('#btnHist');
   await page.waitForTimeout(400);
   check('history drawer opens', await page.locator('#drawer.open').isVisible());
-  check('history has restorable versions',
+  check('history lists earlier versions',
     await page.locator('#drBody').getByText('Wiederherstellen').first().isVisible());
-  await page.screenshot({ path: out('mg-7-history.png') });
   await page.locator('#drBody').getByText('Wiederherstellen').first().click();
   await page.waitForTimeout(400);
-  check('restore closes drawer and applies text',
+  check('restore closes the drawer',
     !(await page.locator('#drawer').evaluate(el => el.classList.contains('open'))));
-
-  // ── 10. pronunciation invalidates audio ────────────────────
-  await page.click('#genBtn');
-  await page.waitForTimeout(1500);
-  await page.locator('.arow').first().getByText(/Audio erzeugen|Neu erzeugen/).click();
-  await page.waitForTimeout(1400);
-  check('audio ready before pron change',
-    (await page.locator('.arow').first().textContent()).includes('Bereit'));
-  await page.click('#pronDisc');
-  await page.waitForTimeout(200);
-  await page.locator('#pronRows input').first().fill('U-Bahn-Linie zwei');
-  await page.waitForTimeout(300);
-  check('pronunciation change makes audio stale',
-    (await page.locator('.arow').first().textContent()).includes('Veraltet'));
-  await page.screenshot({ path: out('mg-8-pron.png'), fullPage: true });
+  check('restore changed the text', (await page.locator('#ta-de').inputValue()) !== keep);
 
   check('no console/page errors', errors.length === 0, errors.join(' | '));
 

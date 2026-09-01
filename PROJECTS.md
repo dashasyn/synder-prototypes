@@ -674,27 +674,31 @@
   down from 9.
 
 ### PIMS · ELA-Meldungsgenerator — AI announcement copy (2026-09-01)
-- **Status:** 🚧 v1 prototype live, awaiting Ignat feedback
+- **Status:** 🚧 v2 live (panel rebuilt to Ignat's screenshot), awaiting feedback
 - **Client:** ETC Solutions GmbH — PIMS for BVG. Audience: **Leitstelle dispatchers**.
 - **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-message-generator/ — `projects/etc-message-generator/index.html`
-- **Verification:** `projects/etc-message-generator/verify.js` — 46 Chromium checks, all passing (`node projects/etc-message-generator/verify.js`)
-- **Brief (Ignat, 2026-09-01, + screenshot of the dev's "Meldung bearbeiten" panel):** station and problem selection are out of scope. DAISY display text is predefined; the spoken ELA text must be **generated in DE + EN** with a selectable tone of voice (kind / funny / straightforward), re-generated as often as wanted, hand-editable, then rendered to an audio file to check the result. Ignat's sketch: auto-generated prompt + tone selector + generate EN/DE + generate audio. He also asked for a critique.
-- **Screens/states built (one screen, 8 states):** initial · generating · generated · edited + EN out of date · audio stale · release-ready · emergency (tone locked) · service failure
-- **Structure:** left = read-only event context (U2 · Kein Halt · Grund · Stationen · Gleis · Zeitraum · Kategorie) + Mitteilungen + audit link. Right = DAISY (read-only, 160-char counter, repeat interval) → Quelle + Prompt → Tonalität & Stimme → Meldungen DE/EN → Audio → Freigabe gate.
-- **Design calls made on top of Ignat's sketch** (all flagged to him for review):
-  1. **Quelle** segmented — Standardtext / KI-generiert / Manuell. The template path is the fallback when the text service is down; without it the tool has a hard LLM dependency during a live disruption.
-  2. **Prompt is assembled from structured facts, not typed.** Alternative transport is a select constrained to the line network (anti-hallucination — the model must not invent a bus line); one free "Zusatzhinweis" field carries the human bits ("Wir wünschen dem Berliner Team viel Erfolg"). Prompt shown read-only, expert mode decouples it with a visible warning.
-  3. **Tone gated by event category.** Locker + Humorvoll are locked for Störung/Personenschaden; a locked tone falls back to Sachlich with a toast. Funny copy over a Notarzteinsatz is the biggest reputational risk in the feature.
-  4. **Tonalität (wording) split from Stimme (TTS voice, per language)** — the dev mock conflated them in one "Tonfall: Berliner (Unkompliziert)" field.
-  5. **Faktenabgleich mit DAISY** — per-fact presence check in both languages. Missing mandatory fact blocks release; a fact present in speech but not on the display raises "Sprechtext sagt mehr als die Anzeige".
-  6. **Audio state per language**, invalidated by text / voice / pronunciation change. The dev mock had one global GENERATE AUDIO + LISTEN GENERATED pair, which happily plays audio that no longer matches the text.
-  7. **Spoken duration instead of a char count** for audio, checked against the 5-min repeat interval (25 s guidance).
-  8. **Aussprache-Ausnahmen** — per-token overrides (U2 → "U zwei", M41, Bhf., station names in EN).
-  9. **Version history per language** with restore + confirm before regenerating an edited text.
-  10. **Freigabe gate** — no release until both texts exist, both audio files are current, both were listened to and the fact check passes. Everything lands in the Freigabe-Protokoll.
-- **Deliberately not built:** priority/conflict handling with other message types, real LLM/TTS wiring, station + problem selection (out of scope per brief), UI language switcher (UI is German only).
-- **Open questions raised with the critique:** GEMA/licensing is not an issue here but political neutrality is ("we wish the Berlin team to win" — Hertha vs Union); who may pick a non-factual tone; whether EN is a translation of DE or independently generated; whether an approval role is needed before public speakers get AI copy; what happens when the LLM invents a replacement line.
-- **Implementation note (bug class worth remembering):** a full re-render on `blur` destroys the button the user is clicking before `mouseup`, so the first click after editing text is silently swallowed. `commitEdit()` now only records the edit; all text-dependent UI updates happen in `oninput` via surgical DOM updates that never replace the textarea.
+- **Verification:** `projects/etc-message-generator/verify.js` — 74 Chromium checks, all passing
+- **Brief:** station + problem selection out of scope. DAISY display text is predefined and **short**; the spoken ELA text is generated in DE + EN with a tone of voice, re-generated freely, hand-editable, then rendered to audio.
+- **⚠️ Process lesson (2026-09-01):** v1 was built from the one-paragraph brief with the critique delivered *afterwards*, and when Ignat asked for fewer inputs I answered with a brand-new three-card layout. Both were wrong — see the AGENTS.md rule "Ask questions BEFORE building a big prototype". v2 reproduces **his** panel structure exactly.
+- **Structure = Ignat's screenshot, 1:1:** title + DE/EN switcher · meta row (Mitteilungen · Typ · Linie · Grund · Stationen) · **Daisy** (read-only template, 160 counter, Intervall) · **ELA** (Quelle · Prompt · Zusatz · Tonfall + GENERIEREN) · **Meldungen** (ELA DE | ELA EN + Intervall, one AUDIO ERZEUGEN / ANHÖREN pair) · **Stationen** (Geplant only) · footer.
+- **Ignat's answers that shaped v2 (2026-09-01):**
+  - EN must be a **real translation** of DE (his sample texts were invented). Station and line names pass through **verbatim** — the production mock rendered "Kein Halt Stadtmitte" as "No stop in the city center", which tells English speakers the whole city centre is shut.
+  - Meta-row `Stationen` **mirrors** Planned; `Gleis` removed; **Actual stations removed** entirely.
+  - UI in **both languages with a switcher at the top** (independent of the message languages).
+  - `Source` options are **Standard · Library · Voice recording** (not Standard/KI/Manuell).
+  - **No length limit** for audio messages for now — duration is shown, never warned about.
+  - **One combined audio file** containing DE + EN, so the single GENERATE AUDIO / LISTEN pair is correct; a play button inside each Material box is impractical for the devs. My earlier per-language criticism was wrong on this point; the *staleness* problem is real and handled on the state line.
+  - DAISY short, ELA may be **playful and long** — customer request.
+  - The two `Intervall` fields are **genuinely independent**.
+  - **Erstmeldung** = generated early with few details; **Hauptmeldung** = later with more. Modelled: Erstmeldung says "aufgrund einer Störung", Hauptmeldung adds Notarzteinsatz + Buslinie M41 + "voraussichtlich bis 23:30".
+  - Only **Planned** stations. **Default tone = Neutral.** **Dispatcher alone** signs off — no second-person approval, so the footer only warns, never blocks.
+- **The state line** (Ignat asked what this meant): one caption under each ELA box and under the audio row, text only, never a control. Kein Text · Generiert + Tonfall · Manuell bearbeitet · Aus Bibliothek · Mitschrift der Aufnahme · *Übersetzung nicht aktuell* · *Zusatz nur auf Deutsch übernommen* · *Ereignis geändert* · Generierung fehlgeschlagen. Audio: Kein Audio · wird erzeugt · erzeugt HH:MM · Dauer · eine Datei DE + EN · angehört · **veraltet**. It exists because the production panel cannot distinguish "the generator wrote this", "a human rewrote it" and "the audio no longer matches the text" — three states that look identical today.
+- **Design calls in v2:** Prompt is read-only and assembled from the event (no invented lines/times); one `Zusatz` field for the sentence that is not in the event ("Viel Spaß beim Konzert!"), with bilingual suggestions — free text lands in German only and the EN state line says so; `Tonfall` stays **one** field whose options bundle wording + voice (Neutral · Freundlich · Berlinerin); Library brings its own approved audio; Voice recording marks the text as a transcript and disables generation.
+- **Bugs the browser caught (jsdom would not have):**
+  - A full re-render from `onblur` replaced the button being clicked, so the first click after editing text was silently swallowed. Blur now only records the edit.
+  - Playback could stick on STOP forever where `speechSynthesis` has no voice installed and never fires `onend` — there is now a duration-based safety timeout plus `onerror`.
+  - Changing the event type marked the text as "manually edited", which raised a false "overwrite your changes?" confirm about text nobody had touched. It is now its own `Ereignis geändert` state.
+- **Still open with the client:** why DAISY is predefined at all (Ignat doesn't know — it's the customer's request that only ELA be playful; if it's habit rather than approval/legal, generating both from the same facts removes the drift and the need for a fact check), and whether the proper-noun glossary lives in Konfiguration.
 
 ### PIMS · Grunddaten Editor (2026-07-09)
 - **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
