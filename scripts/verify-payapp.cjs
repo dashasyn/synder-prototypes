@@ -45,6 +45,20 @@ async function ensureOpen(page, id) {
   await page.click('#c-engine');
   ok('engine on: chip flips', (await page.locator('#ov-state-chip').innerText()).trim() === 'Custom rule');
   ok('engine on: three scope rows visible', (await page.locator('#ov-body .rr').count()) === 3);
+  const s1 = await page.locator('#ov-body .panel-t').nth(0).innerText();
+  const s2 = await page.locator('#ov-body .panel-t').nth(1).innerText();
+  ok('section 1 heading is an instruction, not a question about plumbing', s1.includes('Only consider invoices that'), s1);
+  ok('section 2 heading names the action, no battle metaphor', s2.includes('Then apply the payment to the invoice where') && !/wins/i.test(s2), s2);
+  const rowLabels = await page.locator('#ov-body .rr .rr-t').allInnerTexts();
+  ok('row labels state constraints, not field names',
+     rowLabels[0].includes('same customer') && rowLabels[1].includes('dated within') && rowLabels[2].includes('invoice number'), rowLabels.join(' | '));
+  ok('date row label carries the live day count', rowLabels[1].includes('90 days'), rowLabels[1]);
+  ok('match row label carries the live operand and source',
+     rowLabels[2].includes('is equal to') && rowLabels[2].includes('invoice number'), rowLabels[2]);
+  ok('nothing in the overlay says "wins"', !/\bwins\b/i.test(await page.locator('#ov-body').innerText()));
+  ok('lead line uses "existing invoices"', (await page.locator('#ov-body').innerText()).includes('existing invoices'));
+  ok('tie-break warns that several matches means loose conditions',
+     (await page.locator('#ov-body').innerText()).includes('conditions are too loose'));
   ok('customer toggle clickable', await page.locator('#c-cust').isVisible());
   ok('days field visible', await page.locator('#c-days').isVisible());
   ok('scope operand list has exactly 4 pushable operands',
@@ -186,7 +200,7 @@ async function ensureOpen(page, id) {
 
   // empty box = scope only
   await page.click('#cd-0');
-  ok('empty box explained as scope-only', (await page.locator('#ov-body .ref').first().innerText()).includes('first invoice in the candidate list'));
+  ok('empty box explained as scope-only', (await page.locator('#ov-body .ref').first().innerText()).includes('first invoice it found'));
   await page.locator('#sim-list .txn').nth(0).click();
   out = await page.locator('#sim-out').innerText();
   ok('empty box + candidates applies to the first candidate', out.includes('Applied to'));

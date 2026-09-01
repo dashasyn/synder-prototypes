@@ -56,7 +56,8 @@ button{font-family:inherit}
 .rr:last-of-type{border-bottom:0}
 .rr.off{opacity:.55}
 .rr-main{flex:1;min-width:0}
-.rr-t{font-size:14px;font-weight:500;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.rr-t{font-size:14px;font-weight:500;line-height:1.45}
+.rr-t .status{margin-left:8px;vertical-align:1px}
 .rr-ctl{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-start;margin-top:10px}
 .fld{display:flex;flex-direction:column;gap:3px}
 .fld-l{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--color-grey-50);font-weight:500}
@@ -452,7 +453,7 @@ function renderGSP(){
     btn  = '<button class="btn '+(configured?'btn-outlined':'')+'" id="g-open">'+(configured?'Edit rule':'Configure')+'</button>';
   }
   rows += gspRow('Payment application '+chip,
-    'Replace Synder\'s default invoice matching with a rule you define for this integration: which invoices Synder asks QuickBooks for, and which of those wins.'+
+    'Replace Synder\'s default invoice matching with a rule you define for this integration: which of your existing invoices Synder considers, and which one gets the payment.'+
     (!planOK() ? ' <b>Available on Pro, Pro Max and Premium.</b>' : '')+
     (!env.applyPayments && planOK() ? ' <b>Turn on “Apply payments to invoices” first</b> — otherwise there is nothing for a rule to do.' : ''),
     btn);
@@ -515,18 +516,16 @@ function renderOverlay(){
   }
 
   /* ================= 1. SCOPE ======================================== */
-  h += '<div class="panel"><div class="panel-h"><span class="panel-t" style="display:flex;align-items:center;gap:10px"><span class="sec-n">1</span> Which invoices Synder asks QuickBooks for</span>'+
-    '<span class="text-caption text-secondary">all enabled rows are combined with AND</span></div><div class="panel-b">'+
-    '<div class="hint" style="margin:-4px 0 8px">QuickBooks can only filter on these three things, and it only understands AND. That is why this half is fixed at three rows — everything else has to be checked by Synder afterwards, in section 2.</div>';
+  h += '<div class="panel"><div class="panel-h"><span class="panel-t" style="display:flex;align-items:center;gap:10px"><span class="sec-n">1</span> Only consider invoices that</span>'+
+    '<span class="text-caption text-secondary">every row you switch on must be true</span></div><div class="panel-b">'+
+    '<div class="hint" style="margin:-4px 0 12px">Synder searches your <b>existing invoices</b> and applies the payment to the one that matches. These three are the only things QuickBooks can filter on, and it only understands AND — everything else has to be checked afterwards, in section 2.</div>';
 
   // Customer
   h += '<div class="rr'+(s.customer.on?'':' off')+'">'+
     '<span class="tog"><span class="toggle'+(s.customer.on?' on':'')+'" id="c-cust"></span></span>'+
-    '<div class="rr-main"><div class="rr-t">Customer'+(errFor(errs,'guard').length?' <span class="status status-red">needed</span>':'')+'</div>'+
-    '<div class="row-d">Only invoices belonging to the payment\'s customer.'+
-      (env.genericCustomer && s.customer.on ? '' : '')+'</div>'+
+    '<div class="rr-main"><div class="rr-t">are for the <b>same customer</b> as the payment'+(errFor(errs,'guard').length?' <span class="status status-red">needed</span>':'')+'</div>'+
     (env.genericCustomer && s.customer.on
-      ? '<div class="warn"><b>Generic customer is on for this integration.</b> Every transaction is booked to one customer, so this row stops narrowing anything — the candidate list will be every invoice of the generic customer in the date window.'+
+      ? '<div class="warn"><b>Generic customer is on for this integration.</b> Every transaction is booked to one customer, so this row stops narrowing anything — Synder will look at every invoice of the generic customer in the date window.'+
         '<div class="asm"><b>ASSUMPTION A2 — Q4 is open.</b> The FDD leaves “what do we do when Generic customer is on” unanswered (Q4) and only says it must be surfaced at configuration time. Surfaced here as a warning, not a block.</div></div>'
       : '')+
     '</div></div>';
@@ -535,15 +534,14 @@ function renderOverlay(){
   const dateOffAllowed = env.adminNoLimit;
   h += '<div class="rr'+(s.date.on?'':' off')+'">'+
     '<span class="tog'+(dateOffAllowed?'':' nolock')+'"><span class="toggle'+(s.date.on?' on':'')+'" id="c-date"></span>'+(dateOffAllowed?'':'<span style="color:var(--color-grey-50)" title="Turning this row off means no date limit, which Synder has to enable for your organization">'+LOCK+'</span>')+'</span>'+
-    '<div class="rr-main"><div class="rr-t">Invoice date</div>'+
-    '<div class="row-d">Only invoices dated within a number of days either side of the payment date.</div>'+
+    '<div class="rr-main"><div class="rr-t">are <b>dated within '+s.date.n+' days</b> either side of the payment</div>'+
     (s.date.on
       ? '<div class="rr-ctl"><div class="fld"><span class="fld-l">Days either side</span>'+
         '<input class="k w-narrow" type="number" min="1" max="365" id="c-days" value="'+s.date.n+'"></div>'+
         '<div class="fld"><span class="fld-l">Window for a payment dated 14 Jun 2026</span>'+
         '<div class="locked">'+shiftDays('2026-06-14',-s.date.n)+' → '+shiftDays('2026-06-14',s.date.n)+'</div></div></div>'+
         '<div class="asm"><b>ASSUMPTION A3 — Q3 is open.</b> The FDD marks the default and the self-serve maximum for this number as unresolved (Q3). Using default 90, maximum 365.</div>'
-      : '<div class="warn"><b>No date limit.</b> With this row off, invoices of any age are candidates. On a large ledger that means a much bigger candidate list and a slower sync.</div>')+
+      : '<div class="warn"><b>No date limit.</b> With this row off, invoices of any age are considered. On a large ledger that means a much longer list to search and a slower sync.</div>')+
     (dateOffAllowed
       ? ''
       : '<div class="hint" style="margin-top:8px">Turning this row off means <b>no date limit at all</b>, which has to be enabled for your organization by Synder. You can change the number of days yourself.</div>')+
@@ -553,8 +551,9 @@ function renderOverlay(){
   const mSrc = SOURCES[s.match.source];
   h += '<div class="rr'+(s.match.on?'':' off')+'">'+
     '<span class="tog"><span class="toggle'+(s.match.on?' on':'')+'" id="c-match"></span></span>'+
-    '<div class="rr-main"><div class="rr-t">Invoice-number match'+(errFor(errs,'guard').length?' <span class="status status-red">needed</span>':'')+'</div>'+
-    '<div class="row-d">Compare something the payment carries against the <b>invoice number</b> in QuickBooks. Pick where the reference lives — a simple charge has no invoice of its own, so its reference usually sits in payment metadata.</div>'+
+    '<div class="rr-main"><div class="rr-t">have an <b>invoice number</b> that <b>'+OPS[s.match.operand].label+'</b> the payment\'s <b>'+SOURCES[s.match.source].label.toLowerCase()+
+      (needsKey(s.match.source) ? ' ['+(s.match.key || '…')+']' : '')+'</b>'+(errFor(errs,'guard').length?' <span class="status status-red">needed</span>':'')+'</div>'+
+    '<div class="row-d">Pick where the reference lives — a simple charge has no invoice of its own, so its reference usually sits in payment metadata.</div>'+
     (s.match.on ?
       '<div class="rr-ctl">'+
         '<div class="fld"><span class="fld-l">Take the value from</span>'+selectEl('c-msrc', srcOpts(), s.match.source, 'w-wide')+'</div>'+
@@ -578,14 +577,14 @@ function renderOverlay(){
   h += '</div></div>';
 
   /* ================= 2. CONDITIONS =================================== */
-  h += '<div class="panel"><div class="panel-h"><span class="panel-t" style="display:flex;align-items:center;gap:10px"><span class="sec-n">2</span> Which of those invoices wins</span>'+
+  h += '<div class="panel"><div class="panel-h"><span class="panel-t" style="display:flex;align-items:center;gap:10px"><span class="sec-n">2</span> Then apply the payment to the invoice where</span>'+
     '<span style="display:flex;align-items:center;gap:8px"><span class="text-caption text-secondary">match</span>'+
     '<span class="combi"><button id="c-and" class="'+(cfg.combinator==='AND'?'on':'')+'">ALL of these</button>'+
     '<button id="c-or" class="'+(cfg.combinator==='OR'?'on':'')+'">ANY of these</button></span></span></div><div class="panel-b">'+
-    '<div class="hint" style="margin:-4px 0 12px">Synder checks these against the candidate list itself, so anything goes here — including the statement memo and “is not / is empty”, which QuickBooks cannot filter on. <b>Row order means nothing.</b> If several invoices qualify, the oldest one wins.</div>';
+    '<div class="hint" style="margin:-4px 0 12px">Synder checks these against the invoices it found, so anything goes here — including the statement memo and “is not / is empty”, which QuickBooks cannot filter on. <b>Row order means nothing.</b><br>If several invoices match, Synder takes the one with the <b>earliest invoice date</b> — and more than one match usually means the conditions are too loose.</div>';
 
   if (!cfg.conditions.length){
-    h += '<div class="ref">No conditions. Synder will apply the payment to the <b>first invoice in the candidate list</b> (oldest invoice date, then lowest id) — which is what a customer-only rule should do. Add a condition only if you need to single one out.</div>';
+    h += '<div class="ref">No conditions. Synder applies the payment to the <b>first invoice it found</b> (earliest invoice date, then lowest id) — which is what a customer-only rule should do. Add a condition only if you need to single one out.</div>';
   } else {
     h += '<div class="cond">';
     cfg.conditions.forEach((c,i)=>{
@@ -645,8 +644,8 @@ function plainTerms(){
   if (s.match.on)    bits.push('have an invoice number that <b>'+OPS[s.match.operand].label+'</b> the payment\'s <b>'+SOURCES[s.match.source].label.toLowerCase()+
                               (needsKey(s.match.source)? ' ['+(s.match.key||'…')+']':'')+'</b>');
   let h = '<div class="plain"><ol>';
-  h += '<li>Synder asks QuickBooks for invoices that '+(bits.length? bits.join(', and ') : '<b>— nothing is set, so this rule cannot be saved</b>')+
-       '. They come back oldest invoice date first.</li>';
+  h += '<li>Synder searches your existing invoices and considers only the ones that '+(bits.length? bits.join(', and ') : '<b>— nothing is set, so this rule cannot be saved</b>')+
+       '. They come back earliest invoice date first.</li>';
   if (!cfg.conditions.length){
     h += '<li>It applies the payment to the <b>first</b> invoice on that list.</li>';
   } else {
@@ -657,7 +656,7 @@ function plainTerms(){
       return '<li>'+v+'</li>';
     }).join('');
     h += '<li>Out of those, it looks for the invoice where '+(cfg.combinator==='AND'?'<b>all</b>':'<b>at least one</b>')+' of these is true:<ul style="margin:6px 0">'+rows+'</ul>'+
-         'If more than one invoice qualifies, the oldest one wins.</li>';
+         'If several invoices match, Synder takes the one with the earliest invoice date.</li>';
   }
   h += '<li>If it found one, the payment goes onto that invoice and <b>no invoice is created</b>. '+
        (cfg.overpayment
