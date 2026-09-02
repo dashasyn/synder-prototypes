@@ -116,11 +116,22 @@ const parse = s => {
      grps[0] === 'Narrow the search' && grps[1] === 'Then refine', grps.join(' | '));
   // the operand rule is no longer explained in a paragraph — it is enforced by
   // the control and demonstrated by the row gutters, both of which are asserted
-  ok('the scope sub-line is one short line', await (async () => {
+  ok('the scope sub-line is one short line, and says ticked rather than "true"', await (async () => {
      const d = await ov(page).locator('.grp-d').first().innerText();
-     return d.length < 70 && d.includes('must be true');
+     return d.length < 72 && d.includes('ticked') && !/must be true/.test(d);
   })(), await ov(page).locator('.grp-d').first().innerText());
   ok('every scope row gutter shows its AND, so the join needs no paragraph',
+     (await ov(page).locator('.grp').first().locator('.r-j').allInnerTexts())
+       .map(s => s.trim()).join(',') === 'WHEN,AND,AND');
+  // an unticked row is not "false" — it is not in the search at all, so it
+  // carries no join word and the first ticked row becomes WHEN
+  await ov(page).locator('#c-cust').uncheck();
+  ok('an unticked scope row shows no join word',
+     (await ov(page).locator('.grp').first().locator('.r-j').allInnerTexts())
+       .map(s => s.trim()).join(',') === ',WHEN,AND',
+     (await ov(page).locator('.grp').first().locator('.r-j').allInnerTexts()).join('|'));
+  await ov(page).locator('#c-cust').check();
+  ok('and ticking it back restores WHEN to the first row',
      (await ov(page).locator('.grp').first().locator('.r-j').allInnerTexts())
        .map(s => s.trim()).join(',') === 'WHEN,AND,AND');
   ok('three scope rows, no refine rows pre-filled',
@@ -203,6 +214,17 @@ const parse = s => {
   // --- ONE chevron, on the first refine row, governing all of them
   await ov(page).locator('#c-add').click();
   ok('a single refine row has no combinator to choose', (await ov(page).locator('select.join').count()) === 0);
+  // the per-row checkbox has to do something — it was inert in the first build
+  ok('a refine row starts in the search', await ov(page).locator('#ce-0').isChecked());
+  await ov(page).locator('#ce-0').uncheck();
+  ok('unticking a refine row mutes every control in it', await ov(page).locator('.grp').nth(1)
+     .locator('.r').first().evaluate(el =>
+       [...el.querySelectorAll('select, input.k')].every(c => c.disabled)));
+  ok('and drops its join word', (await ov(page).locator('.grp').nth(1).locator('.r-j').first().innerText()).trim() === '');
+  ok('and takes it out of the read-out count', (await readout(page)).includes('the earliest invoice found'));
+  await ov(page).locator('#ce-0').check();
+  ok('ticking it back puts it in the search', !(await ov(page).locator('#co-0').isDisabled()) &&
+     (await readout(page)).includes('1 refine row'));
   ok('its gutter reads WHERE', (await ov(page).locator('.grp').nth(1).locator('.r-j').first().innerText()).trim() === 'WHERE');
   await ov(page).locator('#c-add').click();
   ok('two rows bring exactly one chevron', (await ov(page).locator('select.join').count()) === 1);

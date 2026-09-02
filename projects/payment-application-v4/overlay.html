@@ -352,7 +352,7 @@ function validate(){
   if (s.match.on && needsKey(s.match.source) && !s.match.key.trim())
     e.push({field:'scope-key', msg:'Name the Stripe field that holds the reference.'});
   cfg.conditions.forEach((c,i)=>{
-    if (!valueless(c.operand) && needsKey(c.source) && !(c.key||'').trim())
+    if (c.on!==false && !valueless(c.operand) && needsKey(c.source) && !(c.key||'').trim())
       e.push({field:'cond-'+i, msg:'Name the Stripe field that holds the reference.'});
   });
   return e;
@@ -392,8 +392,9 @@ function run(txn){
   log.push('QuickBooks returned: '+(snapshot.length ? snapshot.map(i=>i.doc).join(', ') : '(nothing)')+' — earliest invoice date first. Any balance qualifies.');
   if (!snapshot.length) return finish(txn, snapshot, null, 'no-candidates', log, true);
 
+  const active = cfg.conditions.filter(c=>c.on!==false);
   const applicable = [];
-  cfg.conditions.forEach(c=>{
+  active.forEach(c=>{
     if (valueless(c.operand)){
       log.push('Refine row “the invoice’s '+TARGETS[c.target].short+' '+OPS[c.operand].label+'” reads the invoice only, so it always applies.');
       applicable.push({c, val:null});
@@ -403,8 +404,8 @@ function run(txn){
     if (r.absent){ log.push('Refine row “'+SOURCES[c.source].label+'” is absent on this '+txn.type+' → skipped, not applicable.'); return; }
     applicable.push({c, val:r.value});
   });
-  if (!cfg.conditions.length){                                   // R16
-    log.push('No refine rows → take the first invoice QuickBooks returned.');
+  if (!active.length){                                           // R16
+    log.push('No refine rows in the search → take the first invoice QuickBooks returned.');
     return finish(txn, snapshot, snapshot[0], 'matched', log, true);
   }
   if (!applicable.length){                                       // R17
@@ -452,8 +453,15 @@ function ruleSummary(){
   if (s.customer.on) b.push('same customer');
   if (s.date.on)     b.push('±'+s.date.n+' days');
   if (s.match.on)    b.push('invoice number '+OPS[s.match.operand].label+' the payment’s '+SOURCES[s.match.source].label.toLowerCase());
-  if (cfg.conditions.length) b.push(cfg.conditions.length+' refine row'+(cfg.conditions.length>1?'s':''));
+  const nSum = cfg.conditions.filter(c=>c.on!==false).length;
+  if (nSum) b.push(nSum+' refine row'+(nSum>1?'s':''));
   return b.join(' · ');
+}
+/* the join word belongs to the rows that are actually in the search: an
+   unticked row shows nothing, the first ticked row shows WHEN, the rest AND */
+function joinWord(list, i, firstWord, restWord){
+  if (!list[i]) return '';
+  return i === list.indexOf(true) ? firstWord : restWord;
 }
 function snapshotDisc(){
   ['sql','sim'].forEach(k=>{ const d=document.getElementById('d-'+k); if(d) ui.open[k]=d.open; });
@@ -492,11 +500,12 @@ function render(){
 
   // Narrow the search
   h += '<div class="grp"><div class="grp-t">Narrow the search</div>'+
-    '<div class="grp-d">Which invoices QuickBooks looks at. Every row must be true.</div>'+
+    '<div class="grp-d">Which invoices QuickBooks looks at. Every ticked row has to match.</div>'+
     '<div class="rows">';
 
+  const scopeOn = [s.customer.on, s.date.on, s.match.on];
   h += '<div class="r'+(s.customer.on?'':' off')+'">'+
-    '<span class="r-j">WHEN</span>'+
+    '<span class="r-j">'+joinWord(scopeOn, 0, 'WHEN', 'AND')+'</span>'+
     '<span class="r-cb">'+cb('c-cust', s.customer.on, {labelledby:'n-cust'})+'</span>'+
     '<span class="r-c" id="n-cust"><span class="nm">Customer</span> <span class="d">matches the payment’s customer</span></span>'+
     '<span class="r-x"></span>'+
@@ -515,7 +524,7 @@ function render(){
 
   const dateFree = env.adminNoLimit;
   h += '<div class="r'+(s.date.on?'':' off')+'">'+
-    '<span class="r-j">AND</span>'+
+    '<span class="r-j">'+joinWord(scopeOn, 1, 'WHEN', 'AND')+'</span>'+
     '<span class="r-cb">'+cb('c-date', s.date.on, {labelledby:'n-date', disabled:!dateFree, describedby:dateFree?'':'date-hint'})+'</span>'+
     '<span class="r-c" id="n-date"><span class="nm">Invoice date</span> '+
       (s.date.on
@@ -535,7 +544,7 @@ function render(){
     '</div></div>';
 
   h += '<div class="r'+(s.match.on?'':' off')+'">'+
-    '<span class="r-j">AND</span>'+
+    '<span class="r-j">'+joinWord(scopeOn, 2, 'WHEN', 'AND')+'</span>'+
     '<span class="r-cb">'+cb('c-match', s.match.on, {labelledby:'n-match'})+'</span>'+
     '<span class="r-c" id="n-match">'+
       (s.match.on
@@ -566,23 +575,28 @@ function render(){
   h += '<div class="grp"><div class="grp-t">Then refine</div>'+
     '<div class="grp-d">Optional. Checked after the search.</div>'+
     '<div class="rows">';
+  const refineOn = cfg.conditions.map(c=>c.on!==false);
+  const firstOn = refineOn.indexOf(true);
+  const activeCount = refineOn.filter(Boolean).length;
   cfg.conditions.forEach((c,i)=>{
     const noVal = valueless(c.operand);
-    h += '<div class="r">'+
-      // only the first row carries the chevron, and it governs the whole group
-      '<span class="r-j">'+(i===0
-        ? (cfg.conditions.length>1
-            ? sel('c-join', [['AND','AND'],['OR','OR']], cfg.combinator, 'join', false, 'Combine all refine rows with AND or OR')
-            : 'WHERE')
-        : cfg.combinator)+'</span>'+
-      '<span class="r-cb">'+cb('ce-'+i, true, {label:'Include refine row '+(i+1)})+'</span>'+
+    const isOn = refineOn[i];
+    h += '<div class="r'+(isOn?'':' off')+'">'+
+      // the chevron sits on the first row in the search and governs them all
+      '<span class="r-j">'+(!isOn ? ''
+        : i===firstOn
+          ? (activeCount>1
+              ? sel('c-join', [['AND','AND'],['OR','OR']], cfg.combinator, 'join', false, 'Combine all refine rows with AND or OR')
+              : 'WHERE')
+          : cfg.combinator)+'</span>'+
+      '<span class="r-cb">'+cb('ce-'+i, isOn, {label:'Include refine row '+(i+1)})+'</span>'+
       '<span class="r-c">'+
-        sel('cs-'+i, srcOpts(), c.source, 'w-src', noVal, 'Refine row '+(i+1)+': on the payment, take the value from')+
+        sel('cs-'+i, srcOpts(), c.source, 'w-src', noVal||!isOn, 'Refine row '+(i+1)+': on the payment, take the value from')+
         (needsKey(c.source) && !noVal
-          ? '<input class="k w-key" id="ck-'+i+'" list="meta-keys" placeholder="Stripe field" value="'+esc(c.key||'')+'" data-efield="cond-'+i+'" aria-label="Refine row '+(i+1)+': which Stripe field holds the reference">'
+          ? '<input class="k w-key" id="ck-'+i+'" list="meta-keys" placeholder="Stripe field" value="'+esc(c.key||'')+'"'+(isOn?'':' disabled')+' data-efield="cond-'+i+'" aria-label="Refine row '+(i+1)+': which Stripe field holds the reference">'
           : '')+
-        sel('co-'+i, allOpts(), c.operand, 'w-op', false, 'Refine row '+(i+1)+': comparison')+
-        sel('ct-'+i, tgtOpts(), c.target, 'w-tgt', false, 'Refine row '+(i+1)+': on the invoice')+
+        sel('co-'+i, allOpts(), c.operand, 'w-op', !isOn, 'Refine row '+(i+1)+': comparison')+
+        sel('ct-'+i, tgtOpts(), c.target, 'w-tgt', !isOn, 'Refine row '+(i+1)+': on the invoice')+
       '</span>'+
       '<span class="r-x"><button class="del" id="cd-'+i+'" aria-label="Remove refine row '+(i+1)+'">✕</button></span>'+
       eslot('cond-'+i,'r-note')+
@@ -638,8 +652,9 @@ function plainTerms(){
                               (needsKey(s.match.source)? ' ['+esc(s.match.key||'…')+']':''));
   const li = [];
   li.push('<li><b>Searches</b> '+(bits.length ? bits.join(' · ') : '<b>nothing set — cannot be saved</b>')+'. Any balance.</li>');
-  li.push('<li><b>Takes</b> '+(cfg.conditions.length
-      ? 'the earliest where '+(cfg.combinator==='AND'?'<b>all</b>':'<b>any</b>')+' of the '+cfg.conditions.length+' refine row'+(cfg.conditions.length>1?'s':'')+' hold'
+  const nOn = cfg.conditions.filter(c=>c.on!==false).length;
+  li.push('<li><b>Takes</b> '+(nOn
+      ? 'the earliest where '+(cfg.combinator==='AND'?'<b>all</b>':'<b>any</b>')+' of the '+nOn+' refine row'+(nOn>1?'s':'')+' hold'
       : 'the <b>earliest</b> invoice found')+'.</li>');
   li.push('<li><b>Bigger payment</b> '+(cfg.overpayment ? 'remainder as an overpayment' : '<b>cancels the sync</b>')+'.</li>');
   li.push('<li><b>No match</b> '+(cfg.cancelSync ? '<b>sync cancelled</b>, payment kept as Canceled' : 'recorded as a <b>Sales Receipt</b>')+'.</li>');
@@ -650,7 +665,7 @@ function plainTerms(){
 
   const used = [];
   if (s.match.on) used.push({label:'the invoice-number match', src:s.match.source});
-  cfg.conditions.forEach((c,i)=>{ if(!valueless(c.operand)) used.push({label:'refine row '+(i+1), src:c.source}); });
+  cfg.conditions.forEach((c,i)=>{ if(c.on!==false && !valueless(c.operand)) used.push({label:'refine row '+(i+1), src:c.source}); });
   const dead = used.filter(u=>!SOURCES[u.src].on.SalesReceipt);
   if (dead.length){
     h += '<div class="warn" style="margin-bottom:0">Simple charges skip '+dead.map(d=>d.label).join(', ')+
@@ -804,7 +819,7 @@ function bind(){
   // one stored value (R18): commits on change here and on GSP, never a draft
   ch('c-cancel', ()=>{ cfg.cancelSync=!cfg.cancelSync; saved.cancelSync=cfg.cancelSync; post({type:'cancel-sync', on:cfg.cancelSync}); R(); });
   ch('c-join',   e=>{ cfg.combinator=e.target.value; R(); });
-  on('c-add',    ()=>{ cfg.conditions.push({source:'invoice_note', operand:'contains', target:'private_note', key:''}); R(); });
+  on('c-add',    ()=>{ cfg.conditions.push({on:true, source:'invoice_note', operand:'contains', target:'private_note', key:''}); R(); });
 
   // the number field must never re-render — a re-render replaces the node and
   // one ArrowUp would eject focus
@@ -831,6 +846,7 @@ function bind(){
   if (mk) mk.oninput = e=>{ s.match.key=e.target.value; refresh(); };
 
   cfg.conditions.forEach((c,i)=>{
+    ch('ce-'+i, e=>{ c.on = e.target.checked; R(); });
     ch('cs-'+i, e=>{ c.source=e.target.value; if(!needsKey(c.source)) c.key=''; R(); });
     ch('co-'+i, e=>{ c.operand=e.target.value; R(); });
     ch('ct-'+i, e=>{ c.target=e.target.value; R(); });
