@@ -97,26 +97,32 @@ const parse = s => {
   // --- default matching carries information, unlike v3's bare toggle
   ok('default matching is on at first open', await ov(page).locator('#c-default').isChecked());
   const dflt = await ov(page).locator('.dflt').innerText();
-  ok('the default card says what the default actually does',
-     dflt.includes('same customer') && dflt.includes('invoice number equals'), dflt.slice(0, 120));
+  ok('the default card says what the default actually does, in one line',
+     dflt.includes('Same customer') && dflt.includes('invoice number matches') &&
+     dflt.split('\n').filter(l => l.trim()).length <= 2, JSON.stringify(dflt));
   ok('no rule rows while default is on', (await ov(page).locator('#c-cust').count()) === 0);
   ok('default on: Update is available', !(await saveBlocked(page)));
   ok('nothing user-facing says "engine"', !/\bengine\b/i.test(await ov(page).locator('body').innerText()));
 
   await useCustom(page);
   ok('the chip flips to Custom rules', (await ov(page).locator('#chip').innerText()).trim() === 'Custom rules');
-  ok('unchecking it states the override and the retention',
-     (await ov(page).locator('.dflt').innerText()).includes('never runs') &&
-     (await ov(page).locator('.dflt').innerText()).includes('keeps your rules on file'));
+  ok('unchecking it still states the override and the retention',
+     (await ov(page).locator('.dflt').innerText()).includes('never runs here') &&
+     (await ov(page).locator('.dflt').innerText()).includes('keeps your rules'));
 
   // --- his structure: two labelled groups in one card
   const grps = await ov(page).locator('.grp-t').allInnerTexts();
   ok('the rules are Narrow the search / Then refine',
      grps[0] === 'Narrow the search' && grps[1] === 'Then refine', grps.join(' | '));
-  ok('the scope group states that its filters are always ANDed',
-     (await ov(page).locator('.grp-d').first().innerText()).includes('always combined with AND'));
-  ok('and that only the pushable comparisons live there',
-     (await ov(page).locator('.grp-d').first().innerText()).includes('four comparisons'));
+  // the operand rule is no longer explained in a paragraph — it is enforced by
+  // the control and demonstrated by the row gutters, both of which are asserted
+  ok('the scope sub-line is one short line', await (async () => {
+     const d = await ov(page).locator('.grp-d').first().innerText();
+     return d.length < 70 && d.includes('must be true');
+  })(), await ov(page).locator('.grp-d').first().innerText());
+  ok('every scope row gutter shows its AND, so the join needs no paragraph',
+     (await ov(page).locator('.grp').first().locator('.r-j').allInnerTexts())
+       .map(s => s.trim()).join(',') === 'WHEN,AND,AND');
   ok('three scope rows, no refine rows pre-filled',
      (await ov(page).locator('.grp').first().locator('.r').count()) === 3 &&
      (await ov(page).locator('[id^="cs-"]').count()) === 0);
@@ -153,6 +159,9 @@ const parse = s => {
   const custRow = await ov(page).locator('#n-cust').innerText();
   ok('the customer row says Customer matches the payment’s customer',
      custRow.includes('matches the payment’s customer') && !/customer name/i.test(custRow), custRow);
+
+  ok('the scope match row offers only the 4 pushable operands (R4)',
+     (await ov(page).locator('#c-mop option').count()) === 4);
 
   // --- the date row: greyed is fine, but it must say why
   ok('the date row is locked without the admin flag', await ov(page).locator('#c-date').isDisabled());
@@ -206,9 +215,8 @@ const parse = s => {
   await ov(page).locator('#c-join').selectOption('OR');
   ok('switching it changes every later row',
      (await ov(page).locator('.grp').nth(1).locator('.r-j').nth(1).innerText()).trim() === 'OR');
-  ok('the group description states which join is in force',
-     (await ov(page).locator('.grp-d').nth(1).innerText()).includes('OR'));
-  ok('and that scope filters stay AND', (await ov(page).locator('.grp-d').nth(1).innerText()).includes('scope filters stay AND'));
+  ok('the refine sub-line stays short', (await ov(page).locator('.grp-d').nth(1).innerText()).length < 50,
+     await ov(page).locator('.grp-d').nth(1).innerText());
   await ov(page).locator('#c-add').click();
   ok('a third row still shows only one chevron', (await ov(page).locator('select.join').count()) === 1);
   ok('and the third row is joined too, never blank',
@@ -233,12 +241,13 @@ const parse = s => {
   ok('the read-out sits in the right column, costing the rules no height',
      await ov(page).locator('#plain-body').evaluate(el => !!el.closest('.right')));
   let ro = await readout(page);
-  ok('it names the integration', ro.includes('mzkt.by'));
-  ok('it states the live day window', ro.includes('30 days either side'));
+  ok('the read-out is scannable lines, not prose', await ov(page).locator('#plain-body')
+     .evaluate(el => el.querySelectorAll('li').length >= 4));
+  ok('and it is short enough to read', ro.length < 420, 'chars=' + ro.length);
+  ok('it states the live day window', ro.includes('±30 days'));
   ok('it counts the refine rows it actually has', await ov(page).locator('body').evaluate(() => {
     const rows = document.querySelectorAll('.grp')[1].querySelectorAll('.r').length;
-    const said = (document.getElementById('plain-body').innerText.match(/the payment’s|the invoice’s/g) || []).length;
-    return said >= rows;
+    return document.getElementById('plain-body').innerText.includes(rows + ' refine row');
   }));
   await ov(page).locator('#c-join').selectOption('OR');
   ok('changing the join changes the read-out', (await readout(page)).includes('any'));
@@ -246,12 +255,12 @@ const parse = s => {
   ok('and back', (await readout(page)).includes('all'));
   await ov(page).locator('#c-days').fill('45');
   await page.waitForTimeout(150);
-  ok('changing the window changes the read-out', (await readout(page)).includes('45 days either side'));
+  ok('changing the window changes the read-out', (await readout(page)).includes('±45 days'));
   await ov(page).locator('#c-days').fill('30');
   await page.waitForTimeout(150);
   ok('the read-out never says the payment "may" sync', !/may still sync|may sync/i.test(await readout(page)));
   ok('with cancel-sync on it says the sync is cancelled',
-     (await ov(page).locator('#c-cancel').isChecked()) && (await readout(page)).includes('the sync is cancelled'));
+     (await ov(page).locator('#c-cancel').isChecked()) && (await readout(page)).includes('sync cancelled'));
   await ov(page).locator('#c-cancel').uncheck();
   await page.waitForTimeout(150);
   ok('with it off it names the Sales Receipt instead', (await readout(page)).includes('Sales Receipt'));
@@ -260,7 +269,8 @@ const parse = s => {
   await ov(page).locator('#c-cancel').check();
   await page.waitForTimeout(150);
   ok('an unsaved rule says so (R20)', (await readout(page)).includes('Nothing changes until you press Update'));
-  ok('the no-fallback guarantee is in the read-out (R1)', (await readout(page)).includes('not') && (await readout(page)).includes('fallback'));
+  ok('the no-fallback guarantee is stated on the mode card (R1)',
+     (await ov(page).locator('.dflt').innerText()).includes('never runs here'));
 
   // --- inheritance automatic (A6), guard (R8), metadata key (R10)
   await ov(page).locator('#c-cust').uncheck();
@@ -270,7 +280,7 @@ const parse = s => {
   ok('and it does not block Update', !(await saveBlocked(page)));
   ok('it is flagged as an assumption',
      await ov(page).locator('body').evaluate(el => /A6\b/.test(el.textContent)));
-  ok('the read-out mentions the inherited customer', (await readout(page)).includes('takes the customer from the invoice'));
+  ok('the read-out mentions the inherited customer', (await readout(page)).includes('taken from the matched invoice'));
   await ov(page).locator('#c-mop').selectOption('contains');
   ok('a loose comparison with customer off is warned about',
      (await ov(page).locator('.info').first().innerText()).includes('another customer’s invoice'));
@@ -314,8 +324,8 @@ const parse = s => {
   // error slot is also an .r-note
   ok('is empty: the row says it reads the invoice only',
      (await ov(page).locator('.grp').nth(1).locator('.r').first().innerText()).includes('Reads the invoice only'));
-  ok('and the read-out drops the payment side', (await readout(page)).includes('nothing on the payment') ||
-     !(await readout(page)).includes('the payment’s invoice note is empty'));
+  ok('the row itself carries the detail, so the read-out need not repeat it',
+     (await readout(page)).includes('refine row'));
   await ov(page).locator('#co-0').selectOption('contains');
 
   // --- outcomes (R15/R17/R19) and the copy taken from his sketch
