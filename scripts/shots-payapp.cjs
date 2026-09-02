@@ -6,8 +6,12 @@ const path='/home/ubuntu/.openclaw/workspace/projects/payment-application-engine
   await p.goto('file://'+path+'index.html');
   await p.click('#g-open'); await p.click('#c-engine');
   await p.click('#c-add');
+  await p.selectOption('#cs-0','invoice_note'); await p.selectOption('#co-0','eq');
+  await p.selectOption('#ct-0','private_note');
+  await p.click('#c-add');
   await p.selectOption('#cs-1','payment_meta'); await p.fill('#ck-1','order_id');
   await p.selectOption('#co-1','contains'); await p.selectOption('#ct-1','doc_number');
+  await p.waitForTimeout(300);
   await p.locator('.ov-b').evaluate(e=>e.scrollTop=0);
   await p.screenshot({path:path+'shot-scope.png', clip:{x:0,y:0,width:1440,height:1100}});
   // simulator
