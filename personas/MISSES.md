@@ -18,7 +18,32 @@ the prompt reads.
 | PROTO-1 | 2026-08-04 | Variant 4 was unusable in a browser — a flat dropdown-layer list meant opening a filter closed its own popover. 60 jsdom checks passed | Recon (Step 3) | jsdom ignores layout, stacking and visibility; the suite asserted state, not liveness | `reports/filtering-options/` v4 |
 | PROTO-2 | 2026-08-11 | V6 multiselect closed on second toggle; the test asserted `isChecked()` on a control inside a closed panel — correct state, zero liveness | Recon (Step 3) | Same class as PROTO-1, one week later. Assert visibility and hittability, never element state | filtering-options V6 |
 | RECON-1 | 2026-08-18 | Two false flow-breaking findings on the Reconciliation details overlay ("upload is on the wrong side", "Any account removes the integration data source") — both artifacts of a half-filled form; a react-select click had silently missed, so dependent fields never rendered | Recon (Step 3) | Enumerated fields before the form was valid. Conditional fields render only after dependencies are satisfied | Synder demo · New reconciliation overlay |
-| PROC-1 | 2026-08-03 → 2026-08-20 | Trust never ran once; caps exceeded 7× (145 findings vs 20); schema drifted to a `per_prototype` wrapper; `findings-log.json` never created | Protocol itself | Every volume control was an instruction with nothing verifying it. Fixed by `scripts/validator-check.js` | `.synder-state/settings-rework/validators-r3/` — replay it, the checker fails it on all four counts |
+| PROC-1 | 2026-08-03 → 2026-08-20 | Trust never ran once; caps exceeded ~10× (**218 findings** across 5 payloads — `clarity 33 · domain 33 · ux1 42 · ux2 55 · ux3 55` — measured 2026-09-02, not the 145 recorded here earlier); schema drifted to a `per_prototype` wrapper holding 11 variants in one payload; `findings-log.json` never created | Protocol itself | Every volume control was an instruction with nothing verifying it. Fixed by `scripts/validator-check.js` | `.synder-state/settings-rework/validators-r3/` — see the correction note below |
+
+## Correction · 2026-09-02 — PROC-1's own replay claim was false
+
+This row used to end: *"replay it, the checker fails it on all four counts."* Ran it. It doesn't.
+
+```
+$ node scripts/validator-check.js verify .synder-state/settings-rework/validators-r3
+error: no manifest.json in .synder-state/settings-rework/validators-r3 — the round was
+never declared, so completeness cannot be checked.
+```
+
+Exit 2 at the first hurdle. It never reaches the cap check, the schema check or the log check,
+because a round with no manifest can't be evaluated for completeness at all. The claim was
+morally right — that round violates all four rules — and mechanically wrong about what the tool
+demonstrates.
+
+**Which makes this the seventh entry in the corpus, and the same shape as the other four: a claim
+made before it was verified.** Written into the file whose purpose is to catch that. The finding
+number was also wrong (145, actually 218) because it was copied forward from a summary instead of
+recounted. Both errors survived two weeks of the file being read and cited.
+
+Lesson, and it's narrower than "verify things": **a claim about what a tool outputs must be made
+by running the tool and pasting the output**, not by reasoning from what the tool checks. The two
+diverge exactly when an early guard short-circuits the rest — which is the normal case for
+anything with a fail-fast design.
 
 ## RECON-2 · 2026-08-20 — the recon pass is now a single point of failure
 

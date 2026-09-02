@@ -35,6 +35,19 @@ const SPEC = {
 const CONFIDENCE_FLOOR = 70;
 const SEVERITIES = ['Critical', 'High', 'Medium'];
 
+// Fields a specific lens's own prompt demands and the generic check used to ignore.
+// Trust's whole contract is the gap between claim and reality; a Trust finding without
+// both sides stated is an unfalsifiable assertion. It passed the gate 4 times.
+const REQUIRED_EXTRA = { trust: ['claims', 'actual'] };
+
+// Lens-coverage floor. Six lenses exist. Skipping one or two is routine — Fidelity
+// has nothing to do without a reference, Domain nothing to say on a non-accounting
+// screen. Skipping more than two is a decision, and a decision has to be on record:
+// etc-message-generator/round1 ran UX alone, five lenses blind, and PASSED.
+// Gated the way `not_exercised` is: any reason is accepted, no reason is not.
+const LENS_COUNT = 6;
+const MAX_SILENT_SKIPS = 2;
+
 function die(msg) { console.error(`error: ${msg}`); process.exit(2); }
 
 function arg(argv, name, fallback) {
@@ -57,6 +70,21 @@ function writeManifest(argv) {
 
   const unknown = expect.filter(v => !SPEC[v]);
   if (unknown.length) die(`unknown validator(s): ${unknown.join(', ')}`);
+
+  // Coverage floor — checked here, at declaration time, because that is the moment
+  // the decision is actually made. Running the check only in `verify` would catch it
+  // after eight agents had already been spawned against the wrong scope.
+  const declared = [...new Set(expect)];
+  const skipped = Object.keys(SPEC).filter(l => !declared.includes(l));
+  const reason = arg(argv, 'reason', '');
+  if (skipped.length > MAX_SILENT_SKIPS && !reason.trim()) {
+    die(
+      `narrow round: ${declared.length} of ${LENS_COUNT} lenses declared, skipping ${skipped.length} ` +
+      `(${skipped.join(', ')}). More than ${MAX_SILENT_SKIPS} skipped lenses needs --reason "<one sentence>" ` +
+      `recorded in the manifest. A deliberate narrow pass is fine; an undeclared one is how five lenses ` +
+      `go blind and the round still reports PASS.`
+    );
+  }
 
   // repeated lens (e.g. ux x3) => ux1, ux2, ux3
   const counts = {};
@@ -83,6 +111,11 @@ function writeManifest(argv) {
     ...(flow ? { mode: 'parallel-flow', flow } : {}),
     target: arg(argv, 'target', ''),
     confidence_floor: CONFIDENCE_FLOOR,
+    lens_coverage: {
+      declared,
+      skipped,
+      ...(reason.trim() ? { reason: reason.trim() } : {}),
+    },
     expected: slots.map(s => ({ ...s, cap: SPEC[s.validator].cap, prefix: SPEC[s.validator].prefix, evidence: SPEC[s.validator].evidence })),
   };
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
@@ -101,6 +134,20 @@ function verify(argv) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const problems = [];
   const summary = [];
+
+  // Re-derive coverage from the expected slots rather than trusting the recorded
+  // lens_coverage block — otherwise the floor is dodged by hand-editing the manifest,
+  // which is the same move as renaming a round to make the log check pass (MISSES 08-27).
+  const declaredLenses = [...new Set((manifest.expected || []).map(s => s.validator))];
+  const skippedLenses = Object.keys(SPEC).filter(l => !declaredLenses.includes(l));
+  const coverageReason = (manifest.lens_coverage && manifest.lens_coverage.reason) || '';
+  if (skippedLenses.length > MAX_SILENT_SKIPS && !String(coverageReason).trim()) {
+    problems.push(
+      `NARROW ROUND · ${declaredLenses.length} of ${LENS_COUNT} lenses declared, skipping ` +
+      `${skippedLenses.join(', ')} — no reason recorded in manifest.lens_coverage.reason. ` +
+      `Re-run "manifest" with --reason, or add the missing lenses.`
+    );
+  }
 
   for (const slot of manifest.expected) {
     const file = path.join(dir, slot.file);
@@ -140,6 +187,14 @@ function verify(argv) {
       problems.push(`NO COVERAGE · ${label}: "checked" is empty`);
     }
 
+    // Fidelity is the only lens whose findings are all relative to a document that can
+    // itself be incomplete. Its prompt requires `reference_gaps` — an absent array is
+    // indistinguishable from "the reference covered everything", and a finding that is
+    // really an artifact of a missing frame is worse than no finding. [] is a valid answer.
+    if (slot.validator === 'fidelity' && !Array.isArray(payload.reference_gaps)) {
+      problems.push(`NO REFERENCE AUDIT · ${label}: "reference_gaps" array missing — state what the reference did not cover, or [] if it covered everything`);
+    }
+
     const extraKeys = Object.keys(payload).filter(
       k => !['validator', 'round', 'target', 'checked', 'findings', 'gaps', 'reference_gaps'].includes(k)
     );
@@ -166,6 +221,14 @@ function verify(argv) {
       for (const req of ['element', 'finding', 'user_impact', 'suggested_fix']) {
         if (!f[req] || !String(f[req]).trim()) {
           problems.push(`INCOMPLETE · ${at}: "${req}" is empty`);
+        }
+      }
+      // Lens-specific fields the lens's own prompt specifies. Generic-only checking is
+      // how a Trust payload shipped without `claims`/`actual` — the two halves of the
+      // discrepancy it exists to name — and still read as clean.
+      for (const req of REQUIRED_EXTRA[slot.validator] || []) {
+        if (!f[req] || !String(f[req]).trim()) {
+          problems.push(`INCOMPLETE · ${at}: "${req}" is empty — ${slot.validator} findings must state both what the UI claims and what is actually true`);
         }
       }
       // The evidence gate. A confidence score is self-reported and uncalibrated;
@@ -205,14 +268,26 @@ function verify(argv) {
       const log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
       if (!log || typeof log !== 'object' || !Array.isArray(log.resolved)) {
         problems.push(`BAD LOG · findings-log.json has no "resolved" array — round 2 cannot run as a delta`);
-      } else if (manifest.mode === 'parallel-flow') {
+      } else {
+        // "Resolved" is a claim, and a claim needs its verification recorded — this is
+        // the whole open pattern in MISSES.md ("a claim made before it was verified"),
+        // one level up from the findings. Unenforced, the field was populated in 14 of
+        // 105 entries across the repo while every round read as clean.
+        log.resolved.forEach((r, i) => {
+          const id = r.theme !== undefined ? `theme ${r.theme}` : (r.id || `resolved[${i}]`);
+          if (!Array.isArray(r.verified_by) || r.verified_by.length === 0) {
+            problems.push(`UNVERIFIED FIX · findings-log.json ${id}: marked resolved with no non-empty "verified_by" — record how the fix was proven (assertion, gate, or browser check), not that it was made`);
+          }
+        });
+      }
+      if (Array.isArray(log.resolved) && manifest.mode === 'parallel-flow') {
         // First pass over a different flow: there is nothing to be a delta of, so an
         // empty resolved[] is honest. The label is mandatory instead — an unlabelled
         // parallel-flow round is just a delta round dodging the log check.
         if (!manifest.flow || !String(manifest.flow).trim()) {
           problems.push(`UNLABELLED FLOW · manifest declares mode "parallel-flow" but no "flow" label — parallel-flow mode must name the distinct flow it covers, otherwise it is an iteration evading the resolved-findings check`);
         }
-      } else if (manifest.round > 1 && log.resolved.length === 0) {
+      } else if (Array.isArray(log.resolved) && manifest.round > 1 && log.resolved.length === 0) {
         problems.push(`EMPTY LOG · this is round ${manifest.round} but findings-log.json records nothing resolved — either nothing was applied, or the log was never written`);
       }
     } catch (e) {
@@ -361,8 +436,9 @@ else if (cmd === 'statemap') statemap(rest);
 else if (cmd === 'verify') verify(rest);
 else {
   console.log('usage:');
-  console.log('  node scripts/validator-check.js manifest <round-dir> --target <t> --round <n> [--flow <label>] --expect ux,ux,ux,domain,clarity,trust,a11y');
-  console.log('    --flow <label>  this round is a FIRST pass over a different flow, not an iteration (skips the resolved-log delta check)');
+  console.log('  node scripts/validator-check.js manifest <round-dir> --target <t> --round <n> [--flow <label>] [--reason <why>] --expect ux,ux,ux,domain,clarity,trust,a11y');
+  console.log('    --flow <label>   this round is a FIRST pass over a different flow, not an iteration (skips the resolved-log delta check)');
+  console.log(`    --reason <why>   required when the round skips more than ${MAX_SILENT_SKIPS} of the ${LENS_COUNT} lenses`);
   console.log('  node scripts/validator-check.js statemap <round-dir>   # run after Step 3, before spawning');
   console.log('  node scripts/validator-check.js verify <round-dir>');
   process.exit(2);

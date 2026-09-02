@@ -1,7 +1,8 @@
 # PERMISSIONS — what Dasha does without asking
 
-**Status: DRAFT v2 — Ignat to approve.** v1 was reviewed and had two contradictions and five gaps;
-all are resolved below. Move any line between sections, delete what you disagree with.
+**Status: v2 — APPROVED by Ignat 2026-09-02, effective immediately.** v1 was reviewed and had two
+contradictions and five gaps; all are resolved below. Still amendable at any time — move a line
+between sections or delete what you disagree with; first scheduled review 2026-09-26.
 
 Why this exists: without a written line I guessed, and guessed wrong in both directions. I built an
 entire production-depth screen you never asked for (2026-08-03), then a week later asked permission
@@ -27,7 +28,9 @@ A typo fix in a file a validator reads is still a behaviour change. Report it.
 ## 🟢 Just do it — no announcement
 
 - Read anything: files, repo, git history, Jira, Confluence, Figma cache
-- Run LogRocket / Galileo queries — **up to 3 retries on failure**, then it becomes 🟡
+- Run LogRocket / Galileo queries — **up to 3 attempts per query**, then it becomes 🟡.
+  *Enforced in `scripts/galileo.sh`, not just written here: the 4th attempt exits 3 and refuses.
+  A number in a document is a suggestion; a number in a script is a limit.*
 - Screenshots, browser, inspect production or the demo app
 - Search the web, research patterns and competitors
 - Update log-tier files (see table above)
@@ -52,6 +55,12 @@ A typo fix in a file a validator reads is still a behaviour change. Report it.
 - Correct a stale value in a validator-input file when it contradicts Figma — 🟡 by the file test
 - **Add a new check to the harness** (`validator-check.js` or similar). A new gate can only fail
   more, never less. **Loosening or removing an existing gate is 🔴.**
+- **Write or change a bespoke recon / aggregation script** (`recon-*.cjs`, `verify-*.cjs`,
+  `aggregate-*.cjs`). 🟡 as agreed 2026-09-02 — *with a standing obligation:* a recon script
+  decides what gets exercised, so its choices function as coverage. **Say so explicitly, at the
+  time, whenever a change to one could hide coverage** — a control dropped from the sweep, a
+  selector that silently stops matching, an interaction moved to `not_exercised`. Not noted in a
+  document afterwards. Told to you in the message where it happens.
 - Commit and push log-tier files
 
 **Rule:** say what changed and where. Not "done" — "changed X to Y in file Z."
