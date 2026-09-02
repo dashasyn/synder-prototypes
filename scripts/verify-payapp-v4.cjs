@@ -14,7 +14,17 @@ function ok(name, cond, extra) {
   if (cond) { pass++; } else { fail++; console.log('  ✗ ' + name + (extra ? '  → ' + extra : '')); }
 }
 const ov = page => page.frameLocator('#ovf');
-const saveBlocked = page => ov(page).locator('#ov-save').evaluate(el => el.getAttribute('aria-disabled') === 'true');
+// Update is always live now; errors surface when you press it. This reads the
+// live validation count, which the overlay exposes for the suite.
+const saveBlocked = page => ov(page).locator('#ov-save').evaluate(el => el.dataset.errors !== '0');
+// pressing Update with something missing must not close, and must say what
+async function updateRejected(page) {
+  await ov(page).locator('#ov-save').click();
+  await page.waitForTimeout(200);
+  const banner = await ov(page).locator('.alert').count();
+  const open = await page.locator('#ovh').isVisible();
+  return banner > 0 && open;
+}
 const readout = page => ov(page).locator('#plain-body').innerText();
 async function ensureOpen(page, id) {
   const d = ov(page).locator('#' + id);
@@ -35,7 +45,7 @@ async function closed(page) {
   catch (e) { return false; }
 }
 async function useCustom(page) {
-  await ov(page).locator('#c-default').uncheck();
+  await ov(page).locator('#m-custom').check();
   await ov(page).locator('#c-cust').waitFor();
 }
 // a row is on one line when its control strip is a single control tall
@@ -95,20 +105,26 @@ const parse = s => {
      (await ov(page).locator('#ov-save').innerText()).trim() === 'Update');
 
   // --- default matching carries information, unlike v3's bare toggle
-  ok('default matching is on at first open', await ov(page).locator('#c-default').isChecked());
-  const dflt = await ov(page).locator('.dflt').innerText();
-  ok('the default card says what the default actually does, in one line',
-     dflt.includes('Same customer') && dflt.includes('invoice number matches') &&
-     dflt.split('\n').filter(l => l.trim()).length <= 2, JSON.stringify(dflt));
+  ok('default matching is on at first open', await ov(page).locator('#m-default').isChecked());
+  ok('the two ways to match are radio options', (await ov(page).locator('.mode').count()) === 2);
+  const dflt = await ov(page).locator('.mode').first().innerText();
+  ok('the default option says what the default actually does',
+     dflt.includes('Same customer') && dflt.includes('invoice number matches'), JSON.stringify(dflt.slice(0, 120)));
   ok('no rule rows while default is on', (await ov(page).locator('#c-cust').count()) === 0);
-  ok('default on: Update is available', !(await saveBlocked(page)));
+  ok('default on: nothing is blocking Update', !(await saveBlocked(page)));
+  // the outcome settings apply to the default matcher too, so they must be
+  // reachable without choosing custom rules
+  ok('both outcome settings are reachable on default matching',
+     await ov(page).locator('#c-over').isVisible() && await ov(page).locator('#c-cancel').isVisible());
   ok('nothing user-facing says "engine"', !/\bengine\b/i.test(await ov(page).locator('body').innerText()));
 
   await useCustom(page);
   ok('the chip flips to Custom rules', (await ov(page).locator('#chip').innerText()).trim() === 'Custom rules');
-  ok('unchecking it still states the override and the retention',
-     (await ov(page).locator('.dflt').innerText()).includes('never runs here') &&
-     (await ov(page).locator('.dflt').innerText()).includes('keeps your rules'));
+  ok('the custom option states the override and the retention',
+     (await ov(page).locator('#m-custom-card').innerText()).includes('never runs here') &&
+     (await ov(page).locator('#m-custom-card').innerText()).includes('keeps your rules'));
+  ok('the rules are nested inside the custom option', await ov(page).locator('#c-cust')
+     .evaluate(el => !!el.closest('#m-custom-card')));
 
   // --- his structure: two labelled groups in one card
   const grps = await ov(page).locator('.grp-t').allInnerTexts();
@@ -144,7 +160,7 @@ const parse = s => {
     const uniq = a => [...new Set(a)];
     return {
       headings: uniq([...x('.left .grp-t'), ...x('.left .r-j')]),
-      ctlTitles: uniq([...x('.left .dflt-t'), ...x('.left .o-t')]),
+      ctlTitles: uniq([...x('.left .mode-t'), ...x('.left .o-t')]),
       rowContent: uniq(x('.left .r-c')),
       centred: [...document.querySelectorAll('.left *')]
         .filter(e => e.tagName !== 'BUTTON' && getComputedStyle(e).textAlign === 'center')
@@ -224,7 +240,7 @@ const parse = s => {
   ok('and takes it out of the read-out count', (await readout(page)).includes('the earliest invoice found'));
   await ov(page).locator('#ce-0').check();
   ok('ticking it back puts it in the search', !(await ov(page).locator('#co-0').isDisabled()) &&
-     (await readout(page)).includes('1 refine row'));
+     /the refine row holds/.test(await readout(page)));
   ok('its gutter reads WHERE', (await ov(page).locator('.grp').nth(1).locator('.r-j').first().innerText()).trim() === 'WHERE');
   await ov(page).locator('#c-add').click();
   ok('two rows bring exactly one chevron', (await ov(page).locator('select.join').count()) === 1);
@@ -269,7 +285,8 @@ const parse = s => {
   ok('it states the live day window', ro.includes('±30 days'));
   ok('it counts the refine rows it actually has', await ov(page).locator('body').evaluate(() => {
     const rows = document.querySelectorAll('.grp')[1].querySelectorAll('.r').length;
-    return document.getElementById('plain-body').innerText.includes(rows + ' refine row');
+    const t = document.getElementById('plain-body').innerText;
+    return rows === 1 ? /the refine row holds/.test(t) : t.includes(rows + ' refine rows hold');
   }));
   await ov(page).locator('#c-join').selectOption('OR');
   ok('changing the join changes the read-out', (await readout(page)).includes('any'));
@@ -292,7 +309,7 @@ const parse = s => {
   await page.waitForTimeout(150);
   ok('an unsaved rule says so (R20)', (await readout(page)).includes('Nothing changes until you press Update'));
   ok('the no-fallback guarantee is stated on the mode card (R1)',
-     (await ov(page).locator('.dflt').innerText()).includes('never runs here'));
+     (await ov(page).locator('#m-custom-card').innerText()).includes('never runs here'));
 
   // --- inheritance automatic (A6), guard (R8), metadata key (R10)
   await ov(page).locator('#c-cust').uncheck();
@@ -308,9 +325,16 @@ const parse = s => {
      (await ov(page).locator('.info').first().innerText()).includes('another customer’s invoice'));
   await ov(page).locator('#c-mop').selectOption('eq');
   await ov(page).locator('#c-match').uncheck();
-  ok('both bounding rows off: Update blocked', await saveBlocked(page));
+  ok('both bounding rows off: something is blocking Update', await saveBlocked(page));
+  ok('pressing Update says so instead of closing', await updateRejected(page));
   ok('the guard copy is the FDD copy verbatim',
      (await ov(page).locator('#err-guard').innerText()).includes('Keep either Customer or the invoice-number match on'));
+  ok('the banner is still in view after a rejected Update', await ov(page).locator('.alert')
+     .evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.top < window.innerHeight; }));
+  ok('the banner names how many and what', await (async () => {
+     const a = await ov(page).locator('.alert').innerText();
+     return /to fix/.test(a) && a.includes('Customer and Invoice-number match');
+  })(), await ov(page).locator('.alert').innerText());
   await ov(page).locator('#c-match').check();
   await ov(page).locator('#c-cust').check();
 
@@ -330,6 +354,15 @@ const parse = s => {
      !(await ov(page).locator('#ov-save').evaluate(el => el.hasAttribute('disabled'))));
   ok('a blocked Update is still clickable, not dead',
      await ov(page).locator('#ov-save').evaluate(el => getComputedStyle(el).pointerEvents !== 'none'));
+  ok('pressing Update marks the field and focuses it', await (async () => {
+     await ov(page).locator('#ov-save').click();
+     await page.waitForTimeout(200);
+     const bad = await ov(page).locator('#c-mkey').evaluate(el => el.classList.contains('bad'));
+     const focused = await ov(page).locator('body').evaluate(() => document.activeElement.id === 'c-mkey');
+     return bad && focused;
+  })());
+  ok('and the message sits under that field',
+     (await ov(page).locator('#err-scope-key').innerText()).includes('Name the Stripe field'));
   await ov(page).locator('#c-mkey').fill('invoices');
   ok('the typed value survives', (await ov(page).locator('#c-mkey').inputValue()) === 'invoices');
   ok('the field keeps focus', await ov(page).locator('body')
@@ -443,7 +476,7 @@ const parse = s => {
   ok('GSP shows the custom rule', (await page.locator('#pane .pa').innerText()).includes('Custom rule'));
   ok('and summarises the symmetric window', (await page.locator('#pane .pa-d').innerText()).includes('±30 days'));
   await openOverlay(page);
-  ok('reopening lands on the saved rules', !(await ov(page).locator('#c-default').isChecked()));
+  ok('reopening lands on the saved rules', await ov(page).locator('#m-custom').isChecked());
   await page.keyboard.press('Escape');
   ok('a clean draft closes with no prompt', await closed(page));
 
@@ -451,8 +484,8 @@ const parse = s => {
   await openOverlay(page);
   await ov(page).locator('#c-msrc').selectOption('payment_meta');
   ok('a blank field blocks Update while the rules are on', await saveBlocked(page));
-  await ov(page).locator('#c-default').check();
-  ok('back on default: Update is available again', !(await saveBlocked(page)));
+  await ov(page).locator('#m-default').check();
+  ok('back on default: nothing is blocking Update', !(await saveBlocked(page)));
   await ov(page).locator('#ov-save').click();
   ok('the integration returns to the default matcher',
      (await closed(page)) && (await page.locator('#pane .pa').innerText()).includes('Synder default'));

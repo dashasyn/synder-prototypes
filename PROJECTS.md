@@ -20,7 +20,10 @@
 - **The read-out is generated**, so it cannot contradict the controls — the failure his collage showed (three refine rows on the left, one in the read-out, and "the payment may still sync" while cancel-sync was on). Asserted: it tracks the join, the day window, the cancel-sync branch, and never says "may sync".
 - **"Customer matches the payment's customer"** — not customer name, which is out of scope. Third time this came back; now asserted against.
 - **The date row stays greyed** (Ignat: that's fine) but the reason sits next to it as real text with `aria-describedby`, not a tooltip.
-- **Verification:** `scripts/verify-payapp-v4.cjs` — 150 assertions across the frame boundary, 0 failures, carrying round-1's four automated gates plus the layout gates (one edge per tier · every rule row on one line · no select clips its widest option).
+- **Folded in from Ignat's v2.6 (2026-09-02 late):** the rules are **nested inside the "Use custom rules" radio**, so choosing the mode reveals them; **validation is submit-time** — Update is always live, pressing it shows one banner at the top, marks each field and puts the message under it, and focus goes to the first field without scrolling the banner away.
+- **Bug his file and mine shared:** the two outcome settings were inside the custom body, so they were unreachable on default matching. They apply to the default matcher too, so they now live outside the mode choice.
+- **Found while restructuring:** the kit's own `.card` carries 16px padding. It had been cancelling out because every row lived inside a card; the moment the mode rows moved outside one, control-row titles split into two left edges. `.card{padding:0}` — the alignment gate caught it.
+- **Verification:** `scripts/verify-payapp-v4.cjs` — 166 assertions across the frame boundary, 0 failures, carrying round-1's four automated gates plus the layout gates (one edge per tier · every rule row on one line · no select clips its widest option) and the error/discard states.
 - **Prototype (v2, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v2/
 - **Prototype (v1, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-engine/
 

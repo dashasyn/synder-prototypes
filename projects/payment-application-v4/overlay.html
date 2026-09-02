@@ -44,14 +44,28 @@ h1{font-size:20px;font-weight:400;letter-spacing:-.01em}
 .right{position:sticky;top:72px}
 
 /* one left edge for everything in the left column */
-.card{border:1px solid var(--color-grey-20);border-radius:var(--r-sm);background:var(--color-white);margin-bottom:8px}
+/* padding:0 is deliberate — the kit's own .card has 16px, which pushed every
+   row inside a card 16px right of the mode rows that are not in one */
+.card{border:1px solid var(--color-grey-20);border-radius:var(--r-sm);background:var(--color-white);margin-bottom:8px;padding:0}
 .card-b{padding:10px 14px}
-/* the leading control column is the same width for the default checkbox and the
-   outcome switches, so every control-row title starts at the same x */
-.dflt{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;cursor:pointer}
-.dflt input{margin-top:2px;width:16px;height:16px;accent-color:var(--color-primary);justify-self:start}
-.dflt-t{display:block;font-size:13.5px;font-weight:500}
-.dflt-d{display:block;font-size:12.5px;color:var(--color-grey-60);margin-top:2px}
+/* the leading control column is the same width for every control row, so their
+   titles all start at the same x */
+.mode{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;
+      border:1px solid var(--color-grey-20);border-radius:var(--r-sm);background:var(--color-white);padding:10px 14px}
+.mode+.mode{margin-top:8px}
+.mode.sel{border-color:var(--color-primary-10);box-shadow:0 0 0 1px var(--color-primary-10) inset}
+.mode input[type="radio"]{margin-top:2px;width:16px;height:16px;accent-color:var(--color-primary);justify-self:start}
+.mode-t{display:block;font-size:13.5px;font-weight:500}
+.mode-d{display:block;font-size:12.5px;color:var(--color-grey-60);margin-top:2px}
+.mode-head{cursor:pointer}
+/* the rules live inside the custom option, so choosing it reveals them */
+.mode-body{grid-column:1 / -1;margin-top:10px;padding-top:10px;border-top:1px solid var(--color-grey-20)}
+/* errors appear on Update, not while typing — one banner, plus a line under
+   each field that needs something */
+.alert{background:var(--color-red-light);border:1px solid var(--color-red);color:var(--color-red);
+       padding:8px 12px;border-radius:var(--r-sm);font-size:12.5px;font-weight:500;margin-bottom:10px}
+.fielderr{display:block;font-size:11px;font-weight:700;color:var(--color-red);margin-top:2px}
+.k.bad{border-color:var(--color-red);background:color-mix(in srgb, var(--color-red-light) 50%, var(--color-white))}
 
 .grp{padding:10px 14px}
 .grp+.grp{border-top:1px solid var(--color-grey-20)}
@@ -242,6 +256,7 @@ let cfg = blank();
 let saved = JSON.parse(JSON.stringify(cfg));
 let simTxn = 't1';
 let daysNote = '';
+let submitted = false;      // errors appear after an Update attempt, not before
 const ui = {open:{sql:false, sim:false}};
 
 const LEDGER = [
@@ -480,26 +495,35 @@ function render(){
          '<span style="display:inline-flex;align-items:center;gap:8px;vertical-align:middle;margin-left:4px">'+
          sw('c-prereq', env.applyPayments, {label:'Apply payments to unpaid Invoice transactions'})+'<span>Turn it on</span></span></div>';
 
-  /* --- default matching -------------------------------------------------- */
-  h += '<div class="card"><div class="card-b">'+
-    '<label class="dflt">'+cb('c-default', cfg.useDefault, {labelledby:'n-default', disabled:!planOK()})+
-    '<span><span class="dflt-t" id="n-default">Use default matching rules</span>'+
-    '<span class="dflt-d">Same customer, dated near the payment, invoice number matches the payment’s reference.'+
-    (custom() ? ' <b>Off:</b> your rules replace it — the default never runs here. Turning it back on keeps your rules.' : '')+
-    '</span></span></label>'+
-    '<div class="asm"><b>A1 — reference copy.</b> The FDD requires the default behaviour to appear here as non-editable reference text but does not supply the wording. Product owns it.</div>'+
-    '</div></div>';
+  h += '<div data-eslot="alert"></div>';
+
+  /* --- how to match: two options, the rules nested inside the second ------ */
+  h += '<label class="mode'+(cfg.useDefault?' sel':'')+'">'+
+    '<input type="radio" name="mode" id="m-default"'+(cfg.useDefault?' checked':'')+(planOK()?'':' disabled')+'>'+
+    '<span><span class="mode-t">Use default matching rules</span>'+
+    '<span class="mode-d">Same customer, dated near the payment, invoice number matches the payment’s reference. Nothing to set up.</span>'+
+    '<span class="asm" style="display:block"><b>A1 — reference copy.</b> The FDD requires the default behaviour here as non-editable reference text but does not supply the wording. Product owns it.</span>'+
+    '</span></label>';
+
+  // a div, not a label: the body below holds controls, and controls nested in a
+  // label lose their own clicks
+  h += '<div class="mode'+(custom()?' sel':'')+'" id="m-custom-card">'+
+    '<input type="radio" name="mode" id="m-custom"'+(custom()?' checked':'')+(planOK()?'':' disabled')+'>'+
+    '<label class="mode-head" for="m-custom"><span class="mode-t">Use custom rules</span>'+
+    '<span class="mode-d">Narrow which open invoices to search, then optionally refine. '+
+    'Synder’s default matching never runs here, and turning this back off keeps your rules.</span></label>';
 
   if (!custom()){
+    h += '</div>' + outcomeCards();
     paint(h);
     return;
   }
 
-  /* --- the rules --------------------------------------------------------- */
-  h += '<div class="card">';
+  /* --- the rules, nested inside the custom option ------------------------- */
+  h += '<div class="mode-body">';
 
   // Narrow the search
-  h += '<div class="grp"><div class="grp-t">Narrow the search</div>'+
+  h += '<div class="grp" style="padding:0 0 10px"><div class="grp-t">Narrow the search</div>'+
     '<div class="grp-d">Which invoices QuickBooks looks at. Every ticked row has to match.</div>'+
     '<div class="rows">';
 
@@ -572,7 +596,7 @@ function render(){
     '</div>';                                     // .grp
 
   // Then refine
-  h += '<div class="grp"><div class="grp-t">Then refine</div>'+
+  h += '<div class="grp" style="padding:10px 0 0"><div class="grp-t">Then refine</div>'+
     '<div class="grp-d">Optional. Checked after the search.</div>'+
     '<div class="rows">';
   const refineOn = cfg.conditions.map(c=>c.on!==false);
@@ -604,25 +628,30 @@ function render(){
       '</div>';
   });
   h += '</div><button class="btn btn-text" id="c-add" style="padding-left:0;margin-top:8px">+ Add condition</button></div>';
-  h += '</div>';                                  // .card
+  h += '</div>';                                  // .mode-body
+  h += '</div>';                                  // .mode (custom)
 
-  /* --- the two outcome settings ------------------------------------------ */
-  h += '<div class="card"><div class="o">'+sw('c-over', cfg.overpayment, {labelledby:'n-over'})+
-    '<div><div class="o-t" id="n-over">Apply as overpayment</div>'+
-    '<div class="o-d">Payment larger than the matched invoice? Post the remainder as an overpayment. Off cancels the sync instead. Only after a match.</div></div>'+
-    '</div></div>';
-  h += '<div class="card"><div class="o">'+sw('c-cancel', cfg.cancelSync, {labelledby:'n-cancel'})+
-    '<div><div class="o-t" id="n-cancel">Cancel sync if there is no matching open invoice found for a payment</div>'+
-    '<div class="o-d">Same setting as Get &amp; Send Payments — changing it here updates that page. Off: recorded as a Sales Receipt instead.'+
-    '<div class="asm"><b>A5 — the no-match document.</b> The FDD says “processed as usual” without naming it. Sales Receipt versus an unapplied customer payment decides whether income is counted twice. Product and accounting own the answer.</div>'+
-    '</div></div></div>';
-
-  h += '<datalist id="meta-keys">'+META_KEYS.map(k=>'<option value="'+k+'">').join('')+'</datalist>';
+  h += outcomeCards();
   paint(h);
 }
 
+/* These two apply to the default matcher as much as to a custom rule, so they
+   live outside the mode choice. Inside it they were unreachable on default. */
+function outcomeCards(){
+  return '<div class="card"><div class="o">'+sw('c-over', cfg.overpayment, {labelledby:'n-over'})+
+    '<div><div class="o-t" id="n-over">Apply as overpayment</div>'+
+    '<div class="o-d">Payment larger than the matched invoice? Post the remainder as an overpayment. Off cancels the sync instead. Only after a match.</div></div>'+
+    '</div></div>'+
+    '<div class="card"><div class="o">'+sw('c-cancel', cfg.cancelSync, {labelledby:'n-cancel'})+
+    '<div><div class="o-t" id="n-cancel">Cancel sync if there is no matching open invoice found for a payment</div>'+
+    '<div class="o-d">Same setting as Get &amp; Send Payments \u2014 changing it here updates that page. Off: recorded as a Sales Receipt instead.'+
+    '<div class="asm"><b>A5 \u2014 the no-match document.</b> The FDD says \u201cprocessed as usual\u201d without naming it. Sales Receipt versus an unapplied customer payment decides whether income is counted twice. Product and accounting own the answer.</div>'+
+    '</div></div></div>';
+}
+
 function paint(h){
-  document.getElementById('left').innerHTML = h;
+  document.getElementById('left').innerHTML = h +
+    '<datalist id="meta-keys">'+META_KEYS.map(k=>'<option value="'+k+'">').join('')+'</datalist>';
   document.getElementById('right').innerHTML =
     '<div class="ro"><div class="ro-t">In plain terms</div><div id="plain-body">'+plainTerms()+'</div></div>'+
     aidsBlock()+
@@ -654,7 +683,9 @@ function plainTerms(){
   li.push('<li><b>Searches</b> '+(bits.length ? bits.join(' · ') : '<b>nothing set — cannot be saved</b>')+'. Any balance.</li>');
   const nOn = cfg.conditions.filter(c=>c.on!==false).length;
   li.push('<li><b>Takes</b> '+(nOn
-      ? 'the earliest where '+(cfg.combinator==='AND'?'<b>all</b>':'<b>any</b>')+' of the '+nOn+' refine row'+(nOn>1?'s':'')+' hold'
+      ? (nOn===1
+          ? 'the earliest invoice where the refine row holds'
+          : 'the earliest where '+(cfg.combinator==='AND'?'<b>all</b>':'<b>any</b>')+' of the '+nOn+' refine rows hold')
       : 'the <b>earliest</b> invoice found')+'.</li>');
   li.push('<li><b>Bigger payment</b> '+(cfg.overpayment ? 'remainder as an overpayment' : '<b>cancels the sync</b>')+'.</li>');
   li.push('<li><b>No match</b> '+(cfg.cancelSync ? '<b>sync cancelled</b>, payment kept as Canceled' : 'recorded as a <b>Sales Receipt</b>')+'.</li>');
@@ -746,13 +777,28 @@ function renderSim(refocus){
    ========================================================================= */
 function paintErrors(){
   const errs = validate();
+  const show = submitted ? errs : [];
   document.querySelectorAll('[data-eslot]').forEach(slot=>{
-    const f = slot.getAttribute('data-eslot'), m = errFor(errs,f);
-    const want = m.length ? '<div class="err" id="err-'+f+'" role="alert">'+m[0]+'</div>' : '';
+    const f = slot.getAttribute('data-eslot');
+    let want = '';
+    if (f === 'alert'){
+      // one banner at the top, naming what to look for
+      if (show.length){
+        const first = SHORT[show[0].field] ||
+          (show[0].field.indexOf('cond-')===0 ? 'refine row '+(parseInt(show[0].field.slice(5),10)+1)+' needs its Stripe field name' : 'a field needs a value');
+        want = '<div class="alert" role="alert">'+show.length+' thing'+(show.length>1?'s':'')+' to fix before this can be saved — '+first+'.</div>';
+      }
+    } else {
+      const m = errFor(show,f);
+      want = m.length ? '<div class="err" id="err-'+f+'" role="alert">'+m[0]+'</div>' : '';
+    }
     if (slot.innerHTML !== want) slot.innerHTML = want;
+    if (f === 'alert') return;
     const fld = document.querySelector('[data-efield="'+f+'"]');
     if (fld){
-      if (m.length){ fld.setAttribute('aria-invalid','true'); fld.setAttribute('aria-describedby','err-'+f); }
+      const bad = errFor(show,f).length > 0;
+      fld.classList.toggle('bad', bad);
+      if (bad){ fld.setAttribute('aria-invalid','true'); fld.setAttribute('aria-describedby','err-'+f); }
       else { fld.removeAttribute('aria-invalid'); fld.removeAttribute('aria-describedby'); }
     }
   });
@@ -761,13 +807,15 @@ function paintErrors(){
 const SHORT = {guard:'Customer and Invoice-number match are both off', 'scope-key':'the Stripe field name is missing'};
 function paintBar(errs){
   const save = document.getElementById('ov-save');
-  const blocked = !!errs.length || !planOK();
+  // Update stays live: pressing it is how you find out what is missing
+  const blocked = !planOK();
   save.setAttribute('aria-disabled', blocked ? 'true' : 'false');
   save.classList.toggle('btn-disabled', blocked);
+  save.dataset.errors = String(errs.length);   // test hook; no user-visible effect
 
   let msg;
   if (!planOK()) msg = 'Available on Pro and above.';
-  else if (errs.length){
+  else if (submitted && errs.length){
     const f = errs[0].field;
     const what = SHORT[f] || (f.indexOf('cond-')===0 ? 'refine row '+(parseInt(f.slice(5),10)+1)+' has no Stripe field name' : 'a field needs a value');
     msg = '<span style="color:var(--color-red)">'+errs.length+' to fix — first: '+what+'. </span><button class="linkish" id="jump">Show me</button>';
@@ -811,7 +859,14 @@ function bind(){
   const ch = (id,fn)=>{const el=document.getElementById(id); if(el) el.onchange=fn;};
 
   ch('c-prereq', e=>{ env.applyPayments=e.target.checked; post({type:'prereq', on:env.applyPayments}); R(); });
-  ch('c-default',e=>{ if(!planOK()) return; cfg.useDefault=e.target.checked; R(); });
+  ch('m-default',()=>{ if(!planOK()) return; cfg.useDefault=true;  submitted=false; R(); });
+  ch('m-custom', ()=>{ if(!planOK()) return; cfg.useDefault=false; R(); });
+  // clicking anywhere on the custom card chooses it, except inside its own body
+  const cc = document.getElementById('m-custom-card');
+  if (cc) cc.onclick = e=>{
+    if (e.target.closest('.mode-body')) return;
+    if (!custom()){ cfg.useDefault=false; R(); }
+  };
   ch('c-cust',   ()=>{ s.customer.on=!s.customer.on; R(); });
   ch('c-date',   ()=>{ if(!env.adminNoLimit) return; s.date.on=!s.date.on; daysNote=''; R(); });
   ch('c-match',  ()=>{ s.match.on=!s.match.on; R(); });
@@ -887,8 +942,18 @@ document.getElementById('cfm-keep').onclick    = ()=>{ hideConfirm(); document.g
 document.getElementById('cfm-discard').onclick = ()=>{ hideConfirm(); post({type:'close'}); };
 document.getElementById('ov-close').onclick  = requestClose;
 document.getElementById('ov-save').onclick = ()=>{
-  const errs = validate();
-  if (errs.length || !planOK()){ jump(errs); return; }
+  if (!planOK()) return;
+  submitted = true;
+  const errs = paintErrors();
+  paintBar(errs);
+  if (errs.length){
+    document.querySelector('.scroll, .page').scrollIntoView({block:'start'});
+    window.scrollTo(0,0);
+    const f = document.querySelector('[data-efield="'+errs[0].field+'"]');
+    if (f) f.focus({preventScroll:true});
+    return;
+  }
+  submitted = false;
   saved = JSON.parse(JSON.stringify(cfg));
   post({type:'saved', configured:custom(), summary:custom() ? ruleSummary() : ''});
 };
@@ -916,6 +981,7 @@ window.addEventListener('message', e=>{
   Object.assign(env, m.env || {});
   if (first){
     window.__seeded = true;
+    submitted = false;
     cfg.cancelSync = !!(m.shared && m.shared.cancelSync);
     cfg.useDefault = !(m.shared && m.shared.configured);
     saved = JSON.parse(JSON.stringify(cfg));
