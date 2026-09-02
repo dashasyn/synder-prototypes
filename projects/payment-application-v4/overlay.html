@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payment application</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!-- React/MUI kit only. The legacy .sds-* stack lives in the host page. -->
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:Roboto,Arial,sans-serif;color:var(--color-grey);background:var(--color-white);font-size:13.5px;line-height:1.5}
+button{font-family:inherit}
+
+/* AA remediation: grey_50 is 4.26:1 on white and 3.54:1 as chip ink, both under
+   AA below 18.66px. Derived from existing tokens with color-mix, no raw hex. */
+:root{
+  --color-grey-60:  color-mix(in srgb, var(--color-grey-50) 70%, var(--color-grey));
+  --color-green-dark:color-mix(in srgb, var(--color-green)   75%, var(--color-grey));
+  --text-secondary: var(--color-grey-60);
+  --text-placeholder: var(--color-grey-60);
+}
+.status-grey{color:var(--color-grey-60)}
+.status-green{color:var(--color-green-dark)}
+.btn[aria-disabled="true"]{pointer-events:auto;cursor:not-allowed}
+
+/* ---------- full-screen chrome, the way Product mapping opens ---------- */
+.bar{position:sticky;top:0;z-index:20;background:var(--color-white);border-bottom:1px solid var(--color-grey-20);
+     height:48px;display:flex;align-items:center;gap:12px;padding:0 16px}
+.bar-t{font-size:14px;font-weight:500;white-space:nowrap}
+.bar-sub{font-size:12px;color:var(--color-grey-60);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bar-r{margin-left:auto;display:flex;align-items:center;gap:12px}
+.x{width:32px;height:32px;border:0;background:none;border-radius:var(--r-sm);cursor:pointer;font-size:14px;color:var(--color-grey-60);flex:0 0 auto}
+.x:hover{background:var(--color-grey-10)}
+.x:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+.msg{font-size:12px;color:var(--color-grey-60);max-width:460px;text-align:right}
+
+.page{max-width:1280px;margin:0 auto;padding:24px 24px 64px}
+h1{font-size:20px;font-weight:400;letter-spacing:-.01em}
+.lede{font-size:13px;color:var(--color-grey-60);margin-top:4px}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:32px;align-items:start;margin-top:20px}
+@media(max-width:1040px){.cols{grid-template-columns:1fr}.right{position:static !important}}
+.right{position:sticky;top:72px}
+
+/* one left edge for everything in the left column */
+.card{border:1px solid var(--color-grey-20);border-radius:var(--r-sm);background:var(--color-white);margin-bottom:12px}
+.card-b{padding:14px 16px}
+/* the leading control column is the same width for the default checkbox and the
+   outcome switches, so every control-row title starts at the same x */
+.dflt{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;cursor:pointer}
+.dflt input{margin-top:2px;width:16px;height:16px;accent-color:var(--color-primary);justify-self:start}
+.dflt-t{display:block;font-size:13.5px;font-weight:500}
+.dflt-d{display:block;font-size:12.5px;color:var(--color-grey-60);margin-top:2px}
+
+.grp{padding:14px 16px}
+.grp+.grp{border-top:1px solid var(--color-grey-20)}
+.grp-t{font-size:13.5px;font-weight:500}
+.grp-d{font-size:12.5px;color:var(--color-grey-60);margin-top:2px}
+.rows{margin-top:10px}
+
+.r{display:grid;grid-template-columns:52px 20px minmax(0,1fr) 28px;gap:8px;align-items:center;padding:8px 0;
+   border-top:1px solid var(--color-grey-10)}
+.r:first-child{border-top:0}
+.r-j{font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--color-grey-60);justify-self:start}
+.r-cb{display:flex;align-items:center;justify-content:center}
+.r-cb input{width:16px;height:16px;accent-color:var(--color-primary);cursor:pointer}
+.r-cb input:disabled{cursor:not-allowed}
+.r-c{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0}
+.r-c .d{color:var(--color-grey-60)}
+.r-c .nm{font-weight:500}
+.r.off .r-c .nm,.r.off .r-c .d{color:var(--color-grey-60)}
+.r.off .r-c .nm{font-weight:400}
+.r-x{display:flex;justify-content:flex-end}
+.r-note{grid-column:3 / span 2;font-size:12px;color:var(--color-grey-60);margin:-2px 0 4px}
+.lock{display:inline-flex;align-items:center;gap:4px;color:var(--color-grey-60);font-size:12px}
+
+select.k,input.k{height:30px;border:1px solid var(--color-grey-20);border-radius:var(--r-sm);background:var(--color-white);
+  padding:0 8px;font-family:inherit;font-size:13px;color:var(--color-grey);min-width:0}
+select.k{appearance:none;padding-right:26px;cursor:pointer;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><path d='M0 0l5 6 5-6z' fill='%236B778C'/></svg>");
+  background-repeat:no-repeat;background-position:right 8px center}
+select.k:focus,input.k:focus{outline:none;border-color:var(--color-primary);box-shadow:0 0 0 2px var(--color-primary-10)}
+select.k:disabled,input.k:disabled{background:var(--color-grey-5);color:var(--color-grey-60);cursor:not-allowed;opacity:.6}
+.k.w-days{width:62px}
+.k.w-key{width:104px}
+/* the scope row offers only the 4 short pushable operands, so it needs less
+   width than a refine row that has to fit "does not start with" */
+.k.w-src{width:144px}
+.k.w-op{width:146px}
+.k.w-op-s{width:132px}
+.k.w-tgt{width:auto;min-width:160px}
+/* only the first refine row carries the chevron; it governs the whole group */
+select.k.join{width:auto;min-width:62px;height:24px;padding:0 22px 0 6px;font-size:11px;font-weight:700;letter-spacing:.05em;
+  color:var(--color-primary);background-position:right 6px center}
+.del{width:24px;height:24px;border:0;background:none;color:var(--color-grey-60);cursor:pointer;font-size:13px;line-height:1;border-radius:var(--r-sm)}
+.del:hover{background:var(--color-grey-10);color:var(--color-red)}
+
+/* the two outcome settings are real product settings, so they keep switches */
+.o{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;padding:14px 16px}
+.o-t{font-size:13.5px;font-weight:500}
+.o-d{font-size:12.5px;color:var(--color-grey-60);margin-top:2px}
+.tog{display:inline-flex;align-items:center;min-height:22px;cursor:pointer;flex:0 0 auto;padding-top:2px}
+.tog.dis{cursor:not-allowed;opacity:.5}
+.tog.dis input.switch:checked{background:var(--control-track-on)}
+.tog.dis input.switch:checked::after{background:var(--color-primary)}
+
+.err{background:var(--color-red-light);border-left:3px solid var(--color-red);color:var(--color-red);padding:8px 10px;border-radius:var(--r-sm);font-size:12.5px;margin:8px 0}
+.warn{background:var(--color-yellow-light);border-left:3px solid var(--color-yellow);color:var(--color-grey);padding:8px 10px;border-radius:var(--r-sm);font-size:12.5px;margin:8px 0}
+.info{background:var(--color-primary-5);border-left:3px solid var(--color-primary);padding:8px 10px;border-radius:var(--r-sm);font-size:12.5px;margin:8px 0}
+.tip{background:var(--color-primary-5);border:1px solid var(--color-primary-10);color:var(--color-grey);padding:8px 10px;border-radius:var(--r-sm);font-size:12.5px;margin-top:10px}
+.linkish{background:none;border:0;padding:0;font:inherit;color:var(--color-red);text-decoration:underline;cursor:pointer}
+.linkish:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+.hint{font-size:12px;color:var(--color-grey-60)}
+.hint a,.info a,.tip a{color:var(--color-primary)}
+
+/* right column read-out */
+.ro{border:1px dashed var(--color-grey-30);border-radius:var(--r-sm);background:var(--color-grey-5);padding:12px 14px}
+.ro-t{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--color-grey-60);margin-bottom:6px}
+.ro p{font-size:12.5px;line-height:1.6}
+.ro p+p{margin-top:6px}
+.protobar{font-size:11.5px;color:var(--color-grey-60);margin-top:12px;display:flex;flex-direction:column;gap:2px}
+
+.asm{border-left:3px solid var(--color-purple);background:var(--color-purple-light);padding:8px 10px;border-radius:var(--r-sm);font-size:12px;margin:6px 0}
+.asm b{color:var(--color-purple)}
+.asm-hide .asm{display:none}
+.aid{display:inline-flex;align-items:center;height:18px;padding:0 6px;border-radius:3px;background:var(--color-purple-light);color:var(--color-purple);font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+details.disc{border:1px solid var(--color-grey-20);border-radius:var(--r-sm);margin-top:12px}
+details.disc>summary{padding:8px 12px;cursor:pointer;font-size:12.5px;font-weight:500;list-style:none;display:flex;align-items:center;justify-content:space-between;gap:8px}
+details.disc>summary::-webkit-details-marker{display:none}
+details.disc>summary::after{content:'▾';color:var(--color-grey-60);font-size:11px}
+details.disc[open]>summary::after{content:'▴'}
+details.disc>div{padding:0 12px 12px}
+pre.sql{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;background:var(--color-grey);color:var(--color-white);
+  padding:10px;border-radius:var(--r-sm);overflow-x:auto;line-height:1.5;white-space:pre}
+pre.sql .kw{color:var(--color-blue-light)}
+.mono{font-family:ui-monospace,Menlo,Consolas,monospace}
+.txn{display:block;width:100%;text-align:left;font:inherit;color:inherit;border:1px solid var(--color-grey-20);border-radius:var(--r-sm);
+  background:var(--color-white);padding:6px 8px;cursor:pointer;margin-bottom:6px}
+.txn[aria-checked="true"]{border-color:var(--color-primary);box-shadow:0 0 0 2px var(--color-primary-10)}
+.txn:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+.txn-t{display:block;font-size:12px;font-weight:500}
+.txn-d{display:block;font-size:11px;color:var(--color-grey-60);margin-top:2px}
+.out{border-radius:var(--r-sm);padding:8px 10px;font-size:12px;line-height:1.5;margin-top:8px}
+.out-ok{background:var(--color-green-light);border-left:3px solid var(--color-green)}
+.out-no{background:var(--color-yellow-light);border-left:3px solid var(--color-yellow)}
+.out-x{background:var(--color-red-light);border-left:3px solid var(--color-red)}
+.steps{font-size:11px;color:var(--color-grey-60);margin-top:6px;padding-left:16px}
+
+.cfm{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+     background:color-mix(in srgb, var(--color-grey) 45%, transparent);padding:24px}
+.cfm.on{display:flex}
+.cfm-box{background:var(--color-white);border-radius:var(--r-md);box-shadow:var(--shadow-card);max-width:420px;padding:20px}
+.cfm-t{font-size:16px;font-weight:500;margin-bottom:6px}
+.cfm-d{font-size:13px;color:var(--color-grey-60)}
+.cfm-a{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <button class="x" id="ov-close" aria-label="Close without saving">✕</button>
+  <span class="bar-t">Payment application</span>
+  <span class="bar-sub" id="bar-sub">mzkt.by (Stripe) · QuickBooks Online</span>
+  <span class="bar-r">
+    <span class="msg" id="msg" aria-live="polite"></span>
+    <span id="chip" class="status status-grey">Synder default</span>
+    <button class="btn" id="ov-save">Update</button>
+  </span>
+</div>
+
+<div class="page">
+  <h1>Payment matching rules</h1>
+  <div class="lede">Set up the rules Synder uses to match payments to open invoices. You can change them any time.</div>
+  <div class="cols">
+    <div class="left" id="left"></div>
+    <div class="right" id="right"></div>
+  </div>
+</div>
+
+<div class="cfm" id="cfm" role="alertdialog" aria-modal="true" aria-labelledby="cfm-t" aria-describedby="cfm-d" aria-hidden="true">
+  <div class="cfm-box">
+    <div class="cfm-t" id="cfm-t">Discard your changes?</div>
+    <div class="cfm-d" id="cfm-d">These rules have unsaved changes. Closing now throws them away — the rules that are saved right now stay exactly as they are.</div>
+    <div class="cfm-a">
+      <button class="btn btn-outlined" id="cfm-keep">Keep editing</button>
+      <button class="btn btn-danger" id="cfm-discard">Discard changes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================================
+   REFERENCE DATA — from the FDD (R4–R7, R13)
+   ========================================================================= */
+const SOURCES = {
+  invoice_number : {label:'Invoice number',    on:{Invoice:1,Payment:1,SalesReceipt:0}, key:false},
+  invoice_note   : {label:'Invoice note',      on:{Invoice:1,Payment:1,SalesReceipt:0}, key:false},
+  invoice_id     : {label:'Invoice id',        on:{Invoice:1,Payment:1,SalesReceipt:0}, key:false},
+  subscription_id: {label:'Subscription id',   on:{Invoice:1,Payment:1,SalesReceipt:0}, key:false},
+  invoice_meta   : {label:'Invoice metadata',  on:{Invoice:1,Payment:1,SalesReceipt:0}, key:true},
+  payment_note   : {label:'Payment note',      on:{Invoice:1,Payment:1,SalesReceipt:1}, key:false},
+  payment_meta   : {label:'Payment metadata',  on:{Invoice:1,Payment:1,SalesReceipt:1}, key:true}
+};
+const OPS = {
+  eq       : {label:'is equal to',        qbo:v=>"= '"+v+"'",      push:true },
+  contains : {label:'contains',           qbo:v=>"LIKE '%"+v+"%'", push:true },
+  starts   : {label:'starts with',        qbo:v=>"LIKE '"+v+"%'",  push:true },
+  ends     : {label:'ends with',          qbo:v=>"LIKE '%"+v+"'",  push:true },
+  ncontains: {label:'does not contain',   push:false},
+  neq      : {label:'is not equal to',    push:false},
+  nstarts  : {label:'does not start with',push:false},
+  nends    : {label:'does not end with',  push:false},
+  empty    : {label:'is empty',           push:false, noVal:true},
+  nempty   : {label:'is not empty',       push:false, noVal:true}
+};
+const TARGETS = {
+  doc_number  : {label:'Invoice number in books', short:'invoice number in books', api:'DocNumber',  max:21},
+  private_note: {label:'Memo on statement',       short:'memo on statement',       api:'PrivateNote'}
+};
+const DAYS_DEFAULT = 30, DAYS_MIN = 1, DAYS_MAX = 365;
+const META_KEYS = ['invoices','invoice','invoice_id','order_id','order_number'];
+
+/* ============================================================================
+   STATE — env is pushed by the host page
+   ========================================================================= */
+const env = {plan:'pro', applyPayments:true, adminNoLimit:false, genericCustomer:false, asm:false, aids:false};
+const blank = () => ({
+  useDefault:true,
+  scope:{ customer:{on:true}, date:{on:true, n:DAYS_DEFAULT},
+          match:{on:true, source:'invoice_number', key:'', operand:'eq'} },
+  combinator:'AND',
+  conditions:[],
+  overpayment:true,
+  cancelSync:true
+});
+let cfg = blank();
+let saved = JSON.parse(JSON.stringify(cfg));
+let simTxn = 't1';
+let daysNote = '';
+const ui = {open:{sql:false, sim:false}};
+
+const LEDGER = [
+  {id:'1039', cust:58, doc:'INV-1039', memo:'ORD-88012', date:'2026-04-02', due:120.00},
+  {id:'1041', cust:58, doc:'INV-1041', memo:'',          date:'2026-05-30', due:88.00},
+  {id:'1042', cust:58, doc:'INV-1042', memo:'ORD-88431', date:'2026-06-10', due:259.50},
+  {id:'1055', cust:58, doc:'INV-1055', memo:'ORD-88431', date:'2026-09-01', due:259.50},
+  {id:'2201', cust:77, doc:'TW-5510',  memo:'',          date:'2026-06-01', due:120.00},
+  {id:'1990', cust:58, doc:'INV-1990', memo:'ORD-88431', date:'2026-06-12', due:0.00}
+];
+const TXNS = {
+  t1:{name:'Payment with an invoice behind it', type:'Payment', amount:259.50, cust:58, date:'2026-06-14',
+      desc:'$259.50 · Acme Ltd · invoice INV-1042, note ORD-88431',
+      fields:{invoice_number:'INV-1042', invoice_note:'ORD-88431', invoice_id:'in_9f2c', subscription_id:'sub_881',
+              invoice_meta:{order:'ORD-88431'}, payment_note:'', payment_meta:{invoices:'INV-1042'}}},
+  t2:{name:'Simple charge, no invoice (example B)', type:'SalesReceipt', amount:120.00, cust:77, date:'2026-06-14',
+      desc:'$120.00 · Bea Ncube · metadata invoices = TW-5510',
+      fields:{payment_note:'', payment_meta:{invoices:'TW-5510'}}},
+  t3:{name:'Reference not in the books (example C)', type:'Payment', amount:50.00, cust:58, date:'2026-06-14',
+      desc:'$50.00 · Acme Ltd · invoice note ORD-99999',
+      fields:{invoice_number:'INV-9999', invoice_note:'ORD-99999', invoice_id:'in_77aa', subscription_id:'',
+              invoice_meta:{}, payment_note:'', payment_meta:{}}},
+  t4:{name:'Payment bigger than the invoice due', type:'Payment', amount:400.00, cust:58, date:'2026-06-14',
+      desc:'$400.00 · Acme Ltd · note ORD-88431 (INV-1042 owes 259.50)',
+      fields:{invoice_number:'INV-1042', invoice_note:'ORD-88431', invoice_id:'in_31b', subscription_id:'sub_881',
+              invoice_meta:{}, payment_note:'', payment_meta:{invoices:'INV-1042'}}}
+};
+
+/* ============================================================================
+   HELPERS
+   ========================================================================= */
+const LOCK = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" aria-hidden="true">'+
+  '<rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="2"/>'+
+  '<path d="M8 11V8a4 4 0 018 0v3" stroke="currentColor" stroke-width="2"/></svg>';
+const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const planOK   = () => env.plan !== 'starter';
+const needsKey = s => !!SOURCES[s] && SOURCES[s].key;
+const valueless= op => !!OPS[op].noVal;
+const custom   = () => !cfg.useDefault;
+const shiftDays = (iso,d) => {const t=new Date(iso+'T00:00:00Z'); t.setUTCDate(t.getUTCDate()+d); return t.toISOString().slice(0,10);};
+const norm = (v,target) => {
+  let s = String(v==null?'':v).trim().toLowerCase();
+  if (target && TARGETS[target] && TARGETS[target].max) s = s.slice(0, TARGETS[target].max);
+  return s;
+};
+function resolve(txn, source, key){                     // R14: absent vs empty
+  const f = txn.fields || {};
+  if (!(source in f)) return {absent:true};
+  const raw = f[source];
+  if (needsKey(source)){
+    if (!key) return {absent:true};
+    if (!raw || !(key in raw)) return {absent:true};
+    return {value:String(raw[key])};
+  }
+  if (raw === null || raw === undefined) return {absent:true};
+  return {value:String(raw)};
+}
+function testOp(a, op, b){
+  if (op==='empty')  return a==='';
+  if (op==='nempty') return a!=='';
+  switch(op){
+    case 'eq':        return a===b;
+    case 'neq':       return a!==b;
+    case 'contains':  return a.includes(b);
+    case 'ncontains': return !a.includes(b);
+    case 'starts':    return a.startsWith(b);
+    case 'nstarts':   return !a.startsWith(b);
+    case 'ends':      return a.endsWith(b);
+    case 'nends':     return !a.endsWith(b);
+  }
+  return false;
+}
+function sw(id, on, opts){
+  opts = opts || {};
+  const dis = !!opts.disabled;
+  return '<label class="tog'+(dis?' dis':'')+'">'+
+    '<input type="checkbox" class="switch" role="switch" id="'+id+'"'+(on?' checked':'')+(dis?' disabled':'')+
+      (opts.labelledby?' aria-labelledby="'+opts.labelledby+'"':'')+
+      (opts.label?' aria-label="'+esc(opts.label)+'"':'')+'>'+
+  '</label>';
+}
+function cb(id, on, opts){
+  opts = opts || {};
+  return '<input type="checkbox" id="'+id+'"'+(on?' checked':'')+(opts.disabled?' disabled':'')+
+    (opts.labelledby?' aria-labelledby="'+opts.labelledby+'"':'')+
+    (opts.label?' aria-label="'+esc(opts.label)+'"':'')+
+    (opts.describedby?' aria-describedby="'+opts.describedby+'"':'')+'>';
+}
+function sel(id, opts, val, cls, dis, labelTxt){
+  return '<select class="k '+(cls||'')+'" id="'+id+'"'+(dis?' disabled':'')+' aria-label="'+esc(labelTxt)+'">'+
+    opts.map(o=>'<option value="'+o[0]+'"'+(o[0]===val?' selected':'')+'>'+esc(o[1])+'</option>').join('')+'</select>';
+}
+const srcOpts  = () => Object.keys(SOURCES).map(k=>[k, SOURCES[k].label]);
+const pushOpts = () => Object.keys(OPS).filter(k=>OPS[k].push).map(k=>[k, OPS[k].label]);
+const allOpts  = () => Object.keys(OPS).map(k=>[k, OPS[k].label]);
+const tgtOpts  = () => Object.keys(TARGETS).map(k=>[k, TARGETS[k].label]);
+const eslot    = (f,cls) => '<div class="'+(cls||'')+'" data-eslot="'+f+'"></div>';
+
+/* ============================================================================
+   VALIDATION — R8 and R10. Inheritance is automatic (A6). A default-matching
+   integration never blocks Update.
+   ========================================================================= */
+function validate(){
+  if (!custom()) return [];
+  const e = [], s = cfg.scope;
+  if (!s.customer.on && !s.match.on)
+    e.push({field:'guard', msg:'Keep either Customer or the invoice-number match on — otherwise Synder has to look at every invoice in your books.'});
+  if (s.match.on && needsKey(s.match.source) && !s.match.key.trim())
+    e.push({field:'scope-key', msg:'Name the Stripe field that holds the reference.'});
+  cfg.conditions.forEach((c,i)=>{
+    if (!valueless(c.operand) && needsKey(c.source) && !(c.key||'').trim())
+      e.push({field:'cond-'+i, msg:'Name the Stripe field that holds the reference.'});
+  });
+  return e;
+}
+const errFor = (errs,f) => errs.filter(x=>x.field===f).map(x=>x.msg);
+
+/* ============================================================================
+   ENGINE
+   ========================================================================= */
+function run(txn){
+  const log = [], s = cfg.scope, clauses = [];
+  if (s.customer.on) clauses.push({test:inv=>inv.cust===txn.cust});
+  if (s.date.on){
+    const from = shiftDays(txn.date, -s.date.n), to = shiftDays(txn.date, s.date.n);
+    clauses.push({test:inv=>inv.date>=from});
+    clauses.push({test:inv=>inv.date<=to});
+  }
+  let matchClause = false;
+  if (s.match.on){
+    const r = resolve(txn, s.match.source, s.match.key);
+    if (r.absent){
+      log.push('Invoice-number match: “'+SOURCES[s.match.source].label+'” is absent on this '+txn.type+' → that line is dropped from the search.');
+    } else {
+      const v = norm(r.value,'doc_number');
+      matchClause = true;
+      clauses.push({test:inv=>testOp(norm(inv.doc,'doc_number'), s.match.operand, v)});
+      if (String(r.value).trim().length > 21)
+        log.push('Reference is longer than 21 characters — truncated to “'+v+'” on both sides before comparing.');
+    }
+  }
+  if (!(s.customer.on || matchClause)){
+    log.push('Nothing bounding remains after resolving the rows → no search issued.');
+    return finish(txn, [], null, 'no-candidates', log, false);
+  }
+  const snapshot = LEDGER.filter(inv => clauses.every(c=>c.test(inv)))
+                         .sort((a,b)=> a.date<b.date?-1 : a.date>b.date?1 : (a.id<b.id?-1:1));
+  log.push('QuickBooks returned: '+(snapshot.length ? snapshot.map(i=>i.doc).join(', ') : '(nothing)')+' — earliest invoice date first. Any balance qualifies.');
+  if (!snapshot.length) return finish(txn, snapshot, null, 'no-candidates', log, true);
+
+  const applicable = [];
+  cfg.conditions.forEach(c=>{
+    if (valueless(c.operand)){
+      log.push('Refine row “the invoice’s '+TARGETS[c.target].short+' '+OPS[c.operand].label+'” reads the invoice only, so it always applies.');
+      applicable.push({c, val:null});
+      return;
+    }
+    const r = resolve(txn, c.source, c.key);
+    if (r.absent){ log.push('Refine row “'+SOURCES[c.source].label+'” is absent on this '+txn.type+' → skipped, not applicable.'); return; }
+    applicable.push({c, val:r.value});
+  });
+  if (!cfg.conditions.length){                                   // R16
+    log.push('No refine rows → take the first invoice QuickBooks returned.');
+    return finish(txn, snapshot, snapshot[0], 'matched', log, true);
+  }
+  if (!applicable.length){                                       // R17
+    log.push('Every refine row is not applicable → NOT first-in-list. Process as usual.');
+    return finish(txn, snapshot, null, 'no-match', log, true);
+  }
+  const winners = snapshot.filter(inv => {
+    const res = applicable.map(a=>{
+      const tv = norm(a.c.target==='doc_number'?inv.doc:inv.memo, a.c.target);
+      return testOp(tv, a.c.operand, a.val==null ? '' : norm(a.val, a.c.target));
+    });
+    return cfg.combinator==='AND' ? res.every(Boolean) : res.some(Boolean);
+  });
+  log.push('Applicable refine rows: '+applicable.length+', combined with '+cfg.combinator+' → satisfied by '+(winners.length?winners.map(i=>i.doc).join(', '):'nothing')+'.');
+  if (!winners.length){                                          // R17
+    log.push('The refine rows matched nothing → process as usual. NOT the first invoice in the list.');
+    return finish(txn, snapshot, null, 'no-match', log, true);
+  }
+  if (winners.length>1) log.push('Several invoices satisfied them → earliest invoice date is the tie-break → '+winners[0].doc+'.');  // R26
+  return finish(txn, snapshot, winners[0], 'matched', log, true);
+}
+function finish(txn, snapshot, invoice, kind, log, queried){
+  const out = {txn, snapshot, invoice, log, queried, kind};
+  if (kind==='matched'){
+    if (txn.amount > invoice.due){                               // R19
+      out.result = cfg.overpayment
+        ? {tone:'ok', text:'Applied to '+invoice.doc+' as an overpayment — the payment ($'+txn.amount.toFixed(2)+') is more than '+invoice.doc+' still owes ($'+invoice.due.toFixed(2)+').'}
+        : {tone:'x',  text:'Sync cancelled — the payment ($'+txn.amount.toFixed(2)+') is more than '+invoice.doc+' still owes ($'+invoice.due.toFixed(2)+') and “Apply as overpayment” is off. This is the overpayment rule, not cancel-on-no-match.'};
+    } else {
+      out.result = {tone:'ok', text:'Applied to '+invoice.doc+'. No invoice created.'};
+    }
+  } else {
+    out.result = cfg.cancelSync
+      ? {tone:'x',  text:'Sync cancelled, nothing created — no matching invoice was found. The payment keeps a Canceled status in Synder.'}
+      : {tone:'no', text:'Processed as usual — Synder records the payment as a Sales Receipt, so no existing invoice is settled. The default matcher is not consulted.'};
+  }
+  return out;
+}
+
+/* ============================================================================
+   RENDER
+   ========================================================================= */
+function ruleSummary(){
+  const s = cfg.scope, b = [];
+  if (s.customer.on) b.push('same customer');
+  if (s.date.on)     b.push('±'+s.date.n+' days');
+  if (s.match.on)    b.push('invoice number '+OPS[s.match.operand].label+' the payment’s '+SOURCES[s.match.source].label.toLowerCase());
+  if (cfg.conditions.length) b.push(cfg.conditions.length+' refine row'+(cfg.conditions.length>1?'s':''));
+  return b.join(' · ');
+}
+function snapshotDisc(){
+  ['sql','sim'].forEach(k=>{ const d=document.getElementById('d-'+k); if(d) ui.open[k]=d.open; });
+}
+
+function render(){
+  snapshotDisc();
+  const s = cfg.scope, inert = !env.applyPayments;
+  let h = '';
+
+  if (!planOK())
+    h += '<div class="err">Available on <b>Pro, Pro Max and Premium</b>. Your organization is on Starter, so these rules cannot be configured. '+
+         '<a href="https://synder.com/pricing/" target="_blank" rel="noopener" style="color:var(--color-red)">Compare plans</a></div>';
+  if (inert)
+    h += '<div class="warn"><b>Nothing here runs yet.</b> “Apply payments to unpaid Invoice transactions” is off for this integration. '+
+         '<span style="display:inline-flex;align-items:center;gap:8px;vertical-align:middle;margin-left:4px">'+
+         sw('c-prereq', env.applyPayments, {label:'Apply payments to unpaid Invoice transactions'})+'<span>Turn it on</span></span></div>';
+
+  /* --- default matching -------------------------------------------------- */
+  h += '<div class="card"><div class="card-b">'+
+    '<label class="dflt">'+cb('c-default', cfg.useDefault, {labelledby:'n-default', disabled:!planOK()})+
+    '<span><span class="dflt-t" id="n-default">Use default matching rules</span>'+
+    '<span class="dflt-d">Payments are matched to an open invoice for the same customer, dated near the payment, whose invoice number equals the reference the payment carries. Nothing to set up.'+
+    (custom() ? '<br><b>Off:</b> your own rules below replace it — Synder’s default matching never runs for this integration, not even as a fallback. Turning it back on keeps your rules on file.' : '')+
+    '</span></span></label>'+
+    '<div class="asm"><b>A1 — reference copy.</b> The FDD requires the default behaviour to appear here as non-editable reference text but does not supply the wording. Product owns it.</div>'+
+    '</div></div>';
+
+  if (!custom()){
+    paint(h);
+    return;
+  }
+
+  /* --- the rules --------------------------------------------------------- */
+  h += '<div class="card">';
+
+  // Narrow the search
+  h += '<div class="grp"><div class="grp-t">Narrow the search</div>'+
+    '<div class="grp-d">Scope filters are always combined with <b>AND</b> — they limit which open invoices Synder looks at in QuickBooks. '+
+    'Only the four comparisons QuickBooks accepts inside a search are offered here; negations and “is empty” are refine rows.</div>'+
+    '<div class="rows">';
+
+  h += '<div class="r'+(s.customer.on?'':' off')+'">'+
+    '<span class="r-j">WHEN</span>'+
+    '<span class="r-cb">'+cb('c-cust', s.customer.on, {labelledby:'n-cust'})+'</span>'+
+    '<span class="r-c" id="n-cust"><span class="nm">Customer</span> <span class="d">matches the payment’s customer</span></span>'+
+    '<span class="r-x"></span>'+
+    (env.genericCustomer && s.customer.on
+      ? '<div class="r-note"><div class="warn"><b>Generic customer is on for this integration</b>, so every transaction is booked to one customer — this row stops narrowing anything.'+
+        '<div class="asm"><b>A2 — Q4 is open.</b> The FDD leaves what to do when Generic customer is on unanswered and only requires it to be surfaced here.</div></div></div>'
+      : '')+
+    (!s.customer.on
+      ? '<div class="r-note"><div class="info">A payment that matches an invoice <b>takes the customer from that invoice</b> — which may not be the customer who paid.'+
+        (s.match.on && s.match.operand!=='eq'
+          ? '<br>The invoice number is compared with “'+OPS[s.match.operand].label+'”, which can match another customer’s invoice. Use “is equal to” unless the reference is unique across all your customers.'
+          : '')+
+        '<div class="asm"><b>A6 — inheritance is automatic.</b> The FDD makes this a required opt-in and blocks Update without it. Stated as a consequence instead, which removes a blocking error. Needs product; reverting is one line.</div></div></div>'
+      : '')+
+    '</div>';
+
+  const dateFree = env.adminNoLimit;
+  h += '<div class="r'+(s.date.on?'':' off')+'">'+
+    '<span class="r-j">AND</span>'+
+    '<span class="r-cb">'+cb('c-date', s.date.on, {labelledby:'n-date', disabled:!dateFree, describedby:dateFree?'':'date-hint'})+'</span>'+
+    '<span class="r-c" id="n-date"><span class="nm">Invoice date</span> '+
+      (s.date.on
+        ? '<span class="d">is within</span><input class="k w-days" type="number" min="'+DAYS_MIN+'" max="'+DAYS_MAX+'" id="c-days" value="'+s.date.n+'" aria-label="Days either side of the payment date, '+DAYS_MIN+' to '+DAYS_MAX+'">'+
+          '<span class="d">days <b>either side</b> of the payment date</span>'+
+          '<span class="hint" id="d-win">('+shiftDays('2026-06-14',-s.date.n)+' → '+shiftDays('2026-06-14',s.date.n)+')</span>'
+        : '<span class="d">is not limited — invoices of any age are considered</span>')+
+      (dateFree?'':'<span class="lock">'+LOCK+' locked on</span>')+
+    '</span>'+
+    '<span class="r-x"></span>'+
+    '<div class="r-note"><div id="days-note"></div>'+
+      (dateFree
+        ? (s.date.on ? '' : '<div class="warn">On a large ledger, no date limit means a much longer list to search and a slower sync.</div>')
+        : '<span id="date-hint">No date limit at all has to be enabled for your organization by Synder — that is why this one is locked on. The number of days is yours to change. '+
+          '<a href="https://synder.com/contact-us/" target="_blank" rel="noopener">Ask Synder to enable it</a>.</span>')+
+      '<div class="asm"><b>A3 — Q3 is open.</b> The FDD leaves the default and the self-serve maximum unresolved. Using '+DAYS_DEFAULT+', max '+DAYS_MAX+'.</div>'+
+    '</div></div>';
+
+  h += '<div class="r'+(s.match.on?'':' off')+'">'+
+    '<span class="r-j">AND</span>'+
+    '<span class="r-cb">'+cb('c-match', s.match.on, {labelledby:'n-match'})+'</span>'+
+    '<span class="r-c" id="n-match">'+
+      (s.match.on
+        ? sel('c-msrc', srcOpts(), s.match.source, 'w-src', false, 'On the payment, take the value from')+
+          (needsKey(s.match.source)
+            ? '<input class="k w-key" id="c-mkey" list="meta-keys" placeholder="Stripe field" value="'+esc(s.match.key)+'" data-efield="scope-key" aria-label="Which Stripe field holds the reference">'
+            : '')+
+          sel('c-mop', pushOpts(), s.match.operand, 'w-op-s', false, 'Comparison')+
+          '<span class="d">Invoice number in books (<span class="mono">DocNumber</span>)</span>'
+        : '<span class="nm">Invoice number</span> <span class="d">matches a reference carried on the payment</span>')+
+    '</span>'+
+    '<span class="r-x"></span>'+
+    (s.match.on
+      ? '<div class="r-note">'+eslot('scope-key')+
+        (needsKey(s.match.source)
+          ? 'In Stripe, open any payment → <b>Metadata</b>; the name on the left of the pair goes in that box. <a href="https://docs.stripe.com/api/metadata" target="_blank" rel="noopener">Where to find this</a>'
+          : '')+
+        '</div>'
+      : eslot('scope-key','r-note'))+
+    '</div>';
+
+  h += '</div>'+                                  // .rows
+    (s.match.on ? '<div class="tip"><b>Tip:</b> invoice numbers in QuickBooks hold at most <b>21 characters</b>; longer values are shortened on both sides when matching.</div>' : '')+
+    eslot('guard')+
+    '</div>';                                     // .grp
+
+  // Then refine
+  h += '<div class="grp"><div class="grp-t">Then refine</div>'+
+    '<div class="grp-d">Optional extra conditions applied after the scope. '+
+    (cfg.conditions.length>1
+      ? 'The <b>'+cfg.combinator+'</b> on the first row applies to all of them; scope filters stay AND.'
+      : 'No refine rows means the earliest invoice in the scope is taken.')+
+    ' On the invoice, <b>Memo on statement</b> is <span class="mono">PrivateNote</span>.</div>'+
+    '<div class="rows">';
+  cfg.conditions.forEach((c,i)=>{
+    const noVal = valueless(c.operand);
+    h += '<div class="r">'+
+      // only the first row carries the chevron, and it governs the whole group
+      '<span class="r-j">'+(i===0
+        ? (cfg.conditions.length>1
+            ? sel('c-join', [['AND','AND'],['OR','OR']], cfg.combinator, 'join', false, 'Combine all refine rows with AND or OR')
+            : 'WHERE')
+        : cfg.combinator)+'</span>'+
+      '<span class="r-cb">'+cb('ce-'+i, true, {label:'Include refine row '+(i+1)})+'</span>'+
+      '<span class="r-c">'+
+        sel('cs-'+i, srcOpts(), c.source, 'w-src', noVal, 'Refine row '+(i+1)+': on the payment, take the value from')+
+        (needsKey(c.source) && !noVal
+          ? '<input class="k w-key" id="ck-'+i+'" list="meta-keys" placeholder="Stripe field" value="'+esc(c.key||'')+'" data-efield="cond-'+i+'" aria-label="Refine row '+(i+1)+': which Stripe field holds the reference">'
+          : '')+
+        sel('co-'+i, allOpts(), c.operand, 'w-op', false, 'Refine row '+(i+1)+': comparison')+
+        sel('ct-'+i, tgtOpts(), c.target, 'w-tgt', false, 'Refine row '+(i+1)+': on the invoice')+
+      '</span>'+
+      '<span class="r-x"><button class="del" id="cd-'+i+'" aria-label="Remove refine row '+(i+1)+'">✕</button></span>'+
+      eslot('cond-'+i,'r-note')+
+      (noVal ? '<div class="r-note">Reads the invoice only: <b>the invoice’s '+esc(TARGETS[c.target].short)+' '+esc(OPS[c.operand].label)+'</b>. Nothing on the payment is used, so it always applies.</div>' : '')+
+      '</div>';
+  });
+  h += '</div><button class="btn btn-text" id="c-add" style="padding-left:0;margin-top:8px">+ Add condition</button></div>';
+  h += '</div>';                                  // .card
+
+  /* --- the two outcome settings ------------------------------------------ */
+  h += '<div class="card"><div class="o">'+sw('c-over', cfg.overpayment, {labelledby:'n-over'})+
+    '<div><div class="o-t" id="n-over">Apply as overpayment</div>'+
+    '<div class="o-d">If the payment is larger than the matched open invoice, post the remainder as an overpayment. Off, the sync is cancelled instead. Only fires <i>after</i> an invoice was matched.</div></div>'+
+    '</div></div>';
+  h += '<div class="card"><div class="o">'+sw('c-cancel', cfg.cancelSync, {labelledby:'n-cancel'})+
+    '<div><div class="o-t" id="n-cancel">Cancel sync if there is no matching open invoice found for a payment</div>'+
+    '<div class="o-d">Same setting as Get &amp; Send Payments. Changing it here updates the GSP page.<br>'+
+    'On: nothing is created and the payment keeps a Canceled status, syncable later. Off: it is recorded as a Sales Receipt, settling no invoice.'+
+    '<div class="asm"><b>A5 — the no-match document.</b> The FDD says “processed as usual” without naming it. Sales Receipt versus an unapplied customer payment decides whether income is counted twice. Product and accounting own the answer.</div>'+
+    '</div></div></div>';
+
+  h += '<datalist id="meta-keys">'+META_KEYS.map(k=>'<option value="'+k+'">').join('')+'</datalist>';
+  paint(h);
+}
+
+function paint(h){
+  document.getElementById('left').innerHTML = h;
+  document.getElementById('right').innerHTML =
+    '<div class="ro"><div class="ro-t">In plain terms</div><div id="plain-body">'+plainTerms()+'</div></div>'+
+    aidsBlock()+
+    '<div class="protobar" id="protobar"></div>';
+  bind();
+  renderSim();
+}
+function aidsBlock(){
+  if (!env.aids) return '';
+  return '<details class="disc" id="d-sql"'+(ui.open.sql?' open':'')+'><summary><span>The QuickBooks search <span class="aid">review aid</span></span></summary><div id="sql-body">'+sqlBlock()+'</div></details>'+
+    '<details class="disc" id="d-sim"'+(ui.open.sim?' open':'')+'><summary><span>Try a sample payment <span class="aid">review aid</span></span></summary><div>'+
+    '<div id="sim-list" role="radiogroup" aria-label="Sample payment"></div><div id="sim-out"></div></div></details>';
+}
+
+/* --------- the read-out: generated, so it can never contradict the rules -- */
+function plainTerms(){
+  const s = cfg.scope, inert = !env.applyPayments;
+  const will = inert ? 'would' : 'will';
+  let h = '';
+  if (inert) h += '<p><b>Nothing runs yet</b> — “Apply payments to unpaid Invoice transactions” is off. Once it is on:</p>';
+  if (!custom()){
+    return h + '<p>This integration uses <b>Synder’s default matching</b>: an open invoice for the same customer, dated near the payment, whose invoice number equals the reference the payment carries.</p>'+
+      '<p>Switch the checkbox off to write your own rules. Anything you have saved before <b>stays on file</b>.</p>';
+  }
+  const bits = [];
+  if (s.customer.on) bits.push('belong to the same customer as the payment');
+  if (s.date.on)     bits.push('are dated within <b>'+s.date.n+' days either side</b> of the payment');
+  if (s.match.on)    bits.push('have an invoice number that <b>'+OPS[s.match.operand].label+'</b> the payment’s <b>'+SOURCES[s.match.source].label.toLowerCase()+
+                              (needsKey(s.match.source)? ' ['+esc(s.match.key||'…')+']':'')+'</b>');
+  h += '<p>For each payment from <b>mzkt.by · Stripe</b>, Synder '+will+' first narrow the open invoices to those that '+
+       (bits.length? bits.join(', and ') : '<b>— nothing is set, so this cannot be saved</b>')+
+       '. Any balance qualifies, earliest invoice date first.</p>';
+  if (cfg.conditions.length){
+    const rows = cfg.conditions.map(c=> valueless(c.operand)
+      ? 'the invoice’s <b>'+TARGETS[c.target].short+'</b> '+OPS[c.operand].label
+      : 'the payment’s <b>'+SOURCES[c.source].label.toLowerCase()+(needsKey(c.source)?' ['+esc(c.key||'…')+']':'')+'</b> '+OPS[c.operand].label+' the invoice’s <b>'+TARGETS[c.target].short+'</b>');
+    h += '<p>Then it '+will+' take the earliest invoice where '+(cfg.combinator==='AND'?'<b>all</b>':'<b>any</b>')+
+         ' of the refine rows hold: '+rows.join('; ')+'.</p>';
+  } else {
+    h += '<p>With no refine rows it '+will+' take the <b>first</b> invoice on that list.</p>';
+  }
+  h += '<p>'+
+    (cfg.overpayment ? 'A payment larger than the invoice leaves the difference as an overpayment. ' : 'A payment larger than the invoice <b>cancels the sync</b>. ')+
+    (cfg.cancelSync ? 'If no matching open invoice is found, <b>the sync is cancelled</b> and the payment keeps a Canceled status.' : 'If no matching open invoice is found, the payment is recorded as a <b>Sales Receipt</b>, settling no invoice.')+
+    (!s.customer.on ? ' A matched payment takes the customer from the invoice it matched.' : '')+
+    ' Synder’s default matching is <b>not</b> tried as a fallback.'+
+    (dirty() ? ' <b>Nothing changes until you press Update.</b>' : '')+'</p>';
+
+  const used = [];
+  if (s.match.on) used.push({label:'the invoice-number match', src:s.match.source});
+  cfg.conditions.forEach((c,i)=>{ if(!valueless(c.operand)) used.push({label:'refine row '+(i+1), src:c.source}); });
+  const dead = used.filter(u=>!SOURCES[u.src].on.SalesReceipt);
+  if (dead.length){
+    h += '<div class="warn" style="margin-bottom:0"><b>On a simple charge</b> (booked as a Sales Receipt) these read a value that does not exist and are skipped: '+
+      dead.map(d=>d.label).join(', ')+'.'+
+      (dead.length===used.length && cfg.conditions.every(c=>!valueless(c.operand))
+        ? ' That is <b>everything</b> these rules check, so simple charges always fall through. Source a row from <b>payment note</b> or <b>payment metadata</b> to catch them.'
+        : '')+'</div>';
+  }
+  return h;
+}
+
+function sqlBlock(){
+  const s = cfg.scope, t = TXNS.t1, L = [];
+  let dropped = '', srcLine = '';
+  if (s.customer.on) L.push("CustomerRef = '"+t.cust+"'");
+  if (s.date.on){ L.push("TxnDate >= '"+shiftDays(t.date,-s.date.n)+"'"); L.push("TxnDate <= '"+shiftDays(t.date,s.date.n)+"'"); }
+  if (s.match.on){
+    const r = resolve(t, s.match.source, s.match.key);
+    if (r.absent){
+      dropped = '<b>The invoice-number line is dropped entirely.</b> “'+esc(SOURCES[s.match.source].label)+'”'+
+        (needsKey(s.match.source) && !s.match.key.trim() ? ' has no field name yet' : ' is not present on this payment')+
+        ', so the search goes out without it — there is no fallback to a blank comparison.';
+      srcLine = '<b>'+esc(SOURCES[s.match.source].label)+'</b> resolves to <b>nothing</b>.';
+    } else {
+      const v = norm(r.value,'doc_number');
+      L.push('DocNumber '+OPS[s.match.operand].qbo(v));
+      srcLine = '<b>'+esc(SOURCES[s.match.source].label)+(needsKey(s.match.source)?' ['+esc(s.match.key)+']':'')+
+        '</b> resolves to <b class="mono">'+(r.value===''?'(empty)':esc(r.value))+'</b>'+
+        (r.value==='' ? ' — empty, so this can only match an invoice with no number at all.' : '.');
+    }
+  }
+  let sql = '<span class="kw">SELECT</span> * <span class="kw">FROM</span> Invoice\n';
+  sql += L.length ? '<span class="kw">WHERE</span> '+L.join('\n  <span class="kw">AND</span> ')+'\n' : '<span class="kw">-- no filter left</span>\n';
+  sql += '<span class="kw">ORDERBY</span> TxnDate ASC, Id ASC';
+  return '<div class="hint" style="margin-bottom:6px">Sample: $259.50, Acme Ltd (58), 14 Jun 2026. '+srcLine+'</div>'+
+    '<pre class="sql">'+sql+'</pre>'+
+    (dropped ? '<div class="warn">'+dropped+'</div>' : '')+
+    '<div class="hint" style="margin-top:6px">No <span class="mono">Balance &gt; 0</span> line — an invoice with nothing left owing can still be a candidate, because a payment may be an overpayment.</div>';
+}
+
+function renderSim(refocus){
+  const list = document.getElementById('sim-list'); if(!list) return;
+  const keys = Object.keys(TXNS);
+  list.innerHTML = keys.map(k=>{
+    const t = TXNS[k], on = simTxn===k;
+    return '<button type="button" class="txn" role="radio" aria-checked="'+on+'" tabindex="'+(on?0:-1)+'" data-t="'+k+'">'+
+      '<span class="txn-t">'+esc(t.name)+'</span><span class="txn-d">'+esc(t.desc)+' · <b>'+t.type+'</b></span></button>';
+  }).join('');
+  const cards = [...list.querySelectorAll('.txn')];
+  const pick = k => { simTxn=k; renderSim(true); };
+  cards.forEach((el,i)=>{
+    el.onclick = ()=>pick(el.dataset.t);
+    el.onkeydown = e=>{
+      const d = (e.key==='ArrowDown'||e.key==='ArrowRight') ? 1 : (e.key==='ArrowUp'||e.key==='ArrowLeft') ? -1 : 0;
+      if (!d) return; e.preventDefault(); pick(keys[(i+d+keys.length)%keys.length]);
+    };
+  });
+  if (refocus){ const sl = list.querySelector('.txn[aria-checked="true"]'); if(sl) sl.focus(); }
+
+  const box = document.getElementById('sim-out');
+  if (!env.applyPayments){
+    box.innerHTML = '<div class="out out-x"><b>Nothing runs</b> — “Apply payments to unpaid Invoice transactions” is off.</div>';
+    return;
+  }
+  if (!custom()){
+    box.innerHTML = '<div class="out out-no"><b>Default matcher</b> — your own rules are off, so this sample goes through Synder’s default matching.</div>';
+    return;
+  }
+  const errs = validate();
+  if (errs.length){ box.innerHTML = '<div class="out out-x">Fix the rules first — they cannot be saved, so there is nothing to run.</div>'; return; }
+  const r = run(TXNS[simTxn]);
+  let h = '<div class="out out-'+r.result.tone+'"><b>'+
+    (r.result.tone==='ok'?'Applied':r.result.tone==='no'?'No match':'Cancelled')+'</b> — '+esc(r.result.text)+'</div>';
+  h += '<ul class="steps">'+r.log.map(l=>'<li>'+esc(l)+'</li>').join('')+'</ul>';
+  box.innerHTML = h;
+}
+
+/* ============================================================================
+   ERRORS + BAR
+   ========================================================================= */
+function paintErrors(){
+  const errs = validate();
+  document.querySelectorAll('[data-eslot]').forEach(slot=>{
+    const f = slot.getAttribute('data-eslot'), m = errFor(errs,f);
+    const want = m.length ? '<div class="err" id="err-'+f+'" role="alert">'+m[0]+'</div>' : '';
+    if (slot.innerHTML !== want) slot.innerHTML = want;
+    const fld = document.querySelector('[data-efield="'+f+'"]');
+    if (fld){
+      if (m.length){ fld.setAttribute('aria-invalid','true'); fld.setAttribute('aria-describedby','err-'+f); }
+      else { fld.removeAttribute('aria-invalid'); fld.removeAttribute('aria-describedby'); }
+    }
+  });
+  return errs;
+}
+const SHORT = {guard:'Customer and Invoice-number match are both off', 'scope-key':'the Stripe field name is missing'};
+function paintBar(errs){
+  const save = document.getElementById('ov-save');
+  const blocked = !!errs.length || !planOK();
+  save.setAttribute('aria-disabled', blocked ? 'true' : 'false');
+  save.classList.toggle('btn-disabled', blocked);
+
+  let msg;
+  if (!planOK()) msg = 'Available on Pro and above.';
+  else if (errs.length){
+    const f = errs[0].field;
+    const what = SHORT[f] || (f.indexOf('cond-')===0 ? 'refine row '+(parseInt(f.slice(5),10)+1)+' has no Stripe field name' : 'a field needs a value');
+    msg = '<span style="color:var(--color-red)">'+errs.length+' to fix — first: '+what+'. </span><button class="linkish" id="jump">Show me</button>';
+  }
+  else if (!env.applyPayments) msg = '<span style="color:var(--color-yellow)">Saved, but inert until the prerequisite is on.</span>';
+  else if (custom()) msg = 'Applies to mzkt.by (Stripe) only.';
+  else msg = 'Synder’s default matching stays in place.';
+  const box = document.getElementById('msg');
+  if (box.innerHTML !== msg) box.innerHTML = msg;
+  const j = document.getElementById('jump');
+  if (j) j.onclick = ()=>jump(errs);
+
+  const chip = document.getElementById('chip');
+  chip.textContent = custom() ? (env.applyPayments ? 'Custom rules' : 'Custom rules (inactive)') : 'Synder default';
+  chip.className = 'status ' + (custom() && env.applyPayments ? 'status-green' : 'status-grey');
+
+  const n = document.querySelectorAll('.asm').length;
+  const pb = document.getElementById('protobar');
+  if (pb) pb.innerHTML =
+    '<span>Prototype only.</span>'+
+    (env.asm ? '<span>'+n+' assumption'+(n===1?'':'s')+' shown inline.</span>'
+             : '<span>'+n+' assumption'+(n===1?'':'s')+' hidden — “Show assumptions” in the bar above.</span>')+
+    (env.aids ? '' : '<span>Review aids hidden — “Show review aids” in the bar above.</span>');
+  document.body.classList.toggle('asm-hide', !env.asm);
+}
+function jump(errs){
+  if (!errs.length) return;
+  const f = errs[0].field;
+  const box = document.getElementById('err-'+f) || document.querySelector('[data-eslot="'+f+'"]');
+  if (box) box.scrollIntoView({block:'center'});
+  const fld = document.querySelector('[data-efield="'+f+'"]');
+  if (fld) fld.focus();
+}
+
+/* ============================================================================
+   BINDINGS
+   ========================================================================= */
+function bind(){
+  const s = cfg.scope, R = render;
+  const on = (id,fn)=>{const el=document.getElementById(id); if(el) el.onclick=fn;};
+  const ch = (id,fn)=>{const el=document.getElementById(id); if(el) el.onchange=fn;};
+
+  ch('c-prereq', e=>{ env.applyPayments=e.target.checked; post({type:'prereq', on:env.applyPayments}); R(); });
+  ch('c-default',e=>{ if(!planOK()) return; cfg.useDefault=e.target.checked; R(); });
+  ch('c-cust',   ()=>{ s.customer.on=!s.customer.on; R(); });
+  ch('c-date',   ()=>{ if(!env.adminNoLimit) return; s.date.on=!s.date.on; daysNote=''; R(); });
+  ch('c-match',  ()=>{ s.match.on=!s.match.on; R(); });
+  ch('c-over',   ()=>{ cfg.overpayment=!cfg.overpayment; R(); });
+  // one stored value (R18): commits on change here and on GSP, never a draft
+  ch('c-cancel', ()=>{ cfg.cancelSync=!cfg.cancelSync; saved.cancelSync=cfg.cancelSync; post({type:'cancel-sync', on:cfg.cancelSync}); R(); });
+  ch('c-join',   e=>{ cfg.combinator=e.target.value; R(); });
+  on('c-add',    ()=>{ cfg.conditions.push({source:'invoice_note', operand:'contains', target:'private_note', key:''}); R(); });
+
+  // the number field must never re-render — a re-render replaces the node and
+  // one ArrowUp would eject focus
+  const days = document.getElementById('c-days');
+  if (days){
+    days.oninput = e=>{
+      const v = parseInt(e.target.value,10);
+      if (!isNaN(v) && v>=DAYS_MIN && v<=DAYS_MAX){ s.date.n=v; daysNote=''; refresh(); }
+    };
+    days.onchange = e=>{
+      let v = parseInt(e.target.value,10);
+      if (isNaN(v)) v = s.date.n;
+      if (v<DAYS_MIN){ v=DAYS_MIN; daysNote='Changed to '+DAYS_MIN+' — the smallest window Synder accepts.'; }
+      else if (v>DAYS_MAX){ v=DAYS_MAX; daysNote='Changed to '+DAYS_MAX+' — the widest window you can set yourself.'; }
+      else daysNote='';
+      s.date.n=v;
+      if (String(v)!==e.target.value) e.target.value=v;
+      refresh();
+    };
+  }
+  ch('c-msrc', e=>{ s.match.source=e.target.value; if(!needsKey(s.match.source)) s.match.key=''; R(); });
+  ch('c-mop',  e=>{ s.match.operand=e.target.value; R(); });
+  const mk = document.getElementById('c-mkey');
+  if (mk) mk.oninput = e=>{ s.match.key=e.target.value; refresh(); };
+
+  cfg.conditions.forEach((c,i)=>{
+    ch('cs-'+i, e=>{ c.source=e.target.value; if(!needsKey(c.source)) c.key=''; R(); });
+    ch('co-'+i, e=>{ c.operand=e.target.value; R(); });
+    ch('ct-'+i, e=>{ c.target=e.target.value; R(); });
+    on('cd-'+i, ()=>{ cfg.conditions.splice(i,1); R(); });
+    const k = document.getElementById('ck-'+i);
+    if (k) k.oninput = e=>{ c.key=e.target.value; refresh(); };
+  });
+
+  ['sql','sim'].forEach(k=>{
+    const d = document.getElementById('d-'+k);
+    if (d) d.addEventListener('toggle', ()=>{ ui.open[k]=d.open; });
+  });
+
+  paintBar(paintErrors());
+}
+function refresh(){
+  const s = cfg.scope;
+  const set = (id,html)=>{const el=document.getElementById(id); if(el) el.innerHTML=html;};
+  set('d-win', '('+shiftDays('2026-06-14',-s.date.n)+' → '+shiftDays('2026-06-14',s.date.n)+')');
+  set('days-note', daysNote ? '<div class="info" role="status">'+daysNote+'</div>' : '');
+  set('plain-body', plainTerms());
+  set('sql-body', sqlBlock());
+  renderSim();
+  paintBar(paintErrors());
+}
+
+/* ============================================================================
+   CLOSE / SAVE / DISCARD
+   ========================================================================= */
+const post = m => parent.postMessage(m, '*');
+const dirty = () => JSON.stringify(cfg) !== JSON.stringify(saved);
+const confirmOpen = () => document.getElementById('cfm').classList.contains('on');
+function showConfirm(){ const c=document.getElementById('cfm'); c.classList.add('on'); c.setAttribute('aria-hidden','false'); document.getElementById('cfm-keep').focus(); }
+function hideConfirm(){ const c=document.getElementById('cfm'); c.classList.remove('on'); c.setAttribute('aria-hidden','true'); }
+function requestClose(){ if (dirty()) showConfirm(); else post({type:'close'}); }
+
+document.getElementById('cfm-keep').onclick    = ()=>{ hideConfirm(); document.getElementById('ov-close').focus(); };
+document.getElementById('cfm-discard').onclick = ()=>{ hideConfirm(); post({type:'close'}); };
+document.getElementById('ov-close').onclick  = requestClose;
+document.getElementById('ov-save').onclick = ()=>{
+  const errs = validate();
+  if (errs.length || !planOK()){ jump(errs); return; }
+  saved = JSON.parse(JSON.stringify(cfg));
+  post({type:'saved', configured:custom(), summary:custom() ? ruleSummary() : ''});
+};
+
+document.addEventListener('keydown', e=>{
+  if (e.key === 'Tab' && confirmOpen()){
+    const items = [...document.querySelectorAll('#cfm button')];
+    const first = items[0], last = items[items.length-1];
+    if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+    return;
+  }
+  if (e.key !== 'Escape') return;
+  if (confirmOpen()){ e.preventDefault(); hideConfirm(); document.getElementById('ov-close').focus(); return; }
+  const t = e.target;
+  if (t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA')) return;
+  e.preventDefault();
+  requestClose();
+});
+
+window.addEventListener('message', e=>{
+  const m = e.data || {};
+  if (m.type !== 'env') return;
+  const first = !window.__seeded;
+  Object.assign(env, m.env || {});
+  if (first){
+    window.__seeded = true;
+    cfg.cancelSync = !!(m.shared && m.shared.cancelSync);
+    cfg.useDefault = !(m.shared && m.shared.configured);
+    saved = JSON.parse(JSON.stringify(cfg));
+  } else if (m.shared && m.shared.cancelSync !== cfg.cancelSync){
+    cfg.cancelSync = !!m.shared.cancelSync;
+    saved.cancelSync = cfg.cancelSync;
+  }
+  render();
+  if (first) document.getElementById('ov-close').focus();
+});
+post({type:'ready'});
+render();
+</script>
+</body>
+</html>

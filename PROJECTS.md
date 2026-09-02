@@ -6,13 +6,25 @@
 ## 🔧 Active Projects
 
 ### Configurable payment application engine (2026-09-01)
-- **Status:** ✅ v3 live and current — a compact centred sheet on Ignat's third sketch (2026-09-02). v1 and v2 kept for comparison.
+- **Status:** ✅ v4 live and current — full-screen overlay, two columns, on Ignat's collage (2026-09-02). v1–v3 kept for comparison.
 - **Source:** Confluence `[Settings] Configurable payment application engine` (page 3160113208) · Jira SD-16243 (tech) / SD-16110 (mock) · DIS-333
-- **Prototype (current, v3):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v3/ — `projects/payment-application-v3/gsp.html` + `overlay.html`
+- **Prototype (current, v4):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v4/ — `projects/payment-application-v4/gsp.html` + `overlay.html`
+- **Prototype (v3, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v3/
+
+#### v4 — the layout that finally worked
+- **Full-screen overlay** (Product mapping precedent), 1280px content, split into a **rules column and a read-out column**. Parking *In plain terms* on the right is the structural idea: it costs the rules no vertical space and sits beside the thing it describes.
+- **One left edge per tier.** v3's real problem was four different left edges plus centred AND dividers. Now: group headings and row gutters share one edge, every control-row title shares a second, every rule row shares a third. Asserted, along with "nothing in the rules column is centre-aligned".
+- **Two labelled groups in one card** — *Narrow the search* / *Then refine* — with the join rule in each sub-line: "Scope filters are always combined with AND" and "the AND on the first row applies to all of them; scope filters stay AND". That restores the *why* v3 had compacted away, in two sentences.
+- **Checkboxes for rule rows, switches only for the two outcome settings.** A switch says "this is on in the product"; a checkbox says "include this in my rule". Asserted: 3 row checkboxes, exactly 2 switches, 0 switches inside a rule row.
+- **One chevron, on the first refine row, governing all of them** (Ignat's intent). One row shows `WHERE` and no chevron; two or more put a single `AND/OR` select on row 1 and the chosen word statically on the rest. Asserted at 1, 2 and 3 rows.
+- **The read-out is generated**, so it cannot contradict the controls — the failure his collage showed (three refine rows on the left, one in the read-out, and "the payment may still sync" while cancel-sync was on). Asserted: it tracks the join, the day window, the cancel-sync branch, and never says "may sync".
+- **"Customer matches the payment's customer"** — not customer name, which is out of scope. Third time this came back; now asserted against.
+- **The date row stays greyed** (Ignat: that's fine) but the reason sits next to it as real text with `aria-describedby`, not a tooltip.
+- **Verification:** `scripts/verify-payapp-v4.cjs` — 150 assertions across the frame boundary, 0 failures, carrying round-1's four automated gates plus the layout gates (one edge per tier · every rule row on one line · no select clips its widest option).
 - **Prototype (v2, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v2/
 - **Prototype (v1, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-engine/
 
-#### v3 — the size fix. Ignat's repeated note was "you again created a very very big screen"
+#### v3 — the size fix (superseded by v4's layout)
 - **A centred 800px sheet, not a full-bleed page.** Default state ~250px of content; the whole rule
   with three scope rows, conditions, outcomes and plain terms is ~1035px, so it fits a 1080p screen.
   v2 was a full-page scroll of roughly 3000px.
