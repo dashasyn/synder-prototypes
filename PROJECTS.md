@@ -6,12 +6,42 @@
 ## 🔧 Active Projects
 
 ### Configurable payment application engine (2026-09-01)
-- **Status:** ✅ v2 live and current — rebuilt on Ignat's own sketch structure (2026-09-02). v1 kept for comparison.
+- **Status:** ✅ v3 live and current — a compact centred sheet on Ignat's third sketch (2026-09-02). v1 and v2 kept for comparison.
 - **Source:** Confluence `[Settings] Configurable payment application engine` (page 3160113208) · Jira SD-16243 (tech) / SD-16110 (mock) · DIS-333
-- **Prototype (current, v2):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v2/ — `projects/payment-application-v2/gsp.html` + `overlay.html`
-- **Prototype (v1, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-engine/ — `projects/payment-application-engine/index.html`
+- **Prototype (current, v3):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v3/ — `projects/payment-application-v3/gsp.html` + `overlay.html`
+- **Prototype (v2, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-v2/
+- **Prototype (v1, superseded):** https://dashasyn.github.io/synder-prototypes/projects/payment-application-engine/
 
-#### v2 — the structure Ignat's sketch got right
+#### v3 — the size fix. Ignat's repeated note was "you again created a very very big screen"
+- **A centred 800px sheet, not a full-bleed page.** Default state ~250px of content; the whole rule
+  with three scope rows, conditions, outcomes and plain terms is ~1035px, so it fits a 1080p screen.
+  v2 was a full-page scroll of roughly 3000px.
+- **What buys the space:** small-caps section labels (`SCOPE · ALL OF THESE (AND)` / `CONDITIONS` /
+  `APPLICATION`) instead of cards with headers, borders and padding · one-line rows: toggle, bold
+  name, inline controls or a single-sentence description · `AND` dividers on the row borders ·
+  **In plain terms as two generated paragraphs, not an ordered list** · the QuickBooks query panel
+  and the sample-payment runner moved **out of the sheet** behind a presenter-bar switch, and the
+  assumption boxes default to hidden with a persistent one-line note saying how many are hidden.
+- **Copy taken from his sketch verbatim:** “Same setting as Get & Send Payments. Changing it here
+  updates the GSP page.” (names the surface *and* the direction) and “your saved rule stays on
+  file” (R21 in five words). GSP is Get & Send Payments — worth using in copy.
+- **A6 — customer inheritance is now automatic.** His sketch states it as a consequence in an info
+  box rather than a required checkbox. That deletes one blocking error and reads better, but the FDD
+  makes it a required opt-in whose absence blocks Save. **Needs a product decision**; reverting is
+  one line. Flagged inline as A6.
+- **Corrected three times over:** the date row is a window **either side** of the payment date, not
+  a lookback. His sketches said “1 day before”, then “within 90 days of”, then “Look back 90 days”.
+  Default 30, max 365 (Q3 still open).
+- **“Engine” never appears in user-facing copy** — the master row is *Custom rule*. Asserted.
+- **Everything from round 1 still holds:** real switches, labelled controls, announced and jumpable
+  errors, `aria-disabled` Save that keeps its tab position, no-lie query and simulator panels,
+  Escape belonging to the field first, a discard prompt on every exit path — including the scrim
+  click, which in his HTML discarded silently.
+- **Verification:** `scripts/verify-payapp-v3.cjs` — 154 assertions across the frame boundary,
+  0 failures, carrying round-1's four automated gates plus two new layout gates (no select clips its
+  widest option; a condition row with a Stripe-field box stays on one line).
+
+#### v2 — the flat-list structure (superseded by v3's density)
 - **Two documents, on purpose.** `gsp.html` reproduces the live *Settings → Invoices* tab on the **legacy GSP/Bootstrap stack** (`.sds-*`); the configurator is `overlay.html` on the **React/MUI kit**, loaded in an iframe. The two stylesheets cannot share a page (`.btn`/`.card`/`.table` collide) — and production is the same sandwich, an old page hosting a React overlay. Copied the entry pattern from **Product mapping**: a described section with a button, ✕ + title top-left, actions top-right.
 - **One flat list instead of two numbered sections.** `Apply the payment to an invoice where:` then `WHEN / AND` rows. The scope-vs-conditions split survives as *behaviour*, not as a lecture: the three built-in rows are fixed (checkbox on/off, no delete) and offer only the 4 QBO-pushable operands, added conditions offer all 10 and both targets. A caption between them says the three are what QuickBooks can search on and are always ANDed.
 - **AND/OR lives in the gutter** of the first added condition (Airtable-style), so R12's single combinator is satisfied without a segmented control or a second heading.
