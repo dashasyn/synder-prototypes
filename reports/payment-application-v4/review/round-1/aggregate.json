@@ -1,0 +1,571 @@
+{
+  "target": "My v4 (full-screen overlay)",
+  "round": 1,
+  "ran": [
+    {
+      "lens": "a11y",
+      "file": "a11y.json",
+      "checked": 22,
+      "findings": 3
+    },
+    {
+      "lens": "clarity",
+      "file": "clarity.json",
+      "checked": 13,
+      "findings": 3
+    },
+    {
+      "lens": "domain",
+      "file": "domain.json",
+      "checked": 23,
+      "findings": 3
+    },
+    {
+      "lens": "fidelity",
+      "file": "fidelity.json",
+      "checked": 15,
+      "findings": 2
+    },
+    {
+      "lens": "trust",
+      "file": "trust.json",
+      "checked": 12,
+      "findings": 4
+    },
+    {
+      "lens": "ux",
+      "file": "ux1.json",
+      "checked": 11,
+      "findings": 2
+    },
+    {
+      "lens": "ux",
+      "file": "ux2.json",
+      "checked": 13,
+      "findings": 2
+    },
+    {
+      "lens": "ux",
+      "file": "ux3.json",
+      "checked": 8,
+      "findings": 1
+    }
+  ],
+  "missing": [],
+  "auto": [],
+  "critical_high": [
+    {
+      "id": "UX-1",
+      "severity": "High",
+      "confidence": 82,
+      "element": "Key field input in the matching-rule configurator (required once a metadata source is chosen)",
+      "finding": "The key field's required status is only revealed by an error summary after Update is pressed — nothing marks it as required while the user is filling out the form.",
+      "user_impact": "A user can pick a metadata source, believe the rule is complete, and press Update, only then discovering a field they never saw flagged as mandatory — the exact abandonment risk a multi-field setup needs to avoid.",
+      "suggested_fix": "Mark the key field as required inline (asterisk or helper text) as soon as a metadata source is selected, before the user reaches Update.",
+      "evidence": {
+        "action": "Opened the matching configurator, selected a metadata source, left the key field empty, then pressed Update.",
+        "observed": "The overlay stayed open and a summary message appeared listing the missing key — the requirement was not indicated anywhere before that point."
+      },
+      "lens": "ux",
+      "instance": "ux3",
+      "lenses": [
+        "clarity",
+        "ux3"
+      ],
+      "corroborated": true,
+      "also": [
+        {
+          "lens": "clarity",
+          "id": "CLR-1",
+          "finding": "Nothing on screen marks this field as required while I'm filling out the form — I only find out it's mandatory after I press Update and get blocked.",
+          "evidence": {
+            "quote": "1 thing to fix before this can be saved — the Stripe field name is missing.",
+            "source": "plain-language"
+          }
+        }
+      ]
+    },
+    {
+      "id": "A11Y-1",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "Every checkbox, radio and select inside the custom-rule panel (e.g. 'Customer matches the payment's customer', 'On the payment, take the value from', 'Refine row 1: comparison', 'Use custom rules', '+ Add condition', 'Remove refine row 1')",
+      "finding": "Toggling almost any control in the configurator calls render(), which replaces the entire left-column DOM (document.getElementById('left').innerHTML = ...); none of these onchange/onclick handlers restore focus afterward, so the browser drops focus to <body> once the interacted node is destroyed and recreated.",
+      "user_impact": "A keyboard or screen-reader user who picks a source, a comparison, ticks a row, or adds/removes a refine condition loses their place after every single change and must Tab from the very top of the overlay to reach the next field — for a task that requires configuring several such controls in sequence, this makes efficient completion effectively impossible.",
+      "suggested_fix": "After render(), re-focus the element that triggered the change (e.g. capture document.activeElement's id before re-rendering and call .focus() on the new node with the same id), the way renderSim() already does for the sample-payment radios and the way c-days/c-mkey avoid the problem entirely by not re-rendering on input.",
+      "evidence": {
+        "action": "select a new value in 'On the payment, take the value from' (or tick any row checkbox / choose 'Use custom rules') via keyboard",
+        "observed": "source: ch('c-msrc', ...R()) and the equivalent handlers for c-cust, c-date, c-match, m-default, m-custom, ce-i, cs-i, co-i, ct-i, c-join, c-over, c-cancel, c-add, cd-i all call render(), which rewrites #left's entire innerHTML with no .focus() call afterward — contrast with renderSim()'s explicit sl.focus() and the c-days/c-mkey handlers, which use refresh() specifically to avoid destroying the focused node"
+      },
+      "lens": "a11y",
+      "instance": "a11y",
+      "lenses": [
+        "a11y"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 82,
+      "element": "\"Refine row 1: on the invoice\" select — option \"Memo on statement\" (internally target 'private_note', api 'PrivateNote')",
+      "finding": "The option labeled \"Memo on statement\" is wired to QuickBooks Online's PrivateNote field, which is an internal-only memo that is never printed on a customer statement — the label describes a field that does not exist as named.",
+      "user_impact": "An accountant who picks this option expecting it to compare against the customer-facing statement memo is actually comparing against a different, internal-only field, so a refine rule set up on this assumption can silently fail to match the intended invoice or match the wrong one.",
+      "suggested_fix": "Rename the option to match QuickBooks Online's own field name, e.g. \"Memo (internal)\" or \"Memo (PrivateNote)\", and drop \"statement\" since PrivateNote is never shown on a statement.",
+      "evidence": {
+        "quote": "Memo on statement",
+        "source": "Accounting rule: QuickBooks Online's Invoice.PrivateNote is an internal-only memo not shown to the customer or on any statement; conflating it with a statement memo is a field-mapping error, not covered by vocabulary.md."
+      },
+      "lens": "domain",
+      "instance": "domain",
+      "lenses": [
+        "domain"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "DOM-3",
+      "severity": "Critical",
+      "confidence": 75,
+      "element": "\"In plain terms\" read-out, \"No match\" line (shown when \"Cancel sync if there is no matching open invoice\" is off)",
+      "finding": "When the cancel-sync switch is off, an unmatched payment is recorded as a Sales Receipt automatically, with no confirmation step and no way to tell this apart from an unapplied customer payment.",
+      "user_impact": "If the real invoice exists but the rule simply failed to find it (too-narrow date window, wrong reference field), the payment books as new income via a Sales Receipt while the original invoice can still be paid separately later — double-counting revenue with nothing to catch it before or after the fact.",
+      "suggested_fix": "Add an explicit confirmation before a no-match payment is recorded as a Sales Receipt, and confirm with Product/Accounting whether an unapplied customer payment is the safer default outcome.",
+      "evidence": {
+        "quote": "recorded as a Sales Receipt",
+        "source": "Accounting rule: booking an unmatched payment as a new Sales Receipt without confirming the matching invoice is genuinely absent from the books risks double-counting income."
+      },
+      "lens": "domain",
+      "instance": "domain",
+      "lenses": [
+        "domain"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "TRU-1",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "Overlay top-bar status message (#msg)",
+      "claims": "\"Saved, but inert until the prerequisite is on.\" — worded as a statement about what is currently saved.",
+      "actual": "This exact text is shown whenever the prerequisite is off, regardless of whether the current rule edits have ever been saved. The message is built from `!env.applyPayments` alone and never checks `dirty()` (cfg vs. saved), so it reads identically whether the user has an untouched saved rule or a half-edited, never-submitted one.",
+      "finding": "The top-bar message claims a saved state while the same screen's right-hand column, at the same instant, warns \"Nothing changes until you press Update\" — the two zones of one screen disagree about whether anything has been saved.",
+      "user_impact": "A user edits the matching rule, sees \"Saved, but inert…\" in the bar they're looking at, and closes the overlay believing the new rule is committed and just waiting on the prerequisite — when in fact nothing was written and the old (or default) rule is still what runs.",
+      "suggested_fix": "Gate the message on `dirty()` the same way the plain-terms readout does: show an unsaved-changes variant (e.g. \"Not saved yet — and inert until the prerequisite is on\") whenever cfg differs from saved.",
+      "evidence": {
+        "action": "On the GSP Invoices tab, turn off \"Apply payments to unpaid Invoice transactions\". Open \"Set up matching\". Switch to \"Use custom rules\" (or edit any scope field). Do not press Update.",
+        "observed": "Top bar still reads \"Saved, but inert until the prerequisite is on.\" while the right column reads \"Nothing changes until you press Update.\" — a direct contradiction between two zones of the same screen."
+      },
+      "lens": "trust",
+      "instance": "trust",
+      "lenses": [
+        "trust"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "TRU-3",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "\"Discard changes?\" confirmation dialog, shown by the overlay's × close button",
+      "claims": "\"These rules have unsaved changes. Closing now throws them away — the rules that are saved right now stay exactly as they are.\"",
+      "actual": "Two controls inside the same overlay — \"Cancel sync if there is no matching open invoice found for a payment\" and the inline \"Turn it on\" prerequisite switch in the inert banner — commit immediately via `postMessage` to the host page the instant they're toggled (`cfg.cancelSync`/`saved.cancelSync` are written together, and `env.applyPayments` lives outside `cfg` entirely), independent of Update. Neither one is reverted by \"Discard changes.\"",
+      "finding": "If a user toggles \"Cancel sync…\" (or the inline prerequisite switch) and also edits a draft field (e.g. a refine row), then closes and picks \"Discard changes,\" the dialog's blanket promise that saved state \"stays exactly as it is\" is false for the toggle(s) already pushed to the host — that real setting does not roll back.",
+      "user_impact": "A user who deliberately discards a half-finished edit believes they are back to their last-saved configuration, but a real setting affecting sync behavior (cancel-on-no-match, or whether payment application runs at all) has already changed and stays changed.",
+      "suggested_fix": "Either route these two settings through the same cfg/saved/Update lifecycle as everything else, or change the dialog copy to name them explicitly as already-committed and excluded from the discard.",
+      "evidence": {
+        "action": "Open \"Set up matching\". Toggle \"Cancel sync if there is no matching open invoice found for a payment\" off. Then switch to \"Use custom rules\" (an unrelated draft edit). Click × and choose \"Discard changes.\"",
+        "observed": "The overlay closes and the rule edit is gone, but the \"Cancel sync…\" toggle stays off on the GSP settings page — the one thing the dialog said would \"stay exactly as it is\" already changed and was never reverted."
+      },
+      "lens": "trust",
+      "instance": "trust",
+      "lenses": [
+        "trust"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "TRU-4",
+      "severity": "Critical",
+      "confidence": 85,
+      "element": "Overlay's dirty()-gated discard prompt, guarding the × close button",
+      "claims": "Implicitly: if closing the overlay would discard nothing, no confirmation is needed — closing is silent and safe.",
+      "actual": "`dirty()` only compares `cfg` against `saved`; `env.applyPayments` (the prerequisite) is not part of `cfg` at all. So toggling only the inline \"Turn it on\" prerequisite switch and then closing produces `dirty() === false`, and the overlay closes with zero confirmation — even though that toggle already committed a real, functional setting to the live GSP page via `postMessage`.",
+      "finding": "An action that changed something real (whether payment application runs at all for this integration) is acknowledged nowhere — no confirmation prompt, no saved-chip update, no message — because the app's own \"anything to confirm?\" check doesn't know this control exists.",
+      "user_impact": "A user testing \"what does this prerequisite do\" flips it on then closes without further thought (no dialog appears, so they assume nothing happened), not realizing the prerequisite is now permanently changed on the real integration until they go looking for it again.",
+      "suggested_fix": "Fold `env.applyPayments` (and `cancelSync`) into the same change-tracking used by `dirty()`, or trigger an explicit \"prerequisite changed\" acknowledgment the moment the inline switch commits, independent of the rest of the form.",
+      "evidence": {
+        "action": "With the prerequisite off, open \"Set up matching\". In the \"Nothing here runs yet\" banner, click the inline \"Turn it on\" switch. Immediately click × without touching anything else.",
+        "observed": "The overlay closes with no discard/confirmation dialog at all — the same silent close as if nothing had been touched — while the prerequisite has in fact already flipped on for the real integration."
+      },
+      "lens": "trust",
+      "instance": "trust",
+      "lenses": [
+        "trust"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "A11Y-2",
+      "severity": "High",
+      "confidence": 85,
+      "element": "'How to match' radios — 'Use default matching rules' and 'Use custom rules'",
+      "finding": "Each radio's accessible name is built by nesting the option title, its full description, and (for the default option) an internal review-only assumption note inside the same <label> with no separating text, so the announced name runs the words together instead of stating the option's purpose.",
+      "user_impact": "A screen-reader user tabbing to 'Use default matching rules' hears one unbroken string — '...matching rulesSame customer, dated near the payment, invoice number matches the payment's reference. Nothing to set up.A1 — reference copy...' — burying the actual choice inside description and internal note text instead of a short, clear control name.",
+      "suggested_fix": "Give each radio an explicit short accessible name (aria-label or a dedicated aria-labelledby pointing only at the .mode-t span) and move the description into aria-describedby so it is announced separately, the way the outcome switches already do with aria-labelledby pointing at a single title span.",
+      "evidence": {
+        "action": "focus the 'Use default matching rules' radio and read its accessible name",
+        "observed": "recorded name is the run-on string 'Use default matching rulesSame customer, dated near the payment, invoice number matches the payment's reference. Nothing to set up.A1 — reference copy. The FDD requires the default behaviour here as non-editable reference text but does not supply the wording. Product owns it.' — matching the source, where <span class=\"mode-t\">, <span class=\"mode-d\">, and <span class=\"asm\"> all sit inside one unlabelled <label> with no separating text"
+      },
+      "lens": "a11y",
+      "instance": "a11y",
+      "lenses": [
+        "a11y"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "A11Y-3",
+      "severity": "High",
+      "confidence": 78,
+      "element": "Overlay-wide Escape key handler",
+      "finding": "The document keydown handler for Escape explicitly ignores the key whenever the focused element is an INPUT, SELECT, or TEXTAREA, so Escape only closes the overlay when focus happens to be on something else (e.g. the close button) — which the state map's one successful Escape test used.",
+      "user_impact": "Since most of the configurator's controls are text fields and selects, a keyboard user editing 'Which Stripe field holds the reference' or any of the source/comparison/target dropdowns and pressing Escape — the standard way to back out of a modal — gets no response at all, with no indication why, and must Tab away to a non-field element first or reach for the mouse.",
+      "suggested_fix": "Let Escape trigger requestClose() regardless of focused element type (blurring the field first if needed), or at minimum close any open native <select> dropdown on the first Escape and close the overlay on a second, so the shortcut never silently does nothing.",
+      "evidence": {
+        "action": "press Escape while focus is on the 'Which Stripe field holds the reference' text field (or any select)",
+        "observed": "source: `if (t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA')) return;` — the handler returns before calling requestClose(), so nothing happens; this is untested by the state map, whose only Escape pass started with focus on ov-close"
+      },
+      "lens": "a11y",
+      "instance": "a11y",
+      "lenses": [
+        "a11y"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "CLR-2",
+      "severity": "High",
+      "confidence": 82,
+      "element": "\"Cancel sync if there is no matching open invoice found for a payment\" switch description",
+      "finding": "The description tells me flipping this switch changes something on a different page too, but doesn't say whether that's safe, reversible, or already applied.",
+      "user_impact": "I worry that touching this toggle changes settings somewhere else I can't see right now, so I leave it alone rather than risk breaking something on a page I'm not even looking at.",
+      "suggested_fix": "Add a short reassurance next to the switch, e.g. \"This is the same setting shown on Get & Send Payments — you can change it back any time.\"",
+      "evidence": {
+        "quote": "Same setting as Get & Send Payments — changing it here updates that page.",
+        "source": "plain-language"
+      },
+      "lens": "clarity",
+      "instance": "clarity",
+      "lenses": [
+        "clarity"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "DOM-2",
+      "severity": "High",
+      "confidence": 85,
+      "element": "\"Apply as overpayment\" switch description",
+      "finding": "The description reads \"Post the remainder as an overpayment,\" using \"Post\" where Synder's canonical term for writing data into the books is \"Sync\".",
+      "user_impact": "An accountant reading \"Post\" may expect a distinct journal-entry posting step separate from Synder's usual sync, creating doubt about how and when the overpayment actually lands in the books.",
+      "suggested_fix": "Reword to \"...the remainder syncs as an overpayment\" to stay on the canonical Sync term.",
+      "evidence": {
+        "quote": "Post the remainder as an overpayment.",
+        "source": "vocabulary.md line 104: \"Sync (Synchronization) | post, push (syncing data from Synder to books)\""
+      },
+      "lens": "domain",
+      "instance": "domain",
+      "lenses": [
+        "domain"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "FID-1",
+      "severity": "High",
+      "confidence": 90,
+      "element": "overlay.html — metadata-key validation error (scope-key and refine-row 'cond-i' error slots)",
+      "finding": "R10 specifies the blocking message for a metadata source with no key as 'Enter the metadata key to match on.', but the prototype shows 'Name the Stripe field that holds the reference.' in both the field-level error and the alert-banner summary.",
+      "user_impact": "The save-blocking reason a user reads does not match the wording the FDD requires, so the acceptance criterion for this validation message is not met even though the block itself fires correctly.",
+      "suggested_fix": "Replace 'Name the Stripe field that holds the reference.' with 'Enter the metadata key to match on.' in validate() (both the scope-key and cond-i branches) and in the SHORT lookup used for the alert banner and bar message.",
+      "evidence": {
+        "quote": "Enter the metadata key to match on.",
+        "source": "SD-16243 FDD, normative rule R10"
+      },
+      "lens": "fidelity",
+      "instance": "fidelity",
+      "lenses": [
+        "fidelity"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "TRU-2",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Overlay top-bar status chip (#chip)",
+      "claims": "\"Custom rules\" (green) — worded and colored as an active, in-effect configuration.",
+      "actual": "The chip is computed from `custom()`, i.e. the live in-memory draft (`cfg.useDefault`), not from `saved`. It flips to \"Custom rules\" the instant the \"Use custom rules\" radio is picked, before Update is pressed.",
+      "finding": "Picking \"Use custom rules\" turns the chip green immediately, while the GSP settings page behind the overlay (whose own chip only updates on the 'saved' postMessage) still shows \"Synder default\" — the same dimension is represented two different ways on screen at once, and the overlay's version is the one that hasn't actually happened yet.",
+      "user_impact": "A user who glances at the chip mid-edit believes their custom rule is already the one Synder is using, and may stop editing or navigate away without pressing Update, leaving the default matcher in effect while believing otherwise.",
+      "suggested_fix": "Base the chip on `saved` (or on whether cfg equals saved), not on the live draft; keep an \"Unsaved\" affordance distinct from the committed-state chip, mirroring the pattern already used for the plain-terms 'Nothing changes until you press Update' note.",
+      "evidence": {
+        "action": "Open \"Set up matching\" with a Synder-default (unconfigured) rule. Select the \"Use custom rules\" radio. Do not press Update.",
+        "observed": "Overlay chip immediately reads \"Custom rules\" in green; the GSP page's own \"Payment application\" chip, still visible/inert behind the modal, continues to read \"Synder default\" — because it only updates on the `saved` message that has not been sent."
+      },
+      "lens": "trust",
+      "instance": "trust",
+      "lenses": [
+        "trust"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "UX-1",
+      "severity": "High",
+      "confidence": 82,
+      "element": "Top bar status chip (\"Synder default\" → \"Custom rules\") and the message text next to it, both directly beside the Update button",
+      "finding": "Selecting \"Use custom rules\" immediately turns the status chip green and reads \"Custom rules,\" and switches the adjacent message to \"Applies to mzkt.by (Stripe) only\" — before Update has ever been pressed and while the change is still unsaved.",
+      "user_impact": "A user can read the chip and message, next to the save button, as confirmation that the rule is already active, and close or navigate away without pressing Update — leaving the integration silently on unsaved default matching while believing their custom rule is live.",
+      "suggested_fix": "Keep the chip and message in a visibly unsaved state (e.g. \"Custom rules (unsaved)\") until Update actually succeeds, so the two indicators next to the save button agree with the \"Nothing changes until you press Update\" note shown elsewhere on the same screen.",
+      "evidence": {
+        "action": "Selected the \"Use custom rules\" radio (checked false → true).",
+        "observed": "The panel re-rendered into the custom-rule layout, and in that same render the top-bar chip switched to green \"Custom rules\" and the message switched to \"Applies to mzkt.by (Stripe) only\" — with nothing in that immediate area indicating the change is unsaved, even though a separate line further down the right-column summary states changes take effect only after Update."
+      },
+      "lens": "ux",
+      "instance": "ux1",
+      "lenses": [
+        "ux1"
+      ],
+      "corroborated": false,
+      "also": []
+    }
+  ],
+  "polish": [
+    {
+      "id": "CLR-3",
+      "severity": "Medium",
+      "confidence": 75,
+      "element": "Invoice-number match row, description text next to the comparison dropdown",
+      "finding": "\"DocNumber\" is QuickBooks' internal field name and isn't something I'd recognize as my everyday invoice number.",
+      "user_impact": "I second-guess whether this row touches the invoice numbers I actually use or some hidden system field, and hesitate before trusting this row of the rule.",
+      "suggested_fix": "Drop the parenthetical for a first-timer, or add a one-line tooltip: \"This is the invoice number you already use in QuickBooks.\"",
+      "evidence": {
+        "quote": "Invoice number in books (DocNumber)",
+        "source": "plain-language"
+      },
+      "lens": "clarity",
+      "instance": "clarity",
+      "lenses": [
+        "clarity"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "FID-2",
+      "severity": "Medium",
+      "confidence": 75,
+      "element": "overlay.html — 'Then refine' row when 'On the invoice' is set to 'Invoice number in books'",
+      "finding": "R13 requires that the 21-character limit and truncation be stated on the field wherever a DocNumber comparison is made; the tip is rendered only under the scope invoice-number row (s.match.on) and never appears under a refine row whose target is doc_number.",
+      "user_impact": "A user who builds a refine condition against 'Invoice number in books' is not told that long values get truncated to 21 characters before comparing, so a rule that silently matches on a truncated string can look like a bug.",
+      "suggested_fix": "Render the same 21-character tip under any refine row where ct-i (\"on the invoice\") resolves to doc_number, not only under the scope match row.",
+      "evidence": {
+        "quote": "the character limit and truncation must be stated on the field",
+        "source": "SD-16243 FDD, normative rule R13"
+      },
+      "lens": "fidelity",
+      "instance": "fidelity",
+      "lenses": [
+        "fidelity"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "UX-2",
+      "severity": "Medium",
+      "confidence": 76,
+      "element": "\"Invoice date is within ___ days\" number field, narrow-the-search row",
+      "finding": "Clearing the days field causes it to silently snap back to the last valid number with no explanation, while typing an out-of-range number (e.g. 99999) is corrected with an on-screen note explaining what happened and why.",
+      "user_impact": "A user who clears the field intending to type a new day count instead sees their edit disappear with no feedback, and may conclude the field ignored their input or is broken, rather than understanding it reverted on purpose.",
+      "suggested_fix": "Show the same kind of inline note used for the min/max clamp (e.g. \"Changed back to 365 — the field can't be left blank\") whenever the cleared field reverts, so every automatic correction explains itself the same way.",
+      "evidence": {
+        "action": "Typed 99999 into the days field (out of the 1–365 range), then cleared the field entirely.",
+        "observed": "99999 was corrected to 365 with a visible note explaining the value was changed to the widest allowed window; clearing the field afterward reverted it to 365 as well, but with no note or explanation shown for that correction."
+      },
+      "lens": "ux",
+      "instance": "ux1",
+      "lenses": [
+        "ux1"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "UX-1",
+      "severity": "Medium",
+      "confidence": 78,
+      "element": "\"+ Add condition\" button / new refine row defaults",
+      "finding": "A newly added refine row is created already ticked (\"Include refine row N\") with a specific, meaningful-looking field combination pre-selected (Invoice note / contains / Memo on statement), rather than starting blank or unchecked.",
+      "user_impact": "A user adding a refine row to narrow the match may assume it needs configuring before it does anything, leave the defaults untouched, and unknowingly ship a live condition that changes which invoice a payment is applied to.",
+      "suggested_fix": "Create new refine rows unchecked (or visibly \"not yet configured\") until the user actively picks a source, comparison, and target, so nothing takes effect by accident.",
+      "evidence": {
+        "action": "Clicked \"+ Add condition\", then exercised refine row 1's three selects (on the payment: invoice_note → invoice_number → invoice_note; comparison: contains → eq → contains; on the invoice: private_note → doc_number → private_note).",
+        "observed": "The row appeared with \"Include refine row 1\" already checked and all three fields holding real, specific default values (Invoice note / contains / Memo on statement) — an effective, already-active condition from the moment it's added, with no blank or clearly-inert starting state."
+      },
+      "lens": "ux",
+      "instance": "ux2",
+      "lenses": [
+        "ux2"
+      ],
+      "corroborated": false,
+      "also": []
+    },
+    {
+      "id": "UX-2",
+      "severity": "Medium",
+      "confidence": 82,
+      "element": "\"Apply as overpayment\" and \"Cancel sync if there is no matching open invoice found\" switches (outcome cards)",
+      "finding": "Toggling either outcome switch produces no visible change at or near the switch itself — the description text under each switch is static regardless of state, and the only reflection of the new value is a bullet in the separate 'In plain terms' panel in the right-hand column.",
+      "user_impact": "Users who toggle a setting without noticing (or without a viewport wide enough to see) the sidebar summary will conclude nothing happened and may toggle it back, undoing a change that actually took effect — this is the exact 'toggle, see no effect, toggle back' pattern known to cause abandoned setup.",
+      "suggested_fix": "Give each switch its own inline, state-dependent confirmation right next to it (e.g. update the card's description text to name the current effect), instead of relying solely on the separate summary panel.",
+      "evidence": {
+        "action": "Checked \"Apply as overpayment\" true → false → true, and checked \"Cancel sync if there is no matching open invoice found for a payment\" true → false → true; both remained visible after each toggle.",
+        "observed": "Neither switch's own card changed anything other than the switch's position — the description text under each ('Payment larger than the matched invoice? Post the remainder as an overpayment. Off cancels the sync instead...' / 'Same setting as Get & Send Payments...') is identical text regardless of on/off state; only the right-column 'In plain terms' list reflects the current value."
+      },
+      "lens": "ux",
+      "instance": "ux2",
+      "lenses": [
+        "ux2"
+      ],
+      "corroborated": false,
+      "also": []
+    }
+  ],
+  "gaps": [
+    {
+      "lens": "a11y",
+      "text": "A fully valid custom rule was never carried through a successful Update in the state map (only the empty-required-field failure and the unsaved-changes close were exercised) — whether focus/announcement on a successful save behaves as the source implies (closeOverlay returning focus to the trigger button) is inferred from code, not confirmed live."
+    },
+    {
+      "lens": "a11y",
+      "text": "Visual focus-indicator appearance (as opposed to DOM focus retention) for controls styled by the external ui-kit stylesheet (synder-ui-kit.css, e.g. .btn, .btn-outlined, .btn-danger used by Update, Keep editing, Discard changes) could not be verified — the state map records only 'still focused'/'still clickable', not whether a visible outline is present, and that stylesheet is a remote asset outside this pass."
+    },
+    {
+      "lens": "clarity",
+      "text": "overlay chrome / Update: a clean, error-free save was never exercised in this recon, so whether a persistent \"saved\" signal appears afterward is unknown — this bears directly on the known friction of users re-opening the panel just to check if their change stuck."
+    },
+    {
+      "lens": "clarity",
+      "text": "overlay chrome / Close without saving: only the with-unsaved-changes path (discard prompt) was exercised; closing with no pending changes was not, so I can't confirm it closes without any confirmation friction."
+    },
+    {
+      "lens": "domain",
+      "text": "Update (save/commit): the actual write-to-saved-state path is exercised in a dedicated pass, not this recon; this round's read of its validation-blocks-save behaviour comes from source inspection, not an observed interaction."
+    },
+    {
+      "lens": "domain",
+      "text": "Close without saving / Discard changes: the actual discard commit path is exercised in a dedicated pass, not this recon; whether unsaved rule changes are fully discarded (vs. partially retained) was not observed interactively here."
+    },
+    {
+      "lens": "fidelity",
+      "text": "Guard behaviour (R8): the state map exercised the Customer checkbox and the invoice-number-match checkbox independently (each true→false→true) but never both off at once, so the blocking-guard message was never actually observed on screen in this pass — only inferred from source."
+    },
+    {
+      "lens": "fidelity",
+      "text": "Update/Close commit paths: 'Close without saving' and 'Update' are flagged in the state map itself as not exercised during recon (exercised in a dedicated pass), so the GSP-side result of a successful save — chip flip to 'Custom rule', rule-summary line, and R21's retain-configuration-after-disable behaviour — is unverified here."
+    },
+    {
+      "lens": "fidelity",
+      "text": "Plan gate (R22) and Generic customer (R24): the presenter-bar plan selector and 'Generic customer' toggle were not exercised in this recon pass, so the Starter-plan block and the Generic-customer narrowing note are confirmed from source only, not from an observed interaction."
+    },
+    {
+      "lens": "trust",
+      "text": "The state map's recon pass recorded 'Close without saving' and 'Update' only as 'exercised separately below' with a discard prompt confirmed to appear for a generic unsaved-changes case; it does not record a run where 'Cancel sync' or the inline prerequisite switch were toggled and then the overlay was closed/discarded, so TRU-3 and TRU-4 are derived from reading the commit logic in gsp.html/overlay.html (dirty(), the cancel-sync and prereq message handlers) rather than from an observed interactive trace. The mechanism is deterministic in the code, but live confirmation in a browser was not part of the recon this validator was handed."
+    },
+    {
+      "lens": "ux",
+      "text": "Update: the save/validation commit path (error banner and per-field errors on submit, and what the screen shows after a valid save) was not exercised in this recon slice — I cannot confirm whether the premature-looking chip/message described in UX-1 is ever followed by a clearer post-save confirmation, or whether it's the only signal a user ever gets."
+    },
+    {
+      "lens": "ux",
+      "text": "Close without saving: the discard-confirmation dialog was not exercised in this recon slice — cannot confirm whether \"Keep editing\" and \"Discard changes\" behave as expected from the source."
+    },
+    {
+      "lens": "ux",
+      "text": "Then refine (add/remove condition rows, the AND/OR combinator control, and each row's source/operand/target selects) was not part of this slice's recorded interactions — no gap can be confirmed there, including whether the combinator control's appearing/disappearing as active-row count changes is noticeable or confusing."
+    },
+    {
+      "lens": "ux",
+      "text": "Outcome switches (Apply as overpayment, Cancel sync) were not part of this slice — their state clarity was not checked here."
+    },
+    {
+      "lens": "ux",
+      "text": "Update (save) was not exercised in this recon pass (a dedicated pass covers Close/Update). The source shows a successful save leaves the overlay open and surfaces only a small grey status line ('Applies to mzkt.by (Stripe) only.' / 'Synder's default matching stays in place.') with no explicit 'Saved' wording, toast, or persistent indicator — this lines up with the known friction of users re-opening a panel to check whether a change stuck, but I did not verify it live, so it is reported as a gap rather than a finding."
+    },
+    {
+      "lens": "ux",
+      "text": "Close → 'Discard your changes?' confirmation modal was not exercised in this recon pass — its clarity, focus handling on open, and whether users understand which changes are at stake could not be verified here."
+    },
+    {
+      "lens": "ux",
+      "text": "Behaviour with two or more active refine rows (the AND/OR combinator selector that only appears on the first active row once a second row is active) was not exercised in this slice — only a single refine row's controls were exercised, so consistency of that control's appearance/disappearance as rows are added or unchecked is unverified."
+    },
+    {
+      "lens": "ux",
+      "text": "The 'Narrow the search' rows (Customer, Invoice date, Invoice number match checkboxes and their empty/all-off state) are not part of this slice's exercised state map, so the 'nothing set — cannot be saved' empty state and its error banner were not checked here."
+    },
+    {
+      "lens": "ux",
+      "text": "Close without saving: not exercised in this slice — unknown whether it discards silently or shows a confirmation, so consistency with the X-close discard prompt can't be verified."
+    },
+    {
+      "lens": "ux",
+      "text": "Update (successful commit): not exercised in this slice — unknown whether any persistent saved-state confirmation appears afterward, which bears directly on the known pattern of users re-opening the panel to check whether a change saved."
+    },
+    {
+      "lens": "ux",
+      "text": "Escape key: the recorded test doesn't state whether unsaved changes were present when Escape closed the overlay, so it's unknown whether Escape bypasses the discard-confirmation shown for the X-close button."
+    },
+    {
+      "lens": "ux",
+      "text": "Toggle-style controls inside the configurator: the state map doesn't record whether flipping a setting produces any visible on-screen effect, so the 'toggle then toggle back' friction pattern can't be checked."
+    }
+  ],
+  "reference_gaps": [
+    {
+      "lens": "domain",
+      "text": "vocabulary.md has no entries for this screen's domain-specific terms (\"matching\", \"refine row\", \"overpayment\", \"payment application\"), so terminology choices specific to payment-to-invoice matching could only be checked against general accounting/QuickBooks usage, not against a canonical Synder source."
+    },
+    {
+      "lens": "fidelity",
+      "text": "No Figma frames exist for this feature (reference.json note) — only a text FDD extract, so layout/spacing/visual-design fidelity cannot be judged against a design reference, only functional and copy presence against the normative rules."
+    },
+    {
+      "lens": "fidelity",
+      "text": "R27 requires the feature to 'have a marketable name' but the FDD supplies none, so the working title 'Payment application' used throughout the prototype cannot be judged compliant or non-compliant."
+    },
+    {
+      "lens": "fidelity",
+      "text": "Q3 (default finite N, self-serve maximum N, and the snapshot-page ceiling) is explicitly unresolved in the FDD; the prototype's values (default 30, max 365, no stated snapshot ceiling) are documented in-UI as assumption A3 and cannot be checked against a spec'd number."
+    },
+    {
+      "lens": "fidelity",
+      "text": "Q1/Q2 (case-insensitivity and 21-character-truncation confirmation) are unresolved in the FDD; the prototype implements both as assumptions, so their correctness cannot be judged against a confirmed rule."
+    }
+  ]
+}

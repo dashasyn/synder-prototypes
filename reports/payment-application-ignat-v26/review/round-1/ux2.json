@@ -1,0 +1,94 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "Ignat's prototype v2.6 (single file)",
+  "checked": [
+    { "zone": "Layout & hierarchy", "item": "GSP Invoices panel — toggle rows vs. 'Configure matching rules →' link placement" },
+    { "zone": "Layout & hierarchy", "item": "Overlay sheet-chrome — title and 'Update' button vs. scrollable body" },
+    { "zone": "Layout & hierarchy", "item": "Mode radio cards — 'Use default matching rules' vs. 'Use custom rules'" },
+    { "zone": "Layout & hierarchy", "item": "Two-column sheet layout — rule builder vs. 'In plain terms' rail" },
+    { "zone": "Layout & hierarchy", "item": "'Then refine' rows — per-row and/or select vs. single underlying join mode" },
+    { "zone": "Interaction & task completion", "item": "'Apply payments to unpaid Invoice transactions' toggle gating 'Configure matching rules'" },
+    { "zone": "Interaction & task completion", "item": "Open overlay → select 'Use custom rules' mode" },
+    { "zone": "Interaction & task completion", "item": "'Narrow the search' scope rows (customer, date, invoice number) — enable checkboxes, non-removable" },
+    { "zone": "Interaction & task completion", "item": "'+ Add condition' / remove (×) in 'Then refine'" },
+    { "zone": "Interaction & task completion", "item": "And/or join select on refine rows — 'Combine refine conditions with and or or'" },
+    { "zone": "Interaction & task completion", "item": "Metadata key text field (Payment/Invoice metadata source)" },
+    { "zone": "Interaction & task completion", "item": "'Apply as overpayment' toggle" },
+    { "zone": "Interaction & task completion", "item": "'Update' (save) button in sheet chrome" },
+    { "zone": "Interaction & task completion", "item": "Close (×) and backdrop-click dismissal of the overlay" },
+    { "zone": "States", "item": "Empty state — 'No extra conditions' placeholder" },
+    { "zone": "States", "item": "Error state — submit-triggered field errors and 'Fix the highlighted fields' banner" },
+    { "zone": "States", "item": "Persistent status — 'Using defaults' / 'Custom rules' label on the GSP page" },
+    { "zone": "States", "item": "Save confirmation — transient toast 'Matching rules updated'" },
+    { "zone": "States", "item": "Date-limit row enable checkbox — locked state for non-admin orgs" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "'Then refine' — per-row and/or dropdown (aria-label 'Combine refine conditions with and or or')",
+      "finding": "Every refine condition row renders its own AND/OR dropdown, which reads as an independent join for that pair of conditions, but all rows share a single underlying mode: changing any one dropdown snaps every other row's dropdown to the same value.",
+      "user_impact": "A user building 3+ refine conditions who intends mixed logic (e.g. A and B, or C) believes they've set that up because each row shows its own control, then saves a rule that silently applies the same join to everything — payments get matched to the wrong invoices with no error or warning anywhere in the flow.",
+      "suggested_fix": "Render a single shared and/or control for the whole refine list (not one per row), or implement true independent per-pair joins so the per-row control isn't misleading.",
+      "evidence": {
+        "action": "Inspected the refine join control: changed the and/or select on one refine row (value cycled and → or → and) with multiple refine conditions present, then traced setRefineMode() in the source.",
+        "observed": "setRefineMode() writes draft.refineAny (one boolean) and then forces every '.nl-join-select' in the DOM to that same value — so all rows always display and enforce one shared mode, never independent per-row logic."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "High",
+      "confidence": 85,
+      "element": "Overlay close (×) button and backdrop click-outside",
+      "finding": "Closing the matching-rules overlay via the × button or a click outside the sheet discards any in-progress edits immediately, with no 'unsaved changes' confirmation, regardless of how much of the rule was configured.",
+      "user_impact": "A user who has just finished narrowing scope, adding refine conditions, and typing a metadata key can lose all of it with a single stray click (e.g. clicking just outside the sheet), then has to start the whole setup over with no warning it happened.",
+      "suggested_fix": "Before discarding, compare draft to saved and show a confirmation ('Discard unsaved changes?') when they differ, only closing silently if nothing changed.",
+      "evidence": {
+        "action": "Traced closeX's onclick and the backdrop click listener in the source against saveBtn's onclick.",
+        "observed": "Both closeX and the backdrop listener call closeOverlay() directly, which only toggles the .open class; only saveBtn's handler ever reads or writes `saved`, so any path other than clicking 'Update' drops the draft with no check or prompt."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "High",
+      "confidence": 85,
+      "element": "Metadata key field (shown when a refine or scope row's source is 'Payment metadata' / 'Invoice metadata')",
+      "finding": "The metadata key field gives no visual sign that it is required — no asterisk, hint, or inline validation — until after 'Update' is clicked and rejected.",
+      "user_impact": "Users pick a metadata-based source, don't realize a key is mandatory, click Update, get bounced back with an error, and on a first bad experience like this many will abandon the custom-rule setup rather than hunt for what's wrong — matching the known pattern of abandoning multi-field setups when required-ness only surfaces on submit.",
+      "suggested_fix": "Mark the key field as required at all times (e.g. a small 'Required' hint or asterisk next to the label) rather than only after a failed submit.",
+      "evidence": {
+        "action": "Per the state map: selected 'Payment metadata' as a refine row's source and left the key empty, then traced applyFieldErrors()/validation() in the source for when the 'Required' error actually appears.",
+        "observed": "The '.nl-field-err' text and the key input's invalid styling are only toggled on inside applyFieldErrors(), which is a no-op unless the module-level `submitAttempted` flag is true — and that flag is only set by saveBtn's onclick handler, i.e. after clicking Update."
+      }
+    },
+    {
+      "id": "UX-4",
+      "severity": "High",
+      "confidence": 80,
+      "element": "'Configure matching rules →' link, GSP Invoices panel, first toggle row",
+      "finding": "The only entry point into the primary task — setting up the invoice-matching rule — is a small plain-text link tucked under the row's description, visually far less prominent than the blue toggle switch sitting on the same row.",
+      "user_impact": "Users scanning the panel for the control that matters most for their task are drawn to the toggle (which only turns invoice-matching on/off) and can easily miss the link that actually lets them define which invoice a payment matches, especially since it carries no button styling, icon weight, or color distinct from a body-text hyperlink.",
+      "suggested_fix": "Give 'Configure matching rules' the visual weight of a secondary button (border/background) so it reads as the primary way to complete the row's task, not as incidental fine print.",
+      "evidence": {
+        "action": "Reviewed the toggle-row markup and computed styles for '.configure-link' versus '.toggle' on the same row.",
+        "observed": "'.configure-link' is an unstyled inline text button (background:none, border:0, no padding, plain accent-colored text) placed beneath two lines of paragraph copy, while the toggle switch — which does not open the rule builder — is a full-size colored control on the right with its own visual box."
+      }
+    },
+    {
+      "id": "UX-5",
+      "severity": "Medium",
+      "confidence": 75,
+      "element": "'Invoice date is within ⟨days⟩ days' row — enable checkbox in 'Narrow the search'",
+      "finding": "The date row's own enable checkbox looks identical to every other scope/refine row's checkbox, but for non-admin orgs it is force-checked and disabled with no visible explanation — the reason is only available as a hover tooltip on the checkbox itself.",
+      "user_impact": "A non-admin user trying to turn off the date limit (a control that behaves exactly like the other scope checkboxes they can freely toggle) will click it, see nothing happen, and have no way to find out why short of hovering precisely over the small checkbox to read a tooltip.",
+      "suggested_fix": "Replace the silent lock with a visible inline note next to the date row (e.g. 'Ask an admin to change this') instead of relying on a hover-only title attribute.",
+      "evidence": {
+        "action": "Traced buildRowEl()'s handling of the date row's enable checkbox when adminEnabled is false.",
+        "observed": "For kind === 'date' with adminEnabled false, the code sets enable.checked = true and enable.disabled = true and only communicates why via enable.title = 'Admin-enable the org to turn date limit off' — a native tooltip with no on-screen equivalent."
+      }
+    }
+  ],
+  "gaps": []
+}

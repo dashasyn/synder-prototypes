@@ -1,0 +1,70 @@
+{
+  "validator": "trust",
+  "round": 1,
+  "target": "Ignat's prototype v2.6 (single file)",
+  "checked": [
+    { "zone": "Invoices panel header", "item": "Integration select (gspIntegration) vs. 'Using defaults'/'Custom rules' badge (rulesStatus) and the saved matching-rule set" },
+    { "zone": "Invoices panel", "item": "Apply payments toggle (gspApply) vs. Configure matching rules button (openRules) enabled/disabled state" },
+    { "zone": "Invoices panel footer", "item": "Update button (gspUpdate) vs. toast + 'Saved' hint" },
+    { "zone": "Matching rules overlay", "item": "Use default / Use custom radios vs. custom panel visibility and seeded rows" },
+    { "zone": "Then refine section", "item": "Per-row 'combine with and/or' select vs. the single shared draft.refineAny value (duplicate controls, one dimension)" },
+    { "zone": "Narrow the search", "item": "Customer / invoice-number scope enable checkboxes vs. the 'keep at least one on' validation message" },
+    { "zone": "Matching rules overlay footer", "item": "Update (saveBtn) vs. field-level errors and submitAlert banner" },
+    { "zone": "Matching rules overlay chrome", "item": "Close (×) / backdrop click / Escape vs. unsaved draft changes" },
+    { "zone": "Matching rules overlay", "item": "aria-modal dialog vs. recorded 'page behind inert: false'" },
+    { "zone": "Matching rules overlay", "item": "Admin-enabled org checkbox vs. date-row enable checkbox lock state" },
+    { "zone": "Matching rules overlay", "item": "'In plain terms' rail vs. default-mode summary (overpayment handling omitted while custom-mode summary states it explicitly)" },
+    { "zone": "Matching rules overlay", "item": "Cancel-sync toggle (gspCancel, lives on main panel) vs. cancelLine text inside the overlay's plain-terms summary" }
+  ],
+  "findings": [
+    {
+      "id": "TRU-1",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "Integration select (#gspIntegration) vs. the 'Using defaults' / 'Custom rules' badge (#rulesStatus) and the saved matching rules it reflects",
+      "claims": "The badge and the rules opened via 'Configure matching rules' apply to whichever integration is currently selected in the Integration dropdown at the top of the Invoices panel.",
+      "actual": "The saved matching-rule state (`saved`) is a single global object that is never keyed by, or reset on, the selected integration; switching the Integration dropdown does not reload, clear, or re-scope it in any way.",
+      "finding": "Configuring custom matching rules while 'mzkt.by · Stripe' is selected, then switching the Integration dropdown to 'another-shop · Stripe', leaves the 'Custom rules' badge shown and the same custom rows in force for the new integration, with nothing on screen indicating the displayed rules were actually set up for a different integration.",
+      "user_impact": "The user believes they configured (or can verify) rules specific to the newly selected integration, and lets Synder apply payments to invoices using the previous integration's matching logic, risking payments applied to the wrong open invoice in the wrong set of books.",
+      "suggested_fix": "Key the matching-rule state (and the badge/Configure-link state) by the selected integration id, and reload the panel to that integration's own saved/default state whenever the Integration select changes.",
+      "evidence": {
+        "action": "Select 'mzkt.by · Stripe' → open matching rules → choose 'Use custom rules', keep the seeded scope rows → click Update (badge becomes 'Custom rules') → change the Integration select to 'another-shop · Stripe'.",
+        "observed": "The 'Custom rules' badge remains displayed and 'Configure matching rules' still opens the exact custom rows configured under mzkt.by; no indicator, reset, or warning marks the rules as belonging to a different integration."
+      }
+    },
+    {
+      "id": "TRU-2",
+      "severity": "High",
+      "confidence": 83,
+      "element": "Per-row 'Combine refine conditions with and or or' select, rendered once for every refine-condition row",
+      "claims": "Each refine condition's own and/or dropdown independently sets how that specific condition joins with the others, the same way the scope section shows one join marker per row.",
+      "actual": "Every refine-row dropdown is bound to the same single shared flag (draft.refineAny); changing any one row's dropdown immediately overwrites every other row's dropdown to the identical value.",
+      "finding": "With two or more refine conditions on screen, the UI shows multiple independent-looking join controls, but only one real join setting exists — changing one row silently rewrites the visible value of every sibling row with no explanation that they are linked.",
+      "user_impact": "A user trying to build a mixed rule (condition 1 with AND, condition 2 with OR) will unknowingly end up with the last-touched value applied to every condition, producing a broader- or narrower-matching rule than intended and changing which payments get auto-applied to which invoices.",
+      "suggested_fix": "Render the and/or control once (e.g. between conditions) instead of once per row, or visibly tie the dropdowns together so it is clear they always move as one.",
+      "evidence": {
+        "action": "Add two refine conditions → set the first row's join dropdown to 'or' → inspect the second row's join dropdown → set the second row's dropdown to 'and'.",
+        "observed": "Setting the first dropdown to 'or' changes the second dropdown's displayed value to 'or' as well; setting the second back to 'and' changes the first back to 'and' too — there is no per-row precedence, only a single shared value presented as if it were per-row."
+      }
+    },
+    {
+      "id": "TRU-3",
+      "severity": "High",
+      "confidence": 74,
+      "element": "'Update' button in the GSP Invoices panel footer (#gspUpdate) and its toast/'Saved' hint",
+      "claims": "Clicking Update saves the panel's toggle settings (including 'Cancel sync if there is no matching open invoice found') and the toast/hint confirms that save succeeded.",
+      "actual": "The click handler unconditionally fires the 'GSP settings updated' toast and the 'Saved' hint with no validation and no reference to any actual save outcome; there is no code path anywhere in the panel that can ever surface a failed save.",
+      "finding": "The success confirmation is shown every time regardless of whether the settings could actually be persisted, so 'Saved' carries no real information about whether state-changing toggles like the cancel-sync rule actually took effect.",
+      "user_impact": "If a real save ever failed, the user would still see 'Saved' / 'GSP settings updated' and trust that, e.g., cancel-sync-on-no-match is active, when it may not be — leading to payments posting without an invoice application when the user believed sync would instead be cancelled.",
+      "suggested_fix": "Gate the toast/hint on an actual save result and add a visible failure state (banner or error toast) for the case where the save does not succeed.",
+      "evidence": {
+        "action": "Toggle 'Cancel sync if there is no matching open invoice found for a payment' on → click Update.",
+        "observed": "The toast 'GSP settings updated' and the hint 'Saved' appear immediately and unconditionally; nothing in the UI can ever represent a failed save for this action."
+      }
+    }
+  ],
+  "gaps": [
+    "Matching rules overlay: recon recorded the page behind the overlay as not inert while open, but no interaction exercised whether a background control (e.g. gspCancel, gspApply, the Integration select) is actually reachable/operable while the overlay is open, and if so, whether the overlay's own displayed state (badge, plain-terms summary) would go stale or update correctly in that case — commit behaviour for this path is unverified.",
+    "Close (×), backdrop click, and Escape were recorded only as 'no discard prompt shown' / 'Escape does not close'; whether the rulesStatus badge or the Configure-matching-rules button transiently show a stale value in the instant after such a discard (versus only after the overlay finishes closing) was not separately exercised."
+  ]
+}

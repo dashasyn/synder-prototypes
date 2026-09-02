@@ -1,0 +1,62 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "Ignat's prototype v2.6 (single file)",
+  "checked": [
+    { "zone": "Layout & hierarchy", "item": "Settings page shell: sidebar nav, tabs row, vertical section nav, Invoices panel header with integration select" },
+    { "zone": "Layout & hierarchy", "item": "GSP toggle rows (Apply payments to unpaid invoices, Cancel sync, Sync unpaid invoices, Sync zero invoices) and page-level Update button" },
+    { "zone": "Layout & hierarchy", "item": "Matching-rules overlay: sheet-chrome (Close ×, title, primary Update button), sheet-intro banner, mode-radios (default vs custom), plain-terms rail — where the primary action sits relative to content" },
+    { "zone": "Interaction & task completion", "item": "[gsp settings] button — Configure / Set up matching (entry button, id openRules)" },
+    { "zone": "Interaction & task completion", "item": "[gsp settings] switch — Apply payments to open invoices (id gspApply) and its effect on the entry button" },
+    { "zone": "Interaction & task completion", "item": "[gsp settings] switch — Cancel sync if there is no matching open invoice found for a payment (id gspCancel)" },
+    { "zone": "Interaction & task completion", "item": "[gsp settings] button — Update (id gspUpdate) and its hint text" },
+    { "zone": "Interaction & task completion", "item": "[overlay] mode radios (Use default matching rules / Use custom rules), Narrow-the-search rows, Then-refine rows, Apply-as-overpayment toggle — primary task steps in order" },
+    { "zone": "Interaction & task completion", "item": "[overlay chrome] button — Update (id saveBtn), including the required-key validation path for Payment metadata / Invoice metadata sources" },
+    { "zone": "Interaction & task completion", "item": "[overlay chrome] button — Close × (id closeX) and click-outside on the backdrop" },
+    { "zone": "States", "item": "Overlay open/close transitions (openOverlay/closeOverlay): draft reset and error clearing on open" },
+    { "zone": "States", "item": "Field-error state: submitAlert banner ('Fix the highlighted fields') and per-field 'Required' error, gated on submitAttempted" },
+    { "zone": "States", "item": "rulesStatus badge ('Using defaults' / 'Custom rules') on the main settings page as persistent save confirmation" },
+    { "zone": "States", "item": "Visible feedback on the main settings page immediately after toggling gspCancel, compared with feedback after toggling gspApply" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "Matching-rules overlay — Close (×) button and click-outside-the-sheet (backdrop)",
+      "finding": "Closing the overlay via × or by clicking outside the sheet discards any unsaved matching-rule changes immediately, with no confirmation or discard prompt.",
+      "user_impact": "A user who has just set up or edited the matching rule and dismisses the overlay by the × (a very common 'I'm done' gesture) or an accidental outside click loses the entire configuration silently — the rule reverts to whatever was last saved with no indication anything was lost, so the user believes the task is complete when it is not.",
+      "suggested_fix": "Before discarding, compare the draft to the last saved rule and show a confirm/discard prompt (or an inline 'unsaved changes' warning) whenever the overlay is closed with a modified draft.",
+      "evidence": {
+        "action": "Reviewed closeOverlay() and its bindings: $('closeX').onclick = closeOverlay, and the backdrop click listener calls closeOverlay() when the click target is the backdrop itself; closeOverlay() only removes the 'open' class.",
+        "observed": "No comparison between draft and saved state, no confirm dialog, and no 'unsaved changes' warning exists anywhere in the close path — the sheet just disappears and the in-progress draft is dropped, matching the state map's direct observation that closing with unsaved changes produced no discard prompt and the overlay closed immediately."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "High",
+      "confidence": 82,
+      "element": "GSP settings page — 'Cancel sync if there is no matching open invoice found for a payment' toggle (id gspCancel)",
+      "finding": "Toggling this switch produces no visible change anywhere on the settings page at the moment it's flipped; its only effect is a sentence inside the separate matching-rules overlay, which most users won't have open.",
+      "user_impact": "A user deciding this policy (part of setting up how payments apply to invoices) toggles it and sees nothing happen, so they can't tell whether it registered — they are likely to toggle it back and forth, or click the page's Update button unsure of what they are actually saving.",
+      "suggested_fix": "Give the toggle its own on-page state indicator (as the 'Configure matching rules' row already has with its 'Using defaults / Custom rules' badge), or move its plain-language consequence onto the settings page itself instead of only inside the overlay.",
+      "evidence": {
+        "action": "Read the gspCancel change handler: it only calls refresh() 'if ($(\"backdrop\").classList.contains(\"open\"))' — i.e. only when the matching-rules overlay happens to already be open — and traced plainEnglish(), the only consumer of gspCancel's value, which renders solely inside the overlay's 'plain terms' rail.",
+        "observed": "With the overlay closed (its normal state when a user is on the GSP settings page), flipping gspCancel changes nothing visible on screen; no badge, hint, or text near the toggle updates, unlike the adjacent 'Configure matching rules' control which has a persistent status label."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "Medium",
+      "confidence": 78,
+      "element": "Matching-rules overlay — metadata 'Key' input (shown when source is Payment metadata / Invoice metadata)",
+      "finding": "The Key field's required status is invisible until the user presses Update: the placeholder just says 'Key' with no required marker, and the 'Required' error only renders after a failed submit attempt.",
+      "user_impact": "A user filling in a custom rule with a metadata source can complete the rest of the form believing it's ready, click Update, get rejected, and have to notice and fix a field whose necessity was never signaled up front — for anyone who abandons after that first rejection, the rule is never saved.",
+      "suggested_fix": "Mark the Key field as required at render time (e.g. an asterisk or inline hint) instead of only after a failed submit, so the requirement is visible while the user is still filling in the row.",
+      "evidence": {
+        "action": "Reproduced the state map's recon step (select 'Payment metadata' as the source, leave Key empty, click Update) and read the supporting code: submitAttempted is false until saveBtn.onclick sets it true, and applyFieldErrors() — the only place that adds the 'Required' text/invalid state — returns immediately whenever submitAttempted is false.",
+        "observed": "Overlay stayed open and a 'Fix the highlighted fields' banner plus a 'Required' message appeared under the Key input only after Update was pressed with the field empty; before that click, the empty Key input carries no required indicator at all."
+      }
+    }
+  ]
+}

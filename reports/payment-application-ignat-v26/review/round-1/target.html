@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Synder · Apply payments · matching rules (prototype v2.6)</title>
+  <style>
+    :root {
+      --bg: #f0f3f7;
+      --surface: #ffffff;
+      --ink: #1b2430;
+      --ink-2: #3a4658;
+      --muted: #6b7789;
+      --line: #e3e8ef;
+      --line-2: #c9d2de;
+      --accent: #2f6fed;
+      --accent-hover: #245cd0;
+      --accent-soft: #e8f0fe;
+      --green: #12a06a;
+      --green-soft: #e6f7f0;
+      --warn: #c2410c;
+      --warn-soft: #fff1e8;
+      --danger: #c03434;
+      --danger-soft: #fdecec;
+      --sidebar: #1e293b;
+      --sidebar-2: #273449;
+      --shadow: 0 20px 56px rgba(22, 32, 52, 0.22);
+      --radius: 10px;
+      --font: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 13.5px;
+      line-height: 1.45;
+    }
+    button, input, select { font: inherit; }
+
+    /* ===== Fake GSP shell ===== */
+    .shell {
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: var(--sidebar);
+      color: #d7dee8;
+      padding: 18px 0 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .brand {
+      display: flex; align-items: center; gap: 10px;
+      padding: 4px 20px 22px;
+      font-weight: 700; font-size: 15px; color: #fff;
+      letter-spacing: -0.02em;
+    }
+    .brand-mark {
+      width: 26px; height: 26px; border-radius: 7px;
+      background: linear-gradient(135deg, #3b82f6, #22c55e);
+      display: grid; place-items: center; font-size: 12px; color: #fff;
+    }
+    .nav-label {
+      padding: 8px 20px 6px;
+      font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+      color: #8b97a8; font-weight: 700;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 20px; color: #c5cedb; cursor: default;
+      border-left: 3px solid transparent;
+    }
+    .nav-item.active {
+      background: var(--sidebar-2);
+      color: #fff;
+      border-left-color: var(--accent);
+    }
+    .nav-item .dot {
+      width: 7px; height: 7px; border-radius: 50%; background: #64748b;
+    }
+    .nav-item.active .dot { background: var(--accent); }
+
+    .main { display: flex; flex-direction: column; min-width: 0; }
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid var(--line);
+      padding: 14px 28px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar h1 { margin: 0; font-size: 18px; letter-spacing: -0.02em; }
+    .top-meta { color: var(--muted); font-size: 12.5px; }
+
+    .content {
+      display: grid;
+      grid-template-columns: 210px 1fr;
+      gap: 0;
+      flex: 1;
+      padding: 20px 24px 40px;
+      max-width: 1140px;
+    }
+
+    .settings-nav { padding: 8px 8px 0 0; }
+    .tabs {
+      display: flex; flex-wrap: wrap; gap: 0; align-items: center;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .tab {
+      padding: 8px 12px; border: 0; background: transparent;
+      color: var(--muted); font-weight: 600; cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .tab .tab-x {
+      width: 16px; height: 16px; border-radius: 4px; border: 0;
+      background: transparent; color: var(--muted); cursor: pointer;
+      font-size: 13px; line-height: 1; padding: 0;
+    }
+    .tab .tab-x:hover { background: #eef2f6; color: var(--ink); }
+    .tab-hint {
+      margin-left: auto; margin-bottom: -1px; padding: 8px 4px;
+      color: var(--accent); font-size: 12px; font-weight: 600;
+      border: 0; background: transparent; cursor: pointer;
+    }
+    .tab-hint:hover { text-decoration: underline; }
+
+    .vnav a {
+      display: block; padding: 8px 12px; border-radius: 8px;
+      color: var(--ink-2); text-decoration: none; font-weight: 500;
+      margin-bottom: 2px; font-size: 13px;
+    }
+    .vnav a.active {
+      background: var(--green-soft);
+      color: #0b7a56;
+      font-weight: 700;
+    }
+    .vnav a:hover:not(.active) { background: #eef2f6; }
+
+    .panel {
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px 22px 20px;
+      margin-left: 8px;
+    }
+    .panel-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 16px; margin-bottom: 6px;
+    }
+    .panel-head h2 { margin: 0 0 8px; font-size: 16px; letter-spacing: -0.02em; }
+    .integration-select {
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .integration-select select {
+      appearance: none;
+      background: #f7f9fc url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%236b7789' d='M1 1l5 5 5-5'/%3E%3C/svg%3E") no-repeat right 10px center;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 32px 7px 10px;
+      font-weight: 600; font-size: 12.5px;
+      color: var(--ink);
+      min-width: 200px;
+      cursor: pointer;
+    }
+    .mode-pill {
+      display: inline-block; margin-top: 8px;
+      background: var(--accent-soft); color: #1e4bb8;
+      font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+    }
+
+    .toggle-row {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 20px; padding: 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .toggle-row:last-of-type { border-bottom: 0; }
+    .toggle-row h3 { margin: 0 0 3px; font-size: 13.5px; font-weight: 600; }
+    .toggle-row p { margin: 0; color: var(--muted); font-size: 12.5px; max-width: 520px; }
+
+    .configure-link {
+      margin-top: 8px;
+      display: inline-flex; align-items: center; gap: 6px;
+      background: none; border: 0; padding: 0;
+      color: var(--accent); font-weight: 600; cursor: pointer;
+    }
+    .configure-link:hover { text-decoration: underline; }
+    .configure-link:disabled {
+      color: var(--muted); cursor: not-allowed; text-decoration: none;
+    }
+    .config-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-left: 8px; font-size: 11.5px; font-weight: 600;
+      color: var(--muted);
+    }
+    .config-status.on { color: #0b7a56; }
+
+    .toggle {
+      position: relative; width: 40px; height: 22px; flex-shrink: 0;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .toggle span {
+      position: absolute; inset: 0; background: #c5ccd6; border-radius: 99px;
+      transition: .15s; cursor: pointer;
+    }
+    .toggle span::after {
+      content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px;
+      background: #fff; border-radius: 50%; transition: .15s;
+      box-shadow: 0 1px 2px rgba(0,0,0,.2);
+    }
+    .toggle input:checked + span { background: var(--accent); }
+    .toggle input:checked + span::after { left: 21px; }
+    .toggle input:disabled + span { opacity: .45; cursor: not-allowed; }
+
+    .gsp-foot {
+      margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .btn {
+      appearance: none; border: 1px solid var(--line-2); background: #fff;
+      color: var(--ink); border-radius: 8px; padding: 8px 16px;
+      font-weight: 600; cursor: pointer;
+    }
+    .btn:hover { background: #f7f9fc; }
+    .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { background: #9bb6f0; border-color: #9bb6f0; cursor: not-allowed; }
+    .btn-ghost { background: transparent; }
+    .btn-link {
+      background: none; border: 0; color: var(--accent);
+      font-weight: 600; cursor: pointer; padding: 0;
+    }
+    .btn-link:hover { text-decoration: underline; }
+
+    /* ===== Full-screen settings overlay (GSP / Product Mapping pattern) ===== */
+    .backdrop {
+      position: fixed; inset: 0;
+      background: #fff;
+      display: none;
+      z-index: 40;
+    }
+    .backdrop.open { display: flex; flex-direction: column; }
+    .sheet {
+      width: 100%;
+      height: 100%;
+      max-height: 100vh;
+      background: #fff;
+      border-radius: 0;
+      box-shadow: none;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      flex: 1;
+      min-height: 0;
+    }
+    .sheet-chrome {
+      flex-shrink: 0;
+      padding: 12px 20px;
+      border-bottom: 1px solid var(--line);
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 12px;
+      background: #fff;
+    }
+    .sheet-chrome-title {
+      font-size: 14px; font-weight: 700; letter-spacing: -0.01em; color: var(--ink);
+    }
+    .sheet-chrome-actions { display: flex; align-items: center; gap: 8px; }
+    .x {
+      width: 34px; height: 34px; border: 0; background: transparent;
+      border-radius: 8px; cursor: pointer; color: var(--muted); font-size: 22px; line-height: 1;
+    }
+    .x:hover { background: #f3f5f8; color: var(--ink); }
+
+    .sheet-scroll {
+      overflow: auto;
+      flex: 1;
+      min-height: 0;
+      padding: 20px 24px 14px;
+    }
+    .sheet-intro {
+      max-width: 1160px;
+      margin: 0 auto 0;
+      width: 100%;
+    }
+    .sheet-intro h2 {
+      margin: 0 0 6px; font-size: 20px; letter-spacing: -0.025em;
+    }
+    .sheet-intro .sub {
+      color: var(--muted); font-size: 13px; margin: 0 0 12px; max-width: 720px;
+    }
+
+    .sheet-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 240px;
+      gap: 20px;
+      align-items: start;
+      max-width: 1160px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    @media (min-width: 1280px) {
+      .sheet-layout {
+        grid-template-columns: minmax(0, 1fr) 260px;
+        max-width: 1180px;
+      }
+    }
+    @media (max-width: 900px) {
+      .sheet-layout { grid-template-columns: 1fr; }
+      .plain-rail { position: static; }
+    }
+
+    .mode-radios {
+      display: flex; flex-direction: column; gap: 8px;
+      margin-bottom: 8px;
+    }
+    .mode-radio {
+      display: grid;
+      grid-template-columns: 16px 1fr;
+      gap: 10px 10px;
+      padding: 10px 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+      align-items: start;
+    }
+    .mode-radio.mode-default {
+      padding: 10px 12px;
+    }
+    .mode-radio:has(> input:checked) {
+      background: var(--accent-soft);
+      border-color: #c5d6fb;
+    }
+    .mode-radio.mode-custom:has(> input:checked) {
+      background: #fff;
+      border-color: #c5d6fb;
+      box-shadow: 0 0 0 1px #c5d6fb inset;
+    }
+    .mode-radio > input {
+      margin-top: 3px; width: 16px; height: 16px; accent-color: var(--accent); flex-shrink: 0;
+      grid-row: 1;
+      grid-column: 1;
+    }
+    .mode-radio-head {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+    }
+    .mode-radio strong { display: block; font-size: 13.5px; }
+    .mode-radio .mode-desc { color: var(--ink-2); font-size: 12.5px; }
+    .mode-custom-body {
+      grid-column: 1 / -1;
+      margin-top: 4px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      cursor: default;
+    }
+    .mode-custom-body[hidden] { display: none !important; }
+
+    .match-card {
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      background: transparent;
+      overflow: visible;
+      margin: 0;
+    }
+    .match-section {
+      padding: 10px 2px 8px;
+    }
+    .match-section + .match-section {
+      border-top: 1px solid var(--line);
+      background: transparent;
+      margin-top: 2px;
+      padding-top: 12px;
+    }
+    .match-section-head {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; margin-bottom: 6px;
+    }
+    .match-section-title {
+      margin: 0; font-size: 12.5px; font-weight: 700; color: var(--ink);
+    }
+
+    .nl-row {
+      display: grid;
+      grid-template-columns: 56px 22px minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: start;
+      padding: 8px 0;
+      border-top: 1px solid var(--line);
+    }
+    .nl-row:first-of-type { border-top: 0; }
+    .nl-join {
+      font-size: 11px; font-weight: 700; letter-spacing: .05em;
+      color: var(--muted); text-transform: uppercase;
+      user-select: none; pointer-events: none;
+      margin-top: 10px;
+    }
+    .nl-join-select {
+      appearance: none;
+      border: 1px solid var(--line-2);
+      border-radius: 6px;
+      background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%236b7789' d='M1 1l4 4 4-4'/%3E%3C/svg%3E") no-repeat right 6px center;
+      padding: 4px 20px 4px 8px;
+      font-size: 11px; font-weight: 800; letter-spacing: .04em;
+      color: var(--accent); text-transform: uppercase;
+      cursor: pointer; min-width: 58px;
+      margin-top: 6px;
+    }
+    .nl-enable { width: 16px; height: 16px; accent-color: var(--accent); margin-top: 10px; }
+    .nl-sentence {
+      display: flex; flex-wrap: nowrap; gap: 6px 8px; align-items: flex-start;
+      color: var(--ink-2);
+      min-width: 0;
+    }
+    .nl-sentence.disabled { opacity: .45; }
+    .nl-sentence > span { margin-top: 8px; white-space: nowrap; }
+    .nl-sentence .fixed { font-weight: 500; }
+    .nl-sentence select,
+    .nl-sentence input[type="text"],
+    .nl-sentence input[type="number"] {
+      border: 1px solid var(--line-2); border-radius: 8px;
+      padding: 8px 10px; background: #fff; color: var(--ink); min-width: 0;
+    }
+    .nl-sentence select { max-width: 260px; flex: 1 1 150px; }
+    .nl-sentence .days { width: 70px; flex: 0 0 auto; }
+    .nl-sentence .key-input { width: 112px; flex: 0 0 auto; }
+    .nl-sentence .key-input.invalid { border-color: var(--danger); background: #fff8f8; }
+    .nl-field {
+      display: flex; flex-direction: column; gap: 2px;
+      flex: 0 0 auto; min-width: 0;
+    }
+    .nl-field-err {
+      display: none;
+      font-size: 11px; color: var(--danger); line-height: 1.2;
+      font-weight: 600;
+    }
+    .nl-field-err.show { display: block; }
+    .nl-remove {
+      border: 0; background: transparent; color: var(--muted);
+      font-size: 18px; cursor: pointer; padding: 4px 6px; border-radius: 6px;
+      line-height: 1;
+      margin-top: 6px;
+    }
+    .nl-remove:hover { background: #f3f5f8; color: var(--danger); }
+    .nl-remove[hidden] { visibility: hidden; }
+
+    .add-row { margin-top: 2px; padding-top: 4px; }
+    .refine-empty {
+      color: var(--muted); font-size: 12px; padding: 2px 0 0;
+      font-style: italic;
+    }
+
+    .char-tip {
+      display: none;
+      margin-top: 10px;
+      padding: 8px 10px;
+      background: var(--accent-soft);
+      border: 1px solid #c5d6fb;
+      border-radius: 8px;
+      color: #1e4bb8;
+      font-size: 12px;
+    }
+    .char-tip.show { display: block; }
+
+    .banner {
+      border-radius: 8px; padding: 10px 12px; margin: 12px 0 0;
+      display: none; font-size: 13px;
+    }
+    .banner.show { display: block; }
+    .banner.err { background: var(--danger-soft); color: #9b1c1c; border: 1px solid #f5b5b5; }
+    .banner.warn { background: var(--warn-soft); color: #9a3412; border: 1px solid #fdba74; }
+    .banner.info { background: var(--accent-soft); color: #1e4bb8; border: 1px solid #c5d6fb; }
+    .sheet-submit-alert {
+      margin: 0 0 14px;
+      padding: 8px 12px;
+      font-size: 12.5px;
+      font-weight: 600;
+    }
+    .scope-err {
+      margin: 8px 0 0;
+      padding: 8px 10px;
+      font-size: 12px;
+    }
+
+    .option-card {
+      border: 0;
+      border-top: 1px solid var(--line);
+      border-radius: 0;
+      padding: 12px 2px 4px;
+      margin-top: 4px;
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+      background: transparent;
+    }
+    .option-card h4 { margin: 0 0 4px; font-size: 12.5px; font-weight: 700; }
+    .option-card p { margin: 0; color: var(--muted); font-size: 12px; max-width: 480px; }
+    .option-side {
+      display: flex; flex-direction: column; align-items: flex-end; gap: 0; flex-shrink: 0;
+    }
+
+    .plain-rail {
+      position: sticky; top: 0;
+      background: #f7f9fc;
+      border: 1px dashed var(--line-2);
+      border-radius: 10px;
+      padding: 12px 12px 14px;
+      min-width: 0;
+    }
+    .plain-rail h4 {
+      margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+      letter-spacing: .05em; color: var(--muted); font-weight: 700;
+    }
+    .plain-rail p { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.5; }
+
+
+    .sheet-foot {
+      padding: 6px 20px 8px;
+      border-top: 1px solid var(--line);
+      display: flex; align-items: center; gap: 10px;
+      color: #9aa3b2; font-size: 10.5px;
+      flex-shrink: 0;
+      opacity: 0.85;
+    }
+    .sheet-foot label { font-weight: 400; cursor: pointer; }
+    .sheet-foot input { transform: scale(0.9); }
+
+    .toast {
+      position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+      background: #1a2332; color: #fff; padding: 10px 16px; border-radius: 8px;
+      display: none; z-index: 60; font-size: 13px;
+    }
+    .toast.show { display: block; }
+
+    .hint { color: var(--muted); font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">S</span> Synder</div>
+      <div class="nav-label">Workspace</div>
+      <div class="nav-item"><span class="dot"></span> Dashboard</div>
+      <div class="nav-item"><span class="dot"></span> Transactions</div>
+      <div class="nav-item active"><span class="dot"></span> Settings</div>
+      <div class="nav-item"><span class="dot"></span> Integrations</div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <h1>Settings</h1>
+        <div class="top-meta">QuickBooks Online · Pro+</div>
+      </header>
+
+      <div class="content">
+        <div class="settings-nav">
+          <div class="tabs">
+            <button type="button" class="tab active">Default</button>
+            <button type="button" class="tab">Advance</button>
+            <button type="button" class="tab">
+              Application fee
+              <span class="tab-x" title="Remove" aria-label="Remove">×</span>
+            </button>
+            <button type="button" class="tab-hint">+ Create additional settings</button>
+          </div>
+          <nav class="vnav">
+            <a href="#">General</a>
+            <a href="#">Sales</a>
+            <a href="#" class="active">Invoices</a>
+            <a href="#">Products/Services</a>
+            <a href="#">Product mapping</a>
+            <a href="#">Taxes</a>
+            <a href="#">Fees</a>
+            <a href="#">Application Fees</a>
+            <a href="#">Expenses</a>
+            <a href="#">Payouts</a>
+            <a href="#">Multicurrency</a>
+          </nav>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>Invoices</h2>
+              <div class="integration-select">
+                <select id="gspIntegration" aria-label="Integration">
+                  <option value="mzkt" selected>mzkt.by · Stripe</option>
+                  <option value="other">another-shop · Stripe</option>
+                </select>
+              </div>
+              <div class="mode-pill">Per transaction</div>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <h3>Apply payments to unpaid Invoice transactions</h3>
+              <p>Payment will be applied to the matching unpaid Invoice transaction.</p>
+              <button type="button" class="configure-link" id="openRules" disabled>
+                Configure matching rules →
+              </button>
+              <span class="config-status" id="rulesStatus">Using defaults</span>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="gspApply" checked />
+              <span></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <h3>Cancel sync if there is no matching open invoice found for a payment</h3>
+              <p>If Synder cannot find an open invoice that matches the rules, the payment sync is cancelled instead of posting without an application.</p>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="gspCancel" />
+              <span></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <h3>Sync unpaid (open) invoices</h3>
+              <p>Keep unpaid (open) invoices in sync with the sales platform.</p>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="gspSyncUnpaid" checked />
+              <span></span>
+            </label>
+          </div>
+
+          <div class="toggle-row">
+            <div>
+              <h3>Sync zero invoices</h3>
+              <p>Sync invoices with a zero balance.</p>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="gspSyncZero" />
+              <span></span>
+            </label>
+          </div>
+
+          <div class="gsp-foot">
+            <button type="button" class="btn btn-primary" id="gspUpdate">Update</button>
+            <span class="hint" id="gspHint"></span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <!-- Matching rules overlay -->
+  <div class="backdrop" id="backdrop" role="dialog" aria-modal="true" aria-labelledby="sheetChromeTitle">
+    <div class="sheet" id="sheet">
+      <div class="sheet-chrome">
+        <button type="button" class="x" id="closeX" aria-label="Close">×</button>
+        <div class="sheet-chrome-title" id="sheetChromeTitle">Payment matching rules</div>
+        <div class="sheet-chrome-actions">
+          <button type="button" class="btn btn-primary" id="saveBtn">Update</button>
+        </div>
+      </div>
+
+      <div class="sheet-scroll">
+        <div class="sheet-intro">
+          <h2 id="sheetTitle">Apply payments to invoices in books</h2>
+          <p class="sub" id="sheetSub">Set up rules to match payments to open invoices. You can change them anytime.</p>
+          <div class="banner err sheet-submit-alert" id="submitAlert">Fix the highlighted fields</div>
+        </div>
+
+        <div class="sheet-layout">
+          <div class="sheet-main">
+            <div class="mode-radios" role="radiogroup" aria-label="Matching rules mode">
+              <label class="mode-radio mode-default">
+                <input type="radio" name="matchMode" id="modeDefault" value="default" checked />
+                <div class="mode-radio-head">
+                  <strong>Use default matching rules</strong>
+                  <span class="mode-desc">Match open invoices for the same customer whose invoice number equals the payment’s invoice number, looking back 90 days.</span>
+                </div>
+              </label>
+
+              <div class="mode-radio mode-custom" id="modeCustomCard">
+                <input type="radio" name="matchMode" id="modeCustom" value="custom" />
+                <label class="mode-radio-head" for="modeCustom" style="cursor:pointer">
+                  <strong>Use custom rules</strong>
+                  <span class="mode-desc">Narrow which open invoices to search, then optionally refine with extra and/or conditions.</span>
+                </label>
+
+                <div class="mode-custom-body" id="customPanel" hidden>
+                  <div class="match-card">
+                    <div class="match-section" id="narrowSection">
+                      <div class="match-section-head">
+                        <h3 class="match-section-title">Narrow the search</h3>
+                      </div>
+                      <div id="scopeRows"></div>
+                      <div class="banner err scope-err" id="scopeErr"></div>
+                      <div class="char-tip" id="charTip">
+                        Tip: Invoice numbers in QuickBooks are limited to 21 characters; longer values are truncated when matching.
+                      </div>
+                    </div>
+
+                    <div class="match-section" id="refineSection">
+                      <div class="match-section-head">
+                        <h3 class="match-section-title">Then refine</h3>
+                      </div>
+                      <div id="refineRows"></div>
+                      <div class="refine-empty" id="refineEmpty">No extra conditions</div>
+                      <div class="add-row">
+                        <button type="button" class="btn-link" id="addCond">+ Add condition</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="option-card" id="overpayCard">
+                    <div>
+                      <h4>Apply as overpayment</h4>
+                      <p>If the payment is larger than the matched open invoice, post the remainder as an overpayment.</p>
+                    </div>
+                    <div class="option-side">
+                      <label class="toggle">
+                        <input type="checkbox" id="overpay" checked />
+                        <span></span>
+                      </label>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <aside class="plain-rail">
+            <h4>In plain terms</h4>
+            <p id="plain"></p>
+          </aside>
+        </div>
+      </div>
+
+      <div class="sheet-foot">
+        <span>v2.6</span>
+        <label style="display:flex;align-items:center;gap:5px">
+          <input type="checkbox" id="adminEnabled" />
+          Admin-enabled org
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const PAYMENT_NUMBER_SOURCES = [
+      { id: "invoice_number", label: "Invoice number", needsKey: false },
+      { id: "payment_note", label: "Payment note", needsKey: false },
+      { id: "payment_metadata", label: "Payment metadata", needsKey: true },
+      { id: "invoice_note", label: "Invoice note", needsKey: false },
+      { id: "invoice_id", label: "Invoice id", needsKey: false },
+      { id: "subscription_id", label: "Subscription id", needsKey: false },
+      { id: "invoice_metadata", label: "Invoice metadata", needsKey: true },
+    ];
+    const MATCH_OPS = [
+      { id: "eq", label: "is equal to" },
+      { id: "contains", label: "contains" },
+      { id: "starts", label: "starts with" },
+      { id: "ends", label: "ends with" },
+    ];
+    const COND_OPS = [
+      { id: "eq", label: "is equal to" },
+      { id: "contains", label: "contains" },
+      { id: "starts", label: "starts with" },
+      { id: "ends", label: "ends with" },
+      { id: "ncontains", label: "does not contain" },
+      { id: "neq", label: "is not equal to" },
+      { id: "nstarts", label: "does not start with" },
+      { id: "nends", label: "does not end with" },
+      { id: "empty", label: "is empty" },
+      { id: "nempty", label: "is not empty" },
+    ];
+    const BOOK_TARGETS = [
+      { id: "DocNumber", label: "Invoice number in books (DocNumber)" },
+      { id: "PrivateNote", label: "Memo on statement" },
+    ];
+    const EMPTY_OPS = new Set(["empty", "nempty"]);
+
+    function seedCustomRows() {
+      return [
+        {
+          id: uid(),
+          enabled: true,
+          kind: "customer",
+          source: "customer_name",
+          op: "eq",
+          target: "payment_customer",
+          key: "",
+          days: 90,
+          removable: false,
+        },
+        {
+          id: uid(),
+          enabled: true,
+          kind: "date",
+          source: "invoice_date",
+          op: "within",
+          target: "payment_date",
+          key: "",
+          days: 90,
+          removable: false,
+        },
+        {
+          id: uid(),
+          enabled: true,
+          kind: "number",
+          source: "invoice_number",
+          op: "eq",
+          target: "DocNumber",
+          key: "",
+          days: 90,
+          removable: false,
+        },
+        {
+          id: uid(),
+          enabled: true,
+          kind: "number",
+          source: "invoice_note",
+          op: "contains",
+          target: "PrivateNote",
+          key: "",
+          days: 90,
+          removable: true,
+        },
+        {
+          id: uid(),
+          enabled: true,
+          kind: "number",
+          source: "payment_note",
+          op: "contains",
+          target: "PrivateNote",
+          key: "",
+          days: 90,
+          removable: true,
+        },
+      ];
+    }
+
+    const defaults = () => ({
+      useDefault: true,
+      seeded: false,
+      refineAny: false, // false = AND (all), true = OR (any)
+      rows: [],
+      overpay: true,
+    });
+
+    let saved = defaults();
+    let draft = defaults();
+    let adminEnabled = false;
+    let uidSeq = 1;
+    function uid() { return "r" + (uidSeq++); }
+
+    const $ = (id) => document.getElementById(id);
+
+    function clone(s) { return JSON.parse(JSON.stringify(s)); }
+
+    function sourceMeta(id) {
+      return PAYMENT_NUMBER_SOURCES.find((s) => s.id === id);
+    }
+    function sourceNeedsKey(id) {
+      return !!sourceMeta(id)?.needsKey;
+    }
+    function sourceLabel(id) {
+      return sourceMeta(id)?.label || id;
+    }
+    function opLabel(id, list) {
+      return (list || MATCH_OPS).find((s) => s.id === id)?.label || id;
+    }
+    function targetLabel(id) {
+      return BOOK_TARGETS.find((s) => s.id === id)?.label || id;
+    }
+    function integrationLabel() {
+      const sel = $("gspIntegration");
+      return sel.options[sel.selectedIndex]?.text || "current integration";
+    }
+
+    function scopeRows() {
+      return draft.rows.filter((r) => !r.removable);
+    }
+    function refineRowsList() {
+      return draft.rows.filter((r) => r.removable);
+    }
+
+    function ensureSeeded() {
+      if (!draft.seeded || !draft.rows.length) {
+        draft.rows = seedCustomRows();
+        draft.seeded = true;
+      }
+    }
+
+    function customerOn() {
+      return draft.rows.some((r) => r.kind === "customer" && r.enabled);
+    }
+    function numberOn() {
+      return draft.rows.some((r) => r.kind === "number" && r.enabled);
+    }
+    function dateRow() {
+      return draft.rows.find((r) => r.kind === "date");
+    }
+    function scopeNumberOn() {
+      return draft.rows.some((r) => !r.removable && r.kind === "number" && r.enabled);
+    }
+    function comparesToDocNumber() {
+      return draft.rows.some((r) => r.enabled && r.target === "DocNumber");
+    }
+
+    function applyDraftToDom() {
+      $("modeDefault").checked = !!draft.useDefault;
+      $("modeCustom").checked = !draft.useDefault;
+      $("overpay").checked = draft.overpay;
+      $("adminEnabled").checked = adminEnabled;
+      renderMode();
+      renderRows();
+      refresh();
+    }
+
+    function renderMode() {
+      const custom = !draft.useDefault;
+      $("customPanel").hidden = !custom;
+      if (custom) ensureSeeded();
+    }
+
+    function setRefineMode(any) {
+      draft.refineAny = !!any;
+      document.querySelectorAll("#refineRows .nl-join-select").forEach((sel) => {
+        sel.value = draft.refineAny ? "or" : "and";
+      });
+      refresh();
+    }
+
+    function renderRows() {
+      const scopeWrap = $("scopeRows");
+      const refineWrap = $("refineRows");
+      scopeWrap.innerHTML = "";
+      refineWrap.innerHTML = "";
+      if (draft.useDefault) return;
+
+      const scopes = scopeRows();
+      scopes.forEach((row, index) => {
+        scopeWrap.appendChild(buildRowEl(row, index, "scope"));
+      });
+
+      const extras = refineRowsList();
+      $("refineEmpty").style.display = extras.length ? "none" : "block";
+      extras.forEach((row, index) => {
+        refineWrap.appendChild(buildRowEl(row, index, "refine"));
+      });
+    }
+
+    function buildRowEl(row, index, section) {
+      const el = document.createElement("div");
+      el.className = "nl-row";
+      el.dataset.id = row.id;
+
+      let join;
+      if (section === "scope") {
+        join = document.createElement("div");
+        join.className = "nl-join";
+        join.textContent = index === 0 ? "WHEN" : "AND";
+      } else {
+        // Synced and/or dropdown on every refine join
+        join = document.createElement("select");
+        join.className = "nl-join-select";
+        join.setAttribute("aria-label", "Combine refine conditions with and or or");
+        ["and", "or"].forEach((v) => {
+          const o = document.createElement("option");
+          o.value = v;
+          o.textContent = v;
+          join.appendChild(o);
+        });
+        join.value = draft.refineAny ? "or" : "and";
+        join.onchange = () => {
+          setRefineMode(join.value === "or");
+        };
+      }
+
+      const enable = document.createElement("input");
+      enable.type = "checkbox";
+      enable.className = "nl-enable";
+      enable.checked = row.enabled;
+      enable.title = "Include this condition";
+      if (row.kind === "date" && !adminEnabled) {
+        enable.checked = true;
+        row.enabled = true;
+        enable.disabled = true;
+        enable.title = "Admin-enable the org to turn date limit off";
+      }
+      enable.onchange = () => {
+        row.enabled = enable.checked;
+        refresh();
+      };
+
+      const sentence = document.createElement("div");
+      sentence.className = "nl-sentence" + (row.enabled ? "" : " disabled");
+      buildSentence(sentence, row);
+
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "nl-remove";
+      remove.textContent = "×";
+      remove.title = "Remove condition";
+      if (!row.removable) remove.hidden = true;
+      remove.onclick = () => {
+        draft.rows = draft.rows.filter((r) => r.id !== row.id);
+        renderRows();
+        refresh();
+      };
+
+      el.append(join, enable, sentence, remove);
+      return el;
+    }
+
+    function buildSentence(host, row) {
+      host.innerHTML = "";
+
+      if (row.kind === "customer") {
+        host.append(span("Customer name matches"), span("the payment’s customer", "fixed"));
+        return;
+      }
+
+      if (row.kind === "date") {
+        host.append(span("Invoice date is within"));
+        const days = document.createElement("input");
+        days.type = "number";
+        days.className = "days";
+        days.min = "1";
+        days.max = "3650";
+        days.value = row.days || 90;
+        days.disabled = !row.enabled;
+        days.oninput = () => {
+          row.days = Math.max(1, Number(days.value) || 90);
+          refresh();
+        };
+        host.append(days, span("days of the payment date"));
+        if (!row.enabled) {
+          host.append(span("· no date limit", "hint"));
+        }
+        return;
+      }
+
+      const src = document.createElement("select");
+      PAYMENT_NUMBER_SOURCES.forEach((s) => {
+        const o = document.createElement("option");
+        o.value = s.id;
+        o.textContent = s.label;
+        if (s.id === row.source) o.selected = true;
+        src.appendChild(o);
+      });
+      src.disabled = !row.enabled;
+      src.onchange = () => {
+        row.source = src.value;
+        if (!sourceNeedsKey(row.source)) row.key = "";
+        renderRows();
+        refresh();
+      };
+
+      const op = document.createElement("select");
+      const ops = row.removable ? COND_OPS : MATCH_OPS;
+      ops.forEach((s) => {
+        const o = document.createElement("option");
+        o.value = s.id;
+        o.textContent = s.label;
+        if (s.id === row.op) o.selected = true;
+        op.appendChild(o);
+      });
+      op.disabled = !row.enabled;
+      op.onchange = () => { row.op = op.value; refresh(); };
+
+      const parts = [src];
+
+      // Metadata key inline on same row as source / operand / target
+      if (sourceNeedsKey(row.source)) {
+        const wrap = document.createElement("div");
+        wrap.className = "nl-field";
+        const key = document.createElement("input");
+        key.type = "text";
+        key.className = "key-input";
+        key.placeholder = "Key";
+        key.setAttribute("aria-label", "Metadata key");
+        key.dataset.rowId = row.id;
+        key.value = row.key || "";
+        key.disabled = !row.enabled;
+        key.oninput = () => {
+          row.key = key.value;
+          if ((row.key || "").trim()) {
+            key.classList.remove("invalid");
+            const errEl = wrap.querySelector(".nl-field-err");
+            if (errEl) errEl.classList.remove("show");
+            if (submitAttempted) applyFieldErrors();
+          }
+          refresh();
+        };
+        const err = document.createElement("div");
+        err.className = "nl-field-err";
+        err.textContent = "Required";
+        wrap.append(key, err);
+        parts.push(wrap);
+      }
+
+      parts.push(op);
+
+      if (!row.removable) {
+        row.target = "DocNumber";
+        parts.push(span("Invoice number in books (DocNumber)", "fixed"));
+      } else {
+        const tgt = document.createElement("select");
+        BOOK_TARGETS.forEach((s) => {
+          const o = document.createElement("option");
+          o.value = s.id;
+          o.textContent = s.label;
+          if (s.id === row.target) o.selected = true;
+          tgt.appendChild(o);
+        });
+        if (!BOOK_TARGETS.find((t) => t.id === row.target)) {
+          row.target = "DocNumber";
+        }
+        tgt.disabled = !row.enabled;
+        tgt.onchange = () => { row.target = tgt.value; refresh(); };
+        parts.push(tgt);
+      }
+
+      host.append(...parts);
+    }
+
+    function span(text, cls) {
+      const s = document.createElement("span");
+      s.textContent = text;
+      if (cls) s.className = cls;
+      return s;
+    }
+
+    let submitAttempted = false;
+
+    function validation() {
+      const result = { scope: null, keyRowIds: [], hasErrors: false };
+      if (draft.useDefault) return result;
+
+      if (!customerOn() && !numberOn()) {
+        result.scope = "Keep either Customer or the invoice-number match on — otherwise Synder has to look at every invoice in your books.";
+        result.hasErrors = true;
+      }
+
+      draft.rows.forEach((r) => {
+        if (!r.enabled) return;
+        if ((r.kind === "number" || r.removable) && sourceNeedsKey(r.source) && !(r.key || "").trim()) {
+          result.keyRowIds.push(r.id);
+          result.hasErrors = true;
+        }
+      });
+
+      return result;
+    }
+
+    function clearFieldErrors() {
+      document.querySelectorAll(".nl-field-err").forEach((el) => el.classList.remove("show"));
+      document.querySelectorAll(".key-input").forEach((el) => el.classList.remove("invalid"));
+      const scopeErr = $("scopeErr");
+      if (scopeErr) {
+        scopeErr.classList.remove("show");
+        scopeErr.textContent = "";
+      }
+      const alert = $("submitAlert");
+      if (alert) alert.classList.remove("show");
+    }
+
+    function applyFieldErrors() {
+      clearFieldErrors();
+      if (!submitAttempted || draft.useDefault) return;
+
+      const v = validation();
+      v.keyRowIds.forEach((id) => {
+        const input = document.querySelector('.key-input[data-row-id="' + id + '"]');
+        if (!input) return;
+        input.classList.add("invalid");
+        const err = input.parentElement && input.parentElement.querySelector(".nl-field-err");
+        if (err) err.classList.add("show");
+      });
+
+      const scopeErr = $("scopeErr");
+      if (v.scope && scopeErr) {
+        scopeErr.textContent = v.scope;
+        scopeErr.classList.add("show");
+      }
+
+      if (v.hasErrors) {
+        $("submitAlert").classList.add("show");
+      }
+    }
+
+    function plainEnglish() {
+      const cancelOn = $("gspCancel").checked;
+      const cancelLine = cancelOn
+        ? "If none match, cancel the payment sync."
+        : "If none match, the payment may still sync as usual.";
+      const applyOff = !$("gspApply").checked
+        ? " Apply payments is off, so matching will not run."
+        : "";
+
+      if (draft.useDefault) {
+        return "Defaults for " + integrationLabel()
+          + ": same customer, invoice number equals the payment’s invoice number, within 90 days. "
+          + cancelLine
+          + applyOff;
+      }
+
+      const parts = [];
+      const cust = draft.rows.find((r) => r.kind === "customer");
+      const date = dateRow();
+      const scopeNums = draft.rows.filter((r) => !r.removable && r.kind === "number" && r.enabled);
+
+      let scope = "Narrow open invoices for " + integrationLabel() + " with";
+      const scopeBits = [];
+      if (cust && cust.enabled) scopeBits.push("same customer");
+      if (date && date.enabled) scopeBits.push("invoice date within " + (date.days || 90) + " days");
+      else if (date && !date.enabled) scopeBits.push("no date limit");
+      scopeNums.forEach((r) => {
+        let src = sourceLabel(r.source);
+        if (sourceNeedsKey(r.source) && r.key) src += " [" + r.key + "]";
+        scopeBits.push(src + " " + opLabel(r.op, MATCH_OPS) + " DocNumber");
+      });
+      if (!scopeBits.length) scopeBits.push("no active scope filters");
+      parts.push(scope + " " + scopeBits.join(", ") + " (all required).");
+
+      const extras = refineRowsList().filter((r) => r.enabled);
+      if (extras.length) {
+        const join = draft.refineAny ? "any" : "all";
+        const brief = extras.map((r) => {
+          let src = sourceLabel(r.source);
+          if (sourceNeedsKey(r.source) && r.key) src += " [" + r.key + "]";
+          return src + " " + opLabel(r.op, COND_OPS) + " " + (BOOK_TARGETS.find((t) => t.id === r.target)?.label || r.target);
+        });
+        parts.push("Then refine so " + join + " of: " + brief.join("; ") + ".");
+      }
+
+      parts.push(draft.overpay
+        ? "Larger payments: remainder as overpayment."
+        : "No overpayment for leftover amounts.");
+      parts.push(cancelLine + applyOff);
+      return parts.join(" ");
+    }
+
+    function syncRulesStatus() {
+      const st = $("rulesStatus");
+      if (saved.useDefault) {
+        st.textContent = "Using defaults";
+        st.classList.remove("on");
+      } else {
+        st.textContent = "Custom rules";
+        st.classList.add("on");
+      }
+    }
+
+    function refresh() {
+      const d = dateRow();
+      if (d && !adminEnabled) {
+        d.enabled = true;
+      }
+
+      $("openRules").disabled = !$("gspApply").checked;
+
+      // Keep join selects synced
+      document.querySelectorAll("#refineRows .nl-join-select").forEach((sel) => {
+        sel.value = draft.refineAny ? "or" : "and";
+      });
+
+      // Scope joins stay WHEN/AND (muted, non-interactive)
+      document.querySelectorAll("#scopeRows .nl-row").forEach((el, index) => {
+        const join = el.querySelector(".nl-join");
+        if (!join) return;
+        join.textContent = index === 0 ? "WHEN" : "AND";
+      });
+
+      document.querySelectorAll("#scopeRows .nl-row, #refineRows .nl-row").forEach((el) => {
+        const row = draft.rows.find((r) => r.id === el.dataset.id);
+        if (!row) return;
+        const sentence = el.querySelector(".nl-sentence");
+        if (sentence) sentence.classList.toggle("disabled", !row.enabled);
+        sentence?.querySelectorAll("select, input").forEach((inp) => {
+          inp.disabled = !row.enabled;
+        });
+        const enable = el.querySelector(".nl-enable");
+        if (enable && row.kind === "date" && !adminEnabled) {
+          enable.checked = true;
+          enable.disabled = true;
+        }
+      });
+
+      const tip = $("charTip");
+      if (!draft.useDefault && (scopeNumberOn() || comparesToDocNumber())) {
+        tip.classList.add("show");
+      } else {
+        tip.classList.remove("show");
+      }
+
+      // Update stays enabled whenever the overlay is open
+      $("saveBtn").disabled = false;
+      applyFieldErrors();
+
+      $("plain").textContent = plainEnglish();
+      syncRulesStatus();
+    }
+
+    function openOverlay() {
+      if (!$("gspApply").checked) return;
+      submitAttempted = false;
+      draft = clone(saved);
+      applyDraftToDom();
+      clearFieldErrors();
+      $("backdrop").classList.add("open");
+      $("saveBtn").disabled = false;
+    }
+    function closeOverlay() {
+      $("backdrop").classList.remove("open");
+    }
+    function toast(msg) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      setTimeout(() => t.classList.remove("show"), 2200);
+    }
+
+    $("openRules").onclick = openOverlay;
+    $("closeX").onclick = closeOverlay;
+    $("backdrop").addEventListener("click", (e) => {
+      if (e.target === $("backdrop")) closeOverlay();
+    });
+
+    $("gspIntegration").addEventListener("change", () => {
+      if ($("backdrop").classList.contains("open")) refresh();
+    });
+
+    function onMatchModeChange() {
+      draft.useDefault = $("modeDefault").checked;
+      if (!draft.useDefault) ensureSeeded();
+      else submitAttempted = false;
+      // Returning to default keeps seeded rows/config for when custom is reopened
+      renderMode();
+      renderRows();
+      refresh();
+    }
+    $("modeDefault").addEventListener("change", onMatchModeChange);
+    $("modeCustom").addEventListener("change", onMatchModeChange);
+    $("modeCustomCard").addEventListener("click", (e) => {
+      if (e.target.closest("#customPanel")) return;
+      if (!$("modeCustom").checked) {
+        $("modeCustom").checked = true;
+        onMatchModeChange();
+      }
+    });
+
+    $("overpay").addEventListener("change", () => {
+      draft.overpay = $("overpay").checked;
+      refresh();
+    });
+
+    $("gspCancel").addEventListener("change", () => {
+      // Cancel sync lives on GSP only; plain terms on the overlay stay accurate
+      if ($("backdrop").classList.contains("open")) refresh();
+    });
+
+    $("gspApply").addEventListener("change", () => {
+      $("openRules").disabled = !$("gspApply").checked;
+      if ($("backdrop").classList.contains("open")) refresh();
+    });
+
+    $("adminEnabled").addEventListener("change", () => {
+      adminEnabled = $("adminEnabled").checked;
+      renderRows();
+      refresh();
+    });
+
+    $("addCond").onclick = () => {
+      ensureSeeded();
+      draft.rows.push({
+        id: uid(),
+        enabled: true,
+        kind: "number",
+        source: "invoice_note",
+        op: "contains",
+        target: "PrivateNote",
+        key: "",
+        days: 90,
+        removable: true,
+      });
+      renderRows();
+      refresh();
+    };
+
+    $("saveBtn").onclick = () => {
+      submitAttempted = true;
+      const v = validation();
+      applyFieldErrors();
+      if (v.hasErrors) return;
+      submitAttempted = false;
+      draft.overpay = $("overpay").checked;
+      // cancel sync is owned by GSP Invoices page — do not write it from overlay
+      saved = clone(draft);
+      syncRulesStatus();
+      closeOverlay();
+      toast("Matching rules updated");
+    };
+
+    $("gspUpdate").onclick = () => {
+      toast("GSP settings updated");
+      $("gspHint").textContent = "Saved";
+      setTimeout(() => { $("gspHint").textContent = ""; }, 1600);
+    };
+
+    // Init
+    $("openRules").disabled = !$("gspApply").checked;
+    syncRulesStatus();
+  </script>
+</body>
+</html>
