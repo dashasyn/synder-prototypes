@@ -1,0 +1,90 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "filtering-options V6 (Recommended) — #recFilterBar in /tmp/review-target/filter-bar-v6/index.html",
+  "checked": [
+    { "zone": "layout & hierarchy — mock page header", "item": "\"Transactions\" title with two header buttons (secondary \"Simulate dashboard deep-link\", primary \"Add Transaction\") — the page-level primary button sits above the filter task and is unrelated to it" },
+    { "zone": "layout & hierarchy — regions, top to bottom", "item": "header → status segmented control (#recSegments) → filter bar (#recFilterBar) → count line (#recCount) → table (#recTable): one vertical reading order, no competing side region" },
+    { "zone": "layout & hierarchy — filter bar", "item": "bar contents in order: dashed baseline date chip, any deep-link status chip, added filter chips, \"Add filter\" button; there is no bar-level Apply, so the commit control for the primary task lives inside each panel" },
+    { "zone": "layout & hierarchy — status segmented control", "item": "5 segments with counts (All, Attention required, Ready to sync, Synced, Skipped) — carries the strongest visual weight on the screen and is the one dimension that commits on click" },
+    { "zone": "layout & hierarchy — count line", "item": "\"Showing N of 26 transactions · last 90 days (default), no filters applied\" — the only place that states whether a filter is on" },
+    { "zone": "interaction — primary task step 1", "item": "\"Add filter\" button → menu of fields not yet on the bar (Platform, Type, Amount, Customer)" },
+    { "zone": "interaction — primary task step 2", "item": "picking \"Platform\" in the Add filter menu — commits immediately by inserting the chip and auto-opens its panel; menu has no Apply" },
+    { "zone": "interaction — primary task step 3", "item": "Platform panel checkboxes (Stripe, Shopify, PayPal, Amazon) — first toggle keeps the panel open, second toggle destroys it" },
+    { "zone": "interaction — primary task step 4", "item": "Platform panel Apply button — hittable on open and after the first toggle, gone after the second" },
+    { "zone": "interaction — Platform panel", "item": "\"Clear\" button in the panel footer alongside Apply (present in markup, never pressed)" },
+    { "zone": "interaction — baseline date chip", "item": "\"Last 90 days (default)\" trigger → single-select panel with 6 presets (All time, Last 7/30/90 days, This month, Last month) + Apply" },
+    { "zone": "interaction — baseline date chip", "item": "KF-3 check: presets only, no month-by-month arrows (so the 20–30-click friction does not exist here) and also no custom/absolute month or year selection, so an arbitrary historical period cannot be reached at all" },
+    { "zone": "interaction — status segmented control", "item": "KF-7 check: status appears in exactly one control — the Add filter menu offers Platform/Type/Amount/Customer and no Status, so no two controls share the status dimension on this bar" },
+    { "zone": "interaction — chip remove", "item": "× remove control on an active filter chip (rendered only while the chip is active); counted 0 on the Platform chip after the second toggle" },
+    { "zone": "interaction — Add filter after a chip exists", "item": "reopened menu correctly drops the already-added field, which also means it is the only re-entry point and it no longer offers Platform" },
+    { "zone": "states — commit model", "item": "three different commit rules on one bar: segments commit on click, Add filter commits on pick, panels commit on Apply" },
+    { "zone": "states — discard-on-close", "item": "closing a panel without Apply resets the draft from committed state and redraws the trigger; this fires on the destructive interactions above" },
+    { "zone": "states — empty", "item": "\"No transactions match the current filters.\" + \"Clear all filters\" button (read in markup; never reached at runtime)" },
+    { "zone": "states — default/untouched", "item": "dashed ×-less baseline chip plus \"no filters applied\" count text, so an untouched page shows no filter chrome" },
+    { "zone": "states — loading", "item": "no loading state exists; filtering is synchronous over 26 local rows" },
+    { "zone": "states — same control in a second place", "item": "the Platform multiselect panel behaves differently on its first and second interaction; the date single-select panel behaves differently from the Add filter menu on the same gesture" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical",
+      "confidence": 95,
+      "element": "Platform chip panel (#recFilterBar → Platform → checkbox list), second checkbox click",
+      "finding": "The Platform panel is destroyed on the second checkbox toggle, so a second platform can never be selected and the panel's Apply button cannot be pressed.",
+      "user_impact": "The user cannot narrow the list to more than one platform — the exact primary task — and their second selection disappears with no message saying it was discarded.",
+      "suggested_fix": "Keep the panel's layer registration alive across checkbox re-renders (register the new layer before tearing down the old one, and re-query the panel/trigger nodes after the refresh) so every toggle leaves the panel and its Apply button live.",
+      "evidence": {
+        "action": "Add filter → Platform, toggled Stripe (panel stayed open, Apply hit), then reopened the chip and toggled Shopify; liveness asserted with isVisible() plus an elementFromPoint hit test at the panel/Apply centre.",
+        "observed": "After the second toggle: panel visible false, Apply hittable false, the selection was never committed, and the Platform chip showed 0 remove controls."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "High",
+      "confidence": 90,
+      "element": "Baseline date chip \"Last 90 days (default)\" → preset panel (All time / Last 7 / 30 / 90 days / This month / Last month) and its Apply button",
+      "finding": "Picking a preset closes the panel before its Apply can be pressed, and the pick is then discarded — the trigger still reads \"Last 90 days\" afterwards.",
+      "user_impact": "The user believes they changed the date range, gets no error or confirmation, and the date range in fact can never be changed at all — a silent dead end on a dimension the bar advertises as adjustable.",
+      "suggested_fix": "Either commit the pick on click and drop the Apply button from single-select panels, or keep the panel open after a pick so the Apply it displays is actually reachable — one rule, not both.",
+      "evidence": {
+        "action": "Opened the baseline date chip (Apply confirmed hittable on open), clicked \"Last 30 days\", then interacted a second time.",
+        "observed": "Panel visible false, Apply hittable false, and the trigger still reads \"Last 90 days\" — the selection never reached the control the panel presents as the commit action."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "High",
+      "confidence": 78,
+      "element": "Platform chip on #recFilterBar after the panel is lost, plus the \"Add filter\" menu",
+      "finding": "Once a filter chip is on the bar in an uncommitted state there is no recovery affordance: the chip renders no × (0 remove controls counted) and \"Add filter\" no longer offers Platform.",
+      "user_impact": "A user who added the wrong filter, or hit UX-1, is stranded with a chip they can neither complete nor remove and has to reload the page or clear everything to get back.",
+      "suggested_fix": "Render the chip's × whenever the chip is on the bar rather than only while its value is active, so removing an added-but-unapplied filter is always one click.",
+      "evidence": {
+        "action": "After the Platform panel vanished on the second toggle, counted remove controls on the Platform chip and reopened \"Add filter\" to look for a re-entry point.",
+        "observed": "Remove controls on the Platform chip: 0. Add filter re-offers Platform: false. No other control on the bar removes or reopens the chip."
+      }
+    },
+    {
+      "id": "UX-4",
+      "severity": "Medium",
+      "confidence": 80,
+      "element": "#recFilterBar as a whole — status segments vs \"Add filter\" menu vs filter panels",
+      "finding": "The same \"pick a value\" gesture means three different things on one bar: segments commit on click, the Add filter menu commits on pick with no Apply, and panels show an Apply that is unreachable (date) or reachable only for a first change (Platform).",
+      "user_impact": "Users cannot tell when a choice is already live and when it still needs Apply, so they either press Apply on things that already committed or walk away from panels believing a discarded selection took effect.",
+      "suggested_fix": "Make the panel rule uniform and visible — every panel stages until its Apply, no panel closes on a value change — so \"click = live\" applies only to the segments and nothing else.",
+      "evidence": {
+        "action": "Exercised all three commit paths in sequence: clicked \"Add filter\" → Platform, then the date panel presets, then the Platform panel checkboxes and Apply.",
+        "observed": "Add filter had no Apply and inserted the chip on pick; the date panel displayed an Apply that closed before it could be used; the Platform panel's Apply worked once and then disappeared."
+      }
+    }
+  ],
+  "gaps": [
+    "Platform panel: the first Apply was pressed but nothing was recorded about the 26-row list, the count line, or the chip label afterwards — whether a committed platform filter is actually reflected on screen is unknown.",
+    "Platform panel: the \"Clear\" button next to Apply was never pressed, so whether Clear removes the filter, whether it needs Apply after it, and whether it destroys the panel the way a second toggle does are all unknown.",
+    "recSegments (status) was never clicked, so what a commit-on-click segment does to an already-open filter panel holding staged edits is unrecorded — that is the one cross-control interaction on this bar.",
+    "\"Simulate dashboard deep-link\" and the resulting \"From dashboard: …\" status chip were never exercised, so whether a second status surface can visibly contradict the segments (the KF-7 failure class this variant claims to fix) is unverified.",
+    "The empty state (\"No transactions match the current filters.\" + \"Clear all filters\") exists in markup but was never reached at runtime, so its recovery path — including whether it also drops added chips — is unverified.",
+    "Date chip: after the discarded pick, the row count and count line were not recorded, so it is unconfirmed whether the list stayed on the committed 90-day window or moved while the trigger lied."
+  ]
+}

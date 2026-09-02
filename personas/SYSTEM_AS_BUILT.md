@@ -639,6 +639,34 @@ review, first one 2026-09-26.
 
 ---
 
+## 7.5 · Decisions taken 2026-09-02, after this document was reviewed
+
+- **Calibration promoted to first priority** ahead of recon generalisation. Done — see
+  `MISSES.md` CAL-1. Recon generalisation and `scope.json` remain open.
+- **Lens-coverage floor built** (was 6.8). A round skipping more than 2 of the 6 lenses is refused
+  at declaration unless `--reason` is given; `verify` re-derives coverage from the slots so
+  editing the manifest by hand doesn't dodge it. **[CONFIRMED — self-tested both ways]**
+- **Lens-specific fields enforced** (was 6.6): Trust must carry `claims`/`actual`, Fidelity must
+  carry `reference_gaps`.
+- **`verified_by` enforced** on every `resolved[]` entry (was 5.3).
+- **Retry cap of 3 enforced in `scripts/galileo.sh`**, not `validator-check.js` — that file only
+  ever sees round directories, so a query counter there would have been decorative. The 4th
+  attempt exits 3. **[CONFIRMED — self-tested]**
+- **`PERMISSIONS.md` v2 approved**, status line updated. Bespoke recon/aggregation scripts are 🟡
+  with a standing duty to flag, at the time, any change that could hide coverage.
+- **Historical rounds accepted as non-compliant.** Enforcing `verified_by` fails 5 of 7 rounds on
+  disk, because the field is populated in **14 of 105** resolved entries repo-wide (0 of 83 in the
+  q-explorer and etc-message-generator logs). Ignat's decision: **do not backfill, the gate applies
+  from now on.** Backfilling would mean writing evidence for fixes that cannot now be proven —
+  the exact act the field exists to prevent. Each affected log carries a dated provenance note
+  saying its entries predate the gate. Nothing was fabricated and nothing was deleted.
+- **Deferred by decision:** scope-aware gating (6.12) and the `Rethink:` flow — both wait until
+  the strict version is trusted. The two abandoned round directories (6.3) are left alone; they
+  may be resumed.
+- **Still open, unchanged:** 6.1 bespoke recon, 6.2 no persisted scope contract, 6.7 severity
+  comparability (CAL-1 could not test it — single-lens run), 6.9 unfalsifiable `not_exercised`
+  reasons, 6.10 now partly addressed for the UX lens only, 6.11 the judgement half.
+
 ## 8 · If I had to fix three things
 
 Not asked for, one paragraph, ignore if you want the analysis clean.

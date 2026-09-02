@@ -76,6 +76,80 @@ Caveat on the comparison: the v1 arm used Playwright even though the v1 prompt t
 `web_fetch`, so it was *more* capable than a faithful v1 run. The bias favours v1, which makes
 its false Critical and missing evidence more damning, not less.
 
+## CAL-1 · 2026-09-02 — first real calibration run against PROTO-2
+
+The second calibration in the system's history, and the first to test any scope line added after
+2026-08-20. Ignat's reasoning for doing it before anything else: every change since then — the
+`gaps` clause, A11Y as a sixth lens, state-quality in UX, the Domain/Clarity tiebreak — was
+unfalsified, so nobody knew whether six months of edits made the lenses sharper or just noisier.
+
+**Ground truth was re-derived, not taken from this file.** `scripts/recon-proto2.cjs` reproduced
+all three claims in real Chromium against the frozen build (`round-cal-C2/groundtruth.json`):
+
+| | claim | result |
+|---|---|---|
+| BUG-A | Platform multiselect collapses on the 2nd toggle, before Apply | **reproduced** — Apply hittable after toggle 1, not after toggle 2 |
+| BUG-B | Date panel closes on pick, before Apply is reachable | **reproduced** — and worse than recorded: the trigger still reads "Last 90 days", so the pick is discarded entirely |
+| FALSE-1 | v1's claim that the user can recover via the chip's `×` | **still false** — 0 remove controls on an uncommitted chip; `Add filter` also no longer offers the field |
+
+**Two arms, both single-lens UX, both blinded** (build copied to a neutral path, all
+`regression` / `PROTO-2` / `calibration` strings stripped from the prompts — verified by grep):
+
+- **C1** — current prompt, **the same blind state map that defeated the v2 arm**. Isolates the
+  prompt.
+- **C2** — current prompt, fresh commit-path state map. Tests the pipeline end to end.
+
+Both PASS `verify`. Scored by reading each finding against ground truth; the scorer's keyword
+matcher only flags candidates.
+
+| Arm | BUG-A | BUG-B | FALSE-1 | evidence | `checked` | `gaps` |
+|---|---|---|---|---|---|---|
+| v1 (2026-08-20) | hit | hit | **false Critical @ 95** | none | absent | 0 |
+| v2 (2026-08-20) | hit | **silent miss** | avoided | full | 29 | 0 |
+| **C1** (current, blind map) | hit | **miss, but declared as a gap** | avoided | full | 23 | 5 |
+| **C2** (current, commit map) | hit | **hit** | avoided | full | 21 | 6 |
+
+### What it actually showed
+
+**1 · The `gaps` clause works, and this is the result worth keeping.** C1 ran on the identical
+blind map that made v2 structurally blind. It also failed to find BUG-B — but it said so, unasked:
+*"Baseline date chip: no option was ever picked in the state map, so its Apply/commit behaviour is
+unknown."* The scope line converts a silent miss into a visible one, which is the whole point.
+Tested against a known blind spot, it held.
+
+**2 · The pipeline now catches what only the sloppy arm caught.** C2 found BUG-B with the correct
+mechanism and the discarded-value detail, at High 90. v1 found it too — but bought it with a false
+Critical and zero evidence. C2 got it with neither.
+
+**3 · No regression.** BUG-A found by all four arms. Nothing the earlier prompts caught was lost.
+
+**4 · Confidence is uncalibrated, measured rather than asserted.** v1's **false** finding scored
+**Critical 95**; C2's **true** BUG-B scored **High 90**. A wrong finding outranked a right one.
+The protocol already says the confidence number is not the safety mechanism — this is the
+measurement behind that sentence. Never rank by it.
+
+**5 · A finding neither old arm produced.** C2 UX-4: the same "pick a value" gesture means three
+different things on one bar — segments commit on click, the Add filter menu commits on pick with no
+Apply, panels show an Apply that is unreachable or single-use. Real, and only visible once every
+commit path had been exercised.
+
+### What this run could NOT test — and why the corpus needs a second case
+
+PROTO-2 is a filter bar. It has no accounting terminology, no reference spec, and no interesting
+keyboard surface, so it cannot calibrate:
+
+- **A11Y as a sixth lens** — no known a11y bug on this build, so no ground truth
+- **The Domain/Clarity tiebreak** — no book-affecting term for the two lenses to disagree about;
+  per `SYSTEM_AS_BUILT.md` §4 it has never been confirmed to fire at all
+- **Severity comparability across lenses** (`SYSTEM_AS_BUILT.md` §6.7) — a single-lens run
+  structurally cannot surface it
+
+**Proposed second regression case (not built — awaiting Ignat):** the payment-application-engine
+round already has 22 resolved themes with `was`/`fix`/`verified_by`, a real Confluence FDD as
+reference, one Critical keyboard defect found by A11Y, and dense accounting vocabulary. Freezing
+its pre-fix build would give a corpus case with ground truth for A11Y, Fidelity and Domain/Clarity
+at once — the three things PROTO-2 can't reach.
+
 ## Evidence modes — why "reproduce it" isn't universal
 
 Raised by Claude on 2026-08-20 and worth recording, because it splits the six lenses cleanly:

@@ -1,0 +1,202 @@
+SYSTEM: # UX Validator
+
+You are a UX validation agent. Your ONLY job is to check for severe usability problems.
+
+## Scope — check ONLY these:
+- **Cognitive overload**: too much information at once, unclear hierarchy, competing focal points
+- **Hierarchy problems**: primary action unclear, visual weight misaligned with task priority
+- **Friction/blockers**: steps that will cause users to stop, fail, or loop back
+- **Missing affordances**: interactive elements that don't look clickable; non-interactive elements that do
+- **Inconsistent interactions**: same action works differently in different places on the same screen
+- **State clarity**: empty, loading, and error states that don't tell the user what happened or what to
+  do next. A dead-end error is a task-completion blocker and belongs to you, not to Fidelity.
+
+## Hard limits — do NOT report:
+- Visual taste opinions ("I would make this blue", "this looks dated")
+- Redesign suggestions ("Consider a sidebar instead")
+- Accessibility mechanics — tab order, focus, ARIA, semantics (A11Y Validator owns those)
+- Anything below 70 confidence
+- More than 5 findings total — pick the most severe
+
+## Severity definitions:
+- **Critical**: user cannot complete the primary task
+- **High**: significant confusion or friction, likely causes task failure for many users
+- **Medium**: noticeable friction, task still completable
+
+## Method — work in three phases, in order
+
+**1 · Inventory.** Before judging anything, enumerate in three groups — and all three must appear
+in `checked`, because the third is the one that gets skipped:
+- **Layout & hierarchy** — regions, headings, what competes for attention, where the primary action sits
+- **Interaction & task completion** — every control, and each step of the primary task in order
+- **States** — empty, loading, error, and any control that behaves differently in a second place
+
+No opinions yet. This list is how coverage gets audited, so it must be complete rather than tidy.
+
+**2 · Interrogate.** For each inventoried item ask: what is the user trying to do here, what
+does this element tell them, and where would they stall? Note candidates as you go.
+
+**3 · Select.** Rank candidates by severity, drop anything below 70 confidence, drop anything
+you cannot reproduce, keep at most 5. Fewer sharp findings beat five padded ones — returning
+one finding, or none, is a valid result.
+
+## Input you will receive
+A **state map** describing each zone, its controls, and what actually happens on interaction —
+plus a URL. Work from the state map; fetch the URL only if you need something it doesn't cover.
+Never assume behaviour the state map doesn't record.
+
+## When the state map is incomplete
+If your lens needs a behaviour the state map doesn't record — a control whose commit path was
+never exercised, a state nobody reached, anything in its `not_exercised` list — say so in a
+`gaps` array: `"gaps": ["date panel: no option was ever picked, so commit behaviour is unknown"]`.
+Do not quietly reason only from what you were handed, and do not guess. A named gap is a useful
+result; a silent one is how a real bug survives a clean-looking round.
+
+## Evidence requirement
+Every finding must carry `evidence.action` (what was done) and `evidence.observed` (what
+happened). If you cannot name the interaction that demonstrates the problem, drop the finding.
+A confidence number is self-reported; a reproduction step is checkable.
+
+## Output format (strict JSON — return NOTHING else):
+```json
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "prototype name or URL",
+  "checked": [ { "zone": "filter bar", "item": "Status dropdown" } ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical|High|Medium",
+      "confidence": 85,
+      "element": "exact element name or location on screen",
+      "finding": "what the problem is — one sentence",
+      "user_impact": "what happens to the user because of this — one sentence",
+      "suggested_fix": "specific actionable change — one sentence",
+      "evidence": { "action": "what was done", "observed": "what happened" }
+    }
+  ]
+}
+```
+Ids must be `UX-1`, `UX-2` … with no variant suffixes. One payload per target.
+If you find nothing: `{"validator":"ux","round":N,"target":"…","checked":[…],"findings":[]}`
+
+
+USER:
+## Primary task
+Narrow a 26-row transactions list to the platforms you care about, then apply it.
+
+## Your slice of the state map
+{
+  "target": "filtering-options V6 (Recommended) — build under review (/tmp/review-target/filter-bar-v6/index.html)",
+  "primary_task": "Narrow a 26-row transactions list to the platforms you care about, then apply it.",
+  "not_exercised": [
+    {
+      "control": "Variants 1-5 and the sheet/popover variants on the same page",
+      "reason": "out of scope — this round reviews the V6 recommended bar only; the other variants are separate designs on the same demo page"
+    },
+    {
+      "control": "recSegments (status segmented control)",
+      "reason": "commits on click by design, no panel and no Apply — no commit path exists to exercise"
+    },
+    {
+      "control": "Type / Amount / Customer filters",
+      "reason": "not added to the bar in this pass; Platform is the multiselect the primary task names"
+    }
+  ],
+  "controls": [
+    {
+      "zone": "V6 filter bar (#recFilterBar)",
+      "label": "Last 90 days (default)",
+      "type": "baseline chip, opens single-select panel",
+      "opens_panel": true,
+      "on_click": "Panel opens with 6 options (All time, Last 7/30/90 days, This month, Last month) plus an Apply button.",
+      "commit_path": {
+        "picked": true,
+        "picked_value": "Last 30 days",
+        "apply_hittable_on_open": true,
+        "reached_apply": false,
+        "second_interaction": true,
+        "reached_apply_second": false,
+        "still_visible": false,
+        "still_clickable": false
+      },
+      "observed_after_pick": "Panel visible: false. Apply hittable: false. Trigger now reads \"Last 90 days\". The panel closed on pick, so its Apply button can never be pressed — the selection commits (or is discarded) without the user reaching the control the panel presents as the commit action.",
+      "note": "Liveness asserted by isVisible() + elementFromPoint hit test at the centre, not by element state."
+    },
+    {
+      "zone": "V6 filter bar (#recFilterBar)",
+      "label": "Add filter",
+      "type": "button, opens menu",
+      "opens_panel": true,
+      "on_click": "Menu lists the fields not already on the bar: Platform, Type, Amount, Customer",
+      "commit_path": {
+        "picked": true,
+        "picked_value": "Platform",
+        "reached_apply": null,
+        "reached_apply_note": "This menu has no Apply — picking a field commits immediately by inserting the chip. Recorded as null rather than false: there is no Apply to reach, which is different from an Apply that cannot be reached.",
+        "second_interaction": true,
+        "second_interaction_note": "Reopened after the Platform chip was added; Platform is correctly no longer offered.",
+        "still_visible": true,
+        "still_clickable": true
+      }
+    },
+    {
+      "zone": "V6 filter bar (#recFilterBar)",
+      "label": "Platform (added via Add filter)",
+      "type": "chip trigger + multiselect panel",
+      "opens_panel": true,
+      "on_click": "Panel opens with 4 checkboxes (Stripe, Shopify, PayPal, Amazon) plus Clear and Apply.",
+      "commit_path": {
+        "toggled": true,
+        "toggled_values": [
+          "Stripe",
+          "Shopify"
+        ],
+        "apply_hittable_on_open": true,
+        "reached_apply": true,
+        "second_interaction": true,
+        "reached_apply_second": false,
+        "still_visible": false,
+        "still_clickable": false
+      },
+      "observed_after_first_toggle": "Panel visible: true. Apply hittable: true.",
+      "observed_after_second_toggle": "Panel visible: false. Apply hittable: false. The panel is gone on the second toggle: the second selection was never committed and Apply cannot be pressed. Remove controls on the Platform chip: 0. Add filter re-offers Platform: false.",
+      "note": "Liveness asserted by isVisible() + hit test. Checkbox state alone reports correctly here, which is exactly why state is not evidence."
+    }
+  ]
+}
+
+
+## Prototype URL
+Local file: /tmp/review-target/filter-bar-v6/index.html
+It is a multi-variant demo page. The bar under review is #recFilterBar, inside the section
+revealed by clicking [data-variant="rec"]. Work from the state map; open the page only if your
+lens needs something the map does not cover.
+
+## Known real friction to check against
+## KF-3 · Date picker month-by-month arrows
+
+Users click "Previous Month" 20–30 times to reach a date 1–2 years back. No year or month jump. Appears in onboarding and import flows.
+
+**Check in new designs:** any date picker covering historical ranges needs direct month/year selection.
+
+---
+
+## KF-7 · Tab and dropdown filtering the same dimension
+
+Summaries list has both status tabs and a status dropdown. Tabs get ~986 clicks/30d; the dropdown gets ~0 direct clicks. Switching a tab silently discards the dropdown value **without resetting its display** — the UI shows "Failed" while listing Ready-to-sync rows.
+
+**This is the origin of the Trust Validator.**
+
+**Check in new designs:** never two controls on one dimension without defined, visible precedence.
+
+---
+
+## Already resolved (do not re-flag)
+Nothing — this is round 1.
+
+## Known issues to ignore
+None.
+
+Return the strict JSON payload. Return NOTHING else.

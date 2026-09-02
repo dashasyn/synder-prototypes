@@ -1,0 +1,78 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "filtering-options V6 (Recommended) — #recFilterBar in /tmp/review-target/filter-bar-v6/index.html",
+  "checked": [
+    { "zone": "V6 filter bar (#recFilterBar) — layout & hierarchy", "item": "Bar composition on a clean load: baseline date chip 'Last 90 days (default)' + 'Add filter' button, nothing else" },
+    { "zone": "V6 filter bar (#recFilterBar) — layout & hierarchy", "item": "Where the primary action sits: no bar-level Apply; each panel carries its own Apply in its footer" },
+    { "zone": "V6 filter bar (#recFilterBar) — layout & hierarchy", "item": "Competing focal points: page header 'Add Transaction' (primary blue) and 'Simulate dashboard deep-link' sit above the bar" },
+    { "zone": "V6 filter bar (#recFilterBar) — layout & hierarchy", "item": "Result count line (#recCount): 'Showing N of 26 transactions · last 90 days (default), no filters applied'" },
+    { "zone": "V6 filter bar (#recFilterBar) — layout & hierarchy", "item": "Visual weight of the baseline chip (dashed, ×-less, muted '(default)' suffix) vs an added filter chip" },
+    { "zone": "Primary task — interaction & task completion", "item": "Step 1 · click 'Add filter'" },
+    { "zone": "Primary task — interaction & task completion", "item": "Step 2 · pick 'Platform' from the 4-item menu (Platform, Type, Amount, Customer)" },
+    { "zone": "Primary task — interaction & task completion", "item": "Step 3 · Platform chip is inserted and its panel opens immediately (4 checkboxes + Clear + Apply)" },
+    { "zone": "Primary task — interaction & task completion", "item": "Step 4 · tick first platform checkbox (Stripe)" },
+    { "zone": "Primary task — interaction & task completion", "item": "Step 5 · tick second platform checkbox (Shopify)" },
+    { "zone": "Primary task — interaction & task completion", "item": "Step 6 · click Apply inside the Platform panel to commit (never reached — see UX-1)" },
+    { "zone": "V6 filter bar — controls", "item": "'Clear' button in the multiselect panel footer" },
+    { "zone": "V6 filter bar — controls", "item": "Chip trigger on an applied chip (reopens the panel to edit)" },
+    { "zone": "V6 filter bar — controls", "item": "Chip remove '×' on an applied chip" },
+    { "zone": "V6 filter bar — controls", "item": "Baseline chip 'Last 90 days (default)' → single-select panel: All time, Last 7 days, Last 30 days, Last 90 days [selected], This month, Last month + Apply" },
+    { "zone": "V6 filter bar — controls", "item": "'Add filter' menu contents after a chip is added (list shrinks; button disables once all 4 fields are on the bar)" },
+    { "zone": "States", "item": "Empty state: 'No transactions match the current filters.' + 'Clear all filters' button" },
+    { "zone": "States", "item": "Loading state: none — dataset is local, no async path exists" },
+    { "zone": "States", "item": "Error state: none present anywhere in this zone" },
+    { "zone": "States", "item": "Panel closed without Apply — staged edits are discarded and the trigger redrawn" },
+    { "zone": "States", "item": "Applied vs unapplied chip rendering: applied chip shows text + '×', unapplied chip shows text + dropdown caret" },
+    { "zone": "States", "item": "Baseline chip default vs changed rendering: '(default)' suffix is dropped once the value differs from the 90-day baseline" },
+    { "zone": "States", "item": "Same control in a second place: the multiselect panel is the same component used by Status, Type, Amount and Customer chips on this bar" }
+  ],
+  "gaps": [
+    "Platform panel: Apply was never reached, because the second checkbox toggle destroys the panel first. What a committed multi-platform selection does to the chip label, the count line and the 26-row list is therefore unverified.",
+    "Baseline date chip: no option was ever picked in the state map, so its Apply/commit behaviour — and whether the chip correctly drops the '(default)' suffix — is unknown.",
+    "Close-without-Apply was never exercised on a freshly added chip: whether a Platform chip that was added but never applied stays parked on the bar with no value is unrecorded.",
+    "The status segmented control and the dashboard deep-link chip sit directly above this bar but are outside my slice. Segments commit on click while every bar chip is Apply-gated; that mixed commit model on one screen could not be assessed from the map I was given.",
+    "No loading or error state exists in this local demo, so nothing can be said about what the bar shows when a filter query is slow or fails."
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "Critical",
+      "confidence": 95,
+      "element": "Platform multiselect panel in #recFilterBar — second checkbox toggle (e.g. Shopify after Stripe)",
+      "finding": "Ticking a second checkbox in the Platform panel closes the panel and silently discards the whole selection, so Apply can never be reached with more than one platform chosen.",
+      "user_impact": "The stated task — narrowing the list to the platforms you care about — cannot be completed: the user ticks a second platform, the panel vanishes with no message, the list still shows all 26 rows, and reopening the chip shows nothing selected.",
+      "suggested_fix": "In the checkbox change handler, update the checked box in place instead of calling refreshFieldNode with keepOpen — the keepOpen path runs closeLayerTree first, which fires the previously registered close handler (onPanelClose → draft reset → a second re-render), leaving the panel that gets re-marked 'active' detached from the DOM.",
+      "evidence": {
+        "action": "Added the Platform filter via 'Add filter', then clicked 'Stripe' (step 1) and 'Shopify' (step 2) in the panel, asserting panel visibility and Apply hittability in real Chromium; then traced the handler at wireFieldNode → refreshFieldNode({keepOpen:true}) in the source.",
+        "observed": "After step 1 the panel stayed visible and Apply was hittable. After step 2 the panel was no longer visible and Apply was not hittable; the Shopify selection was never committed, and no error, toast or chip state indicated anything had happened."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "Medium",
+      "confidence": 78,
+      "element": "Applied filter chip in #recFilterBar (e.g. 'Platform: Stripe ×')",
+      "finding": "A chip loses its dropdown caret the moment it holds a value, so an applied filter looks like a read-only summary tag rather than a control you can reopen and edit.",
+      "user_impact": "A user who wants to change Stripe to PayPal sees no affordance for editing and is pushed to remove the chip with '×' and rebuild it through 'Add filter' — three extra steps for what is one click on the chip.",
+      "suggested_fix": "Keep the dropdown caret on the chip trigger when the chip is active, alongside the '×', so the chip reads as editable-plus-removable in both states.",
+      "evidence": {
+        "action": "Inspected the chip render branch of fieldHtml (style 'chip') for an active vs inactive value, and the chip-trigger click handler in wireFieldNode.",
+        "observed": "The caret span is emitted only when the field is inactive — `(active ? '' : '<span…>arrow_drop_down</span>')` — while the chip-trigger button still opens the panel in both states. The only visible glyph on an applied chip is the '×' remove button."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "Medium",
+      "confidence": 75,
+      "element": "Baseline date chip 'Last 90 days (default)' → date panel (6 relative presets + Apply)",
+      "finding": "The date panel offers only relative presets — All time, Last 7/30/90 days, This month, Last month — with no custom or absolute range, so no specific historical period can be selected.",
+      "user_impact": "An accountant reconciling a past quarter or a prior tax year has no way to ask for it; the only reach beyond last month is 'All time', which drops them into an unbounded list they must scan manually.",
+      "suggested_fix": "Add a 'Custom range' option to the date panel with direct month and year selection, so a historical window is reachable without month-by-month stepping and without falling back to 'All time'.",
+      "evidence": {
+        "action": "Opened the baseline date chip per the state map and enumerated its options against the FILTERS.date definition in the source, checking against KF-3 (date pickers covering historical ranges need direct month/year selection).",
+        "observed": "Exactly six relative options are rendered, all anchored to today; there is no custom-range entry, no month or year selector, and the oldest bounded window available is 'Last month'."
+      }
+    }
+  ]
+}
