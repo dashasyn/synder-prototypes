@@ -1,0 +1,142 @@
+{
+  "validator": "domain",
+  "round": 1,
+  "target": "projects/payment-application-engine/index.html",
+  "checked": [
+    {
+      "zone": "gsp settings",
+      "item": "\"Apply payments to invoices\" toggle + \"Synder looks for an open invoice and applies the payment to it\""
+    },
+    {
+      "zone": "gsp settings",
+      "item": "\"Cancel sync if there is no matching open invoice found for a payment\" (one value, two places)"
+    },
+    {
+      "zone": "gsp settings",
+      "item": "\"Replace Synder's default invoice matching with a rule you define for this integration\""
+    },
+    {
+      "zone": "master switch",
+      "item": "\"Synder's default matcher never runs for this integration \u2014 not even as a fallback\""
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"Only consider invoices that\" / \"existing invoices\" \u2014 candidate set definition"
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"are for the same customer as the payment\" row"
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"are dated within 90 days either side of the payment\" + window preview"
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"have an invoice number that is equal to the payment's \u2026\" + Compare against \"Invoice number\" (DocNumber)"
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"Take the customer from the matched invoice\" checkbox + \"a matched payment has no customer to attribute to\""
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"Generic customer is on for this integration. Every transaction is booked to one customer\" warning"
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"Keep either Customer or the invoice-number match on \u2014 otherwise Synder has to look at every invoice in your books\""
+    },
+    {
+      "zone": "section 1 scope",
+      "item": "\"No date limit. With this row off, invoices of any age are considered\""
+    },
+    {
+      "zone": "section 2 conditions",
+      "item": "condition sources/targets: \"Invoice note\", \"Memo on statement\", \"Invoice number\", \"Payment metadata\""
+    },
+    {
+      "zone": "section 2 conditions",
+      "item": "tie-break rule \"Synder takes the one with the earliest invoice date\""
+    },
+    {
+      "zone": "section 3 outcomes",
+      "item": "\"Apply as overpayment\" \u2014 \"leaves the difference as an overpayment\" / \"Turn it off and Synder cancels the sync instead\""
+    },
+    {
+      "zone": "section 3 outcomes",
+      "item": "\"The payment is bigger than the invoice still owes\" row title"
+    },
+    {
+      "zone": "section 3 outcomes",
+      "item": "\"No matching open invoice was found\" \u2014 \"On: nothing is created. Off: the payment is processed as usual.\""
+    },
+    {
+      "zone": "disclosures",
+      "item": "\"the payment goes onto that invoice and no invoice is created\""
+    },
+    {
+      "zone": "disclosures",
+      "item": "\"the payment is processed as usual, as if no open invoice existed\" fallback outcome"
+    },
+    {
+      "zone": "disclosures",
+      "item": "\"On a simple charge with no invoice behind it (Synder books these as a Sales Receipt)\""
+    },
+    {
+      "zone": "disclosures",
+      "item": "\"There is no Balance > 0 line \u2014 a fully paid invoice can still be a candidate\""
+    },
+    {
+      "zone": "disclosures",
+      "item": "candidate table columns \"Invoice date\", \"Memo on statement\", \"Still owes\""
+    }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "\"The exact request Synder will send to QuickBooks\" disclosure, closing hint \u2014 contradicting the outcome row \"No matching open invoice was found\" and the integration-settings label \"Cancel sync if there is no matching open invoice found for a payment\"",
+      "finding": "The query deliberately omits a balance filter so paid-in-full invoices are candidates, while three other labels on the same screen call the candidate set \"open invoice\" \u2014 in accounting an open invoice is one with an unpaid balance, so the screen contradicts itself on what can be matched.",
+      "user_impact": "A payment can be applied to an invoice that already has a zero balance, which posts the cash as an unapplied credit on the customer's Accounts Receivable rather than settling anything, and the accountant will not see it coming because the outcome rows promise the rule only ever finds open invoices.",
+      "suggested_fix": "Either add the Balance > 0 line to the query, or keep the behaviour and relabel the outcomes to \"no matching invoice\" plus state in section 1 that unpaid (open), partly paid and fully paid invoices are all candidates \u2014 the precise term \"open\" must not be used for a set that includes closed invoices.",
+      "evidence": {
+        "quote": "There is no Balance > 0 line \u2014 a fully paid invoice can still be a candidate, because a payment may be an overpayment.",
+        "source": "vocabulary.md \"Unpaid (open) invoices\" \u2014 \"open\" is defined as unpaid; also QuickBooks Online applies a payment only against an invoice's remaining balance, so a zero-balance invoice yields an unapplied customer credit."
+      }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "Critical",
+      "confidence": 85,
+      "element": "\"In plain terms\" disclosure, final step; same wording in the \"No matching open invoice was found\" outcome row",
+      "finding": "\"Processed as usual\" is never translated into a document: the screen never says what Synder actually creates in the books when the rule matches nothing, even though it names the document type everywhere else (\"no invoice is created\", \"Synder books these as a Sales Receipt\").",
+      "user_impact": "The accountant cannot predict whether an unmatched payment lands as a Sales Receipt \u2014 which recognizes revenue a second time when the original invoice already did, overstating income and leaving the invoice open \u2014 or as an unapplied customer payment, and this is exactly the outcome the screen exists to explain.",
+      "suggested_fix": "Name the resulting document in both places, e.g. \"the payment is processed as usual \u2014 Synder records it as a Sales Receipt and no invoice is settled\", keeping the precise document term and putting any plain-language gloss in a tooltip rather than replacing it.",
+      "evidence": {
+        "quote": "If it found nothing \u2014 no candidates, or none of them qualified, or none of the conditions could be checked on this payment \u2014 the payment is processed as usual, as if no open invoice existed. Synder's default matching is not tried as a fallback.",
+        "source": "Revenue recognition / no-double-counting: income must be recognized once per sale, so a fallback that may create a revenue document has to be named. vocabulary.md \"Books\" \u2014 effects on the ledger must be stated in ledger terms."
+      }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "High",
+      "confidence": 78,
+      "element": "\"Take the customer from the matched invoice\" checkbox helper text, shown when the Customer scope row is off",
+      "finding": "The helper frames a missing customer as a data-completeness problem, but with the Customer row off the payment is attributed to whichever customer sits on the invoice the reference happened to match \u2014 and QuickBooks Online permits duplicate document numbers, while the scope operands include \"contains\", \"starts with\" and \"ends with\".",
+      "user_impact": "A payment from one customer can be booked against a different customer's Accounts Receivable, misstating both customers' balances and the A/R aging, and on a 40-client book this surfaces only when someone questions a statement.",
+      "suggested_fix": "Reword to state the consequence \u2014 \"the payment is attributed to the customer on the matched invoice, which may not be the customer who paid\" \u2014 and warn when the Customer row is off while the invoice-number comparison is anything looser than \"is equal to\".",
+      "evidence": {
+        "quote": "Required while Customer is off. Without it a matched payment has no customer to attribute to.",
+        "source": "Accounts Receivable sub-ledger integrity: a customer payment must be applied to the paying customer's account; QuickBooks Online does not enforce unique invoice DocNumber across customers."
+      }
+    }
+  ],
+  "gaps": [
+    "\"Apply as overpayment\" off with a payment larger than the invoice balance: the state map records only that the sync is cancelled, never what happens to cash that was received and settled, so whether the books end up short a receipt (and unreconcilable against the payout) is unverified.",
+    "Partly paid invoices: no candidate table in the state map contains an invoice with a partial balance, so the books effect when the payment is smaller than the remaining balance is unrecorded \u2014 the screen only describes the payment being bigger.",
+    "The fully-paid-invoice candidate claimed by the query disclosure was never exercised: the simulator snapshot only ever holds INV-1042 with 259.50 still owing, so no run demonstrates a zero-balance invoice winning the match.",
+    "\"Processed as usual\": no state in the map records the document Synder creates on the no-match path, so the resulting ledger entry could not be confirmed from the prototype."
+  ]
+}
