@@ -313,6 +313,31 @@
 - **Not yet done:** validator pass on `organization.html` — Ignat asked for it "later".
 - **Next:** Ignat picks a layout (or the April hybrid) → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
 
+### Per-transaction settings — copy consistency (2026-09-02)
+- **Status:** 🚧 v1 published, awaiting Ignat's review.
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/projects/pt-settings-copy/
+- **Report:** `reports/pt-settings-copy/index.html` (+ `preview-top.png`, `preview-full.png`)
+- **Live capture:** `.synder-state/pt-settings-2026-09-02/live/` — `capture.json`, `labels.json`, 27 screenshots
+- **Inventory:** `.synder-state/pt-settings-2026-09-02/inventory-qbo.csv` (94 settings from the April corpus; superseded for toggles by `labels.json`)
+- **Scope:** QBO only, Ignat's call. Per-transaction mode, Default settings, mzkt.by/Stripe demo org.
+- **The ask:** keep the logic of every description, remove the chaos — "If you enable / If enabled / If disabled on one page".
+- **Locked rules (Ignat approved 1–5, 6 answered):** no conditional preamble, present tense · "Synder does X" where Synder acts · one picker verb *Select*, no "Please," · no self-reference · dependencies become a stated requirement · "(recommended)" → grey `.chip-neutral`, never the coloured `.badge-new`.
+- **Result:** 21 toggles — 16 rewritten, 2 written from scratch (*Collect items for product mapping*, *Apply generic tax code*, both inferred and needing dev confirmation), 3 already correct, 1 left alone (*Process payouts*, Ignat's call).
+- **The argument to lead with:** three settings on the page ALREADY use the target shape (*Apply payments to unpaid Invoice transactions*, *Apply Taxes*, *Apply expenses to unpaid Bill transactions*). This standardises on what ships, it does not import a house style.
+- **10 distinct sentence shapes** found across 21 toggles, not the 3 Ignat named.
+- **Findings that are not copy edits:**
+  - **The Auto-sync → Auto-import dependency is invisible in the UI.** Verified live: Auto-import off + Auto-sync on produces no error, warning or blocked state. The clause inside the description is the only trace of it in the product.
+  - Two settings carry **two descriptions each** (*Archive Pending* on switch + days field; *Apply Taxes* short + long).
+  - The Doc Numbers prerequisite says "turn off … to disable this setting" — two verbs for one act, plus "Please," and `->` arrows.
+  - Turning on *Apply generic customer* reveals a picker whose help says "If the generic customer setting is “ON”…" — it explains the control the user just used.
+  - Link affordances inconsistent: `page>>`, `Learn more >>`, `Build a Smart Rule >>`.
+  - Plan-gate copy ("Upgrade to use" / "This feature is available on higher plans.") is an uncovered surface.
+  - 22 dropdowns carry help in 4+ shapes — **phase 2, not done**.
+- **Capture method:** every toggle flipped and flipped back individually + 7 ordered scenarios. **Settings save immediately on toggle** (`POST /v2/settings/…`) — 6 writes, all reverted, reload audit confirmed all 21 toggles back at baseline.
+- **Corrections to earlier claims this session:** toggling *does* persist (I had said it wouldn't); the "unlabelled Sales toggle" was a capture artifact and does not exist; *Sync zero invoices* and *Apply expenses to unpaid Bill transactions* were missing from the April corpus; the *Cancel sync* dependency I had drafted is unverified and was removed.
+- **Access note:** the CF Access **service token in `.synder-creds` is rejected** (`service_token_status: false`). Session was re-established with an emailed login code; `.synder-state/storage-state.json` is fresh as of 2026-09-02. A new service token would make this unattended again.
+- **Next:** Ignat reviews → publish to the hub if he wants a URL → phase 2 dropdowns → gate copy → checker script so it can't drift back.
+
 ### Transaction Reconciliation — One-Click First Run (2026-08-20)
 - **Status:** ✅ v3 live (2026-08-27), awaiting Ignat feedback
 - **URL:** https://dashasyn.github.io/synder-prototypes/projects/recon-oneclick/
@@ -730,10 +755,10 @@
   down from 9.
 
 ### PIMS · ELA-Meldungsgenerator — AI announcement copy (2026-09-01)
-- **Status:** 🚧 v3 live (side sheet), awaiting feedback
+- **Status:** 🚧 v5 live (side sheet, four sources, empathetic AI path), awaiting feedback
 - **Client:** ETC Solutions GmbH — PIMS for BVG. Audience: **Leitstelle dispatchers**.
 - **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-message-generator/ — `projects/etc-message-generator/index.html`
-- **Verification:** `projects/etc-message-generator/verify.js` — 83 Chromium checks, all passing
+- **Verification:** `projects/etc-message-generator/verify.js` — 128 Chromium checks, all passing
 - **Brief:** station + problem selection out of scope. DAISY display text is predefined and **short**; the spoken ELA text is generated in DE + EN with a tone of voice, re-generated freely, hand-editable, then rendered to audio.
 - **⚠️ Process lesson (2026-09-01):** v1 was built from the one-paragraph brief with the critique delivered *afterwards*, and when Ignat asked for fewer inputs I answered with a brand-new three-card layout. Both were wrong — see the AGENTS.md rule "Ask questions BEFORE building a big prototype". v2 reproduces **his** panel structure exactly.
 - **Structure = Ignat's screenshot, 1:1:** title + DE/EN switcher · meta row (Mitteilungen · Typ · Linie · Grund · Stationen) · **Daisy** (read-only template, 160 counter, Intervall) · **ELA** (Quelle · Prompt · Zusatz · Tonfall + GENERIEREN) · **Meldungen** (ELA DE | ELA EN + Intervall, one AUDIO ERZEUGEN / ANHÖREN pair) · **Stationen** (Geplant only) · footer.
@@ -761,6 +786,18 @@
   - Button renamed **GENERATE ELA** (`ELA GENERIEREN` in the German UI), kept outlined as in the screenshot.
   - **Three real variants per tone per notice type** (18 DE + 18 EN texts). Every click cycles to the next wording and the state line shows `Variante 2/3`, so regeneration behaves like the real thing instead of returning the same string.
   - **History button and drawer removed**; per-language version tracking dropped with it.
+
+- **v4 — validator round 1 fixes (2026-09-01, published 2026-09-03):** sticky `Abbrechen`/`Speichern` (only the sheet body scrolls) · library and recording pickers keep the chosen entry and the state line names it · `GENERATE ELA` disables and shows progress instead of staying clickable · the pre-save line lists **every** warning worst-first (the DAISY length notice used to hide "the audio does not match the text") · editing EN no longer clears the DE/EN divergence warning · the save toast names what it saved under · waveform dimmed, non-interactive, with a playback position · inline retry on generation and audio failure. Findings and provenance: `projects/etc-message-generator/findings-log.json`, round artifacts in `round1/`. **These sat uncommitted in the working tree for two days** — on 09-01 I reported them as "applied" when they were applied *locally*; the live URL still served v3. Publish before reporting.
+- **v5 changes (Ignat, 2026-09-03 20:02):**
+  - **`Quelle` now has four points:** Standard · Bibliothek (Library) · Aufnahme (Record) · **Empathisch (Empathetic)**. Empathetic is the AI path — the only source with a prompt and the only one where `ELA GENERIEREN` is enabled.
+  - **Standard = the predefined system message**, loaded into DE + EN on open and whenever Standard is chosen; state line reads `Vordefinierter Systemtext`. An *untouched* system text follows the Erst-/Hauptmeldung switch instead of going `Ereignis geändert`; anything generated, picked or hand-edited still goes stale, as before.
+  - **Tone-of-voice selector removed.** Variants are three per notice type (was three per tone per type); the state line reads `Generiert · empathisch · Variante 2/3`.
+  - **`Zusätzliche Angaben` (Additional details) is a separate field again**, and the **prompt is read-only** — assembled from line, stations and reason, so no bus route and no time can be invented. Known phrases land bilingually, free text lands in German only and the EN state line says so.
+  - **`STANDARD` / `DEFAULT` reset button removed** — with the prompt read-only there is nothing to reset.
+  - **All three ELA buttons in one row** under the message boxes: `ELA GENERIEREN` · `AUDIO ERZEUGEN` · `ANHÖREN`, in the order they are used. The generation progress bar moved with the button.
+  - **Playback is simulated** — `speechSynthesis` is gone. Ignat, 09-01: "we don't need actual audio generation. It is just a prototype." The player only models the passage of time through one combined DE + EN file; `endPlay()` is exposed so checks reach the end state without sitting out a 20-second announcement. This also cut the suite from 10+ minutes to about 90 seconds.
+  - The audio key no longer includes `Quelle` — switching source without touching a word must not mark a current file as out of date.
+- **Verification:** `verify.js`, **128 Chromium checks, all passing.** One test bug found and fixed on the way: the playback-duration parse matched `Audio erzeugt 21:47` (the clock) instead of the file length, so the run slept for 21 minutes. Playwright default timeout is now 15 s, so a control that never becomes actionable fails instead of hanging.
 
 - **Still open with the client:** why DAISY is predefined at all (Ignat doesn't know — it's the customer's request that only ELA be playful; if it's habit rather than approval/legal, generating both from the same facts removes the drift and the need for a fact check), and whether the proper-noun glossary lives in Konfiguration.
 

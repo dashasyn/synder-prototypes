@@ -14,7 +14,7 @@
      Ignat's screenshot — the Ereignis screen behind it is
      deliberately not drawn.
      Sections follow the screenshot: meta row › Daisy › ELA
-     (Source · Prompt · Tonfall) › Meldungen (DE | EN + audio) ›
+     (Source · Prompt · Additional details) › Meldungen (DE | EN + audio) ›
      Stations (Planned only).
      ════════════════════════════════════════════════════════════ */
   :root {
@@ -48,8 +48,13 @@
     position: fixed; top: 0; right: 0; bottom: var(--pbar);
     width: 66vw; min-width: 660px; max-width: 1000px;
     background: #fff; box-shadow: var(--elev8);
-    overflow-y: auto; padding: 22px 28px 40px;
+    display: flex; flex-direction: column; overflow: hidden;
   }
+  /* Only the body scrolls — Abbrechen/Speichern and the pre-save warnings stay
+     on screen, so the decision and its consequences are never scrolled apart. */
+  .sheet-body { flex: 1; overflow-y: auto; padding: 22px 28px 24px; }
+  .sheet-foot { flex-shrink: 0; border-top: 1px solid var(--divider); background: #fff;
+                padding: 12px 28px 14px; box-shadow: 0 -2px 6px rgba(0,0,0,.06); }
   @media (max-width: 700px) { .sheet { width: 100%; min-width: 0; } }
 
   .sheet-h { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 13px; }
@@ -67,7 +72,7 @@
   .lang-sw button { font-family: inherit; font-size: 12px; font-weight: 500; letter-spacing: .06em; padding: 6px 11px; background: #fff; border: none; cursor: pointer; color: var(--ink-2); }
   .lang-sw button + button { border-left: 1px solid var(--divider); }
   .lang-sw button.on { background: rgba(25,118,210,.12); color: var(--primary); }
-  .x-btn { width: 34px; height: 34px; border-radius: 50%; border: none; background: none; color: var(--ink-2); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  .x-btn { font-family: inherit; width: 34px; height: 34px; border-radius: 50%; border: none; background: none; color: var(--ink-2); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
   .x-btn:hover { background: rgba(0,0,0,.06); }
 
   /* ── buttons ── */
@@ -93,6 +98,13 @@
   .tf input:focus, .tf select:focus, .tf textarea:focus { outline: none; }
   .tf select { appearance: none; -webkit-appearance: none; padding-right: 22px; cursor: pointer; }
   .tf.sel::after { content: ''; position: absolute; right: 12px; bottom: 13px; border-left: 4.5px solid transparent; border-right: 4.5px solid transparent; border-top: 5px solid var(--ink-2); pointer-events: none; }
+  /* read-only field: the core prompt is assembled from the event, never typed.
+     Material's read-only treatment — dotted underline, no focus ring, no hover. */
+  .tf.ro { border-bottom: 1px dotted rgba(0,0,0,.42); }
+  .tf.ro:hover { background: var(--fill); }
+  .tf.ro:focus-within { border-bottom: 1px dotted rgba(0,0,0,.42); padding-bottom: 5px; }
+  .tf.ro:focus-within > label { color: var(--ink-2); }
+  .tf.ro textarea { color: var(--ink-2); cursor: default; }
   .counter { font-size: 12px; color: var(--ink-2); padding: 5px 0 0 2px; }
   .counter.over { color: var(--err); font-weight: 500; }
   .hint { font-size: 12px; color: var(--ink-2); padding: 5px 0 0 2px; line-height: 1.5; }
@@ -123,15 +135,15 @@
   .state .sep { color: var(--ink-3); }
 
   .audio-acts { display: flex; align-items: center; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
-  .wave { display: flex; align-items: flex-end; gap: 2px; height: 18px; width: 180px; }
+  .wave { display: flex; align-items: flex-end; gap: 2px; height: 18px; width: 180px; cursor: default; pointer-events: none; opacity: .75; }
   .wave i { flex: 1; background: rgba(25,118,210,.3); border-radius: 1px; }
   .wave.playing i { background: var(--primary); }
   .bar { width: 180px; height: 4px; border-radius: 2px; background: rgba(0,0,0,.1); overflow: hidden; }
   .bar > i { display: block; height: 100%; width: 0; background: var(--primary); }
 
-  .divider { height: 1px; background: var(--divider); margin-top: 26px; }
-  .foot { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
-  .foot .right { margin-left: auto; display: flex; gap: 8px; }
+  .foot { display: flex; align-items: flex-start; gap: 16px; }
+  .foot .warns { flex: 1; min-width: 0; }
+  .foot .right { display: flex; gap: 8px; flex-shrink: 0; }
 
   /* ── presenter bar ── */
   .presenter { position: fixed; left: 0; right: 0; bottom: 0; height: var(--pbar); background: #263238; display: flex; align-items: center; gap: 8px; padding: 0 12px; z-index: 1700; }
@@ -150,6 +162,8 @@
 <div class="scrim"></div>
 
 <div class="sheet" id="sheet">
+
+  <div class="sheet-body" id="sheetBody">
 
   <div class="sheet-h">
     <div class="sheet-t" id="tTitle">Meldung bearbeiten</div>
@@ -187,36 +201,24 @@
 
   <div class="tf sel w-source">
     <label id="tSource">Source</label>
-    <select id="source" onchange="onSource(this.value)">
-      <option value="standard">Standard</option>
-      <option value="library">Library</option>
-      <option value="voice">Voice recording</option>
-    </select>
+    <select id="source" onchange="onSource(this.value)"></select>
   </div>
   <div class="hint" id="sourceHint"></div>
 
-  <div id="blkStandard">
-    <!-- one editable prompt field + reset-to-default switch -->
-    <div class="row" style="margin-top:16px;align-items:flex-start">
-      <div class="grow">
-        <div class="tf">
-          <label id="tPrompt">Prompt</label>
-          <textarea id="prompt" rows="2" oninput="onPrompt(this.value)"></textarea>
-        </div>
-      </div>
-      <button class="mbtn mbtn-outlined mbtn-dense" id="btnDefault" style="margin-top:14px"
-              onclick="resetPrompt()">STANDARD</button>
+  <div id="blkEmpathetic" style="display:none">
+    <!-- the core prompt is assembled from the event and cannot be edited;
+         the dispatcher only adds the detail the event does not carry -->
+    <div class="tf ro" style="margin-top:16px">
+      <label id="tPrompt">Prompt</label>
+      <textarea id="prompt" rows="2" readonly tabindex="-1"></textarea>
     </div>
     <div class="hint" id="tPromptHint"></div>
 
-    <div class="row" style="margin-top:16px;align-items:flex-end">
-      <div class="tf sel grow">
-        <label id="tTonfall">Tonfall</label>
-        <select id="tonfall" onchange="onTonfall(this.value)"></select>
-      </div>
-      <button class="mbtn mbtn-outlined" id="btnGen" onclick="generate()">GENERATE ELA</button>
+    <div class="tf" style="margin-top:16px">
+      <label id="tZusatz">Additional details</label>
+      <textarea id="zusatz" rows="1" oninput="onZusatz(this.value)"></textarea>
     </div>
-    <div class="hint" id="tTonfallHint"></div>
+    <div class="hint" id="tZusatzHint"></div>
   </div>
 
   <div id="blkLibrary" style="display:none;margin-top:16px">
@@ -227,7 +229,7 @@
     <div class="hint" id="tLibraryHint"></div>
   </div>
 
-  <div id="blkVoice" style="display:none;margin-top:16px">
+  <div id="blkRecord" style="display:none;margin-top:16px">
     <div class="row" style="align-items:flex-end">
       <div class="tf sel grow">
         <label id="tRec">Aufnahme</label>
@@ -293,12 +295,15 @@
     </div>
   </div>
 
-  <div class="divider"></div>
-  <div class="foot">
-    <div class="state" id="state-save"></div>
-    <div class="right">
-      <button class="mbtn mbtn-text" id="btnCancel" onclick="toast(t('closeStub'))">ABBRECHEN</button>
-      <button class="mbtn mbtn-contained" id="btnSave" onclick="save()">SPEICHERN</button>
+  </div><!-- /sheet-body -->
+
+  <div class="sheet-foot">
+    <div class="foot">
+      <div class="warns" id="saveWarns"></div>
+      <div class="right">
+        <button class="mbtn mbtn-text" id="btnCancel" onclick="toast(t('closeStub'))">ABBRECHEN</button>
+        <button class="mbtn mbtn-contained" id="btnSave" onclick="save()">SPEICHERN</button>
+      </div>
     </div>
   </div>
 
@@ -324,7 +329,7 @@ const I18N = {
   interval:   { de: 'Intervall',               en: 'Interval' },
   source:     { de: 'Quelle',                  en: 'Source' },
   prompt:     { de: 'Prompt',                  en: 'Prompt' },
-  tonfall:    { de: 'Tonfall',                 en: 'Tone of voice' },
+  zusatz:     { de: 'Zusätzliche Angaben',     en: 'Additional details' },
   meldungen:  { de: 'Meldungen',               en: 'Messages' },
   stations:   { de: 'Stationen',               en: 'Stations' },
   planned:    { de: 'Geplant',                 en: 'Planned' },
@@ -341,7 +346,6 @@ const I18N = {
   haupt:      { de: 'Hauptmeldung',            en: 'Main notice' },
   ortspunkt:  { de: 'Ortspunkt',               en: 'Location point' },
   genEla:     { de: 'ELA GENERIEREN',          en: 'GENERATE ELA' },
-  standard:   { de: 'STANDARD',                en: 'DEFAULT' },
   genAudio:   { de: 'AUDIO ERZEUGEN',          en: 'GENERATE AUDIO' },
   listen:     { de: 'ANHÖREN',                 en: 'LISTEN GENERATED' },
   stop:       { de: 'STOP',                    en: 'STOP' },
@@ -349,15 +353,17 @@ const I18N = {
   cancel:     { de: 'ABBRECHEN',               en: 'CANCEL' },
   save:       { de: 'SPEICHERN',               en: 'SAVE' },
 
-  promptHint: { de: 'Standardtext wird aus dem Ereignis zusammengesetzt. Frei bearbeitbar — z. B. um „Viel Spaß beim Konzert!“ anzuhängen. STANDARD setzt ihn zurück.',
-                en: 'The default is assembled from the event. Freely editable — e.g. to append "Enjoy the concert!". DEFAULT restores it.' },
-  tonfallHint:{ de: 'Ein Feld, das Wortwahl und Stimme zusammen bestimmt. Standard ist Neutral. Jeder Klick auf ELA GENERIEREN liefert eine andere Formulierung.',
-                en: 'One field that sets wording and voice together. The default is Neutral. Each click on GENERATE ELA returns a different wording.' },
-  srcStd:     { de: 'Text wird aus dem Prompt generiert und ist danach frei bearbeitbar.',
-                en: 'Text is generated from the prompt and is freely editable afterwards.' },
+  promptHint: { de: 'Aus dem Ereignis zusammengesetzt: Linie, Stationen, Grund. Nicht bearbeitbar — so kann keine Buslinie und keine Uhrzeit erfunden werden.',
+                en: 'Assembled from the event: line, stations, reason. Not editable — so no bus route and no time can be invented.' },
+  zusatzHint: { de: 'Was das Ereignis nicht hergibt, z. B. „Viel Spaß beim Konzert!“. Bekannte Sätze werden zweisprachig übernommen, freier Text nur auf Deutsch.',
+                en: 'Anything the event does not carry, e.g. "Enjoy the concert!". Known sentences are applied in both languages, free text in German only.' },
+  srcStd:     { de: 'Vordefinierter Systemtext zum Ereignis. Keine Generierung — bei Bedarf von Hand anpassbar.',
+                en: 'Predefined system message for this event. No generation — editable by hand if needed.' },
   srcLib:     { de: 'Bereits freigegebene Meldung aus der Bibliothek übernehmen — keine Generierung.',
                 en: 'Reuse an already approved message from the library — no generation.' },
-  srcVoice:   { de: 'Menschlich eingesprochene Datei. Kein generierter Text, keine Sprachsynthese.',
+  srcEmp:     { de: 'Empathisch formulierte Meldung aus Prompt und Zusatzangaben. ELA GENERIEREN liefert bei jedem Klick eine andere Formulierung.',
+                en: 'An empathetically worded message from the prompt and the additional details. Each click on GENERATE ELA returns a different wording.' },
+  srcRec:     { de: 'Menschlich eingesprochene Datei. Kein generierter Text, keine Sprachsynthese.',
                 en: 'Human-recorded file. No generated text, no speech synthesis.' },
   libHint:    { de: 'Text und Audio kommen aus der Bibliothek.',
                 en: 'Text and audio come from the library.' },
@@ -367,7 +373,8 @@ const I18N = {
   closeStub:  { de: 'Schließen ist im Prototyp nicht verdrahtet.', en: 'Closing is not wired up in the prototype.' },
 
   stNone:     { de: 'Kein Text',                            en: 'No text' },
-  stGen:      { de: 'Generiert',                            en: 'Generated' },
+  stStd:      { de: 'Vordefinierter Systemtext',            en: 'Predefined system message' },
+  stGen:      { de: 'Generiert · empathisch',               en: 'Generated · empathetic' },
   stVariant:  { de: 'Variante',                             en: 'Variant' },
   stEdited:   { de: 'Manuell bearbeitet',                   en: 'Edited by hand' },
   stLib:      { de: 'Aus Bibliothek',                       en: 'From library' },
@@ -376,8 +383,8 @@ const I18N = {
                 en: 'Event changed — text no longer matches, please generate again' },
   stTransOld: { de: 'Übersetzung nicht aktuell — DE wurde danach geändert',
                 en: 'Translation out of date — DE was changed afterwards' },
-  stZusatzDe: { de: 'Prompt-Zusatz nur auf Deutsch übernommen — EN bitte prüfen',
-                en: 'Added prompt text applied to German only — please check EN' },
+  stZusatzDe: { de: 'Zusätzliche Angaben nur auf Deutsch übernommen — EN bitte prüfen',
+                en: 'Additional details applied to German only — please check EN' },
   stFail:     { de: 'Generierung fehlgeschlagen — vorherige Fassung unverändert',
                 en: 'Generation failed — previous version unchanged' },
   stLoading:  { de: 'Wird generiert …',                     en: 'Generating …' },
@@ -390,6 +397,18 @@ const I18N = {
   aOneFile:   { de: 'eine Datei, DE + EN',                  en: 'one file, DE + EN' },
   aListened:  { de: 'angehört',                             en: 'listened to' },
   saveOk:     { de: 'Bereit zum Speichern.',                en: 'Ready to save.' },
+  saveEvent:  { de: 'Ereignis geändert — der Text beschreibt nicht mehr dieses Ereignis.',
+                en: 'Event changed — the text no longer describes this event.' },
+  saveEmpty:  { de: 'Kein ELA-Text — es wird nichts gesprochen.',
+                en: 'No ELA text — nothing will be spoken.' },
+  savedWarn:  { de: 'Gespeichert — mit Warnung:',              en: 'Saved — with warning:' },
+  savedClean: { de: 'Gespeichert — DE + EN mit aktuellem Audio',en: 'Saved — DE + EN with current audio' },
+  retry:      { de: 'Wiederholen',                            en: 'Retry' },
+  stPairOff:  { de: 'DE/EN nicht abgeglichen — EN wurde von Hand geändert, nicht neu übersetzt',
+                en: 'DE/EN not reconciled — EN was hand-edited, not re-translated' },
+  genBusy:    { de: 'GENERIERT …',                            en: 'GENERATING …' },
+  playing:    { de: 'läuft',                                  en: 'playing' },
+  fromLib:    { de: 'Aus Bibliothek',                         en: 'From library' },
   saveNoAudio:{ de: 'Noch kein Audio erzeugt — die Meldung wird gespeichert, aber nicht gesprochen.',
                 en: 'No audio generated yet — the message will be saved but not spoken.' },
   saveStale:  { de: 'Audio passt nicht zum Text. Bitte neu erzeugen, sonst geht die alte Fassung auf die Lautsprecher.',
@@ -408,74 +427,52 @@ const I18N = {
 const t = k => (I18N[k] || {})[S.ui] || k;
 
 /* ════════════════════════════════════════════════════════════
-   Content. Three real variants per tone and per notice type, so
-   every click on GENERATE ELA returns a different wording.
+   Content.
+   `standard` is the predefined system message — one fixed wording
+   per notice type, nothing generated.
+   `empathetic` holds three real variants per notice type, so every
+   click on GENERATE ELA returns a different wording.
    EN is a real translation of DE; station and line names pass
    through verbatim — "Stadtmitte" never becomes "the city center".
    ════════════════════════════════════════════════════════════ */
-const TONES = [
-  { id: 'neutral',    de: 'Neutral',                    en: 'Neutral' },
-  { id: 'freundlich', de: 'Freundlich',                 en: 'Friendly' },
-  { id: 'berliner',   de: 'Berlinerin (unkompliziert)', en: 'Berlin (easy-going)' }
+const SOURCES = [
+  { id: 'standard',   de: 'Standard',   en: 'Standard'   },
+  { id: 'library',    de: 'Bibliothek', en: 'Library'    },
+  { id: 'record',     de: 'Aufnahme',   en: 'Record'     },
+  { id: 'empathetic', de: 'Empathisch', en: 'Empathetic' }
 ];
 
 const TEXTS = {
   erst: {
-    neutral: [
+    standard:
       { de: 'U2: Kein Halt Stadtmitte aufgrund einer Störung. Weitere Informationen folgen in Kürze.',
         en: 'U2: No stop at Stadtmitte due to a disruption. Further information will follow shortly.' },
-      { de: 'Information für unsere Fahrgäste: Die Linie U2 hält derzeit nicht in Stadtmitte. Weitere Informationen folgen.',
-        en: 'Information for our passengers: line U2 is currently not stopping at Stadtmitte. Further information will follow.' },
-      { de: 'U2: In Stadtmitte entfällt der Halt wegen einer Störung. Wir informieren Sie, sobald Näheres bekannt ist.',
-        en: 'U2: The stop at Stadtmitte is cancelled due to a disruption. We will inform you as soon as we know more.' }
-    ],
-    freundlich: [
+    empathetic: [
       { de: 'Liebe Fahrgäste, die U2 hält derzeit nicht in Stadtmitte. Wir informieren Sie, sobald wir mehr wissen.',
         en: 'Dear passengers, the U2 is currently not stopping at Stadtmitte. We will inform you as soon as we know more.' },
       { de: 'Liebe Fahrgäste, leider entfällt der Halt in Stadtmitte. Bitte haben Sie einen Moment Geduld — wir melden uns gleich mit Details.',
         en: 'Dear passengers, unfortunately the stop at Stadtmitte is cancelled. Please bear with us — we will be back shortly with details.' },
       { de: 'Liebe Fahrgäste, in Stadtmitte können wir gerade nicht halten. Sobald wir mehr wissen, sagen wir es Ihnen sofort.',
         en: 'Dear passengers, we cannot stop at Stadtmitte right now. As soon as we know more, we will tell you immediately.' }
-    ],
-    berliner: [
-      { de: 'Kurze Info: Die U2 hält gerade nicht in Stadtmitte. Wir melden uns, sobald wir mehr wissen.',
-        en: 'Quick update: the U2 is not stopping at Stadtmitte right now. We will let you know as soon as we know more.' },
-      { de: 'Kleine Störung: In Stadtmitte geht gerade kein Halt. Mehr sagen wir Ihnen, sobald wir es selbst wissen.',
-        en: 'Small disruption: no stop at Stadtmitte at the moment. We will tell you more as soon as we know ourselves.' },
-      { de: 'Moment noch: Stadtmitte fällt gerade als Halt weg. Details kommen, sobald wir sie haben.',
-        en: 'One moment: Stadtmitte is currently dropped as a stop. Details will follow as soon as we have them.' }
     ]
   },
   haupt: {
-    neutral: [
+    standard:
       { de: 'U2: Kein Halt Stadtmitte aufgrund eines Notarzteinsatzes. Bitte nutzen Sie die Buslinie M41. Die Sperrung dauert voraussichtlich bis 23:30 Uhr.',
         en: 'U2: No stop at Stadtmitte due to emergency medical services. Please use bus route M41. The closure is expected to last until 23:30.' },
-      { de: 'Information für unsere Fahrgäste: Wegen eines Notarzteinsatzes entfällt der Halt in Stadtmitte voraussichtlich bis 23:30 Uhr. Als Ersatz steht die Buslinie M41 bereit.',
-        en: 'Information for our passengers: due to emergency medical services the stop at Stadtmitte is cancelled, expected until 23:30. Bus route M41 is available as a replacement.' },
-      { de: 'U2: In Stadtmitte hält die Bahn wegen eines Notarzteinsatzes nicht. Nutzen Sie bitte die Buslinie M41 — voraussichtlich bis 23:30 Uhr.',
-        en: 'U2: Trains are not stopping at Stadtmitte due to emergency medical services. Please use bus route M41 — expected until 23:30.' }
-    ],
-    freundlich: [
+    empathetic: [
       { de: 'Liebe Fahrgäste, wegen eines Notarzteinsatzes hält die U2 nicht in Stadtmitte. Bitte nutzen Sie die Buslinie M41, voraussichtlich bis 23:30 Uhr. Vielen Dank für Ihr Verständnis.',
         en: 'Dear passengers, due to emergency medical services the U2 is not stopping at Stadtmitte. Please use bus route M41, expected until 23:30. Thank you for your understanding.' },
       { de: 'Liebe Fahrgäste, in Stadtmitte müssen wir wegen eines Notarzteinsatzes den Halt aussetzen. Die Buslinie M41 bringt Sie weiter — voraussichtlich bis 23:30 Uhr. Danke für Ihre Geduld.',
         en: 'Dear passengers, we have to suspend the stop at Stadtmitte because of emergency medical services. Bus route M41 will take you onward — expected until 23:30. Thank you for your patience.' },
       { de: 'Liebe Fahrgäste, ein Notarzteinsatz verhindert derzeit den Halt in Stadtmitte. Am besten steigen Sie auf die Buslinie M41 um; wir rechnen mit einer Sperrung bis 23:30 Uhr.',
         en: 'Dear passengers, emergency medical services currently prevent the stop at Stadtmitte. It is best to change to bus route M41; we expect the closure to last until 23:30.' }
-    ],
-    berliner: [
-      { de: 'Kurze Info: Die U2 hält wegen eines Notarzteinsatzes nicht in Stadtmitte. Nehmt bitte die Buslinie M41, voraussichtlich bis 23:30 Uhr.',
-        en: 'Quick update: the U2 is not stopping at Stadtmitte because of emergency medical services. Please take bus route M41, expected until 23:30.' },
-      { de: 'Kurz gesagt: Stadtmitte fällt wegen eines Notarzteinsatzes weg. Die M41 fährt für uns weiter — bis etwa 23:30 Uhr.',
-        en: 'In short: Stadtmitte is out because of emergency medical services. The M41 runs for us instead — until about 23:30.' },
-      { de: 'Info vom Bahnsteig: In Stadtmitte ist wegen eines Notarzteinsatzes gerade kein Halt. Buslinie M41 nehmen, voraussichtlich bis 23:30 Uhr.',
-        en: 'Update from the platform: no stop at Stadtmitte at the moment due to emergency medical services. Take bus route M41, expected until 23:30.' }
     ]
   }
 };
 
-/* Phrases stored bilingually. Anything else appended to the prompt
-   lands in German only, and the EN state line says so. */
+/* Phrases stored bilingually. Anything else typed into Additional
+   details lands in German only, and the EN state line says so. */
 const KNOWN = [
   { de: 'Viel Spaß beim Konzert!',                  en: 'Enjoy the concert!' },
   { de: 'Bitte vorsichtig — draußen ist es glatt.', en: 'Please take care — it is slippery outside.' },
@@ -512,18 +509,22 @@ const S = {
   ui: 'de',
   typ: 'erst',
   source: 'standard',
-  tonfall: 'neutral',
   prompt: '',
-  promptCustom: false,
+  zusatz: '',
   daisy: '',
   daisyCustom: false,
   variant: -1,
+  libId: '',
+  recId: '',
+  srcName: '',
+  pairOff: false,
   zusatzTranslated: true,
   failMode: false,
-  msg: { de: { text: '', state: 'none', tone: null, variant: null },
-         en: { text: '', state: 'none', tone: null, variant: null } },
+  msg: { de: { text: '', state: 'none', variant: null },
+         en: { text: '', state: 'none', variant: null } },
   enOutdated: false,
   audio: { state: 'none', forKey: null, dur: 0, listened: false, at: null, pct: 0 },
+  genPct: 0,
   playing: false
 };
 
@@ -532,7 +533,9 @@ const stamp = () => { const d = new Date();
 const estDur = txt => txt ? Math.round((txt.trim().split(/\s+/).filter(Boolean).length / 2.4 + 0.8) * 10) / 10 : 0;
 const fmtDur = s => s <= 0 ? '0:00' : Math.floor(s / 60) + ':' + String(Math.round(s % 60)).padStart(2, '0');
 const esc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-const audioKey = () => [S.msg.de.text, S.msg.en.text, S.tonfall, S.source].join(' ');
+/* The audio belongs to the texts, and to nothing else — switching Quelle
+   without touching a word must not mark a current file as out of date. */
+const audioKey = () => [S.msg.de.text, S.msg.en.text].join(' ');
 
 /* ── defaults derived from the event ── */
 function defaultDaisy() {
@@ -555,27 +558,53 @@ function defaultPrompt() {
   return p.join('. ') + '.';
 }
 
+/* The predefined system message — no generation, no variants. */
+function loadStandard() {
+  const base = TEXTS[S.typ].standard;
+  ['de','en'].forEach(l => {
+    S.msg[l].text = base[l];
+    S.msg[l].state = 'standard';
+    S.msg[l].variant = null;
+    /* Write the box directly: render() skips a focused textarea on purpose. */
+    const ta = document.getElementById('ta-' + l);
+    if (ta) ta.value = base[l];
+  });
+  S.variant = -1; S.srcName = '';
+  S.enOutdated = false; S.pairOff = false; S.zusatzTranslated = true;
+  if (S.audio.state === 'ready') S.audio.state = 'stale';
+}
+
 /* ════════════════════════════════════════════════════════════
-   Generate — each click returns the next of three variants
+   Generate — empathetic only; each click returns the next of
+   three variants
    ════════════════════════════════════════════════════════════ */
-let genTimer = null;
+let genTimer = null, genPulse = null;
 function generate() {
+  if (S.source !== 'empathetic') return;
   if (S.msg.de.state === 'edited' || S.msg.en.state === 'edited') {
     if (!confirm(t('regenWarn'))) return;
   }
   ['de','en'].forEach(l => { S.msg[l].state = 'loading'; });
   render();
+  S.genPct = 0;
+  clearInterval(genPulse);
+  genPulse = setInterval(() => {
+    S.genPct = Math.min(96, S.genPct + 11);
+    const f = document.getElementById('genBarFill');
+    if (f) f.style.width = S.genPct + '%';
+  }, 90);
   clearTimeout(genTimer);
   genTimer = setTimeout(() => {
+    clearInterval(genPulse);
+    S.genPct = 0;
     if (S.failMode) { ['de','en'].forEach(l => { S.msg[l].state = 'error'; }); render(); return; }
 
-    const set = TEXTS[S.typ][S.tonfall];
+    const set = TEXTS[S.typ].empathetic;
     S.variant = (S.variant + 1) % set.length;
     const base = set[S.variant];
 
-    // anything the dispatcher appended to the default prompt
-    const def = defaultPrompt();
-    const extra = S.prompt.startsWith(def) ? S.prompt.slice(def.length).trim() : '';
+    // whatever the dispatcher typed into Additional details
+    const extra = S.zusatz.trim();
     const known = extra ? KNOWN.find(k => k.de === extra || k.en === extra) : null;
     S.zusatzTranslated = !extra || !!known;
 
@@ -586,9 +615,9 @@ function generate() {
         if (known) txt += ' ' + known[l];
         else if (l === 'de') txt += ' ' + extra;
       }
-      m.text = txt; m.state = 'generated'; m.tone = S.tonfall; m.variant = S.variant + 1;
+      m.text = txt; m.state = 'generated'; m.variant = S.variant + 1;
     });
-    S.enOutdated = false;
+    S.enOutdated = false; S.pairOff = false;
     if (S.audio.state === 'ready') S.audio.state = 'stale';
     render();
   }, 900);
@@ -600,7 +629,10 @@ function onEdit(lang, val) {
   m.text = val;
   m.state = val ? 'edited' : 'none';
   if (lang === 'de') S.enOutdated = !!S.msg.en.text;
-  if (lang === 'en') S.enOutdated = false;
+  /* Editing EN clears "translation out of date" but NOT the fact that the pair
+     was never reconciled — otherwise one keystroke makes a mismatched DE/EN
+     pair look fully in order. */
+  if (lang === 'en' && S.enOutdated) { S.enOutdated = false; S.pairOff = true; }
   autoGrow();
   renderStates(); renderAudio(); renderSave();
 }
@@ -615,36 +647,42 @@ function onDaisy(val) {
   renderSave();
 }
 
-function onPrompt(val) {
-  S.prompt = val;
-  S.promptCustom = val !== defaultPrompt();
-  document.getElementById('btnDefault').disabled = !S.promptCustom;
-  growOne(document.getElementById('prompt'));
-}
-function resetPrompt() {
-  S.prompt = defaultPrompt(); S.promptCustom = false;
-  render();
+function onZusatz(val) {
+  S.zusatz = val;
+  growOne(document.getElementById('zusatz'));
 }
 
 function onSource(v) {
+  const prev = S.source;
   S.source = v;
-  if (v === 'standard') { document.getElementById('library').value = ''; document.getElementById('rec').value = ''; }
+  if (v !== 'library') { S.libId = ''; document.getElementById('library').value = ''; }
+  if (v !== 'record')  { S.recId = ''; document.getElementById('rec').value = ''; }
+  /* Standard means "the predefined system message", so choosing it loads that
+     message. The other three leave the current text alone — the state line
+     keeps saying where it came from until something replaces it. */
+  if (v === 'standard' && prev !== 'standard') loadStandard();
   render();
 }
-function onTonfall(v) { S.tonfall = v; S.variant = -1; }
+
 function onStation() {
-  if (!S.promptCustom) S.prompt = defaultPrompt();
+  S.prompt = defaultPrompt();
   render();
 }
 
 function onLibrary(id) {
   const item = LIBRARY.find(x => x.id === id);
-  if (!item || !item.id) { ['de','en'].forEach(l => { S.msg[l].text = ''; S.msg[l].state = 'none'; }); render(); return; }
+  S.libId = id || '';
+  if (!item || !item.id) { S.srcName = '';
+    ['de','en'].forEach(l => { S.msg[l].text = ''; S.msg[l].state = 'none'; }); render(); return; }
+  S.srcName = item[S.ui];
   ['de','en'].forEach(l => {
     S.msg[l].text = l === 'de' ? item.tde : item.ten;
-    S.msg[l].state = 'library'; S.msg[l].tone = null; S.msg[l].variant = null;
+    S.msg[l].state = 'library'; S.msg[l].variant = null;
+    /* Write the box directly: render() skips a focused textarea on purpose, which
+       would leave the visible text different from the text that gets spoken. */
+    document.getElementById('ta-' + l).value = S.msg[l].text;
   });
-  S.enOutdated = false; S.zusatzTranslated = true;
+  S.enOutdated = false; S.pairOff = false; S.zusatzTranslated = true;
   S.audio = { state: 'ready', forKey: null, dur: estDur(item.tde) + estDur(item.ten) + 0.8,
               listened: false, at: stamp(), pct: 100 };
   S.audio.forKey = audioKey();
@@ -653,13 +691,17 @@ function onLibrary(id) {
 
 function onRec(id) {
   const r = RECS.find(x => x.id === id);
-  if (!r || !r.id) { ['de','en'].forEach(l => { S.msg[l].text = ''; S.msg[l].state = 'none'; });
+  S.recId = id || '';
+  if (!r || !r.id) { S.srcName = '';
+                     ['de','en'].forEach(l => { S.msg[l].text = ''; S.msg[l].state = 'none'; });
                      S.audio.state = 'none'; render(); return; }
+  S.srcName = r[S.ui].split(' · ')[0];
   ['de','en'].forEach(l => {
     S.msg[l].text = l === 'de' ? r.tde : r.ten;
-    S.msg[l].state = 'rec'; S.msg[l].tone = null; S.msg[l].variant = null;
+    S.msg[l].state = 'rec'; S.msg[l].variant = null;
+    document.getElementById('ta-' + l).value = S.msg[l].text;
   });
-  S.enOutdated = false; S.zusatzTranslated = true;
+  S.enOutdated = false; S.pairOff = false; S.zusatzTranslated = true;
   S.audio = { state: 'ready', forKey: null, dur: r.dur, listened: false, at: stamp(), pct: 100 };
   S.audio.forKey = audioKey();
   render();
@@ -690,36 +732,40 @@ function makeAudio() {
   }, 120);
 }
 
-/* Plays DE then EN back to back — that is what one combined file is. */
-let playTimer = null;
+/* Playback is simulated. Nothing is synthesised and no file exists — this is a
+   prototype, so the player only models the passage of time through one combined
+   DE + EN file. `endPlay` is exposed so the checks can reach the end state
+   without sitting out a 20-second announcement in real time. */
+let playTick = null;
 function play() {
   stopPlay();
-  S.playing = true; S.audio.listened = true;
+  /* listened is set in endPlay, not here: pressing play is not hearing it, and
+     the pre-save check is worthless if a click satisfies it. */
+  S.playing = true;
+  S.playPos = 0;
   render();
-  try {
-    const synth = window.speechSynthesis;
-    if (synth && typeof SpeechSynthesisUtterance === 'function' && synth.getVoices().length) {
-      [['de','de-DE'], ['en','en-GB']].forEach(([l, code]) => {
-        if (!S.msg[l].text) return;
-        const u = new SpeechSynthesisUtterance(S.msg[l].text);
-        u.lang = code; u.rate = 0.98;
-        if (l === 'en') { u.onend = endPlay; u.onerror = endPlay; }
-        synth.speak(u);
-      });
-    }
-  } catch (e) { /* fall through to the timer */ }
-  /* Safety net: onend never arrives where no voice is installed or the synth
-     errors. Without this the button stays on STOP for good. */
-  playTimer = setTimeout(endPlay, Math.max(1500, S.audio.dur * 1000 + 1500));
+  playTick = setInterval(() => {
+    S.playPos = Math.min(S.audio.dur, (S.playPos || 0) + 0.5);
+    if (S.playPos >= S.audio.dur) { endPlay(); return; }
+    renderAudio();
+  }, 500);
 }
-function endPlay() { clearTimeout(playTimer); if (!S.playing) return; S.playing = false; render(); }
+function endPlay() {
+  clearInterval(playTick);
+  if (!S.playing) return;
+  S.playing = false; S.playPos = 0;
+  S.audio.listened = true;   // reached the end
+  render();
+}
 function stopPlay() {
-  clearTimeout(playTimer);
-  try { if (window.speechSynthesis) window.speechSynthesis.cancel(); } catch (e) {}
+  clearInterval(playTick); S.playPos = 0;
   S.playing = false;
 }
 
-function save() { toast(t('saved')); }
+function save() {
+  const w = saveWarnings();
+  toast(w.length ? t('savedWarn') + ' ' + w[0] : t('savedClean') + ' (' + fmtDur(S.audio.dur) + ').');
+}
 
 /* ════════════════════════════════════════════════════════════
    Render
@@ -732,7 +778,14 @@ const ICON = {
   play: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'
 };
 
-function growOne(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+/* Never size a field that has no layout: inside a display:none block
+   scrollHeight is 0, so the field would keep height 0 after the block is
+   shown again — it collapses to an invisible line. */
+function growOne(ta) {
+  if (!ta.offsetParent && ta.offsetHeight === 0) return;
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
 /* Grow both message boxes to their content and keep them equal height,
    so DE and EN read as one comparable pair. */
 function autoGrow() {
@@ -748,17 +801,18 @@ function render() {
   const set = (id, k) => { document.getElementById(id).textContent = t(k); };
   set('tTitle','title'); set('tDaisy','daisy'); set('tInterval1','interval');
   set('tInterval2','interval'); set('tSource','source'); set('tPrompt','prompt');
-  set('tTonfall','tonfall'); set('tMeldungen','meldungen'); set('tStations','stations');
+  set('tZusatz','zusatz'); set('tMeldungen','meldungen'); set('tStations','stations');
   set('tPlanned','planned'); set('tVon','von'); set('tBis','bis');
   set('tLibrary','library'); set('tRec','rec');
-  set('tPromptHint','promptHint'); set('tTonfallHint','tonfallHint');
+  set('tPromptHint','promptHint'); set('tZusatzHint','zusatzHint');
   set('tLibraryHint','libHint'); set('tRecHint','recHint');
-  set('btnGen','genEla'); set('btnDefault','standard'); set('btnUpload','upload');
+  set('btnUpload','upload');
   set('btnCancel','cancel'); set('btnSave','save');
   document.getElementById('uiDe').classList.toggle('on', S.ui === 'de');
   document.getElementById('uiEn').classList.toggle('on', S.ui === 'en');
   document.getElementById('sourceHint').textContent =
-    S.source === 'standard' ? t('srcStd') : S.source === 'library' ? t('srcLib') : t('srcVoice');
+    S.source === 'standard' ? t('srcStd') : S.source === 'library' ? t('srcLib')
+    : S.source === 'empathetic' ? t('srcEmp') : t('srcRec');
 
   // meta row — Stationen mirrors Planned; no Gleis, no Actual
   const von = document.getElementById('stVon').value, bis = document.getElementById('stBis').value;
@@ -771,6 +825,12 @@ function render() {
     ['grund', grund], ['stationen', code(von) + ' - ' + code(bis)]
   ].map(([k, v]) => '<span><b>' + t(k) + ':</b> <span class="v">' + esc(v) + '</span></span>').join('');
 
+  /* Toggle the source blocks BEFORE any auto-sizing, so a field that is about
+     to become visible is measured with layout rather than at height 0. */
+  document.getElementById('blkEmpathetic').style.display = S.source === 'empathetic' ? '' : 'none';
+  document.getElementById('blkLibrary').style.display    = S.source === 'library'    ? '' : 'none';
+  document.getElementById('blkRecord').style.display     = S.source === 'record'     ? '' : 'none';
+
   // DAISY — editable, refreshed from the template only while untouched
   const d = document.getElementById('daisy');
   if (!S.daisyCustom) S.daisy = defaultDaisy();
@@ -779,28 +839,27 @@ function render() {
   document.getElementById('daisyCounter').classList.toggle('over', S.daisy.length > 160);
   growOne(d);
 
-  // prompt — editable, one field, reset button
+  // prompt — assembled from the event, read-only; Additional details is the input
   const p = document.getElementById('prompt');
-  if (!S.promptCustom) S.prompt = defaultPrompt();
-  if (document.activeElement !== p) p.value = S.prompt;
-  document.getElementById('btnDefault').disabled = !S.promptCustom;
+  S.prompt = defaultPrompt();
+  p.value = S.prompt;
   growOne(p);
+  const z = document.getElementById('zusatz');
+  if (document.activeElement !== z) z.value = S.zusatz;
+  z.placeholder = KNOWN[0][S.ui];
+  growOne(z);
 
-  document.getElementById('tonfall').innerHTML = TONES.map(x =>
-    '<option value="' + x.id + '"' + (S.tonfall === x.id ? ' selected' : '') + '>' + x[S.ui] + '</option>').join('');
+  document.getElementById('source').innerHTML = SOURCES.map(x =>
+    '<option value="' + x.id + '"' + (S.source === x.id ? ' selected' : '') + '>' + x[S.ui] + '</option>').join('');
   document.getElementById('library').innerHTML = LIBRARY.map(x =>
-    '<option value="' + x.id + '">' + x[S.ui] + '</option>').join('');
+    '<option value="' + x.id + '"' + (S.libId === x.id ? ' selected' : '') + '>' + x[S.ui] + '</option>').join('');
   document.getElementById('rec').innerHTML = RECS.map(x =>
-    '<option value="' + x.id + '">' + x[S.ui] + '</option>').join('');
-
-  document.getElementById('blkStandard').style.display = S.source === 'standard' ? '' : 'none';
-  document.getElementById('blkLibrary').style.display  = S.source === 'library'  ? '' : 'none';
-  document.getElementById('blkVoice').style.display    = S.source === 'voice'    ? '' : 'none';
+    '<option value="' + x.id + '"' + (S.recId === x.id ? ' selected' : '') + '>' + x[S.ui] + '</option>').join('');
 
   ['de','en'].forEach(l => {
     const ta = document.getElementById('ta-' + l);
     if (document.activeElement !== ta) ta.value = S.msg[l].text;
-    ta.readOnly = S.source === 'voice';
+    ta.readOnly = S.source === 'record';
     ta.placeholder = S.msg[l].state === 'loading' ? t('stLoading') : '';
   });
   autoGrow();
@@ -821,16 +880,18 @@ function renderStates() {
     let cls = '', icon = ICON.dot, txt = t('stNone'), extra = '';
 
     if (m.state === 'loading')      { cls = 'b'; txt = t('stLoading'); }
-    else if (m.state === 'error')   { cls = 'r'; icon = ICON.warn; txt = t('stFail'); }
+    else if (m.state === 'error')   { cls = 'r'; icon = ICON.warn; txt = t('stFail');
+      extra = ' <button class="link" onclick="generate()">' + t('retry') + '</button>'; }
     else if (m.state === 'generated') {
       cls = 'g'; icon = ICON.ok; txt = t('stGen');
-      const tn = TONES.find(x => x.id === m.tone);
-      if (tn) extra += '<span class="sep"> · </span>' + tn[S.ui];
       if (m.variant) extra += '<span class="sep"> · </span>' + t('stVariant') + ' ' + m.variant + '/3';
     }
+    else if (m.state === 'standard') { cls = 'g'; icon = ICON.ok; txt = t('stStd'); }
     else if (m.state === 'edited')  { cls = 'b'; icon = ICON.pen; txt = t('stEdited'); }
-    else if (m.state === 'library') { cls = 'g'; icon = ICON.ok;  txt = t('stLib'); }
-    else if (m.state === 'rec')     { cls = '';  txt = t('stRec'); }
+    else if (m.state === 'library') { cls = 'g'; icon = ICON.ok;  txt = t('stLib');
+      if (S.srcName) extra = '<span class="sep"> · </span>' + esc(S.srcName); }
+    else if (m.state === 'rec')     { cls = '';  txt = t('stRec');
+      if (S.srcName) extra = '<span class="sep"> · </span>' + esc(S.srcName); }
     else if (m.state === 'eventChanged') { cls = 'a'; icon = ICON.warn; txt = t('stEventOld'); }
 
     let warned = m.state === 'eventChanged';
@@ -838,6 +899,7 @@ function renderStates() {
     if (l === 'en' && m.text && !warned) {
       if (S.enOutdated)             { cls = 'a'; icon = ICON.warn; txt = t('stTransOld'); extra = ''; warned = true; }
       else if (!S.zusatzTranslated) { cls = 'a'; icon = ICON.warn; txt = t('stZusatzDe'); extra = ''; warned = true; }
+      else if (S.pairOff)           { cls = 'a'; icon = ICON.warn; txt = t('stPairOff'); extra = ''; warned = true; }
     }
     box.classList.toggle('warn', warned);
     el.className = 'state ' + cls;
@@ -851,12 +913,19 @@ function renderAudio() {
   if (st === 'ready' && a.forKey !== audioKey()) st = 'stale';
   const hasText = !!(S.msg.de.text || S.msg.en.text);
 
-  let html = '<button class="mbtn mbtn-outlined" onclick="makeAudio()"'
-    + (!hasText || st === 'rendering' || S.source === 'voice' ? ' disabled' : '') + '>'
+  /* All three ELA buttons sit together: generate the text, render the file,
+     play it back — one row, left to right, in the order they are used. */
+  const busy = S.msg.de.state === 'loading' || S.msg.en.state === 'loading';
+  let html = '<button class="mbtn mbtn-outlined" id="btnGen" onclick="generate()"'
+    + (busy || S.source !== 'empathetic' ? ' disabled' : '') + '>'
+    + (busy ? t('genBusy') : t('genEla')) + '</button>'
+    + '<button class="mbtn mbtn-outlined" id="btnAudio" onclick="makeAudio()"'
+    + (!hasText || st === 'rendering' || S.source === 'record' ? ' disabled' : '') + '>'
     + t('genAudio') + '</button>'
-    + '<button class="mbtn mbtn-text" onclick="' + (S.playing ? 'stopPlay();render()' : 'play()') + '"'
+    + '<button class="mbtn mbtn-text" id="btnPlay" onclick="' + (S.playing ? 'stopPlay();render()' : 'play()') + '"'
     + (st !== 'ready' && st !== 'stale' ? ' disabled' : '') + '>'
     + (S.playing ? '■ ' + t('stop') : ICON.play + ' ' + t('listen')) + '</button>';
+  if (busy) html += '<div class="bar" id="genBar"><i id="genBarFill" style="width:' + (S.genPct || 0) + '%"></i></div>';
   if (st === 'rendering') html += '<div class="bar"><i id="abar" style="width:' + a.pct + '%"></i></div>';
   if (st === 'ready' || st === 'stale') {
     html += '<div class="wave' + (S.playing ? ' playing' : '') + '">'
@@ -875,24 +944,36 @@ function renderAudio() {
     cls = 'g'; icon = ICON.ok;
     txt = t('aReady') + ' ' + a.at + '<span class="sep"> · </span>' + fmtDur(a.dur)
         + '<span class="sep"> · </span>' + t('aOneFile')
-        + (a.listened ? '<span class="sep"> · </span>' + t('aListened') : '');
+        + (S.playing ? '<span class="sep"> · </span>' + t('playing') + ' ' + fmtDur(S.playPos || 0) + ' / ' + fmtDur(a.dur)
+                     : (a.listened ? '<span class="sep"> · </span>' + t('aListened') : ''));
   }
   el.className = 'state ' + cls;
   el.innerHTML = icon + '<span>' + txt + '</span>';
 }
 
-function renderSave() {
+/* Every active warning is listed, ordered by consequence — a single
+   first-match line hid "the audio does not match the text" behind the far less
+   dangerous DAISY truncation notice. */
+function saveWarnings() {
   const a = S.audio;
   let st = a.state;
   if (st === 'ready' && a.forKey !== audioKey()) st = 'stale';
-  let cls = 'g', icon = ICON.ok, txt = t('saveOk');
-  if (S.daisy.length > 160)                 { cls = 'a'; icon = ICON.warn; txt = t('saveDaisy'); }
-  else if (st === 'stale')                  { cls = 'a'; icon = ICON.warn; txt = t('saveStale'); }
-  else if (st === 'none' || st === 'error') { cls = 'a'; icon = ICON.warn; txt = t('saveNoAudio'); }
-  else if (!a.listened)                     { cls = 'a'; icon = ICON.warn; txt = t('saveUnheard'); }
-  const el = document.getElementById('state-save');
-  el.className = 'state ' + cls;
-  el.innerHTML = icon + '<span>' + txt + '</span>';
+  const w = [];
+  if (st === 'stale')                                  w.push(t('saveStale'));
+  if (S.msg.de.state === 'eventChanged' || S.msg.en.state === 'eventChanged')
+                                                       w.push(t('saveEvent'));
+  if (!S.msg.de.text && !S.msg.en.text)                w.push(t('saveEmpty'));
+  else if (st === 'none' || st === 'error')             w.push(t('saveNoAudio'));
+  if (S.daisy.length > 160)                            w.push(t('saveDaisy'));
+  if (st === 'ready' && !a.listened)                    w.push(t('saveUnheard'));
+  return w;
+}
+function renderSave() {
+  const w = saveWarnings();
+  const el = document.getElementById('saveWarns');
+  el.innerHTML = w.length
+    ? w.map(x => '<div class="state a">' + ICON.warn + '<span>' + x + '</span></div>').join('')
+    : '<div class="state g">' + ICON.ok + '<span>' + t('saveOk') + '</span></div>';
 }
 
 function focusBox(l, on) {
@@ -904,22 +985,31 @@ function setUi(l) { S.ui = l; render(); }
 function toggleTyp() {
   S.typ = S.typ === 'erst' ? 'haupt' : 'erst';
   S.variant = -1;
-  /* The event changed, the human did not — do not call this an edit, or
-     regenerating would ask "overwrite your changes?" about untouched text. */
-  ['de','en'].forEach(l => { if (S.msg[l].text) S.msg[l].state = 'eventChanged'; });
+  /* An untouched system text follows the event; anything a human generated,
+     picked or wrote does not. The event changed, the human did not — do not
+     call that an edit, or regenerating would ask "overwrite your changes?"
+     about untouched text. */
+  if (S.source === 'standard' && S.msg.de.state === 'standard' && S.msg.en.state === 'standard') {
+    loadStandard();
+  } else {
+    ['de','en'].forEach(l => { if (S.msg[l].text) S.msg[l].state = 'eventChanged'; });
+  }
   render();
 }
 function toggleFail() { S.failMode = !S.failMode; render(); }
 function resetAll() {
   stopPlay();
-  S.typ = 'erst'; S.source = 'standard'; S.tonfall = 'neutral'; S.variant = -1;
-  S.promptCustom = false; S.daisyCustom = false; S.zusatzTranslated = true; S.enOutdated = false;
-  S.msg = { de: { text: '', state: 'none', tone: null, variant: null },
-            en: { text: '', state: 'none', tone: null, variant: null } };
+  S.typ = 'erst'; S.source = 'standard'; S.variant = -1;
+  S.zusatz = ''; S.daisyCustom = false; S.zusatzTranslated = true; S.enOutdated = false;
+  S.libId = ''; S.recId = ''; S.srcName = ''; S.pairOff = false;
+  S.msg = { de: { text: '', state: 'none', variant: null },
+            en: { text: '', state: 'none', variant: null } };
   S.audio = { state: 'none', forKey: null, dur: 0, listened: false, at: null, pct: 0 };
   document.getElementById('source').value = 'standard';
   document.getElementById('library').value = '';
   document.getElementById('rec').value = '';
+  document.getElementById('zusatz').value = '';
+  loadStandard();
   render();
 }
 
@@ -930,6 +1020,7 @@ function toast(m) {
   clearTimeout(tt); tt = setTimeout(() => el.classList.remove('show'), 3600);
 }
 
+loadStandard();
 render();
 </script>
 </body>
