@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Company provider — match modes (draft spec)</title>
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+  body { background: var(--bg-surface); }
+  .wrap { max-width: 1040px; margin: 0 auto; padding: 24px 24px 80px; }
+
+  .doc-note {
+    background: var(--color-primary-5);
+    border: 1px solid var(--color-primary-20);
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 24px;
+  }
+  .doc-section { margin-top: 40px; }
+  .doc-section > h2 { margin: 0 0 4px; }
+  .doc-lede { color: var(--text-secondary); margin: 0 0 16px; }
+
+  /* ---- the demo surface ---- */
+  .demo {
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    overflow: visible;
+  }
+  .filter-panel {
+    padding: 16px;
+    border-bottom: 1px solid var(--border-default);
+  }
+  .filter-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 24px;
+    margin-bottom: 12px;
+  }
+
+  /* the multiselect field + popover */
+  .ms { position: relative; }
+  .ms-field {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; height: 32px;
+    padding: 6px 8px;
+    background: var(--color-grey-5);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    font: inherit; font-size: 14px; color: var(--text-primary);
+    text-align: left; cursor: pointer;
+  }
+  .ms-field:hover { border-color: var(--color-grey-50); }
+  .ms-field:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+  .ms-field[aria-expanded="true"] { border-color: var(--border-focus); }
+  .ms-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ms-value.is-empty { color: var(--text-placeholder); }
+  .ms-caret { flex: 0 0 auto; color: var(--text-secondary); font-size: 10px; }
+
+  .ms-pop {
+    position: absolute; z-index: 40; top: calc(100% + 4px); left: 0;
+    width: 100%; min-width: 320px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    box-shadow: 0 4px 16px rgba(26,27,36,.16);
+  }
+  .ms-pop[hidden] { display: none; }
+  .ms-pop-head { padding: 12px; border-bottom: 1px solid var(--border-light); }
+  .ms-mode-label {
+    display: block; font-size: 12px; font-weight: 500;
+    color: var(--text-secondary); margin-bottom: 6px;
+  }
+
+  /* ---- SEGMENTED CONTROL (new component) ---- */
+  .segmented {
+    display: flex;
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bg-surface);
+  }
+  .segmented[aria-disabled="true"] { opacity: .55; }
+  .seg {
+    flex: 1 1 0;
+    height: 30px;
+    padding: 0 8px;
+    border: 0;
+    border-right: 1px solid var(--border-default);
+    background: var(--bg-surface);
+    font: inherit; font-size: 13px; line-height: 20px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .seg:last-child { border-right: 0; }
+  .seg:hover:not([aria-checked="true"]) { background: var(--color-primary-5); color: var(--text-primary); }
+  .seg[aria-checked="true"] {
+    background: var(--color-primary-10);
+    color: var(--color-primary);
+    font-weight: 500;
+    box-shadow: inset 0 -2px 0 var(--color-primary);
+  }
+  .seg:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+  .segmented[aria-disabled="true"] .seg { cursor: not-allowed; }
+
+  .ms-search-row { padding: 8px 12px; border-bottom: 1px solid var(--border-light); }
+  .ms-list { max-height: 244px; overflow-y: auto; padding: 4px 0; }
+  .ms-opt {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 12px; cursor: pointer; font-size: 14px;
+  }
+  .ms-opt:hover { background: var(--bg-row-hover); }
+  .ms-opt.is-selected { background: var(--color-primary-10); }
+  .ms-opt input { margin: 0; }
+  .ms-opt-sep { height: 1px; background: var(--border-light); margin: 4px 0; }
+  .ms-empty { padding: 12px; color: var(--text-secondary); font-size: 14px; }
+  .ms-pop-foot {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 12px; border-top: 1px solid var(--border-light);
+  }
+  .ms-count { font-size: 13px; color: var(--text-secondary); }
+
+  .dirty-hint {
+    font-size: 13px; color: var(--color-yellow); margin-left: 12px;
+  }
+  .dirty-hint[hidden] { display: none; }
+
+  .results-head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 12px 16px 0;
+  }
+  .results-head strong { font-size: 14px; }
+  .results-q { font-size: 13px; color: var(--text-secondary); }
+  .prov-cell { font-size: 13px; color: var(--text-secondary); }
+  .prov-hit { color: var(--color-primary); font-weight: 500; }
+  .empty-row td { padding: 32px 16px; text-align: center; color: var(--text-secondary); }
+
+  /* ---- spec bits ---- */
+  .spec-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+  .spec-table th, .spec-table td {
+    text-align: left; padding: 8px 12px;
+    border-bottom: 1px solid var(--border-default); vertical-align: top;
+  }
+  .spec-table th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: var(--text-table-header); font-weight: 500; }
+  .spec-table code { font-size: 13px; }
+  code, .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: var(--color-grey-10); padding: 1px 5px; border-radius: 3px; font-size: 13px;
+  }
+  ul.tight { margin: 8px 0; padding-left: 20px; }
+  ul.tight li { margin-bottom: 6px; }
+  .q-block {
+    border-left: 3px solid var(--color-yellow);
+    background: var(--color-yellow-light, #FFF8E9);
+    padding: 12px 16px; margin: 12px 0; border-radius: 0 4px 4px 0;
+  }
+  .q-block p:first-child { margin-top: 0; }
+  .q-block p:last-child { margin-bottom: 0; }
+  .flag { font-size: 12px; font-weight: 600; letter-spacing: .4px; text-transform: uppercase; color: var(--color-yellow); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="page-header">
+    <div class="page-header-text">
+      <h1>Company provider — match modes</h1>
+      <p class="page-header-desc">Draft spec + working prototype. Organizations list, internal admin.</p>
+    </div>
+  </div>
+
+  <div class="doc-note">
+    <strong>What changes.</strong> The <em>Company provider</em> filter currently returns organizations
+    matching <em>any</em> selected provider, with no way to say otherwise. This adds an explicit
+    three-way match mode — <strong>Has any of</strong> / <strong>Has all of</strong> /
+    <strong>Has none of</strong> — as a segmented control inside the existing dropdown.
+    Nothing else in the filter panel changes.
+  </div>
+
+  <!-- ============ PROTOTYPE ============ -->
+  <div class="doc-section">
+    <h2>Prototype</h2>
+    <p class="doc-lede">Working against 14 sample organizations. Change the mode, press Apply.</p>
+
+    <div class="demo">
+      <div class="filter-panel">
+        <div class="filter-grid">
+          <div class="form-field">
+            <label class="form-label" for="f-search">Search</label>
+            <input class="input" id="f-search" type="text" placeholder="Name">
+          </div>
+          <div class="form-field">
+            <label class="form-label" for="f-product">Product</label>
+            <select class="select" id="f-product">
+              <option value="all">All</option>
+              <option value="sync">Sync</option>
+              <option value="revrec">RevRec</option>
+              <option value="insights">Insights</option>
+            </select>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" id="ms-label">Company provider</label>
+            <div class="ms" id="ms">
+              <button type="button" class="ms-field" id="ms-field"
+                      aria-haspopup="dialog" aria-expanded="false" aria-labelledby="ms-label ms-value">
+                <span class="ms-value" id="ms-value">All</span>
+                <span class="ms-caret" aria-hidden="true">▼</span>
+              </button>
+
+              <div class="ms-pop" id="ms-pop" hidden role="dialog" aria-label="Company provider">
+                <div class="ms-pop-head">
+                  <span class="ms-mode-label" id="mode-label">Match</span>
+                  <div class="segmented" id="segmented" role="radiogroup" aria-labelledby="mode-label">
+                    <button type="button" class="seg" role="radio" data-mode="any"  aria-checked="true"  tabindex="0">Has any</button>
+                    <button type="button" class="seg" role="radio" data-mode="all"  aria-checked="false" tabindex="-1">Has all</button>
+                    <button type="button" class="seg" role="radio" data-mode="none" aria-checked="false" tabindex="-1">Has none</button>
+                  </div>
+                </div>
+
+                <div class="ms-search-row">
+                  <input class="input input-search" id="ms-search" type="search" placeholder="Search" aria-label="Search providers">
+                </div>
+
+                <div class="ms-list" id="ms-list"></div>
+
+                <div class="ms-pop-foot">
+                  <span class="ms-count" id="ms-count">Nothing selected</span>
+                  <button type="button" class="btn btn-text" id="ms-done">Done</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label class="form-label" for="f-country">Company Country</label>
+            <select class="select" id="f-country">
+              <option value="all">All</option>
+              <option value="US">US</option>
+              <option value="CA">CA</option>
+              <option value="GB">GB</option>
+            </select>
+          </div>
+        </div>
+
+        <button class="btn" id="apply">Apply</button>
+        <span class="dirty-hint" id="dirty" hidden>Unapplied changes — press Apply to update the list</span>
+      </div>
+
+      <div class="results-head">
+        <strong id="result-count">14 organizations</strong>
+        <span class="results-q" id="result-q"></span>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr><th>Name</th><th>Country</th><th>Connected providers</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ SPEC ============ -->
+  <div class="doc-section">
+    <h2>The control</h2>
+    <p class="doc-lede">A segmented control at the top of the dropdown, above the search field.</p>
+    <ul class="tight">
+      <li><strong>Why not a separate operator dropdown in the panel.</strong> The panel is a
+        two-column grid of <em>one label, one control</em>. A second control on this row breaks that
+        alignment and makes Product and Company Country look inconsistent for not having one.</li>
+      <li><strong>Why not radio buttons.</strong> Three stacked radios cost ~70px in a popover that
+        already scrolls, and radios directly above a checkbox list read as <em>more list</em> rather
+        than as a mode.</li>
+      <li><strong>Order is mode → search → list</strong>, so it reads top-down as one sentence:
+        how to match, then what to match.</li>
+    </ul>
+    <p>Markup is <code>role="radiogroup"</code> with three <code>role="radio"</code> buttons,
+      roving <code>tabindex</code>, arrow keys to move, <kbd>Home</kbd>/<kbd>End</kbd> to jump.
+      One tab stop for the whole group.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>Closed-state label</h2>
+    <p class="doc-lede">This matters more than the control itself.</p>
+    <p>Today the field shows <code>AFFIRM, EBAY</code>. If the mode is <em>Has none</em> and the field
+      still says that, the user reads the exact opposite of what is filtering. The closed value must
+      carry the mode:</p>
+    <table class="spec-table">
+      <thead><tr><th>State</th><th>Field shows</th></tr></thead>
+      <tbody>
+        <tr><td>Nothing selected</td><td><code>All</code> (placeholder grey)</td></tr>
+        <tr><td>1–2 selected</td><td><code>Has any of: AFFIRM, EBAY</code></td></tr>
+        <tr><td>3+ selected</td><td><code>Has any of 5 providers</code></td></tr>
+        <tr><td>Mode = all</td><td><code>Has all of: …</code></td></tr>
+        <tr><td>Mode = none</td><td><code>Has none of: …</code></td></tr>
+      </tbody>
+    </table>
+    <p>The switch to a count at 3+ is deliberate: a truncated comma list combined with a negation
+      (<code>Has none of: AFFIRM, EBAY, AFTER…</code>) is a genuinely dangerous string.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>Naming</h2>
+    <p>Use <strong>Has any / Has all / Has none</strong>, not <em>Any / All / None</em>.</p>
+    <p>The list already contains <strong>Select all</strong>. A bare “All” segment sitting six inches
+      above it collides: one means <em>match every selected provider</em>, the other means
+      <em>tick every checkbox</em>. The verb prevents that reading.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>Behaviour</h2>
+    <table class="spec-table">
+      <thead><tr><th>Rule</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Default mode</td>
+          <td><code>any</code> — matches today's behaviour, so existing saved views and habits are unaffected.</td>
+        </tr>
+        <tr>
+          <td>Zero selections</td>
+          <td>All three modes behave identically (no filter applied). The segmented control is
+            <strong>disabled</strong> until at least one provider is ticked, otherwise people
+            operate a switch that does nothing.</td>
+        </tr>
+        <tr>
+          <td>Apply-gated</td>
+          <td>Mode and selection are draft state. Neither re-queries until <strong>Apply</strong>.
+            Keep this — it is why there is no jarring mid-edit result flip.</td>
+        </tr>
+        <tr>
+          <td>Mode persists</td>
+          <td>Changing the selection does not reset the mode. Clearing to zero selections resets
+            the mode to <code>any</code>.</td>
+        </tr>
+        <tr>
+          <td>Select all + Has none</td>
+          <td>Legitimate — returns organizations with no connected provider at all. Not blocked.</td>
+        </tr>
+        <tr>
+          <td>URL / saved state</td>
+          <td>Serialise as <code>provider_mode=any|all|none</code> alongside the existing
+            <code>provider=</code> list. Absent parameter means <code>any</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="doc-section">
+    <h2>Query semantics</h2>
+    <p>Given selected set <code>S</code> and an organization's connected provider set <code>P</code>:</p>
+    <table class="spec-table">
+      <thead><tr><th>Mode</th><th>Returns org when</th><th>SQL shape</th></tr></thead>
+      <tbody>
+        <tr><td><code>any</code></td><td><code>S ∩ P ≠ ∅</code></td><td><code>EXISTS (… provider IN S)</code></td></tr>
+        <tr><td><code>all</code></td><td><code>S ⊆ P</code></td><td><code>COUNT(DISTINCT provider) FILTER (provider IN S) = |S|</code></td></tr>
+        <tr><td><code>none</code></td><td><code>S ∩ P = ∅</code></td><td><code>NOT EXISTS (… provider IN S)</code></td></tr>
+      </tbody>
+    </table>
+    <p><strong>Note for whoever writes the query:</strong> <code>none</code> is an anti-join, not
+      <code>provider NOT IN (...)</code>. An organization with companies on both AFFIRM and STRIPE
+      would satisfy a naive row-level <code>NOT IN</code> via its STRIPE row, and wrongly appear in
+      <em>Has none of AFFIRM</em>. This is the single most likely bug in the change.</p>
+  </div>
+
+  <div class="doc-section">
+    <h2>Open questions</h2>
+
+    <div class="q-block">
+      <p><span class="flag">Q1 — needs a product call</span></p>
+      <p><strong>Does an organization with no companies at all match <em>Has none of</em>?</strong>
+        Strictly it qualifies — it has none of them. But a provider filter surfacing accounts that
+        have never connected anything is probably not what the person asking meant.</p>
+      <p>The prototype currently <strong>excludes</strong> them. Toggle it here to see the
+        difference in the table above:</p>
+      <p>
+        <label class="checkbox-wrap">
+          <input type="checkbox" id="q1-toggle">
+          <span>Include organizations with zero companies in “Has none of”</span>
+        </label>
+      </p>
+      <p id="q1-effect" class="results-q"></p>
+    </div>
+
+    <div class="q-block">
+      <p><span class="flag">Q2</span></p>
+      <p><strong>Do the other filters need modes too?</strong> If Product or Company Country will
+        get the same treatment later, the operator-dropdown pattern (field + operator + value, like
+        Jira) scales better and would be worth adopting now instead. If this is the only filter that
+        needs it, the segmented control is the lighter answer. Answering this decides whether the
+        control lives in the popover or in the panel.</p>
+    </div>
+  </div>
+
+  <div class="doc-section">
+    <h2>Out of scope</h2>
+    <p>A single mode applies to the whole selection, so <strong>“has AFFIRM but not EBAY” is
+      unreachable</strong> by design. If that turns out to be a real request the answer is not a
+      fourth segment — it is per-row include/exclude (click once to include, twice to exclude),
+      which is a substantially bigger build. Recommend shipping the three modes and waiting to see
+      whether anyone asks.</p>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var PROVIDERS = [
+    'AFFINIPAY','AFFIRM','AFTERPAY','AMAZON','AMAZON_V2','AUTHORIZE','BIGCOMMERCE',
+    'BLUEFIN','BRAINTREE','BREX','CLOVER','CUSTOM','EBAY','ECWID','ETSY','PAYPAL',
+    'SHOPIFY','SQUARE','STRIPE','WALMART','WIX','WOOCOMMERCE'
+  ];
+
+  // org.providers = distinct providers across that org's companies
+  var ORGS = [
+    { name: '&Dine Ltd',            country: 'US', product: 'sync',     providers: ['AFFIRM','EBAY','STRIPE'] },
+    { name: 'Test Company 2',       country: 'US', product: 'sync',     providers: ['AFFIRM','EBAY'] },
+    { name: 'Testing Company',      country: 'CA', product: 'revrec',   providers: ['AFFIRM'] },
+    { name: 'Anthony Bastien Est.', country: 'US', product: 'sync',     providers: ['EBAY','SHOPIFY'] },
+    { name: 'Logiframe US - Synder',country: 'US', product: 'insights', providers: ['STRIPE','PAYPAL'] },
+    { name: "LQ Int'l",             country: 'GB', product: 'sync',     providers: ['AMAZON','EBAY','AFFIRM'] },
+    { name: 'PA & SC STEENS LTD',   country: 'GB', product: 'sync',     providers: ['SQUARE'] },
+    { name: 'Rebecca Howell',       country: 'US', product: 'revrec',   providers: ['STRIPE'] },
+    { name: 'Vertical Suits Inc.',  country: 'CA', product: 'sync',     providers: ['SHOPIFY','WOOCOMMERCE'] },
+    { name: 'Northgate Supply',     country: 'US', product: 'sync',     providers: ['AFFIRM','AMAZON_V2'] },
+    { name: 'Bluepeak Retail',      country: 'CA', product: 'insights', providers: ['EBAY'] },
+    { name: 'Harbourline Ltd',      country: 'GB', product: 'sync',     providers: ['CLOVER','BRAINTREE'] },
+    { name: 'Solvent Goods Co',     country: 'US', product: 'revrec',   providers: ['AFFIRM','EBAY','PAYPAL','SQUARE'] },
+    { name: 'Untouched Account',    country: 'US', product: 'sync',     providers: [] }
+  ];
+
+  var MODE_PREFIX = { any: 'Has any of', all: 'Has all of', none: 'Has none of' };
+  var MODES = ['any','all','none'];
+
+  var draft   = { providers: [], mode: 'any', search: '', product: 'all', country: 'all' };
+  var applied = { providers: [], mode: 'any', search: '', product: 'all', country: 'all' };
+  var includeEmptyInNone = false;
+  var popSearch = '';
+
+  var $ = function (id) { return document.getElementById(id); };
+  var field = $('ms-field'), pop = $('ms-pop'), valueEl = $('ms-value');
+  var segmented = $('segmented'), list = $('ms-list'), dirty = $('dirty');
+
+  function clone(s) {
+    return { providers: s.providers.slice(), mode: s.mode, search: s.search, product: s.product, country: s.country };
+  }
+  function same(a, b) {
+    return a.mode === b.mode && a.search === b.search && a.product === b.product &&
+           a.country === b.country && a.providers.slice().sort().join('|') === b.providers.slice().sort().join('|');
+  }
+
+  // ---- label -------------------------------------------------------------
+  function fieldLabel(sel, mode) {
+    if (!sel.length) return 'All';
+    var prefix = MODE_PREFIX[mode];
+    if (sel.length <= 2) return prefix + ': ' + sel.join(', ');
+    return prefix + ' ' + sel.length + ' providers';
+  }
+
+  // ---- matching ----------------------------------------------------------
+  function matchProviders(org, sel, mode) {
+    if (!sel.length) return true;
+    var P = org.providers;
+    var hit = function (p) { return P.indexOf(p) !== -1; };
+    if (mode === 'any')  return sel.some(hit);
+    if (mode === 'all')  return sel.every(hit);
+    // none
+    if (!P.length) return includeEmptyInNone;
+    return !sel.some(hit);
+  }
+
+  function matches(org, s) {
+    if (s.search && org.name.toLowerCase().indexOf(s.search.toLowerCase()) === -1) return false;
+    if (s.product !== 'all' && org.product !== s.product) return false;
+    if (s.country !== 'all' && org.country !== s.country) return false;
+    return matchProviders(org, s.providers, s.mode);
+  }
+
+  // ---- render ------------------------------------------------------------
+  function renderField() {
+    var label = fieldLabel(draft.providers, draft.mode);
+    valueEl.textContent = label;
+    valueEl.classList.toggle('is-empty', !draft.providers.length);
+    field.title = label;
+  }
+
+  function renderSegmented() {
+    var disabled = draft.providers.length === 0;
+    segmented.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+    Array.prototype.forEach.call(segmented.querySelectorAll('.seg'), function (b) {
+      var on = b.dataset.mode === draft.mode;
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+      b.tabIndex = on ? 0 : -1;
+      b.disabled = disabled;
+    });
+  }
+
+  function renderList() {
+    var q = popSearch.trim().toUpperCase();
+    var shown = PROVIDERS.filter(function (p) { return !q || p.indexOf(q) !== -1; });
+    list.innerHTML = '';
+
+    if (!shown.length) {
+      var none = document.createElement('div');
+      none.className = 'ms-empty';
+      none.textContent = 'No providers match “' + popSearch + '”';
+      list.appendChild(none);
+      return;
+    }
+
+    var allShown = shown.every(function (p) { return draft.providers.indexOf(p) !== -1; });
+    list.appendChild(option('__all__', 'Select all', allShown, false));
+    var sep = document.createElement('div');
+    sep.className = 'ms-opt-sep';
+    list.appendChild(sep);
+
+    shown.forEach(function (p) {
+      list.appendChild(option(p, p, draft.providers.indexOf(p) !== -1, true));
+    });
+  }
+
+  function option(value, text, checked, mark) {
+    var row = document.createElement('label');
+    row.className = 'ms-opt' + (mark && checked ? ' is-selected' : '');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = checked;
+    cb.dataset.value = value;
+    var span = document.createElement('span');
+    span.textContent = text;
+    row.appendChild(cb);
+    row.appendChild(span);
+    return row;
+  }
+
+  function renderResults() {
+    var rows = $('rows');
+    var out = ORGS.filter(function (o) { return matches(o, applied); });
+    rows.innerHTML = '';
+
+    $('result-count').textContent = out.length + (out.length === 1 ? ' organization' : ' organizations');
+    $('result-q').textContent = applied.providers.length
+      ? '· ' + fieldLabel(applied.providers, applied.mode)
+      : '';
+
+    if (!out.length) {
+      var tr = document.createElement('tr');
+      tr.className = 'empty-row';
+      var td = document.createElement('td');
+      td.colSpan = 3;
+      td.textContent = 'No organizations match these filters.';
+      tr.appendChild(td);
+      rows.appendChild(tr);
+      return;
+    }
+
+    out.forEach(function (o) {
+      var tr = document.createElement('tr');
+
+      var name = document.createElement('td');
+      var a = document.createElement('a');
+      a.href = '#'; a.textContent = o.name;
+      a.addEventListener('click', function (e) { e.preventDefault(); });
+      name.appendChild(a);
+
+      var country = document.createElement('td');
+      country.textContent = o.country;
+
+      var prov = document.createElement('td');
+      prov.className = 'prov-cell';
+      if (!o.providers.length) {
+        prov.textContent = '— no companies —';
+      } else {
+        o.providers.forEach(function (p, i) {
+          var s = document.createElement('span');
+          s.textContent = p;
+          if (applied.providers.indexOf(p) !== -1) s.className = 'prov-hit';
+          prov.appendChild(s);
+          if (i < o.providers.length - 1) prov.appendChild(document.createTextNode(', '));
+        });
+      }
+
+      tr.appendChild(name); tr.appendChild(country); tr.appendChild(prov);
+      rows.appendChild(tr);
+    });
+  }
+
+  function renderDirty() { dirty.hidden = same(draft, applied); }
+
+  function renderCount() {
+    var n = draft.providers.length;
+    $('ms-count').textContent = n === 0 ? 'Nothing selected'
+      : n + (n === 1 ? ' provider selected' : ' providers selected');
+  }
+
+  function renderAll() {
+    renderField(); renderSegmented(); renderList(); renderCount(); renderDirty();
+  }
+
+  // ---- popover -----------------------------------------------------------
+  function openPop() {
+    pop.hidden = false;
+    field.setAttribute('aria-expanded', 'true');
+    popSearch = ''; $('ms-search').value = '';
+    renderList();
+    $('ms-search').focus();
+  }
+  function closePop() {
+    pop.hidden = true;
+    field.setAttribute('aria-expanded', 'false');
+  }
+  function isOpen() { return !pop.hidden; }
+
+  field.addEventListener('click', function () { isOpen() ? closePop() : openPop(); });
+  $('ms-done').addEventListener('click', function () { closePop(); field.focus(); });
+
+  document.addEventListener('click', function (e) {
+    if (isOpen() && !$('ms').contains(e.target)) closePop();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOpen()) { closePop(); field.focus(); }
+  });
+
+  // ---- selection ---------------------------------------------------------
+  list.addEventListener('change', function (e) {
+    var cb = e.target;
+    if (!cb.dataset || !cb.dataset.value) return;
+    var v = cb.dataset.value;
+
+    if (v === '__all__') {
+      var q = popSearch.trim().toUpperCase();
+      var shown = PROVIDERS.filter(function (p) { return !q || p.indexOf(q) !== -1; });
+      if (cb.checked) {
+        shown.forEach(function (p) {
+          if (draft.providers.indexOf(p) === -1) draft.providers.push(p);
+        });
+      } else {
+        draft.providers = draft.providers.filter(function (p) { return shown.indexOf(p) === -1; });
+      }
+    } else {
+      var i = draft.providers.indexOf(v);
+      if (i === -1) draft.providers.push(v); else draft.providers.splice(i, 1);
+    }
+
+    // clearing to zero resets the mode
+    if (!draft.providers.length) draft.mode = 'any';
+    renderAll();
+  });
+
+  $('ms-search').addEventListener('input', function (e) {
+    popSearch = e.target.value;
+    renderList();
+  });
+
+  // ---- segmented control -------------------------------------------------
+  function setMode(mode) {
+    if (draft.providers.length === 0) return;
+    draft.mode = mode;
+    renderAll();
+  }
+
+  segmented.addEventListener('click', function (e) {
+    var b = e.target.closest('.seg');
+    if (!b || b.disabled) return;
+    setMode(b.dataset.mode);
+  });
+
+  segmented.addEventListener('keydown', function (e) {
+    var b = e.target.closest('.seg');
+    if (!b || b.disabled) return;
+    var i = MODES.indexOf(b.dataset.mode), next = null;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') next = MODES[(i + 1) % MODES.length];
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') next = MODES[(i - 1 + MODES.length) % MODES.length];
+    else if (e.key === 'Home') next = MODES[0];
+    else if (e.key === 'End') next = MODES[MODES.length - 1];
+    else if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setMode(b.dataset.mode); return; }
+    else return;
+
+    e.preventDefault();
+    setMode(next);
+    segmented.querySelector('.seg[data-mode="' + next + '"]').focus();
+  });
+
+  // ---- other filters + apply --------------------------------------------
+  $('f-search').addEventListener('input',  function (e) { draft.search = e.target.value; renderDirty(); });
+  $('f-product').addEventListener('change', function (e) { draft.product = e.target.value; renderDirty(); });
+  $('f-country').addEventListener('change', function (e) { draft.country = e.target.value; renderDirty(); });
+
+  $('apply').addEventListener('click', function () {
+    applied = clone(draft);
+    renderResults();
+    renderDirty();
+    closePop();
+  });
+
+  // ---- Q1 toggle ---------------------------------------------------------
+  $('q1-toggle').addEventListener('change', function (e) {
+    includeEmptyInNone = e.target.checked;
+    renderResults();
+    $('q1-effect').textContent = applied.mode === 'none' && applied.providers.length
+      ? 'Table above re-filtered.'
+      : 'Set the mode to “Has none” and press Apply to see this take effect.';
+  });
+
+  // ---- boot --------------------------------------------------------------
+  renderAll();
+  renderResults();
+})();
+</script>
+</body>
+</html>
