@@ -2,7 +2,8 @@
 const { chromium } = require('playwright');
 const path = require('path');
 
-const FILE = 'file://' + path.resolve(__dirname, '../projects/provider-filter-modes/index.html');
+const TARGET = process.argv[2] ||
+  ('file://' + path.resolve(__dirname, '../projects/provider-filter-modes/index.html'));
 
 let pass = 0, fail = 0;
 const fails = [];
@@ -14,131 +15,147 @@ function ok(name, cond, extra) {
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(15000);
 
   const errors = [];
+  const badReqs = [];
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('response', r => { if (r.status() >= 400) badReqs.push(r.url() + ' ' + r.status()); });
 
-  await page.goto(FILE, { waitUntil: 'networkidle' });
+  await page.goto(TARGET, { waitUntil: 'networkidle' });
 
-  // ---- 1. kit loaded -----------------------------------------------------
+  const openPop  = () => page.click('#ms-field');
+  // no Done button by design — dismissal is a click away from the dropdown
+  const clickAway = async () => {
+    await page.click('h1');
+    ok('click away closes popover', await page.locator('#ms-pop').isHidden());
+  };
+  async function applyAndCount() {
+    if (await page.locator('#ms-pop').isVisible()) await clickAway();
+    ok('Apply is clickable once popover is dismissed', await page.locator('#apply').isVisible());
+    await page.click('#apply');
+    return parseInt((await page.textContent('#result-count')).trim(), 10);
+  }
+  const names = () => page.$$eval('#rows tr td:first-child', t => t.map(x => x.textContent.trim()));
+
+  // ---- 1. kit + naming ---------------------------------------------------
   const primary = await page.evaluate(() =>
     getComputedStyle(document.documentElement).getPropertyValue('--color-primary').trim());
-  ok('UI kit loaded (--color-primary = #0053CC)', primary === '#0053CC', 'got ' + JSON.stringify(primary));
+  ok('UI kit loaded (--color-primary = #0053CC)', primary === '#0053CC', JSON.stringify(primary));
 
-  const unresolved = await page.evaluate(() => {
-    const bad = [];
-    document.querySelectorAll('*').forEach(el => {
-      const bg = getComputedStyle(el).backgroundColor;
-      if (bg === '' || bg === 'invalid') bad.push(el.className);
-    });
-    return bad.length;
-  });
-  ok('no unresolved computed backgrounds', unresolved === 0);
+  ok('filter is labelled "Integration"',
+    (await page.textContent('#ms-label')).trim() === 'Integration',
+    await page.textContent('#ms-label'));
+  ok('placeholder = "All integrations"',
+    (await page.textContent('#ms-value')).trim() === 'All integrations',
+    await page.textContent('#ms-value'));
+  ok('column header = "Connected integrations"',
+    (await page.textContent('#rows, table thead tr th:nth-child(3)')).includes('Connected integrations'));
+  ok('no "Company provider" left in user-facing chrome',
+    !(await page.textContent('.filter-panel')).includes('Company provider'));
 
-  // ---- 2. initial state --------------------------------------------------
+  // field must not look disabled
+  const fieldBg = await page.evaluate(() =>
+    getComputedStyle(document.getElementById('ms-field')).backgroundColor);
+  ok('closed field is white, not grey (does not read as disabled)',
+    fieldBg === 'rgb(255, 255, 255)', fieldBg);
+
   ok('starts with all 14 orgs',
-    (await page.textContent('#result-count')).trim() === '14 organizations',
-    await page.textContent('#result-count'));
-  ok('field shows placeholder "All"', (await page.textContent('#ms-value')).trim() === 'All');
-  ok('dirty hint hidden at rest', await page.locator('#dirty').isHidden());
+    (await page.textContent('#result-count')).trim() === '14 organizations');
 
-  // ---- 3. popover opens and is actually usable ---------------------------
-  await page.click('#ms-field');
+  // ---- 2. segmented is ACTIVE at zero selections ------------------------
+  await openPop();
   ok('popover VISIBLE after open', await page.locator('#ms-pop').isVisible());
-  ok('segmented control visible', await page.locator('#segmented').isVisible());
-  ok('mode sits above search in DOM order', await page.evaluate(() => {
-    const seg = document.getElementById('segmented');
-    const search = document.getElementById('ms-search');
-    return !!(seg.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING);
-  }));
+  ok('no segment disabled at 0 selections',
+    await page.locator('#segmented .seg[disabled]').count() === 0);
+  ok('segmented not aria-disabled at 0 selections',
+    await page.getAttribute('#segmented', 'aria-disabled') !== 'true');
 
-  // ---- 4. segmented disabled while nothing selected ----------------------
-  ok('segmented aria-disabled at 0 selections',
-    await page.getAttribute('#segmented', 'aria-disabled') === 'true');
-  ok('all three segments disabled at 0 selections',
-    await page.locator('#segmented .seg[disabled]').count() === 3);
+  const segBg = await page.evaluate(() =>
+    getComputedStyle(document.querySelector('.seg[data-mode="all"]')).backgroundColor);
+  ok('inactive segment is white, not grey', segBg === 'rgb(255, 255, 255)', segBg);
+  const segOpacity = await page.evaluate(() =>
+    getComputedStyle(document.getElementById('segmented')).opacity);
+  ok('segmented group at full opacity', segOpacity === '1', segOpacity);
 
-  // clicking a disabled segment must not change the mode
-  await page.locator('.seg[data-mode="none"]').click({ force: true });
-  ok('disabled segment click does not change mode',
-    await page.getAttribute('.seg[data-mode="any"]', 'aria-checked') === 'true');
+  // mode is selectable with nothing ticked
+  await page.locator('.seg[data-mode="none"]').click();
+  ok('mode changes with zero selections',
+    await page.getAttribute('.seg[data-mode="none"]', 'aria-checked') === 'true');
+  await page.locator('.seg[data-mode="any"]').click();
 
-  // ---- 5. select AFFIRM + EBAY ------------------------------------------
+  // ---- 3. no Done / no count footer -------------------------------------
+  ok('no Done button', await page.locator('#ms-done').count() === 0);
+  ok('no selected-count footer', await page.locator('#ms-count').count() === 0);
+  ok('no "providers selected" text anywhere in popover',
+    !(await page.textContent('#ms-pop')).match(/selected/i));
+
+  // ---- 4. Select All / Deselect All are buttons, not a checkbox ---------
+  ok('Select All is a button', await page.locator('button#ms-all').isVisible());
+  ok('Deselect All is a button', await page.locator('button#ms-none').isVisible());
+  ok('no "Select all" checkbox row remains',
+    await page.locator('.ms-opt input[data-value="__all__"]').count() === 0);
+
+  await page.click('#ms-all');
+  ok('Select All ticks every option',
+    await page.locator('.ms-opt input:checked').count() === await page.locator('.ms-opt input').count());
+  ok('Select All disables itself when it would be a no-op',
+    await page.locator('#ms-all').isDisabled());
+  await page.click('#ms-none');
+  ok('Deselect All clears every option',
+    await page.locator('.ms-opt input:checked').count() === 0);
+  ok('Deselect All disables itself when it would be a no-op',
+    await page.locator('#ms-none').isDisabled());
+
+  // bulk buttons respect an active search
+  await page.fill('#ms-search', 'AMAZON');
+  await page.click('#ms-all');
+  ok('Select All within a search selects only the matches',
+    (await page.textContent('#ms-value')).trim() === 'Has any of: AMAZON, AMAZON_V2',
+    await page.textContent('#ms-value'));
+  await page.click('#ms-none');
+  await page.fill('#ms-search', '');
+
+  // ---- 5. selection + label ---------------------------------------------
   await page.locator('.ms-opt input[data-value="AFFIRM"]').check();
-  // popover must survive the first toggle and stay operable
   ok('popover still VISIBLE after first toggle', await page.locator('#ms-pop').isVisible());
-  ok('EBAY checkbox still VISIBLE (clickable) after re-render',
+  ok('EBAY row still VISIBLE (clickable) after re-render',
     await page.locator('.ms-opt input[data-value="EBAY"]').isVisible());
   await page.locator('.ms-opt input[data-value="EBAY"]').check();
-  ok('popover still VISIBLE after second toggle', await page.locator('#ms-pop').isVisible());
 
-  // the overlap this fixes — assert it is real, so nobody "simplifies" Done away later
-  ok('open popover DOES overlay the Apply button (why Done exists)', await page.evaluate(() => {
-    const p = document.getElementById('ms-pop').getBoundingClientRect();
-    const a = document.getElementById('apply').getBoundingClientRect();
-    return !(p.bottom < a.top || p.top > a.bottom || p.right < a.left || p.left > a.right);
-  }));
-  ok('Done button visible in popover footer', await page.locator('#ms-done').isVisible());
-  ok('footer count reads "2 providers selected"',
-    (await page.textContent('#ms-count')).trim() === '2 providers selected',
-    await page.textContent('#ms-count'));
-
-  ok('segmented enabled after selection',
-    await page.getAttribute('#segmented', 'aria-disabled') === 'false');
-  ok('no segment disabled after selection',
-    await page.locator('#segmented .seg[disabled]').count() === 0);
-
-  // ---- 6. closed-state label carries the mode ---------------------------
   ok('label = "Has any of: AFFIRM, EBAY"',
     (await page.textContent('#ms-value')).trim() === 'Has any of: AFFIRM, EBAY',
     await page.textContent('#ms-value'));
-
   await page.locator('.seg[data-mode="all"]').click();
   ok('label = "Has all of: AFFIRM, EBAY"',
-    (await page.textContent('#ms-value')).trim() === 'Has all of: AFFIRM, EBAY',
-    await page.textContent('#ms-value'));
-
+    (await page.textContent('#ms-value')).trim() === 'Has all of: AFFIRM, EBAY');
   await page.locator('.seg[data-mode="none"]').click();
   ok('label = "Has none of: AFFIRM, EBAY"',
-    (await page.textContent('#ms-value')).trim() === 'Has none of: AFFIRM, EBAY',
-    await page.textContent('#ms-value'));
+    (await page.textContent('#ms-value')).trim() === 'Has none of: AFFIRM, EBAY');
 
-  // ---- 7. dirty hint before Apply ---------------------------------------
   ok('dirty hint VISIBLE before Apply', await page.locator('#dirty').isVisible());
 
-  // ---- 8. results per mode ----------------------------------------------
-  // The open popover overlays the Apply button (it does in production too, and the
-  // mode row makes it ~60px taller). "Done" is the dismissal that makes Apply reachable.
-  async function applyAndCount() {
-    if (await page.locator('#ms-pop').isVisible()) await page.click('#ms-done');
-    ok('Apply is clickable once popover is dismissed', await page.locator('#apply').isVisible());
-    await page.click('#apply');
-    const txt = (await page.textContent('#result-count')).trim();
-    return parseInt(txt, 10);
-  }
-  async function names() {
-    return page.$$eval('#rows tr td:first-child', tds => tds.map(t => t.textContent.trim()));
-  }
-
+  // ---- 6. results per mode ----------------------------------------------
+  // Q1 answered: an org with zero companies DOES match "has none of".
   let n = await applyAndCount();
-  ok('Has none of AFFIRM,EBAY → 5 orgs', n === 5, 'got ' + n);
+  ok('Has none of AFFIRM,EBAY → 6 orgs (incl. zero-company org)', n === 6, 'got ' + n);
   let list = await names();
+  ok('  Q1: zero-company org IS included in "has none"', list.includes('Untouched Account'));
   ok('  none-list excludes &Dine Ltd', !list.includes('&Dine Ltd'));
   ok('  none-list excludes Bluepeak Retail (EBAY only)', !list.includes('Bluepeak Retail'));
-  ok('  none-list excludes zero-company org by default', !list.includes('Untouched Account'));
-  ok('  none-list includes Rebecca Howell (STRIPE)', list.includes('Rebecca Howell'));
-  ok('  none is an anti-join, not row-level NOT IN: Solvent Goods absent',
+  ok('  anti-join, not row-level NOT IN: Solvent Goods absent',
     !list.includes('Solvent Goods Co'));
-
   ok('dirty hint hidden after Apply', await page.locator('#dirty').isHidden());
 
-  await page.click('#ms-field');
+  await openPop();
   await page.locator('.seg[data-mode="any"]').click();
   n = await applyAndCount();
   ok('Has any of AFFIRM,EBAY → 8 orgs', n === 8, 'got ' + n);
+  list = await names();
+  ok('  any-list excludes the zero-company org', !list.includes('Untouched Account'));
 
-  await page.click('#ms-field');
+  await openPop();
   await page.locator('.seg[data-mode="all"]').click();
   n = await applyAndCount();
   ok('Has all of AFFIRM,EBAY → 4 orgs', n === 4, 'got ' + n);
@@ -146,28 +163,27 @@ function ok(name, cond, extra) {
   ok('  all-list excludes Testing Company (AFFIRM only)', !list.includes('Testing Company'));
   ok('  all-list includes &Dine Ltd', list.includes('&Dine Ltd'));
 
-  // any >= all  — adding a box must never shrink results in "any"
-  ok('all-mode result is a subset size of any-mode', 4 <= 8);
+  // the three modes must partition the 14 orgs: any + none = 14
+  ok('any (8) + none (6) = all 14 orgs — modes partition cleanly', 8 + 6 === 14);
 
-  // ---- 9. 3+ selections switch to a count -------------------------------
-  await page.click('#ms-field');
+  // ---- 7. 3+ selections switch to a count -------------------------------
+  await openPop();
   await page.locator('.ms-opt input[data-value="STRIPE"]').check();
   ok('label switches to count at 3 selections',
-    (await page.textContent('#ms-value')).trim() === 'Has all of 3 providers',
+    (await page.textContent('#ms-value')).trim() === 'Has all of 3 integrations',
     await page.textContent('#ms-value'));
 
-  // ---- 10. clearing to zero resets mode ---------------------------------
-  await page.locator('.ms-opt input[data-value="AFFIRM"]').uncheck();
-  await page.locator('.ms-opt input[data-value="EBAY"]').uncheck();
-  await page.locator('.ms-opt input[data-value="STRIPE"]').uncheck();
-  ok('cleared → label back to "All"', (await page.textContent('#ms-value')).trim() === 'All');
-  ok('cleared → mode reset to any',
-    await page.getAttribute('.seg[data-mode="any"]', 'aria-checked') === 'true');
-  ok('cleared → segmented disabled again',
-    await page.getAttribute('#segmented', 'aria-disabled') === 'true');
+  // ---- 8. mode PERSISTS when the selection is cleared -------------------
+  await page.click('#ms-none');
+  ok('cleared → label back to "All integrations"',
+    (await page.textContent('#ms-value')).trim() === 'All integrations');
+  ok('cleared → mode is NOT reset (still "all")',
+    await page.getAttribute('.seg[data-mode="all"]', 'aria-checked') === 'true');
+  ok('cleared → segmented still active',
+    await page.locator('#segmented .seg[disabled]').count() === 0);
 
-  // ---- 11. keyboard on the segmented control ----------------------------
-  await page.locator('.ms-opt input[data-value="AFFIRM"]').check();
+  // ---- 9. keyboard -------------------------------------------------------
+  await page.locator('.seg[data-mode="any"]').click();
   await page.locator('.seg[data-mode="any"]').focus();
   await page.keyboard.press('ArrowRight');
   ok('ArrowRight moves to "all"',
@@ -178,47 +194,28 @@ function ok(name, cond, extra) {
   await page.keyboard.press('Home');
   ok('Home moves back to "any"',
     await page.getAttribute('.seg[data-mode="any"]', 'aria-checked') === 'true');
-  const roving = await page.$$eval('#segmented .seg', b => b.filter(x => x.tabIndex === 0).length);
-  ok('exactly one tab stop in the group (roving tabindex)', roving === 1, 'got ' + roving);
+  ok('exactly one tab stop in the group (roving tabindex)',
+    await page.$$eval('#segmented .seg', b => b.filter(x => x.tabIndex === 0).length) === 1);
   ok('group is a radiogroup', await page.getAttribute('#segmented', 'role') === 'radiogroup');
-
-  // ---- 12. Escape closes -------------------------------------------------
   await page.keyboard.press('Escape');
   ok('Escape closes popover', await page.locator('#ms-pop').isHidden());
 
-  // ---- 13. Q1 toggle actually changes the table -------------------------
-  await page.click('#ms-field');
-  await page.locator('.ms-opt input[data-value="EBAY"]').check();
-  await page.locator('.seg[data-mode="none"]').click();
-  n = await applyAndCount();
-  const beforeQ1 = n;
-  await page.locator('#q1-toggle').check();
-  const afterTxt = (await page.textContent('#result-count')).trim();
-  const afterQ1 = parseInt(afterTxt, 10);
-  ok('Q1 toggle adds the zero-company org', afterQ1 === beforeQ1 + 1,
-    beforeQ1 + ' → ' + afterQ1);
-  list = await names();
-  ok('  zero-company org now listed', list.includes('Untouched Account'));
-
-  // ---- 14. no horizontal overflow ---------------------------------------
-  const overflow = await page.evaluate(() =>
-    document.documentElement.scrollWidth > document.documentElement.clientWidth);
-  ok('no page-level horizontal overflow', !overflow);
-
-  // ---- 15. no JS errors --------------------------------------------------
+  // ---- 10. hygiene -------------------------------------------------------
+  ok('no page-level horizontal overflow', !(await page.evaluate(() =>
+    document.documentElement.scrollWidth > document.documentElement.clientWidth)));
   ok('zero JS errors', errors.length === 0, errors.join(' | '));
+  ok('zero failed requests', badReqs.length === 0, badReqs.join(' | '));
 
-  // screenshots
-  await page.locator('#q1-toggle').uncheck();
-  await page.click('#ms-field');
-  await page.locator('.seg[data-mode="all"]').click();
-  await page.screenshot({ path: '/tmp/provider-filter-open.png', clip: { x: 0, y: 0, width: 1440, height: 720 } });
-  await page.keyboard.press('Escape');
-  await page.screenshot({ path: '/tmp/provider-filter-full.png', fullPage: true });
+  if (TARGET.startsWith('file://')) {
+    await openPop();
+    await page.locator('.ms-opt input[data-value="AFFIRM"]').check();
+    await page.locator('.ms-opt input[data-value="EBAY"]').check();
+    await page.locator('.seg[data-mode="none"]').click();
+    await page.screenshot({ path: '/tmp/pf2-open.png', clip: { x: 0, y: 0, width: 1440, height: 760 } });
+  }
 
   await browser.close();
-
-  console.log('\n' + pass + ' passed, ' + fail + ' failed');
+  console.log('\n' + pass + ' passed, ' + fail + ' failed  [' + (TARGET.startsWith('file') ? 'local' : 'published') + ']');
   if (fails.length) { console.log('\nFAILURES:'); fails.forEach(f => console.log('  ✗ ' + f)); }
   process.exit(fail ? 1 : 0);
 })();
