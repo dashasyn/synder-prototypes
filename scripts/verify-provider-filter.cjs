@@ -134,8 +134,6 @@ function ok(name, cond, extra) {
   ok('label = "Has none of: AFFIRM, EBAY"',
     (await page.textContent('#ms-value')).trim() === 'Has none of: AFFIRM, EBAY');
 
-  ok('dirty hint VISIBLE before Apply', await page.locator('#dirty').isVisible());
-
   // ---- 6. results per mode ----------------------------------------------
   // Q1 answered: an org with zero companies DOES match "has none of".
   let n = await applyAndCount();
@@ -146,7 +144,8 @@ function ok(name, cond, extra) {
   ok('  none-list excludes Bluepeak Retail (EBAY only)', !list.includes('Bluepeak Retail'));
   ok('  anti-join, not row-level NOT IN: Solvent Goods absent',
     !list.includes('Solvent Goods Co'));
-  ok('dirty hint hidden after Apply', await page.locator('#dirty').isHidden());
+  ok('no unapplied-changes hint anywhere', await page.locator('#dirty').count() === 0);
+  ok('no "Unapplied" text on the page', !(await page.textContent('body')).includes('Unapplied'));
 
   await openPop();
   await page.locator('.seg[data-mode="any"]').click();
