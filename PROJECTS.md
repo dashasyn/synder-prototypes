@@ -5,6 +5,21 @@
 
 ## 🔧 Active Projects
 
+### Company provider — filter match modes (2026-09-03)
+- **Status:** ✅ Draft spec + working prototype live, sent to Ignat to share with devs. Awaiting answers on Q1/Q2.
+- **Ask:** Ignat, 2026-09-03 — after a discussion the filter needs three modes (all / one of / none of); "give suggestions how can we add them", then "make a draft to share with devs".
+- **Surface:** internal admin **Organizations** list, `Company provider` multiselect (screenshot: Search · Product · Company provider · Company Country + Apply).
+- **Live:** https://dashasyn.github.io/synder-prototypes/projects/provider-filter-modes/ — `projects/provider-filter-modes/index.html`
+- **The control:** segmented control (`Has any` / `Has all` / `Has none`) at the **top of the existing popover**, above the search field, order mode → search → list. Rejected a separate operator dropdown in the panel (breaks the two-column label+one-control grid, makes the other three filters look inconsistent) and stacked radios (~70px in a scrolling popover; radios above a checkbox list read as more list, not as a mode).
+- **Naming:** `Has any / Has all / Has none`, **not** `Any / All / None` — the list already contains **Select all**, so a bare "All" segment collides with it (match-every-selected vs tick-every-box).
+- **The part that matters more than the control:** the **closed-state label** carries the mode — `Has none of: AFFIRM, EBAY`. Without it a None-mode field still reading `AFFIRM, EBAY` says the exact opposite of what filters. Switches to `Has none of 5 providers` at 3+ selections, because truncated comma list + negation is a dangerous string.
+- **Found in the browser, not in review:** the open popover **overlays the Apply button** (true in production too; the mode row makes it ~60px taller). Added a **Done** button in a popover footer so Apply stays reachable, and *asserted the overlap* so nobody deletes Done later as redundant.
+- **Dev-facing content on the page:** query semantics table (`any` = `S ∩ P ≠ ∅`, `all` = `S ⊆ P`, `none` = `S ∩ P = ∅`) with the warning that **`none` is an anti-join, not row-level `NOT IN`** — an org on both AFFIRM and STRIPE satisfies a naive `NOT IN` via its STRIPE row and would wrongly appear in "Has none of AFFIRM". Flagged as the single most likely bug in the change. Plus behaviour rules (default `any`, segmented disabled at 0 selections, Apply-gated, mode resets on clear, `provider_mode=` URL param).
+- **Open questions on the page:** **Q1** does an org with *no companies at all* match "Has none of"? Prototype excludes them; a live toggle in the Q1 block re-filters the table so the decision is visible, not theoretical. **Q2** will Product/Country get modes too? If yes, the Jira-style field+operator+value pattern scales better and should be adopted instead.
+- **Out of scope, stated:** one mode applies to the whole selection, so "has AFFIRM but *not* EBAY" is unreachable. The answer is not a fourth segment — it's per-row include/exclude, a much bigger build. Ship three modes, wait for demand.
+- **Verification:** `scripts/verify-provider-filter.cjs` — **53 assertions in real Chromium, 0 failures**; also re-run against the published URL (kit resolves, 0 JS errors, 0 failed requests). Covers all three modes' result sets by name, the anti-join case (Solvent Goods absent from "none"), disabled-at-zero, mode reset on clear, 3+ count label, roving-tabindex arrow/Home/End keyboard, Escape, dirty hint, and popover liveness via `isVisible()` after each toggle.
+- **Commit:** `21642c4`.
+
 ### Configurable payment application engine (2026-09-01)
 - **Status:** ✅ v4 live and current — full-screen overlay, two columns, on Ignat's collage (2026-09-02). v1–v3 kept for comparison.
 - **Source:** Confluence `[Settings] Configurable payment application engine` (page 3160113208) · Jira SD-16243 (tech) / SD-16110 (mock) · DIS-333
