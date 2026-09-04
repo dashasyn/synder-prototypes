@@ -128,6 +128,44 @@
 - **Registered on the hub:** first card in Transit Projects.
 
 
+### Sync details ("Explain") — three layouts (2026-09-04)
+- **Status:** ✅ Prototype live, 56 Chromium assertions passing against the published URL
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/reports/sync-details-layouts/
+- **Location:** `reports/sync-details-layouts/index.html`
+- **Research/rationale:** `reports/sync-details-rethink/` (RESEARCH.md, logrocket-findings.md, index.html)
+- **Two switchers:** Layout (1 Fix the frame · 2 Object cards · 3 Two columns) ×
+  Sync state (Synced · Synced with warnings · Deleted with warnings · Rollback in progress).
+  Rollback-in-progress auto-resolves to Deleted after ~6s — the auto-refresh demo.
+- **Shared across all three layouts:** every `General` row lifted out of the log into an alert
+  carrying the fix action · child rows open by default · the object identifier *is* the link ·
+  the message column describes the current state, not the original write.
+- **Ignat's build answers (2026-09-04):** state switcher yes · one page with switchers ·
+  customer view only · **nothing wired** ("I want to see the structure") · auto-refresh kept ·
+  no sparkline in the rail · **keep current customer data — `Transaction type` NOT surfaced**
+  (reverses my recommendation; still think it's the cheapest win, but it's his call) ·
+  rewrite the ambiguous statuses.
+- **Copy rewrite, with production copy preserved in `title` on every changed string:**
+  `Canceled` → **Rollback canceled** (Ignat's tutorial: *"the rollback was stopped before Synder
+  could complete it"*; also the shipped name at `vocabulary.md:144`) ·
+  `Skipped` → **Nothing to remove** (those objects were never created by this sync).
+- **Two problems found in the tutorial copy he supplied:** its *What to do* line says "click
+  **Explain** to review the error details" — but the reader is already on Explain; and it spells
+  the status *Cancelled* where `vocabulary.md:144` lists *Canceled*.
+- **Two defects the screenshots caught that the assertions did not** (both mine, both fixed):
+  struck-through object ids on rows reading "Still in your books" — the exact self-contradiction
+  the prototype exists to remove; and the fix button rendering twice in the warnings state
+  (once in the promoted alert, once on the warning card). Also trimmed a row message that
+  repeated the alert's reason five times.
+- **Tools:** `scripts/verify-sync-layouts.cjs` (56 assertions, takes a URL argument),
+  `scripts/shots-sync-layouts.cjs`.
+- **Data provenance is stated on the page:** Deleted-with-warnings is transcribed from the
+  09-04 screenshot object for object; Synced is the same sync pre-rollback; the two other
+  rollback states have observed *shape* but inferred per-row values; Synced-with-warnings
+  (sync 747262, org set-890) shows `(not captured)` rather than an invented identifier.
+- **Still open:** the `Rollback failed` variant has never been observed; and whether
+  `Deleted with warnings` can also mean a *successful* rollback plus an unrelated warning —
+  if so the alert needs a second shape.
+
 ### Platform Transactions + Dashboard drill-through (2026-08-20)
 - **Status:** ✅ Prototype live — validator round 1 done, all Critical + High FIXED (2026-08-26)
 - **Round 1 (2026-08-26):** 7/7 lenses, gate PASS, 27 findings (6 Critical / 14 High / 7 Medium).
