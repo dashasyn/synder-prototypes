@@ -37,13 +37,19 @@
              border-left:3px solid var(--color-grey-30);font-size:var(--font-body2);line-height:var(--font-body2-line-height);font-weight:var(--font-body2-weight);letter-spacing:var(--font-body2-letter-spacing);color:var(--color-grey)}
   .meta{font-size:var(--font-caption);line-height:var(--font-caption-line-height);font-weight:var(--font-caption-weight);letter-spacing:var(--font-caption-letter-spacing);color:var(--color-grey-50);margin-bottom:var(--sp-32)}
   strong{color:var(--color-grey)}
+  pre.wire{background:var(--color-white);border:1px solid var(--color-grey-20);
+        border-radius:var(--radius-md);padding:var(--sp-16);overflow-x:auto;
+        font-family:ui-monospace,monospace;font-size:12px;line-height:1.55;
+        color:var(--color-grey);margin:var(--sp-12) 0}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-16)}
+  @media (max-width:720px){.cols{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="wrap">
 
 <h1>Sync details ("Explain") — rethink</h1>
-<div class="meta">2026-08-26 · Dasha · evidence: demo.synderapp.com (4 transaction types, live) + 5 admin screenshots from Ignat</div>
+<div class="meta">2026-08-26, layout proposals added 2026-09-04 · Dasha · evidence: demo.synderapp.com (4 transaction types, live) + 6 screenshots from Ignat + LogRocket, 90 days, external users only</div>
 
 <p class="lede">Where the page is reached from, what actually varies between transactions,
 what the options are, and which one I'd pick. Two of my earlier claims were wrong and are
@@ -258,6 +264,159 @@ Detail: <a href="logrocket-findings.md">logrocket-findings.md</a></p>
   <em>complements</em> A rather than replacing it — pair it with the transactions-table work.</p>
 </div>
 
+<h2>The "Deleted with warnings" screenshot, read line by line <span class="chip warnc">2026-09-04</span></h2>
+
+<p>One screenshot of the Sync log on a rolled-back sync. Six rows, five columns. It is the densest
+piece of evidence in this whole file, and it argues for the layout below better than my prose did.</p>
+
+<div class="card corr">
+  <h3>It contradicts itself inside a single row</h3>
+  <p>Row 1 reads <em>Invoice · 26EC8A01-0209 · Show in QuickBooks · <strong>Canceled</strong> ·
+  "Invoice was created."</em> The Message column is describing the <strong>sync</strong>; the
+  Rollback status column is describing the <strong>rollback</strong>. Two events, opposite
+  directions, one row, nothing saying which is current. The three rows that carry the newest
+  information all say "was created".</p>
+</div>
+
+<div class="card corr">
+  <h3>I cannot tell you what "Canceled" means, and I've been reading this page for a week</h3>
+  <p>In a column headed <code>Rollback status</code>, <code>Canceled</code> can mean the rollback
+  was canceled (object survives in the books) or the object was canceled/voided in QuickBooks
+  (rollback succeeded). Opposite outcomes for the customer's books. Same for
+  <code>Skipped</code> on the two child rows — those objects were never created by this sync, so
+  the honest value is <em>nothing to remove</em>, not <em>skipped</em>.</p>
+  <p><strong>Rule:</strong> a status value must name its subject when two subjects are on screen.
+  <code>Rollback canceled</code> / <code>Nothing to remove</code>.</p>
+</div>
+
+<div class="card key">
+  <h3>The cause is in last place, under a label that means nothing</h3>
+  <p>The row that explains the entire screen — <em>"Authorization fail: Synder is unable to get
+  response from a QuickBooks Online company as Synder has been disconnected from QuickBooks Online
+  by a user."</em> — is row 6 of 6, amber, and its Object type is <strong>General</strong>. Its
+  Object info, Object and Rollback status cells are empty.</p>
+  <p>That is the tell: <strong>it is not an object, so it does not belong in a table of objects.</strong>
+  Three empty cells is the table saying so. Every <code>General</code> row is a page-level event and
+  belongs in an alert above the log, not as its last row.</p>
+</div>
+
+<div class="card corr">
+  <h3>The page offers five links to a system it just told you it can't reach</h3>
+  <p>Every object row carries <em>Show in QuickBooks</em>. The last row says Synder is disconnected
+  from QuickBooks Online. The page holds both facts and reconciles neither — all five links will
+  fail. When the connection is known-broken, those links should be disabled with the reason on hover,
+  and the reconnect action should be the only live control.</p>
+</div>
+
+<div class="card">
+  <h3>Two smaller ones</h3>
+  <ul>
+    <li>The Sync log's intro sentence is an advert — <em>"review your Settings… you can also use
+      Smart Rules Recipes"</em> — sitting in the exact spot where a summary of <em>this</em> log
+      should be. Same complaint as the Rules block at the bottom, but worse, because here it is
+      above the error. Replace with <em>6 steps · 3 rollbacks canceled · 1 problem</em>.</li>
+    <li>Copy bug in that sentence: <code>configuration.You</code> — missing space.</li>
+  </ul>
+</div>
+
+<h2>Layout proposals</h2>
+
+<p class="lede">Three, cheapest first. They share one move: <strong>the page currently orders
+sections by Synder's process (info → log → time → advert) and every layout below orders them by
+the user's question instead (what happened → what's wrong → what do I do → the detail).</strong>
+Nothing is deleted in any of them.</p>
+
+<div class="card rec">
+  <h3>Layout 1 · Fix the frame, keep the table <span class="chip yes">ship this first</span></h3>
+  <p>No new components, no new data. Four structural edits to what already renders.</p>
+  <pre class="wire">┌──────────────────────────────────────────────────────────────┐
+│ ← Transactions list   Syncs history            [ Sync again ]│
+│ Refund · −103.29 USD · Shopify → QuickBooks Online           │
+│ ● Deleted with warnings · 1 problem            ⟳ live status │  ← auto-refresh, no banner
+├──────────────────────────────────────────────────────────────┤
+│ ⚠  Synder is disconnected from QuickBooks Online.            │  ← the General row, lifted out
+│    The rollback stopped. 3 objects were not removed.         │
+│    [ Reconnect QuickBooks Online ]   [ Try rollback again ]  │  ← fix, not just diagnosis
+├──────────────────────────────────────────────────────────────┤
+│ WHAT'S IN YOUR BOOKS            6 steps · 3 canceled · 1 problem
+│ ▾ Invoice   26EC8A01-0209 ↗          Rollback canceled       │  ← id IS the link
+│     Product or Service  EUR_lamp         nothing to remove   │  ← children open by default
+│     Income account      Stripe sales ⓘ   nothing to remove   │
+│   Payment   4Z1E4pyg…ZuKC ↗          Rollback canceled       │
+│   Expense   4Z1E4pyg…ZuKC ↗          Rollback canceled       │
+├──────────────────────────────────────────────────────────────┤
+│ › Sync info      › Sync time      › Rules that ran (0)       │
+└──────────────────────────────────────────────────────────────┘</pre>
+  <ol>
+    <li><strong>Lift every <code>General</code> row into an alert above the table</strong>, and give
+      it the fix action. This alone moves the cause from last place to first.</li>
+    <li><strong>Children open by default, ids collapse.</strong> Already recommended; this screenshot
+      shows why — <em>Income account: Stripe sales</em> is the row an accountant came for.</li>
+    <li><strong>The object identifier becomes the link.</strong> Kills five identical
+      "Show in QuickBooks" links whose accessible name is the same string five times, and frees a
+      column. Disable them when the connection is known-broken.</li>
+    <li><strong>Message column becomes state-current.</strong> During and after a rollback it
+      describes the rollback, not the original write. The original write moves into the row's
+      expanded detail where it is history, not headline.</li>
+  </ol>
+</div>
+
+<div class="card">
+  <h3>Layout 2 · Object cards instead of a table</h3>
+  <p>The Sync log is <strong>1 to 5 top-level rows</strong> across every transaction type observed.
+  A five-column table is a lot of chrome for four rows, and it is why the warning message —
+  the best copy on the page — is squeezed into a cell that wraps to two lines.</p>
+  <pre class="wire">┌─ Invoice ────────────────────────── 26EC8A01-0209 ↗ ─┐
+│  Rollback canceled · created 12 Aug                   │
+│  Product or Service   EUR_lamp                        │
+│  Income account       Stripe sales                    │
+└───────────────────────────────────────────────────────┘
+┌─ Payment ──────────────────────── 4Z1E4pyg…ZuKC ↗ ─┐
+│  Rollback canceled                                    │
+└───────────────────────────────────────────────────────┘
+┌─ ⚠ Inventory not adjusted ────────────────────────────┐
+│  Linen Wrap Dress · CHV-LWD-001                       │
+│  Not tracked as an inventory product.                 │
+│  [ How to convert it ↗ ]                              │  ← a warning gets room for a fix button
+└───────────────────────────────────────────────────────┘</pre>
+  <p>Cards give a warning somewhere to put an action — which is the thing the amber rows have
+  never had, in either screenshot. Cost: a real build, and support loses the scannable grid.
+  Worth doing only if Layout 1 proves too cramped for the warning copy.</p>
+</div>
+
+<div class="card">
+  <h3>Layout 3 · Two columns — outcome left, technical right <span class="chip yes">the target</span></h3>
+  <p>Today the page is one full-width stack, so the only way to rank anything is vertical order, and
+  the only way to demote the technical half is to bury it. <strong>The LogRocket run forbids
+  burying it — 86% scroll to Sync time.</strong> A right rail resolves that contradiction: the
+  technical content stays visible without competing for first place.</p>
+  <pre class="wire">┌───────────────────────────────────────┬──────────────────────────┐
+│ ⚠  Disconnected from QuickBooks       │ Transaction type         │
+│    [ Reconnect ] [ Rollback again ]   │   Refund  ← admin-only    │
+│                                       │   today; surface it       │
+│ WHAT'S IN YOUR BOOKS                  │                          │
+│  Invoice   26EC8A01-0209 ↗            │ Sync id     747262       │
+│    Product or Service  EUR_lamp       │ Started     12 Aug 14:02 │
+│    Income account      Stripe sales   │ Finished    12 Aug 14:02 │
+│  Payment   4Z1E4pyg…ZuKC ↗            │ Amount      −103.29 USD  │
+│  Expense   4Z1E4pyg…ZuKC ↗            │ Shopify → QBO            │
+│                                       │                          │
+│ RULES THAT RAN ON THIS SYNC           │ Sync time  8 processes   │
+│  none — [ Create a rule ]             │  ▁▂▇▂▁  11.6s            │
+└───────────────────────────────────────┴──────────────────────────┘</pre>
+  <p>Also fixes the two dead-click cases directly: the sync id and the error text both become
+  things you can click (copy, and expand-for-detail) rather than static strings users hammer.</p>
+</div>
+
+<div class="card key">
+  <h3>What I'd do</h3>
+  <p><strong>Layout 1 now, Layout 3 as the target, Layout 2 only if warnings still don't fit.</strong>
+  Layout 1 is four edits to existing markup and moves the cause of the page from row 6 to row 1.
+  Pair either with the two items the evidence ranks above all of this:
+  <strong>auto-refresh</strong> (68% of sessions reload manually) and
+  <strong>surfacing Transaction type</strong> to customers.</p>
+</div>
+
 <h2>Separate from the redesign — worth tickets regardless</h2>
 <table>
 <thead><tr><th>Issue</th><th>Detail</th></tr></thead>
@@ -283,9 +442,11 @@ Detail: <a href="logrocket-findings.md">logrocket-findings.md</a></p>
 </table>
 
 <h2>Still unobserved</h2>
-<p><code>Rollback failed</code> and <code>Rollback canceled</code> — both write to the books, so both
-have an Explain page, and I have not seen either. Everything else in the matrix above is from
-first-hand evidence.</p>
+<p><code>Rollback failed</code> and <code>Rollback canceled</code> as page <em>statuses</em> — I still
+have not seen either. The 09-04 screenshot shows the <code>Rollback status</code> column populated
+with <code>Canceled</code>/<code>Skipped</code> on a <code>Deleted with warnings</code> sync, which is
+the closest I have, but I can't tell from it whether the rollback was canceled or the objects were —
+see the ambiguity finding above. Treat the rollback state matrix as still unresolved.</p>
 
 </div>
 </body>
