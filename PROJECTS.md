@@ -820,7 +820,7 @@
 - **Still open with the client:** why DAISY is predefined at all (Ignat doesn't know — it's the customer's request that only ELA be playful; if it's habit rather than approval/legal, generating both from the same facts removes the drift and the need for a fact check), and whether the proper-noun glossary lives in Konfiguration.
 
 ### PIMS · Grunddaten Editor (2026-07-09)
-- **Status:** 🚧 In progress — v1 prototype built, awaiting feedback
+- **Status:** 🚧 In progress — Everrunning music V2 (schedules per station) live, awaiting feedback
 - **Client:** ETC Solutions GmbH — PIMS product for BVG (Berlin transport authority)
 - **Purpose:** RailML base data editor for BVG Stadler J/JK vehicles. Replaces manual Excel workflow (JJK.xlsx). Daily export at 04:00 to Stadler FIS-SW via RailML 2.5.
 - **Local file:** `projects/grunddaten-editor/index.html`
@@ -851,6 +851,18 @@
   - Operations: who may create events + approval step, whole station forever or speaker zones later, weekday/holiday patterns, global kill switch during disruptions
   - Legal: GEMA licensing owner + whether the tool must store licence reference/expiry per track, and play-out logging for proof
   - Scale: how many events/stations expected (decides bulk edit / templates)
+- **Everrunning music V2 — schedules per station (2026-09-04):** built as a **second version behind a switcher** on the Music page (`Ansicht: Zeitpläne pro Station | Eventliste (V1)`), so V1 survives for later work. Ignat's answers drove every decision:
+  - **Triggers deleted from both versions** — "nothing about specific trains". The Weihnachtszug event became a plain December date range. The `Auslösepunkte` on station detail (announcement metres) are a different feature and were left alone.
+  - **One row per station**, four columns: Name · Linie · Musik · Radio. Only stations that actually hold a schedule are listed. Each cell shows source + type chip, seven day chips with the active weekdays lit, the distinct periods, and the validity (`dauerhaft` or a date range). Row click opens a **full-screen detail** like Grunddaten — no expander.
+  - **One schedule per station**, holding entries; each entry = one source (radio / playlist / single track) + its own validity + a weekly grid. Music and radio may share a day.
+  - **Overlaps refused on save**, naming the day and both sources. Checked on a Mon 00:00 → Sun 24:00 minute timeline, so `end < start` correctly means *across midnight* (the existing transfer schedules use 22:00–01:00) and only entries whose validity periods intersect are compared.
+  - **Weekly grid reuses the existing Schedule component** from the transfer announcements — the very dialog in Ignat's screenshot — but inline in the entry card rather than in a modal, so music and radio are visible together while checking for overlaps. Days **start empty** ("keine Wiedergabe"), `−` removes, `+` adds, `⧉` copies a day to the next.
+  - **Single track loops**, or repeats every N minutes (`Wiederholung: Fortlaufend | Alle N Min.`).
+  - **`Apply to` copies** (Ignat: "I think copy"): line-grouped target picker, multi-line stations stay in sync, targets that already have a schedule are chipped and counted in an overwrite warning, and the source station is saved along with the copies. Copies are independent afterwards.
+  - **Per-station time override was *not* carried into V2** — the station owns its schedule, so it would be the same thing twice. Left intact in V1, which is the version Ignat wants to keep developing.
+  - **Modal actions are now pinned** to the bottom of the dialog box, with the overwrite warning riding in the same bar — the same rule Ignat asked for on the message generator, applied here because the apply dialog is tall enough to scroll the decision away from its warning.
+  - Seed data: Alexanderplatz (Klassik Radio Mo–Fr 09:00–12:00 + Oktoberfest playlist, weekends in October) · Zoologischer Garten (**Ignat's example**: playlist Monday 09:00–12:00, Jazzradio Tue+Wed 10:00–15:00 and 16:00–20:00) · Wittenbergplatz (Madonna single track, 18.–20.09, every 20 min) · Nollendorfplatz (inactive). New playlist `PL-004 Oktoberfest 2026`.
+  - **Verification:** `projects/grunddaten-editor/verify-music.js` — **62 Chromium checks, all passing**, including focus retention while editing a period, `isVisible()`/`isEditable()` on a freshly added period rather than state alone, and both pinned-bar visibility assertions.
 - **Display Texts page (2026-08-25):** position input moved to first column (after drag handle + checkbox), multiselect (per-row + select-all-on-page + shift-click range, selection survives paging), bulk bar with "Move to position N" + bulk delete + clear, block drag (dragging one selected row moves the whole selection), pagination (10/25/50 per page)
 
 ### ETC Station Area Editor (2026-06-15)
