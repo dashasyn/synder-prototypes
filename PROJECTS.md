@@ -5,6 +5,20 @@
 
 ## 🔧 Active Projects
 
+### Banner builder — campaign banners (2026-09-04)
+- **Status:** ✅ MVP proto live, awaiting his read. Built to answer "is this a good idea", not to be a spec.
+- **Ask:** Ignat, 2026-09-04 — managers should be able to run temporary campaign banners (trial, subscribe, Black Friday, Christmas) without a developer. He asked for questions first; 11 questions with defaults → 11 answers in one list → one build.
+- **Live:** https://dashasyn.github.io/synder-prototypes/projects/banner-builder/ — `projects/banner-builder/index.html`
+- **Scope he settled:** campaign banners rank **below** system banners (already built, out of scope) · **one banner at a time** · targeting by plan (trial / monthly / yearly / accountants) · **not dismissible** · date + time + timezone · a page listing scheduled banners · plain text only · single optional button · every screen at the top · **no** metrics, **no** pause toggle, **no** approval step.
+- **Two screens, one file:** a *Campaign banners* list (status chip Live/Scheduled/Ended · colour swatch · body text · button + link · audience · start/end with the banner's own timezone · ⋯ Edit/Duplicate/Delete) and a full-screen builder overlay with the form left and a **scaled 1280px preview of the real app chrome** right.
+- **Colour is 4 fixed UI-kit presets**, not a picker: blue = `--color-banner-info` (the production banner blue, the default), green, yellow, purple. No raw hex anywhere — asserted.
+- **The gap in his answers, and the design idea:** one banner at a time **but no priority field**, so overlapping campaigns need a tie-break. Implemented **later start wins**, and both the list and the builder **warn on overlap** — naming the other banner, the shared audience, and which of the two actually shows. Adds zero new controls; it's the main thing to discuss.
+- **Six open questions on the page:** no internal name field (body text is the identity) · priority number vs later-start-wins · not-dismissible + every-screen + a 7-day Christmas banner is the likeliest support-ticket generator · no roles or audit trail · nothing checks copy against `vocabulary.md` · does marketing really want to exclude yearly subscribers from an annual-plan discount.
+- **Known proto shortcuts, stated:** fixed timezone offsets rather than a tz library, and no backend — reloading resets the list.
+- **Verification:** `scripts/verify-banner-builder.cjs` — **93 assertions in real Chromium, 0 failures**. Covers seeded statuses against today's date, both overlap warnings and their winner, submit-time validation (empty body, over-cap body, button text without a link and the reverse, bare domain, empty audience, end before start, end in the past), preview truthfulness (background and button colour per preset, button disappearing for an informational banner, measured wrap), row menu liveness via `isVisible()`, Edit prefill, Escape, Duplicate, Delete, and focus return to *New banner*.
+- **Bugs the build caught, both new failure classes:** `getBoundingClientRect().height` returns the **transformed** height, so the wrap warning read one line inside a `scale(.375)` preview — `offsetHeight` is untransformed layout. And a submit-time field error **outlived the value that caused it** (red "140 characters" under a 39-character field), so submit-time validation now clears per-field on input.
+- **Kit note:** `.material-icons` has **no font loaded** in any prototype, so icon ligatures render as the literal words "error"/"warning". Use text or unicode; asserted against.
+
 ### Integration filter — match modes (2026-09-03)
 - **Status:** ✅ Round 2 live. Both open questions answered by Ignat; one copy question outstanding (`All integrations` vs production's “All payment platforms”).
 - **Ask:** Ignat, 2026-09-03 — the filter needs three modes (all / one of / none of). Suggestions first, then "make a draft to share with devs", then a 7-point feedback round.

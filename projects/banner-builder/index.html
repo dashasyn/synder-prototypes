@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Banner builder — campaign banners (MVP proto)</title>
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+  body { background: var(--bg-page, var(--bg-surface)); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 24px 80px; }
+
+  .doc-note {
+    background: var(--color-primary-5);
+    border: 1px solid var(--color-primary-20);
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    margin-bottom: 24px;
+    font-size: 14px; line-height: 20px;
+  }
+  .doc-note p { margin: 0 0 6px; }
+  .doc-note p:last-child { margin: 0; }
+
+  .list-card { background: var(--bg-surface); border-radius: var(--radius-md); box-shadow: var(--shadow-card); }
+  .list-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px; border-bottom: 1px solid var(--border-default);
+  }
+  .list-head h2 { margin: 0; font-size: 16px; font-weight: 500; }
+  .list-rule { padding: 10px 16px; border-bottom: 1px solid var(--border-default); }
+
+  table.bb { width: 100%; border-collapse: collapse; }
+  table.bb th {
+    text-align: left; padding: 8px 16px;
+    font-size: 12px; font-weight: 500; color: var(--text-table-header);
+    border-bottom: 1px solid var(--border-table, var(--border-default));
+    white-space: nowrap;
+  }
+  table.bb td {
+    padding: 12px 16px; font-size: 14px; color: var(--text-primary);
+    border-bottom: 1px solid var(--border-default); vertical-align: top;
+  }
+  table.bb tr:last-child td { border-bottom: none; }
+  .col-status { width: 104px; }
+  .col-aud { width: 190px; }
+  .col-when { width: 168px; }
+  .col-menu { width: 44px; }
+
+  .swatch {
+    display: inline-block; width: 12px; height: 12px; border-radius: 3px;
+    border: 1px solid rgba(0,0,0,.08); flex: 0 0 auto; margin-top: 4px;
+  }
+  .banner-cell { display: flex; gap: 8px; align-items: flex-start; }
+  .banner-body { min-width: 0; }
+  .banner-text { display: block; }
+  .banner-cta { display: block; margin-top: 2px; font-size: 12px; color: var(--text-secondary); }
+  .when { font-variant-numeric: tabular-nums; }
+  .when-tz { display: block; font-size: 12px; color: var(--text-secondary); }
+
+  .conflict {
+    display: flex; gap: 6px; align-items: flex-start; margin-top: 6px;
+    font-size: 12px; line-height: 16px; color: var(--color-yellow);
+  }
+
+  .row-menu-wrap { position: relative; }
+  .row-menu-btn {
+    width: 28px; height: 28px; border: none; background: none; cursor: pointer;
+    border-radius: var(--radius-sm); color: var(--text-secondary);
+    font-size: 18px; line-height: 1;
+  }
+  .row-menu-btn:hover { background: var(--bg-hover, var(--color-grey-5)); }
+  .row-menu {
+    position: absolute; right: 0; top: 30px; z-index: 30; min-width: 150px;
+    background: var(--bg-surface); border-radius: var(--radius-md);
+    box-shadow: var(--shadow-dropdown); padding: 4px 0;
+  }
+  .row-menu button {
+    display: block; width: 100%; text-align: left; border: none; background: none;
+    padding: 8px 16px; font: inherit; font-size: 14px; color: var(--text-primary); cursor: pointer;
+  }
+  .row-menu button:hover { background: var(--bg-hover, var(--color-grey-5)); }
+  .row-menu button.danger { color: var(--color-red); }
+
+  /* ---------- builder overlay ---------- */
+  .bb-overlay { display: none; }
+  .bb-overlay.show { display: flex; }
+  .bb-grid {
+    display: grid; grid-template-columns: minmax(0,1fr) 480px; gap: 32px;
+    max-width: 1160px; margin: 0 auto;
+  }
+  .fieldset { margin-bottom: 28px; }
+  .fieldset > h3 {
+    margin: 0 0 12px; font-size: 11px; font-weight: 500; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--text-secondary);
+  }
+  .counter { font-size: 12px; color: var(--text-secondary); float: right; font-variant-numeric: tabular-nums; }
+  .counter.over { color: var(--color-red); }
+  .field-error { display: none; font-size: 12px; color: var(--color-red); margin-top: 2px; }
+  .has-error .field-error { display: block; }
+  .has-error .input, .has-error .textarea, .has-error .select { border-color: var(--border-error, var(--color-red)); }
+  .has-error .swatch-row { outline: 1px solid var(--color-red); outline-offset: 4px; border-radius: var(--radius-sm); }
+  .has-error .aud-row { outline: 1px solid var(--color-red); outline-offset: 4px; border-radius: var(--radius-sm); }
+
+  .swatch-row { display: flex; gap: 8px; }
+  .swatch-opt { position: relative; }
+  .swatch-opt input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .swatch-opt span {
+    display: flex; align-items: center; justify-content: center;
+    width: 76px; height: 40px; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default); cursor: pointer;
+    font-size: 12px; font-weight: 500;
+  }
+  .swatch-opt input:checked + span { box-shadow: 0 0 0 2px var(--color-primary); border-color: var(--color-primary); }
+  .swatch-opt input:focus-visible + span { outline: 2px solid var(--border-focus); outline-offset: 2px; }
+
+  .aud-row { display: flex; flex-wrap: wrap; gap: 8px 24px; }
+  .aud-summary { margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+
+  .when-grid { display: grid; grid-template-columns: 1fr 132px; gap: 12px; }
+  .tz-row { margin-top: 12px; }
+  .sched-note { margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+
+  /* ---------- preview ---------- */
+  .pv-col { position: sticky; top: 0; align-self: start; }
+  .pv-label { font-size: 11px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 8px; }
+  .pv-frame {
+    border: 1px solid var(--border-default); border-radius: var(--radius-md);
+    overflow: hidden; height: 292px; background: var(--bg-surface);
+  }
+  .pv-scale { width: 1280px; transform: scale(.375); transform-origin: top left; }
+  .pv-banner {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 12px 16px; font-size: 14px; line-height: 20px; letter-spacing: .15px;
+  }
+  .pv-banner-text { max-width: 900px; }
+  .pv-banner-btn {
+    flex: 0 0 auto; height: 32px; padding: 0 16px; border: none;
+    border-radius: var(--radius-sm); color: var(--color-white);
+    font-size: 14px; font-weight: 500; letter-spacing: .4px; cursor: default;
+    display: inline-flex; align-items: center;
+  }
+  .pv-topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 57px; padding: 0 24px; background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-nav, var(--border-default));
+    font-size: 16px; font-weight: 500;
+  }
+  .pv-lower { display: flex; height: 620px; }
+  .pv-side { width: 216px; background: var(--bg-sidebar, var(--color-grey-5)); padding: 16px 12px; }
+  .pv-side i { display: block; height: 10px; border-radius: 3px; background: var(--color-grey-20); margin-bottom: 16px; }
+  .pv-main { flex: 1; padding: 24px; }
+  .pv-main i { display: block; height: 12px; border-radius: 3px; background: var(--color-grey-10); margin-bottom: 14px; }
+  .pv-main i.w40 { width: 40%; } .pv-main i.w70 { width: 70%; } .pv-main i.w55 { width: 55%; }
+  .pv-caption { margin-top: 8px; font-size: 12px; color: var(--text-secondary); }
+  .pv-status { margin-top: 16px; }
+
+  .q-list { margin: 40px 0 0; padding: 0 0 0 20px; font-size: 14px; line-height: 22px; }
+  .q-list li { margin-bottom: 8px; }
+  h1.pt { margin: 0 0 4px; font-size: 24px; font-weight: 400; }
+  .lede { color: var(--text-secondary); margin: 0 0 24px; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="listView">
+  <h1 class="pt">Banner builder</h1>
+  <p class="lede">Internal admin · so managers can run temporary campaigns without a developer</p>
+
+  <div class="doc-note">
+    <p><strong>MVP proto for discussion, not a spec.</strong> Everything here is one file, no backend.</p>
+    <p>Scope decided 2026-09-04: one banner at a time · not dismissible · targeting by plan · date + time + timezone · single optional button · plain text · every screen · no metrics, no pause, no approval step.</p>
+  </div>
+
+  <div id="saveAlert" class="alert alert-success hidden" role="status"></div>
+
+  <div class="list-card">
+    <div class="list-head">
+      <h2>Campaign banners</h2>
+      <button class="btn btn-primary btn-sm" id="newBtn">New banner</button>
+    </div>
+    <div class="list-rule">
+      <span class="text-caption">System banners — trial expiry, failed payment, dunning — always win. A campaign banner shows only when no system banner is active for that user.</span>
+    </div>
+    <div class="table-wrap">
+      <table class="bb">
+        <thead>
+          <tr>
+            <th class="col-status">Status</th>
+            <th>Banner</th>
+            <th class="col-aud">Audience</th>
+            <th class="col-when">Starts</th>
+            <th class="col-when">Ends</th>
+            <th class="col-menu"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <h2 style="margin:40px 0 4px;font-size:16px;font-weight:500">Open questions for the discussion</h2>
+  <ol class="q-list">
+    <li><strong>How does the list identify a banner?</strong> Right now the body text is the identity — no separate internal name field. Fine at 5 banners, probably not at 50.</li>
+    <li><strong>Two overlapping campaigns:</strong> only one banner can show, and there is no priority field in the MVP, so the rule here is <em>the later start wins</em>. The builder warns when it detects an overlap. Alternative: an explicit priority number, which is one more field for managers to get wrong.</li>
+    <li><strong>Not dismissible + every screen + weeks-long campaign.</strong> A Christmas banner a user cannot close for 7 days is the thing most likely to generate support tickets. Worth revisiting even if the MVP ships without an X.</li>
+    <li><strong>Who can reach this page?</strong> No roles or audit trail in the proto. Anyone with the link can publish to all users.</li>
+    <li><strong>Copy review.</strong> Nothing checks the body text against <code>vocabulary.md</code>, so a manager can ship "payment platform" or "turn on".</li>
+    <li><strong>Yearly + Black Friday.</strong> Targeting by plan lets you exclude yearly subscribers from an annual-plan discount — worth confirming that is how marketing actually wants to slice it.</li>
+  </ol>
+</div>
+
+<!-- ================= builder overlay ================= -->
+<div class="overlay bb-overlay" id="builder" role="dialog" aria-modal="true" aria-labelledby="bTitle">
+  <div class="overlay-header">
+    <div class="d-flex align-center" style="gap:16px">
+      <button class="close-x" id="closeBtn" aria-label="Close">&times;</button>
+      <span class="overlay-header-title" id="bTitle">New banner</span>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outlined btn-sm" id="cancelBtn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="saveBtn">Schedule banner</button>
+    </div>
+  </div>
+  <div class="overlay-body">
+    <div class="bb-grid">
+      <!-- ---------- form ---------- -->
+      <form id="form" novalidate>
+        <div id="formAlert" class="alert alert-error hidden" tabindex="-1" role="alert"></div>
+
+        <div class="fieldset">
+          <h3>Content</h3>
+          <div class="form-field" id="f-body">
+            <label class="form-label" for="body">Body text <span class="counter" id="bodyCount">0/90</span></label>
+            <textarea class="textarea" id="body" rows="2" maxlength="140" placeholder="Black Friday: 50% off all annual plans."></textarea>
+            <div class="form-hint">Plain text. No links inside the text — use the button.</div>
+            <div class="field-error" id="e-body"></div>
+          </div>
+          <div class="form-field" id="f-btnText">
+            <label class="form-label" for="btnText">Button text <span class="counter" id="btnCount">0/24</span></label>
+            <input class="input" id="btnText" maxlength="40" placeholder="See plans">
+            <div class="field-error" id="e-btnText"></div>
+          </div>
+          <div class="form-field" id="f-btnLink">
+            <label class="form-label" for="btnLink">Button link</label>
+            <input class="input" id="btnLink" placeholder="https://synder.com/pricing">
+            <div class="form-hint">Leave the button text and link empty for an informational banner with no button.</div>
+            <div class="field-error" id="e-btnLink"></div>
+          </div>
+        </div>
+
+        <div class="fieldset">
+          <h3>Colour</h3>
+          <div class="form-field" id="f-color">
+            <div class="swatch-row" id="swatches" role="radiogroup" aria-label="Banner colour"></div>
+            <div class="form-hint">Fixed presets from the UI kit. Blue is the default and matches every banner in production today.</div>
+            <div class="field-error" id="e-color"></div>
+          </div>
+        </div>
+
+        <div class="fieldset">
+          <h3>Audience</h3>
+          <div class="form-field" id="f-aud">
+            <div class="aud-row" id="audRow"></div>
+            <div class="aud-summary" id="audSummary"></div>
+            <div class="field-error" id="e-aud"></div>
+          </div>
+        </div>
+
+        <div class="fieldset">
+          <h3>Schedule</h3>
+          <div class="form-field" id="f-start">
+            <label class="form-label" for="startDate">Starts</label>
+            <div class="when-grid">
+              <input class="input" type="date" id="startDate">
+              <input class="input" type="time" id="startTime" value="09:00">
+            </div>
+            <div class="field-error" id="e-start"></div>
+          </div>
+          <div class="form-field" id="f-end">
+            <label class="form-label" for="endDate">Ends</label>
+            <div class="when-grid">
+              <input class="input" type="date" id="endDate">
+              <input class="input" type="time" id="endTime" value="23:59">
+            </div>
+            <div class="field-error" id="e-end"></div>
+          </div>
+          <div class="form-field tz-row" id="f-tz">
+            <label class="form-label" for="tz">Time zone</label>
+            <select class="select" id="tz"></select>
+            <div class="field-error" id="e-tz"></div>
+          </div>
+          <div class="sched-note" id="schedNote"></div>
+          <div class="conflict hidden" id="conflictNote"></div>
+        </div>
+      </form>
+
+      <!-- ---------- preview ---------- -->
+      <div class="pv-col">
+        <div class="pv-label">Preview</div>
+        <div class="pv-frame">
+          <div class="pv-scale">
+            <div class="pv-banner" id="pvBanner">
+              <span class="pv-banner-text" id="pvText">Your banner text will appear here.</span>
+              <span class="pv-banner-btn hidden" id="pvBtn">See plans</span>
+            </div>
+            <div class="pv-topbar"><span>Synder</span><span style="color:var(--text-secondary)">Company ▾</span></div>
+            <div class="pv-lower">
+              <div class="pv-side"><i style="width:60%"></i><i style="width:80%"></i><i style="width:50%"></i><i style="width:70%"></i><i style="width:65%"></i></div>
+              <div class="pv-main"><i class="w40"></i><i class="w70"></i><i></i><i class="w55"></i><i class="w70"></i><i class="w40"></i></div>
+            </div>
+          </div>
+        </div>
+        <div class="pv-caption">Desktop at 1280px, scaled to 37.5%. <span id="wrapWarn"></span></div>
+        <div class="pv-status" id="pvStatus"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+/* ---------------- reference data ---------------- */
+
+const COLORS = {
+  blue:   { label: "Blue",   bg: "var(--color-banner-info)",  fg: "var(--color-primary)" },
+  green:  { label: "Green",  bg: "var(--color-green-light)",  fg: "var(--color-green)" },
+  yellow: { label: "Yellow", bg: "var(--color-yellow-light)", fg: "var(--color-yellow)" },
+  purple: { label: "Purple", bg: "var(--color-purple-light)", fg: "var(--color-purple)" },
+};
+
+const AUDIENCES = [
+  { id: "trial",       label: "Trial" },
+  { id: "monthly",     label: "Monthly" },
+  { id: "yearly",      label: "Yearly" },
+  { id: "accountants", label: "Accountants" },
+];
+
+/* Fixed offsets — a proto, not a tz library. Flagged on the page. */
+const ZONES = [
+  { id: "UTC",                 label: "UTC",                        offset: 0 },
+  { id: "Europe/Vilnius",      label: "Europe/Vilnius (UTC+3)",     offset: 3 },
+  { id: "America/New_York",    label: "America/New_York (UTC−4)",   offset: -4 },
+  { id: "America/Los_Angeles", label: "America/Los_Angeles (UTC−7)", offset: -7 },
+];
+
+const LIMITS = { body: 90, btnText: 24 };
+
+/* ---------------- seed banners ---------------- */
+
+let nextId = 100;
+let banners = [
+  { id: 1, body: "Summer sale ends soon — get 3 months free on any annual plan.",
+    btnText: "See plans", btnLink: "https://synder.com/pricing", color: "yellow",
+    aud: ["trial", "monthly"], startDate: "2026-09-01", startTime: "09:00",
+    endDate: "2026-09-10", endTime: "23:59", tz: "UTC" },
+  { id: 2, body: "New: Sage Intacct is now available on Scale and Enterprise plans.",
+    btnText: "Read the guide", btnLink: "https://synder.com/blog/sage-intacct", color: "green",
+    aud: ["trial", "monthly", "yearly", "accountants"], startDate: "2026-09-08", startTime: "09:00",
+    endDate: "2026-09-22", endTime: "23:59", tz: "UTC" },
+  { id: 3, body: "Black Friday: 50% off all annual plans.",
+    btnText: "Claim the discount", btnLink: "https://synder.com/black-friday", color: "purple",
+    aud: ["trial", "monthly"], startDate: "2026-11-27", startTime: "09:00",
+    endDate: "2026-11-30", endTime: "23:59", tz: "America/New_York" },
+  { id: 4, body: "Holiday support hours: replies may take longer 24–26 December.",
+    btnText: "", btnLink: "", color: "blue",
+    aud: ["trial", "monthly", "yearly", "accountants"], startDate: "2026-12-20", startTime: "00:00",
+    endDate: "2026-12-27", endTime: "23:59", tz: "UTC" },
+  { id: 5, body: "Webinar for accounting firms: reconciling multi-channel clients.",
+    btnText: "Register", btnLink: "https://synder.com/webinar", color: "blue",
+    aud: ["accountants"], startDate: "2026-08-12", startTime: "12:00",
+    endDate: "2026-08-20", endTime: "23:59", tz: "UTC" },
+];
+
+/* ---------------- helpers ---------------- */
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const zone = (id) => ZONES.find((z) => z.id === id) || ZONES[0];
+
+/* local wall-clock in the banner's zone -> real instant */
+function instant(date, time, tzId) {
+  if (!date || !time) return null;
+  const [y, m, d] = date.split("-").map(Number);
+  const [hh, mm] = time.split(":").map(Number);
+  return Date.UTC(y, m - 1, d, hh - zone(tzId).offset, mm);
+}
+const startOf = (b) => instant(b.startDate, b.startTime, b.tz);
+const endOf   = (b) => instant(b.endDate, b.endTime, b.tz);
+
+function statusOf(b, now = Date.now()) {
+  const s = startOf(b), e = endOf(b);
+  if (s == null || e == null) return "draft";
+  if (now > e) return "ended";
+  if (now < s) return "scheduled";
+  return "live";
+}
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function fmtWhen(date, time) {
+  if (!date) return "—";
+  const [y, m, d] = date.split("-").map(Number);
+  return `${d} ${MONTHS[m - 1]} ${y}, ${time}`;
+}
+
+function audLabel(aud) {
+  if (!aud || !aud.length) return "—";
+  if (aud.length === AUDIENCES.length) return "Everyone";
+  return AUDIENCES.filter((a) => aud.includes(a.id)).map((a) => a.label).join(", ");
+}
+
+/* overlap = time ranges intersect AND audiences intersect */
+function overlaps(a, b) {
+  const as = startOf(a), ae = endOf(a), bs = startOf(b), be = endOf(b);
+  if ([as, ae, bs, be].some((v) => v == null)) return false;
+  if (as > be || bs > ae) return false;
+  return a.aud.some((x) => b.aud.includes(x));
+}
+
+function conflictsFor(b, now = Date.now()) {
+  return banners
+    .filter((o) => o.id !== b.id && statusOf(o, now) !== "ended" && overlaps(b, o))
+    .map((o) => ({ other: o, thisWins: startOf(b) >= startOf(o) }));
+}
+
+/* ---------------- list rendering ---------------- */
+
+const STATUS_CHIP = { live: "status-green", scheduled: "status-blue", ended: "status-grey", draft: "status-grey" };
+const STATUS_LABEL = { live: "Live", scheduled: "Scheduled", ended: "Ended", draft: "Incomplete" };
+
+function renderList() {
+  const now = Date.now();
+  const order = { live: 0, scheduled: 1, draft: 2, ended: 3 };
+  const sorted = [...banners].sort((a, b) => {
+    const d = order[statusOf(a, now)] - order[statusOf(b, now)];
+    return d !== 0 ? d : (startOf(a) || 0) - (startOf(b) || 0);
+  });
+
+  $("rows").innerHTML = sorted.map((b) => {
+    const st = statusOf(b, now);
+    const c = COLORS[b.color];
+    const conf = st === "ended" ? [] : conflictsFor(b, now);
+    const confHtml = conf.map((k) => `
+      <div class="conflict">
+        <span aria-hidden="true">&#9888;</span>
+        <span>Overlaps <strong>${esc(shortName(k.other))}</strong> for ${esc(sharedAud(b, k.other))}.
+        ${k.thisWins ? "This one shows" : "That one shows"} during the overlap (later start wins).</span>
+      </div>`).join("");
+
+    return `<tr data-id="${b.id}">
+      <td class="col-status"><span class="status ${STATUS_CHIP[st]}">${STATUS_LABEL[st]}</span></td>
+      <td>
+        <div class="banner-cell">
+          <span class="swatch" style="background:${c.bg};border-color:${c.fg}"></span>
+          <span class="banner-body">
+            <span class="banner-text">${esc(b.body)}</span>
+            ${b.btnText ? `<span class="banner-cta">Button: ${esc(b.btnText)} → ${esc(b.btnLink)}</span>` : `<span class="banner-cta">No button</span>`}
+          </span>
+        </div>
+        ${confHtml}
+      </td>
+      <td class="col-aud">${esc(audLabel(b.aud))}</td>
+      <td class="col-when"><span class="when">${fmtWhen(b.startDate, b.startTime)}</span><span class="when-tz">${esc(b.tz)}</span></td>
+      <td class="col-when"><span class="when">${fmtWhen(b.endDate, b.endTime)}</span><span class="when-tz">${esc(b.tz)}</span></td>
+      <td class="col-menu">
+        <div class="row-menu-wrap">
+          <button class="row-menu-btn" data-menu="${b.id}" aria-label="Actions for this banner" aria-haspopup="true" aria-expanded="false">⋯</button>
+        </div>
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+/* Names a banner in a warning. Uses the text before the first — : or . only
+   when that prefix is long enough to identify the campaign; "New: Sage
+   Intacct is now available…" must not become "New". */
+function shortName(b) {
+  const prefix = b.body.split(/[—:.]/)[0].trim();
+  const t = prefix.length >= 12 ? prefix : b.body.trim();
+  return t.length > 34 ? t.slice(0, 33) + "…" : t;
+}
+function sharedAud(a, b) {
+  const shared = a.aud.filter((x) => b.aud.includes(x));
+  return shared.length === AUDIENCES.length ? "everyone" : AUDIENCES.filter((x) => shared.includes(x.id)).map((x) => x.label.toLowerCase()).join(" + ");
+}
+
+/* row menu */
+document.addEventListener("click", (ev) => {
+  const open = document.querySelector(".row-menu");
+  const btn = ev.target.closest("[data-menu]");
+  if (open && !ev.target.closest(".row-menu")) {
+    const owner = document.querySelector('[aria-expanded="true"][data-menu]');
+    if (owner) owner.setAttribute("aria-expanded", "false");
+    open.remove();
+    if (!btn) return;
+  }
+  if (!btn) return;
+  if (open && open.dataset.for === btn.dataset.menu) return;
+  const id = Number(btn.dataset.menu);
+  const menu = document.createElement("div");
+  menu.className = "row-menu";
+  menu.dataset.for = String(id);
+  menu.innerHTML = `<button data-act="edit">Edit</button><button data-act="dup">Duplicate</button><button class="danger" data-act="del">Delete</button>`;
+  btn.parentElement.appendChild(menu);
+  btn.setAttribute("aria-expanded", "true");
+  menu.addEventListener("click", (e) => {
+    const act = e.target.dataset.act;
+    if (!act) return;
+    menu.remove();
+    btn.setAttribute("aria-expanded", "false");
+    if (act === "edit") openBuilder(id);
+    if (act === "dup") { const src = banners.find((x) => x.id === id); openBuilder(null, { ...src, id: null }); }
+    if (act === "del") { banners = banners.filter((x) => x.id !== id); renderList(); }
+  });
+});
+
+/* ---------------- builder ---------------- */
+
+let editingId = null;
+
+function buildControls() {
+  $("swatches").innerHTML = Object.entries(COLORS).map(([k, c]) => `
+    <label class="swatch-opt">
+      <input type="radio" name="color" value="${k}">
+      <span style="background:${c.bg};color:${c.fg}">${c.label}</span>
+    </label>`).join("");
+
+  $("audRow").innerHTML = AUDIENCES.map((a) => `
+    <label class="checkbox-wrap"><input type="checkbox" name="aud" value="${a.id}"><span>${a.label}</span></label>`).join("");
+
+  $("tz").innerHTML = ZONES.map((z) => `<option value="${z.id}">${z.label}</option>`).join("");
+}
+
+function readForm() {
+  return {
+    id: editingId,
+    body: $("body").value.trim(),
+    btnText: $("btnText").value.trim(),
+    btnLink: $("btnLink").value.trim(),
+    color: (document.querySelector('input[name="color"]:checked') || {}).value || "",
+    aud: [...document.querySelectorAll('input[name="aud"]:checked')].map((i) => i.value),
+    startDate: $("startDate").value, startTime: $("startTime").value,
+    endDate: $("endDate").value, endTime: $("endTime").value,
+    tz: $("tz").value,
+  };
+}
+
+function fillForm(b) {
+  $("body").value = b.body || "";
+  $("btnText").value = b.btnText || "";
+  $("btnLink").value = b.btnLink || "";
+  const color = b.color || "blue";
+  const radio = document.querySelector(`input[name="color"][value="${color}"]`);
+  if (radio) radio.checked = true;
+  const aud = b.aud || AUDIENCES.map((a) => a.id);
+  document.querySelectorAll('input[name="aud"]').forEach((i) => { i.checked = aud.includes(i.value); });
+  $("startDate").value = b.startDate || "";
+  $("startTime").value = b.startTime || "09:00";
+  $("endDate").value = b.endDate || "";
+  $("endTime").value = b.endTime || "23:59";
+  $("tz").value = b.tz || "UTC";
+}
+
+function openBuilder(id, preset) {
+  editingId = id;
+  clearErrors();
+  const base = id != null ? banners.find((b) => b.id === id) : (preset || defaultDraft());
+  fillForm(base);
+  $("bTitle").textContent = id != null ? "Edit banner" : "New banner";
+  $("saveBtn").textContent = id != null ? "Save changes" : "Schedule banner";
+  $("builder").classList.add("show");
+  document.body.style.overflow = "hidden";
+  update();
+  $("body").focus();
+}
+
+function defaultDraft() {
+  const d = new Date();
+  const iso = (dt) => dt.toISOString().slice(0, 10);
+  const plus = new Date(d.getTime() + 7 * 864e5);
+  return { body: "", btnText: "", btnLink: "", color: "blue",
+    aud: AUDIENCES.map((a) => a.id), startDate: iso(d), startTime: "09:00",
+    endDate: iso(plus), endTime: "23:59", tz: "UTC" };
+}
+
+function closeBuilder() {
+  $("builder").classList.remove("show");
+  document.body.style.overflow = "";
+  $("newBtn").focus();
+}
+
+/* ---------------- live preview + notes ---------------- */
+
+/* A submit-time error must not outlive the value that caused it — a red
+   "140 characters" message under a 39-character field is a UI that lies. */
+function clearErrorNear(el) {
+  const wrap = el && el.closest ? el.closest(".form-field.has-error") : null;
+  if (!wrap) return;
+  wrap.classList.remove("has-error");
+  const msg = wrap.querySelector(".field-error");
+  if (msg) msg.textContent = "";
+  if (!document.querySelector("#form .has-error")) $("formAlert").classList.add("hidden");
+}
+
+function update(ev) {
+  if (ev && ev.target) clearErrorNear(ev.target);
+  const b = readForm();
+  const c = COLORS[b.color] || COLORS.blue;
+
+  $("bodyCount").textContent = `${b.body.length}/${LIMITS.body}`;
+  $("bodyCount").classList.toggle("over", b.body.length > LIMITS.body);
+  $("btnCount").textContent = `${b.btnText.length}/${LIMITS.btnText}`;
+  $("btnCount").classList.toggle("over", b.btnText.length > LIMITS.btnText);
+
+  const pv = $("pvBanner");
+  pv.style.background = c.bg;
+  pv.style.color = c.fg;
+  $("pvText").textContent = b.body || "Your banner text will appear here.";
+  const btn = $("pvBtn");
+  if (b.btnText) {
+    btn.classList.remove("hidden");
+    btn.textContent = b.btnText;
+    btn.style.background = c.fg;
+  } else {
+    btn.classList.add("hidden");
+  }
+
+  /* real wrap measurement — offsetHeight is untransformed layout, unlike
+     getBoundingClientRect(), which returns the scaled preview height */
+  const t = $("pvText");
+  const lines = Math.round(t.offsetHeight / 20);
+  $("wrapWarn").textContent = lines > 1 ? `Wraps to ${lines} lines at this width.` : "";
+  $("wrapWarn").style.color = lines > 1 ? "var(--color-yellow)" : "";
+
+  $("audSummary").textContent = b.aud.length
+    ? `Shows to: ${audLabel(b.aud)}`
+    : "No audience selected — this banner would show to nobody.";
+
+  const s = instant(b.startDate, b.startTime, b.tz), e = instant(b.endDate, b.endTime, b.tz);
+  if (s != null && e != null && e > s) {
+    const mins = Math.round((e - s) / 6e4);
+    const d = Math.floor(mins / 1440), h = Math.round((mins % 1440) / 60);
+    const parts = [];
+    if (d) parts.push(`${d} day${d === 1 ? "" : "s"}`);
+    if (h) parts.push(`${h} hour${h === 1 ? "" : "s"}`);
+    const utc = new Date(s).toISOString().replace("T", " ").slice(0, 16);
+    $("schedNote").textContent = `Runs ${parts.join(", ") || "under an hour"}.`
+      + (b.tz === "UTC" ? "" : ` Starts ${utc} UTC.`);
+  } else {
+    $("schedNote").textContent = "";
+  }
+
+  const st = statusOf(b);
+  $("pvStatus").innerHTML = s == null || e == null || e <= s
+    ? ""
+    : `<span class="status ${STATUS_CHIP[st]}">${STATUS_LABEL[st]}</span>
+       <span class="text-caption" style="margin-left:8px">${st === "live" ? "would start showing immediately" : st === "scheduled" ? `starts in ${Math.max(1, Math.ceil((s - Date.now()) / 864e5))} day(s)` : "the end date is in the past"}</span>`;
+
+  const conf = conflictsFor(b);
+  const cn = $("conflictNote");
+  if (conf.length && st !== "ended") {
+    cn.classList.remove("hidden");
+    cn.innerHTML = conf.map((k) => `<span aria-hidden="true">&#9888;</span>
+      <span>Overlaps <strong>${esc(shortName(k.other))}</strong> (${fmtWhen(k.other.startDate, k.other.startTime)} → ${fmtWhen(k.other.endDate, k.other.endTime)}) for ${esc(sharedAud(b, k.other))}.
+      Only one banner shows, so during the overlap ${k.thisWins ? "<strong>this</strong>" : "<strong>that</strong>"} one wins — the later start wins.</span>`).join("<br>");
+  } else {
+    cn.classList.add("hidden");
+    cn.innerHTML = "";
+  }
+}
+
+/* ---------------- validation (submit-time) ---------------- */
+
+const FIELDS = ["body", "btnText", "btnLink", "color", "aud", "start", "end", "tz"];
+function clearErrors() {
+  FIELDS.forEach((f) => {
+    const wrap = $("f-" + f);
+    if (wrap) wrap.classList.remove("has-error");
+    const msg = $("e-" + f);
+    if (msg) msg.textContent = "";
+  });
+  $("formAlert").classList.add("hidden");
+}
+function setError(field, msg) {
+  const wrap = $("f-" + field);
+  if (wrap) wrap.classList.add("has-error");
+  const el = $("e-" + field);
+  if (el) el.textContent = msg;
+}
+
+function validate(b) {
+  const errs = [];
+  if (!b.body) errs.push(["body", "Body text is required."]);
+  else if (b.body.length > LIMITS.body) errs.push(["body", `Body text is ${b.body.length} characters. Keep it to ${LIMITS.body} so it stays on one line.`]);
+
+  if (b.btnText && b.btnText.length > LIMITS.btnText) errs.push(["btnText", `Button text is ${b.btnText.length} characters. Keep it to ${LIMITS.btnText}.`]);
+  if (b.btnText && !b.btnLink) errs.push(["btnLink", "Add a link, or clear the button text for a banner with no button."]);
+  if (!b.btnText && b.btnLink) errs.push(["btnText", "Add button text, or clear the link."]);
+  if (b.btnLink && !/^(https?:\/\/|\/)/.test(b.btnLink)) errs.push(["btnLink", "Use a full https:// address or an in-app path starting with /."]);
+
+  if (!b.color) errs.push(["color", "Pick a colour."]);
+  if (!b.aud.length) errs.push(["aud", "Pick at least one audience."]);
+
+  const s = instant(b.startDate, b.startTime, b.tz), e = instant(b.endDate, b.endTime, b.tz);
+  if (s == null) errs.push(["start", "Set a start date and time."]);
+  if (e == null) errs.push(["end", "Set an end date and time."]);
+  if (s != null && e != null && e <= s) errs.push(["end", "The end must be after the start."]);
+  if (e != null && e < Date.now()) errs.push(["end", "The end is already in the past, so this banner would never show."]);
+  return errs;
+}
+
+function save() {
+  clearErrors();
+  const b = readForm();
+  const errs = validate(b);
+  if (errs.length) {
+    errs.forEach(([f, m]) => setError(f, m));
+    const alert = $("formAlert");
+    alert.classList.remove("hidden");
+    alert.innerHTML = `<span>${errs.length === 1 ? "One field needs" : errs.length + " fields need"} attention before this banner can be scheduled.</span>`;
+    const first = errs[0][0];
+    const focusMap = { color: "swatches", aud: "audRow", start: "startDate", end: "endDate" };
+    const target = $(focusMap[first] || first);
+    if (target) {
+      const focusable = target.matches("input,textarea,select") ? target : target.querySelector("input,select,textarea");
+      if (focusable) focusable.focus({ preventScroll: true });
+    }
+    return;
+  }
+
+  if (editingId != null) {
+    banners = banners.map((x) => (x.id === editingId ? { ...b, id: editingId } : x));
+  } else {
+    b.id = ++nextId;
+    banners.push(b);
+  }
+  renderList();
+  closeBuilder();
+  const a = $("saveAlert");
+  a.classList.remove("hidden");
+  a.textContent = editingId != null ? "Banner updated." : `Banner scheduled for ${fmtWhen(b.startDate, b.startTime)} (${b.tz}).`;
+  setTimeout(() => a.classList.add("hidden"), 6000);
+}
+
+/* ---------------- wiring ---------------- */
+
+buildControls();
+renderList();
+
+$("newBtn").addEventListener("click", () => openBuilder(null));
+$("closeBtn").addEventListener("click", closeBuilder);
+$("cancelBtn").addEventListener("click", closeBuilder);
+$("saveBtn").addEventListener("click", save);
+$("form").addEventListener("input", update);
+$("form").addEventListener("change", update);
+$("form").addEventListener("submit", (e) => { e.preventDefault(); save(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("builder").classList.contains("show")) closeBuilder();
+});
+</script>
+</body>
+</html>
