@@ -29,6 +29,24 @@ body {
   display: flex; flex-direction: column; height: 100vh; overflow: hidden;
 }
 
+/* ── Prototype frame ───────────────────────────────────────────
+   A black strip above everything: it belongs to the prototype, not to the
+   product, so nobody mistakes the variant switcher for a BVG control. */
+.proto-bar {
+  background: #1b1b1b; color: #fff; flex-shrink: 0;
+  display: flex; align-items: center; gap: 14px; padding: 7px 16px;
+}
+.proto-lbl { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.6); }
+.proto-seg { display: inline-flex; border: 1px solid rgba(255,255,255,.28); border-radius: 4px; overflow: hidden; }
+.proto-seg button {
+  font-family: inherit; font-size: 12px; font-weight: 500; letter-spacing: .02em;
+  padding: 5px 12px; background: transparent; color: rgba(255,255,255,.72);
+  border: none; cursor: pointer; white-space: nowrap;
+}
+.proto-seg button + button { border-left: 1px solid rgba(255,255,255,.28); }
+.proto-seg button:hover { background: rgba(255,255,255,.1); color: #fff; }
+.proto-seg button.on { background: #fff; color: #1b1b1b; }
+
 /* ── ETC Top Bar ───────────────────────────────────────────── */
 .staging-banner {
   background: #FFF9C4; border-bottom: 1px solid #F9A825;
@@ -466,8 +484,6 @@ tr.row-sel td { background: var(--pri-50); }
 .sched-day-sep { height: 1px; background: var(--divider); margin: 3px 0; }
 
 /* ── Everrunning music V2: schedules per station ── */
-.ver-sw { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
-.ver-lbl { font-size: 12px; color: var(--text-sec); text-transform: uppercase; letter-spacing: .04em; }
 .ms-row { cursor: pointer; }
 .ms-row:hover { background: var(--pri-50); }
 .ms-item + .ms-item { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--divider); }
@@ -484,9 +500,32 @@ tr.row-sel td { background: var(--pri-50); }
 .ms-warn-inline { margin: 0 auto 0 0; max-width: 60%; line-height: 1.35; }
 .pick-click { cursor: pointer; }
 .pick-click:hover { background: var(--pri-50); }
+
+/* Row actions: ⋮ opens a small menu anchored to the row's last cell. */
+.row-act { position: relative; text-align: right; white-space: nowrap; padding: 10px 12px; }
+.kebab { font-family: inherit; width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: none; color: var(--text-sec); font-size: 18px; line-height: 1; cursor: pointer; }
+.kebab:hover { background: rgba(0,0,0,.07); color: var(--text-pri); }
+.kebab.on { background: var(--pri-light); color: var(--pri-dark); }
+.row-menu { position: absolute; right: 10px; top: 38px; z-index: 250; min-width: 210px;
+  background: #fff; border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.22);
+  padding: 4px 0; text-align: left; }
+.row-menu-item { padding: 9px 16px; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.row-menu-item:hover { background: var(--pri-50); color: var(--pri); }
+.row-menu-item.danger { color: #C62828; }
+.row-menu-item.danger:hover { background: #FDECEA; color: #C62828; }
 </style>
 </head>
 <body>
+
+<!-- Prototype frame: variant switcher, outside the product chrome -->
+<div class="proto-bar">
+  <span class="proto-lbl" id="proto-label">Prototyp-Variante</span>
+  <div class="proto-seg">
+    <button id="proto-v2" onclick="setMusicVer('stations')">Zeitpläne pro Station</button>
+    <button id="proto-v1" onclick="setMusicVer('events')">Eventliste (V1)</button>
+  </div>
+</div>
 
 <!-- Staging banner -->
 <div class="staging-banner">
@@ -603,6 +642,8 @@ const state = {
   evPickSearch: '',
   musicVer: 'stations', // Everrunning music: 'stations' (V2) | 'events' (V1)
   msStationId: null,    // station whose schedule is being edited
+  msLineId: null,       // …on this line: a station has one schedule per line
+  msMenu: null,         // row whose ⋮ menu is open, as "ST|LN"
   msDraft: null,        // working copy of that station schedule
   msPickSearch: '',     // station picker for a new schedule
   msApplySel: [],       // "apply to" target station ids
@@ -679,10 +720,12 @@ const i18n = {
     evTimeRange:         'Zeitfenster (Standard)',
     evSchedNote:         'Das Zeitfenster gilt für alle ausgewählten Stationen und kann je Station überschrieben werden.',
     // ── Everrunning Musik · Version 2: Zeitpläne pro Station ──
-    verLabel:            'Ansicht',
+    protoLabel:          'Prototyp-Variante',
+    msEdit:              'Bearbeiten',
+    msRowActions:        'Aktionen',
     verStations:         'Zeitpläne pro Station',
     verEvents:           'Eventliste (V1)',
-    msIntro:             'Ein Zeitplan pro Station — Musik und Radio dürfen sich nicht überlappen. Läuft mit niedriger Priorität, Ansagen haben immer Vorrang.',
+    msIntro:             'Ein Zeitplan pro Station und Linie — Musik und Radio dürfen sich nicht überlappen. Läuft mit niedriger Priorität, Ansagen haben immer Vorrang.',
     newSchedule:         '+ Neuer Zeitplan',
     colMusic:            'Musik',
     colRadio:            'Radio',
@@ -691,8 +734,8 @@ const i18n = {
     msPickTitle:         'Station für den Zeitplan wählen',
     msPickHint:          'Stationen mit bestehendem Zeitplan sind markiert.',
     msHasSched:          'Zeitplan vorhanden',
-    msNewFor:            (n) => `Neuer Zeitplan — ${n}`,
-    msSchedFor:          (n) => `Zeitplan — ${n}`,
+    msNewFor:            (n, l) => `Neuer Zeitplan — ${n} · ${l}`,
+    msSchedFor:          (n, l) => `Zeitplan — ${n} · ${l}`,
     msActive:            'Zeitplan aktiv',
     msEntry:             (n) => `Eintrag ${n}`,
     msAddEntry:          '+ Eintrag hinzufügen',
@@ -715,9 +758,9 @@ const i18n = {
     msApplyOverwrite:    (n) => `⚠ ${n} ausgewählte Station(en) haben bereits einen Zeitplan — er wird überschrieben.`,
     msApplyBtn:          (n) => `Auf ${n} Station(en) anwenden`,
     msApplyNone:         'Keine Zielstation ausgewählt.',
-    msApplySelf:         'Diese Station ist die Quelle des Zeitplans.',
+    msApplySelf:         'Quelle des Zeitplans.',
     msDelete:            'Zeitplan löschen',
-    msDelConfirm:        (n) => `Zeitplan für „${n}“ löschen?`,
+    msDelConfirm:        (n, l) => `Zeitplan für „${n}“ (${l}) löschen?`,
     msSave:              'Zeitplan speichern',
     msErrNoEntries:      'Bitte mindestens einen Eintrag anlegen.',
     msErrNoSource:       (n) => `Eintrag ${n}: bitte eine Quelle auswählen.`,
@@ -937,10 +980,12 @@ const i18n = {
     evTimeRange:         'Time window (default)',
     evSchedNote:         'The time window applies to every selected station and can be overridden per station.',
     // ── Everrunning music · version 2: schedules per station ──
-    verLabel:            'View',
+    protoLabel:          'Prototype variant',
+    msEdit:              'Edit',
+    msRowActions:        'Actions',
     verStations:         'Schedules per station',
     verEvents:           'Event list (V1)',
-    msIntro:             'One schedule per station — music and radio must not overlap. Runs at low priority; announcements always take precedence.',
+    msIntro:             'One schedule per station and line — music and radio must not overlap. Runs at low priority; announcements always take precedence.',
     newSchedule:         '+ New schedule',
     colMusic:            'Music',
     colRadio:            'Radio',
@@ -949,8 +994,8 @@ const i18n = {
     msPickTitle:         'Choose a station for the schedule',
     msPickHint:          'Stations that already have a schedule are marked.',
     msHasSched:          'has a schedule',
-    msNewFor:            (n) => `New schedule — ${n}`,
-    msSchedFor:          (n) => `Schedule — ${n}`,
+    msNewFor:            (n, l) => `New schedule — ${n} · ${l}`,
+    msSchedFor:          (n, l) => `Schedule — ${n} · ${l}`,
     msActive:            'Schedule active',
     msEntry:             (n) => `Entry ${n}`,
     msAddEntry:          '+ Add entry',
@@ -973,9 +1018,9 @@ const i18n = {
     msApplyOverwrite:    (n) => `⚠ ${n} selected station(s) already have a schedule — it will be overwritten.`,
     msApplyBtn:          (n) => `Apply to ${n} station(s)`,
     msApplyNone:         'No target station selected.',
-    msApplySelf:         'This station is the source of the schedule.',
+    msApplySelf:         'Source of this schedule.',
     msDelete:            'Delete schedule',
-    msDelConfirm:        (n) => `Delete the schedule for "${n}"?`,
+    msDelConfirm:        (n, l) => `Delete the schedule for "${n}" (${l})?`,
     msSave:              'Save schedule',
     msErrNoEntries:      'Please add at least one entry.',
     msErrNoSource:       (n) => `Entry ${n}: please select a source.`,
@@ -1218,7 +1263,7 @@ const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
    Music and radio may share a day but must never overlap in time.
    repeat only applies to a single track: 'loop' or every N minutes.        */
 const stationSchedules = [
-  { stationId:'AL', active:true, entries:[
+  { stationId:'AL', lineId:'U2', active:true, entries:[
     { id:'SE-1', source:{ kind:'radio', refId:'RS-001' }, validFrom:'', validTo:'',
       repeat:{ mode:'loop', intervalMin:15 },
       days:[{ day:'Mon', slots:[{start:'09:00',end:'12:00'}] },
@@ -1231,7 +1276,13 @@ const stationSchedules = [
       days:[{ day:'Sat', slots:[{start:'16:00',end:'20:00'}] },
             { day:'Sun', slots:[{start:'16:00',end:'20:00'}] }] },
   ]},
-  { stationId:'ZO', active:true, entries:[
+  { stationId:'AL', lineId:'U5', active:true, entries:[
+    { id:'SE-1', source:{ kind:'radio', refId:'RS-002' }, validFrom:'', validTo:'',
+      repeat:{ mode:'loop', intervalMin:15 },
+      days:[{ day:'Fri', slots:[{start:'17:00',end:'21:00'}] },
+            { day:'Sat', slots:[{start:'12:00',end:'21:00'}] }] },
+  ]},
+  { stationId:'ZO', lineId:'U2', active:true, entries:[
     { id:'SE-1', source:{ kind:'playlist', refId:'PL-001' }, validFrom:'', validTo:'',
       repeat:{ mode:'loop', intervalMin:15 },
       days:[{ day:'Mon', slots:[{start:'09:00',end:'12:00'}] }] },
@@ -1240,19 +1291,24 @@ const stationSchedules = [
       days:[{ day:'Tue', slots:[{start:'10:00',end:'15:00'},{start:'16:00',end:'20:00'}] },
             { day:'Wed', slots:[{start:'10:00',end:'15:00'},{start:'16:00',end:'20:00'}] }] },
   ]},
-  { stationId:'WI', active:true, entries:[
+  { stationId:'WI', lineId:'U1', active:true, entries:[
     { id:'SE-1', source:{ kind:'track', refId:'SND-048' }, validFrom:'2026-09-18', validTo:'2026-09-20',
       repeat:{ mode:'interval', intervalMin:20 },
       days:DAYS.map(d => ({ day:d, slots:[{start:'15:00',end:'18:00'}] })) },
   ]},
-  { stationId:'NO', active:false, entries:[
+  { stationId:'NO', lineId:'U4', active:false, entries:[
     { id:'SE-1', source:{ kind:'radio', refId:'RS-002' }, validFrom:'', validTo:'',
       repeat:{ mode:'loop', intervalMin:15 },
       days:[{ day:'Fri', slots:[{start:'18:00',end:'23:00'}] },
             { day:'Sat', slots:[{start:'12:00',end:'23:00'}] }] },
   ]},
 ];
-function getSchedule(stationId) { return stationSchedules.find(sc => sc.stationId === stationId); }
+/* A station record in PIMS is per line — there are several Alexanderplatz, one
+   per line — so a schedule is keyed by station *and* line. */
+function getSchedule(stationId, lineId) {
+  return stationSchedules.find(sc => sc.stationId === stationId && sc.lineId === lineId);
+}
+function schedKey(stationId, lineId) { return stationId + '|' + lineId; }
 function getEvent(id) { return musicEvents.find(ev => ev.id === id); }
 function musicTracks() { return soundFiles.filter(f => f.type === 'music'); }
 function sourceName(src) {
@@ -1575,12 +1631,16 @@ function toggleEvrDropdown(e) {
 function closeEvrDropdown() {
   document.getElementById('evr-dropdown').classList.remove('open');
 }
-document.addEventListener('click', () => { closeCfgDropdown(); closeEvrDropdown(); });
+document.addEventListener('click', () => {
+  closeCfgDropdown(); closeEvrDropdown();
+  if (state.msMenu) { closeRowMenu(); render(); }
+});
 
 // ── Render ─────────────────────────────────────────────────
 const GD_VIEWS  = ['stations','detail','sounds','spc','texts','lines','lineDetail','lineMgmt','playlistDetail'];
 const EVR_VIEWS = ['music','musicEvent','musicStations','musicStation'];
 function render() {
+  renderProtoBar();
   // Highlight cfg trigger when any GD view is active
   const cfgActive = GD_VIEWS.includes(state.view);
   document.getElementById('nav-cfg').classList.toggle('active', cfgActive);
@@ -3082,7 +3142,6 @@ function renderMusic() {
       <button class="btn btn-primary btn-sm" onclick="newMusicEvent()">${t('newEvent')}</button>
     </div>
   </div>
-  ${versionSwitch()}
   <div class="tbl-wrap"><table>
     <thead><tr>
       <th>${t('colEvent')}</th>
@@ -3431,27 +3490,44 @@ function setMusicVer(v) {
   navigate(v === 'stations' ? 'musicStations' : 'music');
 }
 function openMusic() { navigate(state.musicVer === 'stations' ? 'musicStations' : 'music'); }
-function versionSwitch() {
-  return `
-  <div class="ver-sw">
-    <span class="ver-lbl">${t('verLabel')}</span>
-    <div class="seg">
-      <button class="${state.musicVer === 'stations' ? 'on' : ''}" onclick="setMusicVer('stations')">${t('verStations')}</button>
-      <button class="${state.musicVer === 'events'   ? 'on' : ''}" onclick="setMusicVer('events')">${t('verEvents')}</button>
-    </div>
-  </div>`;
+/* The variant switcher lives in the black prototype bar, so it is updated
+   there rather than being re-rendered with the page body. */
+function renderProtoBar() {
+  document.getElementById('proto-label').textContent = t('protoLabel');
+  const v2 = document.getElementById('proto-v2'), v1 = document.getElementById('proto-v1');
+  v2.textContent = t('verStations'); v1.textContent = t('verEvents');
+  v2.classList.toggle('on', state.musicVer === 'stations');
+  v1.classList.toggle('on', state.musicVer === 'events');
 }
 
 function renderMusicStations() {
-  const rows = stationSchedules.map(sc => {
+  const lineOrder = lineData.map(l => l.id);
+  const sorted = stationSchedules.slice().sort((a, b) => {
+    const d = lineOrder.indexOf(a.lineId) - lineOrder.indexOf(b.lineId);
+    if (d) return d;
+    return (getStation(a.stationId) || {}).name < (getStation(b.stationId) || {}).name ? -1 : 1;
+  });
+  const rows = sorted.map(sc => {
     const st = getStation(sc.stationId);
     if (!st) return '';
-    return `<tr class="ms-row" onclick="openStationSchedule('${sc.stationId}')">
+    const key = schedKey(sc.stationId, sc.lineId);
+    const open = state.msMenu === key;
+    return `<tr class="ms-row" onclick="openStationSchedule('${sc.stationId}','${sc.lineId}')">
       <td style="font-weight:500">${st.name}
         ${sc.active ? '' : `<span class="chip chip-off">${t('stEvOff')}</span>`}</td>
-      <td>${st.lines.map(l => lineBadge(l)).join(' ')}</td>
+      <td>${lineBadge(sc.lineId)}</td>
       <td>${schedCell(sc, MUSIC_KINDS)}</td>
       <td>${schedCell(sc, RADIO_KINDS)}</td>
+      <td class="row-act" onclick="event.stopPropagation()">
+        <button class="kebab ${open ? 'on' : ''}" title="${t('msRowActions')}"
+          aria-haspopup="true" aria-expanded="${open}"
+          onclick="toggleRowMenu('${key}',event)">⋮</button>
+        ${open ? `<div class="row-menu">
+          <div class="row-menu-item" onclick="closeRowMenu();openStationSchedule('${sc.stationId}','${sc.lineId}')">${t('msEdit')}</div>
+          <div class="row-menu-item" onclick="closeRowMenu();msApplyFromList('${sc.stationId}','${sc.lineId}')">${t('msApplyTo')}</div>
+          <div class="row-menu-item danger" onclick="closeRowMenu();msDeleteFromList('${sc.stationId}','${sc.lineId}')">${t('msDelete')}</div>
+        </div>` : ''}
+      </td>
     </tr>`;
   }).join('');
   return `
@@ -3464,17 +3540,36 @@ function renderMusicStations() {
       <button class="btn btn-primary btn-sm" onclick="msPickStationModal()">${t('newSchedule')}</button>
     </div>
   </div>
-  ${versionSwitch()}
   <div class="tbl-wrap"><table>
     <thead><tr>
       <th>${t('colName')}</th>
       <th>${t('colLine')}</th>
-      <th style="width:31%">${t('colMusic')}</th>
-      <th style="width:31%">${t('colRadio')}</th>
+      <th style="width:30%">${t('colMusic')}</th>
+      <th style="width:30%">${t('colRadio')}</th>
+      <th style="width:44px"></th>
     </tr></thead>
-    <tbody>${rows || `<tr><td colspan="4" style="text-align:center;color:var(--text-dis);padding:32px">
+    <tbody>${rows || `<tr><td colspan="5" style="text-align:center;color:var(--text-dis);padding:32px">
       ${t('noSchedules')}<div class="fhint" style="margin-top:6px">${t('noSchedulesHint')}</div></td></tr>`}</tbody>
   </table></div>`;
+}
+
+function toggleRowMenu(key, e) {
+  if (e) e.stopPropagation();
+  state.msMenu = state.msMenu === key ? null : key;
+  render();
+}
+function closeRowMenu() { state.msMenu = null; }
+function msApplyFromList(stationId, lineId) {
+  loadScheduleDraft(stationId, lineId);
+  render();
+  msApplyModal();
+}
+function msDeleteFromList(stationId, lineId) {
+  const st = getStation(stationId);
+  if (!confirm(t('msDelConfirm', st ? st.name : stationId, lineId))) { render(); return; }
+  const sc = getSchedule(stationId, lineId);
+  if (sc) stationSchedules.splice(stationSchedules.indexOf(sc), 1);
+  navigate('musicStations');
 }
 
 // ── new schedule: station picker ───────────────────────────
@@ -3493,8 +3588,8 @@ function msPickStationHtml() {
     <div class="pick-line">
       <div class="pick-line-hd">${lineBadge(l.id)}
         <span style="font-size:12px;color:var(--text-dis)">${stns.length}</span></div>
-      ${stns.map(st => `<div class="pick-stn pick-click" onclick="closeModal();openStationSchedule('${st.id}')">
-        ${st.name}${getSchedule(st.id) ? ` <span class="chip chip-on">${t('msHasSched')}</span>` : ''}
+      ${stns.map(st => `<div class="pick-stn pick-click" onclick="closeModal();openStationSchedule('${st.id}','${l.id}')">
+        ${st.name}${getSchedule(st.id, l.id) ? ` <span class="chip chip-on">${t('msHasSched')}</span>` : ''}
       </div>`).join('')}
     </div>`;
   }).join('');
@@ -3529,15 +3624,20 @@ function normaliseDays(entry) {
   });
   return entry;
 }
-function openStationSchedule(stationId) {
-  const existing = getSchedule(stationId);
+function loadScheduleDraft(stationId, lineId) {
+  const existing = getSchedule(stationId, lineId);
   state.msStationId = stationId;
+  state.msLineId = lineId;
   state.msDraft = existing
     ? JSON.parse(JSON.stringify(existing))
-    : { stationId, active: true, entries: [] };
+    : { stationId, lineId, active: true, entries: [] };
   state.msDraft.entries.forEach(normaliseDays);
   state.msApplySel = [];
   state.msApplySearch = '';
+  state.msMenu = null;
+}
+function openStationSchedule(stationId, lineId) {
+  loadScheduleDraft(stationId, lineId);
   navigate('musicStation');
 }
 function msSet(field, val) { state.msDraft[field] = val; }
@@ -3644,7 +3744,7 @@ function msSave() {
   const err = msValidate();
   if (err) { alert(err); return; }
   const d = JSON.parse(JSON.stringify(state.msDraft));
-  const existing = getSchedule(d.stationId);
+  const existing = getSchedule(d.stationId, d.lineId);
   if (existing) Object.assign(existing, d);
   else stationSchedules.push(d);
   state.msDraft = null;
@@ -3653,8 +3753,8 @@ function msSave() {
 function msCancel() { state.msDraft = null; navigate('musicStations'); }
 function msDeleteSchedule() {
   const st = getStation(state.msStationId);
-  if (!confirm(t('msDelConfirm', st ? st.name : state.msStationId))) return;
-  const existing = getSchedule(state.msStationId);
+  if (!confirm(t('msDelConfirm', st ? st.name : state.msStationId, state.msLineId))) return;
+  const existing = getSchedule(state.msStationId, state.msLineId);
   if (existing) stationSchedules.splice(stationSchedules.indexOf(existing), 1);
   state.msDraft = null;
   navigate('musicStations');
@@ -3668,18 +3768,20 @@ function msApplyModal() {
   document.getElementById('modal-content').innerHTML = msApplyHtml();
   document.getElementById('modal-overlay').style.display = 'flex';
 }
-function msApplyToggle(id) {
-  const i = state.msApplySel.indexOf(id);
-  if (i === -1) state.msApplySel.push(id); else state.msApplySel.splice(i, 1);
+function msApplyToggle(key) {
+  const i = state.msApplySel.indexOf(key);
+  if (i === -1) state.msApplySel.push(key); else state.msApplySel.splice(i, 1);
   document.getElementById('modal-content').innerHTML = msApplyHtml();
 }
 function msApplyToggleLine(lineId) {
-  const ids = stations.filter(st => st.lines.includes(lineId) && st.id !== state.msStationId).map(st => st.id);
-  const allSel = ids.every(id => state.msApplySel.includes(id));
-  ids.forEach(id => {
-    const i = state.msApplySel.indexOf(id);
+  const keys = stations.filter(st => st.lines.includes(lineId))
+    .map(st => schedKey(st.id, lineId))
+    .filter(k => k !== schedKey(state.msStationId, state.msLineId));
+  const allSel = keys.every(k => state.msApplySel.includes(k));
+  keys.forEach(k => {
+    const i = state.msApplySel.indexOf(k);
     if (allSel && i !== -1) state.msApplySel.splice(i, 1);
-    else if (!allSel && i === -1) state.msApplySel.push(id);
+    else if (!allSel && i === -1) state.msApplySel.push(k);
   });
   document.getElementById('modal-content').innerHTML = msApplyHtml();
 }
@@ -3690,8 +3792,9 @@ function msApplyHtml() {
     const stns = stations.filter(st => st.lines.includes(l.id))
       .filter(st => !q || st.name.toLowerCase().includes(q) || l.id.toLowerCase().includes(q));
     if (!stns.length) return '';
-    const targets = stns.filter(st => st.id !== state.msStationId);
-    const allSel = targets.length && targets.every(st => sel.includes(st.id));
+    const self = schedKey(state.msStationId, state.msLineId);
+    const targets = stns.filter(st => schedKey(st.id, l.id) !== self);
+    const allSel = targets.length && targets.every(st => sel.includes(schedKey(st.id, l.id)));
     return `
     <div class="pick-line">
       <div class="pick-line-hd">${lineBadge(l.id)}
@@ -3699,18 +3802,19 @@ function msApplyHtml() {
         ${targets.length ? `<button class="pick-all" onclick="msApplyToggleLine('${l.id}')">${allSel ? t('twReset') : t('evSelectAll')}</button>` : ''}
       </div>
       ${stns.map(st => {
-        if (st.id === state.msStationId)
+        const key = schedKey(st.id, l.id);
+        if (key === self)
           return `<div class="pick-stn" style="opacity:.5">${st.name} <span class="fhint">${t('msApplySelf')}</span></div>`;
-        const on = sel.includes(st.id);
-        const has = !!getSchedule(st.id);
+        const on = sel.includes(key);
+        const has = !!getSchedule(st.id, l.id);
         return `<label class="pick-stn ${on ? 'sel' : ''}">
-          <input type="checkbox" ${on ? 'checked' : ''} onclick="msApplyToggle('${st.id}')">${st.name}
+          <input type="checkbox" ${on ? 'checked' : ''} onclick="msApplyToggle('${key}')">${st.name}
           ${has ? `<span class="chip chip-custom">${t('msHasSched')}</span>` : ''}
         </label>`;
       }).join('')}
     </div>`;
   }).join('');
-  const overwrite = sel.filter(id => getSchedule(id)).length;
+  const overwrite = sel.filter(k => getSchedule(k.split('|')[0], k.split('|')[1])).length;
   return `
     <div class="modal-title">${t('msApplyTitle')}</div>
     <p class="fhint">${t('msApplyNote')}</p>
@@ -3730,12 +3834,14 @@ function msApplyRun() {
   if (!state.msApplySel.length) return;
   // Save the source station first, so the copies and the original match.
   const src = JSON.parse(JSON.stringify(state.msDraft));
-  const own = getSchedule(src.stationId);
+  const own = getSchedule(src.stationId, src.lineId);
   if (own) Object.assign(own, src); else stationSchedules.push(JSON.parse(JSON.stringify(src)));
-  state.msApplySel.forEach(id => {
+  state.msApplySel.forEach(key => {
+    const [stationId, lineId] = key.split('|');
     const copy = JSON.parse(JSON.stringify(src));
-    copy.stationId = id;
-    const existing = getSchedule(id);        // one schedule per station — overwritten
+    copy.stationId = stationId; copy.lineId = lineId;
+    // one schedule per station and line — an existing one is overwritten
+    const existing = getSchedule(stationId, lineId);
     if (existing) Object.assign(existing, copy);
     else stationSchedules.push(copy);
   });
@@ -3749,7 +3855,7 @@ function renderMusicStation() {
   const d = state.msDraft;
   if (!d) return renderMusicStations();
   const st = getStation(d.stationId);
-  const isNew = !getSchedule(d.stationId);
+  const isNew = !getSchedule(d.stationId, d.lineId);
 
   const entryCards = d.entries.map((e, i) => {
     const opts = (e.source.kind === 'radio'    ? radioStreams.map(r => ({ id: r.id, label: r.name + (r.genre ? ' · ' + r.genre : '') }))
@@ -3818,12 +3924,12 @@ function renderMusicStation() {
   <div class="breadcrumb">
     <button class="bc-link" onclick="msCancel()">${t('musicTitle')}</button>
     <span class="bc-sep">/</span>
-    <span class="bc-current">${st ? st.name : d.stationId}</span>
+    <span class="bc-current">${st ? st.name : d.stationId} · ${d.lineId}</span>
   </div>
   <div class="ph">
     <div>
-      <h1>${isNew ? t('msNewFor', st ? st.name : '') : t('msSchedFor', st ? st.name : '')}</h1>
-      <div class="ph-sub">${st ? st.lines.map(l => lineBadge(l)).join(' ') : ''}</div>
+      <h1>${isNew ? t('msNewFor', st ? st.name : '', d.lineId) : t('msSchedFor', st ? st.name : '', d.lineId)}</h1>
+      <div class="ph-sub">${lineBadge(d.lineId)}</div>
     </div>
     <div class="ph-right" style="display:flex;gap:8px;align-items:center">
       ${isNew ? '' : `<button class="btn-danger-ghost btn-sm" onclick="msDeleteSchedule()">${t('msDelete')}</button>`}

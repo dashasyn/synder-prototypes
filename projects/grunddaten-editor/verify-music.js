@@ -15,7 +15,10 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   const errors = [], dialogs = [];
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', e => errors.push('pageerror: ' + e.message));
-  page.on('dialog', d => { dialogs.push(d.message()); d.accept(); });
+  /* One handler for the run; `dialogMode` decides whether a confirm is accepted
+     or dismissed, since a second listener would race this one. */
+  let dialogMode = 'accept';
+  page.on('dialog', d => { dialogs.push(d.message()); dialogMode === 'accept' ? d.accept() : d.dismiss(); });
 
   const openMusic = async () => {
     await page.click('#nav-evr');
@@ -28,30 +31,63 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.waitForTimeout(300);
   await openMusic();
 
-  // ── the new version is the default, and the switcher offers both ──
+  // ── the variant switcher sits in the black bar above everything ──
   check('Everrunning → Music opens the station version',
     (await page.locator('.ms-row').count()) > 0);
-  const verBtns = (await page.locator('.ver-sw .seg button').allTextContents()).map(x => x.trim());
-  check('version switcher offers exactly two versions',
+  const protoBox = await page.locator('.proto-bar').boundingBox();
+  const bannerBox = await page.locator('.staging-banner').boundingBox();
+  const navBox = await page.locator('.topnav').boundingBox();
+  check('the prototype bar is the very top strip, above the staging banner and the product nav',
+    protoBox.y === 0 && protoBox.y + protoBox.height <= bannerBox.y + 1 && bannerBox.y < navBox.y,
+    'proto=' + Math.round(protoBox.y) + '..' + Math.round(protoBox.y + protoBox.height)
+      + ' banner=' + Math.round(bannerBox.y) + ' nav=' + Math.round(navBox.y));
+  check('the prototype bar is black',
+    await page.locator('.proto-bar').evaluate(el => getComputedStyle(el).backgroundColor)
+      === 'rgb(27, 27, 27)',
+    await page.locator('.proto-bar').evaluate(el => getComputedStyle(el).backgroundColor));
+  const verBtns = (await page.locator('.proto-seg button').allTextContents()).map(x => x.trim());
+  check('the variant switcher offers exactly two variants',
     verBtns.length === 2 && verBtns[0] === 'Zeitpläne pro Station' && verBtns[1] === 'Eventliste (V1)',
     verBtns.join(' | '));
-  check('the station version is the active one',
-    await page.locator('.ver-sw .seg button.on').first().textContent() === 'Zeitpläne pro Station');
+  check('the station variant is the active one',
+    await page.locator('.proto-seg button.on').first().textContent() === 'Zeitpläne pro Station');
+  check('no switcher is left above the table',
+    (await page.locator('.ver-sw').count()) === 0);
+  check('the prototype bar is visible on the other pages too, not only on Music',
+    await (async () => {
+      await page.click('#nav-cfg'); await page.click('#nav-stations');
+      await page.waitForTimeout(250);
+      const on = await page.locator('.proto-seg button.on').count();
+      await openMusic();
+      return on === 1;
+    })());
 
-  // ── columns are exactly the four asked for ──
+  // ── columns are the four asked for, plus the actions cell ──
   const heads = (await page.locator('.tbl-wrap th').allTextContents()).map(x => x.trim());
-  check('four columns: station, line, music, radio',
-    heads.join('|') === 'Name|Linie|Musik|Radio', heads.join('|'));
+  check('four columns: station, line, music, radio (plus the actions cell)',
+    heads.join('|') === 'Name|Linie|Musik|Radio|', heads.join('|'));
 
   // ── only stations that have a schedule ──
   const rowCount = await page.locator('.ms-row').count();
   const stationTotal = await page.evaluate(() => stations.length);
   check('only stations with a schedule are listed, not all of Berlin',
-    rowCount === 4 && rowCount < stationTotal, rowCount + ' of ' + stationTotal + ' stations');
+    rowCount === 5 && rowCount < stationTotal, rowCount + ' rows, ' + stationTotal + ' stations');
   const names = await page.locator('.ms-row td:first-child').allTextContents();
   check('the listed stations are the ones holding schedules',
     ['Alexanderplatz', 'Zoologischer Garten', 'Wittenbergplatz', 'Nollendorfplatz']
       .every(n => names.some(x => x.includes(n))), names.map(n => n.trim()).join(', '));
+
+  // ── a station belongs to one line per row ──
+  const lineCells = await page.locator('.ms-row td:nth-child(2)').evaluateAll(
+    tds => tds.map(td => td.querySelectorAll('.line-badge, .lbadge, span').length + ':' + td.textContent.trim()));
+  check('every row carries exactly one line chip',
+    lineCells.every(c => /^1:/.test(c)), lineCells.join(' | '));
+  const alRows = await page.locator('.ms-row', { hasText: 'Alexanderplatz' }).count();
+  const alLines = await page.locator('.ms-row', { hasText: 'Alexanderplatz' })
+    .locator('td:nth-child(2)').allTextContents();
+  check('Alexanderplatz appears once per line, not once with three chips',
+    alRows === 2 && alLines.map(x => x.trim()).sort().join(',') === 'U2,U5',
+    alRows + ' rows: ' + alLines.map(x => x.trim()).join(', '));
 
   // ── Ignat's example row: music Monday, radio Tue+Wed with two periods ──
   const zo = rowByStation('Zoologischer Garten');
@@ -70,6 +106,9 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     /dauerhaft/.test(zoRadio)
     && /01\.10\.2026 – 31\.10\.2026/.test(await rowByStation('Alexanderplatz').locator('td').nth(2).textContent()),
     (await rowByStation('Alexanderplatz').locator('td').nth(2).textContent()).replace(/\s+/g, ' ').trim());
+  check('the two Alexanderplatz rows hold different schedules',
+    await page.evaluate(() => JSON.stringify(getSchedule('AL','U2').entries)
+                           !== JSON.stringify(getSchedule('AL','U5').entries)));
   check('an inactive schedule is marked on the station',
     (await rowByStation('Nollendorfplatz').locator('td').first().textContent()).includes('Inaktiv'));
   await page.screenshot({ path: out('mu-1-list.png'), fullPage: true });
@@ -78,7 +117,7 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await zo.click();
   await page.waitForTimeout(300);
   check('clicking a row opens the full detail page with a breadcrumb',
-    await page.locator('.breadcrumb .bc-current').textContent() === 'Zoologischer Garten'
+    await page.locator('.breadcrumb .bc-current').textContent() === 'Zoologischer Garten · U2'
     && (await page.locator('.ms-row').count()) === 0);
   check('no expander was used in the list',
     (await page.locator('.tbl-wrap').count()) === 0);
@@ -131,7 +170,7 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     dialogs[0] && /Di/.test(dialogs[0]) && /Jazzradio/.test(dialogs[0]),
     dialogs[0]);
   check('nothing was written while the schedule was invalid',
-    await page.evaluate(() => getSchedule('ZO').entries[0].days[1].slots.length) === 0);
+    await page.evaluate(() => getSchedule('ZO','U2').entries[0].days[1].slots.length) === 0);
 
   // ── music and radio may share a day when they do not overlap ──
   await page.evaluate(() => {
@@ -142,13 +181,63 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.click('button:has-text("Zeitplan speichern")');
   await page.waitForTimeout(300);
   check('music and radio on the same day are accepted when they do not overlap',
-    dialogs.length === 0 && (await page.locator('.ms-row').count()) === 4, dialogs.join(' | '));
+    dialogs.length === 0 && (await page.locator('.ms-row').count()) === 5, dialogs.join(' | '));
   check('the new period is in the saved schedule',
-    await page.evaluate(() => getSchedule('ZO').entries[0].days[1].slots[0].start) === '08:00');
+    await page.evaluate(() => getSchedule('ZO','U2').entries[0].days[1].slots[0].start) === '08:00');
   check('the day chip for Tuesday is now on in the music column',
     (await rowByStation('Zoologischer Garten').locator('td').nth(2)
       .locator('.dayc').evaluateAll(els => els.map(e => e.classList.contains('on') ? '+' : '-'))).join('')
       === '++-----');
+
+  // ── the ⋮ row menu ──
+  const zoRow = rowByStation('Zoologischer Garten');
+  await zoRow.locator('.kebab').click();
+  await page.waitForTimeout(200);
+  const menuItems = (await page.locator('.row-menu-item').allTextContents()).map(x => x.trim());
+  check('the row menu offers edit, apply to stations and delete',
+    menuItems.join('|') === 'Bearbeiten|Auf andere Stationen anwenden|Zeitplan löschen',
+    menuItems.join('|'));
+  check('the menu is visible and does not open the detail page',
+    await page.locator('.row-menu').isVisible() && (await page.locator('.ms-row').count()) === 5);
+  await page.locator('body').click({ position: { x: 5, y: 400 } });
+  await page.waitForTimeout(200);
+  check('clicking away closes the row menu', (await page.locator('.row-menu').count()) === 0);
+
+  // menu → edit
+  await zoRow.locator('.kebab').click();
+  await page.waitForTimeout(150);
+  await page.locator('.row-menu-item', { hasText: 'Bearbeiten' }).click();
+  await page.waitForTimeout(300);
+  check('menu → Bearbeiten opens that station and line',
+    await page.locator('.breadcrumb .bc-current').textContent() === 'Zoologischer Garten · U2');
+  await page.click('.breadcrumb .bc-link');
+  await page.waitForTimeout(250);
+
+  // menu → apply to, straight from the list
+  await rowByStation('Wittenbergplatz').locator('.kebab').click();
+  await page.waitForTimeout(150);
+  await page.locator('.row-menu-item', { hasText: 'anwenden' }).click();
+  await page.waitForTimeout(300);
+  check('menu → apply to opens the dialog for the row it was opened from',
+    (await page.locator('#modal-content .modal-title').textContent()).includes('anwenden')
+    && await page.evaluate(() => state.msStationId === 'WI' && state.msLineId === 'U1'));
+  await page.click('#modal-content button:has-text("Abbrechen")');
+  await page.waitForTimeout(200);
+
+  // menu → delete asks first, and a cancelled delete keeps the row
+  dialogs.length = 0;
+  dialogMode = 'dismiss';
+  await rowByStation('Nollendorfplatz').locator('.kebab').click();
+  await page.waitForTimeout(150);
+  await page.locator('.row-menu-item', { hasText: 'löschen' }).click();
+  await page.waitForTimeout(300);
+  check('menu → delete asks first and names the station and line',
+    /Nollendorfplatz/.test(dialogs[0] || '') && /U4/.test(dialogs[0] || ''), dialogs.join(' | '));
+  check('a dismissed delete keeps the row',
+    (await page.locator('.ms-row').count()) === 5
+    && (await page.locator('.tbl-wrap').textContent()).includes('Nollendorfplatz'));
+  dialogMode = 'accept';
+  await page.screenshot({ path: out('mu-5-menu.png'), fullPage: true });
 
   // ── a new schedule starts from the station picker, and starts empty ──
   await page.click('button:has-text("Neuer Zeitplan")');
@@ -162,8 +251,9 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     picked.join(' | '));
   await page.locator('#ms-pick-grid .pick-stn').first().click();
   await page.waitForTimeout(300);
-  check('picking a station opens an empty new schedule',
+  check('picking a station opens an empty new schedule for that line',
     (await page.locator('h1').textContent()).includes('Neuer Zeitplan')
+    && (await page.locator('h1').textContent()).includes('U9')
     && (await page.locator('table.sched-table').count()) === 0
     && (await page.locator('#modal-overlay').isHidden()));
   check('the empty schedule says what to do next',
@@ -220,8 +310,9 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.waitForTimeout(200);
   const alBoxes = await page.locator('#modal-content label.pick-stn', { hasText: 'Alexanderplatz' })
     .locator('input').evaluateAll(els => els.map(e => e.checked));
-  check('a station on several lines stays in sync across the line groups',
-    alBoxes.length === 3 && alBoxes.every(Boolean), JSON.stringify(alBoxes));
+  check('a station on several lines is a separate target per line, not one synced entry',
+    alBoxes.length === 3 && alBoxes[0] === true && alBoxes.slice(1).every(x => x === false),
+    JSON.stringify(alBoxes));
   check('a target that already has a schedule raises an overwrite warning',
     (await page.locator('.ms-warn').textContent()).includes('überschrieben'),
     (await page.locator('.ms-warn').textContent()).trim());
@@ -244,21 +335,23 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.waitForTimeout(350);
 
   check('applying copied the schedule to both targets and saved the source station',
-    (await page.locator('.ms-row').count()) === 6, await page.locator('.ms-row').count() + ' rows');
+    (await page.locator('.ms-row').count()) === 7, await page.locator('.ms-row').count() + ' rows');
   const applied = await page.evaluate(() => {
-    const src = getSchedule('KU'), a = getSchedule('AL'), b = getSchedule('BR');
+    const src = getSchedule('KU','U9'), a = getSchedule('AL','U2'), b = getSchedule('BR','U5');
     const strip = sc => JSON.stringify(sc.entries);
     return { same: strip(src) === strip(a) && strip(src) === strip(b),
-             alEntries: a.entries.length, srcEntries: src.entries.length };
+             alEntries: a.entries.length, srcEntries: src.entries.length,
+             otherAl: getSchedule('AL','U5').entries[0].source.refId };
   });
-  check('the copies are identical to the source', applied.same,
-    JSON.stringify(applied));
-  check('the overwritten station lost its two old entries',
+  check('the copies are identical to the source', applied.same, JSON.stringify(applied));
+  check('the overwritten station+line lost its two old entries',
     applied.alEntries === 1 && applied.srcEntries === 1, JSON.stringify(applied));
+  check('the same station on another line was left alone',
+    applied.otherAl === 'RS-002', JSON.stringify(applied));
   check('a copy is independent of its source afterwards',
     await page.evaluate(() => {
-      getSchedule('KU').entries[0].repeat.intervalMin = 99;
-      return getSchedule('BR').entries[0].repeat.intervalMin === 20;
+      getSchedule('KU','U9').entries[0].repeat.intervalMin = 99;
+      return getSchedule('BR','U5').entries[0].repeat.intervalMin === 20;
     }));
 
   // ── delete a schedule ──
@@ -270,13 +363,13 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   check('deleting asks first and names the station',
     /Brandenburger Tor/.test(dialogs[0] || ''), dialogs.join(' | '));
   check('the station is gone from the list after deleting',
-    (await page.locator('.ms-row').count()) === 5
+    (await page.locator('.ms-row').count()) === 6
     && !(await page.locator('.tbl-wrap').textContent()).includes('Brandenburger Tor'));
 
   // ── the trigger is gone, in both versions ──
   const bodyDe = await page.locator('body').textContent();
   check('no train number anywhere in the station version', !/Zugnummer|W-2412/.test(bodyDe));
-  await page.click('.ver-sw .seg button:has-text("Eventliste")');
+  await page.click('.proto-seg button:has-text("Eventliste")');
   await page.waitForTimeout(250);
   const evHeads = (await page.locator('.tbl-wrap th').allTextContents()).map(x => x.trim());
   check('the V1 event list no longer has a playback-mode column',
@@ -297,17 +390,20 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   // ── back to V2 and switch the interface language ──
   await page.click('.breadcrumb .bc-link');
   await page.waitForTimeout(200);
-  await page.click('.ver-sw .seg button:has-text("Zeitpläne")');
+  await page.click('.proto-seg button:has-text("Zeitpläne")');
   await page.waitForTimeout(250);
   await page.click('#lang-en');
   await page.waitForTimeout(300);
   const headsEn = (await page.locator('.tbl-wrap th').allTextContents()).map(x => x.trim());
   check('the new screen relabels in English',
-    headsEn.join('|') === 'Name|Line|Music|Radio', headsEn.join('|'));
-  check('the version switcher relabels too',
-    (await page.locator('.ver-sw .seg button').allTextContents()).join('|')
+    headsEn.join('|') === 'Name|Line|Music|Radio|', headsEn.join('|'));
+  check('the variant switcher relabels too',
+    (await page.locator('.proto-seg button').allTextContents()).join('|')
       === 'Schedules per station|Event list (V1)',
-    (await page.locator('.ver-sw .seg button').allTextContents()).join('|'));
+    (await page.locator('.proto-seg button').allTextContents()).join('|'));
+  check('the prototype bar label relabels',
+    (await page.locator('#proto-label').textContent()) === 'Prototype variant',
+    await page.locator('#proto-label').textContent());
   check('day chips relabel in English',
     (await page.locator('.ms-row .dayc').first().textContent()) === 'Mon');
   check('"ongoing" is used for an open validity',
@@ -315,7 +411,7 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await rowByStation('Zoologischer Garten').click();
   await page.waitForTimeout(250);
   check('the detail page relabels in English',
-    (await page.locator('h1').textContent()).includes('Schedule —')
+    (await page.locator('h1').textContent()).includes('Schedule — Zoologischer Garten · U2')
     && (await page.locator('body').textContent()).includes('Weekly schedule'));
   await page.screenshot({ path: out('mu-4-english.png'), fullPage: true });
   await page.click('#lang-de');
