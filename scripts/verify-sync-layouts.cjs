@@ -56,8 +56,16 @@ const yes = (n, got) => got ? ok(n) : bad(n, 'falsy');
   yes('alert is visible', await alert.isVisible());
   yes('alert names the disconnect',
     /disconnected from QuickBooks Online/.test(await alert.innerText()));
-  yes('alert says nothing was removed',
-    /still in your books/i.test(await alert.innerText()));
+  yes('outcome sentence leads with what happened to the books',
+    /^Nothing was removed from your books\./m.test(await alert.innerText()));
+  yes('outcome sentence sits above the detail line',
+    (await alert.locator('.oc-lead').boundingBox()).y <
+    (await alert.locator('.oc-detail').boundingBox()).y);
+  yes('outcome lead is larger than the detail', await alert.evaluate(n => {
+    const l = parseFloat(getComputedStyle(n.querySelector('.oc-lead')).fontSize);
+    const d = parseFloat(getComputedStyle(n.querySelector('.oc-detail')).fontSize);
+    return l > d;
+  }));
 
   const aBox = await alert.boundingBox();
   const tBox = await page.locator('table').boundingBox();
@@ -155,8 +163,22 @@ const yes = (n, got) => got ? ok(n) : bad(n, 'falsy');
   const syncedTxt = await page.locator('#page').innerText();
   is('no Rollback status column when nothing was rolled back',
     /Rollback status/.test(syncedTxt), false);
-  is('no alert on a clean sync', await page.locator('.alert').count(), 0);
+  is('clean sync still gets an outcome sentence', await page.locator('.alert.oc-ok').count(), 1);
+  yes('and it says what landed in the books',
+    /Recorded in your books as Invoice 26EC8A01-0209/.test(await page.locator('.alert.oc-ok').innerText()));
+  is('clean sync outcome carries no fix buttons', await page.locator('.alert.oc-ok button').count(), 0);
   is('object links are live again', await page.locator('a.oid').count() > 0, true);
+
+  console.log('\n— every state answers the question —');
+  for (const st of ['synced', 'warnings', 'deleted']) {
+    await setState(st);
+    is(`${st}: exactly one outcome block`, await page.locator('.alert').count(), 1);
+    const lead = page.locator('.alert .oc-lead').first();
+    yes(`${st}: outcome sentence visible`, await lead.isVisible());
+    const box = await lead.boundingBox();
+    yes(`${st}: outcome sits above the object list`,
+      box.y < (await page.locator('.card, .obj').first().boundingBox()).y);
+  }
 
   console.log('\n— page hygiene —');
   const overflow = await page.evaluate(() =>

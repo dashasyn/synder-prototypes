@@ -62,13 +62,21 @@
   @keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
 
   /* ---------- alert lifted out of the log ---------- */
-  .alert{border-radius:var(--radius-md);padding:var(--sp-16) var(--sp-20);margin:var(--sp-20) 0;
-      background:var(--color-status-yellow-bg);border:1px solid var(--color-yellow);
-      display:flex;gap:var(--sp-16);align-items:flex-start}
-  .alert .ico{font-size:18px;line-height:1.2}
-  .alert h4{margin:0 0 var(--sp-4);font-size:var(--font-subtitle2);
-      font-weight:var(--font-subtitle2-bold-weight);color:var(--color-grey)}
-  .alert p{margin:0;font-size:var(--font-body2);line-height:var(--font-body2-line-height);color:var(--color-grey)}
+  .alert{border-radius:var(--radius-md);padding:var(--sp-16) var(--sp-20);margin:var(--sp-16) 0 var(--sp-24);
+      display:flex;gap:var(--sp-16);align-items:flex-start;
+      background:var(--color-white);border:1px solid var(--color-grey-20)}
+  .alert.oc-warn{background:var(--color-status-yellow-bg);border-color:var(--color-yellow)}
+  .alert.oc-ok{border-left:4px solid var(--color-green)}
+  .alert.oc-busy{border-left:4px solid var(--color-primary)}
+  .alert .ico{font-size:18px;line-height:1.35}
+  .alert.oc-ok .ico{color:var(--color-green)}
+  .alert.oc-busy .ico{color:var(--color-primary)}
+  .alert .oc-body{min-width:0}
+  .alert .oc-lead{margin:0;font-size:var(--font-subtitle1);line-height:var(--font-subtitle1-line-height);
+      font-weight:500;color:var(--color-grey)}
+  .alert .oc-detail{margin:var(--sp-6) 0 0;font-size:var(--font-body2);
+      line-height:var(--font-body2-line-height);color:var(--color-grey)}
+  .alert .oc-raw{margin:var(--sp-8) 0 0;font-size:var(--font-caption);color:var(--color-grey-50)}
   .alert .acts{margin-top:var(--sp-12);display:flex;gap:var(--sp-8);flex-wrap:wrap}
 
   /* ---------- section card ---------- */
@@ -264,9 +272,9 @@ var STATES = {
     rows: OBJECTS_SALE,
     info: INFO_SALE,
     hasRollbackCol:false,
-    alerts:[],
-    tally:'5 steps · nothing needs your attention',
-    summary:'Recorded in your books as Invoice 26EC8A01-0209 for 20.85 USD, income to Stripe sales.'
+    alerts:[{tone:'ok', icon:'✓',
+      title:'Recorded in your books as Invoice 26EC8A01-0209 for 20.85 USD, income to Stripe sales.'}],
+    tally:'5 steps · nothing needs your attention'
   },
 
   warnings: {
@@ -293,13 +301,12 @@ var STATES = {
     ],
     hasRollbackCol:false,
     alerts:[{
-      icon:'⚠',
-      title:'Inventory was not adjusted for Linen Wrap Dress',
+      tone:'warn', icon:'⚠',
+      title:'Recorded as a refund receipt — but inventory was not adjusted for Linen Wrap Dress.',
       body:"The product isn't tracked as an inventory item in Shopify, so Synder could not adjust its stock. Everything else in this refund was recorded.",
       acts:[{l:'How to convert it to inventory ↗', k:'outline'}]
     }],
-    tally:'2 steps · 1 warning',
-    summary:'Recorded in your books as a refund receipt — but inventory was not adjusted for Linen Wrap Dress.'
+    tally:'2 steps · 1 warning'
   },
 
   deleted: {
@@ -313,14 +320,13 @@ var STATES = {
     info: INFO_SALE,
     hasRollbackCol:true,
     alerts:[{
-      icon:'⚠',
-      title:'Synder is disconnected from ' + QBO,
-      body:'The rollback was stopped before Synder could finish it, so Invoice 26EC8A01-0209, the payment and the expense are still in your books. Reconnect ' + QBO + ', then run the rollback again.',
+      tone:'warn', icon:'⚠',
+      title:'Nothing was removed from your books.',
+      body:'The rollback stopped because Synder is disconnected from ' + QBO + '. Invoice 26EC8A01-0209, the payment and the expense are all still there.',
       raw:'Authorization fail: Synder is unable to get response from a ' + QBO + ' company as Synder has been disconnected from ' + QBO + ' by a user.',
       acts:[{l:'Reconnect ' + QBO, k:'primary'},{l:'Try rollback again', k:'outline'}]
     }],
     tally:'5 steps · 3 rollbacks canceled · 1 problem',
-    summary:'Nothing was removed. The rollback stopped because Synder lost access to ' + QBO + '.',
     linksDead:true
   },
 
@@ -335,10 +341,9 @@ var STATES = {
       return (p[0]==='Sync start date'||p[0]==='Sync date finished') ? [p[0],'—'] : p;
     }),
     hasRollbackCol:true,
-    alerts:[],
+    alerts:[{tone:'busy', icon:'◔', title:'Removing this transaction from your books.'}],
     live:'Updating automatically — no need to reload',
     tally:'5 steps · 3 being removed',
-    summary:'Removing this transaction from your books.',
     resolvesTo:'rollbackDone'
   },
 
@@ -353,8 +358,9 @@ var STATES = {
     hasRollbackCol:true,
     alerts:[],
     justUpdated:'Status updated just now',
-    tally:'5 steps · 3 removed from your books',
-    summary:'Invoice 26EC8A01-0209, the payment and the expense were removed from your books.'
+    alerts:[{tone:'ok', icon:'✓',
+      title:'Invoice 26EC8A01-0209, the payment and the expense were removed from your books.'}],
+    tally:'5 steps · 3 removed from your books'
   }
 };
 
@@ -398,15 +404,20 @@ function headerHtml(st){
   return h;
 }
 
+/* The outcome block. This is the answer to "what did this do to my books" and it
+   is the first thing on the page in all three layouts — it is not a banner that
+   only appears when something breaks, it is always there and changes tone. */
 function alertsHtml(st){
   return st.alerts.map(function(a){
-    var acts = a.acts.map(function(x){
+    var acts = (a.acts || []).map(function(x){
       return '<button type="button" class="btn btn-' + x.k + '">' + esc(x.l) + '</button>';
     }).join('');
-    var raw = a.raw ? '<p style="margin-top:var(--sp-8)"><span class="rw" title="Production copy: &quot;' +
+    var raw = a.raw ? '<p class="oc-raw"><span class="rw" title="Production copy: &quot;' +
       esc(a.raw) + '&quot;">what production says instead</span></p>' : '';
-    return '<div class="alert"><span class="ico">' + a.icon + '</span><div><h4>' + esc(a.title) +
-      '</h4><p>' + esc(a.body) + '</p>' + raw + '<div class="acts">' + acts + '</div></div></div>';
+    return '<div class="alert oc-' + (a.tone || 'warn') + '"><span class="ico">' + a.icon +
+      '</span><div class="oc-body"><p class="oc-lead">' + esc(a.title) + '</p>' +
+      (a.body ? '<p class="oc-detail">' + esc(a.body) + '</p>' : '') + raw +
+      (acts ? '<div class="acts">' + acts + '</div>' : '') + '</div></div>';
   }).join('');
 }
 
@@ -486,7 +497,7 @@ function layout2(st){
     }).join('') + '</dl>' : '';
     /* Only when the warning was NOT already promoted into the alert — otherwise the
        same fix button renders twice on one screen. */
-    var fix = (warn && !st.alerts.length) ? '<div class="acts" style="margin-top:var(--sp-12)">' +
+    var fix = (warn && !st.alerts.some(function(a){ return a.acts && a.acts.length; })) ? '<div class="acts" style="margin-top:var(--sp-12)">' +
       '<button type="button" class="btn btn-outline">How to convert it to inventory ↗</button></div>' : '';
     return '<div class="obj' + (warn ? ' warn' : '') + '">' + head + msg + facts + fix + '</div>';
   }
