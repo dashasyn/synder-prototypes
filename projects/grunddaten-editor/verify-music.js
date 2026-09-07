@@ -458,48 +458,58 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     (await page.locator('input[type=date]').count()) === 2
     && evBody.includes('läuft unbefristet weiter'));
 
-  // multi-source, each with its own days and windows
+  // multi-source, each with the detailed weekly grid from the station variant
   check('both sources are editable blocks', (await page.locator('.src-block').count()) === 2);
-  const dayBtns = await page.locator('.src-block').first().locator('.daysel').allTextContents();
-  check('weekdays are a row of seven toggles', dayBtns.length === 7 && dayBtns[0] === 'Mo', dayBtns.join(''));
-  check('Mon–Fri are on, weekend off in the first source',
-    await page.locator('.src-block').first().locator('.daysel').evaluateAll(
-      els => els.map(e => e.classList.contains('on')).join('')) === 'truetruetruetruetruefalsefalse'
-      .replace(/true/g, 'true').replace(/false/g, 'false'),
-    await page.locator('.src-block').first().locator('.daysel')
-      .evaluateAll(els => els.map(e => (e.classList.contains('on') ? '1' : '0')).join('')));
-  check('the first source has two time windows',
-    (await page.locator('.src-block').first().locator('.win-row').count()) === 2);
-  check('the second source has its own window',
-    (await page.locator('.src-block').nth(1).locator('.win-row input[type=time]').first().inputValue()) === '18:00');
+  check('each source carries its own weekly grid',
+    (await page.locator('.src-block table.sched-table').count()) === 2);
+  const gridDays = await page.locator('#evw-0 .sched-day-label').allTextContents();
+  check('the grid lists all seven days',
+    gridDays.map(x => x.trim()).join('') === 'MoDiMiDoFrSaSo', gridDays.join(''));
+  check('Monday holds both of its periods',
+    (await page.locator('#evw-0 #evs-0-0-0-s').inputValue()) === '09:00'
+    && (await page.locator('#evw-0 #evs-0-0-1-s').inputValue()) === '15:00');
+  check('the weekend reads "no playback" instead of showing empty fields',
+    (await page.locator('#evw-0').textContent()).match(/keine Wiedergabe/g).length === 2);
+  check('the second source has its own times',
+    (await page.locator('#evw-1 #evs-1-0-0-s').inputValue()) === '18:00');
 
   // a time edit must not steal focus
-  const w0 = page.locator('#ev-0-0-f');
+  const w0 = page.locator('#evs-0-0-0-s');
   await w0.click();
   await w0.fill('08:00');
-  check('editing a window keeps the focus in the field',
-    (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'ev-0-0-f');
+  check('editing a period keeps the focus in the field',
+    (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'evs-0-0-0-s');
   check('the edited time is in the draft',
-    await page.evaluate(() => state.evDraft.sources[0].windows[0].from) === '08:00');
+    await page.evaluate(() => state.evDraft.sources[0].days[0].slots[0].start) === '08:00');
   await w0.fill('09:00');
 
-  // add and remove a window, assert the control is really usable
-  await page.locator('.src-block').first().locator('.sched-icon-btn:not(.remove)').click();
+  // add, then remove a period — asserting the control is really usable
+  await page.locator('#evw-0 tr').filter({ hasText: 'Sa' }).locator('.sched-icon-btn').first().click();
   await page.waitForTimeout(200);
-  check('adding a window yields a visible, editable field',
-    await page.locator('#ev-0-2-f').isVisible() && await page.locator('#ev-0-2-f').isEditable());
-  await page.locator('.src-block').first().locator('.win-row').nth(2).locator('.sched-icon-btn.remove').click();
+  check('adding a period to an empty day yields a visible, editable field',
+    await page.locator('#evs-0-5-0-s').isVisible() && await page.locator('#evs-0-5-0-s').isEditable());
+  check('that day is now in the draft',
+    await page.evaluate(() => state.evDraft.sources[0].days[5].slots.length) === 1);
+  await page.locator('#evw-0 .sched-icon-btn.remove').last().click();
   await page.waitForTimeout(200);
-  check('removing it leaves the two original windows',
-    (await page.locator('.src-block').first().locator('.win-row').count()) === 2);
+  check('removing it makes the day empty again',
+    (await page.locator('#evw-0').textContent()).match(/keine Wiedergabe/g).length === 2);
 
-  // toggling a weekday
-  await page.locator('.src-block').first().locator('.daysel').nth(5).click();
+  /* Copy a day onto the next. The day label sits on the day's first slot row,
+     so a text filter would land on that row rather than the one carrying the
+     copy button — address the buttons by title instead. Mon–Fri have one
+     each, so Friday's is index 4. */
+  await page.locator('#evw-0 button[title="Auf nächsten Tag kopieren"]').nth(4).click();
   await page.waitForTimeout(200);
-  check('a weekday toggles on',
-    await page.evaluate(() => state.evDraft.sources[0].days.includes('Sat')));
-  await page.locator('.src-block').first().locator('.daysel').nth(5).click();
+  check('the copy button carries a day over to the next',
+    await page.evaluate(() => JSON.stringify(state.evDraft.sources[0].days[5].slots)
+                           === JSON.stringify(state.evDraft.sources[0].days[4].slots)));
+  await page.locator('#evw-0 .sched-icon-btn.remove').last().click();
+  await page.waitForTimeout(150);
+  await page.locator('#evw-0 .sched-icon-btn.remove').last().click();
   await page.waitForTimeout(200);
+  check('Saturday is empty again after undoing the copy',
+    await page.evaluate(() => state.evDraft.sources[0].days[5].slots.length) === 0);
 
   // one kind per event
   await page.click('.seg button:has-text("Playlist")');
@@ -542,13 +552,13 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.waitForTimeout(200);
   check('an event without a name is refused', /Eventname/.test(dialogs[0] || ''), dialogs.join(' | '));
   await nameInput.fill('Klassik & Jazz — Tagesprogramm');
-  await page.locator('#ev-0-0-t').fill('08:00');
+  await page.locator('#evs-0-0-0-e').fill('09:00');
   dialogs.length = 0;
   await page.click('button:has-text("Event speichern")');
   await page.waitForTimeout(200);
-  check('a window that ends before it starts is refused',
-    /Ende muss nach dem Beginn/.test(dialogs[0] || ''), dialogs.join(' | '));
-  await page.locator('#ev-0-0-t').fill('12:00');
+  check('a period whose start and end are identical is refused, naming the day',
+    /identisch/.test(dialogs[0] || '') && /Mo/.test(dialogs[0] || ''), dialogs.join(' | '));
+  await page.locator('#evs-0-0-0-e').fill('12:00');
   await page.waitForTimeout(150);
 
   // ── overlap warning: same rank only ──
@@ -559,8 +569,12 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.waitForTimeout(250);
   await page.locator('.card input[type=text]').first().fill('Test-Überschneidung');
   await page.locator('.src-block').first().locator('select').selectOption('RS-002');
-  await page.locator('#ev-0-0-f').fill('10:00');
-  await page.locator('#ev-0-0-t').fill('11:00');
+  check('a brand-new source starts with an empty week',
+    (await page.locator('#evw-0').textContent()).match(/keine Wiedergabe/g).length === 7);
+  await page.locator('#evw-0 tr').filter({ hasText: 'Mo' }).locator('.sched-icon-btn').first().click();
+  await page.waitForTimeout(200);
+  await page.locator('#evs-0-0-0-s').fill('10:00');
+  await page.locator('#evs-0-0-0-e').fill('11:00');
   await page.locator('.pick-stn', { hasText: 'Alexanderplatz' }).first().locator('input').click();
   await page.waitForTimeout(300);
   check('two radio events on one station at the same time raise a warning',

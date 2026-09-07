@@ -902,9 +902,10 @@
   - **Table:** full width (`.content.wide`), name is plain text, **search by station or event name**, **line chips carrying the number of stations on that line** with the station names on hover, **source chips carrying the source names** (no subname line), **period as dates only** — `10. Jun 2026 – offen`.
   - **Status stays**, derived from the period alone — geplant / aktiv / abgelaufen. There is no manual active switch any more, so a December event created in September reads *Geplant* by itself.
   - **Editor stripped:** no active checkbox, no selected-stations table, no per-station time override. Row order: name + period · source kind + sources · stations.
+  - **The detailed weekly grid from V2 is now used in V1 too** (Ignat, 19:32 — sent the V2 grid back and asked for it here): each source carries the seven-day table with several periods per day, `−` remove, `+` add, `⧉` copy a day to the next, empty day = *keine Wiedergabe*, end before start = across midnight. Day chips plus a shared window list are gone. Both variants now share the component **and** the rules: overlap is computed with `entryRanges()` on one Mon 00:00 → Sun 24:00 minute timeline, and a period whose start equals its end is refused, naming the day. A new source starts with an empty week.
   - **Overlap warns, never blocks.** Rank = single track > playlist > radio; only **equal ranks** warn, because a Christmas playlist over the always-on radio is the intended case. The live warning names the event, day, window and stations; saving through it asks once, since the warning scrolls out of view while the station picker is in use.
   - Seed: *Klassik & Jazz* (two radio sources, two windows, open end) · *Weihnachtsmusik* (playlist, December, planned) · *Madonna* (single track, 3 days) · *Sommerradio 2026* (expired).
-  - **Verification:** `verify-music.js` — **122 Chromium checks, all passing** across both variants.
+  - **Verification:** `verify-music.js` — **126 Chromium checks, all passing** across both variants.
 - **Answered by Ignat (2026-09-07):**
   - **Licensing is out of scope** — "Licenses are not important." No licence reference, no expiry, no play-out log. The GEMA question is closed, not deferred.
   - **Triggers are closed too** (2026-09-04): nothing about specific trains, schedules only.

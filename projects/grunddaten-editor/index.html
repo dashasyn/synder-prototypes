@@ -529,10 +529,6 @@ tr.row-sel td { background: var(--pri-50); }
   padding: 7px 10px; border-radius: 4px; white-space: nowrap; box-shadow: var(--elev2);
 }
 .lc:hover .lc-tip, .lc:focus .lc-tip { display: block; }
-.daysel { font-family: inherit; border: none; cursor: pointer; }
-.daysel.on { background: var(--pri); color: #fff; }
-.win-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.win-row input[type="time"] { min-width: 132px; }
 .src-block { border: 1px solid var(--divider); border-radius: 4px; padding: 14px 16px; margin: 12px 0; }
 .src-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .src-t { font-size: 13px; font-weight: 500; color: var(--text-sec); text-transform: uppercase; letter-spacing: .04em; }
@@ -751,16 +747,11 @@ const i18n = {
     evSourceN:           (n) => `Quelle ${n}`,
     evAddSource:         '+ Quelle hinzufügen',
     evRemoveSource:      'Quelle entfernen',
-    evDays:              'Wochentage',
-    evWindows:           'Zeitfenster',
-    evWindowsNote:       'Mehrere Zeitfenster pro Quelle möglich, z. B. 09:00–12:00 und 15:00–16:00.',
-    evAddWindow:         'Zeitfenster hinzufügen',
     evNoDate:            'Bitte ein Startdatum angeben.',
     evBadDate:           'Das Ende liegt vor dem Beginn.',
     evSrcNoRef:          (n) => `Quelle ${n}: bitte auswählen.`,
-    evSrcNoDays:         (n) => `Quelle ${n}: bitte mindestens einen Wochentag wählen.`,
-    evSrcNoWin:          (n) => `Quelle ${n}: bitte mindestens ein Zeitfenster angeben.`,
-    evSrcBadWin:         (n, f, t2) => `Quelle ${n}: ${f}–${t2} — das Ende muss nach dem Beginn liegen.`,
+    evSrcNoWin:          (n) => `Quelle ${n}: bitte mindestens einen Zeitraum eintragen.`,
+    evSrcSameTime:       (n, d) => `Quelle ${n}, ${d}: Beginn und Ende sind identisch.`,
     evOverlapTitle:      '⚠ Überschneidung mit einem gleichrangigen Event',
     evOverlapLine:       (name, day, win, stns) => `„${name}“ — ${day} ${win} · ${stns}`,
     evOverlapConfirm:    (list) => `Überschneidung mit einem gleichrangigen Event:\n\n${list}\n\nTrotzdem speichern?`,
@@ -1023,16 +1014,11 @@ const i18n = {
     evSourceN:           (n) => `Source ${n}`,
     evAddSource:         '+ Add source',
     evRemoveSource:      'Remove source',
-    evDays:              'Weekdays',
-    evWindows:           'Time windows',
-    evWindowsNote:       'Several windows per source are possible, e.g. 09:00–12:00 and 15:00–16:00.',
-    evAddWindow:         'Add time window',
     evNoDate:            'Please give a start date.',
     evBadDate:           'The end is before the start.',
     evSrcNoRef:          (n) => `Source ${n}: please select one.`,
-    evSrcNoDays:         (n) => `Source ${n}: please select at least one weekday.`,
-    evSrcNoWin:          (n) => `Source ${n}: please add at least one time window.`,
-    evSrcBadWin:         (n, f, t2) => `Source ${n}: ${f}–${t2} — the end must be after the start.`,
+    evSrcNoWin:          (n) => `Source ${n}: please enter at least one period.`,
+    evSrcSameTime:       (n, d) => `Source ${n}, ${d}: start and end are identical.`,
     evOverlapTitle:      '⚠ Overlap with an event of the same rank',
     evOverlapLine:       (name, day, win, stns) => `"${name}" — ${day} ${win} · ${stns}`,
     evOverlapConfirm:    (list) => `Overlap with an event of the same rank:\n\n${list}\n\nSave anyway?`,
@@ -1288,35 +1274,45 @@ function getRadio(id) { return radioStreams.find(rs => rs.id === id); }
 // overrides: { stationId: {timeFrom, timeTo} } — per-station deviation from the default window
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
+/* Weekly plan helper for the seed: which days, and the slots on each. */
+function wk(dayIds, slots) {
+  return DAYS.map(d => ({ day: d, slots: dayIds.includes(d) ? slots.map(sl => ({ ...sl })) : [] }));
+}
 const musicEvents = [
   { id:'EV-001', name:'Klassik & Jazz — Tagesprogramm',
     dateFrom:'2026-06-10', dateTo:'',
     sources:[
-      { id:'S-1', kind:'radio', refId:'RS-001', days:['Mon','Tue','Wed','Thu','Fri'],
-        windows:[{from:'09:00',to:'12:00'},{from:'15:00',to:'16:00'}] },
-      { id:'S-2', kind:'radio', refId:'RS-003', days:['Mon','Tue','Wed','Thu','Fri'],
-        windows:[{from:'18:00',to:'22:00'}] },
+      { id:'S-1', kind:'radio', refId:'RS-001',
+        days:wk(['Mon','Tue','Wed','Thu','Fri'], [{start:'09:00',end:'12:00'},{start:'15:00',end:'16:00'}]) },
+      { id:'S-2', kind:'radio', refId:'RS-003',
+        days:wk(['Mon','Tue','Wed','Thu','Fri'], [{start:'18:00',end:'22:00'}]) },
     ],
     stationIds:['AL','FR','PO','ZO','HA'] },
   { id:'EV-002', name:'Weihnachtsmusik',
     dateFrom:'2026-12-01', dateTo:'2026-12-26',
     sources:[
-      { id:'S-1', kind:'playlist', refId:'PL-002', days:DAYS.slice(),
-        windows:[{from:'16:00',to:'20:00'}] },
+      { id:'S-1', kind:'playlist', refId:'PL-002', days:wk(DAYS, [{start:'16:00',end:'20:00'}]) },
     ],
     stationIds:['AL','PO','ZO','KU','WI'] },
   { id:'EV-003', name:'Madonna — Celebration Tour',
     dateFrom:'2026-09-18', dateTo:'2026-09-20',
     sources:[
-      { id:'S-1', kind:'track', refId:'SND-048', days:DAYS.slice(),
-        windows:[{from:'15:00',to:'18:00'}] },
+      { id:'S-1', kind:'track', refId:'SND-048', days:wk(DAYS, [{start:'15:00',end:'18:00'}]) },
     ],
     stationIds:['WI','NO','ZO','KU'] },
   { id:'EV-004', name:'Sommerradio 2026',
     dateFrom:'2026-06-01', dateTo:'2026-08-31',
     sources:[
-      { id:'S-1', kind:'radio', refId:'RS-002', days:DAYS.slice(),
-        windows:[{from:'10:00',to:'18:00'}] },
+      /* Different times per day — Fri and Sat run into the evening. */
+      { id:'S-1', kind:'radio', refId:'RS-002', days:[
+        { day:'Mon', slots:[{start:'10:00',end:'18:00'}] },
+        { day:'Tue', slots:[{start:'10:00',end:'18:00'}] },
+        { day:'Wed', slots:[{start:'10:00',end:'18:00'}] },
+        { day:'Thu', slots:[{start:'10:00',end:'18:00'}] },
+        { day:'Fri', slots:[{start:'18:00',end:'23:00'}] },
+        { day:'Sat', slots:[{start:'12:00',end:'23:00'}] },
+        { day:'Sun', slots:[] },
+      ] },
     ],
     stationIds:['KA','WA'] },
 ];
@@ -3237,15 +3233,13 @@ function periodsOverlap(a, b) {
   if (b.dateTo && a.dateFrom && b.dateTo < a.dateFrom) return false;
   return true;
 }
-function windowsOverlap(w1, w2) {
-  return toMin(w1.from) < toMin(w2.to) && toMin(w2.from) < toMin(w1.to);
-}
+/* Both sources are laid out on one Mon 00:00 → Sun 24:00 minute timeline by
+   entryRanges(), the same helper the station variant uses, so a period that
+   runs past midnight is compared where it actually falls. */
 function sourcesClash(sa, sb) {
-  const days = sa.days.filter(d => sb.days.includes(d));
-  if (!days.length) return null;
-  for (const w1 of sa.windows) for (const w2 of sb.windows) {
-    if (windowsOverlap(w1, w2))
-      return { day: days[0], w1, w2 };
+  const ra = entryRanges(sa), rb = entryRanges(sb);
+  for (const x of ra) for (const y of rb) {
+    if (rangesOverlap(x.r, y.r)) return { day: x.day, slot: x.slot };
   }
   return null;
 }
@@ -3265,7 +3259,7 @@ function evConflicts(draft) {
       const clash = sourcesClash(sa, sb);
       if (clash) {
         out.push({ name: other.name, stations: shared, day: clash.day,
-                   win: clash.w1.from + '–' + clash.w1.to });
+                   win: clash.slot.start + '–' + clash.slot.end });
         return;
       }
     }
@@ -3328,7 +3322,7 @@ function deleteEvent(id) {
 function cloneEvent(ev) { return ev ? JSON.parse(JSON.stringify(ev)) : null; }
 function blankSource(kind) {
   return { id: 'S-' + Date.now().toString(36), kind: kind || 'radio', refId: '',
-           days: ['Mon','Tue','Wed','Thu','Fri'], windows: [{ from: '09:00', to: '12:00' }] };
+           days: DAYS.map(d => ({ day: d, slots: [] })) };   // starts empty, as in V2
 }
 function blankEvent() {
   return { id: null, name: '', dateFrom: new Date().toISOString().slice(0, 10), dateTo: '',
@@ -3358,22 +3352,62 @@ function evAddSource() {
   render();
 }
 function evRemoveSource(i) { state.evDraft.sources.splice(i, 1); render(); }
-function evToggleDay(i, day) {
-  const days = state.evDraft.sources[i].days;
-  const k = days.indexOf(day);
-  if (k === -1) days.push(day); else days.splice(k, 1);
-  render();
+/* The weekly grid is the same component the station variant uses: seven days,
+   several periods per day, empty day = no playback, end before start = across
+   midnight. Time edits never re-render, or a focused <input type=time> loses
+   its caret mid-edit; add/remove/copy redraw only that source's tbody. */
+function evSlotChange(i, di, si, field, val) {
+  state.evDraft.sources[i].days[di].slots[si][field] = val;
 }
-/* Time edits never re-render: replacing a focused <input type=time> mid-edit
-   closes the picker and drops the caret. */
-function evWinChange(i, wi, field, val) { state.evDraft.sources[i].windows[wi][field] = val; }
-function evAddWindow(i) {
-  state.evDraft.sources[i].windows.push({ from: '15:00', to: '16:00' });
-  render();
+function evRerenderWeek(i) {
+  const body = document.getElementById('evw-' + i);
+  if (body) body.innerHTML = evWeekRows(i);
 }
-function evRemoveWindow(i, wi) {
-  state.evDraft.sources[i].windows.splice(wi, 1);
-  render();
+function evAddSlot(i, di) {
+  state.evDraft.sources[i].days[di].slots.push({ start: '09:00', end: '12:00' });
+  evRerenderWeek(i);
+}
+function evRemoveSlot(i, di, si) {
+  state.evDraft.sources[i].days[di].slots.splice(si, 1);
+  evRerenderWeek(i);
+}
+function evCopyDay(i, di) {
+  const src = state.evDraft.sources[i];
+  if (di >= DAYS.length - 1) return;
+  src.days[di + 1].slots = src.days[di].slots.map(sl => ({ ...sl }));
+  evRerenderWeek(i);
+}
+function evWeekRows(i) {
+  const src = state.evDraft.sources[i];
+  return src.days.map((dayObj, di) => {
+    const isLastDay = di === DAYS.length - 1;
+    const rows = dayObj.slots.length
+      ? dayObj.slots.map((slot, si) => {
+          const first = si === 0, last = si === dayObj.slots.length - 1;
+          return `<tr>
+            <td class="${first ? 'sched-day-label' : 'sched-spacer'}">${first ? dayLabel(dayObj.day) : ''}</td>
+            <td><input type="time" id="evs-${i}-${di}-${si}-s" value="${slot.start}"
+                  oninput="evSlotChange(${i},${di},${si},'start',this.value)"></td>
+            <td class="sched-dash">–</td>
+            <td><input type="time" id="evs-${i}-${di}-${si}-e" value="${slot.end}"
+                  oninput="evSlotChange(${i},${di},${si},'end',this.value)"></td>
+            <td class="sched-ctrl">
+              <button class="sched-icon-btn remove" title="${state.lang === 'de' ? 'Entfernen' : 'Remove'}"
+                onclick="evRemoveSlot(${i},${di},${si})">−</button>
+              ${last ? `<button class="sched-icon-btn" title="${t('addSlot')}" onclick="evAddSlot(${i},${di})">+</button>` : ''}
+              ${last && !isLastDay ? `<button class="sched-icon-btn" title="${t('copyToNext')}" onclick="evCopyDay(${i},${di})">⧉</button>` : ''}
+            </td>
+          </tr>`;
+        }).join('')
+      : `<tr>
+          <td class="sched-day-label">${dayLabel(dayObj.day)}</td>
+          <td colspan="3" class="ms-none" style="font-size:12px">${t('msNoPlayback')}</td>
+          <td class="sched-ctrl">
+            <button class="sched-icon-btn" title="${t('addSlot')}" onclick="evAddSlot(${i},${di})">+</button>
+          </td>
+        </tr>`;
+    return rows + (isLastDay ? '' : `<tr><td colspan="5"><div class="sched-day-sep"></div></td></tr>`);
+  }).join('');
 }
 function evToggleStation(id) {
   const d = state.evDraft;
@@ -3402,11 +3436,13 @@ function evValidate() {
   if (!d.sources.length) return t('evNoSource');
   for (let i = 0; i < d.sources.length; i++) {
     const s = d.sources[i], n = i + 1;
-    if (!s.refId)         return t('evSrcNoRef', n);
-    if (!s.days.length)   return t('evSrcNoDays', n);
-    if (!s.windows.length) return t('evSrcNoWin', n);
-    for (const w of s.windows) {
-      if (toMin(w.to) <= toMin(w.from)) return t('evSrcBadWin', n, w.from, w.to);
+    if (!s.refId) return t('evSrcNoRef', n);
+    const slots = s.days.reduce((acc, day) => acc + day.slots.length, 0);
+    if (!slots)   return t('evSrcNoWin', n);
+    for (const day of s.days) {
+      for (const sl of day.slots) {
+        if (toMin(sl.start) === toMin(sl.end)) return t('evSrcSameTime', n, dayLabel(day.day));
+      }
     }
   }
   if (!d.stationIds.length) return t('evNoStationsErr');
@@ -3457,27 +3493,18 @@ function renderMusicEvent() {
           ${opts.map(o => `<option value="${o.id}" ${o.id === s.refId ? 'selected' : ''}>${o.label}</option>`).join('')}
         </select>
       </div>
-      <div class="frow">
-        <label>${t('evDays')}</label>
-        <div class="dayrow">${DAYS.map(day =>
-          `<button class="dayc daysel ${s.days.includes(day) ? 'on' : ''}"
-            onclick="evToggleDay(${i},'${day}')">${dayLabel(day)}</button>`).join('')}</div>
-      </div>
-      <div class="frow" style="align-items:flex-start">
-        <label>${t('evWindows')}</label>
-        <div>
-          ${s.windows.map((w, wi) => `
-            <div class="win-row">
-              <input type="time" id="ev-${i}-${wi}-f" value="${w.from}" oninput="evWinChange(${i},${wi},'from',this.value)">
-              <span class="sched-dash">–</span>
-              <input type="time" id="ev-${i}-${wi}-t" value="${w.to}" oninput="evWinChange(${i},${wi},'to',this.value)">
-              <button class="sched-icon-btn remove" title="${state.lang === 'de' ? 'Entfernen' : 'Remove'}"
-                onclick="evRemoveWindow(${i},${wi})" ${s.windows.length > 1 ? '' : 'disabled style="opacity:.25"'}>−</button>
-              ${wi === s.windows.length - 1 ? `<button class="sched-icon-btn" title="${t('evAddWindow')}" onclick="evAddWindow(${i})">+</button>` : ''}
-            </div>`).join('')}
-          <div class="fhint">${t('evWindowsNote')}</div>
-        </div>
-      </div>
+      <div class="section-label" style="margin-top:14px">${t('msWeek')}</div>
+      <table class="sched-table" style="max-width:520px">
+        <thead><tr>
+          <th style="width:38px">${state.lang === 'de' ? 'Tag' : 'Day'}</th>
+          <th>${state.lang === 'de' ? 'Beginn' : 'Start'}</th>
+          <th style="width:16px"></th>
+          <th>${state.lang === 'de' ? 'Ende' : 'End'}</th>
+          <th></th>
+        </tr></thead>
+        <tbody id="evw-${i}">${evWeekRows(i)}</tbody>
+      </table>
+      <p class="fhint">${t('msWeekNote')}</p>
     </div>`).join('');
 
   // station picker, grouped by line
