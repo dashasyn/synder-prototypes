@@ -140,6 +140,9 @@ body {
 /* ── Main content ──────────────────────────────────────────── */
 .main { flex: 1; overflow-y: auto; }
 .content { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+/* The event list carries chips, periods and status side by side — it needs the
+   whole window, so this page opts out of the reading-width container. */
+.content.wide { max-width: none; }
 
 /* Save toast */
 .save-toast {
@@ -514,6 +517,27 @@ tr.row-sel td { background: var(--pri-50); }
 .row-menu-item:hover { background: var(--pri-50); color: var(--pri); }
 .row-menu-item.danger { color: #C62828; }
 .row-menu-item.danger:hover { background: #FDECEA; color: #C62828; }
+
+/* ── Everrunning music V1: event list and editor ── */
+.lc-wrap { display: flex; flex-wrap: wrap; gap: 6px; }
+.lc { position: relative; display: inline-flex; align-items: center; gap: 4px; cursor: default; outline: none; }
+.lc-n { font-size: 12px; color: var(--text-sec); }
+.lc-tip {
+  /* below the chip, so the table header never clips it */
+  display: none; position: absolute; left: 0; top: calc(100% + 6px); z-index: 260;
+  background: #313131; color: #fff; font-size: 12px; line-height: 1.5;
+  padding: 7px 10px; border-radius: 4px; white-space: nowrap; box-shadow: var(--elev2);
+}
+.lc:hover .lc-tip, .lc:focus .lc-tip { display: block; }
+.daysel { font-family: inherit; border: none; cursor: pointer; }
+.daysel.on { background: var(--pri); color: #fff; }
+.win-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.win-row input[type="time"] { min-width: 132px; }
+.src-block { border: 1px solid var(--divider); border-radius: 4px; padding: 14px 16px; margin: 12px 0; }
+.src-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.src-t { font-size: 13px; font-weight: 500; color: var(--text-sec); text-transform: uppercase; letter-spacing: .04em; }
+.ev-warn { margin: 0 0 18px; }
+.ev-warn b { display: block; margin-bottom: 4px; }
 </style>
 </head>
 <body>
@@ -640,6 +664,7 @@ const state = {
   evId: null,           // music event being edited
   evDraft: null,        // working copy of that event
   evPickSearch: '',
+  evSearch: '',        // event list: filter by station or event name
   musicVer: 'stations', // Everrunning music: 'stations' (V2) | 'events' (V1)
   msStationId: null,    // station whose schedule is being edited
   msLineId: null,       // …on this line: a station has one schedule per line
@@ -712,13 +737,34 @@ const i18n = {
     evNewTitle:          'Neues Event',
     evBasics:            'Grunddaten',
     evName:              'Eventname',
-    evActive:            'Event aktiv',
     evSource:            'Audioquelle',
     evSourceSel:         'Quelle auswählen',
-    evTiming:            'Zeitsteuerung',
-    evDateRange:         'Datum von – bis',
-    evTimeRange:         'Zeitfenster (Standard)',
-    evSchedNote:         'Das Zeitfenster gilt für alle ausgewählten Stationen und kann je Station überschrieben werden.',
+    evDateRange:         'Zeitraum von – bis',
+    evIntro:             'Ein Zeitplan, der auf viele Stationen läuft. Priorität: Einzeltrack vor Playlist vor Radio.',
+    evSearchPh:          'Nach Station oder Event suchen …',
+    evFound:             (n, all) => `${n} von ${all}`,
+    evNoMatch:           'Kein Event passt zur Suche.',
+    evOpenEnd:           'offen',
+    evOpenEndHint:       'Ende leer lassen = läuft unbefristet weiter.',
+    evKind:              'Art der Quelle',
+    evKindNote:          'Ein Event nutzt eine Art — Radio und Playlist werden nicht gemischt.',
+    evSourceN:           (n) => `Quelle ${n}`,
+    evAddSource:         '+ Quelle hinzufügen',
+    evRemoveSource:      'Quelle entfernen',
+    evDays:              'Wochentage',
+    evWindows:           'Zeitfenster',
+    evWindowsNote:       'Mehrere Zeitfenster pro Quelle möglich, z. B. 09:00–12:00 und 15:00–16:00.',
+    evAddWindow:         'Zeitfenster hinzufügen',
+    evNoDate:            'Bitte ein Startdatum angeben.',
+    evBadDate:           'Das Ende liegt vor dem Beginn.',
+    evSrcNoRef:          (n) => `Quelle ${n}: bitte auswählen.`,
+    evSrcNoDays:         (n) => `Quelle ${n}: bitte mindestens einen Wochentag wählen.`,
+    evSrcNoWin:          (n) => `Quelle ${n}: bitte mindestens ein Zeitfenster angeben.`,
+    evSrcBadWin:         (n, f, t2) => `Quelle ${n}: ${f}–${t2} — das Ende muss nach dem Beginn liegen.`,
+    evOverlapTitle:      '⚠ Überschneidung mit einem gleichrangigen Event',
+    evOverlapLine:       (name, day, win, stns) => `„${name}“ — ${day} ${win} · ${stns}`,
+    evOverlapConfirm:    (list) => `Überschneidung mit einem gleichrangigen Event:\n\n${list}\n\nTrotzdem speichern?`,
+    evOverlapNote:       'Speichern ist möglich. Bei gleichem Rang ist nicht festgelegt, was läuft. Einzeltrack geht vor Playlist, Playlist vor Radio.',
     // ── Everrunning Musik · Version 2: Zeitpläne pro Station ──
     protoLabel:          'Prototyp-Variante',
     msEdit:              'Bearbeiten',
@@ -773,16 +819,7 @@ const i18n = {
     evPickSearch:        'Station oder Linie suchen …',
     evSelectAll:         'Alle',
     evClearAll:          'Auswahl leeren',
-    evSelected:          (n) => `Ausgewählte Stationen (${n})`,
-    evNoStations:        'Noch keine Stationen ausgewählt.',
-    colTimeWindow:       'Zeitfenster',
-    twDefault:           'Standard',
-    twCustom:            'Individuell',
-    twEdit:              'Ändern',
     twReset:             'Zurücksetzen',
-    twModalTitle:        (n) => `Zeitfenster für ${n}`,
-    twFrom:              'Von',
-    twTo:                'Bis',
     evSave:              'Event speichern',
     evDelConfirm:        (n) => `Event „${n}“ löschen?`,
     evNoName:            'Bitte einen Eventnamen eingeben.',
@@ -972,13 +1009,34 @@ const i18n = {
     evNewTitle:          'New event',
     evBasics:            'Basics',
     evName:              'Event name',
-    evActive:            'Event active',
     evSource:            'Audio source',
     evSourceSel:         'Select source',
-    evTiming:            'Timing',
-    evDateRange:         'Date from – to',
-    evTimeRange:         'Time window (default)',
-    evSchedNote:         'The time window applies to every selected station and can be overridden per station.',
+    evDateRange:         'Period from – to',
+    evIntro:             'One schedule running on many stations. Priority: single track over playlist over radio.',
+    evSearchPh:          'Search station or event …',
+    evFound:             (n, all) => `${n} of ${all}`,
+    evNoMatch:           'No event matches the search.',
+    evOpenEnd:           'open',
+    evOpenEndHint:       'Leave the end empty = runs indefinitely.',
+    evKind:              'Kind of source',
+    evKindNote:          'One event uses one kind — radio and playlists are not mixed.',
+    evSourceN:           (n) => `Source ${n}`,
+    evAddSource:         '+ Add source',
+    evRemoveSource:      'Remove source',
+    evDays:              'Weekdays',
+    evWindows:           'Time windows',
+    evWindowsNote:       'Several windows per source are possible, e.g. 09:00–12:00 and 15:00–16:00.',
+    evAddWindow:         'Add time window',
+    evNoDate:            'Please give a start date.',
+    evBadDate:           'The end is before the start.',
+    evSrcNoRef:          (n) => `Source ${n}: please select one.`,
+    evSrcNoDays:         (n) => `Source ${n}: please select at least one weekday.`,
+    evSrcNoWin:          (n) => `Source ${n}: please add at least one time window.`,
+    evSrcBadWin:         (n, f, t2) => `Source ${n}: ${f}–${t2} — the end must be after the start.`,
+    evOverlapTitle:      '⚠ Overlap with an event of the same rank',
+    evOverlapLine:       (name, day, win, stns) => `"${name}" — ${day} ${win} · ${stns}`,
+    evOverlapConfirm:    (list) => `Overlap with an event of the same rank:\n\n${list}\n\nSave anyway?`,
+    evOverlapNote:       'Saving is possible. At equal rank it is undefined which one plays. Single track beats playlist, playlist beats radio.',
     // ── Everrunning music · version 2: schedules per station ──
     protoLabel:          'Prototype variant',
     msEdit:              'Edit',
@@ -1033,16 +1091,7 @@ const i18n = {
     evPickSearch:        'Search station or line …',
     evSelectAll:         'All',
     evClearAll:          'Clear selection',
-    evSelected:          (n) => `Selected stations (${n})`,
-    evNoStations:        'No stations selected yet.',
-    colTimeWindow:       'Time window',
-    twDefault:           'Default',
-    twCustom:            'Custom',
-    twEdit:              'Change',
     twReset:             'Reset',
-    twModalTitle:        (n) => `Time window for ${n}`,
-    twFrom:              'From',
-    twTo:                'To',
     evSave:              'Save event',
     evDelConfirm:        (n) => `Delete event "${n}"?`,
     evNoName:            'Please enter an event name.',
@@ -1237,25 +1286,41 @@ function getRadio(id) { return radioStreams.find(rs => rs.id === id); }
 // musicEvents (V1): source.kind = radio | playlist | track. Schedule only —
 // train triggers were dropped on 2026-09-04 ("nothing about specific trains").
 // overrides: { stationId: {timeFrom, timeTo} } — per-station deviation from the default window
-const musicEvents = [
-  { id:'EV-001', name:'Klassik-Radio Vormittag', active:true,
-    source:{ kind:'radio', refId:'RS-001' },
-    dateFrom:'2026-09-01', dateTo:'2026-12-31', timeFrom:'09:00', timeTo:'12:00',
-    stationIds:['AL','FR','PO','ZO','HA'],
-    overrides:{ 'PO': { timeFrom:'10:00', timeTo:'12:00' } } },
-  { id:'EV-002', name:'Weihnachtsmusik Dezember', active:true,
-    source:{ kind:'playlist', refId:'PL-002' },
-    dateFrom:'2026-12-01', dateTo:'2026-12-26', timeFrom:'16:00', timeTo:'20:00',
-    stationIds:['AL','PO','ZO','KU','WI'],
-    overrides:{} },
-  { id:'EV-003', name:'Madonna — Celebration Tour', active:true,
-    source:{ kind:'track', refId:'SND-048' },
-    dateFrom:'2026-09-18', dateTo:'2026-09-20', timeFrom:'15:00', timeTo:'18:00',
-    stationIds:['WI','NO','ZO','KU'],
-    overrides:{ 'NO': { timeFrom:'16:00', timeTo:'18:00' } } },
-];
-
 const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+const musicEvents = [
+  { id:'EV-001', name:'Klassik & Jazz — Tagesprogramm',
+    dateFrom:'2026-06-10', dateTo:'',
+    sources:[
+      { id:'S-1', kind:'radio', refId:'RS-001', days:['Mon','Tue','Wed','Thu','Fri'],
+        windows:[{from:'09:00',to:'12:00'},{from:'15:00',to:'16:00'}] },
+      { id:'S-2', kind:'radio', refId:'RS-003', days:['Mon','Tue','Wed','Thu','Fri'],
+        windows:[{from:'18:00',to:'22:00'}] },
+    ],
+    stationIds:['AL','FR','PO','ZO','HA'] },
+  { id:'EV-002', name:'Weihnachtsmusik',
+    dateFrom:'2026-12-01', dateTo:'2026-12-26',
+    sources:[
+      { id:'S-1', kind:'playlist', refId:'PL-002', days:DAYS.slice(),
+        windows:[{from:'16:00',to:'20:00'}] },
+    ],
+    stationIds:['AL','PO','ZO','KU','WI'] },
+  { id:'EV-003', name:'Madonna — Celebration Tour',
+    dateFrom:'2026-09-18', dateTo:'2026-09-20',
+    sources:[
+      { id:'S-1', kind:'track', refId:'SND-048', days:DAYS.slice(),
+        windows:[{from:'15:00',to:'18:00'}] },
+    ],
+    stationIds:['WI','NO','ZO','KU'] },
+  { id:'EV-004', name:'Sommerradio 2026',
+    dateFrom:'2026-06-01', dateTo:'2026-08-31',
+    sources:[
+      { id:'S-1', kind:'radio', refId:'RS-002', days:DAYS.slice(),
+        windows:[{from:'10:00',to:'18:00'}] },
+    ],
+    stationIds:['KA','WA'] },
+];
+function getEvent(id) { return musicEvents.find(ev => ev.id === id); }
 
 /* ── Everrunning music V2: one schedule per station ─────────
    A station holds exactly one schedule; the schedule holds entries, and each
@@ -1309,14 +1374,9 @@ function getSchedule(stationId, lineId) {
   return stationSchedules.find(sc => sc.stationId === stationId && sc.lineId === lineId);
 }
 function schedKey(stationId, lineId) { return stationId + '|' + lineId; }
-function getEvent(id) { return musicEvents.find(ev => ev.id === id); }
 function musicTracks() { return soundFiles.filter(f => f.type === 'music'); }
-function sourceName(src) {
-  if (!src || !src.refId) return '—';
-  if (src.kind === 'radio')    { const r = getRadio(src.refId);    return r ? r.name : '—'; }
-  if (src.kind === 'playlist') { const p = getPlaylist(src.refId); return p ? p.name : '—'; }
-  const f = soundFiles.find(x => x.id === src.refId); return f ? f.name : '—';
-}
+const esc = v => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 function plDuration(pl) {
   const secs = pl.trackIds.reduce((sum, id) => {
     const f = soundFiles.find(x => x.id === id);
@@ -1641,6 +1701,7 @@ const GD_VIEWS  = ['stations','detail','sounds','spc','texts','lines','lineDetai
 const EVR_VIEWS = ['music','musicEvent','musicStations','musicStation'];
 function render() {
   renderProtoBar();
+  document.getElementById('content').classList.toggle('wide', state.view === 'music');
   // Highlight cfg trigger when any GD view is active
   const cfgActive = GD_VIEWS.includes(state.view);
   document.getElementById('nav-cfg').classList.toggle('active', cfgActive);
@@ -3088,46 +3149,143 @@ function deleteRadio(id) {
   navigate('sounds');
 }
 
-// ── Everrunning music: event list ──────────────────────────
+// ── Everrunning music V1: events (schedule first) ──────────
+/* An event is one schedule applied to many stations: name + date period +
+   one or more sources of the SAME kind, each with its own weekdays and time
+   windows ("morning classic, evening jazz"), plus the stations it runs on.
+   Priority when two events meet: single track > playlist > radio.          */
+const RANK = { track: 1, playlist: 2, radio: 3 };
+const MONTHS_DE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+const MONTHS_EN = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
 function fmtD(iso) {
   if (!iso) return '—';
   const [y, m, d] = iso.split('-');
   return state.lang === 'de' ? `${d}.${m}.${y}` : `${y}-${m}-${d}`;
 }
+/* "10. Jun 2026" / "10 Jun 2026" — no time, as agreed. */
+function fmtDMY(iso) {
+  if (!iso) return '';
+  const [y, m, d] = iso.split('-');
+  const mon = (state.lang === 'de' ? MONTHS_DE : MONTHS_EN)[parseInt(m, 10) - 1];
+  return state.lang === 'de' ? `${parseInt(d, 10)}. ${mon} ${y}` : `${parseInt(d, 10)} ${mon} ${y}`;
+}
+function evPeriod(ev) {
+  return fmtDMY(ev.dateFrom) + ' – ' + (ev.dateTo ? fmtDMY(ev.dateTo) : t('evOpenEnd'));
+}
+/* Status comes from the period alone — there is no manual active switch.
+   A Christmas event created in September is "geplant" until December. */
 function evStatus(ev) {
-  if (!ev.active) return { cls: 'chip-off', label: t('stEvOff') };
   const today = new Date().toISOString().slice(0, 10);
   if (ev.dateTo   && ev.dateTo   < today) return { cls: 'chip-past',    label: t('stEvPast') };
   if (ev.dateFrom && ev.dateFrom > today) return { cls: 'chip-planned', label: t('stEvPlanned') };
   return { cls: 'chip-on', label: t('stEvActive') };
 }
 function srcLabel(kind) { return kind === 'radio' ? t('srcRadio') : kind === 'playlist' ? t('srcPlaylist') : t('srcTrack'); }
-function evWhen(ev) {
-  const range = `${fmtD(ev.dateFrom)} – ${fmtD(ev.dateTo)}`;
-  return `${range}<div class="fhint">${ev.timeFrom}–${ev.timeTo}${Object.keys(ev.overrides || {}).length ? ' · ' + Object.keys(ev.overrides).length + '× ' + t('twCustom') : ''}</div>`;
+function evKind(ev) { return ev.sources.length ? ev.sources[0].kind : 'radio'; }
+function srcRefName(kind, refId) {
+  if (!refId) return '—';
+  if (kind === 'radio')    { const r = getRadio(refId);    return r ? r.name : '—'; }
+  if (kind === 'playlist') { const p = getPlaylist(refId); return p ? p.name : '—'; }
+  const f = soundFiles.find(x => x.id === refId); return f ? f.name : '—';
 }
-function evLines(ev) {
-  const set = [];
+function sourceName(src) { return srcRefName(src.kind, src.refId); }
+
+/* Stations grouped by line, with the station names for the hover. */
+function evLineGroups(ev) {
+  const map = [];
   ev.stationIds.forEach(id => {
     const st = getStation(id);
-    if (st) st.lines.forEach(l => { if (!set.includes(l)) set.push(l); });
+    if (!st) return;
+    st.lines.forEach(l => {
+      let g = map.find(x => x.line === l);
+      if (!g) { g = { line: l, names: [] }; map.push(g); }
+      if (!g.names.includes(st.name)) g.names.push(st.name);
+    });
   });
-  return set;
+  const order = lineData.map(l => l.id);
+  return map.sort((a, b) => order.indexOf(a.line) - order.indexOf(b.line));
+}
+function evLineChips(ev) {
+  const groups = evLineGroups(ev);
+  if (!groups.length) return `<span class="ms-none">—</span>`;
+  return `<div class="lc-wrap">${groups.map(g =>
+    `<span class="lc" tabindex="0">${lineBadge(g.line)}<span class="lc-n">${g.names.length}</span>
+       <span class="lc-tip">${g.names.map(n => esc(n)).join('<br>')}</span></span>`).join('')}</div>`;
+}
+function evSourceChips(ev) {
+  if (!ev.sources.length) return `<span class="ms-none">—</span>`;
+  return ev.sources.map(s =>
+    `<span class="chip chip-${s.kind}">${esc(srcRefName(s.kind, s.refId))}</span>`).join(' ');
+}
+/* Search matches the station names an event runs on — and its own name, which
+   is what anyone types first. */
+function evMatches(ev, q) {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  if (ev.name.toLowerCase().includes(needle)) return true;
+  return ev.stationIds.some(id => {
+    const st = getStation(id);
+    return st && (st.name.toLowerCase().includes(needle)
+      || st.lines.some(l => l.toLowerCase().includes(needle)));
+  });
+}
+
+/* ── overlap: same rank, shared station, periods and windows meeting ── */
+function periodsOverlap(a, b) {
+  if (a.dateTo && b.dateFrom && a.dateTo < b.dateFrom) return false;
+  if (b.dateTo && a.dateFrom && b.dateTo < a.dateFrom) return false;
+  return true;
+}
+function windowsOverlap(w1, w2) {
+  return toMin(w1.from) < toMin(w2.to) && toMin(w2.from) < toMin(w1.to);
+}
+function sourcesClash(sa, sb) {
+  const days = sa.days.filter(d => sb.days.includes(d));
+  if (!days.length) return null;
+  for (const w1 of sa.windows) for (const w2 of sb.windows) {
+    if (windowsOverlap(w1, w2))
+      return { day: days[0], w1, w2 };
+  }
+  return null;
+}
+/* Different ranks never warn: a Christmas playlist on top of the always-on
+   radio is the intended case, not a mistake. */
+function evConflicts(draft) {
+  const out = [];
+  musicEvents.forEach(other => {
+    if (other.id === draft.id) return;
+    if (!draft.sources.length || !other.sources.length) return;
+    if (RANK[evKind(draft)] !== RANK[evKind(other)]) return;
+    if (!periodsOverlap(draft, other)) return;
+    const shared = draft.stationIds.filter(id => other.stationIds.includes(id))
+      .map(id => (getStation(id) || {}).name).filter(Boolean);
+    if (!shared.length) return;
+    for (const sa of draft.sources) for (const sb of other.sources) {
+      const clash = sourcesClash(sa, sb);
+      if (clash) {
+        out.push({ name: other.name, stations: shared, day: clash.day,
+                   win: clash.w1.from + '–' + clash.w1.to });
+        return;
+      }
+    }
+  });
+  return out;
 }
 
 function renderMusic() {
-  const rows = musicEvents.map(ev => {
+  const q = state.evSearch || '';
+  const list = musicEvents.filter(ev => evMatches(ev, q));
+  const rows = list.map(ev => {
     const st = evStatus(ev);
     return `<tr>
-      <td style="font-weight:500"><a class="bc-link" onclick="navigate('musicEvent','${ev.id}')">${ev.name}</a></td>
-      <td><span class="chip chip-${ev.source.kind}">${srcLabel(ev.source.kind)}</span>
-          <div class="fhint">${sourceName(ev.source)}</div></td>
-      <td>${ev.stationIds.length}
-          <div class="fhint">${evLines(ev).join(', ') || '—'}</div></td>
-      <td style="color:var(--text-sec)">${evWhen(ev)}</td>
+      <td style="font-weight:500">${esc(ev.name)}</td>
+      <td>${evSourceChips(ev)}</td>
+      <td>${evLineChips(ev)}</td>
+      <td style="color:var(--text-sec);white-space:nowrap">${evPeriod(ev)}</td>
       <td><span class="chip ${st.cls}">${st.label}</span></td>
       <td style="text-align:right;white-space:nowrap;padding:10px 16px">
-        <button class="btn btn-ghost btn-sm" onclick="navigate('musicEvent','${ev.id}')">${state.lang === 'de' ? 'Bearbeiten' : 'Edit'}</button>
+        <button class="btn btn-ghost btn-sm" onclick="navigate('musicEvent','${ev.id}')">${t('msEdit')}</button>
         <button class="btn-danger-ghost btn-sm" onclick="deleteEvent('${ev.id}')">✕</button>
       </td>
     </tr>`;
@@ -3136,11 +3294,16 @@ function renderMusic() {
   <div class="ph">
     <div>
       <h1>${t('musicTitle')}</h1>
-      <div class="ph-sub">${t('musicIntro')}</div>
+      <div class="ph-sub">${t('evIntro')}</div>
     </div>
     <div class="ph-right">
       <button class="btn btn-primary btn-sm" onclick="newMusicEvent()">${t('newEvent')}</button>
     </div>
+  </div>
+  <div class="frow" style="margin-bottom:14px">
+    <input class="search-input" type="text" style="min-width:320px" value="${esc(q)}"
+      placeholder="${t('evSearchPh')}" oninput="state.evSearch=this.value;render()">
+    ${q ? `<span class="fhint">${t('evFound', list.length, musicEvents.length)}</span>` : ''}
   </div>
   <div class="tbl-wrap"><table>
     <thead><tr>
@@ -3151,7 +3314,8 @@ function renderMusic() {
       <th>${t('colStatus')}</th>
       <th></th>
     </tr></thead>
-    <tbody>${rows || `<tr><td colspan="6" style="text-align:center;color:var(--text-dis);padding:32px">${t('noEvents')}</td></tr>`}</tbody>
+    <tbody>${rows || `<tr><td colspan="6" style="text-align:center;color:var(--text-dis);padding:32px">
+      ${q ? t('evNoMatch') : t('noEvents')}</td></tr>`}</tbody>
   </table></div>`;
 }
 
@@ -3162,11 +3326,13 @@ function deleteEvent(id) {
   navigate('music');
 }
 function cloneEvent(ev) { return ev ? JSON.parse(JSON.stringify(ev)) : null; }
+function blankSource(kind) {
+  return { id: 'S-' + Date.now().toString(36), kind: kind || 'radio', refId: '',
+           days: ['Mon','Tue','Wed','Thu','Fri'], windows: [{ from: '09:00', to: '12:00' }] };
+}
 function blankEvent() {
-  return { id: null, name: '', active: true,
-    source: { kind: 'radio', refId: '' },
-    dateFrom: '', dateTo: '', timeFrom: '09:00', timeTo: '12:00',
-    stationIds: [], overrides: {} };
+  return { id: null, name: '', dateFrom: new Date().toISOString().slice(0, 10), dateTo: '',
+           sources: [blankSource('radio')], stationIds: [] };
 }
 function newMusicEvent() {
   state.evId = null;
@@ -3176,18 +3342,43 @@ function newMusicEvent() {
   render();
 }
 
-// ── Everrunning music: event editor ────────────────────────
+// ── event editor ───────────────────────────────────────────
 function evSet(field, val) { state.evDraft[field] = val; }
-function refreshDefaultWindows() {
+/* One kind per event — "don't combine playlists and radio together" — so the
+   kind is a property of the event, not of each source. */
+function evSetKind(kind) {
   const d = state.evDraft;
-  document.querySelectorAll('.dw-txt').forEach(el => { el.textContent = d.timeFrom + '–' + d.timeTo; });
+  if (evKind(d) === kind) return;
+  d.sources.forEach(s => { s.kind = kind; s.refId = ''; });
+  render();
 }
-function evSetKind(k)  { state.evDraft.source.kind = k; state.evDraft.source.refId = ''; render(); }
+function evSetRef(i, refId) { state.evDraft.sources[i].refId = refId; render(); }
+function evAddSource() {
+  state.evDraft.sources.push(blankSource(evKind(state.evDraft)));
+  render();
+}
+function evRemoveSource(i) { state.evDraft.sources.splice(i, 1); render(); }
+function evToggleDay(i, day) {
+  const days = state.evDraft.sources[i].days;
+  const k = days.indexOf(day);
+  if (k === -1) days.push(day); else days.splice(k, 1);
+  render();
+}
+/* Time edits never re-render: replacing a focused <input type=time> mid-edit
+   closes the picker and drops the caret. */
+function evWinChange(i, wi, field, val) { state.evDraft.sources[i].windows[wi][field] = val; }
+function evAddWindow(i) {
+  state.evDraft.sources[i].windows.push({ from: '15:00', to: '16:00' });
+  render();
+}
+function evRemoveWindow(i, wi) {
+  state.evDraft.sources[i].windows.splice(wi, 1);
+  render();
+}
 function evToggleStation(id) {
   const d = state.evDraft;
   const i = d.stationIds.indexOf(id);
-  if (i === -1) d.stationIds.push(id);
-  else { d.stationIds.splice(i, 1); delete d.overrides[id]; }
+  if (i === -1) d.stationIds.push(id); else d.stationIds.splice(i, 1);
   render();
 }
 function evToggleLine(lineId) {
@@ -3196,51 +3387,44 @@ function evToggleLine(lineId) {
   const allSel = ids.every(id => d.stationIds.includes(id));
   ids.forEach(id => {
     const i = d.stationIds.indexOf(id);
-    if (allSel && i !== -1) { d.stationIds.splice(i, 1); delete d.overrides[id]; }
+    if (allSel && i !== -1) d.stationIds.splice(i, 1);
     else if (!allSel && i === -1) d.stationIds.push(id);
   });
   render();
 }
-function evClearStations() { state.evDraft.stationIds = []; state.evDraft.overrides = {}; render(); }
-function evRemoveStation(id) { evToggleStation(id); }
-function evResetOverride(id) { delete state.evDraft.overrides[id]; render(); }
-function evOverrideModal(id) {
+function evClearStations() { state.evDraft.stationIds = []; render(); }
+
+function evValidate() {
   const d = state.evDraft;
-  const st = getStation(id);
-  const cur = d.overrides[id] || { timeFrom: d.timeFrom, timeTo: d.timeTo };
-  openModal(`
-    <div class="modal-title">${t('twModalTitle', st.name)}</div>
-    <div class="modal-field">
-      <label>${t('twFrom')}</label>
-      <input type="time" id="m-tw-from" value="${cur.timeFrom}">
-    </div>
-    <div class="modal-field">
-      <label>${t('twTo')}</label>
-      <input type="time" id="m-tw-to" value="${cur.timeTo}">
-    </div>
-    <p class="fhint">${state.lang === 'de' ? `Standard für dieses Event: ${d.timeFrom}–${d.timeTo}` : `Event default: ${d.timeFrom}–${d.timeTo}`}</p>
-    <div class="modal-actions">
-      <button class="btn btn-ghost btn-sm" onclick="closeModal();evResetOverride('${id}')">${t('twReset')}</button>
-      <button class="btn btn-outline btn-sm" onclick="closeModal()">${t('cancel')}</button>
-      <button class="btn btn-primary btn-sm" id="modal-save-btn">${t('saveEntry')}</button>
-    </div>`,
-    () => {
-      const from = document.getElementById('m-tw-from').value;
-      const to   = document.getElementById('m-tw-to').value;
-      if (from === d.timeFrom && to === d.timeTo) delete d.overrides[id];
-      else d.overrides[id] = { timeFrom: from, timeTo: to };
-      closeModal();
-      render();
-    });
+  if (!d.name.trim())    return t('evNoName');
+  if (!d.dateFrom)       return t('evNoDate');
+  if (d.dateTo && d.dateTo < d.dateFrom) return t('evBadDate');
+  if (!d.sources.length) return t('evNoSource');
+  for (let i = 0; i < d.sources.length; i++) {
+    const s = d.sources[i], n = i + 1;
+    if (!s.refId)         return t('evSrcNoRef', n);
+    if (!s.days.length)   return t('evSrcNoDays', n);
+    if (!s.windows.length) return t('evSrcNoWin', n);
+    for (const w of s.windows) {
+      if (toMin(w.to) <= toMin(w.from)) return t('evSrcBadWin', n, w.from, w.to);
+    }
+  }
+  if (!d.stationIds.length) return t('evNoStationsErr');
+  return null;
 }
 function evSaveDraft() {
+  const err = evValidate();
+  if (err) { alert(err); return; }
   const d = state.evDraft;
-  if (!d.name.trim())        { alert(t('evNoName')); return; }
-  if (!d.source.refId)       { alert(t('evNoSource')); return; }
-  if (!d.stationIds.length)  { alert(t('evNoStationsErr')); return; }
-  if (d.id) {
-    Object.assign(getEvent(d.id), cloneEvent(d));
-  } else {
+  /* The live warning sits at the top of the form and scrolls away while the
+     station picker is in use, so the conflict is repeated on the way out.
+     It asks rather than blocks — an equal-rank overlap is undefined, not
+     forbidden. */
+  const clashes = evConflicts(d);
+  if (clashes.length && !confirm(t('evOverlapConfirm',
+        clashes.map(c => `„${c.name}“ — ${dayLabel(c.day)} ${c.win} · ${c.stations.join(', ')}`).join('\n')))) return;
+  if (d.id) Object.assign(getEvent(d.id), cloneEvent(d));
+  else {
     const nextNum = musicEvents.reduce((m, ev) => Math.max(m, parseInt(ev.id.slice(3), 10) || 0), 0) + 1;
     d.id = 'EV-' + String(nextNum).padStart(3, '0');
     musicEvents.push(cloneEvent(d));
@@ -3254,29 +3438,49 @@ function renderMusicEvent() {
   const d = state.evDraft;
   if (!d) return renderMusic();
   const isNew = !d.id;
+  const kind = evKind(d);
 
-  // Audio source options for the picked kind
-  const srcOpts = (d.source.kind === 'radio'    ? radioStreams.map(r => ({ id: r.id, label: r.name + (r.genre ? ' · ' + r.genre : '') }))
-                : d.source.kind === 'playlist'  ? playlists.map(pl => ({ id: pl.id, label: `${pl.name} · ${pl.trackIds.length} ${t('colTracks')} · ${plDuration(pl)}` }))
-                :                                 musicTracks().map(f => ({ id: f.id, label: `${f.name} · ${f.duration}` })))
-    .map(o => `<option value="${o.id}" ${o.id === d.source.refId ? 'selected' : ''}>${o.label}</option>`).join('');
+  const opts = (kind === 'radio'    ? radioStreams.map(r => ({ id: r.id, label: r.name + (r.genre ? ' · ' + r.genre : '') }))
+              : kind === 'playlist' ? playlists.map(pl => ({ id: pl.id, label: `${pl.name} · ${pl.trackIds.length} ${t('colTracks')} · ${plDuration(pl)}` }))
+              :                       musicTracks().map(f => ({ id: f.id, label: `${f.name} · ${f.duration}` })));
 
-  let srcPreview = '';
-  if (d.source.refId) {
-    if (d.source.kind === 'radio') {
-      const r = getRadio(d.source.refId);
-      srcPreview = r ? `<div class="src-preview">${r.url}</div>` : '';
-    } else if (d.source.kind === 'playlist') {
-      const pl = getPlaylist(d.source.refId);
-      srcPreview = pl ? `<div class="src-preview">${pl.trackIds.length} ${t('colTracks')} · ${plDuration(pl)} · ${pl.mode === 'shuffle' ? t('modeShuffle') : t('modeOrder')}
-        &nbsp;<a class="bc-link" onclick="navigate('playlistDetail','${pl.id}')">${state.lang === 'de' ? 'Playlist öffnen' : 'Open playlist'}</a></div>` : '';
-    } else {
-      const f = soundFiles.find(x => x.id === d.source.refId);
-      srcPreview = f ? `<div class="src-preview">${f.filename} · ${f.duration}</div>` : '';
-    }
-  }
+  const sourceCards = d.sources.map((s, i) => `
+    <div class="src-block">
+      <div class="src-hd">
+        <span class="src-t">${t('evSourceN', i + 1)}</span>
+        ${d.sources.length > 1 ? `<button class="btn-danger-ghost btn-sm" onclick="evRemoveSource(${i})">${t('evRemoveSource')}</button>` : ''}
+      </div>
+      <div class="frow">
+        <label>${t('evSourceSel')} *</label>
+        <select style="min-width:340px" onchange="evSetRef(${i},this.value)">
+          <option value="">${state.lang === 'de' ? '— wählen —' : '— select —'}</option>
+          ${opts.map(o => `<option value="${o.id}" ${o.id === s.refId ? 'selected' : ''}>${o.label}</option>`).join('')}
+        </select>
+      </div>
+      <div class="frow">
+        <label>${t('evDays')}</label>
+        <div class="dayrow">${DAYS.map(day =>
+          `<button class="dayc daysel ${s.days.includes(day) ? 'on' : ''}"
+            onclick="evToggleDay(${i},'${day}')">${dayLabel(day)}</button>`).join('')}</div>
+      </div>
+      <div class="frow" style="align-items:flex-start">
+        <label>${t('evWindows')}</label>
+        <div>
+          ${s.windows.map((w, wi) => `
+            <div class="win-row">
+              <input type="time" id="ev-${i}-${wi}-f" value="${w.from}" oninput="evWinChange(${i},${wi},'from',this.value)">
+              <span class="sched-dash">–</span>
+              <input type="time" id="ev-${i}-${wi}-t" value="${w.to}" oninput="evWinChange(${i},${wi},'to',this.value)">
+              <button class="sched-icon-btn remove" title="${state.lang === 'de' ? 'Entfernen' : 'Remove'}"
+                onclick="evRemoveWindow(${i},${wi})" ${s.windows.length > 1 ? '' : 'disabled style="opacity:.25"'}>−</button>
+              ${wi === s.windows.length - 1 ? `<button class="sched-icon-btn" title="${t('evAddWindow')}" onclick="evAddWindow(${i})">+</button>` : ''}
+            </div>`).join('')}
+          <div class="fhint">${t('evWindowsNote')}</div>
+        </div>
+      </div>
+    </div>`).join('');
 
-  // Station picker, grouped by line
+  // station picker, grouped by line
   const q = (state.evPickSearch || '').toLowerCase();
   const lineGroups = lineData.filter(l => stations.some(st => st.lines.includes(l.id))).map(l => {
     const stns = stations.filter(st => st.lines.includes(l.id))
@@ -3299,68 +3503,43 @@ function renderMusicEvent() {
     </div>`;
   }).join('');
 
-  // Selected stations with per-station window
-  const selRows = d.stationIds.map(id => {
-    const st = getStation(id);
-    if (!st) return '';
-    const ov = d.overrides[id];
-    return `<tr>
-      <td style="font-weight:500">${st.name}</td>
-      <td>${st.lines.map(l => lineBadge(l)).join(' ')}</td>
-      <td>${ov
-        ? `${ov.timeFrom}–${ov.timeTo} <span class="chip chip-custom">${t('twCustom')}</span>`
-        : `<span class="dw-txt">${d.timeFrom}–${d.timeTo}</span> <span class="fhint">(${t('twDefault')})</span>`}</td>
-      <td style="text-align:right;white-space:nowrap;padding:10px 16px">
-        <button class="btn btn-ghost btn-sm" onclick="evOverrideModal('${id}')">${t('twEdit')}</button>
-        ${ov ? `<button class="btn btn-ghost btn-sm" onclick="evResetOverride('${id}')">${t('twReset')}</button>` : ''}
-        <button class="btn-danger-ghost btn-sm" onclick="evRemoveStation('${id}')">✕</button>
-      </td>
-    </tr>`;
-  }).join('');
-
-  const timing = `
-    <div class="frow">
-      <label>${t('evDateRange')}</label>
-      <input type="date" value="${d.dateFrom}" oninput="evSet('dateFrom',this.value)">
-      <span>–</span>
-      <input type="date" value="${d.dateTo}" oninput="evSet('dateTo',this.value)">
-    </div>
-    <div class="frow">
-      <label>${t('evTimeRange')}</label>
-      <input type="time" value="${d.timeFrom}" oninput="evSet('timeFrom',this.value);refreshDefaultWindows()">
-      <span>–</span>
-      <input type="time" value="${d.timeTo}" oninput="evSet('timeTo',this.value);refreshDefaultWindows()">
-    </div>
-    <p class="fhint">${t('evSchedNote')}</p>`;
+  const clashes = evConflicts(d);
 
   return `
   <div class="breadcrumb">
     <button class="bc-link" onclick="evCancel()">${t('musicTitle')}</button>
     <span class="bc-sep">/</span>
-    <span class="bc-current">${isNew ? t('evNewTitle') : d.name}</span>
+    <span class="bc-current">${isNew ? t('evNewTitle') : esc(d.name)}</span>
   </div>
   <div class="ph">
-    <div><h1>${isNew ? t('evNewTitle') : d.name}</h1></div>
+    <div><h1>${isNew ? t('evNewTitle') : esc(d.name)}</h1></div>
     <div class="ph-right" style="display:flex;gap:8px;align-items:center">
       <button class="btn btn-outline btn-sm" onclick="evCancel()">${t('cancel')}</button>
       <button class="btn btn-primary btn-sm" onclick="evSaveDraft()">${t('evSave')}</button>
     </div>
   </div>
 
+  ${clashes.length ? `<div class="ms-warn ev-warn">
+    <b>${t('evOverlapTitle')}</b>
+    ${clashes.map(c => `<div>${t('evOverlapLine', esc(c.name), dayLabel(c.day), c.win, c.stations.join(', '))}</div>`).join('')}
+    <div class="fhint" style="color:inherit">${t('evOverlapNote')}</div>
+  </div>` : ''}
+
   <div class="card">
     <div class="card-head"><span class="card-title">${t('evBasics')}</span></div>
     <div class="card-body">
       <div class="frow">
         <label>${t('evName')} *</label>
-        <input type="text" value="${d.name}" style="min-width:320px"
+        <input type="text" value="${esc(d.name)}" style="min-width:320px"
           placeholder="${state.lang === 'de' ? 'z.B. Klassik-Radio Vormittag' : 'e.g. Classical radio mornings'}"
           oninput="evSet('name',this.value)">
       </div>
       <div class="frow">
-        <label>${t('colStatus')}</label>
-        <label class="pick-stn" style="gap:6px">
-          <input type="checkbox" ${d.active ? 'checked' : ''} onclick="evSet('active',this.checked)">${t('evActive')}
-        </label>
+        <label>${t('evDateRange')} *</label>
+        <input type="date" value="${d.dateFrom}" oninput="evSet('dateFrom',this.value)">
+        <span>–</span>
+        <input type="date" value="${d.dateTo}" oninput="evSet('dateTo',this.value)">
+        <span class="fhint">${t('evOpenEndHint')}</span>
       </div>
     </div>
   </div>
@@ -3369,55 +3548,30 @@ function renderMusicEvent() {
     <div class="card-head"><span class="card-title">${t('evSource')}</span></div>
     <div class="card-body">
       <div class="frow">
-        <label>${t('evSource')} *</label>
+        <label>${t('evKind')} *</label>
         <div class="seg">
-          <button class="${d.source.kind === 'radio'    ? 'on' : ''}" onclick="evSetKind('radio')">${t('srcRadio')}</button>
-          <button class="${d.source.kind === 'playlist' ? 'on' : ''}" onclick="evSetKind('playlist')">${t('srcPlaylist')}</button>
-          <button class="${d.source.kind === 'track'    ? 'on' : ''}" onclick="evSetKind('track')">${t('srcTrack')}</button>
+          <button class="${kind === 'radio'    ? 'on' : ''}" onclick="evSetKind('radio')">${t('srcRadio')}</button>
+          <button class="${kind === 'playlist' ? 'on' : ''}" onclick="evSetKind('playlist')">${t('srcPlaylist')}</button>
+          <button class="${kind === 'track'    ? 'on' : ''}" onclick="evSetKind('track')">${t('srcTrack')}</button>
         </div>
+        <span class="fhint">${t('evKindNote')}</span>
       </div>
-      <div class="frow">
-        <label>${t('evSourceSel')}</label>
-        <select style="min-width:340px" onchange="state.evDraft.source.refId=this.value;render()">
-          <option value="">${state.lang === 'de' ? '— wählen —' : '— select —'}</option>
-          ${srcOpts}
-        </select>
-      </div>
-      ${srcPreview}
+      ${sourceCards}
+      <button class="btn btn-outline btn-sm" onclick="evAddSource()">${t('evAddSource')}</button>
     </div>
   </div>
 
   <div class="card">
-    <div class="card-head"><span class="card-title">${t('evTiming')}</span></div>
-    <div class="card-body">
-      ${timing}
-    </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><span class="card-title">${t('evStations')}</span></div>
+    <div class="card-head"><span class="card-title">${t('evStations')} (${d.stationIds.length})</span></div>
     <div class="card-body">
       <p class="sect-note">${t('evStationsNote')}</p>
       <div class="frow">
-        <input class="search-input" type="text" placeholder="${t('evPickSearch')}" value="${state.evPickSearch}"
+        <input class="search-input" type="text" placeholder="${t('evPickSearch')}" value="${esc(state.evPickSearch)}"
           style="flex:1;min-width:240px" oninput="state.evPickSearch=this.value;render()">
         ${d.stationIds.length ? `<button class="btn btn-ghost btn-sm" onclick="evClearStations()">${t('evClearAll')}</button>` : ''}
       </div>
       <div class="pick-grid">${lineGroups || `<div class="pick-empty">—</div>`}</div>
     </div>
-  </div>
-
-  <div class="card">
-    <div class="card-head"><span class="card-title">${t('evSelected', d.stationIds.length)}</span></div>
-    <table>
-      <thead><tr>
-        <th>${t('colName')}</th>
-        <th>${t('lines')}</th>
-        <th>${t('colTimeWindow')}</th>
-        <th></th>
-      </tr></thead>
-      <tbody>${selRows || `<tr><td colspan="4" style="text-align:center;color:var(--text-dis);padding:28px">${t('evNoStations')}</td></tr>`}</tbody>
-    </table>
   </div>`;
 }
 

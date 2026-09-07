@@ -366,30 +366,259 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     (await page.locator('.ms-row').count()) === 6
     && !(await page.locator('.tbl-wrap').textContent()).includes('Brandenburger Tor'));
 
-  // ── the trigger is gone, in both versions ──
+  // ══ V1: the event list, now schedule-first ══════════════════
   const bodyDe = await page.locator('body').textContent();
   check('no train number anywhere in the station version', !/Zugnummer|W-2412/.test(bodyDe));
   await page.click('.proto-seg button:has-text("Eventliste")');
-  await page.waitForTimeout(250);
+  await page.waitForTimeout(300);
+
+  check('the event list runs full width',
+    await page.locator('#content').evaluate(el => el.classList.contains('wide'))
+    && (await page.locator('.tbl-wrap').boundingBox()).width > page.viewportSize().width - 120,
+    'table width=' + Math.round((await page.locator('.tbl-wrap').boundingBox()).width)
+      + ' viewport=' + page.viewportSize().width);
   const evHeads = (await page.locator('.tbl-wrap th').allTextContents()).map(x => x.trim());
-  check('the V1 event list no longer has a playback-mode column',
-    !evHeads.includes('Auslösung') && evHeads.length === 6, evHeads.join('|'));
-  check('the Christmas event is now a plain date range',
-    (await page.locator('.tbl-wrap').textContent()).includes('Weihnachtsmusik Dezember')
-    && !(await page.locator('.tbl-wrap').textContent()).includes('Zugnummer'));
-  await page.locator('.tbl-wrap a.bc-link').first().click();
+  check('columns are Event · Quelle · Stationen · Zeitraum · Status (+ actions)',
+    evHeads.join('|') === 'Event|Quelle|Stationen|Zeitraum|Status|', evHeads.join('|'));
+  check('the event name is no longer a link',
+    (await page.locator('.tbl-wrap tbody td:first-child a').count()) === 0);
+
+  const klassik = page.locator('tbody tr', { hasText: 'Klassik & Jazz' }).first();
+  const srcChips = await klassik.locator('td').nth(1).locator('.chip').allTextContents();
+  check('several sources show as chips carrying their names, no subname line',
+    srcChips.length === 2 && srcChips[0].includes('Klassik Radio Berlin')
+    && srcChips[1].includes('Jazzradio'), srcChips.join(' | '));
+
+  const lineChips = await klassik.locator('td').nth(2).locator('.lc').evaluateAll(
+    els => els.map(e => e.querySelector('.line-badge').textContent.trim()
+                      + ':' + e.querySelector('.lc-n').textContent.trim()));
+  check('stations are line chips with the number of stations on that line',
+    lineChips.length === 5 && lineChips[0] === 'U2:3' && lineChips.includes('U5:3'),
+    lineChips.join(' | '));
+  await klassik.locator('td').nth(2).locator('.lc').first().hover();
+  await page.waitForTimeout(250);
+  const tip = klassik.locator('td').nth(2).locator('.lc-tip').first();
+  check('hovering a line chip reveals the station names',
+    await tip.isVisible() && /Alexanderplatz/.test(await tip.textContent()),
+    (await tip.textContent()).replace(/\s+/g, ' ').trim());
+  const tipBox = await tip.boundingBox();
+  check('the hover card is not clipped by the table header',
+    tipBox.y >= 0 && tipBox.y + tipBox.height <= page.viewportSize().height,
+    'tip y=' + Math.round(tipBox.y));
+
+  check('the period is dates only, with an open end where there is none',
+    (await klassik.locator('td').nth(3).textContent()).trim() === '10. Jun 2026 – offen',
+    (await klassik.locator('td').nth(3).textContent()).trim());
+  check('a closed period shows both dates and no time',
+    (await page.locator('tbody tr', { hasText: 'Weihnachtsmusik' }).locator('td').nth(3).textContent()).trim()
+      === '1. Dez 2026 – 26. Dez 2026',
+    (await page.locator('tbody tr', { hasText: 'Weihnachtsmusik' }).locator('td').nth(3).textContent()).trim());
+  const statuses = (await page.locator('tbody .chip-on, tbody .chip-planned, tbody .chip-past').allTextContents())
+    .map(x => x.trim());
+  check('status is derived from the period: active, planned and expired all appear',
+    statuses.includes('Aktiv') && statuses.includes('Geplant') && statuses.includes('Abgelaufen'),
+    statuses.join(', '));
+  await page.screenshot({ path: out('mu-7-v1-list.png'), fullPage: true });
+
+  // ── search by station name ──
+  await page.fill('.search-input', 'Kaiserdamm');
+  await page.waitForTimeout(250);
+  check('search by station name narrows the list to the events on it',
+    (await page.locator('tbody tr').count()) === 1
+    && (await page.locator('tbody').textContent()).includes('Sommerradio'),
+    (await page.locator('tbody').textContent()).replace(/\s+/g, ' ').slice(0, 60));
+  await page.fill('.search-input', 'Madonna');
+  await page.waitForTimeout(250);
+  check('search also matches the event name',
+    (await page.locator('tbody tr').count()) === 1
+    && (await page.locator('tbody').textContent()).includes('Madonna'));
+  await page.fill('.search-input', 'zzz');
+  await page.waitForTimeout(250);
+  check('a search with no hits says so',
+    (await page.locator('tbody').textContent()).includes('Kein Event passt'));
+  await page.fill('.search-input', '');
+  await page.waitForTimeout(250);
+
+  // ── the editor ──
+  await page.locator('tbody tr', { hasText: 'Klassik & Jazz' }).locator('button:has-text("Bearbeiten")').click();
   await page.waitForTimeout(300);
   const evBody = await page.locator('body').textContent();
-  check('the V1 editor has no trigger controls left',
-    !/Auslöser|Zugnummer|vor Ankunft/.test(evBody));
-  check('the V1 editor still has its schedule fields',
-    evBody.includes('Datum von – bis') && evBody.includes('Zeitfenster'));
-  check('the V1 per-station override survived',
-    (await page.locator('body').textContent()).includes('Zeitfenster'));
+  check('the editor opens from the Bearbeiten button',
+    (await page.locator('h1').textContent()).includes('Klassik & Jazz'));
+  check('no trigger controls anywhere', !/Auslöser|Zugnummer|vor Ankunft/.test(evBody));
+  check('the active checkbox is gone',
+    !evBody.includes('Event aktiv') && (await page.locator('.card input[type=checkbox]:not(.pick-grid input)').count()) >= 0
+    && !/Event aktiv/.test(evBody));
+  check('the selected-stations table at the bottom is gone',
+    !/Ausgewählte Stationen|Selected stations/.test(evBody)
+    && (await page.locator('.card table:not(.sched-table)').count()) === 0);
+  check('no per-station time override is offered',
+    !/Individuell|Standard\)/.test(evBody));
+  check('the period keeps an optional end',
+    (await page.locator('input[type=date]').count()) === 2
+    && evBody.includes('läuft unbefristet weiter'));
+
+  // multi-source, each with its own days and windows
+  check('both sources are editable blocks', (await page.locator('.src-block').count()) === 2);
+  const dayBtns = await page.locator('.src-block').first().locator('.daysel').allTextContents();
+  check('weekdays are a row of seven toggles', dayBtns.length === 7 && dayBtns[0] === 'Mo', dayBtns.join(''));
+  check('Mon–Fri are on, weekend off in the first source',
+    await page.locator('.src-block').first().locator('.daysel').evaluateAll(
+      els => els.map(e => e.classList.contains('on')).join('')) === 'truetruetruetruetruefalsefalse'
+      .replace(/true/g, 'true').replace(/false/g, 'false'),
+    await page.locator('.src-block').first().locator('.daysel')
+      .evaluateAll(els => els.map(e => (e.classList.contains('on') ? '1' : '0')).join('')));
+  check('the first source has two time windows',
+    (await page.locator('.src-block').first().locator('.win-row').count()) === 2);
+  check('the second source has its own window',
+    (await page.locator('.src-block').nth(1).locator('.win-row input[type=time]').first().inputValue()) === '18:00');
+
+  // a time edit must not steal focus
+  const w0 = page.locator('#ev-0-0-f');
+  await w0.click();
+  await w0.fill('08:00');
+  check('editing a window keeps the focus in the field',
+    (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'ev-0-0-f');
+  check('the edited time is in the draft',
+    await page.evaluate(() => state.evDraft.sources[0].windows[0].from) === '08:00');
+  await w0.fill('09:00');
+
+  // add and remove a window, assert the control is really usable
+  await page.locator('.src-block').first().locator('.sched-icon-btn:not(.remove)').click();
+  await page.waitForTimeout(200);
+  check('adding a window yields a visible, editable field',
+    await page.locator('#ev-0-2-f').isVisible() && await page.locator('#ev-0-2-f').isEditable());
+  await page.locator('.src-block').first().locator('.win-row').nth(2).locator('.sched-icon-btn.remove').click();
+  await page.waitForTimeout(200);
+  check('removing it leaves the two original windows',
+    (await page.locator('.src-block').first().locator('.win-row').count()) === 2);
+
+  // toggling a weekday
+  await page.locator('.src-block').first().locator('.daysel').nth(5).click();
+  await page.waitForTimeout(200);
+  check('a weekday toggles on',
+    await page.evaluate(() => state.evDraft.sources[0].days.includes('Sat')));
+  await page.locator('.src-block').first().locator('.daysel').nth(5).click();
+  await page.waitForTimeout(200);
+
+  // one kind per event
+  await page.click('.seg button:has-text("Playlist")');
+  await page.waitForTimeout(250);
+  check('switching the kind switches every source and clears the picks',
+    await page.evaluate(() => state.evDraft.sources.every(s => s.kind === 'playlist' && !s.refId)));
+  const optTexts = await page.locator('.src-block').first().locator('select option').allTextContents();
+  check('the source picker now lists playlists, not streams',
+    optTexts.some(o => /Weihnachten 2026/.test(o)) && !optTexts.some(o => /Klassik Radio Berlin/.test(o)),
+    optTexts.join(' | ').slice(0, 90));
+  dialogs.length = 0;
+  await page.click('button:has-text("Event speichern")');
+  await page.waitForTimeout(250);
+  check('saving with an unpicked source is refused, naming which one',
+    /Quelle 1/.test(dialogs[0] || ''), dialogs.join(' | '));
+  await page.click('.seg button:has-text("Radio")');
+  await page.waitForTimeout(250);
+  await page.locator('.src-block').first().locator('select').selectOption('RS-001');
+  await page.locator('.src-block').nth(1).locator('select').selectOption('RS-003');
+  await page.waitForTimeout(200);
+
+  // remove the second source, then put it back
+  await page.locator('.src-block').nth(1).locator('button:has-text("Quelle entfernen")').click();
+  await page.waitForTimeout(200);
+  check('a source can be removed', (await page.locator('.src-block').count()) === 1);
+  check('the last source cannot be removed',
+    (await page.locator('button:has-text("Quelle entfernen")').count()) === 0);
+  await page.click('button:has-text("Quelle hinzufügen")');
+  await page.waitForTimeout(200);
+  check('a source can be added back', (await page.locator('.src-block').count()) === 2);
+  await page.locator('.src-block').nth(1).locator('select').selectOption('RS-003');
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: out('mu-8-v1-editor.png'), fullPage: true });
+
+  // ── validation ──
+  const nameInput = page.locator('.card input[type=text]').first();
+  await nameInput.fill('');
+  dialogs.length = 0;
+  await page.click('button:has-text("Event speichern")');
+  await page.waitForTimeout(200);
+  check('an event without a name is refused', /Eventname/.test(dialogs[0] || ''), dialogs.join(' | '));
+  await nameInput.fill('Klassik & Jazz — Tagesprogramm');
+  await page.locator('#ev-0-0-t').fill('08:00');
+  dialogs.length = 0;
+  await page.click('button:has-text("Event speichern")');
+  await page.waitForTimeout(200);
+  check('a window that ends before it starts is refused',
+    /Ende muss nach dem Beginn/.test(dialogs[0] || ''), dialogs.join(' | '));
+  await page.locator('#ev-0-0-t').fill('12:00');
+  await page.waitForTimeout(150);
+
+  // ── overlap warning: same rank only ──
+  check('no warning while nothing collides', (await page.locator('.ev-warn').count()) === 0);
+  await page.click('button:has-text("Abbrechen")');
+  await page.waitForTimeout(250);
+  await page.click('button:has-text("Neues Event")');
+  await page.waitForTimeout(250);
+  await page.locator('.card input[type=text]').first().fill('Test-Überschneidung');
+  await page.locator('.src-block').first().locator('select').selectOption('RS-002');
+  await page.locator('#ev-0-0-f').fill('10:00');
+  await page.locator('#ev-0-0-t').fill('11:00');
+  await page.locator('.pick-stn', { hasText: 'Alexanderplatz' }).first().locator('input').click();
+  await page.waitForTimeout(300);
+  check('two radio events on one station at the same time raise a warning',
+    (await page.locator('.ev-warn').count()) === 1
+    && (await page.locator('.ev-warn').textContent()).includes('Klassik & Jazz'),
+    (await page.locator('.ev-warn').textContent() || '').replace(/\s+/g, ' ').slice(0, 120));
+  check('the warning names the day, the window and the station',
+    /Mo/.test(await page.locator('.ev-warn').textContent())
+    && /10:00–11:00/.test(await page.locator('.ev-warn').textContent())
+    && /Alexanderplatz/.test(await page.locator('.ev-warn').textContent()));
+  check('the warning explains that saving is still possible',
+    (await page.locator('.ev-warn').textContent()).includes('Speichern ist möglich'));
+  await page.screenshot({ path: out('mu-9-v1-overlap.png'), fullPage: true });
+
+  // saving through a conflict asks once, so the warning cannot be scrolled past
+  dialogMode = 'dismiss';
+  dialogs.length = 0;
+  await page.click('button:has-text("Event speichern")');
+  await page.waitForTimeout(300);
+  check('saving into an equal-rank overlap asks first and names the conflict',
+    /Trotzdem speichern/.test(dialogs[0] || '') && /Klassik & Jazz/.test(dialogs[0] || ''),
+    (dialogs[0] || '').replace(/\s+/g, ' ').slice(0, 110));
+  check('declining keeps the editor open and saves nothing',
+    (await page.locator('.ev-warn').count()) === 1
+    && await page.evaluate(() => !musicEvents.some(e => e.name === 'Test-Überschneidung')));
+  dialogMode = 'accept';
+
+  await page.click('.seg button:has-text("Playlist")');
+  await page.waitForTimeout(250);
+  await page.locator('.src-block').first().locator('select').selectOption('PL-001');
+  await page.waitForTimeout(300);
+  check('a playlist over the same radio does not warn — different rank, priority decides',
+    (await page.locator('.ev-warn').count()) === 0);
+
+  // ── saving, with an open end ──
+  await page.locator('input[type=date]').nth(1).fill('');
+  dialogs.length = 0;
+  await page.click('button:has-text("Event speichern")');
+  await page.waitForTimeout(350);
+  check('the new event saved and is in the list',
+    dialogs.length === 0
+    && (await page.locator('tbody').textContent()).includes('Test-Überschneidung'), dialogs.join(' | '));
+  check('the saved event shows an open period',
+    (await page.locator('tbody tr', { hasText: 'Test-Überschneidung' }).locator('td').nth(3).textContent())
+      .includes('– offen'));
+  check('the saved event shows its single playlist chip',
+    (await page.locator('tbody tr', { hasText: 'Test-Überschneidung' }).locator('.chip-playlist').count()) === 1);
+
+  // ── delete ──
+  dialogs.length = 0;
+  await page.locator('tbody tr', { hasText: 'Test-Überschneidung' }).locator('.btn-danger-ghost').click();
+  await page.waitForTimeout(300);
+  check('deleting asks first and names the event',
+    /Test-Überschneidung/.test(dialogs[0] || ''), dialogs.join(' | '));
+  check('the event is gone after confirming',
+    !(await page.locator('tbody').textContent()).includes('Test-Überschneidung'));
 
   // ── back to V2 and switch the interface language ──
-  await page.click('.breadcrumb .bc-link');
-  await page.waitForTimeout(200);
   await page.click('.proto-seg button:has-text("Zeitpläne")');
   await page.waitForTimeout(250);
   await page.click('#lang-en');

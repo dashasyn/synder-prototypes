@@ -897,6 +897,14 @@
   - Seed data = Ignat's three use cases: daily classical radio 09:00–12:00, Christmas-train trigger (W-2412, 400 m before arrival), Madonna 3-day 15:00–18:00.
   - `<html lang>` now follows the DE/EN switcher so native date/time inputs render in the right locale.
   - Deferred by Ignat: priority handling between events, interruption behaviour (not a UI concern), timeline/calendar view, volume, weekday patterns.
+- **V1 reworked into the schedule-first variant (2026-09-07, Ignat's answers):**
+  - **The event is the schedule:** name + **date period** (start required, **end optional = "offen"**) + one or more **sources of the same kind**, each with its own **weekdays** and **several time windows** ("Klassik Mo–Fr 09:00–12:00 and 15:00–16:00, Jazz Mo–Fr 18:00–22:00") + the stations it runs on. The kind lives on the **event**, not on each source — "don't combine playlists and radio together" is enforced structurally rather than validated.
+  - **Table:** full width (`.content.wide`), name is plain text, **search by station or event name**, **line chips carrying the number of stations on that line** with the station names on hover, **source chips carrying the source names** (no subname line), **period as dates only** — `10. Jun 2026 – offen`.
+  - **Status stays**, derived from the period alone — geplant / aktiv / abgelaufen. There is no manual active switch any more, so a December event created in September reads *Geplant* by itself.
+  - **Editor stripped:** no active checkbox, no selected-stations table, no per-station time override. Row order: name + period · source kind + sources · stations.
+  - **Overlap warns, never blocks.** Rank = single track > playlist > radio; only **equal ranks** warn, because a Christmas playlist over the always-on radio is the intended case. The live warning names the event, day, window and stations; saving through it asks once, since the warning scrolls out of view while the station picker is in use.
+  - Seed: *Klassik & Jazz* (two radio sources, two windows, open end) · *Weihnachtsmusik* (playlist, December, planned) · *Madonna* (single track, 3 days) · *Sommerradio 2026* (expired).
+  - **Verification:** `verify-music.js` — **122 Chromium checks, all passing** across both variants.
 - **Answered by Ignat (2026-09-07):**
   - **Licensing is out of scope** — "Licenses are not important." No licence reference, no expiry, no play-out log. The GEMA question is closed, not deferred.
   - **Triggers are closed too** (2026-09-04): nothing about specific trains, schedules only.
