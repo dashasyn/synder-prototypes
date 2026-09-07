@@ -897,13 +897,15 @@
   - Seed data = Ignat's three use cases: daily classical radio 09:00–12:00, Christmas-train trigger (W-2412, 400 m before arrival), Madonna 3-day 15:00–18:00.
   - `<html lang>` now follows the DE/EN switcher so native date/time inputs render in the right locale.
   - Deferred by Ignat: priority handling between events, interruption behaviour (not a UI concern), timeline/calendar view, volume, weekday patterns.
-- **Open questions for BVG/ETC managers (2026-08-27)** — sent to Ignat, unanswered:
-  - Trigger identity (train number vs Umlauf vs vehicle no.), fire-per-run vs once-per-day, trigger point (reuse station trigger metres?), behaviour on delay/reroute, non-train triggers
-  - Conflicts: overlapping music events on one station, music vs everrunning text, trigger interrupting a running schedule
+- **Answered by Ignat (2026-09-07):**
+  - **Licensing is out of scope** — "Licenses are not important." No licence reference, no expiry, no play-out log. The GEMA question is closed, not deferred.
+  - **Triggers are closed too** (2026-09-04): nothing about specific trains, schedules only.
+  - **Priority replaces the overlap ban:** **1. Single track · 2. Playlist · 3. Radio.** Overlapping schedules are allowed and resolved by that order; **only radio-against-radio raises a warning**. ⚠️ This is a change to what is built — V2 currently *refuses* every overlap on save, naming the day and both sources. Ignat said he will send more details before anything is rebuilt.
+- **Still open with the managers (2026-08-27)** — unanswered:
   - Playback rules that shape UI: resume vs restart after an announcement, playlist loop vs stop, radio dropout fallback, volume scope (system / event / station / night)
-  - Operations: who may create events + approval step, whole station forever or speaker zones later, weekday/holiday patterns, global kill switch during disruptions
-  - Legal: GEMA licensing owner + whether the tool must store licence reference/expiry per track, and play-out logging for proof
-  - Scale: how many events/stations expected (decides bulk edit / templates)
+  - Operations: who may create schedules + approval step, whole station forever or speaker zones later, weekday/holiday patterns, global kill switch during disruptions
+  - Scale: how many schedules/stations expected (decides bulk edit / templates)
+  - Music vs **everrunning text** — independent channels, or does one gate the other?
 - **Everrunning music V2 — schedules per station (2026-09-04):** built as a **second version behind a switcher** on the Music page (`Ansicht: Zeitpläne pro Station | Eventliste (V1)`), so V1 survives for later work. Ignat's answers drove every decision:
   - **Triggers deleted from both versions** — "nothing about specific trains". The Weihnachtszug event became a plain December date range. The `Auslösepunkte` on station detail (announcement metres) are a different feature and were left alone.
   - **One row per station**, four columns: Name · Linie · Musik · Radio. Only stations that actually hold a schedule are listed. Each cell shows source + type chip, seven day chips with the active weekdays lit, the distinct periods, and the validity (`dauerhaft` or a date range). Row click opens a **full-screen detail** like Grunddaten — no expander.
