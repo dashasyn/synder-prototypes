@@ -384,30 +384,26 @@
 - **Not yet done:** validator pass on `organization.html` — Ignat asked for it "later".
 - **Next:** Ignat picks a layout (or the April hybrid) → swap in real rates (SPEC-1) → answer SPEC-2 (Member role) and SPEC-5 (dunning schedule) → validator round 3
 
-### Per-transaction settings — copy consistency (2026-09-02)
-- **Status:** 🚧 v1 published, awaiting Ignat's review.
+### Per-transaction settings — copy consistency (2026-09-02 · v2 2026-09-07)
+- **Status:** ✅ v2 published, awaiting Ignat's sign-off on two items.
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/projects/pt-settings-copy/
-- **Report:** `reports/pt-settings-copy/index.html` (+ `preview-top.png`, `preview-full.png`)
-- **Live capture:** `.synder-state/pt-settings-2026-09-02/live/` — `capture.json`, `labels.json`, 27 screenshots
-- **Inventory:** `.synder-state/pt-settings-2026-09-02/inventory-qbo.csv` (94 settings from the April corpus; superseded for toggles by `labels.json`)
-- **Scope:** QBO only, Ignat's call. Per-transaction mode, Default settings, mzkt.by/Stripe demo org.
-- **The ask:** keep the logic of every description, remove the chaos — "If you enable / If enabled / If disabled on one page".
-- **Locked rules (Ignat approved 1–5, 6 answered):** no conditional preamble, present tense · "Synder does X" where Synder acts · one picker verb *Select*, no "Please," · no self-reference · dependencies become a stated requirement · "(recommended)" → grey `.chip-neutral`, never the coloured `.badge-new`.
-- **Result:** 21 toggles — 16 rewritten, 2 written from scratch (*Collect items for product mapping*, *Apply generic tax code*, both inferred and needing dev confirmation), 3 already correct, 1 left alone (*Process payouts*, Ignat's call).
-- **The argument to lead with:** three settings on the page ALREADY use the target shape (*Apply payments to unpaid Invoice transactions*, *Apply Taxes*, *Apply expenses to unpaid Bill transactions*). This standardises on what ships, it does not import a house style.
-- **10 distinct sentence shapes** found across 21 toggles, not the 3 Ignat named.
-- **Findings that are not copy edits:**
-  - **The Auto-sync → Auto-import dependency is invisible in the UI.** Verified live: Auto-import off + Auto-sync on produces no error, warning or blocked state. The clause inside the description is the only trace of it in the product.
-  - Two settings carry **two descriptions each** (*Archive Pending* on switch + days field; *Apply Taxes* short + long).
-  - The Doc Numbers prerequisite says "turn off … to disable this setting" — two verbs for one act, plus "Please," and `->` arrows.
-  - Turning on *Apply generic customer* reveals a picker whose help says "If the generic customer setting is “ON”…" — it explains the control the user just used.
-  - Link affordances inconsistent: `page>>`, `Learn more >>`, `Build a Smart Rule >>`.
-  - Plan-gate copy ("Upgrade to use" / "This feature is available on higher plans.") is an uncovered surface.
-  - 22 dropdowns carry help in 4+ shapes — **phase 2, not done**.
-- **Capture method:** every toggle flipped and flipped back individually + 7 ordered scenarios. **Settings save immediately on toggle** (`POST /v2/settings/…`) — 6 writes, all reverted, reload audit confirmed all 21 toggles back at baseline.
-- **Corrections to earlier claims this session:** toggling *does* persist (I had said it wouldn't); the "unlabelled Sales toggle" was a capture artifact and does not exist; *Sync zero invoices* and *Apply expenses to unpaid Bill transactions* were missing from the April corpus; the *Cancel sync* dependency I had drafted is unverified and was removed.
-- **Access note:** the CF Access **service token in `.synder-creds` is rejected** (`service_token_status: false`). Session was re-established with an emailed login code; `.synder-state/storage-state.json` is fresh as of 2026-09-02. A new service token would make this unattended again.
-- **Next:** Ignat reviews → publish to the hub if he wants a URL → phase 2 dropdowns → gate copy → checker script so it can't drift back.
+- **Report:** `reports/pt-settings-copy/index.html` · builder `.synder-state/pt-settings-2026-09-02/build-v2.py`
+- **Live capture:** `.synder-state/pt-settings-2026-09-02/live/` — `capture.json`, `labels.json`, `v2-facts.json`, 27 screenshots
+- **Org (canonical):** `Per transaction test` · `mzkt.by (Stripe)` · QBO · Default settings. Same org the parallel audit used.
+- **v2 scope:** 21 toggle helpers · 22 pickers · 5 nested fields · 3 error strings · dead-UI audit · 10 house rules · ship order.
+- **v2 corrections to v1:**
+  - **Apply Taxes** — v1 said "two descriptions, pick one". Wrong: the description **changes meaning when the switch flips** (ON = Tax-center behaviour, OFF = "additional product line"). Escalated as a product question.
+  - **Cancel sync** — v1 opened with "Synder searches your books…", which is *Apply payments*' behaviour. Now outcome-only.
+  - **Voice unified** to `Synder [verb]` on the three rows v1 left passive; the "already ships" argument is about the *shape*, not the voice.
+  - **Process payouts rewritten** (`Synder receives and syncs payouts to your books.`), reversing Ignat's earlier "keep as is" — the "app" wording is fixable without the Yes/No control change. **Needs his sign-off.**
+- **Three pushbacks I made and got wrong** (all from measuring one tab or checking the wrong artifact):
+  - "Lending Liability doesn't exist here" — it does, `DEFAULT_.loanPayableAccount.USD`, Fees tab. I checked my toggle list, not my pickers.
+  - "Empty help icons aren't widespread" — across all 11 tabs: **56 help icons, 42 visible, 0 with any tooltip**. My "7, none visible" measured only the default tab.
+  - "Two different orgs, needs reconciling" — same org, same integration.
+- **Held one disagreement:** multi-currency keeps `When disabled` rather than `Otherwise…` — "Otherwise" gives the second sentence nothing to be the alternative to.
+- **Still open for Ignat:** (1) sign off the Process payouts rewrite; (2) **Apply Taxes single-truth** — which behaviour is real is product's call; (3) whether the **Auto-sync → Auto-import** dependency gets a real UI state (verified twice: no error, no warning, no blocked switch).
+- **Not done:** Xero pass · Summary sync mode · `Customer name search priority` control · the `Invoice payment` tab's close-X (**deliberately not clicked** — it may delete an additional settings set).
+- **Access notes:** CF Access **service token in `.synder-creds` is rejected**; session re-established via emailed login code. The GitHub token **embedded in the `/home/ubuntu/synder-prototypes` remote URL is dead** — use `.github-token` via a `GIT_ASKPASS` script, and `git fetch && git reset --hard FETCH_HEAD` before editing `projects/index.html` (that clone goes stale fast).
 
 ### Transaction Reconciliation — One-Click First Run (2026-08-20)
 - **Status:** ✅ v3 live (2026-08-27), awaiting Ignat feedback
@@ -898,14 +894,14 @@
   - `<html lang>` now follows the DE/EN switcher so native date/time inputs render in the right locale.
   - Deferred by Ignat: priority handling between events, interruption behaviour (not a UI concern), timeline/calendar view, volume, weekday patterns.
 - **V1 reworked into the schedule-first variant (2026-09-07, Ignat's answers):**
-  - **The event is the schedule:** name + **date period** (start required, **end optional = "offen"**) + one or more **sources of the same kind**, each with its own **weekdays** and **several time windows** ("Klassik Mo–Fr 09:00–12:00 and 15:00–16:00, Jazz Mo–Fr 18:00–22:00") + the stations it runs on. The kind lives on the **event**, not on each source — "don't combine playlists and radio together" is enforced structurally rather than validated.
+  - **The event is the schedule:** name + **date period** (start required, **end optional = "offen"**) + **exactly one source** + the stations it runs on. Multi-source was built on 09-07 and **reverted on 09-08 at Ignat's request** ("We need only one source per event"), so the model is flat: `event.source = { kind, refId, days[] }`. Morning classic and evening jazz are two events — which also keeps the priority rule readable, since an event has one rank.
   - **Table:** full width (`.content.wide`), name is plain text, **search by station or event name**, **line chips carrying the number of stations on that line** with the station names on hover, **source chips carrying the source names** (no subname line), **period as dates only** — `10. Jun 2026 – offen`.
   - **Status stays**, derived from the period alone — geplant / aktiv / abgelaufen. There is no manual active switch any more, so a December event created in September reads *Geplant* by itself.
   - **Editor stripped:** no active checkbox, no selected-stations table, no per-station time override. Row order: name + period · source kind + sources · stations.
   - **The detailed weekly grid from V2 is now used in V1 too** (Ignat, 19:32 — sent the V2 grid back and asked for it here): each source carries the seven-day table with several periods per day, `−` remove, `+` add, `⧉` copy a day to the next, empty day = *keine Wiedergabe*, end before start = across midnight. Day chips plus a shared window list are gone. Both variants now share the component **and** the rules: overlap is computed with `entryRanges()` on one Mon 00:00 → Sun 24:00 minute timeline, and a period whose start equals its end is refused, naming the day. A new source starts with an empty week.
   - **Overlap warns, never blocks.** Rank = single track > playlist > radio; only **equal ranks** warn, because a Christmas playlist over the always-on radio is the intended case. The live warning names the event, day, window and stations; saving through it asks once, since the warning scrolls out of view while the station picker is in use.
   - Seed: *Klassik & Jazz* (two radio sources, two windows, open end) · *Weihnachtsmusik* (playlist, December, planned) · *Madonna* (single track, 3 days) · *Sommerradio 2026* (expired).
-  - **Verification:** `verify-music.js` — **126 Chromium checks, all passing** across both variants.
+  - **Verification:** `verify-music.js` — **124 Chromium checks, all passing** across both variants.
 - **Answered by Ignat (2026-09-07):**
   - **Licensing is out of scope** — "Licenses are not important." No licence reference, no expiry, no play-out log. The GEMA question is closed, not deferred.
   - **Triggers are closed too** (2026-09-04): nothing about specific trains, schedules only.

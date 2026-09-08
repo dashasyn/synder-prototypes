@@ -383,11 +383,15 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   check('the event name is no longer a link',
     (await page.locator('.tbl-wrap tbody td:first-child a').count()) === 0);
 
-  const klassik = page.locator('tbody tr', { hasText: 'Klassik & Jazz' }).first();
+  const klassik = page.locator('tbody tr', { hasText: 'Klassik-Radio Vormittag' }).first();
   const srcChips = await klassik.locator('td').nth(1).locator('.chip').allTextContents();
-  check('several sources show as chips carrying their names, no subname line',
-    srcChips.length === 2 && srcChips[0].includes('Klassik Radio Berlin')
-    && srcChips[1].includes('Jazzradio'), srcChips.join(' | '));
+  check('the source is one chip carrying its name, no subname line',
+    srcChips.length === 1 && srcChips[0].includes('Klassik Radio Berlin'), srcChips.join(' | '));
+  check('every event carries exactly one source chip',
+    await page.locator('tbody tr').evaluateAll(
+      trs => trs.every(tr => tr.querySelectorAll('td:nth-child(2) .chip').length === 1)));
+  check('morning classic and evening jazz are two separate events',
+    (await page.locator('tbody tr', { hasText: 'Jazz am Abend' }).count()) === 1);
 
   const lineChips = await klassik.locator('td').nth(2).locator('.lc').evaluateAll(
     els => els.map(e => e.querySelector('.line-badge').textContent.trim()
@@ -440,11 +444,11 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.waitForTimeout(250);
 
   // ── the editor ──
-  await page.locator('tbody tr', { hasText: 'Klassik & Jazz' }).locator('button:has-text("Bearbeiten")').click();
+  await page.locator('tbody tr', { hasText: 'Klassik-Radio Vormittag' }).locator('button:has-text("Bearbeiten")').click();
   await page.waitForTimeout(300);
   const evBody = await page.locator('body').textContent();
   check('the editor opens from the Bearbeiten button',
-    (await page.locator('h1').textContent()).includes('Klassik & Jazz'));
+    (await page.locator('h1').textContent()).includes('Klassik-Radio Vormittag'));
   check('no trigger controls anywhere', !/Auslöser|Zugnummer|vor Ankunft/.test(evBody));
   check('the active checkbox is gone',
     !evBody.includes('Event aktiv') && (await page.locator('.card input[type=checkbox]:not(.pick-grid input)').count()) >= 0
@@ -458,89 +462,77 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
     (await page.locator('input[type=date]').count()) === 2
     && evBody.includes('läuft unbefristet weiter'));
 
-  // multi-source, each with the detailed weekly grid from the station variant
-  check('both sources are editable blocks', (await page.locator('.src-block').count()) === 2);
-  check('each source carries its own weekly grid',
-    (await page.locator('.src-block table.sched-table').count()) === 2);
-  const gridDays = await page.locator('#evw-0 .sched-day-label').allTextContents();
+  // one source per event, with the detailed weekly grid from the station variant
+  check('the event carries exactly one source and one weekly grid',
+    (await page.locator('table.sched-table').count()) === 1
+    && (await page.locator('.card select').count()) === 1);
+  check('nothing offers to add or remove a source',
+    (await page.locator('button:has-text("Quelle hinzufügen")').count()) === 0
+    && (await page.locator('button:has-text("Quelle entfernen")').count()) === 0);
+  const gridDays = await page.locator('#evw .sched-day-label').allTextContents();
   check('the grid lists all seven days',
     gridDays.map(x => x.trim()).join('') === 'MoDiMiDoFrSaSo', gridDays.join(''));
   check('Monday holds both of its periods',
-    (await page.locator('#evw-0 #evs-0-0-0-s').inputValue()) === '09:00'
-    && (await page.locator('#evw-0 #evs-0-0-1-s').inputValue()) === '15:00');
+    (await page.locator('#evw #evs-0-0-s').inputValue()) === '09:00'
+    && (await page.locator('#evw #evs-0-1-s').inputValue()) === '15:00');
   check('the weekend reads "no playback" instead of showing empty fields',
-    (await page.locator('#evw-0').textContent()).match(/keine Wiedergabe/g).length === 2);
-  check('the second source has its own times',
-    (await page.locator('#evw-1 #evs-1-0-0-s').inputValue()) === '18:00');
+    (await page.locator('#evw').textContent()).match(/keine Wiedergabe/g).length === 2);
 
   // a time edit must not steal focus
-  const w0 = page.locator('#evs-0-0-0-s');
+  const w0 = page.locator('#evs-0-0-s');
   await w0.click();
   await w0.fill('08:00');
   check('editing a period keeps the focus in the field',
-    (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'evs-0-0-0-s');
+    (await page.evaluate(() => document.activeElement && document.activeElement.id)) === 'evs-0-0-s');
   check('the edited time is in the draft',
-    await page.evaluate(() => state.evDraft.sources[0].days[0].slots[0].start) === '08:00');
+    await page.evaluate(() => state.evDraft.source.days[0].slots[0].start) === '08:00');
   await w0.fill('09:00');
 
   // add, then remove a period — asserting the control is really usable
-  await page.locator('#evw-0 tr').filter({ hasText: 'Sa' }).locator('.sched-icon-btn').first().click();
+  await page.locator('#evw tr').filter({ hasText: 'Sa' }).locator('.sched-icon-btn').first().click();
   await page.waitForTimeout(200);
   check('adding a period to an empty day yields a visible, editable field',
-    await page.locator('#evs-0-5-0-s').isVisible() && await page.locator('#evs-0-5-0-s').isEditable());
+    await page.locator('#evs-5-0-s').isVisible() && await page.locator('#evs-5-0-s').isEditable());
   check('that day is now in the draft',
-    await page.evaluate(() => state.evDraft.sources[0].days[5].slots.length) === 1);
-  await page.locator('#evw-0 .sched-icon-btn.remove').last().click();
+    await page.evaluate(() => state.evDraft.source.days[5].slots.length) === 1);
+  await page.locator('#evw .sched-icon-btn.remove').last().click();
   await page.waitForTimeout(200);
   check('removing it makes the day empty again',
-    (await page.locator('#evw-0').textContent()).match(/keine Wiedergabe/g).length === 2);
+    (await page.locator('#evw').textContent()).match(/keine Wiedergabe/g).length === 2);
 
   /* Copy a day onto the next. The day label sits on the day's first slot row,
      so a text filter would land on that row rather than the one carrying the
      copy button — address the buttons by title instead. Mon–Fri have one
      each, so Friday's is index 4. */
-  await page.locator('#evw-0 button[title="Auf nächsten Tag kopieren"]').nth(4).click();
+  await page.locator('#evw button[title="Auf nächsten Tag kopieren"]').nth(4).click();
   await page.waitForTimeout(200);
   check('the copy button carries a day over to the next',
-    await page.evaluate(() => JSON.stringify(state.evDraft.sources[0].days[5].slots)
-                           === JSON.stringify(state.evDraft.sources[0].days[4].slots)));
-  await page.locator('#evw-0 .sched-icon-btn.remove').last().click();
+    await page.evaluate(() => JSON.stringify(state.evDraft.source.days[5].slots)
+                           === JSON.stringify(state.evDraft.source.days[4].slots)));
+  await page.locator('#evw .sched-icon-btn.remove').last().click();
   await page.waitForTimeout(150);
-  await page.locator('#evw-0 .sched-icon-btn.remove').last().click();
+  await page.locator('#evw .sched-icon-btn.remove').last().click();
   await page.waitForTimeout(200);
   check('Saturday is empty again after undoing the copy',
-    await page.evaluate(() => state.evDraft.sources[0].days[5].slots.length) === 0);
+    await page.evaluate(() => state.evDraft.source.days[5].slots.length) === 0);
 
-  // one kind per event
+  // switching the kind re-lists the picker and clears the pick
   await page.click('.seg button:has-text("Playlist")');
   await page.waitForTimeout(250);
-  check('switching the kind switches every source and clears the picks',
-    await page.evaluate(() => state.evDraft.sources.every(s => s.kind === 'playlist' && !s.refId)));
-  const optTexts = await page.locator('.src-block').first().locator('select option').allTextContents();
+  check('switching the kind clears the picked source',
+    await page.evaluate(() => state.evDraft.source.kind === 'playlist' && !state.evDraft.source.refId));
+  const optTexts = await page.locator('.card select').first().locator('option').allTextContents();
   check('the source picker now lists playlists, not streams',
     optTexts.some(o => /Weihnachten 2026/.test(o)) && !optTexts.some(o => /Klassik Radio Berlin/.test(o)),
     optTexts.join(' | ').slice(0, 90));
   dialogs.length = 0;
   await page.click('button:has-text("Event speichern")');
   await page.waitForTimeout(250);
-  check('saving with an unpicked source is refused, naming which one',
-    /Quelle 1/.test(dialogs[0] || ''), dialogs.join(' | '));
+  check('saving without a source is refused',
+    /Audioquelle/.test(dialogs[0] || ''), dialogs.join(' | '));
   await page.click('.seg button:has-text("Radio")');
   await page.waitForTimeout(250);
-  await page.locator('.src-block').first().locator('select').selectOption('RS-001');
-  await page.locator('.src-block').nth(1).locator('select').selectOption('RS-003');
-  await page.waitForTimeout(200);
-
-  // remove the second source, then put it back
-  await page.locator('.src-block').nth(1).locator('button:has-text("Quelle entfernen")').click();
-  await page.waitForTimeout(200);
-  check('a source can be removed', (await page.locator('.src-block').count()) === 1);
-  check('the last source cannot be removed',
-    (await page.locator('button:has-text("Quelle entfernen")').count()) === 0);
-  await page.click('button:has-text("Quelle hinzufügen")');
-  await page.waitForTimeout(200);
-  check('a source can be added back', (await page.locator('.src-block').count()) === 2);
-  await page.locator('.src-block').nth(1).locator('select').selectOption('RS-003');
+  await page.locator('.card select').first().selectOption('RS-001');
   await page.waitForTimeout(200);
   await page.screenshot({ path: out('mu-8-v1-editor.png'), fullPage: true });
 
@@ -551,14 +543,14 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.click('button:has-text("Event speichern")');
   await page.waitForTimeout(200);
   check('an event without a name is refused', /Eventname/.test(dialogs[0] || ''), dialogs.join(' | '));
-  await nameInput.fill('Klassik & Jazz — Tagesprogramm');
-  await page.locator('#evs-0-0-0-e').fill('09:00');
+  await nameInput.fill('Klassik-Radio Vormittag');
+  await page.locator('#evs-0-0-e').fill('09:00');
   dialogs.length = 0;
   await page.click('button:has-text("Event speichern")');
   await page.waitForTimeout(200);
   check('a period whose start and end are identical is refused, naming the day',
     /identisch/.test(dialogs[0] || '') && /Mo/.test(dialogs[0] || ''), dialogs.join(' | '));
-  await page.locator('#evs-0-0-0-e').fill('12:00');
+  await page.locator('#evs-0-0-e').fill('12:00');
   await page.waitForTimeout(150);
 
   // ── overlap warning: same rank only ──
@@ -568,18 +560,18 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.click('button:has-text("Neues Event")');
   await page.waitForTimeout(250);
   await page.locator('.card input[type=text]').first().fill('Test-Überschneidung');
-  await page.locator('.src-block').first().locator('select').selectOption('RS-002');
-  check('a brand-new source starts with an empty week',
-    (await page.locator('#evw-0').textContent()).match(/keine Wiedergabe/g).length === 7);
-  await page.locator('#evw-0 tr').filter({ hasText: 'Mo' }).locator('.sched-icon-btn').first().click();
+  await page.locator('.card select').first().selectOption('RS-002');
+  check('a brand-new event starts with an empty week',
+    (await page.locator('#evw').textContent()).match(/keine Wiedergabe/g).length === 7);
+  await page.locator('#evw tr').filter({ hasText: 'Mo' }).locator('.sched-icon-btn').first().click();
   await page.waitForTimeout(200);
-  await page.locator('#evs-0-0-0-s').fill('10:00');
-  await page.locator('#evs-0-0-0-e').fill('11:00');
+  await page.locator('#evs-0-0-s').fill('10:00');
+  await page.locator('#evs-0-0-e').fill('11:00');
   await page.locator('.pick-stn', { hasText: 'Alexanderplatz' }).first().locator('input').click();
   await page.waitForTimeout(300);
   check('two radio events on one station at the same time raise a warning',
     (await page.locator('.ev-warn').count()) === 1
-    && (await page.locator('.ev-warn').textContent()).includes('Klassik & Jazz'),
+    && (await page.locator('.ev-warn').textContent()).includes('Klassik-Radio Vormittag'),
     (await page.locator('.ev-warn').textContent() || '').replace(/\s+/g, ' ').slice(0, 120));
   check('the warning names the day, the window and the station',
     /Mo/.test(await page.locator('.ev-warn').textContent())
@@ -595,7 +587,7 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
   await page.click('button:has-text("Event speichern")');
   await page.waitForTimeout(300);
   check('saving into an equal-rank overlap asks first and names the conflict',
-    /Trotzdem speichern/.test(dialogs[0] || '') && /Klassik & Jazz/.test(dialogs[0] || ''),
+    /Trotzdem speichern/.test(dialogs[0] || '') && /Klassik-Radio Vormittag/.test(dialogs[0] || ''),
     (dialogs[0] || '').replace(/\s+/g, ' ').slice(0, 110));
   check('declining keeps the editor open and saves nothing',
     (await page.locator('.ev-warn').count()) === 1
@@ -604,7 +596,7 @@ const check = (name, cond, extra = '') => (cond ? ok : bad).push(name + (extra ?
 
   await page.click('.seg button:has-text("Playlist")');
   await page.waitForTimeout(250);
-  await page.locator('.src-block').first().locator('select').selectOption('PL-001');
+  await page.locator('.card select').first().selectOption('PL-001');
   await page.waitForTimeout(300);
   check('a playlist over the same radio does not warn — different rank, priority decides',
     (await page.locator('.ev-warn').count()) === 0);
