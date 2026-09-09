@@ -51,6 +51,7 @@ Source of truth: `skills/synder-explorer/references/synder-design-tokens.css`
 - **Error states inline:** show error below the field, 12px red text, icon optional.
 - **Destructive actions:** always require a confirmation modal. Button label must say exactly what will happen ("Delete 3 transactions" not "Confirm").
 - **Undo:** offer undo for any bulk action affecting >1 item. Toast with undo link, 8s timeout.
+- **Default-justification hints expire.** A hint explaining *why a field is prefilled* ("Your most active integration last month", "Your last full month") is a claim about the default, not about the field. Clear it the moment the user changes the value, and restore it if they change back. Leaving it in place makes the UI assert something false — caught in `recon-setup` 2026-09-09, where the hint still read "your most active integration" under a manually-picked Shopify.
 
 ## Forbidden patterns
 - ❌ No tooltips as the only source of important information
