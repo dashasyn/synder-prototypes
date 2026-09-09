@@ -43,6 +43,15 @@ function ok(name, cond) {
   ok('summary period updated', (await page.locator('#s-per').innerText()).trim() === 'July 2026');
   ok('summary dates updated', (await page.locator('#s-dates').innerText()).includes('Jul 1'));
   ok('period select still visible after change', await page.locator('#f-per').isVisible());
+  // a "why this default" hint must stop claiming to justify a default once the field changes
+  ok('A: period default-hint dropped after change',
+    (await page.locator('#h-per').innerText()).trim() === '');
+  await page.selectOption('#f-int', 'PayPal business (PayPal)');
+  ok('A: integration default-hint dropped after change',
+    (await page.locator('#h-int').innerText()).trim() === '');
+  await page.selectOption('#f-int', 'mzkt.by (Stripe)');
+  ok('A: integration default-hint restored on return',
+    (await page.locator('#h-int').innerText()).includes('most active'));
 
   await page.locator('#toggle').click();
   ok('editor hidden again', !(await page.locator('#editor').isVisible()));
@@ -78,6 +87,8 @@ function ok(name, cond) {
   ok('auto line hidden for Shopify', !(await page.locator('#auto').isVisible()));
   ok('required upload visible for Shopify', await page.locator('#drop').isVisible());
   ok('upload names the file', (await page.locator('#need').innerText()).includes('payouts'));
+  ok('B: integration default-hint dropped for Shopify',
+    (await page.locator('#h-int').innerText()).trim() === '');
   ok('run blocked until file provided', !(await page.locator('#run').isEnabled()));
   ok('integration select still visible after change', await page.locator('#f-int').isVisible());
   await page.locator('#pick').click();
