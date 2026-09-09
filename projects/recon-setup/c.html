@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transaction reconciliation — C. No form</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<link rel="stylesheet" href="./proto.css">
+<style>
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;flex-wrap:wrap}
+.top .sel{max-width:230px;min-width:210px}
+.sum{margin-top:22px;font-size:13px;color:var(--color-grey-50)}
+.sum b{color:var(--color-grey);font-weight:500}
+
+.rows{
+  margin-top:10px;background:var(--color-white);border:1px solid var(--color-grey-20);
+  border-radius:var(--r-md);overflow:hidden;
+}
+.row{
+  display:flex;align-items:center;gap:18px;padding:16px 20px;
+  border-top:1px solid var(--color-grey-20);
+}
+.row:first-child{border-top:0}
+.row .who{flex:1 1 auto;min-width:0}
+.row .nm{font-weight:500}
+.row .acc{font-size:12px;color:var(--color-grey-50);margin-top:2px}
+.row .st{flex:0 0 210px;font-size:13px}
+/* fixed basis so the status column lines up across rows regardless of button label length */
+.row .act{flex:0 0 120px;display:flex;justify-content:flex-end}
+
+.pill{
+  display:inline-block;font-size:12px;font-weight:500;padding:2px 9px;border-radius:var(--r-pill);
+}
+.pill.att{background:var(--color-status-yellow-bg);color:var(--color-grey)}
+.pill.ok{background:var(--color-status-green-bg);color:var(--color-grey)}
+.st .none{color:var(--color-grey-50)}
+.st .prog{color:var(--color-primary)}
+.st .sub{display:block;font-size:12px;color:var(--color-grey-50);margin-top:3px}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>Transaction reconciliation</h1>
+</div>
+
+<div class="wrap wide">
+
+  <div class="top">
+    <div>
+      <h2 class="h2">Transaction reconciliation</h2>
+      <p class="lead">Run a check on any account. Read-only — nothing in your books changes.</p>
+    </div>
+    <div class="fld" style="margin:0">
+      <label for="f-per">Period</label>
+      <div class="sel">
+        <select id="f-per">
+          <option selected>August 2026 (Aug 1 – 31)</option>
+          <option>July 2026 (Jul 1 – 31)</option>
+          <option>Q2 2026 (Apr 1 – Jun 30)</option>
+          <option>Custom range…</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <p class="sum" id="sum"></p>
+
+  <div class="rows" id="rows">
+
+    <div class="row" data-state="none">
+      <div class="who">
+        <div class="nm"><span class="dot stripe"></span>mzkt.by (Stripe)</div>
+        <div class="acc">Stripe mzkt.by · USD</div>
+      </div>
+      <div class="st"><span class="none">Not checked</span></div>
+      <div class="act"><button class="btn pri sm" type="button" data-run>Run</button></div>
+    </div>
+
+    <div class="row" data-state="none">
+      <div class="who">
+        <div class="nm"><span class="dot paypal"></span>PayPal business (PayPal)</div>
+        <div class="acc">PayPal clearing (Synder) · USD</div>
+      </div>
+      <div class="st"><span class="none">Not checked</span></div>
+      <div class="act"><button class="btn ghost sm" type="button" data-run>Run</button></div>
+    </div>
+
+    <div class="row" data-state="done">
+      <div class="who">
+        <div class="nm"><span class="dot stripe"></span>Lalala (Stripe)</div>
+        <div class="acc">Stripe Lalala · USD</div>
+      </div>
+      <div class="st">
+        <span class="pill att">Attention required</span>
+        <span class="sub">3 transactions missing from your books</span>
+      </div>
+      <div class="act"><button class="lnk" type="button">See results</button></div>
+    </div>
+
+    <div class="row" data-state="upload">
+      <div class="who">
+        <div class="nm"><span class="dot shopify"></span>My store (Shopify)</div>
+        <div class="acc">Shopify clearing (Synder) · USD</div>
+      </div>
+      <div class="st">
+        <span class="none">Needs your payouts file</span>
+        <span class="sub">Xero can't be checked automatically</span>
+      </div>
+      <div class="act"><button class="btn ghost sm" type="button">Upload file</button></div>
+    </div>
+
+  </div>
+
+  <p class="safe" style="margin-top:20px">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3l7 3v6c0 4.2-2.8 7.6-7 9-4.2-1.4-7-4.8-7-9V6l7-3z"/></svg>
+    Every check is read-only, included in your plan, and doesn't use sync credits.
+  </p>
+
+</div>
+
+<script>
+(function(){
+  document.getElementById('rows').addEventListener('click', function(e){
+    var btn = e.target.closest('[data-run]');
+    if (!btn) return;
+    var row = btn.closest('.row');
+    row.dataset.state = 'running';
+    row.querySelector('.st').innerHTML =
+      '<span class="prog">In progress</span>' +
+      '<span class="sub">Gathering and processing your transactions</span>';
+    btn.disabled = true;
+    btn.textContent = 'Running…';
+    recount();
+  });
+
+  // The count is derived from row state, never hand-written — same rule as recon-checks.
+  // "Not checked" means anything that hasn't produced a result yet: unrun, or waiting on a file.
+  function recount(){
+    var rows = document.querySelectorAll('#rows .row');
+    var left = 0;
+    rows.forEach(function(r){ if (r.dataset.state === 'none' || r.dataset.state === 'upload') left++; });
+    var sum = document.getElementById('sum');
+    sum.innerHTML = left
+      ? '<b>' + left + ' of ' + rows.length + ' accounts</b> haven\'t been checked for August 2026.'
+      : '<b>All accounts</b> are checked or running for August 2026.';
+  }
+
+  recount();
+})();
+</script>
+</body>
+</html>

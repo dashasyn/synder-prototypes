@@ -419,6 +419,21 @@
 - **Related:** the other 5 ideas from 2026-08-20 (upload validation at drop, "Run again for next period", example result, delta-as-verdict on results, /transaction/list dead-click investigation) are unbuilt.
 - **Context:** exploration captures for the whole create flow in `.synder-state/recon-create-2026-08-19/` (25 states, v11.7.66)
 
+### Transaction Reconciliation — setup page, 3 variants (2026-09-09)
+- **Status:** ✅ built, awaiting Ignat feedback
+- **URL:** https://dashasyn.github.io/synder-prototypes/projects/recon-setup/ (compare page) → `a.html` · `b.html` · `c.html`
+- **Location:** `projects/recon-setup/` — `index.html`, `a.html`, `b.html`, `c.html`, shared `proto.css`
+- **Origin:** Ignat asked for a re-read of the live "Reconciliation details" create page, then for three variants. Diagnosis: the page asks **six required questions and prefills none** — date range, integration, clearing account, and *two* separate selectors both labelled "Automation mode".
+- **A — One line:** setup is a prefilled sentence ("Reconcile mzkt.by (Stripe) for August 2026") with derived values listed beneath; "Change details" reveals all four fields; the sentence restates itself on change. Zero decisions to run.
+- **B — One column:** keeps real fields, deletes the Synder | Integration mirror. Three groups (what to check · period · data), everything prefilled, **one** data question instead of two automation modes. Selecting Shopify switches Data to a named required upload and blocks Run — the honest shape for the Xero+Shopify case where "one click" can't hold.
+- **C — No form:** the setup page disappears; one row per clearing account, each with its own Run. No default to guess, and it shows the coverage truth (one run per integration). The unchecked count is **computed from row state**, not hand-written.
+- **Fixed in all three:** title "New reconciliation" (not "Reconciliation details" — details is for viewing something that exists); one verb "Run reconciliation" (replacing Start matching / Run audit / Start reconciling); months as presets instead of two free-text date inputs; read-only promise beside the button at normal weight; no Get-started explainer; no footer bleed; account list scoped to clearing accounts.
+- **Verified:** real Chromium, **67 assertions green, 0 page errors**. Expand/collapse and every post-change control asserted on **visibility**, not element state. Also asserted absence of the three stale verbs, absence of any `Select...` placeholder, no nested `<button>`, and `--color-primary` resolving to `#0053CC` (proves the UI kit actually loaded).
+- **Caught in build:** (1) C's unchecked count was hardcoded "2 of 4" and disagreed with its own derivation rule — now computed on load; (2) C's status column was ragged across rows because the action column sized to its label — fixed to a 120px basis, measured aligned at 697px on all four rows; (3) `body` had no `min-height`, so the grey background stopped mid-screenshot.
+- **Design:** links `ui-kit/synder-ui-kit.css` only, `var(--color-*)` throughout; raw hex only for Stripe/PayPal/Shopify brand dots.
+- **Note:** periods use **August 2026** ("last month" as of Sep 9), not the July used in the earlier dashboard-promo work.
+- **Open:** which variant to take forward; and the two live-app questions still blocked by Cloudflare Access (does re-running duplicate or update a record; is there a per-period import-complete flag).
+
 ### Transaction Reconciliation — Dashboard "Checks" block (2026-08-31)
 - **Status:** ✅ v1 live, awaiting Ignat feedback
 - **URL:** https://dashasyn.github.io/synder-prototypes/projects/recon-checks/
