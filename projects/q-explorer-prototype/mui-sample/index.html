@@ -189,12 +189,58 @@ body {
 }
 .field-adornment .material-icons { font-size: 24px; }
 
+/* ── Autocomplete indicators (clear ✕ + popup caret) ────────
+   Both sit hard against the RIGHT edge of the field, never in
+   the middle. The centre of a filled filter must remain "open
+   the list" — a centre-mounted ✕ silently wiping the value was
+   Critical #1 of the 2026-08-27 review. Do not re-centre these. */
+.field-actions {
+  position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; gap: 2px;
+}
+.indicator {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 2px;
+  border: 0; border-radius: 50%; background: transparent; cursor: pointer;
+  color: rgba(0,0,0,0.54);
+  transition: background-color 150ms cubic-bezier(0.4,0,0.2,1), transform 150ms;
+}
+.indicator:hover { background: var(--action-hover); }
+.indicator .material-icons { font-size: 18px; }
+.popup-indicator .material-icons { font-size: 24px; }
+.field-root.open .popup-indicator { transform: rotate(180deg); }
+
+/* MUI hides the clear indicator until the field is hovered or focused,
+   and only ever shows it when there is a value to clear. */
+.clear-indicator { visibility: hidden; }
+.field.has-value:hover .clear-indicator,
+.field.has-value:focus-within .clear-indicator { visibility: visible; }
+
 .filter-bar {
   display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
   padding-bottom: 24px;
 }
 .field.w-search { width: 320px; }
-.field.w-md { width: 200px; }
+.field.w-md { width: 210px; }
+
+/* ── Listbox (Autocomplete Paper, elevation 8) ─────────────── */
+.listbox {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 1300;
+  display: none; margin: 0; padding: 8px 0; list-style: none;
+  max-height: 40vh; overflow-y: auto;
+  background: #fff; border-radius: var(--radius);
+  box-shadow: 0px 5px 5px -3px rgba(0,0,0,0.2), 0px 8px 10px 1px rgba(0,0,0,0.14), 0px 3px 14px 2px rgba(0,0,0,0.12);
+}
+.field-root.open + .listbox { display: block; }
+.option {
+  display: flex; align-items: center; min-height: 36px; padding: 6px 16px;
+  font-size: 1rem; line-height: 1.5; color: var(--text-primary); cursor: pointer;
+}
+.option:hover { background: var(--action-hover); }
+.option.focused { background: var(--action-hover); }
+.option[aria-selected="true"] { background: rgba(25,118,210,0.08); }
+.option[aria-selected="true"]:hover { background: rgba(25,118,210,0.12); }
+
+.no-results { padding: 32px 16px; text-align: center; color: var(--text-secondary); }
 
 /* ── Paper + Accordion group ──────────────────────────────── */
 .paper { background: #fff; border-radius: var(--radius); box-shadow: var(--elev1); overflow: hidden; }
@@ -311,50 +357,36 @@ table.mui-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
     <div class="page-head">
       <div>
         <h1 class="t-h5">Auswertungen</h1>
-        <div class="t-body2 t-secondary" style="margin-top:4px">19 Auswertungen</div>
+        <div class="t-body2 t-secondary" style="margin-top:4px" id="result-count">19 Auswertungen</div>
       </div>
       <button class="btn btn-contained"><span class="material-icons">add</span> Neue Auswertung</button>
     </div>
 
-    <!-- Filter bar — filled TextFields, label inside -->
+    <!-- Filter bar — filled TextFields, label inside.
+         No "Alle" option: an empty field IS unfiltered. A value is removed
+         with the clear ✕, which appears only when there is one. -->
     <div class="filter-bar">
-      <div class="field w-search">
-        <div class="field-root" id="f-search">
-          <input class="field-input" id="i-search" placeholder=" ">
+      <div class="field w-search" id="fld-search">
+        <div class="field-root">
+          <input class="field-input" id="i-search" placeholder=" " autocomplete="off">
           <label class="field-label" for="i-search">Auswertungen durchsuchen</label>
-          <span class="field-adornment"><span class="material-icons">search</span></span>
+          <span class="field-actions">
+            <button class="indicator clear-indicator" type="button" aria-label="Suche löschen" data-clear>
+              <span class="material-icons">close</span>
+            </button>
+            <span class="indicator" style="cursor:default" aria-hidden="true"><span class="material-icons">search</span></span>
+          </span>
         </div>
       </div>
 
-      <div class="field w-md">
-        <div class="field-root shrink">
-          <select class="field-input select-input">
-            <option>Alle</option><option>Fertig</option><option>In Arbeit</option><option>Fehlgeschlagen</option>
-          </select>
-          <label class="field-label">Status</label>
-          <span class="field-adornment"><span class="material-icons">arrow_drop_down</span></span>
-        </div>
-      </div>
+      <div class="field w-md" id="fld-status" data-key="status" data-label="Status"
+           data-options="Fertig|In Arbeit|Fehlgeschlagen"></div>
 
-      <div class="field w-md">
-        <div class="field-root shrink">
-          <select class="field-input select-input">
-            <option>Alle</option><option>Letzte 7 Tage</option><option>Aktueller Monat</option><option>Letzter Monat</option>
-          </select>
-          <label class="field-label">Zeitraum</label>
-          <span class="field-adornment"><span class="material-icons">arrow_drop_down</span></span>
-        </div>
-      </div>
+      <div class="field w-md" id="fld-period" data-key="period" data-label="Zeitraum"
+           data-options="Letzte 7 Tage|Aktueller Monat|Letzter Monat|Letztes Jahr"></div>
 
-      <div class="field w-md">
-        <div class="field-root shrink">
-          <select class="field-input select-input">
-            <option>Alle</option><option>Pünktlichkeit</option><option>Fahrtausfälle</option><option>Datenqualitätsindex</option>
-          </select>
-          <label class="field-label">Auswertungstyp</label>
-          <span class="field-adornment"><span class="material-icons">arrow_drop_down</span></span>
-        </div>
-      </div>
+      <div class="field w-md" id="fld-type" data-key="type" data-label="Auswertungstyp"
+           data-options="Pünktlichkeit|Datenqualitätsindex"></div>
     </div>
 
     <div class="paper">
@@ -374,7 +406,7 @@ table.mui-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
               </tr>
             </thead>
             <tbody>
-              <tr>
+              <tr data-name="Pünktlichkeit – Letzte 7 Tage, SBB" data-status="In Arbeit" data-period="Letzte 7 Tage" data-type="Pünktlichkeit">
                 <td>Pünktlichkeit – Letzte 7 Tage, SBB</td>
                 <td class="cell-secondary num">19.05–25.05.2026</td>
                 <td class="cell-secondary num">25.05.2026</td>
@@ -384,7 +416,7 @@ table.mui-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
                   <button class="icon-button small" title="Löschen"><span class="material-icons">delete_outline</span></button>
                 </td>
               </tr>
-              <tr>
+              <tr data-name="Pünktlichkeit – Letzter Monat, Kanton ZH" data-status="Fertig" data-period="Letzter Monat" data-type="Pünktlichkeit">
                 <td>Pünktlichkeit – Letzter Monat, Kanton ZH</td>
                 <td class="cell-secondary num">01.04–30.04.2026</td>
                 <td class="cell-secondary num">02.05.2026</td>
@@ -394,7 +426,7 @@ table.mui-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
                   <button class="icon-button small" title="Löschen"><span class="material-icons">delete_outline</span></button>
                 </td>
               </tr>
-              <tr>
+              <tr data-name="Pünktlichkeit – Letztes Jahr, alle Kantone" data-status="Fehlgeschlagen" data-period="Letztes Jahr" data-type="Pünktlichkeit">
                 <td>Pünktlichkeit – Letztes Jahr, alle Kantone</td>
                 <td class="cell-secondary num">01.01–31.12.2025</td>
                 <td class="cell-secondary num">14.01.2026</td>
@@ -425,7 +457,7 @@ table.mui-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
               </tr>
             </thead>
             <tbody>
-              <tr>
+              <tr data-name="Datenqualitätsindex DPM – Aktueller Monat" data-status="Fertig" data-period="Aktueller Monat" data-type="Datenqualitätsindex">
                 <td>Datenqualitätsindex DPM – Aktueller Monat</td>
                 <td class="cell-secondary num">01.09–09.09.2026</td>
                 <td class="cell-secondary num">09.09.2026</td>
@@ -435,7 +467,7 @@ table.mui-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
                   <button class="icon-button small" title="Löschen"><span class="material-icons">delete_outline</span></button>
                 </td>
               </tr>
-              <tr>
+              <tr data-name="Datenqualitätsindex DPM – Letztes Jahr, BLS" data-status="Fertig" data-period="Letztes Jahr" data-type="Datenqualitätsindex">
                 <td>Datenqualitätsindex DPM – Letztes Jahr, BLS</td>
                 <td class="cell-secondary num">01.01–31.12.2025</td>
                 <td class="cell-secondary num">08.01.2026</td>
@@ -449,26 +481,150 @@ table.mui-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
           </table>
         </div>
       </div>
+      <div class="no-results" id="no-results" style="display:none">
+        <div class="t-body1">Keine Auswertung entspricht den Filtern.</div>
+        <div class="t-body2" style="margin-top:4px">Filter über das ✕ im jeweiligen Feld zurücksetzen.</div>
+      </div>
     </div>
   </div>
 </main>
 
 <script>
-/* Only the filled-field label behaviour — MUI shrinks the label on focus
-   or when the field holds a value. Selects always render shrunk. */
-document.querySelectorAll('.field-root').forEach(root => {
-  const input = root.querySelector('.field-input');
-  if (!input) return;
-  const isSelect = input.tagName === 'SELECT';
-  const sync = () => {
-    if (isSelect) return;                       // selects stay shrunk
-    root.classList.toggle('shrink', !!input.value || root.classList.contains('focused'));
+/* ============================================================
+   Filters behave like MUI <Autocomplete>: no "Alle" entry in any
+   list — an empty field is an unfiltered one — and a value is
+   removed with the clear ✕ that appears beside the caret.
+   ============================================================ */
+
+const state = { search: '', status: '', period: '', type: '' };
+
+/* ── Build the three option filters ───────────────────────── */
+document.querySelectorAll('.field[data-key]').forEach(field => {
+  const key     = field.dataset.key;
+  const label   = field.dataset.label;
+  const options = field.dataset.options.split('|');
+
+  field.innerHTML = `
+    <div class="field-root" role="combobox" tabindex="0"
+         aria-expanded="false" aria-haspopup="listbox" aria-label="${label}">
+      <div class="field-input" data-value></div>
+      <label class="field-label">${label}</label>
+      <span class="field-actions">
+        <button class="indicator clear-indicator" type="button" aria-label="${label} zurücksetzen" data-clear>
+          <span class="material-icons">close</span>
+        </button>
+        <span class="indicator popup-indicator" aria-hidden="true"><span class="material-icons">arrow_drop_down</span></span>
+      </span>
+    </div>
+    <ul class="listbox" role="listbox" aria-label="${label}">
+      ${options.map(o => `<li class="option" role="option" aria-selected="false" data-opt="${o}">${o}</li>`).join('')}
+    </ul>`;
+
+  const root  = field.querySelector('.field-root');
+  const value = field.querySelector('[data-value]');
+  const list  = field.querySelector('.listbox');
+
+  const render = () => {
+    const v = state[key];
+    value.textContent = v;
+    field.classList.toggle('has-value', !!v);
+    root.classList.toggle('shrink', !!v);          // label lifts only when set
+    list.querySelectorAll('.option').forEach(o =>
+      o.setAttribute('aria-selected', String(o.dataset.opt === v)));
+    applyFilters();
   };
-  input.addEventListener('focus', () => { root.classList.add('focused'); sync(); });
-  input.addEventListener('blur',  () => { root.classList.remove('focused'); sync(); });
-  input.addEventListener('input', sync);
-  sync();
+
+  const close = () => { root.classList.remove('open'); root.setAttribute('aria-expanded', 'false'); };
+  const open  = () => {
+    document.querySelectorAll('.field-root.open').forEach(r => {
+      r.classList.remove('open'); r.setAttribute('aria-expanded', 'false');
+    });
+    root.classList.add('open'); root.setAttribute('aria-expanded', 'true');
+  };
+
+  /* Anywhere on the field opens the list — except the ✕, which clears.
+     The ✕ is at the right edge, so the natural "click it again to see my
+     options" gesture in the middle of the field can never destroy a value. */
+  root.addEventListener('click', e => {
+    if (e.target.closest('[data-clear]')) {
+      e.stopPropagation();
+      state[key] = ''; render(); close();
+      return;
+    }
+    root.classList.contains('open') ? close() : open();
+  });
+
+  root.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); root.classList.contains('open') ? close() : open(); }
+    if (e.key === 'Escape') close();
+  });
+
+  list.addEventListener('click', e => {
+    const opt = e.target.closest('.option');
+    if (!opt) return;
+    state[key] = opt.dataset.opt;
+    render(); close(); root.focus();
+  });
+
+  render();
 });
+
+/* ── Search field ─────────────────────────────────────────── */
+(() => {
+  const field = document.getElementById('fld-search');
+  const root  = field.querySelector('.field-root');
+  const input = field.querySelector('#i-search');
+
+  const render = () => {
+    state.search = input.value.trim();
+    field.classList.toggle('has-value', !!input.value);
+    root.classList.toggle('shrink', !!input.value || root.classList.contains('focused'));
+    applyFilters();
+  };
+  input.addEventListener('focus', () => { root.classList.add('focused'); render(); });
+  input.addEventListener('blur',  () => { root.classList.remove('focused'); render(); });
+  input.addEventListener('input', render);
+  field.querySelector('[data-clear]').addEventListener('click', () => {
+    input.value = ''; render(); input.focus();
+  });
+  render();
+})();
+
+document.addEventListener('click', e => {
+  if (e.target.closest('.field[data-key]')) return;
+  document.querySelectorAll('.field-root.open').forEach(r => {
+    r.classList.remove('open'); r.setAttribute('aria-expanded', 'false');
+  });
+});
+
+/* ── Apply filters to the table ───────────────────────────── */
+function applyFilters() {
+  let shown = 0;
+  const q = (state.search || '').toLowerCase();
+
+  document.querySelectorAll('.mui-table tbody tr').forEach(tr => {
+    const ok =
+      (!q || tr.dataset.name.toLowerCase().includes(q)) &&
+      (!state.status || tr.dataset.status === state.status) &&
+      (!state.period || tr.dataset.period === state.period) &&
+      (!state.type   || tr.dataset.type   === state.type);
+    tr.style.display = ok ? '' : 'none';
+    if (ok) shown++;
+  });
+
+  // A group with nothing left in it is hidden rather than left as an empty header.
+  document.querySelectorAll('.accordion').forEach(acc => {
+    const rows = [...acc.querySelectorAll('tbody tr')].filter(r => r.style.display !== 'none');
+    acc.style.display = rows.length ? '' : 'none';
+    const count = acc.querySelector('.accordion-count');
+    if (count) count.textContent = rows.length + (rows.length === 1 ? ' Auswertung' : ' Auswertungen');
+  });
+
+  const total = document.getElementById('result-count');
+  if (total) total.textContent = shown + (shown === 1 ? ' Auswertung' : ' Auswertungen');
+  const empty = document.getElementById('no-results');
+  if (empty) empty.style.display = shown ? 'none' : '';
+}
 </script>
 </body>
 </html>
