@@ -121,7 +121,17 @@ clickability**, never element state. `isChecked()` passes perfectly against a ch
 That's how the V6 multiselect-closes-on-second-toggle bug reached Ignat instead of CI, and it's
 the second time in a week for this failure class (the v4 flat-layer bug slipped past jsdom the
 same way). Related rule: **verify prototypes in a real browser, not just jsdom** — jsdom passes
-while the UI is unusable. Screenshot it.
+while the UI is unusable. Drive it in real Chromium and assert `isVisible()` / hittability —
+**assert it, don't screenshot it.**
+
+## 🖼️ Deliver HTML, never screenshots
+
+Ignat's deliverable is always a **working HTML page plus its live URL** — never a PNG mockup,
+never a screenshot gallery, never "here's what it looks like" as an image. He has a browser;
+HTML is strictly more useful than a picture of HTML, and images cost tokens to make, attach and
+describe. Capture an image only if he explicitly asks, or if the target is a production page I
+can't hand over as HTML. (Stated 2026-09-10: *"Don't create screenshots. I need html
+prototypes. Don't waste tokens."*)
 
 ## Safety
 

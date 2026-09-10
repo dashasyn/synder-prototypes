@@ -94,7 +94,7 @@ One agent, **real browser**, once per round. This is the expensive read, and it 
 time so that no validator ever has to swallow raw HTML.
 
 For each zone, record every control: label, type, and **what actually happens on interaction** —
-before/after, with screenshots. Then:
+before/after, as **text** in the state map — no screenshots. Then:
 
 - **Assert visibility and hittability, not element state.** `isChecked()` passes against a
   checkbox inside a closed panel: correct state, zero liveness. Record whether the control is
@@ -235,8 +235,8 @@ Return the strict JSON payload. Return NOTHING else.
 
 **Never embed raw HTML in a subagent prompt.** Validators need read and fetch, never write.
 
-**Round 2+:** send the diff — what changed since round N — plus new screenshots and the full
-resolved list, not the whole state map again.
+**Round 2+:** send the diff — what changed since round N — plus the re-recorded state for the
+changed zones and the full resolved list, not the whole state map again. Text, not screenshots.
 
 ---
 

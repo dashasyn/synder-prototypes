@@ -31,7 +31,23 @@ A typo fix in a file a validator reads is still a behaviour change. Report it.
 - Run LogRocket / Galileo queries — **up to 3 attempts per query**, then it becomes 🟡.
   *Enforced in `scripts/galileo.sh`, not just written here: the 4th attempt exits 3 and refuses.
   A number in a document is a suggestion; a number in a script is a limit.*
-- Screenshots, browser, inspect production or the demo app
+- Browser: inspect production or the demo app by reading the **DOM and text**, not by capturing
+  images
+
+### 🚫 Never, in any tier, in any topic: screenshots as output
+
+The deliverable is a **working HTML page plus its live URL** — never a PNG, never an image
+gallery, never "here's what it looks like" as a picture. Ignat has a browser; images cost
+tokens to capture, attach and describe and can't be clicked or edited.
+
+- **Verification** = a text assertion (`isVisible()`, computed style, DOM state), not an image.
+- **Reading production** = `extract` / `html` / `eval` on the live page. Capture an image only
+  when the question is genuinely visual (spacing, overlap, a rendered chart) *and* no DOM read
+  can answer it — and even then it stays local, it does not go into chat.
+- **Figma reference frames** stay allowed: they are an *input* Fidelity compares against, never
+  something I hand back as a deliverable.
+- The only exception: Ignat explicitly asks for an image.
+
 - Search the web, research patterns and competitors
 - Update log-tier files (see table above)
 - Fix typos and broken links in log-tier files only
@@ -99,8 +115,9 @@ usability, a validator assumed to have run.
 - Before claiming something **is broken or missing**: search the whole workspace, complete the
   form. I told you the validators didn't exist while they sat in `personas/` (RECON-1 is the same
   error on a half-filled form).
-- Before claiming something **is fixed or works**: open it in a real browser and screenshot it.
-  jsdom passes while the UI is unusable — twice (PROTO-1, PROTO-2). Assert visible and clickable,
+- Before claiming something **is fixed or works**: open it in a real browser and **assert** it —
+  `isVisible()` / hittability, reported as one line of text. **Not a screenshot** (see the
+  no-screenshots rule below). jsdom passes while the UI is unusable — twice (PROTO-1, PROTO-2). Assert visible and clickable,
   never element state; `isChecked()` passes against a checkbox inside a closed panel.
 - Before claiming a **process ran**: check its output exists. Trust was assumed to be running for
   seventeen days while producing nothing.
