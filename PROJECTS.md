@@ -732,6 +732,41 @@
 
 ---
 
+### Transactions table + Sync details — Ignat's decisions (2026-09-10)
+Recorded so they stop being re-litigated. All from Telegram topic 7138.
+- **All tab: sort by import date.** A screen full of red is honest signal, not a problem to design
+  away. Supersedes both my "sort actionable first" and Draft B's "auto-land on Needs attention".
+- **Status pills keep their colour** — the colour is what tells you whether a tab is good or bad.
+  Supersedes Draft B's "demote the status pill".
+- **`Synced with rule failed` keeps its full label** — it tells the user the transaction *was*
+  synced. Supersedes Draft B's short-label proposal, and avoids the collision with the separate
+  shipped status `Rule failed` (`vocabulary.md:144`). **Truncation is therefore unsolved by copy** —
+  it has to be solved with space (wrap to two lines / wider column).
+- **Row click → Sync details; Transaction ID → the integration.**
+- **Default sort: date.**
+- **Tabs and the status filter stay INDEPENDENT** (v14 stands, Draft B's "tabs ≠ filters" rejected).
+- **Payout primary line: my suggestion was rejected** — "Payout" as the primary just repeats the
+  Type column. Replacement proposal: primary = where the money went (destination account,
+  `Chase ••4321`), secondary = payout id; if the bank isn't held, promote the payout id rather than
+  leaving the cell blank.
+- **Sync details should follow the shipped Summary Preview** — status at top, details, objects
+  created in books, tables with tabs. This answers the open "which shipped screen should it look
+  like" question behind the "not pretty" feedback. **Awaiting a screenshot/URL** — we have never
+  built a Summary preview, so this is the production modal (Summary Lines / Aggregated View tabs).
+- **Two additions requested:** (1) show the *reason* under the status — Canceled → canceled manually
+  by a user, Failed → no connection to books; (2) **details for every transaction, including
+  pre-sync states like Pending / Ready to sync.** (2) is a product change, not a layout tweak:
+  those rows have no Explain page today because nothing has been written, so the page's job for them
+  is "what will happen and why it's waiting", not "what happened".
+
+**⚠️ Correction to my own claim (2026-09-10).** I cited `Apply filter` = **25,591** against Draft B's
+"users rarely filter". That is a **click** count, not a session rate — it can come from a small
+number of heavy sessions, so it does not refute the claim. Ignat was right to challenge it. The
+only session-level number in the research is **Select all = 1,554 sessions**, with no denominator;
+total sessions on `/transaction/list` was never measured. Attempted to measure it via Galileo
+(chat `01a08be3-c5c8-7c6a-824d-54e807562cc9`): all three metrics built, then the summarising step
+errored, three attempts = the retry cap in `PERMISSIONS.md`. **Unresolved.**
+
 ### Status Filter Usage Research — Platform transactions (2026-08-26)
 
 - **Report:** `reports/status-filter-usage/index.html` — https://dashasyn.github.io/synder-prototypes/reports/status-filter-usage/
