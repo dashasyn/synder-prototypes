@@ -419,20 +419,28 @@
 - **Related:** the other 5 ideas from 2026-08-20 (upload validation at drop, "Run again for next period", example result, delta-as-verdict on results, /transaction/list dead-click investigation) are unbuilt.
 - **Context:** exploration captures for the whole create flow in `.synder-state/recon-create-2026-08-19/` (25 states, v11.7.66)
 
-### Transaction Reconciliation — setup page, 3 variants (2026-09-09)
-- **Status:** ✅ built, awaiting Ignat feedback
-- **URL:** https://dashasyn.github.io/synder-prototypes/projects/recon-setup/ (compare page) → `a.html` · `b.html` · `c.html`
-- **Location:** `projects/recon-setup/` — `index.html`, `a.html`, `b.html`, `c.html`, shared `proto.css`
-- **Origin:** Ignat asked for a re-read of the live "Reconciliation details" create page, then for three variants. Diagnosis: the page asks **six required questions and prefills none** — date range, integration, clearing account, and *two* separate selectors both labelled "Automation mode".
-- **A — One line:** setup is a prefilled sentence ("Reconcile mzkt.by (Stripe) for August 2026") with derived values listed beneath; "Change details" reveals all four fields; the sentence restates itself on change. Zero decisions to run.
-- **B — One column:** keeps real fields, deletes the Synder | Integration mirror. Three groups (what to check · period · data), everything prefilled, **one** data question instead of two automation modes. Selecting Shopify switches Data to a named required upload and blocks Run — the honest shape for the Xero+Shopify case where "one click" can't hold.
-- **C — No form:** the setup page disappears; one row per clearing account, each with its own Run. No default to guess, and it shows the coverage truth (one run per integration). The unchecked count is **computed from row state**, not hand-written.
-- **Fixed in all three:** title "New reconciliation" (not "Reconciliation details" — details is for viewing something that exists); one verb "Run reconciliation" (replacing Start matching / Run audit / Start reconciling); months as presets instead of two free-text date inputs; read-only promise beside the button at normal weight; no Get-started explainer; no footer bleed; account list scoped to clearing accounts.
-- **Verified:** real Chromium, **67 assertions green, 0 page errors**. Expand/collapse and every post-change control asserted on **visibility**, not element state. Also asserted absence of the three stale verbs, absence of any `Select...` placeholder, no nested `<button>`, and `--color-primary` resolving to `#0053CC` (proves the UI kit actually loaded).
-- **Caught in build:** (1) C's unchecked count was hardcoded "2 of 4" and disagreed with its own derivation rule — now computed on load; (2) C's status column was ragged across rows because the action column sized to its label — fixed to a 120px basis, measured aligned at 697px on all four rows; (3) `body` had no `min-height`, so the grey background stopped mid-screenshot.
-- **Design:** links `ui-kit/synder-ui-kit.css` only, `var(--color-*)` throughout; raw hex only for Stripe/PayPal/Shopify brand dots.
-- **Note:** periods use **August 2026** ("last month" as of Sep 9), not the July used in the earlier dashboard-promo work.
-- **Open:** which variant to take forward; and the two live-app questions still blocked by Cloudflare Access (does re-running duplicate or update a record; is there a per-period import-complete flag).
+### Transaction Reconciliation — "New reconciliation" setup page (2026-09-10)
+- **Status:** ✅ v2 live, awaiting Ignat feedback
+- **URL:** https://dashasyn.github.io/synder-prototypes/projects/recon-setup/
+- **Location:** `projects/recon-setup/index.html` + `proto.css`
+- **History:** built as three variants on 2026-09-09 (A one-line sentence · B one column · C no form, a Run per account). **Ignat picked B on 2026-09-10; A and C deleted.**
+- **Live-app exploration (v11.7.79, session restored 2026-09-10).** Several of my earlier findings have shipped, and my Sep 9 diagnosis was partly stale:
+  - "Automation mode" → **"Import method"** (my F9 recommendation) ✅ · CTA → **"Run reconciliation"** (F10) ✅ · left column "Synder" → **"Accounting"** ✅ · Get-started step 3 → "Choose import method" ✅ · "Clearing account" → **"Account to reconcile"** ✅
+  - **Date range is now prefilled** (08/01–08/31) and the accounting Import method is prefilled to Automated. So "six required questions, prefills none" is out of date — only **Account to reconcile** is empty on arrival.
+  - Still not fixed: title **"Reconciliation details"** on a create screen (F14); footer bleeding into the overlay; the Get-started panel.
+  - **Account to reconcile is NOT scoped to clearing accounts** — 11 options including `Stripe fees`, `Stripe sales`, `Checking`, `Cost of Goods Sold`. The multi-connection ambiguity I raised on Aug 20 is still live.
+- **The import-method matrix, measured (not inferred):**
+  - **Accounting side: 2 methods** — Automated / Manual. No Assisted.
+  - **Integration side: 3 methods** — Automated (Recommended) / Assisted / Manual.
+  - **Assisted = 2 named files**, each with its own real 5-step "How to get …" instructions (Balance change from activity · Payouts, both from Stripe Reports → Balance summary).
+  - **Manual = 1 file and zero guidance** (confirms F5).
+  - **Worst case = 3 upload areas on one screen** (books Manual + integration Assisted), and only the integration-side ones carry instructions.
+- **v2 closes Ignat's four gaps:** per-integration capability (Automated is *absent* from the menu where unsupported, with a line saying why) · one named drop area per required file, per side · collapsible real "how to get this file" steps · Custom range reveals from/to date inputs.
+- **Design decisions:** the Data section collapses to a single reassurance line when nothing is needed, with a "Provide files myself" link so the per-side controls stay reachable; a non-clearing account swaps the hint for a warning that the account can't identify the connection; the disabled Run states how many files are missing.
+- **Verified:** real Chromium, **73 assertions green, 0 page errors**, no horizontal overflow. Every post-change control asserted on **visibility**, instructions asserted across two toggles.
+- **Caught in build:** (1) collapsing the Data section when fully automatic left **no way to opt into uploading** — added the opt-in link; (2) the account hint claimed "the clearing account" even for `Stripe fees` — same expiring-hint class as the integration hint, now derived from the selection; (3) disabled Run had no explanation, which `DESIGN_RULES.md` forbids.
+- **Honest gap:** the demo org has only **one** integration (Stripe) plus "No integration — reconcile a GL account", so per-integration capability could not be measured. Stripe method names, descriptions, file names and steps are **verbatim production**; PayPal and Shopify capability and steps are **placeholders** flagged in the file's data model.
+- **Open:** confirm the real capability matrix per integration; whether re-running a period duplicates or updates the record; whether a per-period import-complete flag exists.
 
 ### Transaction Reconciliation — Dashboard "Checks" block (2026-08-31)
 - **Status:** ✅ v1 live, awaiting Ignat feedback
