@@ -77,14 +77,41 @@ const ok = (n, c) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, console.
   ok('files are named, not generic', names.some(n => /Activity download/.test(n)) && names.some(n => /Settlement report/.test(n)));
   ok('every file has a how-to link', await page.locator('[data-steps]').count() === 2);
 
-  const firstSteps = page.locator('[data-steps]').first();
-  await firstSteps.click();
-  ok('instructions visible after click', await page.locator('.steps.on').first().isVisible());
-  ok('instructions have numbered steps', await page.locator('.steps.on li').count() === 5);
-  ok('how-to link still clickable after opening', await firstSteps.isVisible() && await firstSteps.isEnabled());
-  await firstSteps.click();
-  ok('instructions hidden after second click', await page.locator('.steps.on').count() === 0);
-  ok('how-to link survives two toggles', await firstSteps.isVisible());
+  console.log('\n  accordion, not a link');
+  ok('accordion header present, no bare link',
+    await page.locator('.acc .acc-h').count() === 2 && await page.locator('[data-steps].lnk').count() === 0);
+  ok('accordion header spans the row',
+    await page.evaluate(() => {
+      const h = document.querySelector('.acc-h'), p = h.closest('.need');
+      return Math.abs(h.getBoundingClientRect().width - p.getBoundingClientRect().width) < 2;
+    }));
+  ok('chevron rendered', await page.locator('.acc-h .chev').first().isVisible());
+  ok('collapsed by default', !(await page.locator('.acc .steps').first().isVisible()));
+  ok('aria-expanded=false when collapsed',
+    await page.locator('.acc-h').first().getAttribute('aria-expanded') === 'false');
+
+  await page.locator('.acc-h').first().click();
+  ok('instructions visible after click', await page.locator('.acc.on .steps').first().isVisible());
+  ok('instructions have numbered steps', await page.locator('.acc.on .steps li').count() === 5);
+  ok('aria-expanded=true when open',
+    await page.locator('.acc-h').first().getAttribute('aria-expanded') === 'true');
+  ok('chevron rotated when open',
+    await page.evaluate(() => getComputedStyle(document.querySelector('.acc.on .chev')).transform
+      !== getComputedStyle(document.querySelectorAll('.acc:not(.on) .chev')[0]).transform));
+  ok('header still clickable after opening',
+    await page.locator('.acc-h').first().isVisible() && await page.locator('.acc-h').first().isEnabled());
+  ok('open state survives an unrelated re-render',
+    await (async () => { await page.locator('#f-acc').click(); return await page.locator('.acc.on .steps').first().isVisible(); })());
+  await page.locator('.acc-h').first().click();
+  ok('instructions hidden after second click', await page.locator('.acc.on').count() === 0);
+  ok('header survives two toggles', await page.locator('.acc-h').first().isVisible());
+  ok('second accordion independent', await page.locator('.acc').nth(1).isVisible());
+
+  console.log('\n  example-vs-real instruction copy');
+  await page.locator('.acc-h').first().click();
+  ok('placeholder steps admit they are examples',
+    (await page.locator('.acc.on .egnote').first().innerText()).includes('Example steps'));
+  await page.locator('.acc-h').first().click();
   await page.screenshot({ path: '/tmp/synder/b2-paypal-assisted.png', fullPage: true });
 
   console.log('\nAttaching files unblocks Run');
@@ -122,6 +149,16 @@ const ok = (n, c) => c ? (pass++, console.log('  ✓ ' + n)) : (fail++, console.
 
   console.log('\nWorst case: books Manual + integration Assisted = 3 files');
   await page.selectOption('.src select[data-side="integration"]', 'Assisted');
+  // Stripe Assisted copy is verbatim production, so it must NOT be marked as an example
+  const stripeAcc = page.locator('.src').nth(1).locator('.acc-h').first();
+  await stripeAcc.click();
+  ok('Stripe Assisted steps are real — no example note',
+    await page.locator('.src').nth(1).locator('.acc.on .egnote').count() === 0);
+  ok('Stripe Assisted steps visible', await page.locator('.src').nth(1).locator('.acc.on .steps').isVisible());
+  ok('Stripe step 1 is the production wording',
+    (await page.locator('.src').nth(1).locator('.acc.on .steps li').first().innerText()).includes('Go to your Stripe account'));
+  await page.screenshot({ path: '/tmp/synder/b2-stripe-assisted.png', fullPage: true });
+  await stripeAcc.click();
   ok('three upload areas', await page.locator('.drop').count() === 3);
   ok('count says 3 files', (await page.locator('#reqsum').innerText()).includes('3 files'));
   ok('all three drop areas visible', await page.locator('.drop').first().isVisible()
