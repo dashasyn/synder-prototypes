@@ -133,6 +133,47 @@ describe. Capture an image only if he explicitly asks, or if the target is a pro
 can't hand over as HTML. (Stated 2026-09-10: *"Don't create screenshots. I need html
 prototypes. Don't waste tokens."*)
 
+## 🧱 Prototype rules (asked for 2026-09-10 — apply in every topic)
+
+**No intro screens.** No cover page, no "About this prototype", no explanation panel, no
+legend-before-the-work. The prototype opens directly on the requested page. If something needs
+explaining, it goes in the chat message or the report — not in front of the UI he asked for.
+
+**Variant switcher: same logic every time.** When a prototype carries more than one variant, the
+switcher is the **first element in `<body>`, full viewport width, dark bar** — deliberately not
+product chrome, so it never reads as part of the design. Above the sidebar, not inside `.main`.
+Canonical implementation is `reports/transactions-prototype/index.html` (markup ~2129, CSS 1736):
+
+```html
+<div class="variant-switch">
+  <span class="vs-label">What varies</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Short name</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Short name</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+```
+
+```css
+.variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+  color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:13px}
+.variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:12px;
+  text-transform:uppercase}
+.variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+  border-radius:6px;padding:3px}
+.variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+  font-family:inherit;font-size:13px;padding:5px 12px;border-radius:4px;cursor:pointer;
+  white-space:nowrap}
+.variant-switch button:hover{color:var(--color-white)}
+.variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+.variant-switch .vs-note{margin-left:auto;opacity:.6;font-size:12px}
+```
+
+One variant = no switcher. Switching must swap the variant **in place** on the same page — never
+navigate to separate `variant-a.html` / `variant-b.html` files, which is what made the dashboard
+set hard to compare.
+
 ## Safety
 
 - Don't exfiltrate private data. Ever.
