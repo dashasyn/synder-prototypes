@@ -2862,10 +2862,10 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
     <div class="d-overlay-body">
       <div class="d-page-hero">
         <div class="d-page-hero-row">
-          <h2 class="d-page-title" id="d-title">New reconciliation</h2>
+          <h2 class="d-page-title" id="d-title">Reconciliation for Aug 1–31</h2>
           <span class="d-readonly-badge">Read-only comparison — no changes to your books.</span>
         </div>
-        <p class="d-page-sub" id="d-page-sub">Sandbox Company_US_1 (QuickBooks Online) — Select an integration</p>
+        <p class="d-page-sub" id="d-page-sub">Sandbox Company_US_1 (QuickBooks Online) / Select an integration</p>
       </div>
 
       <div class="d-fields-row">
@@ -3181,6 +3181,8 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
       assistedHint: 'Walmart settlement report'
     }
   };
+
+  const BOOKS_PLATFORM_NAME = 'Sandbox Company_US_1 (QuickBooks Online)';
 
   const BOOKS_MODES = ['Automated', 'Assisted', 'Manual']; // Assisted optional per brief
 
@@ -3785,32 +3787,49 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
     }
   }
 
-  function dTitleFor() {
-    const acc = accountMeta(D.integration, D.account);
-    const cap = D.integration && CAPS[D.integration] ? CAPS[D.integration] : null;
-    const intName = cap ? (cap.short || cap.label || D.integration) : null;
-    if (intName && acc && D.from && D.to) {
-      var dates = D.periodLabel || (D.from + ' – ' + D.to);
-      return 'Reconcile ' + intName + ' · ' + acc.name + ' · ' + dates;
+  function dPeriodShort() {
+    // Title-friendly range: "Aug 1–31" / "Jun 1–Aug 31" (no year)
+    if (!D.from || !D.to) return '';
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function parts(iso) {
+      var bits = iso.split('-');
+      return { y: bits[0], m: months[parseInt(bits[1], 10) - 1], d: parseInt(bits[2], 10) };
     }
-    return 'New reconciliation';
+    var a = parts(D.from);
+    var b = parts(D.to);
+    if (a.m === b.m && a.y === b.y) return a.m + ' ' + a.d + '–' + b.d;
+    if (a.y === b.y) return a.m + ' ' + a.d + '–' + b.m + ' ' + b.d;
+    return a.m + ' ' + a.d + ', ' + a.y + '–' + b.m + ' ' + b.d + ', ' + b.y;
+  }
+
+  function dBooksPlatformName() {
+    return BOOKS_PLATFORM_NAME;
+  }
+
+  function dIntegrationPlatformName() {
+    if (!D.integration || !CAPS[D.integration]) return '';
+    var cap = CAPS[D.integration];
+    return cap.label || cap.short || D.integration;
+  }
+
+  function dTitleFor() {
+    var range = dPeriodShort();
+    if (range) return 'Reconciliation for ' + range;
+    return 'Reconciliation';
   }
 
   function dUpdateTitle() {
     $('#d-title').textContent = dTitleFor();
     var sub = $('#d-page-sub');
     if (!sub) return;
-    // Connection names under the hero (layout match for screenshot)
-    var books = 'My accounting (QuickBooks)';
-    var intLabel = 'Select an integration';
-    if (D.integration === 'paypal') intLabel = 'My great plates (PayPal)';
-    else if (D.integration === 'stripe') intLabel = 'mzkt.by (Stripe)';
-    else if (D.integration === 'walmart') intLabel = 'Walmart';
-    else if (D.integration && CAPS[D.integration]) {
-      var cap = CAPS[D.integration];
-      intLabel = cap.label || cap.short || intLabel;
-    }
-    sub.textContent = books + ' — ' + intLabel;
+    var books = dBooksPlatformName();
+    var intLabel = dIntegrationPlatformName() || 'Select an integration';
+    sub.textContent = books + ' / ' + intLabel;
+    // Keep Import method platform labels in sync with the subtitle
+    var booksText = document.querySelector('#d-books-platform .d-src-platform-text');
+    if (booksText) booksText.textContent = books;
+    var intText = $('#d-int-platform-text');
+    if (intText && dIntegrationPlatformName()) intText.textContent = dIntegrationPlatformName();
   }
 
   function dUpdateRun() {
