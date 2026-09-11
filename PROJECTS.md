@@ -5,6 +5,14 @@
 
 ## 🔧 Active Projects
 
+### TxnRecon setup — all prototypes (2026-09-11)
+- **Status:** ✅ Gallery live for team discussion.
+- **Ask:** Ignat — put every setup prototype in one hub folder (do not archive), plus two finalists.
+- **Live:** https://dashasyn.github.io/synder-prototypes/projects/txnrecon-setup/
+- **Contents:** Finalist 1 (Automatic retrieval card) · Finalist 2 (Labeled import methods) · revised · original hub recon-setup · layouts A/B/C · Variant D.
+- **Path:** `projects/txnrecon-setup/`
+
+
 ### Banner builder — campaign banners (2026-09-04)
 - **Status:** ✅ MVP proto live, awaiting his read. Built to answer "is this a good idea", not to be a spec.
 - **Ask:** Ignat, 2026-09-04 — managers should be able to run temporary campaign banners (trial, subscribe, Black Friday, Christmas) without a developer. He asked for questions first; 11 questions with defaults → 11 answers in one list → one build.
