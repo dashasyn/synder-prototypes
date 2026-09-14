@@ -1,0 +1,81 @@
+{
+  "validator": "domain",
+  "round": 1,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/txnrecon-setup/finalist-1-sketch.html (Finalist 1 · Automatic retrieval)",
+  "checked": [
+    { "zone": "header", "item": "\"Read-only. Nothing in your books changes.\" badge — claim that the run does not write to the ledger" },
+    { "zone": "header", "item": "\"Run reconciliation\" primary button label and its book-affecting scope" },
+    { "zone": "header", "item": "Close (✕) discards a filled setup with no confirmation" },
+    { "zone": "period", "item": "\"Date range\" select options: \"Last week (Aug 24–30)\", \"Last month (Aug 1–31)\", \"Last quarter (Jun 1–Aug 31)\", \"Custom\"" },
+    { "zone": "period", "item": "Hint \"Last full month — the usual close period\" — close-period framing" },
+    { "zone": "period", "item": "Custom start/end date inputs — range validity (inverted and future ranges)" },
+    { "zone": "period", "item": "Date display format in the hint (\"2026-08-01 – 2026-08-31\") vs vocabulary date format" },
+    { "zone": "period", "item": "\"About date range\" tooltip: \"Compares transactions dated in this range in QuickBooks and on the platform.\" — \"the platform\" as a term, and transaction-date (not settlement-date) basis" },
+    { "zone": "what to reconcile", "item": "\"Integration\" select label and option set (Stripe / PayPal / Shopify)" },
+    { "zone": "what to reconcile", "item": "Integration hint \"Timezone: Europe/Minsk\" vs \"Timezone: UTC +3:00, Vilnius\" — cut-off basis for dated transactions" },
+    { "zone": "what to reconcile", "item": "\"Account to reconcile\" select label and options \"Stripe mzkt.by (required for Synder)\", \"Stripe fees\", \"Stripe sales\"" },
+    { "zone": "what to reconcile", "item": "\"About account\" tooltip: \"Any QuickBooks account can be reconciled. Prefer the account tied to this integration connection.\"" },
+    { "zone": "what to reconcile", "item": "Shared-account warning \"…is shared across connections, so Synder may not know which one to use.\" — \"connections\" vs canonical \"Integration\"" },
+    { "zone": "what to reconcile", "item": "Account hint \"Currency: USD\" / \"Currency: EUR\" and its disappearance when the shared-account warning takes the same slot (multicurrency risk)" },
+    { "zone": "how we get the data", "item": "Card title \"Automatic file retrieval Recommended\"" },
+    { "zone": "how we get the data", "item": "Card body \"Synder pulls QuickBooks and Stripe for this period. Large pulls can take a few hours…\"" },
+    { "zone": "how we get the data", "item": "\"Upload manually\" / \"Use automatic retrieval\" toggle and the hybrid state it produces" },
+    { "zone": "how we get the data · Accounting card", "item": "\"Import method (Accounting)\" select — options \"Automated (recommended)\" / \"Manual\"" },
+    { "zone": "how we get the data · Integration card", "item": "\"Import method (Integration)\" select — options \"Automated (recommended)\" / \"Assisted\" / \"Manual\"" },
+    { "zone": "how we get the data · Integration card", "item": "Source file names \"General ledger export\" (QuickBooks) and \"Balance change from activity\" (Stripe) — correct source documents for a clearing-account reconciliation" },
+    { "zone": "how we get the data · Integration card", "item": "Accordion steps \"Run Transaction Detail by Account for this period.\" — report choice" },
+    { "zone": "how we get the data · Integration card", "item": "\"Example steps — confirm the real report path for this integration.\" note rendered inside product UI" },
+    { "zone": "upload blocks", "item": "\"Upload file *\" label, \"CSV or XLSX formats, up to 100MB\", fabricated chip \"General_ledger_export_export.csv\" / \"0.1 Mb\"" },
+    { "zone": "matching rules", "item": "\"Matching rules\" modal — \"Prototype preview of the product popup. Active profile for this connection:\"" },
+    { "zone": "status", "item": "\"Reconciliation started\" / \"Synder is gathering and processing your transactions. We’ll update the status when it’s ready.\"" },
+    { "zone": "status", "item": "Disabled \"Run reconciliation\" state naming no blocker; form stays editable after Run with no effect" }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "\"Account to reconcile\" select + its \"About account\" (?) tooltip, [what to reconcile] zone",
+      "finding": "The tooltip asserts that any QuickBooks account is reconcilable and the dropdown duly offers the income and expense accounts \"Stripe fees\" and \"Stripe sales\" alongside the clearing account, warning only that they are shared — never that a profit-and-loss account has no balance to reconcile against a processor.",
+      "user_impact": "An accountant picks \"Stripe fees\" or \"Stripe sales\", the run is allowed to start, and every processor transaction comes back as a discrepancy against an account that was never supposed to carry a reconcilable balance — producing a bogus variance list that gets chased, or worse, adjusted away with a journal entry.",
+      "suggested_fix": "Restrict \"Account to reconcile\" to balance-sheet accounts (bank, credit card, clearing/undeposited funds) and replace the tooltip claim with the real rule — \"Reconcile the balance sheet account that holds this integration's balance. Income and expense accounts can't be reconciled.\" — keeping the precise term \"reconciled\" and explaining it inline rather than relabelling it.",
+      "evidence": {
+        "quote": "Any QuickBooks account can be reconciled. Prefer the account tied to this integration connection.",
+        "source": "Accounting rule: reconciliation compares a general-ledger account balance to an external statement balance, so it applies only to balance-sheet accounts (bank, credit card, clearing). Income/expense accounts have no closing balance to reconcile — the claim that any account can be reconciled is false in QuickBooks Online and in GAAP practice."
+      }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "High",
+      "confidence": 90,
+      "element": "\"Automatic file retrieval\" card title and body, [how we get the data] zone",
+      "finding": "The card describes the operation as Synder \"pulling\" QuickBooks and calls the whole mechanism \"retrieval\", using two terms vocabulary.md explicitly bans in place of \"Import\", and it names the accounting company as the thing being pulled rather than the data in the books.",
+      "user_impact": "An accountant reading \"pulls QuickBooks\" cannot tell whether Synder is reading the books or acting on the QuickBooks connection itself, which is exactly the ambiguity that makes people hesitate to run anything against a live client file — and it breaks the one vocabulary users rely on to distinguish Import (into Synder) from Sync (into the books).",
+      "suggested_fix": "Rewrite as \"Automatic import\" / \"Synder imports your books and Stripe data for this period. Large imports can take a few hours — we'll email you when it's ready.\", using Import for the inbound direction and Books for the ledger data.",
+      "evidence": {
+        "quote": "Synder pulls QuickBooks and Stripe for this period. Large pulls can take a few hours — we’ll email you when it’s ready.",
+        "source": "vocabulary.md UI Words table: \"**Import** | fetch, pull (importing data from integrations into Synder)\" — pull is a banned term. Also \"Integration vs Books vs Accounting company\": Books = the data/ledger; Accounting company = the software — the data imported is the books, not QuickBooks."
+      }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "High",
+      "confidence": 82,
+      "element": "[period] Custom start / end date inputs and their hint",
+      "finding": "The custom range accepts an end date earlier than its start date and accepts a range entirely in the future, echoing the nonsense period back as a normal hint with no error element and with \"Run reconciliation\" left enabled.",
+      "user_impact": "A mistyped or inverted period starts a reconciliation over a window that contains no transactions, and because the prototype's only outcome is \"Reconciliation started\" the accountant receives what reads as a clean, zero-discrepancy result for a period they never actually tested — a client's books get signed off on a comparison that never happened.",
+      "suggested_fix": "Validate the range before enabling the run — block end-before-start with the canonical \"Required\"-style inline error, refuse periods beyond today since no transactions can exist there, and display the period in the canonical MM/DD/YYYY format rather than ISO.",
+      "evidence": {
+        "quote": "2026-08-31 – 2026-08-01",
+        "source": "vocabulary.md \"Dropdowns, Selects, Inputs, Search — Default validation/error: `Required`\" (validation is expected on inputs) and \"Date Format — **MM/DD/YYYY** — American format by default\". Accounting rule: a reconciliation must be bounded by a valid, elapsed period; an empty comparison window must never be reported as a completed reconciliation."
+      }
+    }
+  ],
+  "gaps": [
+    "Results / matched-unmatched screen after Run is not built, so I cannot check how discrepancies are classified, whether \"unmatched\" is distinguished from \"missing\", or whether any adjusting journal entry is ever proposed — the highest-risk accounting surface of this flow is unverifiable.",
+    "Closed accounting periods (KF-9 top-3 sync-failure cause) are not represented anywhere in the state map: nothing records whether a range overlapping a period closed in QuickBooks is detected, flagged, or silently reconciled.",
+    "Automatic retrieval failure and empty-result states are not implemented, so it is unknown whether a failed or partial import is distinguishable from a genuine zero-discrepancy reconciliation — the two must never look alike.",
+    "Real file upload is unreachable (the prototype fabricates the file), so I could not verify whether an uploaded report's own period, account or currency is checked against the selected date range and \"Account to reconcile\".",
+    "Multicurrency: the account hint shows \"Currency: USD\" / \"Currency: EUR\" but no state records any cross-check between the integration's settlement currency and the selected QuickBooks account's currency, and the hint slot is overwritten by the shared-account warning — commit behaviour for a mismatched pair was never exercised."
+  ]
+}

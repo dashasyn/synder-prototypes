@@ -1,0 +1,98 @@
+{
+  "validator": "trust",
+  "round": 1,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/txnrecon-setup/finalist-1-sketch.html (Finalist 1 · Automatic retrieval sketch)",
+  "checked": [
+    { "zone": "header", "item": "Close (✕) — discards a filled setup with no confirmation and no visible acknowledgement" },
+    { "zone": "header", "item": "\"Read-only. Nothing in your books changes.\" badge vs. what Run actually does" },
+    { "zone": "header / status", "item": "Run reconciliation enabled state vs. completeness of the form below it" },
+    { "zone": "header / status", "item": "Run reconciliation disabled state vs. the upload blocks in the sources zone (nothing names the blocker)" },
+    { "zone": "header / status", "item": "\"Running…\" + \"Reconciliation started\" region vs. the still-enabled form controls above it (cross-zone)" },
+    { "zone": "period", "item": "Date range select vs. its hint line (hint empty on \"Last week\", populated on \"Last month\")" },
+    { "zone": "period", "item": "Custom start/end date inputs vs. hint and vs. Run enablement (inverted and future ranges accepted, no error element)" },
+    { "zone": "period", "item": "\"About date range\" tooltip claim (\"Compares transactions dated in this range\") vs. actual scope of the run" },
+    { "zone": "what to reconcile", "item": "Integration select vs. the \"how we get the data\" zone (automatic card and mode toggle appear/disappear) — same dimension, cross-zone" },
+    { "zone": "what to reconcile", "item": "Integration timezone hint formats (\"Europe/Minsk\" vs. \"UTC +3:00, Vilnius\") vs. the period the run compares" },
+    { "zone": "what to reconcile", "item": "Account select vs. its single shared hint slot (Currency fact replaced by the shared-account warning)" },
+    { "zone": "what to reconcile", "item": "Shared-account warning (\"Synder may not know which one to use\") vs. Run staying enabled" },
+    { "zone": "how we get the data", "item": "\"Upload manually\" / \"Use automatic retrieval\" toggle vs. the two per-card Import method selects — two controls on one dimension, no precedence" },
+    { "zone": "how we get the data", "item": "Toggle label vs. actual resulting mode (Accounting side stays Automated — hybrid)" },
+    { "zone": "how we get the data", "item": "Toggle round-trip vs. already-picked files (survival of state across a mode switch)" },
+    { "zone": "how we get the data · Accounting card", "item": "Import method select vs. upload blocks and Run state" },
+    { "zone": "how we get the data · Integration card", "item": "Import method select (Automated/Assisted/Manual) vs. the toggle label above it" },
+    { "zone": "how we get the data · Integration card", "item": "\"How to get <file>\" accordion — \"Example steps — confirm the real report path\" presented inside product UI" },
+    { "zone": "how we get the data · upload blocks", "item": "Browse control vs. the file chip it produces (name + size for a file nobody chose)" },
+    { "zone": "how we get the data · upload blocks", "item": "Drop-zone copy \"CSV or XLSX formats, up to 100MB\" vs. absence of any type/size validation or parse state" },
+    { "zone": "how we get the data · upload blocks", "item": "Remove vs. Run state (Run silently re-disables, nothing names what is now missing)" },
+    { "zone": "matching rules", "item": "Matching rules modal claiming an \"Active profile for this connection\" vs. no indication on the setup screen that a profile is applied" }
+  ],
+  "findings": [
+    {
+      "id": "TRU-1",
+      "severity": "Critical",
+      "confidence": 92,
+      "element": "Upload block \"Browse\" control and the file chip it produces (\"General_ledger_export_export.csv\", \"0.1 Mb\")",
+      "claims": "A named file of a stated size has been attached to this upload block, and once every block shows a chip the run has all the data it needs — Run reconciliation enables.",
+      "actual": "No file was selected. There is no input[type=file] on the page and no OS dialog opens; the chip name and the \"0.1 Mb\" size are hard-coded strings fabricated on click. Run enables on the count of fabricated chips, not on any real data.",
+      "finding": "The upload zone presents a fabricated file name and a fabricated byte size as a confirmed attachment, and the primary action's enabled state is derived from those fabrications.",
+      "user_impact": "The user believes their general-ledger and platform exports are attached and starts a reconciliation whose sources they never actually chose, then treats the resulting matched/unmatched verdict as a statement about their real books.",
+      "suggested_fix": "Bind Browse to a real file input and render the chip from the chosen file's own name and size — never a placeholder — and gate Run on files that actually parsed.",
+      "evidence": {
+        "action": "From the default Stripe/automatic state, click \"Upload manually\", set the Accounting card's Import method to Manual, then click \"Browse\" in the upload block that appears; repeat until all three blocks are filled.",
+        "observed": "No OS file dialog opens at any point, yet a chip appears reading \"General_ledger_export_export.csv\" with size \"0.1 Mb\"; chips=1 → Run still disabled, chips=3 → Run disabled=false. Clicking Remove drops to chips=2 and Run disables again with no message naming what is missing. Cross-zone: the header's Run button reports readiness for content it cannot have verified."
+      }
+    },
+    {
+      "id": "TRU-2",
+      "severity": "Critical",
+      "confidence": 85,
+      "element": "Period / integration / account selects after \"Run reconciliation\" is clicked, vs. the \"Reconciliation started\" status region",
+      "claims": "The run is under way (\"Running…\", \"Reconciliation started — Synder is gathering and processing your transactions\") while every setup control above stays enabled and editable, implying the parameters are still live and still belong to this run.",
+      "actual": "The parameters were captured at click time. The state map records that the form stays editable but changing it now does nothing; nothing on screen states which period, integration or account the started run actually locked in, and there is no cancel.",
+      "finding": "After the run starts the setup form remains fully interactive but inert, so the values displayed no longer describe the job that is running and no indicator reconciles the two.",
+      "user_impact": "A user who spots a wrong period after clicking Run — very likely given the default is last month while KF-3 shows people routinely need 1–2 years back — changes the date range, sees the control accept it, and waits for a result that silently covers the old period.",
+      "suggested_fix": "On Run, disable (or replace with a read-only summary of) the captured period, integration, account and data-source, and show that summary inside the status region so the running job states its own parameters.",
+      "evidence": {
+        "action": "With automatic retrieval selected click \"Run reconciliation\", then interact with select#f-per (and the integration/account selects) in the zone above.",
+        "observed": "Button label becomes \"Running…\" and disabled=true, #running becomes visible with \"Reconciliation started…\", while select#f-per is still enabled=true and accepts a new value that the started run ignores. Cross-zone contradiction: the status region in the header asserts a specific run is in flight while the period/what-to-reconcile zones still present themselves as the run's live settings."
+      }
+    },
+    {
+      "id": "TRU-3",
+      "severity": "High",
+      "confidence": 88,
+      "element": "\"Upload manually\" / \"Use automatic retrieval\" toggle vs. the two per-card \"Import method\" selects",
+      "claims": "The toggle is the mode switch: while it reads \"Use automatic retrieval\" the screen is in manual-upload mode; each card's Import method select claims to set that card's source independently.",
+      "actual": "Three controls set one dimension with no defined precedence. Choosing \"Automated (recommended)\" inside the manual panel removes all upload blocks but leaves the page in the manual panel with the automatic card hidden, while the toggle still claims manual mode and Run stays disabled. And the toggle never produced manual mode in the first place: clicking \"Upload manually\" leaves the Accounting side on \"Automated\", so the label describes a state that does not exist.",
+      "finding": "The mode toggle and the Import method selects disagree about which retrieval mode is active, and the toggle's label misstates the mode it actually produces.",
+      "user_impact": "The user believes they have switched both sides to manual upload (or back to fully automatic), cannot tell which source is actually being pulled versus uploaded, and lands in a state where Run is disabled with nothing on screen naming the blocker.",
+      "suggested_fix": "Make the per-source Import method selects the single source of truth, replace the toggle with a state that is derived from them, and render one explicit per-source line (\"QuickBooks: automatic · Stripe: upload\") above Run.",
+      "evidence": {
+        "action": "From the default automatic state click \"Upload manually\" (label flips to \"Use automatic retrieval\"), observe both cards, then set the Integration card's Import method to \"Automated (recommended)\".",
+        "observed": "On click 1 the Accounting card's Import method defaults to \"Automated\" while the Integration card flips to \"Assisted\" — a hybrid, not manual upload — and Run becomes disabled=true with no on-screen statement of what is missing. After picking \"Automated (recommended)\" in the Integration card: upload blocks=0, the automatic retrieval card is still visible=false, the toggle above still reads \"Use automatic retrieval\", and Run remains disabled=true. Cross-zone: the header's disabled Run button is the only sign anything is wrong, and it names nothing."
+      }
+    },
+    {
+      "id": "TRU-4",
+      "severity": "High",
+      "confidence": 84,
+      "element": "\"Use automatic retrieval\" toggle vs. already-picked upload files",
+      "claims": "The toggle is a reversible view switch between two ways of supplying the same data — its label pair implies you can look at the other option and come back.",
+      "actual": "Switching to automatic destroys every file already attached. The #sources grid is re-rendered via innerHTML and the picked files are discarded with no warning, no confirmation and no undo; Run re-enables immediately, which reads as progress rather than loss.",
+      "finding": "One control silently discards another control's committed values, and the state it leaves behind (Run enabled) gives no hint that anything was lost.",
+      "user_impact": "A user who toggles back to compare options loses all three attached exports, and on returning to manual sees empty drop zones and a disabled Run with no explanation — or worse, never returns and runs a reconciliation on automatic pulls believing their uploaded files are still in play.",
+      "suggested_fix": "Preserve attached files across mode switches, or warn before discarding them and state explicitly in the automatic card that the uploaded files will not be used.",
+      "evidence": {
+        "action": "In manual mode fill all three upload blocks (chips=3, Run disabled=false), click \"Use automatic retrieval\", then click \"Upload manually\" again.",
+        "observed": "Click 2 restores the automatic card and re-enables Run (disabled=false) while the three chips are silently discarded; click 3 returns to the manual panel showing empty drop zones and Run disabled=true again, with nothing naming what is missing. Cross-zone: the header's Run button flipped from enabled to enabled again across a data-destroying transition, so the one global status indicator never registered the loss."
+      }
+    }
+  ],
+  "gaps": [
+    "Real file upload was never exercised — the prototype fabricates a file on Browse and has no input[type=file], so whether a wrong-type or oversized file would be rejected (the drop zone claims \"CSV or XLSX formats, up to 100MB\") and whether a parse/progress state exists is unknown, not passing.",
+    "Automatic-retrieval failure and empty-result states are not implemented, so I could not verify whether the \"Reconciliation started — we'll update the status when it's ready\" message is ever contradicted by the real failure causes in KF-9 (missing account mappings, multicurrency off, closed accounting periods, lost authorization, missing products/tax codes). The claim is untested rather than false.",
+    "Switching the Integration select while in manual mode with files already attached was not exercised, so it is unknown whether the integration change silently discards attached files the way the mode toggle does.",
+    "The Matching rules modal asserts an \"Active profile for this connection\" that governs matching, but the setup screen shows no indicator that any profile is applied and the profile could not be changed or confirmed, so whether the displayed profile is the one the run uses is unverified.",
+    "No post-Run state beyond \"Reconciliation started\" exists, so whether the captured parameters are ever shown back to the user (and therefore whether TRU-2's contradiction is ever resolvable) could not be checked."
+  ]
+}
