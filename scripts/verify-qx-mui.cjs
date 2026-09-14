@@ -37,8 +37,68 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
   // The prototype opens on a login view that VALIDATES, so clicking the
   // button with empty fields does nothing and every later click is silently
   // intercepted by the still-present overlay. Drive the real flow.
+  // ── The login screen is a view too. The first restyle pass skipped it and
+  //    this verifier dismissed it in one line without ever looking, so two
+  //    real bugs shipped: outlined inputs, and an opaque page background
+  //    mapped onto rgba(0,0,0,0.04) so the app showed through. Check it
+  //    BEFORE logging in. (Both found by Ignat, 2026-09-14.)
   const login = await page.$('#view-login');
   if (login && await login.isVisible()) {
+    const shell = await page.evaluate(() => {
+      const parse = c => { const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
+        return m ? { a: m[4] === undefined ? 1 : +m[4] } : null; };
+      const v = document.querySelector('#view-login');
+      const card = document.querySelector('.login-card');
+      const cs = getComputedStyle(v);
+      return {
+        alpha: parse(cs.backgroundColor).a,
+        cardRadius: getComputedStyle(card).borderTopLeftRadius,
+        cardShadow: getComputedStyle(card).boxShadow,
+      };
+    });
+    ok('the login page is opaque — the app must not show through it',
+      shell.alpha === 1, shell.alpha);
+    ok('the login card uses the 4px radius', shell.cardRadius === '4px', shell.cardRadius);
+    ok('the login card is flat', shell.cardShadow === 'none', shell.cardShadow);
+
+    const li = await page.$$eval('.login-field input', els => els.map(el => {
+      const s = getComputedStyle(el);
+      return { h: Math.round(el.getBoundingClientRect().height),
+               bw: s.borderTopWidth, br: s.borderBottomLeftRadius,
+               pt: parseFloat(s.paddingTop), fs: s.fontSize };
+    }));
+    ok('login has both fields', li.length === 2, li.length);
+    ok('login inputs are filled, not outlined', li.every(f => f.bw === '0px'),
+      [...new Set(li.map(f => f.bw))]);
+    ok('login inputs are 48px (size=small)', li.every(f => Math.abs(f.h - 48) <= 1),
+      [...new Set(li.map(f => f.h))]);
+    ok('login inputs are square-bottomed', li.every(f => f.br === '0px'),
+      [...new Set(li.map(f => f.br))]);
+    ok('login inputs use the filled top padding (21px)',
+      li.every(f => f.pt === 21), [...new Set(li.map(f => f.pt))]);
+
+    const lb = await page.$eval('.btn-login', el => {
+      const s = getComputedStyle(el);
+      return { fs: s.fontSize, tt: s.textTransform, sh: s.boxShadow, fw: s.fontWeight };
+    });
+    ok('login button is MUI sizeSmall typography',
+      lb.fs === '13px' && lb.tt === 'uppercase' && lb.fw === '500', lb);
+    ok('login button is flat', lb.sh === 'none', lb.sh);
+
+    // the error state must actually be reachable: submit empty
+    await page.click('.btn-login');
+    await page.waitForTimeout(200);
+    const errShown = await page.evaluate(() => {
+      const e = document.getElementById('login-error');
+      const f = document.getElementById('login-email');
+      return { visible: !!e && e.offsetParent !== null && e.textContent.trim().length > 0,
+               marked: f.classList.contains('input-error'),
+               underline: getComputedStyle(f).boxShadow };
+    });
+    ok('submitting empty shows an error and keeps the login up', errShown.visible, errShown);
+    ok('the invalid field is marked with an error underline',
+      errShown.marked && errShown.underline.includes('211, 47, 47'), errShown);
+
     await page.fill('#login-email', 'dasha@etc-solutions.test');
     await page.fill('#login-password', 'prototype');
     await page.click('.btn-login');

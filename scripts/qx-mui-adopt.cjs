@@ -149,7 +149,11 @@ const COLOUR_MAP = {
   '#F5F7FF': 'var(--action-hover)',
   '#F0F5FF': 'var(--action-hover)',
   '#F8FAFF': 'var(--action-hover)',
-  '#F0F2F5': 'var(--action-hover)',
+  // NOT a hover tint: #F0F2F5 is the login page's opaque background.
+  // Mapping an opaque SURFACE onto an alpha OVERLAY token made the login
+  // screen 4%-transparent, so the app showed through it. Surfaces take
+  // surface tokens. (Caught by Ignat, 2026-09-14.)
+  '#F0F2F5': 'var(--bg-subtle)',
   '#F8F9FA': 'var(--bg-subtle)',
   '#F8F8F8': 'var(--bg-subtle)',
   // dividers
