@@ -1557,6 +1557,20 @@ body{
   .dates.on{display:flex}
   .dates input{width:150px}
 
+
+  .field-invalid{
+    border-color:#C9372C !important;
+    box-shadow:0 0 0 1px #C9372C;
+  }
+  .field-invalid-label{color:#C9372C !important}
+  .run-error{
+    margin:12px 24px 0;font-size:14px;line-height:20px;color:#C9372C;
+  }
+  .run-error.hidden{display:none !important}
+  .auto-notice{
+    margin:0 0 12px;font-size:14px;line-height:20px;color:var(--color-grey-50,#6B778C);
+  }
+
   .match-modal-backdrop{
     display:none;position:fixed;inset:0;background:rgba(26,27,36,.5);z-index:200;
     align-items:center;justify-content:center;padding:24px;
@@ -1627,7 +1641,7 @@ body{
           <div class="lab-with-tip">
             <label for="f-acc">Account to reconcile <span class="req">*</span></label>
             <button type="button" class="tip" aria-label="About account">?
-              <span class="tip-bubble">Any QuickBooks account can be reconciled. Prefer the account tied to this integration connection.</span>
+              <span class="tip-bubble">Prefer the clearing account tied to this integration connection. P&L accounts (fees, sales) usually aren’t reconcilable here.</span>
             </button>
           </div>
           <div class="sel"><select id="f-acc"></select></div>
@@ -1639,10 +1653,11 @@ body{
     <div class="grp">
       <div class="grp-head">
         <h3>How we get the data</h3>
-        <button type="button" class="lnk" id="mode-toggle">Upload manually</button>
+        <button type="button" class="lnk" id="mode-toggle">Choose how to import</button>
       </div>
 
       <div id="auto-panel">
+        <p class="auto-notice hidden" id="auto-notice" role="status"></p>
         <div class="auto-card">
           <div class="aa-title">Automatic file retrieval <span class="rec-chip">Recommended</span></div>
           <p class="aa-body" id="aa-body">Synder pulls QuickBooks and the platform for this period. Large pulls can take a few hours — we’ll email you when it’s ready.</p>
@@ -1656,6 +1671,7 @@ body{
     </div>
 
 
+    <p class="run-error hidden" id="run-error" role="alert"></p>
     <div class="running" id="running" role="status">
       <b>Reconciliation started</b>
       <span>Synder is gathering and processing your transactions. We’ll update the status when it’s ready.</span>
@@ -1776,7 +1792,8 @@ body{
     booksMode: 'Automated',
     intMode: 'Automated',
     provided: {},
-    openHowto: {}
+    openHowto: {},
+    autoNotice: ''
   };
 
   function esc(s){
@@ -1883,16 +1900,22 @@ body{
 
     var a = i.accounts.filter(function(x){ return x.id === state.account; })[0] || i.accounts[0];
     var hAcc = document.getElementById('h-acc');
-    if (a.shared){
-      hAcc.className = 'hint warn';
-      hAcc.textContent = a.label + ' is shared across connections, so Synder may not know which one to use. Prefer the account tied to this connection.';
-    } else {
-      hAcc.className = 'hint';
-      hAcc.textContent = 'Currency: ' + a.currency;
-    }
+    hAcc.className = 'hint';
+    hAcc.textContent = 'Currency: ' + a.currency;
 
     document.getElementById('aa-body').textContent =
       'Synder pulls QuickBooks and ' + i.short + ' for this period. Large pulls can take a few hours — we’ll email you when it’s ready.';
+    var noticeEl = document.getElementById('auto-notice');
+    if (noticeEl) {
+      if (state.autoNotice) {
+        noticeEl.textContent = state.autoNotice;
+        noticeEl.classList.remove('hidden');
+        state.autoNotice = '';
+      } else {
+        noticeEl.textContent = '';
+        noticeEl.classList.add('hidden');
+      }
+    }
 
     var autoPanel = document.getElementById('auto-panel');
     var manPanel = document.getElementById('manual-panel');
@@ -1902,7 +1925,7 @@ body{
     manPanel.classList.toggle('hidden', showAuto);
     if (canBothAuto()){
       toggle.classList.remove('hidden');
-      toggle.textContent = showAuto ? 'Upload manually' : 'Use automatic retrieval';
+      toggle.textContent = showAuto ? 'Choose how to import' : 'Use automatic retrieval';
     } else {
       toggle.classList.add('hidden');
       state.mode = 'manual';
@@ -1949,9 +1972,8 @@ body{
       document.getElementById('sources').innerHTML = html;
     }
 
-    var missing = showAuto ? 0 : missingCount();
     var run = document.getElementById('run');
-    run.disabled = missing > 0;
+    if (run && run.dataset.running !== '1') run.disabled = false;
 
   }
 
@@ -1994,15 +2016,19 @@ body{
     if (state.mode === 'auto'){
       state.mode = 'manual';
       if (current().methods.indexOf('Assisted') > -1) state.intMode = 'Assisted';
-      if (BOOKS.methods.indexOf('Manual') > -1) {
-        // leave books on Automated by default so hybrid works; user can switch
-      }
+      // Hybrid OK: leave books on Automated unless user changes it
     } else {
+      var hadUploads = Object.keys(state.provided).length > 0;
+      if (hadUploads) {
+        var ok = window.confirm('Switch to automatic retrieval? Uploaded files on this screen will be cleared.');
+        if (!ok) return;
+      }
       state.mode = 'auto';
       state.booksMode = 'Automated';
       state.intMode = 'Automated';
       state.provided = {};
       state.openHowto = {};
+      state.autoNotice = hadUploads ? 'Uploaded files cleared — using automatic retrieval.' : '';
     }
     render();
   });
@@ -2068,11 +2094,91 @@ body{
     }
   });
 
+  function clearRunErrors(){
+    document.querySelectorAll('#f-per, #f-int, #f-acc, #d-from, #d-to, .msel select, .drop').forEach(function(el){
+      el.classList.remove('field-invalid');
+    });
+    document.querySelectorAll('label[for="f-per"], label[for="f-int"], label[for="f-acc"], .lab-with-tip > label, .msel-lab').forEach(function(el){
+      el.classList.remove('field-invalid-label');
+    });
+    var err = document.getElementById('run-error');
+    if (err) { err.textContent = ''; err.classList.add('hidden'); }
+  }
+
+  function markInvalid(selectId, labelFor){
+    var sel = document.getElementById(selectId);
+    if (sel) sel.classList.add('field-invalid');
+    var lab = document.querySelector('label[for="'+labelFor+'"]');
+    if (lab) lab.classList.add('field-invalid-label');
+  }
+
+  function validateRun(){
+    clearRunErrors();
+    var msgs = [];
+    if (!state.integration) {
+      markInvalid('f-int', 'f-int');
+      msgs.push('Select an integration');
+    }
+    if (!state.account) {
+      markInvalid('f-acc', 'f-acc');
+      msgs.push('Select an account');
+    }
+    if (state.period === 'custom') {
+      var f = document.getElementById('d-from').value;
+      var to = document.getElementById('d-to').value;
+      if (!f || !to) {
+        markInvalid('f-per', 'f-per');
+        document.getElementById('d-from').classList.add('field-invalid');
+        document.getElementById('d-to').classList.add('field-invalid');
+        msgs.push('Pick start and end dates');
+      } else if (f > to) {
+        markInvalid('f-per', 'f-per');
+        document.getElementById('d-from').classList.add('field-invalid');
+        document.getElementById('d-to').classList.add('field-invalid');
+        msgs.push('End date must be on or after the start date');
+      }
+    }
+    var showAuto = state.mode === 'auto' && canBothAuto();
+    if (!showAuto) {
+      var n = missingCount();
+      if (n > 0) {
+        document.querySelectorAll('.drop').forEach(function(dz){ dz.classList.add('field-invalid'); });
+        msgs.push(n === 1 ? 'Upload the required file' : ('Upload the required files (' + n + ' missing)'));
+      }
+      // Dead path: both Automated in "choose how" with nothing to upload
+      if (state.booksMode === 'Automated' && intMethod() === 'Automated' && n === 0) {
+        // OK — hybrid both auto inside customize is a valid path (same as automatic)
+      }
+    }
+    if (msgs.length) {
+      var err = document.getElementById('run-error');
+      if (err) {
+        err.textContent = msgs[0];
+        err.classList.remove('hidden');
+      }
+      var first = document.querySelector('.field-invalid');
+      if (first && first.focus) first.focus();
+      return false;
+    }
+    return true;
+  }
+
   document.getElementById('run').addEventListener('click', function(){
-    if (this.disabled) return;
+    if (this.dataset.running === '1') return;
+    if (!validateRun()) return;
     document.getElementById('running').classList.add('on');
     this.textContent = 'Running…';
     this.disabled = true;
+    this.dataset.running = '1';
+    ['f-per','f-int','f-acc','d-from','d-to','mode-toggle'].forEach(function(id){
+      var el = document.getElementById(id);
+      if (el) el.disabled = true;
+    });
+  });
+
+  ['f-per','f-int','f-acc','d-from','d-to'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', clearRunErrors);
   });
 
   render();
