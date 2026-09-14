@@ -2069,6 +2069,14 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
   #screen-D .input:disabled, #screen-D select:disabled {
     background: var(--color-grey-5, #F7F8FA); color: var(--text-muted, #B4BBCB); cursor: not-allowed;
   }
+
+  #screen-D .d-period-tip{
+    width:18px;height:18px;border-radius:50%;border:1px solid var(--color-grey-30,#B4BBCB);
+    color:var(--color-grey-50,#6B778C);font-size:12px;font-weight:700;cursor:help;
+    background:#fff;line-height:1;padding:0;
+  }
+  #screen-D .d-period-tip:hover{border-color:var(--color-primary,#0053CC);color:var(--color-primary,#0053CC)}
+
   #screen-D .form-hint {
     font-size: 14px; line-height: 16px; letter-spacing: 0.4px;
     color: var(--text-secondary, #6B778C); margin-top: 4px;
@@ -2871,7 +2879,10 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
 
       <div class="d-fields-row">
         <div class="form-field">
-          <label class="form-label" for="d-period">Date range</label>
+          <div class="lab-with-tip" style="display:inline-flex;align-items:center;gap:6px;margin-bottom:6px">
+            <label class="form-label" for="d-period" style="margin:0">Date range</label>
+            <button type="button" class="tip d-period-tip" aria-label="About date range" title="Compares transactions dated in this range in QuickBooks and on the platform.">?</button>
+          </div>
           <select class="select" id="d-period">
             <option value="last_month" selected>Last month</option>
             <option value="last_quarter">Last quarter</option>
@@ -3882,10 +3893,26 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
       dMarkRequired('#d-from', 'd-period');
       dMarkRequired('#d-to', 'd-period');
     }
+    // Gate Assisted/Manual: require uploads before Run (custom / no-auto paths)
+    var needUploads = false;
+    var uploadMsg = '';
+    if (D.approach === 'custom' || !dHasBothAuto()) {
+      if (needsUpload(D.booksMode) && !D.uploads.booksAssisted && !D.uploads.booksManual) {
+        needUploads = true;
+      }
+      if (needsUpload(D.intMode)) {
+        var intOk = D.uploads.intAssisted || D.uploads.intAssisted2 || D.uploads.intManual;
+        if (!intOk) needUploads = true;
+      }
+      if (needUploads) {
+        missing.push('uploads');
+        uploadMsg = 'Upload the required files before running reconciliation.';
+      }
+    }
     const err = $('#d-run-error');
     if (missing.length) {
       if (err) {
-        err.textContent = 'Select required fields to run reconciliation.';
+        err.textContent = uploadMsg || 'Select required fields to run reconciliation.';
         err.classList.remove('hidden');
       }
       const first = document.querySelector('#screen-D .field-invalid');
@@ -4231,6 +4258,15 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
     dUpdateTitle();
     dUpdateRun();
     dRenderSources();
+  });
+
+  
+  function dOpenMatchRules(e) {
+    if (e) e.preventDefault();
+    alert('Matching rules (product popup)\n\nActive profile: Default\n• Primary ID, Amount, Date\n• Fuzzy amount ±0.01 · same calendar day\n• Applies once to both sides');
+  }
+  $all('#screen-D .match-link, #screen-D a.text-link.match-link').forEach(function(a){
+    a.addEventListener('click', dOpenMatchRules);
   });
 
   $('#d-run').addEventListener('click', function () {
