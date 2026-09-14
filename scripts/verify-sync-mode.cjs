@@ -129,6 +129,25 @@ function ok(name, cond) {
   ok('summary downside is the missing detail',
     (await page.locator('#mode-sum .mode-down').textContent()).includes('stay in Synder'));
 
+  // ── 4b. "Recommended" must carry a reason, not just a badge (review, 2026-09-14) ──
+  const why = page.locator('#mode-pt .mode-why');
+  ok('recommended card explains why', await why.isVisible());
+  ok('the reason names the actual stack', /shopify/i.test(await why.textContent()) &&
+    /quickbooks/i.test(await why.textContent()));
+  ok('the reason is specific, not a restatement of the badge',
+    /tax/i.test(await why.textContent()) && /customer/i.test(await why.textContent()));
+  ok('the reason is 14px', await why.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
+  ok('only the recommended card carries a reason',
+    (await page.locator('.mode-why').count()) === 1);
+  ok('the badge is still there too', await page.locator('#mode-pt .status.status-green').isVisible());
+
+  // ── 4c. Soft default for the undecided (review, 2026-09-14) ──
+  const nudge = page.locator('.perm-nudge');
+  ok('undecided nudge visible', await nudge.isVisible());
+  ok('nudge points at a specific mode', /per transaction/i.test(await nudge.textContent()));
+  ok('nudge sits above the irreversibility line',
+    (await nudge.boundingBox()).y < (await page.locator('.perm-under').boundingBox()).y);
+
   // ── 5. Permanence — one grey line under the cards, not a yellow warning ──
   const perm = page.locator('.perm-under');
   ok('permanence line visible', await perm.isVisible());
@@ -136,7 +155,13 @@ function ok(name, cond) {
     (await perm.boundingBox()).y >
       (await cardSum.boundingBox()).y + (await cardSum.boundingBox()).height - 1);
   ok('permanence states the escape hatch',
-    (await perm.textContent()).includes('create another organization'));
+    /second organization/i.test(await perm.textContent()));
+  // review, 2026-09-14: the new-org route must not read as the normal way to switch modes
+  ok('the escape hatch is framed as a cost, not a toggle',
+    /separate set of books/i.test(await perm.textContent()) &&
+    /isn't\s+a\s+quick\s+toggle/i.test(await perm.textContent()));
+  ok('permanence still says the choice is final',
+    /can't be changed later/i.test(await perm.textContent()));
   ok('permanence is grey, not a warning colour', await perm.evaluate(el => {
     const m = getComputedStyle(el).color.match(/\d+/g).map(Number);
     return Math.abs(m[0] - m[1]) < 40 && Math.abs(m[1] - m[2]) < 60 && m[0] < 160;
