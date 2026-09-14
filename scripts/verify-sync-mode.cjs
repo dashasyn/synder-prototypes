@@ -98,6 +98,14 @@ function ok(name, cond) {
   const btnPt = page.locator('#mode-pt .pv-btn button');
   const btnSum = page.locator('#mode-sum .pv-btn button');
   ok('both cards offer a preview button', await btnPt.isVisible() && await btnSum.isVisible());
+  // Trust (2026-09-14): at this step nothing has synced, so the button must not promise a look at
+  // real books. "See it in QuickBooks" implied data that does not exist yet.
+  const labelPt = (await btnPt.textContent()).trim();
+  ok('button calls it a preview', /preview/i.test(labelPt));
+  ok('button says the data is a sample', /sample/i.test(labelPt));
+  ok('button no longer promises real books',
+    !/see it in/i.test(labelPt) && !/see it in/i.test((await btnSum.textContent())));
+  ok('both buttons carry the same label', labelPt === (await btnSum.textContent()).trim());
   ok('no inline preview left in the cards', (await page.locator('.mode .pv').count()) === 0);
   ok('no big-tabs panel left on the page', (await page.locator('#pv-panel').count()) === 0);
 
@@ -118,6 +126,22 @@ function ok(name, cond) {
     const cs = getComputedStyle(document.querySelector('.modal-title-row'));
     return parseFloat(cs.borderBottomWidth) >= 1;
   }));
+
+  // ── 5b. The modal repeats the disclosure, so it survives being opened directly ──
+  const sample = page.locator('.pv-sample');
+  ok('modal states the data is a sample', await sample.isVisible());
+  ok('modal says nothing has synced yet',
+    /nothing has synced yet/i.test(await sample.textContent()));
+  ok('modal says when real data appears',
+    /after the first sync/i.test(await sample.textContent()));
+  ok('modal title calls it a preview',
+    /preview/i.test(await page.locator('#pv-modal-title').textContent()));
+  ok('modal title is conditional, not a claim about existing books',
+    /would look like/i.test(await page.locator('#pv-modal-title').textContent()));
+  ok('register header is marked as a sample',
+    /sample/i.test(await page.locator('#pv-modal-body .pv-head').first().textContent()));
+  ok('disclosure sits above the register',
+    (await sample.boundingBox()).y < (await page.locator('#pv-modal-body .pv').first().boundingBox()).y);
 
   // ── 6. Modal content, variant 1 — chosen mode only ──
   const body1 = await page.locator('#pv-modal-body').textContent();
@@ -175,6 +199,11 @@ function ok(name, cond) {
   ok('v2: the 412-vs-1 contrast is on screen together',
     (await pairPt.textContent()).includes('412 entries') &&
     (await pairSum.textContent()).includes('1 entry'));
+  ok('v2: sample disclosure still shown in the side-by-side modal', await page.locator('.pv-sample').isVisible());
+  ok('v2: both registers marked as samples',
+    (await page.locator('#pv-modal-body .pv-head').count()) === 2 &&
+    (await page.locator('#pv-modal-body .pv-head').first().textContent()).includes('Sample') &&
+    (await page.locator('#pv-modal-body .pv-head').last().textContent()).includes('Sample'));
   const m2 = await modal.boundingBox();
   ok('v2: modal widens for the pair', m2.width > mBox.width);
   ok('v2: modal still fits the viewport', m2.x >= 0 && m2.x + m2.width <= 1280);
