@@ -5,9 +5,11 @@
  * Usage:  node scripts/verify-sync-mode.cjs [url]
  * Default target is the local file; pass the published URL to check the deployed copy.
  *
- * Rule this file exists to honour (AGENTS.md): when the question is "can the user still
- * interact with this?", assert isVisible() / hittability — never element state. An
- * isChecked() on a radio inside a hidden card passes while the UI is unusable.
+ * Two standing rules this file enforces:
+ *  - Liveness, not state (AGENTS.md): when the question is "can the user still interact with
+ *    this?", assert isVisible() / hittability. isChecked() passes inside a closed panel.
+ *  - Modal padding (regression, 2026-09-14): the kit puts padding on .modal-header / .modal-body,
+ *    never on .modal itself. Bare children sit flush against the edge. Measured, not eyeballed.
  */
 const { chromium } = require('playwright');
 const path = require('path');
@@ -30,6 +32,8 @@ function ok(name, cond) {
   const h1 = page.locator('.ob-h1');
   const cardPt = page.locator('#mode-pt');
   const cardSum = page.locator('#mode-sum');
+  const modalBg = page.locator('#pv-modal-bg');
+  const modal = page.locator('#pv-modal');
 
   // ── 1. Opens on the work, no intro screen, switcher first and full width ──
   ok('switcher visible', await sw.isVisible());
@@ -39,183 +43,202 @@ function ok(name, cond) {
   ok('switcher is first element in body',
     await page.evaluate(() => document.body.firstElementChild.classList.contains('variant-switch')));
   const swBox = await sw.boundingBox();
-  ok('switcher spans the viewport width', swBox.width >= 1280 - 1 && swBox.x === 0);
-  const h1Box = await h1.boundingBox();
-  ok('switcher sits above the page content', swBox.y + swBox.height <= h1Box.y);
+  ok('switcher spans the viewport width', swBox.width >= 1279 && swBox.x === 0);
+  ok('switcher sits above the page content', swBox.y + swBox.height <= (await h1.boundingBox()).y);
   ok('no chevron band / stepper on this step',
     (await page.locator('text=Organize').count()) === 0);
   ok('UI kit is the canonical linked stylesheet',
     await page.evaluate(() => !!document.querySelector(
       'link[href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css"]')));
   ok('both mode cards visible', await cardPt.isVisible() && await cardSum.isVisible());
+  ok('modal is closed on load', !(await modalBg.isVisible()));
 
-  // ── 2. Preview variant 1 — inline, BOTH visible at once ──
-  const inPt = page.locator('#pv-inline-pt');
-  const inSum = page.locator('#pv-inline-sum');
-  ok('v1: per-transaction preview visible', await inPt.isVisible());
-  ok('v1: summary preview visible', await inSum.isVisible());
-  ok('v1: both previews on screen simultaneously',
-    await inPt.isVisible() && await inSum.isVisible());
-  const ptBox = await inPt.boundingBox(), sumBox = await inSum.boundingBox();
-  ok('v1: previews sit side by side, not stacked', Math.abs(ptBox.y - sumBox.y) < 120);
-  ok('v1: per-transaction preview shows a customer name',
-    (await inPt.textContent()).includes('Amelia Hart'));
-  ok('v1: summary preview shows one journal entry',
-    (await inSum.textContent()).includes('Journal Entry'));
-  ok('v1: the 412 / 1 contrast is legible in the previews',
-    (await inPt.textContent()).includes('412 entries') &&
-    (await inSum.textContent()).includes('1 entry'));
-  ok('v1: modal trigger hidden', !(await page.locator('#mode-pt .pv-btn').isVisible()));
-  ok('v1: big-tabs panel hidden', !(await page.locator('#pv-panel').isVisible()));
+  // ── 2. Card body — three lines, each with a tick, plus the downside ──
+  ok('three lines per card',
+    (await page.locator('#mode-pt .mode-lines li').count()) === 3 &&
+    (await page.locator('#mode-sum .mode-lines li').count()) === 3);
+  ok('lines are visible on both cards',
+    await page.locator('#mode-pt .mode-lines').isVisible() &&
+    await page.locator('#mode-sum .mode-lines').isVisible());
+  const tick = await page.evaluate(() => {
+    const li = document.querySelector('#mode-pt .mode-lines li');
+    const cs = getComputedStyle(li, '::before');
+    return { content: cs.content, color: cs.color };
+  });
+  ok('each line carries a tick marker', tick.content.includes('✓'));
+  // kit token --color-green is #1F8940 → rgb(31, 137, 64); assert green dominance, not a literal
+  const tickRgb = tick.color.match(/\d+/g).map(Number);
+  ok('the tick is the kit green, not the body colour',
+    tickRgb[1] > tickRgb[0] && tickRgb[1] > tickRgb[2]);
+  ok('downside line visible on both cards',
+    await page.locator('#mode-pt .mode-down').isVisible() &&
+    await page.locator('#mode-sum .mode-down').isVisible());
+  ok('per-transaction downside is the row count',
+    (await page.locator('#mode-pt .mode-down').textContent()).includes('412 entries'));
+  ok('summary downside is the missing detail',
+    (await page.locator('#mode-sum .mode-down').textContent()).includes('stay in Synder'));
+  ok('no six-tick list left behind', (await page.locator('.mode-ticks').count()) === 0);
 
-  // journal-entry lines must actually add up to the deposit
-  const sums = await inSum.evaluate(el => {
-    const num = t => parseFloat(t.replace(/[−,]/g, m => m === '−' ? '-' : '').replace(/,/g, ''));
-    const rows = [...el.querySelectorAll('tr')];
+  // ── 3. Permanence — one grey line under the cards, not a yellow warning ──
+  const perm = page.locator('.perm-under');
+  ok('permanence line visible', await perm.isVisible());
+  ok('permanence sits below both cards',
+    (await perm.boundingBox()).y > (await cardSum.boundingBox()).y + (await cardSum.boundingBox()).height - 1);
+  ok('permanence states the escape hatch',
+    (await perm.textContent()).includes('create another organization'));
+  ok('permanence is grey, not a warning colour', await perm.evaluate(el => {
+    const c = getComputedStyle(el).color;
+    const m = c.match(/\d+/g).map(Number);
+    return Math.abs(m[0] - m[1]) < 40 && Math.abs(m[1] - m[2]) < 60 && m[0] < 160;
+  }));
+  ok('no yellow alert on the page', (await page.locator('.alert-warning').count()) === 0);
+  ok('permanence appears once only', (await page.locator('.perm-under').count()) === 1);
+
+  // ── 4. Preview is button + modal; nothing inline ──
+  const btnPt = page.locator('#mode-pt .pv-btn button');
+  const btnSum = page.locator('#mode-sum .pv-btn button');
+  ok('both cards offer a preview button', await btnPt.isVisible() && await btnSum.isVisible());
+  ok('no inline preview left in the cards', (await page.locator('.mode .pv').count()) === 0);
+  ok('no big-tabs panel left on the page', (await page.locator('#pv-panel').count()) === 0);
+
+  // ── 5. Modal padding — the 2026-09-14 regression, measured ──
+  await btnPt.click();
+  ok('modal opens', await modalBg.isVisible());
+  const mBox = await modal.boundingBox();
+  const titleBox = await page.locator('#pv-modal-title').boundingBox();
+  const pvBox = await page.locator('#pv-modal-body .pv').boundingBox();
+  const footBox = await page.locator('.modal-foot').boundingBox();
+  ok('title has left padding', titleBox.x - mBox.x >= 20);
+  ok('preview has left padding', pvBox.x - mBox.x >= 20);
+  ok('preview has right padding', (mBox.x + mBox.width) - (pvBox.x + pvBox.width) >= 20);
+  ok('preview is not flush against the header', pvBox.y - (titleBox.y + titleBox.height) >= 12);
+  ok('footer is not flush against the preview', footBox.y - (pvBox.y + pvBox.height) >= 12);
+  ok('modal fits inside the viewport', mBox.x >= 0 && mBox.x + mBox.width <= 1280);
+  ok('header rule separates title from body', await page.evaluate(() => {
+    const cs = getComputedStyle(document.querySelector('.modal-title-row'));
+    return parseFloat(cs.borderBottomWidth) >= 1;
+  }));
+
+  // ── 6. Modal content, variant 1 — chosen mode only ──
+  const body1 = await page.locator('#pv-modal-body').textContent();
+  ok('v1: modal names the mode it is showing',
+    (await page.locator('#pv-modal-mode').textContent()).includes('Per transaction'));
+  ok('v1: register shows customer names', body1.includes('Amelia Hart'));
+  ok('v1: register has column headers',
+    (await page.locator('#pv-modal-body th').count()) === 4);
+  ok('v1: register names the QuickBooks accounts', body1.includes('Shopify Sales') && body1.includes('Merchant fees'));
+  ok('v1: eight sample rows shown', (await page.locator('#pv-modal-body tbody tr').count()) === 8);
+  ok('v1: footer reconciles the sample to the real count',
+    body1.includes('412 entries') && body1.includes('404 more'));
+  ok('v1: a note explains the consequence, not just the rows',
+    (await page.locator('#pv-modal-body .pv-note').textContent()).includes('412 entries to one deposit line'));
+  ok('v1: the other mode is NOT in the modal — the cost of this option',
+    !body1.includes('Journal Entry'));
+  await page.keyboard.press('Escape');
+  ok('v1: Escape closes', !(await modalBg.isVisible()));
+
+  await btnSum.click();
+  const body1s = await page.locator('#pv-modal-body').textContent();
+  ok('v1: summary modal shows the journal entry', body1s.includes('Journal Entry'));
+  ok('v1: summary lines name real QuickBooks accounts',
+    body1s.includes('Sales of Product Income') && body1s.includes('Sales Tax Payable'));
+  ok('v1: summary footer states 1 entry for the same 412 orders',
+    body1s.includes('1 entry') && body1s.includes('412 orders'));
+  // the journal-entry lines must actually add up to the deposit
+  const sums = await page.locator('#pv-modal-body .pv').evaluate(el => {
+    const num = t => parseFloat(t.replace(/−/g, '-').replace(/,/g, ''));
+    const rows = [...el.querySelectorAll('tbody tr')];
     const head = num(rows[0].querySelector('.c-amt').textContent.trim());
     const lines = rows.slice(1).map(r => num(r.querySelector('.c-amt').textContent.trim()));
     return { head, total: lines.reduce((a, b) => a + b, 0) };
   });
-  ok('v1: journal-entry lines sum to the deposit',
-    Math.abs(sums.head - sums.total) < 0.005);
-
-  // ── 3. Preview variant 2 — button + modal ──
-  await page.click('#pv-2');
-  ok('v2: inline previews gone', !(await inPt.isVisible()) && !(await inSum.isVisible()));
-  const btnPt = page.locator('#mode-pt .pv-btn button');
-  const btnSum = page.locator('#mode-sum .pv-btn button');
-  ok('v2: both cards offer a preview button',
-    await btnPt.isVisible() && await btnSum.isVisible());
-  await btnPt.click();
-  const modal = page.locator('#pv-modal-bg');
-  ok('v2: modal opens', await modal.isVisible());
-  ok('v2: modal carries the per-transaction register',
-    (await page.locator('#pv-modal-body').textContent()).includes('Amelia Hart'));
-  ok('v2: the other mode is NOT visible while the modal is open — the cost of this option',
-    !(await inSum.isVisible()));
-  await page.keyboard.press('Escape');
-  ok('v2: Escape closes the modal', !(await modal.isVisible()));
-  ok('v2: cards still interactive after closing',
+  ok('v1: journal-entry lines sum to the deposit', Math.abs(sums.head - sums.total) < 0.005);
+  await page.locator('#pv-modal .close-x').click();
+  ok('v1: close button works', !(await modalBg.isVisible()));
+  ok('v1: cards still interactive after closing',
     await cardPt.isVisible() && await btnSum.isVisible());
-  await btnSum.click();
-  ok('v2: summary modal opens with the journal entry',
-    (await page.locator('#pv-modal-body').textContent()).includes('Journal Entry'));
-  await page.locator('#pv-modal-bg .close-x').click();
-  ok('v2: close button works', !(await modal.isVisible()));
-  ok('v2: opening a preview did not change the selected mode',
+  ok('v1: opening a preview did not change the selected mode',
     await page.locator('#mode-pt.sel').isVisible());
 
-  // ── 4. Preview variant 3 — big tabs ──
-  await page.click('#pv-3');
-  const panel = page.locator('#pv-panel');
-  ok('v3: panel visible', await panel.isVisible());
-  ok('v3: inline previews hidden', !(await inPt.isVisible()));
-  ok('v3: buttons hidden', !(await btnPt.isVisible()));
-  ok('v3: opens on per-transaction', await page.locator('#tab-pt.active').isVisible());
-  ok('v3: panel renders the register rows',
-    (await page.locator('#pv-panel-body').textContent()).includes('Amelia Hart'));
-  await page.click('#tab-sum');
-  ok('v3: summary tab is live after clicking', await page.locator('#tab-sum.active').isVisible());
-  ok('v3: panel swapped to the journal entry',
-    (await page.locator('#pv-panel-body').textContent()).includes('Journal Entry'));
-  ok('v3: per-transaction now invisible — one mode at a time',
-    !(await page.locator('#pv-panel-body').textContent()).includes('Amelia Hart'));
-  ok('v3: both tabs still clickable', await page.locator('#tab-pt').isVisible());
+  // ── 7. Modal content, variant 2 — both modes side by side ──
+  await page.click('#md-2');
+  await btnPt.click();
+  const pairPt = page.locator('#pair-pt');
+  const pairSum = page.locator('#pair-sum');
+  ok('v2: both registers visible at once',
+    await pairPt.isVisible() && await pairSum.isVisible());
+  const pBox = await pairPt.boundingBox(), sBox = await pairSum.boundingBox();
+  ok('v2: they sit side by side, not stacked', Math.abs(pBox.y - sBox.y) < 40 && sBox.x > pBox.x);
+  ok('v2: both columns labelled',
+    (await pairPt.locator('h3').textContent()).includes('Per transaction') &&
+    (await pairSum.locator('h3').textContent()).includes('Summary'));
+  ok('v2: the 412-vs-1 contrast is on screen together',
+    (await pairPt.textContent()).includes('412 entries') &&
+    (await pairSum.textContent()).includes('1 entry'));
+  const m2 = await modal.boundingBox();
+  ok('v2: modal widens for the pair', m2.width > mBox.width);
+  ok('v2: modal still fits the viewport', m2.x >= 0 && m2.x + m2.width <= 1280);
+  const pvBox2 = await pairPt.locator('.pv').boundingBox();
+  ok('v2: left padding survives the wider layout', pvBox2.x - m2.x >= 20);
+  const pvBox2r = await pairSum.locator('.pv').boundingBox();
+  ok('v2: right padding survives the wider layout',
+    (m2.x + m2.width) - (pvBox2r.x + pvBox2r.width) >= 20);
+  ok('v2: opening from the summary card shows the same pair', await (async () => {
+    await page.keyboard.press('Escape');
+    await btnSum.click();
+    return await page.locator('#pair-pt').isVisible() && await page.locator('#pair-sum').isVisible();
+  })());
+  await page.keyboard.press('Escape');
+  ok('v2: closes cleanly', !(await modalBg.isVisible()));
 
-  // ── 5. Card body variants ──
-  await page.click('#pv-1');
-  await page.click('#cb-1');
-  ok('cb1: plain lines visible', await page.locator('#mode-pt .mode-lines').isVisible());
-  ok('cb1: downside line visible on both cards',
-    await page.locator('#mode-pt .mode-down').isVisible() &&
-    await page.locator('#mode-sum .mode-down').isVisible());
-  ok('cb1: exactly three lines per card',
-    (await page.locator('#mode-pt .mode-lines li').count()) === 3 &&
-    (await page.locator('#mode-sum .mode-lines li').count()) === 3);
-  ok('cb1: ticks hidden', !(await page.locator('#mode-pt .mode-ticks').isVisible()));
-  ok('cb1: per-transaction downside is the row count',
-    (await page.locator('#mode-pt .mode-down').textContent()).includes('412 entries'));
-  ok('cb1: summary downside is the missing detail',
-    (await page.locator('#mode-sum .mode-down').textContent()).includes('stay in Synder'));
-
-  await page.click('#cb-2');
-  ok('cb2: ticks visible', await page.locator('#mode-pt .mode-ticks').isVisible());
-  ok('cb2: six ticks per card',
-    (await page.locator('#mode-pt .mode-ticks li').count()) === 6 &&
-    (await page.locator('#mode-sum .mode-ticks li').count()) === 6);
-  ok('cb2: lines and downside hidden',
-    !(await page.locator('#mode-pt .mode-lines').isVisible()) &&
-    !(await page.locator('#mode-pt .mode-down').isVisible()));
-  ok('cb2: previews unaffected by the card-body switch', await inPt.isVisible());
-
-  // ── 6. Permanence variants — mutually exclusive, one claim on screen at a time ──
-  await page.click('#pm-1');
-  ok('pm1: line under the cards visible', await page.locator('.perm-under').isVisible());
-  ok('pm1: in-card copy hidden', !(await page.locator('.perm-in-card').isVisible()));
-  ok('pm1: old warning hidden', !(await page.locator('.perm-alert').isVisible()));
-  ok('pm1: escape hatch is stated, not just the restriction',
-    (await page.locator('.perm-under').textContent()).includes('create another organization'));
-
-  await page.click('#pm-2');
-  ok('pm2: copy inside the recommended card', await page.locator('#mode-pt .perm-in-card').isVisible());
-  ok('pm2: under-cards line hidden', !(await page.locator('.perm-under').isVisible()));
-  ok('pm2: summary card carries no permanence copy',
-    (await page.locator('#mode-sum .perm-in-card').count()) === 0);
-
-  await page.click('#pm-3');
-  ok('pm3: current warning visible', await page.locator('.perm-alert').isVisible());
-  ok('pm3: the other two hidden',
-    !(await page.locator('.perm-under').isVisible()) &&
-    !(await page.locator('.perm-in-card').isVisible()));
-
-  // ── 7. The three dimensions are independent ──
-  await page.click('#pv-2'); await page.click('#cb-2'); await page.click('#pm-1');
-  ok('combo: preview=2 holds', await btnPt.isVisible() && !(await inPt.isVisible()));
-  ok('combo: body=2 holds', await page.locator('#mode-pt .mode-ticks').isVisible());
-  ok('combo: permanence=1 holds', await page.locator('.perm-under').isVisible());
-  ok('combo: all three switch groups still operable',
-    await page.locator('#pv-1').isVisible() &&
-    await page.locator('#cb-1').isVisible() &&
-    await page.locator('#pm-3').isVisible());
+  await page.click('#md-1');
+  ok('switching back to v1 restores the single register', await (async () => {
+    await btnPt.click();
+    const single = (await page.locator('#pv-modal-body').textContent()).includes('Amelia Hart') &&
+                   (await page.locator('#pair-sum').count()) === 0;
+    await page.keyboard.press('Escape');
+    return single;
+  })());
 
   // ── 8. Choosing a mode — liveness, not just state ──
-  await page.click('#pv-1'); await page.click('#cb-1');
   await cardSum.click();
   ok('select: summary card marked selected', await page.locator('#mode-sum.sel').isVisible());
   ok('select: per-transaction card still visible and clickable',
-    await cardPt.isVisible() && await page.locator('#mode-pt .mode-radio').isVisible());
-  ok('select: both previews survive the selection', await inPt.isVisible() && await inSum.isVisible());
+    await cardPt.isVisible() && await btnPt.isVisible());
   await cardPt.click();
   ok('select: switching back works', await page.locator('#mode-pt.sel').isVisible());
-  ok('select: only one card selected at a time',
-    (await page.locator('.mode.sel').count()) === 1);
+  ok('select: only one card selected at a time', (await page.locator('.mode.sel').count()) === 1);
+  ok('select: permanence line survives every selection', await perm.isVisible());
 
   // ── 9. Keyboard / a11y ──
   await page.locator('#mode-pt input').focus();
   await page.keyboard.press('ArrowDown');
   ok('a11y: arrow key moves the radio selection', await page.locator('#mode-sum.sel').isVisible());
-  ok('a11y: focused card shows a visible focus ring',
-    await page.evaluate(() => {
-      const c = document.querySelector('#mode-sum');
-      return getComputedStyle(c).outlineStyle !== 'none' || c.matches(':focus-within');
-    }));
-  await page.locator('#pv-2').focus();
-  ok('a11y: switcher buttons are focusable',
-    await page.evaluate(() => document.activeElement.id === 'pv-2'));
-  ok('a11y: modal is labelled',
-    await page.evaluate(() => {
-      const m = document.querySelector('#pv-modal-bg');
-      return m.getAttribute('role') === 'dialog' && !!m.getAttribute('aria-labelledby');
-    }));
+  await btnPt.click();
+  ok('a11y: focus moves into the modal on open',
+    await page.evaluate(() => document.querySelector('#pv-modal').contains(document.activeElement)));
+  ok('a11y: modal is a labelled dialog', await page.evaluate(() => {
+    const m = document.querySelector('#pv-modal-bg');
+    return m.getAttribute('role') === 'dialog' && m.getAttribute('aria-modal') === 'true' &&
+           !!document.getElementById(m.getAttribute('aria-labelledby'));
+  }));
+  ok('a11y: close control has an accessible name',
+    (await page.locator('#pv-modal .close-x').getAttribute('aria-label')) === 'Close');
+  await page.keyboard.press('Escape');
+  ok('a11y: switcher buttons are focusable', await (async () => {
+    await page.locator('#md-2').focus();
+    return await page.evaluate(() => document.activeElement.id === 'md-2');
+  })());
+  await page.click('#md-1');
 
   // ── 10. Copy consistency ──
-  const body = await page.locator('.ob-wrap').textContent();
+  const text = await page.locator('.ob-wrap').textContent();
   ok('copy: the same 412 is used on both sides of the comparison',
-    (body.match(/412/g) || []).length >= 2);
+    (text.match(/412/g) || []).length >= 2);
   ok('copy: no jargon "journal entries that summarize" left from the old card',
-    !body.includes('summarize all transactions together'));
-  ok('copy: sample data is generic Shopify, not a named real merchant',
-    body.includes('Shopify') && !body.includes('Dasha Test Company'));
+    !text.includes('summarize all transactions together'));
+  ok('copy: sample data is generic Shopify, not a real connected merchant',
+    text.includes('Shopify') && !text.includes('Dasha Test Company'));
 
   await browser.close();
 
