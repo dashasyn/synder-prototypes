@@ -1561,9 +1561,8 @@ body{
         <div class="date-controls">
           <div class="sel">
             <select id="f-per">
-              <option value="aug" selected>August 2026 (Aug 1 – 31)</option>
-              <option value="jul">July 2026 (Jul 1 – 31)</option>
-              <option value="q2">Q2 2026 (Apr 1 – Jun 30)</option>
+              <option value="last_month" selected>Last month</option>
+              <option value="last_quarter">Last quarter</option>
               <option value="custom">Custom</option>
             </select>
           </div>
@@ -1573,7 +1572,7 @@ body{
             <input type="date" id="d-to" value="2026-08-31" aria-label="End date">
           </div>
         </div>
-        <p class="hint" id="h-per">Your last full month — the usual close period</p>
+        <p class="hint" id="h-per">Aug 1–31, 2026 — your last full month, the usual close period</p>
       </div>
     </div>
 
@@ -1713,16 +1712,15 @@ body{
     }
   };
   var PERIODS = {
-    aug:{from:'2026-08-01', to:'2026-08-31'},
-    jul:{from:'2026-07-01', to:'2026-07-31'},
-    q2:{from:'2026-04-01', to:'2026-06-30'},
-    custom:{from:null, to:null}
+    last_month:{from:'2026-08-01', to:'2026-08-31', range:'Aug 1–31, 2026', hint:'your last full month, the usual close period'},
+    last_quarter:{from:'2026-04-01', to:'2026-06-30', range:'Apr 1–Jun 30, 2026', hint:'previous calendar quarter'},
+    custom:{from:null, to:null, range:'', hint:''}
   };
 
   var state = {
     integration: 'stripe',
     account: '',
-    period: 'aug',
+    period: 'last_month',
     mode: 'auto', // auto | manual
     booksMode: 'Automated',
     intMode: 'Automated',
@@ -1820,9 +1818,16 @@ body{
     document.getElementById('dates').classList.toggle('on', state.period === 'custom');
     var hPer = document.getElementById('h-per');
     if (hPer) {
-      hPer.textContent = state.period === 'aug'
-        ? 'Your last full month — the usual close period'
-        : '';
+      var pMeta = PERIODS[state.period] || {};
+      if (state.period === 'custom') {
+        var f = document.getElementById('d-from').value;
+        var to = document.getElementById('d-to').value;
+        hPer.textContent = (f && to) ? (f + ' – ' + to) : 'Pick start and end dates';
+      } else if (pMeta.range) {
+        hPer.textContent = pMeta.hint ? (pMeta.range + ' — ' + pMeta.hint) : pMeta.range;
+      } else {
+        hPer.textContent = '';
+      }
     }
     document.getElementById('h-int').textContent = 'Timezone: ' + i.tz;
 
@@ -1940,6 +1945,11 @@ body{
       document.getElementById('d-to').value = p.to;
     }
     render();
+  });
+  ['d-from','d-to'].forEach(function(id){
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('change', function(){ render(); });
   });
 
   document.getElementById('sources').addEventListener('change', function(e){
