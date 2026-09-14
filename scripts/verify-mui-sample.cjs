@@ -160,6 +160,49 @@ const near = (name, actual, expected, tol = 0.6) =>
   ok('no "Alle" option anywhere',
     (await page.$$eval('.option', els => els.filter(e => /^alle$/i.test(e.textContent.trim())).length)) === 0);
 
+  // ── Values measured off ETC's real product (2026-09-14 screenshots).
+  //    See scripts/sample-etc-screenshots.cjs for how each was derived. ──
+  const rgb = h => { const n = parseInt(h.slice(1), 16);
+    return `rgb(${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255})`; };
+
+  const bar = await page.$eval('.appbar', el => {
+    const s = getComputedStyle(el);
+    return { bg: s.backgroundColor, shadow: s.boxShadow,
+             h: el.getBoundingClientRect().height };
+  });
+  ok('AppBar is brand navy #1C2848, not MUI primary', bar.bg === rgb('#1C2848'), bar.bg);
+  ok('AppBar carries no elevation', bar.shadow === 'none', bar.shadow);
+  near('AppBar is a dense 48px toolbar, not 64px', bar.h, 48, 1);
+
+  const btnBg = await page.$eval('.btn-contained', el => getComputedStyle(el).backgroundColor);
+  ok('primary is Material Blue 500 #2196F3, not MUI default #1976D2',
+    btnBg === rgb('#2196F3'), btnBg);
+
+  const paper = await page.$eval('.paper', el => {
+    const s = getComputedStyle(el);
+    return { shadow: s.boxShadow, border: s.borderTopWidth, color: s.borderTopColor };
+  });
+  ok('cards are outlined, not elevated (no shadow)', paper.shadow === 'none', paper.shadow);
+  ok('card hairline is 1px #E7E7E7',
+    paper.border === '1px' && paper.color === rgb('#E7E7E7'), paper);
+
+  const thBg = await page.$eval('.mui-table thead th', el => getComputedStyle(el).backgroundColor);
+  ok('table head carries the #F4F4F4 band', thBg === rgb('#F4F4F4'), thBg);
+
+  // The old primary may still appear in comments/prose saying what this is NOT,
+  // so assert on computed style: no element may actually render #1976D2.
+  const stale = await page.evaluate(old => {
+    const hits = [];
+    for (const el of document.querySelectorAll('*')) {
+      const s = getComputedStyle(el);
+      for (const p of ['color', 'backgroundColor', 'borderTopColor', 'borderBottomColor']) {
+        if (s[p] === old) { hits.push(`${el.tagName}.${el.className} ${p}`); break; }
+      }
+    }
+    return hits;
+  }, rgb('#1976D2'));
+  ok('no element still renders the old MUI primary #1976D2', stale.length === 0, stale);
+
   ok('no console errors', errors.length === 0, errors);
 
   await browser.close();
