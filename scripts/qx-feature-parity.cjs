@@ -109,6 +109,49 @@ const uniq = a => [...new Set(a.filter(Boolean))];
     react[view] = await affordances(r);
     await back();
   }
+  // the chart / mask / rohdaten screens are reached through a row action
+  await openGroup('punctuality');
+  await r.click('#punct-table tbody tr:first-child button[aria-label="chart"]').catch(() => {});
+  await r.waitForTimeout(600);
+  react['chart-punct'] = await affordances(r);
+  await r.evaluate(() => { const a = document.querySelector('.MuiBreadcrumbs-root a'); if (a) a.click(); });
+  await r.waitForTimeout(500);
+
+  await openGroup('trip_failures');
+  await r.click('#fa-table tbody tr:first-child button[aria-label="mask"]').catch(() => {});
+  await r.waitForTimeout(600);
+  react['ausfallmaske'] = await affordances(r);
+  await r.evaluate(() => { const a = document.querySelector('.MuiBreadcrumbs-root a'); if (a) a.click(); });
+  await r.waitForTimeout(500);
+
+  await openGroup('trip_failures');
+  await r.click('#fa-table tbody tr:first-child button[aria-label="chart"]').catch(() => {});
+  await r.waitForTimeout(600);
+  react['chart-fa'] = await affordances(r);
+  await r.evaluate(() => { const a = document.querySelector('.MuiBreadcrumbs-root a'); if (a) a.click(); });
+  await r.waitForTimeout(500);
+
+  await openGroup('connection');
+  await r.click('#rpt-table tbody tr:first-child button[aria-label="chart"]').catch(() => {});
+  await r.waitForTimeout(600);
+  react['chart-connection'] = await affordances(r);
+  await r.evaluate(() => { const a = document.querySelector('.MuiBreadcrumbs-root a'); if (a) a.click(); });
+  await r.waitForTimeout(500);
+
+  // Raw Data Export config is reached from New evaluation, not from a row —
+  // a row in the list is a FINISHED export and opens the table.
+  await r.click('#new-eval-btn');
+  await r.waitForTimeout(600);
+  await r.click('#eval-type');
+  await r.waitForTimeout(300);
+  await r.evaluate(() => {
+    const li = [...document.querySelectorAll('.MuiMenu-list li')].find(x => /Raw Data|Rohdaten/.test(x.textContent));
+    if (li) li.click();
+  });
+  await r.waitForTimeout(700);
+  react['rohdaten'] = await affordances(r);
+  await back();
+
   await r.click('#new-eval-btn');
   await r.waitForTimeout(600);
   react['wizard'] = await affordances(r);

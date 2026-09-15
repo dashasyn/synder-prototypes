@@ -376,6 +376,49 @@ const fs = require('fs');
     (await page.$$eval('#raw-table tbody tr', r => r.length)) === 25);
   await goBack();
 
+  // ── the views reached through a row action ───────────────────
+  await openByName(await nameOf('punctuality'));
+  await page.click('#punct-table tbody tr:first-child button[aria-label="chart"]');
+  await page.waitForTimeout(700);
+  ok('a punctuality row opens a chart', (await page.$$('#chart-svg')).length === 1);
+  ok('the chart draws bars', (await page.$$eval('#chart-svg rect', r => r.length)) > 0);
+  ok('the chart has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
+  await goBack();
+
+  await openByName(await nameOf('trip_failures'));
+  await page.click('#fa-table tbody tr:first-child button[aria-label="mask"]');
+  await page.waitForTimeout(700);
+  ok('a trip-failures row opens the Ausfallmaske', (await page.$$('#fa-mask-causes')).length === 1);
+  ok('the mask has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
+  await goBack();
+
+  // Raw Data Export config comes from New evaluation. A row in the list is a
+  // FINISHED export and must open the table — an earlier routing sent every
+  // raw_data row to the config and made the table unreachable.
+  await openByName(await nameOf('raw_data'));
+  ok('a raw-data row opens the table, not the config',
+    (await page.$$('#raw-table')).length === 1 && (await page.$$('#rd-run-btn')).length === 0);
+  await goBack();
+
+  await page.click('#new-eval-btn');
+  await page.waitForTimeout(600);
+  await page.click('#eval-type');
+  await page.waitForTimeout(300);
+  await page.evaluate(() => {
+    const li = [...document.querySelectorAll('.MuiMenu-list li')].find(x => /Raw Data|Rohdaten/.test(x.textContent));
+    if (li) li.click();
+  });
+  await page.waitForTimeout(700);
+  ok('choosing Raw Data Export opens its config form',
+    (await page.$$('#rd-run-btn')).length === 1);
+  ok('the threshold is required and blocks the run',
+    (await page.$$('#rd-threshold')).length === 1);
+  await page.click('#rd-run-btn');
+  await page.waitForTimeout(400);
+  ok('running without a threshold shows the error',
+    (await page.$$('#rd-threshold-error')).length === 1);
+  ok('the config has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
+
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
 
   await browser.close();

@@ -309,7 +309,12 @@ function NewEvaluation({ go }) {
               <${FormControl} required sx=${{ flex: 1 }}>
                 <${InputLabel}>${t('sel_eval_type')}<//>
                 <${Select} id="eval-type" value=${type} label=${t('sel_eval_type')}
-                           onChange=${e => setType(e.target.value)}>
+                           onChange=${e => {
+                             // Raw Data Export has its own config form rather
+                             // than the period/scope cards — same as the vanilla.
+                             if (e.target.value === 'raw_data') { go('rohdaten'); return; }
+                             setType(e.target.value);
+                           }}>
                   ${TYPE_KEYS.map(k => html`<${MenuItem} key=${k} value=${k}>${t('type_' + k)}<//>`)}
                 <//>
               <//>
@@ -382,7 +387,7 @@ function fmtPct(v) {
   return (v === null || v === undefined) ? '—' : v.toFixed(2) + '%';
 }
 
-function PunctRow({ node, depth, t }) {
+function PunctRow({ node, depth, t, onChart }) {
   const [open, setOpen] = useState(depth === 0);
   const kids = node.children || [];
   const pad = 16 + depth * 20;
@@ -411,15 +416,14 @@ function PunctRow({ node, depth, t }) {
         <//>
         <${TableCell} align="right">
           <${Tooltip} title=${t('rpt_action_chart')}>
-            <${IconButton} aria-label="chart"><${Icon}>bar_chart<//><//>
-          <//>
-          <${Tooltip} title=${t('rpt_action_raw')}>
-            <${IconButton} aria-label="raw"><${Icon}>table_view<//><//>
+            <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(node)}>
+              <${Icon}>bar_chart<//>
+            <//>
           <//>
         <//>
       <//>
       ${open && kids.map((k, i) =>
-        html`<${PunctRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t} />`)}
+        html`<${PunctRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t} onChart=${onChart} />`)}
     <//>`;
 }
 
@@ -486,7 +490,15 @@ function ReportPunctuality({ go, row }) {
               <//>
             <//>
             <${TableBody}>
-              ${tree.map((n, i) => html`<${PunctRow} key=${n.label + i} node=${n} depth=${0} t=${t} />`)}
+              ${tree.map((n, i) => html`
+                <${PunctRow} key=${n.label + i} node=${n} depth=${0} t=${t}
+                  onChart=${node => go('chart', row, { chart: {
+                    title: node.label,
+                    backLabel: t('type_punctuality'),
+                    format: v => v.toFixed(1) + '%',
+                    items: (node.children && node.children.length ? node.children : [node])
+                      .map(c => ({ label: c.label, value: c.agg.wert || 0 })),
+                  } })} />`)}
               <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
                 <${TableCell}>${t('rpt_gesamt')}<//>
                 <${TableCell} align="right">${fmtInt(total.soll)}<//>
@@ -509,7 +521,7 @@ function ReportPunctuality({ go, row }) {
    over RPT_RECORDS, both from data.js. The value columns come from
    RPT_DATA.gesamt's own length, so adding a metric upstream adds a column
    here rather than silently dropping one. */
-function RptRow({ node, depth, cols }) {
+function RptRow({ node, depth, cols, onChart }) {
   const [open, setOpen] = useState(depth === 0);
   const kids = node.children || [];
   return html`
@@ -526,8 +538,14 @@ function RptRow({ node, depth, cols }) {
           <${TableCell} key=${i} align="right">
             ${node.v[i] === null || node.v[i] === undefined ? '—' : node.v[i].toFixed(2) + '%'}
           <//>`)}
+        <${TableCell} align="right">
+          <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(node)}>
+            <${Icon}>bar_chart<//>
+          <//>
+        <//>
       <//>
-      ${open && kids.map((k, i) => html`<${RptRow} key=${k.label + i} node=${k} depth=${depth + 1} cols=${cols} />`)}
+      ${open && kids.map((k, i) => html`
+        <${RptRow} key=${k.label + i} node=${k} depth=${depth + 1} cols=${cols} onChart=${onChart} />`)}
     <//>`;
 }
 
@@ -573,12 +591,21 @@ function ReportConnection({ go, row }) {
               <${TableCell}>${t('rpt_col_name')}<//>
               ${cols.map((_, i) => html`<${TableCell} key=${i} align="right">
                 ${i === 0 ? t('rpt_col_apcq') : t('rpt_col_punct_zub') + ' ' + i}<//>`)}
+              <${TableCell} align="right">${t('col_actions')}<//>
             <//><//>
             <${TableBody}>
-              ${tree.map((n, i) => html`<${RptRow} key=${n.label + i} node=${n} depth=${0} cols=${cols} />`)}
+              ${tree.map((n, i) => html`
+                <${RptRow} key=${n.label + i} node=${n} depth=${0} cols=${cols}
+                  onChart=${node => go('chart', row, { chart: {
+                    title: node.label, backLabel: t('type_connection'),
+                    format: v => v.toFixed(1) + '%',
+                    items: (node.children && node.children.length ? node.children : [node])
+                      .map(c => ({ label: c.label, value: c.v[0] || 0 })),
+                  } })} />`)}
               <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
                 <${TableCell}>${t('rpt_gesamt')}<//>
                 ${cols.map((v, i) => html`<${TableCell} key=${i} align="right">${v === null ? '—' : v.toFixed(2) + '%'}<//>`)}
+                <${TableCell} />
               <//>
             <//>
           <//>
@@ -591,7 +618,7 @@ function ReportConnection({ go, row }) {
    Each TU carries six metrics and a list of Betriebstage. The failure-rate
    colouring uses faPct(), extracted, so the thresholds match the vanilla
    (0 / <2 / 2–5 / 5–50 / 50+) rather than being re-invented here. */
-function FaRow({ tu, t }) {
+function FaRow({ tu, t, onMask, onChart }) {
   const [open, setOpen] = useState(false);
   const days = tu.tage || [];
   const rate = v => {
@@ -616,8 +643,15 @@ function FaRow({ tu, t }) {
         <${TableCell} align="right">${faNum(tu.v[2])}<//>
         <${TableCell} align="right">${faNum(tu.v[3])}<//>
         <${TableCell} align="right">
+          <${Tooltip} title=${t('rpt_action_chart')}>
+            <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(tu)}>
+              <${Icon}>bar_chart<//>
+            <//>
+          <//>
           <${Tooltip} title=${t('fa_mask_title')}>
-            <${IconButton} aria-label="mask"><${Icon}>fact_check<//><//>
+            <${IconButton} aria-label="mask" onClick=${() => onMask && onMask(tu)}>
+              <${Icon}>fact_check<//>
+            <//>
           <//>
         <//>
       <//>
@@ -707,7 +741,14 @@ function ReportTripFailures({ go, row }) {
               <${TableCell} align="right">${t('col_actions')}<//>
             <//><//>
             <${TableBody}>
-              ${tus.map((tu, i) => html`<${FaRow} key=${tu.id + i} tu=${tu} t=${t} />`)}
+              ${tus.map((tu, i) => html`
+                <${FaRow} key=${tu.id + i} tu=${tu} t=${t}
+                  onMask=${x => go('mask', row, { tuId: x.id })}
+                  onChart=${x => go('chart', row, { chart: {
+                    title: x.label, backLabel: t('type_trip_failures'),
+                    format: v => faNum(Math.round(v)),
+                    items: (x.tage || []).map(d => ({ label: d.d, value: d.v[1] || 0 })),
+                  } })} />`)}
               <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
                 <${TableCell}>${t('fa_col_gesamt')}<//>
                 ${FA_DATA.gesamt.slice(0, 2).map((v, i) => html`<${TableCell} key=${i} align="right">${faNum(v)}<//>`)}
@@ -895,6 +936,174 @@ function RawDataTable({ go, row, rows, title }) {
     <//>`;
 }
 
+
+/* ── Chart view ───────────────────────────────────────────────────────
+   One component for all three chart screens. The vanilla draws these as
+   hand-built SVG; so does this, because a chart library would be a fourth
+   dependency for five bars. Values come from the same aggregates the
+   tables use, so a chart and its table can never disagree. */
+function BarChart({ items, max, format }) {
+  const H = 220, W = 900, pad = 48;
+  const bw = items.length ? (W - pad * 2) / items.length : 0;
+  const top = max || Math.max(1, ...items.map(i => i.value || 0));
+  return html`
+    <${Box} component="svg" viewBox=${`0 0 ${W} ${H + 60}`} id="chart-svg"
+            sx=${{ width: '100%', height: 'auto' }} role="img">
+      ${[0, .25, .5, .75, 1].map(f => html`
+        <${React.Fragment} key=${f}>
+          <line x1=${pad} x2=${W - pad} y1=${H - f * H + 20} y2=${H - f * H + 20}
+                stroke="#E7E7E7" strokeWidth="1" />
+          <text x=${pad - 8} y=${H - f * H + 24} textAnchor="end"
+                fontSize="11" fill="rgba(0,0,0,0.6)">${format(top * f)}</text>
+        <//>`)}
+      ${items.map((it, i) => {
+        const h = top ? ((it.value || 0) / top) * H : 0;
+        return html`
+          <${React.Fragment} key=${it.label + i}>
+            <rect x=${pad + i * bw + bw * 0.15} y=${H - h + 20}
+                  width=${bw * 0.7} height=${Math.max(0, h)} fill="#2196F3" rx="2">
+              <title>${it.label}: ${format(it.value)}</title>
+            </rect>
+            <text x=${pad + i * bw + bw / 2} y=${H + 38} textAnchor="middle"
+                  fontSize="11" fill="rgba(0,0,0,0.6)">
+              ${String(it.label).slice(0, 14)}
+            </text>
+          <//>`;
+      })}
+    <//>`;
+}
+
+function ChartView({ go, row, title, items, format, backLabel, onBack }) {
+  const { t } = useT();
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: backLabel, onClick: onBack },
+                  { label: t('rpt_action_chart') }]}
+        title=${title} subtitle=${t('rpt_action_chart')} />
+      <${Box} sx=${{ p: 3 }}>
+        <${Card}><${CardContent}>
+          ${items.length
+            ? html`<${BarChart} items=${items} format=${format} />`
+            : html`<${Alert} severity="info">${t('raw_no_match')}<//>`}
+        <//><//>
+      <//>
+    <//>`;
+}
+
+/* ── Screen: Rohdaten Export config ───────────────────────────────────
+   The export form: period, transport company, lines, stops, direction and
+   the punctuality threshold, then Run. The threshold is required — the
+   vanilla blocks the run without it, and that is the one validation this
+   form has, so it is reproduced rather than left as decoration. */
+function RohdatenConfig({ go, row }) {
+  const { t } = useT();
+  const [tu, setTu] = useState('');
+  const [threshold, setThreshold] = useState('');
+  const [dir, setDir] = useState('');
+  const [touched, setTouched] = useState(false);
+  const missing = touched && !threshold;
+
+  const THRESHOLDS = ['rd_thr_1', 'rd_thr_2', 'rd_thr_3', 'rd_thr_4', 'rd_thr_5'];
+
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_raw_data') }]}
+        title=${row ? row.name : t('type_raw_data')} subtitle=${t('type_raw_data')}
+        action=${html`<${Button} variant="contained" id="rd-run-btn"
+                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>play_arrow<//>`}
+                        onClick=${() => setTouched(true)}>${t('rd_run')}<//>`} />
+      <${Box} sx=${{ p: 3, maxWidth: 1100 }}>
+        <${Card} sx=${{ mb: 3 }}><${CardContent}>
+          <${Typography} variant="h6" gutterBottom>${t('rd_section_title')}<//>
+          <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
+            ${t('rd_section_subtitle')}
+          <//>
+          <${Stack} direction="row" spacing=${2} sx=${{ mb: 2 }}>
+            <${TextField} label=${t('label_from')} type="date" InputLabelProps=${{ shrink: true }} />
+            <${TextField} label=${t('label_to')} type="date" InputLabelProps=${{ shrink: true }} />
+          <//>
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+            <${FilterSelect} id="rd-tu" label=${t('filter_tu')} value=${tu}
+              onChange=${setTu} minWidth=${220}
+              options=${RD_TU.map(x => ({ value: String(x), label: String(x) }))} />
+            <${FilterSelect} id="rd-dir" label=${t('rd_step_directions')} value=${dir}
+              onChange=${setDir} minWidth=${220}
+              options=${[{ value: 'hin', label: t('rd_dir_hin') },
+                         { value: 'rueck', label: t('rd_dir_rueck') }]} />
+          <//>
+        <//><//>
+
+        <${Card}><${CardContent}>
+          <${Typography} variant="h6" gutterBottom>${t('rd_step_threshold')}<//>
+          <${FormControl} required error=${missing} sx=${{ minWidth: 320 }} id="rd-threshold">
+            <${InputLabel}>${t('rd_step_threshold')}<//>
+            <${Select} value=${threshold} label=${t('rd_step_threshold')}
+                       onChange=${e => setThreshold(e.target.value)}>
+              ${THRESHOLDS.map(k => html`<${MenuItem} key=${k} value=${k}>${t(k)}<//>`)}
+            <//>
+            ${missing && html`
+              <${Typography} variant="caption" color="error" id="rd-threshold-error"
+                             sx=${{ mt: .5, ml: 1.75 }}>${t('err_threshold_required')}<//>`}
+          <//>
+        <//><//>
+      <//>
+    <//>`;
+}
+
+/* ── Screen: Ausfallmaske (FA mask) ───────────────────────────────────
+   The per-TU failure breakdown: which causes account for the lost minutes.
+   FA_UBERSICHT_DATA carries the cause list with its own colours and
+   percentages, so the bars are the data's colours, not a palette I chose. */
+function Ausfallmaske({ go, row, tuId }) {
+  const { t } = useT();
+  const key = tuId && FA_UBERSICHT_DATA[tuId] ? tuId : 'GESAMT';
+  const d = FA_UBERSICHT_DATA[key] || { causes: [], totalMin: 0, ausMin: 0 };
+
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: t('type_trip_failures'), onClick: () => go('report', row) },
+                  { label: t('fa_mask_title') }]}
+        title=${t('fa_mask_title')} subtitle=${key} />
+      <${Box} sx=${{ p: 3, maxWidth: 1000 }}>
+        <${Card} sx=${{ mb: 3 }}><${CardContent}>
+          <${Stack} direction="row" spacing=${4}>
+            <${Box}>
+              <${Typography} variant="caption" color="text.secondary">${t('fa_col_fahrtzeit')}<//>
+              <${Typography} variant="h5">${fmtHM(d.totalMin)}<//>
+            <//>
+            <${Box}>
+              <${Typography} variant="caption" color="text.secondary">${t('fa_col_ausgefallen')}<//>
+              <${Typography} variant="h5" color="error.main">${fmtHM(d.ausMin)}<//>
+            <//>
+            <${Box}>
+              <${Typography} variant="caption" color="text.secondary">${t('fa_col_ausfallquote')}<//>
+              <${Typography} variant="h5">${faPct(d.ausMin, d.totalMin).toFixed(2)}%<//>
+            <//>
+          <//>
+        <//><//>
+        <${Card} id="fa-mask-causes"><${CardContent}>
+          <${Typography} variant="h6" gutterBottom>${t('fa_mask_title')}<//>
+          ${(d.causes || []).map((c, i) => html`
+            <${Box} key=${i} sx=${{ mb: 1.5 }}>
+              <${Stack} direction="row" justifyContent="space-between" sx=${{ mb: .5 }}>
+                <${Typography} variant="body2">${c.label}<//>
+                <${Typography} variant="body2" color="text.secondary">${c.pct.toFixed(1)}%<//>
+              <//>
+              <${Box} sx=${{ height: 8, bgcolor: '#F0F0F0', borderRadius: 1, overflow: 'hidden' }}>
+                <${Box} sx=${{ width: `${c.pct}%`, height: '100%', bgcolor: c.color }} />
+              <//>
+            <//>`)}
+        <//><//>
+      <//>
+    <//>`;
+}
+
 /* ── Screen: a report view that has not been ported yet ───────────── */
 function NotPorted({ go, row }) {
   const { t } = useT();
@@ -962,7 +1171,7 @@ function App() {
   // call it while they build. Duplicating the lookup here would give two
   // implementations that can disagree.
   const t = useMemo(() => { setDataLang(lang); return k => window.t(k); }, [lang]);
-  const go = (name, row) => setRoute({ name, row });
+  const go = (name, row, extra) => setRoute({ name, row, ...(extra || {}) });
 
   const screen =
     route.name === 'list'      ? html`<${EvaluationsList} go=${go} />` :
@@ -978,6 +1187,13 @@ function App() {
                                ? html`<${ReportDQI} go=${go} row=${route.row} />` :
     (route.name === 'report' && route.row && route.row.group === 'line_analysis')
                                ? html`<${ReportPunctuality} go=${go} row=${route.row} />` :
+    route.name === 'chart'     ? html`<${ChartView} go=${go} row=${route.row}
+                                   title=${route.chart.title} items=${route.chart.items}
+                                   format=${route.chart.format}
+                                   backLabel=${route.chart.backLabel}
+                                   onBack=${() => go('report', route.row)} />` :
+    route.name === 'mask'      ? html`<${Ausfallmaske} go=${go} row=${route.row} tuId=${route.tuId} />` :
+    route.name === 'rohdaten'  ? html`<${RohdatenConfig} go=${go} row=${route.row} />` :
     (route.name === 'report' && route.row && route.row.group === 'raw_data')
                                ? html`<${RawDataTable} go=${go} row=${route.row} rows=${PUNCT_RAW}
                                         title=${route.row.name} />` :
