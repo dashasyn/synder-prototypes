@@ -1726,6 +1726,95 @@
   .form-section-title:focus, .form-section-title:focus-visible { outline: none; }
   .type-card:focus-visible, .custom-select-trigger:focus-visible,
   .nav-item:focus-visible, .rpt-param-chip--partial:focus-visible { outline: 2px solid var(--primary-main); outline-offset: 2px; }
+  /* ── MUI Menu (Select) ──────────────────────────────────────
+     Ignat, 2026-09-15: "Active state. We use MUI menu."
+     Measured off his screenshot, which is a 2x capture:
+
+       field fill               #F0F0F0, UNCHANGED while open
+       underline when open      2px primary (4px at 2x)
+       label when open/focused  primary (darkest glyph #2C86C8)
+       menu paper               #FFFFFF, flush under the field, no gap
+       menu vertical padding    8px  (paper 160px for 4 rows of 36)
+       menu item height         36px (72px at 2x) = MUI DENSE MenuItem,
+                                which is what size="small" gives you
+       selected row             #E6F2FD -- primary at 12% over white,
+                                NOT MUI's default action.selected grey
+       paper shadow             present: overlays keep elevation 8
+
+     A native <select> renders the OS dropdown and can never look like
+     this, so .mui-select wraps the real <select> and drives it. The
+     <select> stays in the DOM as the source of truth, so every existing
+     `.value` read and `onchange` handler keeps working untouched. */
+  /* The wrapper is scaffolding only -- it must not inherit the field box.
+     The original select's classes go on the TRIGGER instead, so per-instance
+     widths (.rpt-select, .form-input-narrow, ...) still size the visible
+     control, and the menu's min-width:100% follows it. */
+  .mui-select { position: relative; display: inline-block; vertical-align: top; }
+  .mui-select > select.mui-select-native {
+    position: absolute; width: 1px; height: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
+  .mui-select-trigger {
+    display: flex; align-items: center; gap: 8px;
+    height: 48px;
+    padding: 21px 32px 4px 12px;
+    border: none; border-radius: var(--radius) var(--radius) 0 0;
+    background: var(--filled-bg);
+    box-shadow: inset 0 -1px 0 var(--filled-underline);
+    font-family: 'Roboto', sans-serif; font-size: 1rem; line-height: 1.4375em;
+    color: var(--text-primary); text-align: left; cursor: pointer;
+    transition: background-color 200ms cubic-bezier(0.0,0,0.2,1),
+                box-shadow 200ms cubic-bezier(0.0,0,0.2,1);
+  }
+  .mui-select-trigger:hover { background: var(--filled-bg-hover); }
+  .mui-select-trigger:focus-visible,
+  .mui-select.open .mui-select-trigger {
+    outline: none;
+    background: var(--filled-bg-hover);
+    box-shadow: inset 0 -2px 0 var(--primary-main);
+  }
+  .mui-select-trigger .mui-select-value {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .mui-select-trigger .mui-select-value:empty::before {
+    content: attr(data-placeholder); color: var(--text-secondary);
+  }
+  .mui-select-caret {
+    position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 24px; display: grid; place-items: center;
+    color: rgba(0,0,0,0.54); pointer-events: none;
+    transition: transform 150ms cubic-bezier(0.4,0,0.2,1);
+  }
+  .mui-select.open .mui-select-caret { transform: translateY(-50%) rotate(180deg); }
+  .mui-select-trigger.input-error { box-shadow: inset 0 -2px 0 var(--error-main); }
+
+  /* Menu paper. Flush under the field -- measured 1px between the
+     underline and the paper, i.e. no deliberate gap. */
+  .mui-menu {
+    display: none;
+    position: absolute; top: 100%; left: 0; min-width: 100%;
+    z-index: 1300;
+    margin: 0; padding: 8px 0;
+    list-style: none;
+    max-height: 40vh; overflow-y: auto;
+    background: #fff; border-radius: var(--radius);
+    box-shadow: var(--elev8);
+  }
+  .mui-select.open .mui-menu { display: block; }
+  .mui-menu-item {
+    display: flex; align-items: center;
+    min-height: 36px; padding: 6px 16px;
+    font-size: 1rem; line-height: 1.5; color: var(--text-primary);
+    cursor: pointer; white-space: nowrap;
+  }
+  .mui-menu-item:hover,
+  .mui-menu-item.focused { background: var(--action-hover); }
+  .mui-menu-item.selected { background: var(--primary-12); }
+  .mui-menu-item.selected:hover,
+  .mui-menu-item.selected.focused { background: var(--primary-12); }
+  .mui-menu-item[aria-disabled="true"] { color: var(--text-disabled); pointer-events: none; }
+
   /* ── FIELD ERROR STATE ──────────────────────────────────────
      Modelled on Ignat's screenshot of their Station details form
      (2026-09-15), which is MUI's `error` + `helperText` exactly:
@@ -2385,7 +2474,7 @@
     <a class="topbar-nav-item" href="#" onclick="return false">Q-Messungen</a>
   </nav>
   <div class="topbar-right">
-    <select class="topbar-lang" id="topbar-lang-select" onchange="setLang(this.value)">
+    <select class="topbar-lang" data-no-mui id="topbar-lang-select" onchange="setLang(this.value)">
       <option value="en">EN</option>
       <option value="de">DE</option>
     </select>
@@ -4752,6 +4841,198 @@
      JAVASCRIPT
 ══════════════════════════════════════════════════════════ -->
 <script>
+  // ── MUI Select + Menu ────────────────────────────────────────
+  // Ignat, 2026-09-15: "We use MUI menu." A native <select> opens the
+  // operating system's dropdown, which takes no styling at all, so the
+  // only way to show an MUI Menu is to render one.
+  //
+  // The real <select> is kept in the DOM and remains the source of truth:
+  // this sets `.value` on it and dispatches a bubbling `change`, so all 37
+  // existing selects keep their current handlers, and any code reading
+  // `document.getElementById(x).value` is unaffected.
+  //
+  // Opt out with data-no-mui (the language switcher lives in the navy bar
+  // and is styled against it, not against a filled field).
+  const MUI_SELECT_OPEN = 'open';
+
+  function muiCloseAllSelects(except) {
+    document.querySelectorAll('.mui-select.' + MUI_SELECT_OPEN).forEach(w => {
+      if (w !== except) {
+        w.classList.remove(MUI_SELECT_OPEN);
+        const t = w.querySelector('.mui-select-trigger');
+        if (t) t.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  function muiSyncSelect(wrap) {
+    const sel = wrap.querySelector('select.mui-select-native');
+    const valueEl = wrap.querySelector('.mui-select-value');
+    const menu = wrap.querySelector('.mui-menu');
+    if (!sel || !valueEl || !menu) return;
+    const opt = sel.options[sel.selectedIndex];
+    // An option with an empty value is a placeholder, not a choice.
+    const isPlaceholder = !opt || opt.value === '';
+    valueEl.textContent = isPlaceholder ? '' : opt.textContent.trim();
+    valueEl.setAttribute('data-placeholder', opt ? opt.textContent.trim() : '');
+    menu.querySelectorAll('.mui-menu-item').forEach(li => {
+      const on = li.getAttribute('data-value') === sel.value;
+      li.classList.toggle('selected', on);
+      li.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+  }
+
+  function muiBuildMenu(wrap) {
+    const sel = wrap.querySelector('select.mui-select-native');
+    const menu = wrap.querySelector('.mui-menu');
+    menu.innerHTML = '';
+    Array.from(sel.options).forEach(opt => {
+      const li = document.createElement('li');
+      li.className = 'mui-menu-item';
+      li.setAttribute('role', 'option');
+      li.setAttribute('data-value', opt.value);
+      if (opt.disabled) li.setAttribute('aria-disabled', 'true');
+      li.textContent = opt.textContent;
+      li.addEventListener('click', () => {
+        sel.value = opt.value;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+        muiSyncSelect(wrap);
+        wrap.classList.remove(MUI_SELECT_OPEN);
+        wrap.querySelector('.mui-select-trigger').setAttribute('aria-expanded', 'false');
+        wrap.querySelector('.mui-select-trigger').focus();
+      });
+      menu.appendChild(li);
+    });
+    muiSyncSelect(wrap);
+  }
+
+  function muiUpgradeSelect(sel) {
+    if (!sel || sel.dataset.muiReady === '1' || sel.hasAttribute('data-no-mui')) return;
+    sel.dataset.muiReady = '1';
+
+    const originalClasses = sel.className || '';
+    const wrap = document.createElement('div');
+    wrap.className = 'mui-select';
+    sel.parentNode.insertBefore(wrap, sel);
+    wrap.appendChild(sel);
+    sel.className = 'mui-select-native';
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    // original classes ride on the trigger, not the wrapper: they carry
+    // per-instance width, and the wrapper must stay a bare positioning box
+    trigger.className = ('mui-select-trigger ' + originalClasses).trim();
+    trigger.setAttribute('role', 'combobox');
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    if (sel.id) trigger.setAttribute('aria-labelledby', sel.id + '-label');
+    trigger.innerHTML = '<span class="mui-select-value"></span>'
+      + '<span class="mui-select-caret material-icons">arrow_drop_down</span>';
+    wrap.appendChild(trigger);
+
+    const menu = document.createElement('ul');
+    menu.className = 'mui-menu';
+    menu.setAttribute('role', 'listbox');
+    wrap.appendChild(menu);
+
+    muiBuildMenu(wrap);
+
+    // A native <select> is as wide as its widest option. A button is as wide
+    // as its current text, so switching to one silently shrinks every filter
+    // and then clips longer choices when they are picked. Measure the menu
+    // once, hidden, and hold the trigger to it.
+    // (The payment-application build had the same gate: no select may clip
+    // its widest option.)
+    // A hidden view has no layout, so this returns 0 until the view is shown
+    // -- which is why it has to be lazy rather than done once at upgrade.
+    const measure = () => {
+      const prev = menu.getAttribute('style') || '';
+      menu.setAttribute('style', 'display:block;visibility:hidden;position:absolute;min-width:0;width:auto;');
+      const w = Math.ceil(menu.scrollWidth);
+      menu.setAttribute('style', prev);
+      if (w > 0) {
+        // menu items pad 16px each side; the trigger pads 12 left, 32 right
+        trigger.style.minWidth = (w - 32 + 44) + 'px';
+        return true;
+      }
+      return false;
+    };
+    if (!measure() && 'IntersectionObserver' in window) {
+      const io = new IntersectionObserver(entries => {
+        if (entries.some(e => e.isIntersecting) && measure()) io.disconnect();
+      });
+      io.observe(wrap);
+    }
+    sel.addEventListener('mui-options-changed', measure);
+
+    const open = () => {
+      measure();
+      muiCloseAllSelects(wrap);
+      wrap.classList.add(MUI_SELECT_OPEN);
+      trigger.setAttribute('aria-expanded', 'true');
+      const cur = menu.querySelector('.mui-menu-item.selected') || menu.firstElementChild;
+      menu.querySelectorAll('.focused').forEach(e => e.classList.remove('focused'));
+      if (cur) { cur.classList.add('focused'); cur.scrollIntoView({ block: 'nearest' }); }
+    };
+    const close = () => {
+      wrap.classList.remove(MUI_SELECT_OPEN);
+      trigger.setAttribute('aria-expanded', 'false');
+    };
+
+    trigger.addEventListener('click', e => {
+      e.stopPropagation();
+      wrap.classList.contains(MUI_SELECT_OPEN) ? close() : open();
+    });
+
+    trigger.addEventListener('keydown', e => {
+      const isOpen = wrap.classList.contains(MUI_SELECT_OPEN);
+      if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
+        e.preventDefault();
+        if (!isOpen) { open(); return; }
+        const items = Array.from(menu.querySelectorAll('.mui-menu-item'));
+        const cur = menu.querySelector('.focused');
+        let i = items.indexOf(cur);
+        if (e.key === 'Enter' || e.key === ' ') { if (cur) cur.click(); return; }
+        i = e.key === 'ArrowDown' ? Math.min(i + 1, items.length - 1) : Math.max(i - 1, 0);
+        items.forEach(x => x.classList.remove('focused'));
+        if (items[i]) { items[i].classList.add('focused'); items[i].scrollIntoView({ block: 'nearest' }); }
+      } else if (e.key === 'Escape' && isOpen) {
+        e.preventDefault(); e.stopPropagation(); close();
+      } else if (e.key === 'Tab') {
+        close();
+      }
+    });
+
+    // Code elsewhere may set .value directly, or replace the options
+    // wholesale (the day lists do). Keep the trigger honest either way.
+    sel.addEventListener('change', () => muiSyncSelect(wrap));
+    new MutationObserver(() => {
+      muiBuildMenu(wrap);
+      sel.dispatchEvent(new Event('mui-options-changed'));
+    }).observe(sel, { childList: true });
+  }
+
+  function muiUpgradeSelects(root) {
+    (root || document).querySelectorAll('select:not([data-mui-ready])').forEach(muiUpgradeSelect);
+  }
+
+  document.addEventListener('click', () => muiCloseAllSelects(null));
+
+  // Selects are also built at runtime (raw-data column filters, day lists),
+  // so upgrading once on load would miss them.
+  document.addEventListener('DOMContentLoaded', function () {
+    muiUpgradeSelects(document);
+    new MutationObserver(muts => {
+      for (const m of muts) {
+        for (const n of m.addedNodes) {
+          if (n.nodeType !== 1) continue;
+          if (n.tagName === 'SELECT') muiUpgradeSelect(n);
+          else muiUpgradeSelects(n);
+        }
+      }
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+
   /**
    * Put a field into, or out of, MUI's `error` state: red label, red
    * underline, red helper line under the box. Pass '' to clear.

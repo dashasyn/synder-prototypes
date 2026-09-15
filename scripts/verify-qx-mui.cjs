@@ -393,6 +393,123 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
   ok('the threshold message and its label are red',
     thr.helperColour === 'rgb(211, 47, 47)' && thr.label === 'rgb(211, 47, 47)', thr);
 
+  // ── MUI Select + Menu. Ignat, 2026-09-15: "We use MUI menu."
+  //    Every value here was measured off his screenshot (a 2x capture).
+  await page.evaluate(() => window.showView('reports-list'));
+  await page.waitForTimeout(300);
+
+  const leftNative = await page.$$eval('select:not(.mui-select-native)',
+    els => els.map(e => e.className));
+  ok('every select is an MUI Select except the opted-out language switcher',
+    leftNative.length === 0 || leftNative.every(c => c.includes('topbar-lang')), leftNative);
+
+  const trigger = await page.$('#view-reports-list .mui-select-trigger');
+  ok('the reports list has an MUI Select', !!trigger);
+  if (trigger) {
+    await trigger.click();
+    await page.waitForTimeout(250);
+    const menu = await page.evaluate(() => {
+      const w = document.querySelector('#view-reports-list .mui-select.open');
+      if (!w) return null;
+      const tr = w.querySelector('.mui-select-trigger');
+      const m = w.querySelector('.mui-menu');
+      const items = [...m.querySelectorAll('.mui-menu-item')];
+      const ms = getComputedStyle(m);
+      const selItem = m.querySelector('.mui-menu-item.selected');
+      return {
+        paper: ms.backgroundColor, pad: ms.paddingTop, radius: ms.borderTopLeftRadius,
+        elevated: ms.boxShadow !== 'none',
+        itemH: items.length ? Math.round(items[0].getBoundingClientRect().height) : null,
+        selBg: selItem ? getComputedStyle(selItem).backgroundColor : null,
+        gap: Math.round(m.getBoundingClientRect().top - tr.getBoundingClientRect().bottom),
+        triggerH: Math.round(tr.getBoundingClientRect().height),
+        underline: getComputedStyle(tr).boxShadow,
+        expanded: tr.getAttribute('aria-expanded'),
+        role: m.getAttribute('role'),
+        visible: m.offsetParent !== null,
+      };
+    });
+    ok('the menu actually opens and is visible', menu && menu.visible, menu);
+    ok('menu paper is white', menu.paper === 'rgb(255, 255, 255)', menu.paper);
+    ok('menu paper has 8px vertical padding', menu.pad === '8px', menu.pad);
+    ok('menu paper uses the 4px radius', menu.radius === '4px', menu.radius);
+    ok('menu paper keeps an elevation (overlays are not flattened)', menu.elevated);
+    ok('menu items are 36px — MUI DENSE MenuItem, what size=small gives',
+      menu.itemH === 36, menu.itemH);
+    ok('the selected row is primary at 12%, not MUI default action.selected grey',
+      menu.selBg === 'rgba(33, 150, 243, 0.12)', menu.selBg);
+    ok('the menu sits flush under the field, no gap', Math.abs(menu.gap) <= 1, menu.gap);
+    ok('the trigger stays a 48px filled field while open', menu.triggerH === 48, menu.triggerH);
+    ok('the open field carries the 2px primary underline',
+      menu.underline.includes('33, 150, 243') && menu.underline.includes('-2px'), menu.underline);
+    ok('the menu is a listbox and the trigger reports expanded',
+      menu.role === 'listbox' && menu.expanded === 'true', menu);
+
+    // Picking must drive the real <select> so existing handlers still fire.
+    const picked = await page.evaluate(() => {
+      const w = document.querySelector('#view-reports-list .mui-select.open');
+      const sel = w.querySelector('select.mui-select-native');
+      const items = [...w.querySelectorAll('.mui-menu-item')];
+      const target = items.find(i => i.getAttribute('data-value') !== sel.value) || items[1];
+      let fired = false;
+      sel.addEventListener('change', () => { fired = true; }, { once: true });
+      target.click();
+      return { fired, value: sel.value, want: target.getAttribute('data-value'),
+               label: w.querySelector('.mui-select-value').textContent.trim(),
+               stillOpen: w.classList.contains('open') };
+    });
+    ok('picking sets the underlying select and fires change',
+      picked.fired && picked.value === picked.want, picked);
+    ok('picking closes the menu and updates the trigger text',
+      !picked.stillOpen && picked.label.length > 0, picked);
+
+    // Keyboard: the menu has to be operable without a mouse.
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(200);
+    const kbOpen = await page.$eval('#view-reports-list .mui-select',
+      w => w.classList.contains('open'));
+    ok('Enter opens the menu from the keyboard', kbOpen);
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(200);
+    const kbDone = await page.$eval('#view-reports-list .mui-select',
+      w => ({ open: w.classList.contains('open'),
+              value: w.querySelector('select').value }));
+    ok('ArrowDown + Enter picks and closes', !kbDone.open, kbDone);
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(150);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+    ok('Escape closes the menu',
+      !(await page.$eval('#view-reports-list .mui-select', w => w.classList.contains('open'))));
+  }
+
+  // A native select is as wide as its widest option; a button is not. Every
+  // visible trigger must still fit its longest choice, in every view.
+  let clipped = [];
+  for (const v of ['reports-list', 'scheduled', 'rohdaten', 'report-punct', 'raw-punct']) {
+    await page.evaluate(n => window.showView(n), v);
+    await page.waitForTimeout(350);
+    const r = await page.evaluate(vn => {
+      const out = [];
+      document.querySelectorAll(`#view-${vn} .mui-select`).forEach(w => {
+        const tr = w.querySelector('.mui-select-trigger');
+        if (!tr || tr.offsetParent === null) return;
+        const m = w.querySelector('.mui-menu');
+        const prev = m.getAttribute('style') || '';
+        m.setAttribute('style', 'display:block;visibility:hidden;position:absolute;min-width:0;width:auto;');
+        const need = m.scrollWidth - 32 + 44;
+        m.setAttribute('style', prev);
+        if (Math.round(tr.getBoundingClientRect().width) < need - 1) out.push({ vn, need });
+      });
+      return out;
+    }, v);
+    clipped = clipped.concat(r);
+  }
+  ok('no MUI Select clips its widest option, in any view', clipped.length === 0, clipped);
+
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
 
   await browser.close();
