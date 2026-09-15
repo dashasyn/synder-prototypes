@@ -21,7 +21,9 @@ const ok = (n, c, got) => c ? pass++ : fails.push(`${n}${got !== undefined ? ` �
 const rgb = h => { const n = parseInt(h.slice(1), 16);
   return `rgb(${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255})`; };
 
-const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
+// 'type-selection' is gone: New evaluation is a single detail page now, so
+// the six type cards live in a dialog (variant 1) or a field (variant 2).
+const VIEWS = ['wizard', 'reports-list', 'scheduled',
   'report-connection', 'chart-connection', 'raw-connection', 'report-fa',
   'chart-fa', 'ausfallmaske', 'report-punct', 'report-dqi', 'rohdaten',
   'chart-punct', 'raw-punct'];
@@ -165,13 +167,18 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
   // Nothing may hide under the bar. Asserting a wrapper's top is useless --
   // the wrapper legitimately starts at 0 and offsets its children. Ask the
   // real question instead: is any visible, laid-out element overlapped?
+  // The bar no longer starts at y=0: the variant switcher owns the strip
+  // above it. Measure against the bar's real box, not a hardcoded 48.
   const underBar = await page.evaluate(() => {
     const bar = document.querySelector('#topbar');
+    const br = bar.getBoundingClientRect();
+    const sw = document.querySelector('.variant-switch');
     return [...document.querySelectorAll('body *')].filter(e => {
       if (e === bar || bar.contains(e) || e.offsetParent === null) return false;
+      if (sw && (e === sw || sw.contains(e))) return false;
       if (getComputedStyle(e).position === 'fixed') return false;
       const r = e.getBoundingClientRect();
-      return r.top < 48 && r.height > 4 && r.width > 40;
+      return r.top < br.bottom && r.bottom > br.top && r.height > 4 && r.width > 40;
     }).slice(0, 5).map(e => `${e.tagName}.${String(e.className).slice(0, 30)}`);
   });
   ok('nothing is hidden under the 48px bar', underBar.length === 0, underBar);
@@ -622,6 +629,117 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
     de.items.length > 0 && de.items.some(i => /Fertig|Bearbeitung|Fehlgeschlagen/.test(i)), de);
   await page.evaluate(() => window.setLang && window.setLang('en'));
   await page.waitForTimeout(300);
+
+  // ── The structural rework (Ignat, 2026-09-15) ────────────────
+  ok('the sidebar is gone', (await page.$$('#sidebar')).length === 0);
+  ok('content runs full width',
+    (await page.$eval('#main', e => getComputedStyle(e).marginLeft)) === '0px');
+
+  // Impressum is a legal requirement; it must not have died with the sidebar.
+  const footer = await page.$$eval('.app-footer .util-link', els => els.map(e => e.textContent.trim()));
+  ok('the sidebar utility links survived into a footer', footer.length === 4, footer);
+
+  // Q-Explorer is an expandable nav item
+  await page.click('#qx-nav-trigger');
+  await page.waitForTimeout(250);
+  const navMenu = await page.evaluate(() => {
+    const m = document.getElementById('qx-nav-menu');
+    const d = m.querySelector('.topbar-dropdown');
+    const cs = getComputedStyle(d);
+    return { open: m.classList.contains('open'),
+             shown: cs.display !== 'none',
+             items: [...d.querySelectorAll('.mui-menu-item')].map(i => i.textContent.trim()),
+             paper: cs.backgroundColor, elevated: cs.boxShadow !== 'none',
+             expanded: document.getElementById('qx-nav-trigger').getAttribute('aria-expanded') };
+  });
+  ok('Q-Explorer opens a menu', navMenu.open && navMenu.shown, navMenu);
+  ok('the menu holds exactly Evaluations and Scheduled reports',
+    navMenu.items.length === 2, navMenu.items);
+  ok('it is an MUI Menu — white paper with elevation',
+    navMenu.paper === 'rgb(255, 255, 255)' && navMenu.elevated, navMenu);
+  ok('the trigger reports its expanded state', navMenu.expanded === 'true', navMenu.expanded);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
+
+  // The old type-selection page is gone
+  ok('the type-selection page no longer exists',
+    (await page.$$('#view-type-selection')).length === 0);
+
+  // ── Variant 1: dialog first ──────────────────────────────────
+  // NB offsetParent is always null for position:fixed, so visibility here
+  // has to be read from computed display, not offsetParent.
+  await page.evaluate(() => setVariant(1));
+  await page.waitForTimeout(250);
+  await page.click('#new-eval-btn');
+  await page.waitForTimeout(300);
+  const dlg = await page.evaluate(() => {
+    const d = document.getElementById('type-dialog');
+    return { shown: getComputedStyle(d).display !== 'none',
+             options: d.querySelectorAll('.type-dialog-option').length };
+  });
+  ok('variant 1: New evaluation opens the type dialog', dlg.shown, dlg);
+  ok('the dialog offers all six types', dlg.options === 6, dlg.options);
+
+  await page.click('#type-dialog .type-dialog-option:nth-child(5)');
+  await page.waitForTimeout(400);
+  const v1 = await page.evaluate(() => {
+    const v = document.getElementById('view-wizard');
+    return { active: v.classList.contains('active'),
+             dialogShown: getComputedStyle(document.getElementById('type-dialog')).display !== 'none',
+             title: v.querySelector('.page-title').textContent.trim(),
+             crumb: v.querySelector('.page-breadcrumb').textContent.replace(/\s+/g, ' ').trim(),
+             type: document.getElementById('eval-type-select').value,
+             locked: v.querySelector('.needs-type').getAttribute('data-locked'),
+             runDisabled: document.getElementById('run-btn').disabled,
+             steps: getComputedStyle(v.querySelector('.wizard-progress')).display,
+             panels: [...v.querySelectorAll('.wizard-panel')].filter(p => p.offsetParent !== null).length };
+  });
+  ok('choosing a type closes the dialog and opens the detail page',
+    v1.active && !v1.dialogShown, v1);
+  ok('the type is carried onto the page', v1.type === 'trip_failures', v1.type);
+  ok('the title stays "New evaluation" — the type is a field, not the title',
+    /New evaluation/i.test(v1.title), v1.title);
+  ok('the breadcrumb goes back to Evaluations', /Evaluations/.test(v1.crumb), v1.crumb);
+  ok('there is no step bar — it is one page', v1.steps === 'none', v1.steps);
+  ok('all three panels are visible at once', v1.panels === 3, v1.panels);
+  ok('nothing is locked once the type came from the dialog',
+    v1.locked === '0' && !v1.runDisabled, v1);
+  ok('Run is the only primary action — no Publish, no Save, no draft chip',
+    (await page.$$('#wizard-header-actions #run-btn')).length === 1 &&
+    (await page.$eval('#save-schedule-btn', e => getComputedStyle(e).display)) === 'none');
+
+  // ── Variant 2: type as the first field ───────────────────────
+  await page.evaluate(() => setVariant(2));
+  await page.waitForTimeout(250);
+  await page.click('#new-eval-btn');
+  await page.waitForTimeout(400);
+  const v2 = await page.evaluate(() => {
+    const v = document.getElementById('view-wizard');
+    return { active: v.classList.contains('active'),
+             dialogShown: getComputedStyle(document.getElementById('type-dialog')).display !== 'none',
+             type: document.getElementById('eval-type-select').value,
+             locked: v.querySelector('.needs-type').getAttribute('data-locked'),
+             runDisabled: document.getElementById('run-btn').disabled };
+  });
+  ok('variant 2: New evaluation goes straight to the page, no dialog',
+    v2.active && !v2.dialogShown, v2);
+  ok('it opens with no type chosen', v2.type === '', v2.type);
+  ok('everything below the type is locked until it is set',
+    v2.locked === '1' && v2.runDisabled, v2);
+
+  await page.evaluate(() => {
+    const sel = document.getElementById('eval-type-select');
+    sel.value = 'punctuality';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(400);
+  const v2b = await page.evaluate(() => {
+    const v = document.getElementById('view-wizard');
+    return { locked: v.querySelector('.needs-type').getAttribute('data-locked'),
+             runDisabled: document.getElementById('run-btn').disabled };
+  });
+  ok('choosing the type unlocks the rest of the page',
+    v2b.locked === '0' && !v2b.runDisabled, v2b);
 
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
 
