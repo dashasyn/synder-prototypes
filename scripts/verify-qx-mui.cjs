@@ -155,6 +155,48 @@ const VIEWS = ['wizard', 'reports-list', 'scheduled',
     ok('login dismisses the overlay', !(await login.isVisible()));
   }
 
+  // ── LAYOUT GATE ──────────────────────────────────────────────
+  // 183 assertions passed while the entire UI was squeezed into the
+  // right-hand third of the window, because every one of them checked a
+  // computed style or a class and none checked that the page was laid out.
+  // body was still display:flex ROW from when it held the sidebar, so the
+  // variant switcher became a full-height column beside the app.
+  // Ignat caught it in a screenshot. Assert the shape of the page.
+  const layout = await page.evaluate(() => {
+    const box = el => { const b = el.getBoundingClientRect();
+      return { x: Math.round(b.x), y: Math.round(b.y),
+               w: Math.round(b.width), h: Math.round(b.height) }; };
+    return {
+      vw: window.innerWidth,
+      sw: box(document.querySelector('.variant-switch')),
+      bar: box(document.getElementById('topbar')),
+      main: box(document.getElementById('main')),
+      scrollW: document.documentElement.scrollWidth,
+      bodyDir: getComputedStyle(document.body).flexDirection,
+    };
+  });
+  ok('body stacks vertically — a flex ROW puts the switcher beside the app',
+    layout.bodyDir === 'column', layout.bodyDir);
+  ok('the variant switcher spans the full viewport width',
+    layout.sw.x === 0 && layout.sw.w === layout.vw, layout.sw);
+  ok('the app bar spans the full viewport width',
+    layout.bar.x === 0 && layout.bar.w === layout.vw, layout.bar);
+  ok('the content spans the full viewport width',
+    layout.main.x === 0 && layout.main.w === layout.vw, layout.main);
+  ok('the app bar sits directly below the switcher',
+    layout.bar.y === layout.sw.h, { barY: layout.bar.y, switchH: layout.sw.h });
+  ok('content starts below both', layout.main.y === layout.sw.h + layout.bar.h,
+    { mainY: layout.main.y, expected: layout.sw.h + layout.bar.h });
+  ok('the content fills the rest of the window, no dead band',
+    Math.abs(layout.main.y + layout.main.h - 900) <= 1, layout.main);
+  ok('no horizontal overflow at 1440',
+    layout.scrollW <= layout.vw, { scrollW: layout.scrollW, vw: layout.vw });
+
+  // and the page background must be opaque, like the login screen's
+  const bodyBg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  ok('the page background is opaque, not an alpha overlay token',
+    !/rgba\([^)]*,\s*0?\.\d+\)/.test(bodyBg), bodyBg);
+
   // ── AppBar: dense 48, navy, flat ─────────────────────────────
   const bar = await page.$eval('#topbar', el => {
     const s = getComputedStyle(el);
