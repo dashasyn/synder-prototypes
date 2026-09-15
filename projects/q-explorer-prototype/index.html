@@ -1726,11 +1726,44 @@
   .form-section-title:focus, .form-section-title:focus-visible { outline: none; }
   .type-card:focus-visible, .custom-select-trigger:focus-visible,
   .nav-item:focus-visible, .rpt-param-chip--partial:focus-visible { outline: 2px solid var(--primary-main); outline-offset: 2px; }
-  /* Every field in this prototype is now a filled TextField, so the error
-     state is an error UNDERLINE, not a 3px ring around an outlined box.
-     This rule also carried the last stale rgba() from the old Tailwind
-     palette -- the conversion replaced hex literals but not rgba(). */
+  /* ── FIELD ERROR STATE ──────────────────────────────────────
+     Modelled on Ignat's screenshot of their Station details form
+     (2026-09-15), which is MUI's `error` + `helperText` exactly:
+
+       · the LABEL turns error-red, asterisk included
+       · the underline turns red and sits at 2px, like focus
+       · a red HELPER LINE appears under the field, outside the box
+       · the fill stays #F0F0F0 -- it is NOT tinted red (measured:
+         error field and untouched field both read #F0F0F0)
+
+     Measured glyph colour on the red text averages #AE3B3D over a
+     #F0F0F0 fill, which is consistent with MUI's default error.main
+     #D32F2F once JPEG anti-aliasing on thin glyphs is allowed for.
+     No evidence of a custom error red, so the default stands. */
   .input-error { box-shadow: inset 0 -2px 0 var(--error-main) !important; }
+  .input-error:focus { box-shadow: inset 0 -2px 0 var(--error-main) !important; }
+
+  /* The label reddens with the field. Not scoped to <label> on purpose:
+     several of these forms label a control with a styled div instead. */
+  .has-error,
+  .has-error > label,
+  .login-field label.has-error,
+  .form-label.has-error,
+  .filter-label.has-error { color: var(--error-main); }
+
+  /* MUI FormHelperText: 0.75rem, 1.66 line-height, margin 3px 14px 0.
+     It sits OUTSIDE the filled box, which is why the box keeps its
+     height and the layout does not jump when it appears. */
+  .field-helper {
+    display: none;
+    margin: 3px 14px 0;
+    font-size: 0.75rem;
+    line-height: 1.66;
+    letter-spacing: 0.03333em;
+    color: var(--text-secondary);
+  }
+  .field-helper.visible { display: block; }
+  .field-helper.error { color: var(--error-main); }
   .login-error { display: none; margin-top: 12px; font-size: 13px; color: var(--error-dark); text-align: center; }
   .login-error.visible { display: block; }
   .login-forgot { display: block; text-align: center; margin-top: 16px; font-size: 13px; color: var(--primary-main); cursor: pointer; text-decoration: none; }
@@ -2378,12 +2411,14 @@
     <h2>Anmelden</h2>
     <p class="login-subtitle">QMS RPV CH · Q-Explorer</p>
     <div class="login-field">
-      <label for="login-email">E-Mail</label>
-      <input type="email" id="login-email" placeholder="name@organisation.ch">
+      <label for="login-email" id="login-email-label">E-Mail</label>
+      <input type="email" id="login-email" placeholder="name@organisation.ch" aria-describedby="login-email-helper">
+      <div class="field-helper" id="login-email-helper" role="alert"></div>
     </div>
     <div class="login-field">
-      <label for="login-password">Passwort</label>
-      <input type="password" id="login-password" placeholder="••••••••">
+      <label for="login-password" id="login-password-label">Passwort</label>
+      <input type="password" id="login-password" placeholder="••••••••" aria-describedby="login-password-helper">
+      <div class="field-helper" id="login-password-helper" role="alert"></div>
     </div>
     <button class="btn-login" onclick="doLogin(true)">Anmelden</button>
     <div class="login-error" id="login-error"></div>
@@ -2584,16 +2619,15 @@
 
           <div class="date-inputs" id="custom-dates">
             <div class="form-group">
-              <label class="form-label" data-i18n="label_from">From</label>
+              <label class="form-label" for="date-from" id="date-from-label" data-i18n="label_from">From</label>
               <input type="date" class="form-input" id="date-from" oninput="validateCustomRange();updateAutoName()">
             </div>
             <div class="form-group">
-              <label class="form-label" data-i18n="label_to">To</label>
-              <input type="date" class="form-input" id="date-to" oninput="validateCustomRange();updateAutoName()">
+              <label class="form-label" for="date-to" id="date-to-label" data-i18n="label_to">To</label>
+              <input type="date" class="form-input" id="date-to" aria-describedby="date-to-helper" oninput="validateCustomRange();updateAutoName()">
+              <div class="field-helper" id="date-to-helper" role="alert"></div>
             </div>
           </div>
-
-          <div class="sched-note" id="date-range-error" style="margin-top:0"></div>
 
           <div class="form-group name-preview-row">
             <label class="form-label" data-i18n="label_eval_name">Evaluation Name</label>
@@ -4420,9 +4454,9 @@
 
         <!-- Pünktlichkeitsgrenzwert -->
         <div class="filter-row">
-          <div class="filter-label" data-i18n="rd_step_threshold">Pünktlichkeitsgrenzwert</div>
+          <div class="filter-label" id="rd-threshold-label" data-i18n="rd_step_threshold">Pünktlichkeitsgrenzwert</div>
           <div class="filter-control">
-          <select class="rd-input" id="rd-threshold">
+          <select class="rd-input" id="rd-threshold" aria-describedby="rd-threshold-helper">
             <option value="" data-i18n="rd_choose">Bitte auswählen</option>
             <option value="d299" data-i18n="rd_thr_1">Verfrühung > 04:59 Min (Abfahrt)</option>
             <option value="d59"  data-i18n="rd_thr_2">Verfrühung > 00:59 Min (Abfahrt)</option>
@@ -4430,6 +4464,7 @@
             <option value="d0"   data-i18n="rd_thr_4">Verfrühung > 00:00 Min (Abfahrt)</option>
             <option value="a119" data-i18n="rd_thr_5">Verspätung > 01:59 Min (Ankunft)</option>
           </select>
+          <div class="field-helper" id="rd-threshold-helper" role="alert"></div>
           </div>
         </div>
 
@@ -4717,15 +4752,56 @@
      JAVASCRIPT
 ══════════════════════════════════════════════════════════ -->
 <script>
+  /**
+   * Put a field into, or out of, MUI's `error` state: red label, red
+   * underline, red helper line under the box. Pass '' to clear.
+   * One function so the three places that validate cannot drift apart.
+   */
+  function setFieldError(input, message, clearOnInput) {
+    if (!input) return;
+    const bad = !!message;
+    // Only "you left this empty" errors may clear themselves the moment a
+    // value appears. An error ABOUT the value -- a reversed date range --
+    // must survive typing and be cleared by its own validator, or the
+    // message vanishes while the input is still wrong.
+    if (bad && clearOnInput === false) input.removeAttribute('data-clears-on-input');
+    else if (bad) input.setAttribute('data-clears-on-input', '1');
+    else input.removeAttribute('data-clears-on-input');
+    input.classList.toggle('input-error', bad);
+    input.setAttribute('aria-invalid', bad ? 'true' : 'false');
+    const label = document.getElementById(input.id + '-label')
+               || (input.closest('.login-field, .form-field, .field') || document).querySelector('label[for="' + input.id + '"]');
+    if (label) label.classList.toggle('has-error', bad);
+    const helper = document.getElementById(input.id + '-helper');
+    if (helper) {
+      helper.textContent = message || '';
+      helper.classList.toggle('visible', bad);
+      helper.classList.toggle('error', bad);
+    }
+  }
+
+  // clearing as you type -- a submit-time error must not outlive the value
+  // that caused it. (Same bug class as the banner builder's 140-character
+  // message surviving under a 39-character field.)
+  document.addEventListener('input', function (e) {
+    const el = e.target;
+    if (el && el.classList && el.classList.contains('input-error')
+        && el.hasAttribute('data-clears-on-input') && (el.value || '').trim()) {
+      setFieldError(el, '');
+    }
+  });
+
   // ── Login ────────────────────────────────────────────────────
   function doLogin(validate) {
     if (validate) {
       const email = document.getElementById('login-email');
       const pass  = document.getElementById('login-password');
-      const err   = document.getElementById('login-error');
+      // Their Station details form puts the message under the field it is
+      // about, not once at the bottom of the form, so each field owns its
+      // own error line here too.
       const missing = !((email.value || '').trim()) || !((pass.value || '').trim());
-      if (err) { err.textContent = missing ? t('err_login_required') : ''; err.classList.toggle('visible', missing); }
-      [email, pass].forEach(i => i.classList.toggle('input-error', missing && !(i.value || '').trim()));
+      setFieldError(email, !(email.value || '').trim() ? t('err_email_required') : '');
+      setFieldError(pass,  !(pass.value  || '').trim() ? t('err_password_required') : '');
       if (missing) { (!(email.value || '').trim() ? email : pass).focus(); return; }
     }
     return doLoginInner();
@@ -4969,6 +5045,9 @@
       filter_all_bracket: '[All]',
       err_range_reversed: 'The end date is before the start date — the evaluation cannot run over a negative period.',
       err_login_required: 'Please enter your e-mail address and password.',
+      err_email_required: 'E-mail address is required',
+      err_password_required: 'Password is required',
+      err_threshold_required: 'Punctuality threshold is required',
       acr_dpm: 'DPM — Durchschnittliche Pünktlichkeitsmessung (average punctuality measurement)',
       acr_rpv: 'RPV — Regionaler Personenverkehr (regional passenger transport)',
       acr_tu: 'TU — Transportunternehmen (transport company)',
@@ -5433,6 +5512,9 @@
       filter_all_bracket: '[Alle]',
       err_range_reversed: 'Das Enddatum liegt vor dem Startdatum — die Auswertung kann keinen negativen Zeitraum verarbeiten.',
       err_login_required: 'Bitte E-Mail-Adresse und Passwort eingeben.',
+      err_email_required: 'E-Mail-Adresse ist erforderlich',
+      err_password_required: 'Passwort ist erforderlich',
+      err_threshold_required: 'Pünktlichkeitsgrenzwert ist erforderlich',
       acr_dpm: 'DPM — Durchschnittliche Pünktlichkeitsmessung',
       acr_rpv: 'RPV — Regionaler Personenverkehr',
       acr_tu: 'TU — Transportunternehmen',
@@ -6097,13 +6179,13 @@
   function validateCustomRange() {
     const from = document.getElementById('date-from');
     const to = document.getElementById('date-to');
-    const err = document.getElementById('date-range-error');
     const next = document.querySelector('#wizard-step-1 [onclick="goToStep(2)"]');
-    if (!from || !to || !err) return true;
+    if (!from || !to) return true;
     const bad = state.selectedPeriod === 'custom' && from.value && to.value && from.value > to.value;
-    err.classList.toggle('visible', bad);
-    err.textContent = bad ? t('err_range_reversed') : '';
-    [from, to].forEach(i => i.classList.toggle('input-error', bad));
+    // The end date is the one that is wrong, so the message hangs off it.
+    // `from` still reddens, because the pair is what is inconsistent.
+    setFieldError(to, bad ? t('err_range_reversed') : '', false);
+    from.classList.toggle('input-error', bad);
     if (next) next.disabled = bad;
     return !bad;
   }
@@ -9436,7 +9518,9 @@
   function rdRun() {
     const thr = document.getElementById('rd-threshold');
     if (!thr.value) {
-      thr.classList.add('input-error');
+      // A toast is not an error state -- it leaves and the field still looks
+      // fine. Mark the field and leave the reason next to it.
+      setFieldError(thr, t('err_threshold_required'));
       showRptApplyToast(t('rd_need_threshold'));
       thr.focus();
       return;

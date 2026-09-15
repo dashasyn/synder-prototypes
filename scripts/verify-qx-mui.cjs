@@ -95,9 +95,56 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
                marked: f.classList.contains('input-error'),
                underline: getComputedStyle(f).boxShadow };
     });
-    ok('submitting empty shows an error and keeps the login up', errShown.visible, errShown);
-    ok('the invalid field is marked with an error underline',
-      errShown.marked && errShown.underline.includes('211, 47, 47'), errShown);
+    ok('submitting empty marks the field', errShown.marked, errShown);
+    ok('the invalid field gets the 2px error underline',
+      errShown.underline.includes('211, 47, 47'), errShown.underline);
+
+    // The full MUI error state, modelled on their Station details form:
+    // red label + red underline + red helper line, fill UNCHANGED.
+    const errState = await page.evaluate(() => {
+      const f = document.getElementById('login-email');
+      const lab = document.getElementById('login-email-label');
+      const help = document.getElementById('login-email-helper');
+      const cs = getComputedStyle(f);
+      return {
+        labelColour: getComputedStyle(lab).color,
+        helperVisible: help.offsetParent !== null,
+        helperText: help.textContent.trim(),
+        helperColour: getComputedStyle(help).color,
+        helperSize: getComputedStyle(help).fontSize,
+        fill: cs.backgroundColor,
+        ariaInvalid: f.getAttribute('aria-invalid'),
+        describedBy: f.getAttribute('aria-describedby'),
+      };
+    });
+    const ERR = 'rgb(211, 47, 47)';
+    ok('the label turns error-red', errState.labelColour === ERR, errState.labelColour);
+    ok('a helper line appears under the field', errState.helperVisible && errState.helperText.length > 0, errState);
+    ok('the helper line is error-red', errState.helperColour === ERR, errState.helperColour);
+    ok('the helper line is 0.75rem (MUI FormHelperText)', errState.helperSize === '12px', errState.helperSize);
+    // Measured in their screenshot: the error field and an untouched field
+    // both read #F0F0F0. The fill is never tinted red. 0.09 is the hover
+    // fill, which is legitimately active right after clicking the button.
+    ok('the field fill is NOT tinted red — it stays the filled grey',
+      ['rgba(0, 0, 0, 0.06)', 'rgba(0, 0, 0, 0.09)'].includes(errState.fill), errState.fill);
+    ok('the field is announced as invalid', errState.ariaInvalid === 'true', errState.ariaInvalid);
+    ok('the helper is wired to the field via aria-describedby',
+      errState.describedBy === 'login-email-helper', errState.describedBy);
+
+    // A submit-time error must not outlive the value that caused it.
+    await page.fill('#login-email', 'a@b.c');
+    await page.waitForTimeout(150);
+    const cleared = await page.evaluate(() => {
+      const f = document.getElementById('login-email');
+      const help = document.getElementById('login-email-helper');
+      const lab = document.getElementById('login-email-label');
+      return { marked: f.classList.contains('input-error'),
+               helperVisible: help.offsetParent !== null,
+               labelRed: getComputedStyle(lab).color === 'rgb(211, 47, 47)' };
+    });
+    ok('typing a value clears the error, helper and red label',
+      !cleared.marked && !cleared.helperVisible && !cleared.labelRed, cleared);
+    await page.fill('#login-email', '');
 
     await page.fill('#login-email', 'dasha@etc-solutions.test');
     await page.fill('#login-password', 'prototype');
@@ -282,6 +329,69 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
     return hit;
   }, OLD.map(rgb));
   ok('no element still renders a Tailwind-palette colour', stale.length === 0, stale.slice(0, 5));
+
+  // ── The other two error paths, driven end to end. All three must use the
+  //    same treatment, and the error must survive/clear for the right reason.
+  await page.evaluate(() => window.showView('wizard'));
+  await page.waitForTimeout(200);
+  const custom = await page.$('#btn-custom');
+  if (custom) { await custom.click(); await page.waitForTimeout(200); }
+  await page.fill('#date-from', '2026-03-10');
+  await page.fill('#date-to', '2026-03-01');
+  await page.waitForTimeout(250);
+  const range = await page.evaluate(() => {
+    const to = document.getElementById('date-to');
+    const h = document.getElementById('date-to-helper');
+    const l = document.getElementById('date-to-label');
+    return { toMarked: to.classList.contains('input-error'),
+             fromMarked: document.getElementById('date-from').classList.contains('input-error'),
+             helperVisible: h.offsetParent !== null,
+             helperColour: getComputedStyle(h).color,
+             label: getComputedStyle(l).color };
+  });
+  ok('a reversed date range marks both fields', range.toMarked && range.fromMarked, range);
+  ok('the range message hangs off the end date, in red',
+    range.helperVisible && range.helperColour === 'rgb(211, 47, 47)', range);
+  ok('the end-date label turns red too', range.label === 'rgb(211, 47, 47)', range.label);
+
+  // An error ABOUT the value must NOT vanish just because the field has one.
+  await page.fill('#date-to', '2026-03-05');
+  await page.waitForTimeout(250);
+  const stillBad = await page.evaluate(() => ({
+    marked: document.getElementById('date-to').classList.contains('input-error'),
+    helperVisible: document.getElementById('date-to-helper').offsetParent !== null,
+  }));
+  ok('the range error survives typing while the range is still reversed',
+    stillBad.marked && stillBad.helperVisible, stillBad);
+
+  await page.fill('#date-to', '2026-03-20');
+  await page.waitForTimeout(250);
+  const fixed = await page.evaluate(() => ({
+    toMarked: document.getElementById('date-to').classList.contains('input-error'),
+    fromMarked: document.getElementById('date-from').classList.contains('input-error'),
+    helperVisible: document.getElementById('date-to-helper').offsetParent !== null,
+  }));
+  ok('correcting the range clears both fields and the message',
+    !fixed.toMarked && !fixed.fromMarked && !fixed.helperVisible, fixed);
+
+  await page.evaluate(() => window.showView('rohdaten'));
+  await page.waitForTimeout(250);
+  await page.evaluate(() => window.rdRun && window.rdRun());
+  await page.waitForTimeout(250);
+  const thr = await page.evaluate(() => {
+    const t = document.getElementById('rd-threshold');
+    const h = document.getElementById('rd-threshold-helper');
+    const l = document.getElementById('rd-threshold-label');
+    return { marked: t.classList.contains('input-error'),
+             helperVisible: h.offsetParent !== null,
+             helperText: h.textContent.trim(),
+             helperColour: getComputedStyle(h).color,
+             label: getComputedStyle(l).color };
+  });
+  ok('a missing threshold marks the field, not just a toast',
+    thr.marked && thr.helperVisible && thr.helperText.length > 0, thr);
+  ok('the threshold message and its label are red',
+    thr.helperColour === 'rgb(211, 47, 47)' && thr.label === 'rgb(211, 47, 47)', thr);
 
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
 
