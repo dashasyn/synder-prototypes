@@ -227,6 +227,47 @@ const rawKeys = page => page.evaluate(() => {
   ok('every rendered font size is on MUI\'s ramp',
     sizes.every(s => RAMP.includes(s)), sizes.filter(s => !RAMP.includes(s)));
 
+  // ── Punctuality DPM: the first report view, with the real breakdown ──
+  await page.evaluate(() => window.__go && window.__go('list'));
+  await page.waitForTimeout(200);
+  const backToList = await page.$('#new-eval-btn');
+  if (!backToList) { await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(1500); }
+  await page.click('tbody tr a');
+  await page.waitForTimeout(700);
+
+  ok('opening an evaluation lands on the punctuality report',
+    (await page.$$('#punct-table')).length === 1);
+  ok('three breakdown levels are offered',
+    (await page.$$('#punct-auf-1, #punct-auf-2, #punct-auf-3')).length === 3);
+  ok('no untranslated keys on the report', (await rawKeys(page)).length === 0, await rawKeys(page));
+
+  const l1 = await page.$$eval('#punct-table tbody tr', r => r.length);
+  ok('the first breakdown level renders rows', l1 > 5, l1);
+
+  // The numbers must come from the extracted logic, not from anything
+  // re-typed here: compare the Gesamt row against punctAggregate directly.
+  const totals = await page.$$eval('#punct-table tbody tr:last-child td',
+    c => c.map(x => x.textContent.trim()));
+  const expect = await page.evaluate(() => {
+    const a = punctAggregate(PUNCT_RECORDS);
+    const f = n => Math.round(n).toLocaleString('de-CH');
+    return [f(a.soll), f(a.ist), f(a.punkt), f(a.delta), a.wert.toFixed(2) + '%'];
+  });
+  ok('the totals row equals punctAggregate over every record',
+    JSON.stringify(totals.slice(1, 6)) === JSON.stringify(expect), { totals: totals.slice(1, 6), expect });
+
+  // the cascade must not offer a dimension already taken above
+  await page.click('#punct-auf-2');
+  await page.waitForTimeout(300);
+  const lvl2 = await page.$$eval('.MuiMenu-list li', els => els.map(e => e.textContent.trim()));
+  const lvl1Label = await page.$eval('#punct-auf-1 .MuiSelect-select', e => e.textContent.trim());
+  ok('the second level cannot repeat the first level\'s dimension',
+    !lvl2.includes(lvl1Label), { lvl1Label, lvl2 });
+  await page.click('.MuiMenu-list li:first-child');
+  await page.waitForTimeout(600);
+  const l2 = await page.$$eval('#punct-table tbody tr', r => r.length);
+  ok('adding a second level expands the tree', l2 > l1, { l1, l2 });
+
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
 
   await browser.close();

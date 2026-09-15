@@ -5,8 +5,15 @@
    port and the vanilla prototype share one source of truth for the domain
    model. Re-run to resync; the vanilla file is never modified.
 
-   28 evaluation rows · 35 domain constants · 75 pure functions
+   28 evaluation rows · 43 domain constants · 76 pure functions
    ══════════════════════════════════════════════════════════════════ */
+
+/* The extracted code calls t() while building its record sets, and the
+   vanilla's t() closes over a module-level lang. Rather than duplicate the
+   lookup in the React app, that binding lives here and the app drives it
+   through setDataLang() -- one implementation of t(), not two that can drift. */
+var lang = 'de';
+function setDataLang(l) { lang = l; }
 
 /** The evaluations list, read out of the vanilla prototype's markup. */
 var EVALUATIONS = [
@@ -292,6 +299,10 @@ var EVALUATIONS = [
   }
 ];
 
+var scl = n => Math.round((n || 0) * _punctScale);
+var sclPunkt = (punkt, ist) => Math.min(scl(ist), Math.round(scl(punkt) * _punctPctShift));
+var _punctScale = 1, _punctPctShift = 1;
+
 var DATA = {
     rpv: {
       "Tarifverbund A": {
@@ -382,10 +393,14 @@ var DAY_LABELS = {
     de: {Mon:'Mo',  Tue:'Di',  Wed:'Mi',  Thu:'Do',  Fri:'Fr',  Sat:'Sa',  Sun:'So'}
   };
 
+var PROTO_TODAY = new Date(2026, 5, 25);
+
 var MONTH_NAMES = {
     en: ['January','February','March','April','May','June','July','August','September','October','November','December'],
     de: ['Januar','Februar','März','April','Mai','Juni','Juli','August','September','Oktober','November','Dezember'],
   };
+
+var ORDINAL_EN = n => n + (n % 10 === 1 && n !== 11 ? 'st' : n % 10 === 2 && n !== 12 ? 'nd' : n % 10 === 3 && n !== 13 ? 'rd' : 'th');
 
 var DAY_CHOICES = [1,2,3,4,5,7,10,14,15,20,28];
 
@@ -403,6 +418,8 @@ var SCHED_CONFIG = {
   };
 
 var RPT_COLORS = ['#1D4ED8','#15803D','#B45309','#EA580C'];
+
+var RPT_THRESHOLD = 90;
 
 var RPT_DATA = {
     tus: [
@@ -450,6 +467,39 @@ var RPT_DATA = {
     gesamt: [89.53,90.41,86.44,88.87,92.34,93.88,86.70],
   };
 
+var RPT_RAW = (function() {
+    const base = [
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','06:39:00','06:38:52','06:41:00','06:42:08','00:03:16','00:02:00','ja','ja'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','07:09:00','07:09:00','07:11:00','07:12:17','00:03:17','00:02:00','ja','ja'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','07:39:00','07:38:45','07:41:00','07:41:39','00:02:54','00:02:00','ja','ja'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','08:09:00','08:08:25','08:11:00','08:11:41','00:03:16','00:02:00','ja','ja'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','12:39:00','12:39:45','12:41:00','12:44:54','00:05:09','00:02:00','ja','ja'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','13:39:00','13:38:51','13:41:00','13:41:47','00:02:56','00:02:00','ja','ja'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','14:39:00','14:41:34','14:41:00','14:41:03','-00:00:31','00:02:00','nein','nein'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','15:39:00','','15:41:00','','','00:02:00','',''],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','16:39:00','16:38:13','16:41:00','16:42:34','00:04:21','00:02:00','ja','ja'],
+      ['10.06.2026','50.099','(8572240) Giebenach, Lindenplatz','50.072','(8572240) Giebenach, Lindenplatz','17:09:00','17:08:31','17:11:00','17:12:36','00:04:05','00:02:00','ja','ja'],
+    ];
+    const rows = [];
+    const stops = ['(8572240) Giebenach, Lindenplatz','(8572241) Pratteln, Bahnhof','(4573120) Zürich HB','(4573121) Winterthur, Bahnhof','(8572100) Basel SBB','(8572242) Liestal, Bahnhof'];
+    const lines = ['50.099','50.072','50.081','60.040','8.S21','8.S23','62.131','62.132'];
+    const dates = ['10.06.2026','11.06.2026','12.06.2026','13.06.2026','16.06.2026','17.06.2026','18.06.2026','19.06.2026','20.06.2026','23.06.2026'];
+    for (let i = 0; i < 140; i++) {
+      if (i < 10) { rows.push([...base[i]]); continue; }
+      const d = dates[Math.floor(i/14) % dates.length];
+      const h = 6 + (i % 14);
+      const min = (i * 7) % 60;
+      const pad = n => String(n).padStart(2,'0');
+      const st = `${pad(h)}:${pad(min)}:00`;
+      const at = `${pad(h)}:${pad((min + (i%3===0 ? 2 : -1) + 60)%60)}:${pad((i*3)%60)}`;
+      const dt = `${pad(h)}:${pad((min+2)%60)}:00`;
+      const fat = `${pad(h)}:${pad((min + 2 + (i%5===0 ? 3 : 1))%60)}:${pad((i*2)%60)}`;
+      const reached = i%7 !== 0 ? 'ja' : 'nein';
+      rows.push([d, lines[i%lines.length], stops[i%stops.length], lines[(i+1)%lines.length], stops[(i+2)%stops.length], st, at, dt, fat, '00:02:'+pad((i*3)%60), '00:02:00', reached, reached]);
+    }
+    return rows;
+  })();
+
 var RPT_DIM_LABELS = {
     linienbuendel_abb: 'rpt_opt_linienbuendel_abb', tu_abb: 'rpt_opt_tu_abb',
     haltestelle_abb: 'rpt_opt_haltestelle_abb', verkehrsmittel_abb: 'rpt_opt_verkehrsmittel_abb',
@@ -460,6 +510,30 @@ var RPT_DIM_LABELS = {
 var RPT_REAL_DIMS = ['linienbuendel_abb','tu_abb','verkehrsmittel_abb','linie_abb','haltestelle_abb'];
 
 var RPT_DAYS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
+
+var RPT_RECORDS = (function () {
+    const out = [];
+    RPT_DATA.tus.forEach((tu, ti) => {
+      const code = tu.label.split(' ')[0];
+      const vm = /Bahn/.test(tu.label) ? 'Bahn' : /Tram/.test(tu.label) ? 'Tram' : 'Bus';
+      tu.lines.forEach(line => {
+        const n = out.length;
+        const place = (line.label.match(/\)\s*\d*\s*([^\-–]+)/) || [])[1];
+        out.push({
+          v: line.v, tuIdx: ti,
+          linienbuendel_abb: tu.label,
+          tu_abb: code,
+          verkehrsmittel_abb: vm,
+          linie_abb: line.label,
+          linie_zub: line.label.replace(/^\([^)]*\)\s*/, '') + ' ' + t('rpt_feeder_suffix'),
+          haltestelle_abb: place ? place.trim() : '—',
+          betriebstag: RPT_DAYS[n % 7],
+          kw: 'KW ' + (20 + (n % 6)),
+        });
+      });
+    });
+    return out;
+  })();
 
 var AUFSCHLUSS_OPTIONS = [
     'linienbuendel_abb', 'tu_abb', 'haltestelle_abb',
@@ -566,6 +640,51 @@ var PUNCT_DATA = {
     ]
   };
 
+var PUNCT_RAW = (function() {
+    const total = 4950;
+    const rows = [];
+    const stops = ['(8500855) Bubendorf, Bad','(8500852) Reigoldswil, Dorfplatz','(8572212) Liestal, Bahnhof','(8572213) Pratteln, Hauptstrasse'];
+    const bavLines = ['50.070','50.071','50.072','50.080','50.081','50.083'];
+    const tuLines  = [70, 71, 72, 80, 81, 83];
+    const fahrtIds = [70001,70003,70005,70007,71001,71003,72001,72003,80001,80003];
+    const lfdNrs   = [0,4,17,9,13,0,4,17,9,13];
+    const anDeltas = [0,3,8,-112,21,-28,5,0,41,-11];
+    const abDeltas = [56,0,55,101,21,27,12,0,83,265];
+    function p2(n) { return String(n).padStart(2,'0'); }
+    function fmtD(sec) {
+      if (!sec) return '00:00:00';
+      const a=Math.abs(sec), s=sec<0?'-':'';
+      return `${s}${p2(Math.floor(a/3600))}:${p2(Math.floor((a%3600)/60))}:${p2(a%60)}`;
+    }
+    for (let i = 0; i < total; i++) {
+      const day = p2(10 + (i % 14));
+      const h = p2(5 + (i % 16));
+      const m = p2((i * 3) % 60);
+      const date = `${day}.06.2026`;
+      const soll = `${date} ${h}:${m}:00`;
+      const anD = anDeltas[i % 10];
+      const abD = abDeltas[i % 10];
+      const istAnM = p2(((i * 3) + Math.floor(Math.abs(anD) / 60)) % 60);
+      const istAn = `${date} ${h}:${istAnM}:${p2(Math.abs(anD) % 60)}`;
+      const abM = p2(((i * 3) + 2) % 60);
+      const sollAb = `${date} ${h}:${abM}:00`;
+      const istAbM = p2(((i * 3) + 2 + Math.floor(abD / 60)) % 60);
+      const istAb = `${date} ${h}:${istAbM}:${p2(abD % 60)}`;
+      const hasAn = (i % 5) !== 2;
+      const hasAb = (i % 7) !== 3;
+      rows.push([
+        date, bavLines[i%6], 'ja', tuLines[i%6], fahrtIds[i%10],
+        i%2===0?'Hinrichtung':'Rückrichtung',
+        lfdNrs[i%10], stops[i%4],
+        hasAn?soll:'', hasAn?soll:'', hasAn?istAn:'',
+        hasAn?fmtD(anD):'', hasAn?fmtD(anD):'',
+        hasAb?sollAb:'', hasAb?sollAb:'', hasAb?istAb:'',
+        hasAb?fmtD(abD):'', hasAb?fmtD(abD):'',
+      ]);
+    }
+    return rows;
+  })();
+
 var PUNCT_DIM_LABELS = {
     linienbuendel: 'rpt_col_name', linie: 'fa_opt_linie', haltestelle: 'punct_dim_haltestelle',
     monat: 'punct_dim_monat', kw: 'rpt_opt_kw', betriebstag: 'fa_opt_tag',
@@ -580,6 +699,38 @@ var PUNCT_MONTHS = ['Januar','Februar','März','April','Mai','Juni'];
 var PUNCT_DAYS = ['Mo','Di','Mi','Do','Fr','Sa','So'];
 
 var PUNCT_REGIONS = ['Nordwestschweiz','Mittelland','Ostschweiz','Zentralschweiz','Ticino'];
+
+var PUNCT_RECORDS = (function () {
+    const out = [];
+    PUNCT_DATA.bundles.forEach((b, bi) => {
+      const tu = b.label.split(' ')[0];
+      const vm = /Bahn/.test(b.label) ? 'Bahn' : /Tram/.test(b.label) ? 'Tram' : 'Bus';
+      const src = (b.lines && b.lines.length) ? b.lines : [{ label: b.label, soll: b.soll, ist: b.ist, punkt: b.punkt, delta: b.delta, wert: b.wert, collective: true }];
+      src.forEach((r, ri) => {
+        const n = out.length;
+        const place = (r.label.match(/\d+\s+([^\-–]+)/) || [])[1];
+        out.push({
+          _soll: r.soll, _ist: r.ist, _punkt: r.punkt,
+          get soll() { return scl(this._soll); },
+          get ist()  { return scl(this._ist);  },
+          get punkt(){ return sclPunkt(this._punkt, this._ist);},
+          get delta(){ return scl(this._soll) - scl(this._ist); },
+          bundleIdx: bi,
+          linienbuendel: b.label,
+          linie: r.collective ? `${b.label} (${t('punct_collective')})` : r.label,
+          haltestelle: place ? place.trim() : '—',
+          tu_konz: tu, tu_fahr: tu, vm,
+          monat: PUNCT_MONTHS[n % PUNCT_MONTHS.length],
+          kw: 'KW ' + (20 + (n % 6)),
+          betriebstag: PUNCT_DAYS[n % 7],
+          region: PUNCT_REGIONS[bi % PUNCT_REGIONS.length],
+        });
+      });
+    });
+    return out;
+  })();
+
+var PUNCT_THRESHOLD = 90;
 
 var RD_TU = [
     ['AAGL','Autobus AG Liestal Öffentlicher Verkehr'],
@@ -705,6 +856,21 @@ function setLang(newLang) {
 
 function isSchedulingAllowed() {
     return state.selectedPeriod !== 'custom';
+  }
+
+function buildDaysSuffix() {
+    const allSelected = ALL_DAYS.every(d => state.selectedDays.includes(d));
+    if (allSelected) return '';
+    const days = state.selectedDays;
+    if (days.length === 0) return '';
+    // Check if it's a contiguous range like Mon–Fri
+    const indices = days.map(d => ALL_DAYS.indexOf(d)).sort((a, b) => a - b);
+    const isContiguous = indices.every((v, i) => i === 0 || v === indices[i - 1] + 1);
+    const labels = DAY_LABELS[lang] || DAY_LABELS.en;
+    if (isContiguous && days.length > 2) {
+      return ', ' + labels[ALL_DAYS[indices[0]]] + '–' + labels[ALL_DAYS[indices[indices.length - 1]]];
+    }
+    return ', ' + days.map(d => labels[d]).join(', ');
   }
 
 function buildFilterSuffix() {

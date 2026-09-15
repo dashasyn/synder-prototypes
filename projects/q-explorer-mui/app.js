@@ -361,6 +361,147 @@ function NewEvaluation({ go }) {
     <//>`;
 }
 
+
+/* ── Screen: Punctuality DPM report ───────────────────────────────────
+   The first of the report views to come across. The breakdown itself is
+   NOT reimplemented: punctBuildTree / punctAggregate come from data.js,
+   extracted from the vanilla prototype, so the numbers are the same code
+   producing them. What is written here is the rendering and the cascade.
+
+   Aufschlüsseln cascade: three levels, each offering only the dimensions
+   the levels above have not already taken, and clearing the levels below
+   when it changes -- otherwise you can ask for "TU within TU". */
+const PUNCT_DIMS = ['betriebstag', 'linienbuendel', 'linie', 'haltestelle',
+                    'monat', 'kw', 'tu_konz', 'tu_fahr', 'vm', 'region'];
+
+function fmtInt(n) {
+  return (n === null || n === undefined) ? '—' : Math.round(n).toLocaleString('de-CH');
+}
+function fmtPct(v) {
+  return (v === null || v === undefined) ? '—' : v.toFixed(2) + '%';
+}
+
+function PunctRow({ node, depth, t }) {
+  const [open, setOpen] = useState(depth === 0);
+  const kids = node.children || [];
+  const pad = 16 + depth * 20;
+  return html`
+    <${React.Fragment}>
+      <${TableRow} hover>
+        <${TableCell} sx=${{ pl: `${pad}px` }}>
+          ${kids.length > 0 && html`
+            <${IconButton} aria-label=${open ? 'collapse' : 'expand'}
+                           onClick=${() => setOpen(o => !o)} sx=${{ mr: .5 }}>
+              <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
+            <//>`}
+          ${node.label}
+        <//>
+        <${TableCell} align="right">${fmtInt(node.agg.soll)}<//>
+        <${TableCell} align="right">${fmtInt(node.agg.ist)}<//>
+        <${TableCell} align="right">${fmtInt(node.agg.punkt)}<//>
+        <${TableCell} align="right">${fmtInt(node.agg.delta)}<//>
+        <${TableCell} align="right">
+          <${Typography} variant="body2" component="span"
+            color=${node.agg.wert === null ? 'text.disabled'
+                   : node.agg.wert >= 90 ? 'success.main'
+                   : node.agg.wert >= 80 ? 'warning.main' : 'error.main'}>
+            ${fmtPct(node.agg.wert)}
+          <//>
+        <//>
+        <${TableCell} align="right">
+          <${Tooltip} title=${t('rpt_action_chart')}>
+            <${IconButton} aria-label="chart"><${Icon}>bar_chart<//><//>
+          <//>
+          <${Tooltip} title=${t('rpt_action_raw')}>
+            <${IconButton} aria-label="raw"><${Icon}>table_view<//><//>
+          <//>
+        <//>
+      <//>
+      ${open && kids.map((k, i) =>
+        html`<${PunctRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t} />`)}
+    <//>`;
+}
+
+function ReportPunctuality({ go, row }) {
+  const { t } = useT();
+  const [dims, setDims] = useState(['linienbuendel', '', '']);
+
+  const active = dims.filter(Boolean);
+  const tree = useMemo(
+    () => punctBuildTree(PUNCT_RECORDS, active.length ? active : ['linienbuendel']),
+    [dims.join('|')]);
+  const total = useMemo(() => punctAggregate(PUNCT_RECORDS), []);
+
+  // each level offers only what the levels above have not taken
+  const setLevel = (i, value) => setDims(d => {
+    const next = [...d];
+    next[i] = value;
+    for (let j = i + 1; j < next.length; j++) next[j] = '';   // clear below
+    return next;
+  });
+  const optionsFor = i => PUNCT_DIMS
+    .filter(dim => !dims.some((d, j) => d === dim && j !== i))
+    .map(dim => ({ value: dim, label: t(PUNCT_DIM_LABELS[dim] || dim) }));
+
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_punctuality') }]}
+        title=${row ? row.name : t('type_punctuality')}
+        subtitle=${t('type_punctuality')}
+        action=${html`<${Button} variant="outlined"
+                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>
+                        ${t('export_csv')}<//>`} />
+
+      <${Box} sx=${{ p: 3 }}>
+        <${Card} sx=${{ mb: 3 }}>
+          <${CardContent}>
+            <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>
+              ${t('punct_aufschluss_label')}
+            <//>
+            <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+              ${[0, 1, 2].map(i => html`
+                <${FilterSelect} key=${i} id=${'punct-auf-' + (i + 1)}
+                  label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
+                  value=${dims[i]} onChange=${v => setLevel(i, v)}
+                  options=${optionsFor(i)}
+                  minWidth=${210} />`)}
+            <//>
+          <//>
+        <//>
+
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+          <${Table} id="punct-table">
+            <${TableHead}>
+              <${TableRow}>
+                <${TableCell}>${t('rpt_col_name')}<//>
+                <${TableCell} align="right">${t('punct_col_soll')}<//>
+                <${TableCell} align="right">${t('punct_col_ist')}<//>
+                <${TableCell} align="right">${t('punct_col_punkt')}<//>
+                <${TableCell} align="right">${t('punct_col_delta')}<//>
+                <${TableCell} align="right">${t('punct_col_wert')}<//>
+                <${TableCell} align="right">${t('col_actions')}<//>
+              <//>
+            <//>
+            <${TableBody}>
+              ${tree.map((n, i) => html`<${PunctRow} key=${n.label + i} node=${n} depth=${0} t=${t} />`)}
+              <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
+                <${TableCell}>${t('rpt_gesamt') || 'Gesamt'}<//>
+                <${TableCell} align="right">${fmtInt(total.soll)}<//>
+                <${TableCell} align="right">${fmtInt(total.ist)}<//>
+                <${TableCell} align="right">${fmtInt(total.punkt)}<//>
+                <${TableCell} align="right">${fmtInt(total.delta)}<//>
+                <${TableCell} align="right">${fmtPct(total.wert)}<//>
+                <${TableCell} />
+              <//>
+            <//>
+          <//>
+        <//>
+      <//>
+    <//>`;
+}
+
 /* ── Screen: a report view that has not been ported yet ───────────── */
 function NotPorted({ go, row }) {
   const { t } = useT();
@@ -421,13 +562,18 @@ function TopBar({ go }) {
 function App() {
   const [lang, setLang] = useState('de');
   const [route, setRoute] = useState({ name: 'list' });
-  const t = useMemo(() => k => (translations[lang] || translations.en)[k] || k, [lang]);
+  // data.js owns t() and its lang binding, because the extracted record sets
+  // call it while they build. Duplicating the lookup here would give two
+  // implementations that can disagree.
+  const t = useMemo(() => { setDataLang(lang); return k => window.t(k); }, [lang]);
   const go = (name, row) => setRoute({ name, row });
 
   const screen =
     route.name === 'list'      ? html`<${EvaluationsList} go=${go} />` :
     route.name === 'scheduled' ? html`<${ScheduledReports} go=${go} />` :
     route.name === 'new'       ? html`<${NewEvaluation} go=${go} />` :
+    (route.name === 'report' && route.row && route.row.group === 'punctuality')
+                               ? html`<${ReportPunctuality} go=${go} row=${route.row} />` :
                                  html`<${NotPorted} go=${go} row=${route.row} />`;
 
   return html`

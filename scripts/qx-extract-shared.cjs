@@ -31,21 +31,49 @@ const OUT = path.resolve(__dirname, '../projects/q-explorer-mui/data.js');
 const src = fs.readFileSync(SRC, 'utf8');
 const js = src.slice(src.lastIndexOf('<script>') + 8, src.lastIndexOf('</script>'));
 
-/** Match a balanced {...} or [...] starting at `from`. */
+/**
+ * Match a balanced {...}, [...] or (...) starting at `from`.
+ *
+ * Skips strings, comments AND regex literals. That last one is not
+ * pedantry: RPT_RECORDS contains /\)\s*\d*\s*([^\-–]+)/ , and counting the
+ * `)` inside that regex as a closer truncated the whole IIFE, producing a
+ * data.js that would not parse.
+ */
 function balanced(text, from) {
   const open = text[from];
-  const close = open === '{' ? '}' : ']';
-  let depth = 0, inStr = null;
+  const close = open === '{' ? '}' : open === '[' ? ']' : ')';
+  let depth = 0;
+  // a `/` begins a regex (not division) when the last meaningful char is one
+  // of these — enough for this source, and wrong only in cases it never hits
+  const REGEX_OK = '(,=:[!&|?{};+-*%~^<>';
+  let prev = '';
   for (let i = from; i < text.length; i++) {
     const c = text[i];
-    if (inStr) {
-      if (c === '\\') { i++; continue; }
-      if (c === inStr) inStr = null;
-      continue;
+
+    if (c === '/' && text[i + 1] === '/') { while (i < text.length && text[i] !== '\n') i++; continue; }
+    if (c === '/' && text[i + 1] === '*') { i += 2; while (i + 1 < text.length && !(text[i] === '*' && text[i + 1] === '/')) i++; i++; continue; }
+
+    if (c === '"' || c === "'" || c === '`') {
+      const q = c; i++;
+      while (i < text.length) { if (text[i] === '\\') { i++; } else if (text[i] === q) break; i++; }
+      prev = q; continue;
     }
-    if (c === '"' || c === "'" || c === '`') { inStr = c; continue; }
+
+    if (c === '/' && REGEX_OK.includes(prev)) {
+      i++; let inClass = false;
+      while (i < text.length) {
+        if (text[i] === '\\') { i++; }
+        else if (text[i] === '[') inClass = true;
+        else if (text[i] === ']') inClass = false;
+        else if (text[i] === '/' && !inClass) break;
+        i++;
+      }
+      prev = '/'; continue;
+    }
+
     if (c === open) depth++;
     else if (c === close) { depth--; if (depth === 0) return text.slice(from, i + 1); }
+    if (!/\s/.test(c)) prev = c;
   }
   return null;
 }
@@ -87,13 +115,78 @@ const rows = [];
 const SKIP = new Set(['MUI_SELECT_OPEN', 'VIEW_HASH', 'HASH_VIEW', 'EVAL_TYPES',
                       'INFO_ICONS', 'INFO_DOCS', 'INFO_TITLES']);
 const consts = [];
-const constRe = /^  const ([A-Z][A-Z0-9_]*)\s*=\s*([\{\[])/gm;
+// NOT just object and array literals. Four of the most important constants
+// -- PUNCT_RECORDS, RPT_RECORDS, PUNCT_RAW, RPT_RAW -- are IIFEs that derive
+// their rows from the base data, and an earlier version of this regex matched
+// only `{` and `[`, so it skipped them SILENTLY. They are precisely the record
+// sets the Aufschlüsseln breakdown runs on.
+const constRe = /^  const ([A-Z][A-Z0-9_]*)\s*=\s*/gm;
 let c;
 while ((c = constRe.exec(js))) {
   const name = c[1];
   if (SKIP.has(name)) continue;
-  const body = balanced(js, c.index + c[0].length - 1);
-  if (body) consts.push({ name, body });
+  const at = c.index + c[0].length;
+  const first = js[at];
+  let body;
+  if (first === '{' || first === '[' || first === '(') {
+    body = balanced(js, at);
+    if (!body) continue;
+    // an IIFE needs its trailing call
+    if (first === '(') {
+      const after = js.slice(at + body.length).match(/^\s*\(\s*\)/);
+      if (after) body += after[0];
+    }
+  } else {
+    // a scalar or expression: take the rest of the statement
+    // (PROTO_TODAY is a `new Date(...)`, the thresholds are numbers)
+    let depth = 0, inStr = null, i = at;
+    for (; i < js.length; i++) {
+      const ch = js[i];
+      if (inStr) { if (ch === '\\') { i++; continue; } if (ch === inStr) inStr = null; continue; }
+      if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+      if ('([{'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth--;
+      else if (ch === ';' && depth === 0) break;
+    }
+    body = js.slice(at, i).trim();
+  }
+  consts.push({ name, body });
+}
+
+// A miss must be loud. Every top-level SHOUTY const in the source either comes
+// across or is deliberately skipped -- anything else stops the extraction.
+{
+  const all = [...js.matchAll(/^  const ([A-Z][A-Z0-9_]*)\s*=/gm)].map(m => m[1]);
+  const got = new Set(consts.map(x => x.name));
+  const missed = all.filter(n => !got.has(n) && !SKIP.has(n));
+  if (missed.length) {
+    console.error('EXTRACTION INCOMPLETE — not carried across:', missed.join(', '));
+    process.exit(1);
+  }
+}
+
+/* ── 2b. lowercase module-level helpers ──────────────────────────────
+   PUNCT_RECORDS' rows are getters that call scl()/sclPunkt(), and those are
+   lowercase arrow consts, so the SHOUTY-only sweep above missed them and the
+   data threw ReferenceError the moment anything read a row. Carried by name,
+   with the scale variables they close over. */
+const HELPERS = ['scl', 'sclPunkt', '_punctScale', '_punctPctShift', '_rptScale'];
+const helpers = [];
+for (const name of HELPERS) {
+  const re = new RegExp('^  (?:const|let|var) ' + name + '\\s*=\\s*', 'm');
+  const m = js.match(re);
+  if (!m) continue;
+  const at = m.index + m[0].length;
+  let depth = 0, inStr = null, i = at;
+  for (; i < js.length; i++) {
+    const ch = js[i];
+    if (inStr) { if (ch === '\\') { i++; continue; } if (ch === inStr) inStr = null; continue; }
+    if (ch === '"' || ch === "'" || ch === '`') { inStr = ch; continue; }
+    if ('([{'.includes(ch)) depth++;
+    else if (')]}'.includes(ch)) depth--;
+    else if (ch === ';' && depth === 0) break;
+  }
+  helpers.push({ name, body: js.slice(at, i).trim() });
 }
 
 /* ── 3. the pure functions ───────────────────────────────────────── */
@@ -118,8 +211,17 @@ const out = `/* ═════════════════════�
    ${rows.length} evaluation rows · ${consts.length} domain constants · ${pure.length} pure functions
    ══════════════════════════════════════════════════════════════════ */
 
+/* The extracted code calls t() while building its record sets, and the
+   vanilla's t() closes over a module-level lang. Rather than duplicate the
+   lookup in the React app, that binding lives here and the app drives it
+   through setDataLang() -- one implementation of t(), not two that can drift. */
+var lang = 'de';
+function setDataLang(l) { lang = l; }
+
 /** The evaluations list, read out of the vanilla prototype's markup. */
 var EVALUATIONS = ${JSON.stringify(rows, null, 2)};
+
+${helpers.map(x => `var ${x.name} = ${x.body};`).join('\n')}
 
 ${consts.map(x => `var ${x.name} = ${x.body};`).join('\n\n')}
 
@@ -127,6 +229,28 @@ ${pure.map(x => x.src).join('\n\n')}
 `;
 
 fs.writeFileSync(OUT, out);
+
+// The real completeness gate: execute what was just written, together with
+// the i18n it depends on, and touch every record set. An earlier version
+// produced a data.js that parsed fine and threw ReferenceError on first read.
+{
+  const vm = require('vm');
+  const ctx = { console };
+  vm.createContext(ctx);
+  try {
+    const i18n = fs.readFileSync(path.resolve(__dirname, '../projects/q-explorer-mui/i18n.js'), 'utf8');
+    vm.runInContext(i18n + '\n' + out, ctx);
+    // touching a row is what actually exercises the getters
+    JSON.stringify(ctx.PUNCT_RECORDS && ctx.PUNCT_RECORDS[0]);
+    JSON.stringify(ctx.RPT_RECORDS && ctx.RPT_RECORDS[0]);
+    ctx.punctBuildTree(ctx.PUNCT_RECORDS, ['tu']);
+    ctx.rptBuildTree(ctx.RPT_RECORDS, ['tu']);
+    console.log('self-check      data.js executes and every record set reads');
+  } catch (e) {
+    console.error('SELF-CHECK FAILED —', e.message);
+    process.exit(1);
+  }
+}
 console.log(`evaluation rows   ${rows.length}`);
 console.log(`domain constants  ${consts.length}  (${consts.map(x => x.name).slice(0, 8).join(', ')}…)`);
 console.log(`pure functions    ${pure.length}`);
