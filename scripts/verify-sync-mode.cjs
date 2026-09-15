@@ -65,9 +65,10 @@ function ok(name, cond) {
     return Math.round(r.width) === 20 && Math.round(r.height) === 20;
   }));
   ok('no hand-rolled radio left behind', (await page.locator('.mode-radio').count()) === 0);
-  ok('status chips are kit chips',
-    await page.locator('#mode-pt .status.status-green').isVisible() &&
-    await page.locator('#mode-sum .status.status-grey').isVisible());
+  ok('the recommended chip is a kit status chip',
+    await page.locator('#mode-pt .status.status-green').isVisible());
+  ok('the Summary card carries no chip', (await page.locator('#mode-sum .status').count()) === 0);
+  ok('only one chip on the step', (await page.locator('.modes .status').count()) === 1);
   ok('buttons are kit buttons',
     await page.locator('#mode-pt .pv-btn button.btn.btn-outlined').isVisible());
   ok('page actions use the kit primary + outlined pair',
@@ -96,8 +97,6 @@ function ok(name, cond) {
   ok('card lines are 14px', await page.locator('#mode-pt .mode-lines li')
     .first().evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
   ok('downside line is 14px', await page.locator('#mode-pt .mode-down')
-    .evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
-  ok('permanence line is 14px', await page.locator('.perm-under')
     .evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
   ok('switcher text is 14px', await page.locator('#md-1')
     .evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
@@ -129,45 +128,65 @@ function ok(name, cond) {
   ok('summary downside is the missing detail',
     (await page.locator('#mode-sum .mode-down').textContent()).includes('stay in Synder'));
 
-  // ── 4b. "Recommended" must carry a reason, not just a badge (review, 2026-09-14) ──
-  const why = page.locator('#mode-pt .mode-why');
-  ok('recommended card explains why', await why.isVisible());
-  ok('the reason names the actual stack', /shopify/i.test(await why.textContent()) &&
-    /quickbooks/i.test(await why.textContent()));
-  ok('the reason is specific, not a restatement of the badge',
-    /tax/i.test(await why.textContent()) && /customer/i.test(await why.textContent()));
-  ok('the reason is 14px', await why.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
-  ok('only the recommended card carries a reason',
-    (await page.locator('.mode-why').count()) === 1);
-  ok('the badge is still there too', await page.locator('#mode-pt .status.status-green').isVisible());
-
-  // ── 4c. Soft default for the undecided (review, 2026-09-14) ──
-  const nudge = page.locator('.perm-nudge');
-  ok('undecided nudge visible', await nudge.isVisible());
-  ok('nudge points at a specific mode', /per transaction/i.test(await nudge.textContent()));
-  ok('nudge sits above the irreversibility line',
-    (await nudge.boundingBox()).y < (await page.locator('.perm-under').boundingBox()).y);
-
-  // ── 5. Permanence — one grey line under the cards, not a yellow warning ──
-  const perm = page.locator('.perm-under');
-  ok('permanence line visible', await perm.isVisible());
-  ok('permanence sits below both cards',
-    (await perm.boundingBox()).y >
-      (await cardSum.boundingBox()).y + (await cardSum.boundingBox()).height - 1);
-  ok('permanence states the escape hatch',
-    /second organization/i.test(await perm.textContent()));
-  // review, 2026-09-14: the new-org route must not read as the normal way to switch modes
-  ok('the escape hatch is framed as a cost, not a toggle',
-    /separate set of books/i.test(await perm.textContent()) &&
-    /isn't\s+a\s+quick\s+toggle/i.test(await perm.textContent()));
-  ok('permanence still says the choice is final',
-    /can't be changed later/i.test(await perm.textContent()));
-  ok('permanence is grey, not a warning colour', await perm.evaluate(el => {
-    const m = getComputedStyle(el).color.match(/\d+/g).map(Number);
-    return Math.abs(m[0] - m[1]) < 40 && Math.abs(m[1] - m[2]) < 60 && m[0] < 160;
+  // ── 4b. The reason now lives in a tooltip on the Recommended chip (Ignat, 2026-09-15) ──
+  const chip = page.locator('#mode-pt .why-chip');
+  const tip = page.locator('#why-pt');
+  ok('recommended chip visible', await chip.isVisible());
+  ok('chip carries a question mark', (await chip.textContent()).includes('?'));
+  ok('chip is a real button, so it is reachable', await chip.evaluate(el => el.tagName === 'BUTTON'));
+  ok('chip is described by the tooltip', await page.evaluate(() => {
+    const c = document.querySelector('#mode-pt .why-chip');
+    return document.getElementById(c.getAttribute('aria-describedby')) !== null;
   }));
-  ok('no yellow alert on the step', (await page.locator('.alert-warning').count()) === 0);
-  ok('permanence appears once only', (await page.locator('.perm-under').count()) === 1);
+  ok('tooltip uses the kit tooltip component',
+    await tip.evaluate(el => el.classList.contains('tooltip') &&
+      el.parentElement.classList.contains('tooltip-wrap')));
+  // .tooltip transitions opacity over 150ms — read after it settles, or the assertion races it
+  const tipOpacity = () => tip.evaluate(el => parseFloat(getComputedStyle(el).opacity));
+  async function opacitySettles(want) {
+    for (let i = 0; i < 20; i++) {
+      if ((await tipOpacity()) === want) return true;
+      await page.waitForTimeout(50);
+    }
+    return false;
+  }
+  ok('tooltip hidden at rest', (await tipOpacity()) === 0);
+  await chip.hover();
+  ok('tooltip appears on hover', await opacitySettles(1));
+  ok('tooltip explains the recommendation for this stack',
+    /shopify/i.test(await tip.textContent()) && /quickbooks/i.test(await tip.textContent()));
+  ok('tooltip gives a reason, not a restatement',
+    /tax/i.test(await tip.textContent()) && /customer/i.test(await tip.textContent()));
+  ok('tooltip is 14px, not the kit default 12px',
+    await tip.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
+  ok('tooltip stays inside the viewport', await tip.evaluate(el => {
+    const r = el.getBoundingClientRect();
+    return r.left >= 0 && r.right <= window.innerWidth;
+  }));
+  await page.locator('.ob-sub').hover();
+  ok('tooltip hides again when the pointer leaves', await opacitySettles(0));
+  await chip.focus();
+  ok('tooltip also appears on keyboard focus — the kit reveals on hover only',
+    await opacitySettles(1));
+  await page.locator('#md-1').focus();
+  ok('tooltip hides on blur', await opacitySettles(0));
+  ok('clicking the chip does not change the selected mode', await (async () => {
+    await page.locator('#mode-sum').click();
+    await chip.click();
+    return await page.locator('#mode-sum.sel').isVisible();
+  })());
+  await page.locator('#r-pt').click();
+  ok('no reason block left in the card body', (await page.locator('.mode-why').count()) === 0);
+
+  // ── 4c. Everything under the cards is gone (Ignat, 2026-09-15) ──
+  ok('no permanence line under the cards', (await page.locator('.perm-under').count()) === 0);
+  ok('no undecided nudge', (await page.locator('.perm-nudge').count()) === 0);
+  ok('the actions row follows the cards directly', await page.evaluate(() => {
+    const cards = document.querySelector('.modes');
+    return cards.nextElementSibling && cards.nextElementSibling.classList.contains('ob-actions');
+  }));
+  ok('nothing on the step claims the choice is permanent',
+    !/can't be changed later/i.test(await page.locator('.ob-wrap').textContent()));
 
   // ── 6. Preview is button + modal, and the button does not promise real books ──
   const btnPt = page.locator('#mode-pt .pv-btn button');
@@ -310,7 +329,6 @@ function ok(name, cond) {
   ok('select: clicking the radio itself selects that card',
     await page.locator('#mode-pt.sel').isVisible());
   ok('select: only one card selected at a time', (await page.locator('.mode.sel').count()) === 1);
-  ok('select: permanence line survives every selection', await perm.isVisible());
 
   // ── 12. Keyboard / a11y ──
   await page.locator('#r-pt').focus();
