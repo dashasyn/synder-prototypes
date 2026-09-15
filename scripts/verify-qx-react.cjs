@@ -173,6 +173,45 @@ const rawKeys = page => page.evaluate(() => {
   ok('the ✕ clears the filter and restores every row',
     (await page.$$eval('tbody tr', r => r.length)) === before);
 
+  // ── the port must carry the vanilla's DATA, not retyped samples ──
+  //    Ignat, 2026-09-15: "Now you lost almost all logic." The fix is
+  //    scripts/qx-extract-shared.cjs, so this pins the two together.
+  const data = await page.evaluate(() => ({
+    rows: EVALUATIONS.length,
+    groups: [...new Set(EVALUATIONS.map(r => r.group))].sort(),
+    statuses: [...new Set(EVALUATIONS.map(r => r.status))].sort(),
+    constants: ['DATA', 'PUNCT_DATA', 'FA_DATA', 'DQI_TU', 'RPT_DATA', 'RD_TU']
+      .filter(k => typeof window[k] === 'object'),
+    pureFns: ['periodFromKey', 'punctAggregate', 'rptBuildTree', 'punctBuildTree']
+      .filter(k => typeof window[k] === 'function'),
+  }));
+  ok('all 28 evaluations came across from the vanilla prototype',
+    data.rows === 28, data.rows);
+  ok('all six evaluation types came across', data.groups.length === 6, data.groups);
+  ok('the real status set came across, including `running`',
+    data.statuses.includes('running'), data.statuses);
+  ok('the domain constants are loaded', data.constants.length === 6, data.constants);
+  ok('the pure helper functions are loaded', data.pureFns.length === 4, data.pureFns);
+
+  const rendered = await page.$$eval('tbody tr', r => r.length);
+  ok('every evaluation renders', rendered === 28, rendered);
+
+  // status_running and status_in_progress share a label in both languages,
+  // so the menu must not offer the same text twice — and picking it has to
+  // return BOTH underlying statuses rather than silently dropping one.
+  await page.click('#f-status');
+  await page.waitForTimeout(300);
+  const opts = await page.$$eval('.MuiMenu-list li', els => els.map(e => e.textContent.trim()));
+  ok('no two status options share a label', opts.length === new Set(opts).size, opts);
+  const inProgress = opts.findIndex(o => /progress|bearbeitung/i.test(o));
+  await page.click(`.MuiMenu-list li:nth-child(${inProgress + 1})`);
+  await page.waitForTimeout(400);
+  ok('picking "In progress" returns the `running` rows too, not just in_progress',
+    (await page.$$eval('tbody tr', r => r.length)) === 5,
+    await page.$$eval('tbody tr', r => r.length));
+  await page.click('#f-status button[aria-label^="Clear"]');
+  await page.waitForTimeout(400);
+
   // ── typography: every rendered size on MUI's ramp ────────────
   const sizes = await page.evaluate(() => {
     const out = new Set();

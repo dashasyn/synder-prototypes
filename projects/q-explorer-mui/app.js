@@ -61,17 +61,13 @@ const theme = createTheme({
 
 const TYPE_KEYS = ['punctuality', 'raw_data', 'data_quality', 'connection', 'trip_failures', 'line_analysis'];
 
-const ROWS = [
-  { group: 'punctuality', name: 'Pünktlichkeit – Letzte 7 Tage, Solothurn', period: '19.05–25.05.2026', created: '25.05.2026', status: 'in_progress' },
-  { group: 'punctuality', name: 'Pünktlichkeit – Letzter Monat, alle TU',   period: '01.04–30.04.2026', created: '03.05.2026', status: 'done' },
-  { group: 'punctuality', name: 'Pünktlichkeit – Letzte 30 Tage, Bern',     period: '26.04–25.05.2026', created: '26.05.2026', status: 'done' },
-  { group: 'punctuality', name: 'Pünktlichkeit – Aktuelles Jahr, Zürich',   period: '01.01–26.05.2026', created: '24.05.2026', status: 'failed', note: 'Data source was unreachable' },
-  { group: 'raw_data',    name: 'Rohdaten Export – Gestern',                period: '24.05.2026',       created: '25.05.2026', status: 'done' },
-  { group: 'raw_data',    name: 'Rohdaten Export – SBB Vollexport',         period: '01.05–23.05.2026', created: '25.05.2026', status: 'in_progress' },
-  { group: 'raw_data',    name: 'Rohdaten Export – Letzte Woche',           period: '11.05–17.05.2026', created: '20.05.2026', status: 'done' },
-  { group: 'trip_failures', name: 'Fahrtausfälle – Letzter Monat, alle Linien', period: '01.04–30.04.2026', created: '02.05.2026', status: 'done' },
-  { group: 'data_quality',  name: 'DQI – Aktuelles Quartal',                period: '01.04–30.06.2026', created: '01.07.2026', status: 'done' },
-];
+/* The evaluations come from data.js, extracted straight out of the vanilla
+   prototype (scripts/qx-extract-shared.cjs). Ignat, 2026-09-15: "Now you
+   lost almost all logic" — he was right, the first pass retyped a handful
+   of sample rows. Nothing here is retyped now; re-run the extractor to
+   resync. Schedules are still local: the vanilla builds them in markup
+   the same way, and they come across in the next pass. */
+const ROWS = EVALUATIONS;
 
 const SCHEDULES = [
   { name: 'Pünktlichkeit – wöchentlich', type: 'punctuality',   freq: 'weekly',  next: '01.06.2026 06:00', status: 'active' },
@@ -79,8 +75,31 @@ const SCHEDULES = [
   { name: 'Fahrtausfälle – monatlich',   type: 'trip_failures', freq: 'monthly', next: '01.06.2026 07:00', status: 'paused' },
 ];
 
-const STATUS_COLOUR = { done: 'success', in_progress: 'warning', failed: 'error', active: 'success', paused: 'default' };
-const STATUS_KEY = { done: 'filter_done', in_progress: 'filter_in_progress', failed: 'filter_failed' };
+// The real data carries a `running` status my invented sample rows never had —
+// which is exactly the kind of gap retyping data hides.
+const STATUS_COLOUR = { done: 'success', in_progress: 'warning', running: 'info',
+                        failed: 'error', active: 'success', paused: 'default' };
+const STATUS_KEY = { done: 'status_done', in_progress: 'status_in_progress',
+                     running: 'status_running', failed: 'status_failed' };
+
+/**
+ * Status options, derived from the data rather than hardcoded.
+ *
+ * FINDING: the data carries four statuses but only three distinct labels —
+ * `status_running` and `status_in_progress` are both "In Progress" /
+ * "In Bearbeitung" (3 rows in_progress, 2 running). Offering both would put
+ * two identical entries in the menu. They are merged here under the first
+ * value, and the duplicate is flagged for Ignat: either they are meant to
+ * read differently, or one of them is redundant.
+ */
+function statusOptions(t) {
+  const seen = new Map();
+  for (const s of [...new Set(ROWS.map(r => r.status))]) {
+    const label = t(STATUS_KEY[s] || s);
+    if (!seen.has(label)) seen.set(label, { value: s, label });
+  }
+  return [...seen.values()];
+}
 
 /* ── A filter select. No All option — an empty value IS all, the label
       names the field, and the ✕ clears it. Ignat, 2026-09-15. ───────── */
@@ -127,9 +146,11 @@ function EvaluationsList({ go }) {
   const [period, setPeriod] = useState('');
   const [q, setQ] = useState('');
 
+  // Matching on the LABEL, not the raw value, so selecting "In Progress"
+  // returns the `running` rows too rather than silently dropping them.
   const rows = useMemo(() => ROWS.filter(r =>
-    (!status || r.status === status) &&
-    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, q]);
+    (!status || t(STATUS_KEY[r.status] || r.status) === t(STATUS_KEY[status] || status)) &&
+    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, q, t]);
   const groups = [...new Set(rows.map(r => r.group))];
 
   return html`
@@ -145,7 +166,7 @@ function EvaluationsList({ go }) {
           <${TextField} label=${t('search_placeholder')} value=${q}
             onChange=${e => setQ(e.target.value)} sx=${{ minWidth: 280 }} id="f-search" />
           <${FilterSelect} id="f-status" label=${t('sel_status')} value=${status} onChange=${setStatus}
-            options=${['done', 'in_progress', 'failed'].map(s => ({ value: s, label: t(STATUS_KEY[s]) }))} />
+            options=${statusOptions(t)} />
           <${FilterSelect} id="f-period" label=${t('sel_period')} value=${period} onChange=${setPeriod}
             options=${['last_7', 'cur_month', 'last_month', 'last_year']
               .map(p => ({ value: p, label: t('preset_' + p) }))} />
