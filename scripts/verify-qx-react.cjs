@@ -37,6 +37,18 @@ const rawKeys = page => page.evaluate(() => {
   return [...out];
 });
 
+/* t() returns the KEY when a string is missing, and a key is truthy — so
+   `t('x') || 'fallback'` never fires the fallback and renders "x" as a label.
+   That has now shipped three times, so it fails the suite rather than waiting
+   to be spotted in a screenshot. */
+const fs = require('fs');
+{
+  const appSrc = fs.readFileSync(path.resolve(__dirname, '../projects/q-explorer-mui/app.js'), 'utf8');
+  const bad = [...appSrc.matchAll(/t\('([a-z_]+)'\)\s*\|\|/g)].map(m => m[1]);
+  if (bad.length) { fails.push(`t() with a dead || fallback: ${bad.join(', ')}`); }
+  else pass++;
+}
+
 (async () => {
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -267,6 +279,86 @@ const rawKeys = page => page.evaluate(() => {
   await page.waitForTimeout(600);
   const l2 = await page.$$eval('#punct-table tbody tr', r => r.length);
   ok('adding a second level expands the tree', l2 > l1, { l1, l2 });
+
+  // ── every evaluation type opens its own view, with numbers that come
+  //    from the extracted logic rather than anything retyped here ──────
+  const openByName = async name => {
+    await page.evaluate(n => {
+      const a = [...document.querySelectorAll('tbody a')].find(x => x.textContent.trim() === n);
+      if (a) a.click();
+    }, name);
+    await page.waitForTimeout(700);
+  };
+  const goBack = async () => {
+    await page.evaluate(() => { const a = document.querySelector('.MuiBreadcrumbs-root a'); if (a) a.click(); });
+    await page.waitForTimeout(500);
+  };
+  const nameOf = g => page.evaluate(gr => {
+    const r = EVALUATIONS.find(x => x.group === gr); return r && r.name;
+  }, g);
+
+  const EXPECT = {
+    punctuality:   '#punct-table',
+    connection:    '#rpt-table',
+    trip_failures: '#fa-table',
+    data_quality:  '#dqi-table',
+    raw_data:      '#raw-table',
+    line_analysis: '#punct-table',
+  };
+  for (const [group, sel] of Object.entries(EXPECT)) {
+    const name = await nameOf(group);
+    if (!name) { fails.push(`no evaluation of type ${group}`); continue; }
+    await openByName(name);
+    ok(`${group} opens its own report view`, (await page.$$(sel)).length === 1, sel);
+    const n = await page.$$eval('tbody tr', r => r.length);
+    ok(`${group} renders rows`, n > 0, n);
+    ok(`${group} has no untranslated keys`, (await rawKeys(page)).length === 0, await rawKeys(page));
+    await goBack();
+  }
+
+  // Trip Failures: the totals row and the failure rate come from FA_DATA
+  // and the extracted faNum/faPct, not from anything written in the view.
+  await openByName(await nameOf('trip_failures'));
+  const fa = await page.$$eval('#fa-table tbody tr:last-child td',
+    c => c.map(x => x.textContent.trim()).slice(1, 4));
+  const faWant = await page.evaluate(() => [faNum(FA_DATA.gesamt[0]), faNum(FA_DATA.gesamt[1]),
+    faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2) + '%']);
+  ok('Trip Failures totals equal FA_DATA through faNum/faPct',
+    JSON.stringify(fa) === JSON.stringify(faWant), { fa, faWant });
+  await goBack();
+
+  await openByName(await nameOf('data_quality'));
+  const dqi = await page.$$eval('#dqi-table tbody tr:first-child td',
+    c => c.map(x => x.textContent.trim()).slice(0, 4));
+  const dqiWant = await page.evaluate(() => [DQI_TU[0].label, ...DQI_TU[0].v.slice(0, 3).map(v => v.toFixed(2))]);
+  ok('DQI first row equals DQI_TU[0]',
+    JSON.stringify(dqi) === JSON.stringify(dqiWant), { dqi, dqiWant });
+  await goBack();
+
+  await openByName(await nameOf('connection'));
+  const rpt = await page.$$eval('#rpt-table tbody tr:last-child td',
+    c => c.map(x => x.textContent.trim()).slice(1, 4));
+  const rptWant = await page.evaluate(() =>
+    RPT_DATA.gesamt.slice(0, 3).map(v => v === null ? '—' : v.toFixed(2) + '%'));
+  ok('Connection totals equal RPT_DATA.gesamt',
+    JSON.stringify(rpt) === JSON.stringify(rptWant), { rpt, rptWant });
+  await goBack();
+
+  // Raw data: per-column filtering and paging over the real 4 950 rows
+  await openByName(await nameOf('raw_data'));
+  const firstPage = await page.$$eval('#raw-table tbody tr', r => r.length);
+  ok('raw data pages at 25 rows', firstPage === 25, firstPage);
+  const totalRaw = await page.evaluate(() => PUNCT_RAW.length);
+  ok('the raw set is the real one, not a sample', totalRaw > 1000, totalRaw);
+  await page.fill('#raw-table thead tr:nth-child(2) input', 'zzzzzz');
+  await page.waitForTimeout(500);
+  ok('a filter that matches nothing shows the empty state',
+    (await page.$$('#raw-empty')).length === 1);
+  await page.fill('#raw-table thead tr:nth-child(2) input', '');
+  await page.waitForTimeout(500);
+  ok('clearing the filter restores the page',
+    (await page.$$eval('#raw-table tbody tr', r => r.length)) === 25);
+  await goBack();
 
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
 

@@ -207,12 +207,12 @@ function EvaluationsList({ go }) {
                                  label=${t(STATUS_KEY[r.status])} color=${STATUS_COLOUR[r.status]} />
                       <//>
                       <${TableCell} align="right">
-                        <${Tooltip} title=${t('rpt_action_chart') || 'View'}>
+                        <${Tooltip} title=${t('act_preview')}>
                           <${IconButton} aria-label="view" onClick=${() => go('report', r)}>
                             <${Icon}>visibility<//>
                           <//>
                         <//>
-                        <${Tooltip} title=${t('btn_delete') || 'Delete'}>
+                        <${Tooltip} title=${t('act_delete')}>
                           <${IconButton} aria-label="delete"><${Icon}>delete_outline<//><//>
                         <//>
                       <//>
@@ -487,7 +487,7 @@ function ReportPunctuality({ go, row }) {
             <${TableBody}>
               ${tree.map((n, i) => html`<${PunctRow} key=${n.label + i} node=${n} depth=${0} t=${t} />`)}
               <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
-                <${TableCell}>${t('rpt_gesamt') || 'Gesamt'}<//>
+                <${TableCell}>${t('rpt_gesamt')}<//>
                 <${TableCell} align="right">${fmtInt(total.soll)}<//>
                 <${TableCell} align="right">${fmtInt(total.ist)}<//>
                 <${TableCell} align="right">${fmtInt(total.punkt)}<//>
@@ -497,6 +497,299 @@ function ReportPunctuality({ go, row }) {
               <//>
             <//>
           <//>
+        <//>
+      <//>
+    <//>`;
+}
+
+
+/* ── Screen: Connection Punctuality ───────────────────────────────────
+   Same shape as Punctuality, different model: rptBuildTree / rptAggregate
+   over RPT_RECORDS, both from data.js. The value columns come from
+   RPT_DATA.gesamt's own length, so adding a metric upstream adds a column
+   here rather than silently dropping one. */
+function RptRow({ node, depth, cols }) {
+  const [open, setOpen] = useState(depth === 0);
+  const kids = node.children || [];
+  return html`
+    <${React.Fragment}>
+      <${TableRow} hover>
+        <${TableCell} sx=${{ pl: `${16 + depth * 20}px` }}>
+          ${kids.length > 0 && html`
+            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} sx=${{ mr: .5 }}>
+              <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
+            <//>`}
+          ${node.label}
+        <//>
+        ${cols.map((_, i) => html`
+          <${TableCell} key=${i} align="right">
+            ${node.v[i] === null || node.v[i] === undefined ? '—' : node.v[i].toFixed(2) + '%'}
+          <//>`)}
+      <//>
+      ${open && kids.map((k, i) => html`<${RptRow} key=${k.label + i} node=${k} depth=${depth + 1} cols=${cols} />`)}
+    <//>`;
+}
+
+function ReportConnection({ go, row }) {
+  const { t } = useT();
+  const DIMS = Object.keys(RPT_DIM_LABELS);
+  const [dims, setDims] = useState(['linienbuendel_abb', '', '']);
+  const active = dims.filter(Boolean);
+  const tree = useMemo(
+    () => rptBuildTree(RPT_RECORDS, active.length ? active : ['linienbuendel_abb']),
+    [dims.join('|')]);
+  const cols = RPT_DATA.gesamt;
+
+  const setLevel = (i, v) => setDims(d => {
+    const n = [...d]; n[i] = v;
+    for (let j = i + 1; j < n.length; j++) n[j] = '';
+    return n;
+  });
+
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_connection') }]}
+        title=${row ? row.name : t('type_connection')} subtitle=${t('type_connection')}
+        action=${html`<${Button} variant="outlined"
+                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+      <${Box} sx=${{ p: 3 }}>
+        <${Card} sx=${{ mb: 3 }}><${CardContent}>
+          <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('punct_aufschluss_label')}<//>
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+            ${[0, 1, 2].map(i => html`
+              <${FilterSelect} key=${i} id=${'rpt-auf-' + (i + 1)}
+                label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
+                value=${dims[i]} onChange=${v => setLevel(i, v)} minWidth=${210}
+                options=${DIMS.filter(d => !dims.some((x, j) => x === d && j !== i))
+                  .map(d => ({ value: d, label: t(RPT_DIM_LABELS[d]) }))} />`)}
+          <//>
+        <//><//>
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+          <${Table} id="rpt-table">
+            <${TableHead}><${TableRow}>
+              <${TableCell}>${t('rpt_col_name')}<//>
+              ${cols.map((_, i) => html`<${TableCell} key=${i} align="right">
+                ${i === 0 ? t('rpt_col_apcq') : t('rpt_col_punct_zub') + ' ' + i}<//>`)}
+            <//><//>
+            <${TableBody}>
+              ${tree.map((n, i) => html`<${RptRow} key=${n.label + i} node=${n} depth=${0} cols=${cols} />`)}
+              <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
+                <${TableCell}>${t('rpt_gesamt')}<//>
+                ${cols.map((v, i) => html`<${TableCell} key=${i} align="right">${v === null ? '—' : v.toFixed(2) + '%'}<//>`)}
+              <//>
+            <//>
+          <//>
+        <//>
+      <//>
+    <//>`;
+}
+
+/* ── Screen: Trip Failures DPM (Fahrtausfälle) ────────────────────────
+   Each TU carries six metrics and a list of Betriebstage. The failure-rate
+   colouring uses faPct(), extracted, so the thresholds match the vanilla
+   (0 / <2 / 2–5 / 5–50 / 50+) rather than being re-invented here. */
+function FaRow({ tu, t }) {
+  const [open, setOpen] = useState(false);
+  const days = tu.tage || [];
+  const rate = v => {
+    const pct = faPct(v[1], v[0]);
+    const colour = pct === 0 ? 'text.disabled' : pct >= 50 ? 'error.main'
+                 : pct >= 5 ? 'warning.main' : pct >= 2 ? 'warning.light' : 'success.main';
+    return html`<${Typography} variant="body2" component="span" color=${colour}>${pct.toFixed(2)}%<//>`;
+  };
+  return html`
+    <${React.Fragment}>
+      <${TableRow} hover>
+        <${TableCell}>
+          ${days.length > 0 && html`
+            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} sx=${{ mr: .5 }}>
+              <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
+            <//>`}
+          ${tu.label}
+        <//>
+        <${TableCell} align="right">${faNum(tu.v[0])}<//>
+        <${TableCell} align="right">${faNum(tu.v[1])}<//>
+        <${TableCell} align="right">${rate(tu.v)}<//>
+        <${TableCell} align="right">${faNum(tu.v[2])}<//>
+        <${TableCell} align="right">${faNum(tu.v[3])}<//>
+        <${TableCell} align="right">
+          <${Tooltip} title=${t('fa_mask_title')}>
+            <${IconButton} aria-label="mask"><${Icon}>fact_check<//><//>
+          <//>
+        <//>
+      <//>
+      ${open && days.map((d, i) => html`
+        <${TableRow} key=${d.d + i} hover>
+          <${TableCell} sx=${{ pl: '52px' }}>${d.d}<//>
+          <${TableCell} align="right">${faNum(d.v[0])}<//>
+          <${TableCell} align="right">${faNum(d.v[1])}<//>
+          <${TableCell} align="right">${rate(d.v)}<//>
+          <${TableCell} align="right">${faNum(d.v[2])}<//>
+          <${TableCell} align="right">${faNum(d.v[3])}<//>
+          <${TableCell} />
+        <//>`)}
+    <//>`;
+}
+
+function ReportTripFailures({ go, row }) {
+  const { t } = useT();
+  const tus = FA_DATA.tus || [];
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_trip_failures') }]}
+        title=${row ? row.name : t('type_trip_failures')} subtitle=${t('type_trip_failures')}
+        action=${html`<${Button} variant="outlined"
+                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+      <${Box} sx=${{ p: 3 }}>
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+          <${Table} id="fa-table">
+            <${TableHead}><${TableRow}>
+              <${TableCell}>${t('fa_col_name')}<//>
+              <${TableCell} align="right">${t('fa_col_gesamt')}<//>
+              <${TableCell} align="right">${t('fa_col_ausgefallen')}<//>
+              <${TableCell} align="right">${t('fa_col_ausfallquote')}<//>
+              <${TableCell} align="right">${t('fa_col_fahrtzeit')}<//>
+              <${TableCell} align="right">${t('fa_col_haltestellen')}<//>
+              <${TableCell} align="right">${t('col_actions')}<//>
+            <//><//>
+            <${TableBody}>
+              ${tus.map((tu, i) => html`<${FaRow} key=${tu.id + i} tu=${tu} t=${t} />`)}
+              <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
+                <${TableCell}>${t('fa_col_gesamt')}<//>
+                ${FA_DATA.gesamt.slice(0, 2).map((v, i) => html`<${TableCell} key=${i} align="right">${faNum(v)}<//>`)}
+                <${TableCell} align="right">${faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2)}%<//>
+                <${TableCell} align="right">${faNum(FA_DATA.gesamt[2])}<//>
+                <${TableCell} align="right">${faNum(FA_DATA.gesamt[3])}<//>
+                <${TableCell} />
+              <//>
+            <//>
+          <//>
+        <//>
+      <//>
+    <//>`;
+}
+
+/* ── Screen: Data Quality Index DPM ───────────────────────────────────
+   Ten indicators across transport companies and cantons. dqiBand() —
+   extracted — gives each indicator's observed min/max, which is what the
+   colouring is relative to; a fixed scale would make every column look
+   identical because they all sit in the high nineties. */
+function ReportDQI({ go, row }) {
+  const { t } = useT();
+  const [scope, setScope] = useState('tu');
+  const rows = scope === 'tu' ? DQI_TU : DQI_KANTON;
+  const bands = useMemo(() => DQI_INDICATORS.map((_, i) => dqiBand(i)), []);
+
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_data_quality') }]}
+        title=${row ? row.name : t('type_data_quality')} subtitle=${t('type_data_quality')}
+        action=${html`<${Button} variant="outlined"
+                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+      <${Box} sx=${{ p: 3 }}>
+        <${Card} sx=${{ mb: 3 }}><${CardContent}>
+          <${FilterSelect} id="dqi-scope" label=${t('dqi_show')} value=${scope}
+            onChange=${v => setScope(v || 'tu')} minWidth=${240}
+            options=${[{ value: 'tu', label: t('filter_tu') }, { value: 'kanton', label: t('filter_cantons') }]} />
+        <//><//>
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+          <${Table} id="dqi-table">
+            <${TableHead}><${TableRow}>
+              <${TableCell}>${t('rpt_col_name')}<//>
+              ${DQI_INDICATORS.map(ind => html`
+                <${Tooltip} key=${ind.n} title=${t(ind.key)}>
+                  <${TableCell} align="right">${ind.n}<//>
+                <//>`)}
+            <//><//>
+            <${TableBody}>
+              ${rows.map((r, ri) => html`
+                <${TableRow} key=${r.label + ri} hover
+                             sx=${r.total ? { '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } } : {}}>
+                  <${TableCell}>${r.label}<//>
+                  ${r.v.map((v, i) => {
+                    const b = bands[i];
+                    const low = typeof v === 'number' && b && v <= b.min + (b.max - b.min) * 0.25;
+                    return html`<${TableCell} key=${i} align="right">
+                      <${Typography} variant="body2" component="span"
+                        color=${typeof v !== 'number' ? 'text.disabled' : low ? 'error.main' : 'text.primary'}>
+                        ${typeof v === 'number' ? v.toFixed(2) : '—'}
+                      <//>
+                    <//>`;
+                  })}
+                <//>`)}
+            <//>
+          <//>
+        <//>
+      <//>
+    <//>`;
+}
+
+/* ── Screen: raw data ─────────────────────────────────────────────────
+   One component for both raw sets — PUNCT_RAW is 4 950 x 18, RPT_RAW is
+   140 x 13 — with per-column filters and paging. Every column filter is
+   an ordinary text field: a Select would need MUI X Pro for multi-column
+   filtering, which the licence question has not settled. */
+function RawDataTable({ go, row, rows, title }) {
+  const { t } = useT();
+  const [filters, setFilters] = useState({});
+  const [page, setPage] = useState(0);
+  const perPage = 25;
+
+  const filtered = useMemo(() => {
+    const active = Object.entries(filters).filter(([, v]) => v && v.trim());
+    if (!active.length) return rows;
+    return rows.filter(r => active.every(([i, q]) =>
+      String(r[i] ?? '').toLowerCase().includes(q.trim().toLowerCase())));
+  }, [filters, rows]);
+
+  const shown = filtered.slice(page * perPage, page * perPage + perPage);
+  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: title }]}
+        title=${title}
+        subtitle=${`${filtered.length.toLocaleString('de-CH')} / ${rows.length.toLocaleString('de-CH')}`} />
+      <${Box} sx=${{ p: 3 }}>
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', overflowX: 'auto' }}>
+          <${Table} id="raw-table">
+            <${TableHead}>
+              <${TableRow}>
+                ${rows[0].map((_, i) => html`<${TableCell} key=${i}>${i + 1}<//>`)}
+              <//>
+              <${TableRow}>
+                ${rows[0].map((_, i) => html`
+                  <${TableCell} key=${i} sx=${{ p: .5 }}>
+                    <${TextField} variant="standard" size="small" placeholder="…"
+                      value=${filters[i] || ''}
+                      onChange=${e => { setPage(0); setFilters(f => ({ ...f, [i]: e.target.value })); }}
+                      sx=${{ minWidth: 70 }} />
+                  <//>`)}
+              <//>
+            <//>
+            <${TableBody}>
+              ${shown.map((r, ri) => html`
+                <${TableRow} key=${ri} hover>
+                  ${r.map((c, ci) => html`<${TableCell} key=${ci}>${c}<//>`)}
+                <//>`)}
+              ${shown.length === 0 && html`
+                <${TableRow}><${TableCell} colSpan=${rows[0].length}>
+                  <${Alert} severity="info" id="raw-empty">${t('raw_no_match')}<//>
+                <//><//>`}
+            <//>
+          <//>
+        <//>
+        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mt: 2 }}>
+          <${Button} disabled=${page === 0} onClick=${() => setPage(p => p - 1)}>${t('rpt_pager_prev')}<//>
+          <${Typography} variant="body2">${page + 1} / ${pages}<//>
+          <${Button} disabled=${page + 1 >= pages} onClick=${() => setPage(p => p + 1)}>${t('rpt_pager_next')}<//>
         <//>
       <//>
     <//>`;
@@ -574,6 +867,17 @@ function App() {
     route.name === 'new'       ? html`<${NewEvaluation} go=${go} />` :
     (route.name === 'report' && route.row && route.row.group === 'punctuality')
                                ? html`<${ReportPunctuality} go=${go} row=${route.row} />` :
+    (route.name === 'report' && route.row && route.row.group === 'connection')
+                               ? html`<${ReportConnection} go=${go} row=${route.row} />` :
+    (route.name === 'report' && route.row && route.row.group === 'trip_failures')
+                               ? html`<${ReportTripFailures} go=${go} row=${route.row} />` :
+    (route.name === 'report' && route.row && route.row.group === 'data_quality')
+                               ? html`<${ReportDQI} go=${go} row=${route.row} />` :
+    (route.name === 'report' && route.row && route.row.group === 'line_analysis')
+                               ? html`<${ReportPunctuality} go=${go} row=${route.row} />` :
+    (route.name === 'report' && route.row && route.row.group === 'raw_data')
+                               ? html`<${RawDataTable} go=${go} row=${route.row} rows=${PUNCT_RAW}
+                                        title=${route.row.name} />` :
                                  html`<${NotPorted} go=${go} row=${route.row} />`;
 
   return html`
