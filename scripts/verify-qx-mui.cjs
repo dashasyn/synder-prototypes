@@ -406,6 +406,14 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
   const trigger = await page.$('#view-reports-list .mui-select-trigger');
   ok('the reports list has an MUI Select', !!trigger);
   if (trigger) {
+    // Selectors now start empty ("" is all), so pick something first --
+    // otherwise there is no selected row to measure.
+    await page.evaluate(() => {
+      const sel = document.querySelector('#view-reports-list select.mui-select-native');
+      sel.value = sel.options[1].value;
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+    await page.waitForTimeout(150);
     await trigger.click();
     await page.waitForTimeout(250);
     const menu = await page.evaluate(() => {
@@ -509,6 +517,111 @@ const VIEWS = ['type-selection', 'wizard', 'reports-list', 'scheduled',
     clipped = clipped.concat(r);
   }
   ok('no MUI Select clips its widest option, in any view', clipped.length === 0, clipped);
+
+  // ── Ignat, 2026-09-15: "We don't need option 'All' in the dropdown. All
+  //    selected by default. cleares the selector. Also you lost headers for
+  //    selectors. All selectors should have headers."
+  await page.evaluate(() => window.showView('reports-list'));
+  await page.waitForTimeout(300);
+  // Earlier blocks picked values; reset so "starts empty" means what it says.
+  await page.evaluate(() => {
+    document.querySelectorAll('select.mui-select-native').forEach(sel => {
+      if ([...sel.options].some(o => o.value === '')) {
+        sel.value = '';
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    });
+  });
+  await page.waitForTimeout(300);
+
+  const allOpts = await page.$$eval('.mui-menu-item',
+    els => els.filter(e => /^(all|alle|\[alle\]|\[all\]|keine auswahl|\(none\))$/i
+      .test(e.textContent.trim())).map(e => e.textContent.trim()));
+  ok('no menu anywhere offers an All / none option', allOpts.length === 0, allOpts);
+
+  const headers = await page.evaluate(() => {
+    const out = [];
+    document.querySelectorAll('.mui-select').forEach(w => {
+      const tr = w.querySelector('.mui-select-trigger');
+      if (!tr || tr.offsetParent === null) return;
+      const sel = w.querySelector('select.mui-select-native');
+      if (sel.hasAttribute('data-mui-nolabel')) return;
+      const lab = tr.querySelector('.mui-select-label');
+      out.push({ id: sel.id || sel.className, label: lab ? lab.textContent.trim() : null });
+    });
+    return out;
+  });
+  ok('every visible selector carries a header', headers.length > 0
+    && headers.every(h => h.label && h.label.length > 0),
+    headers.filter(h => !h.label));
+
+  ok('exactly one clear affordance per selector — no leftover bespoke x',
+    (await page.$$('.filter-x')).length === 0);
+
+  const sel1 = await page.$('#view-reports-list .mui-select-trigger');
+  if (sel1) {
+    const rowsNow = () => page.$$eval('#view-reports-list tbody tr',
+      e => e.filter(r => r.offsetParent !== null).length);
+    const before = await rowsNow();
+
+    const restState = await page.evaluate(() => {
+      const w = document.querySelector('#view-reports-list .mui-select');
+      const t = w.querySelector('.mui-select-trigger');
+      return { value: w.querySelector('select').value,
+               shrunk: t.querySelector('.mui-select-label').classList.contains('shrink'),
+               clear: getComputedStyle(t.querySelector('.mui-select-clear')).display };
+    });
+    ok('a selector starts empty — empty IS "all", so nothing is filtered',
+      restState.value === '', restState.value);
+    ok('the header rests centred while empty', !restState.shrunk, restState);
+    ok('no clear x while there is nothing to clear', restState.clear === 'none', restState.clear);
+
+    await sel1.click();
+    await page.waitForTimeout(200);
+    await page.click('#view-reports-list .mui-select.open .mui-menu-item:nth-child(1)');
+    await page.waitForTimeout(300);
+    const picked = await page.evaluate(() => {
+      const w = document.querySelector('#view-reports-list .mui-select');
+      const t = w.querySelector('.mui-select-trigger');
+      return { value: w.querySelector('select').value,
+               text: t.querySelector('.mui-select-value').textContent.trim(),
+               shrunk: t.querySelector('.mui-select-label').classList.contains('shrink'),
+               clear: getComputedStyle(t.querySelector('.mui-select-clear')).display };
+    });
+    const afterPick = await rowsNow();
+    ok('picking shrinks the header and shows the value',
+      picked.shrunk && picked.text.length > 0, picked);
+    ok('the clear x appears once there is a value', picked.clear === 'grid', picked.clear);
+    ok('picking actually filters the table', afterPick < before, { before, afterPick });
+
+    await page.click('#view-reports-list .mui-select .mui-select-clear');
+    await page.waitForTimeout(300);
+    const cleared = await page.evaluate(() => {
+      const w = document.querySelector('#view-reports-list .mui-select');
+      const t = w.querySelector('.mui-select-trigger');
+      return { value: w.querySelector('select').value,
+               text: t.querySelector('.mui-select-value').textContent.trim(),
+               shrunk: t.querySelector('.mui-select-label').classList.contains('shrink'),
+               menuOpen: w.classList.contains('open') };
+    });
+    ok('the x clears the selector back to empty',
+      cleared.value === '' && cleared.text === '' && !cleared.shrunk, cleared);
+    ok('clearing does not leave the menu open', !cleared.menuOpen);
+    ok('clearing restores every row', (await rowsNow()) === before, { before, now: await rowsNow() });
+  }
+
+  // Option text lives on the hidden select, so a language switch has to
+  // rebuild both the header and the rendered menu.
+  await page.evaluate(() => window.setLang && window.setLang('de'));
+  await page.waitForTimeout(400);
+  const de = await page.evaluate(() => {
+    const w = document.querySelector('#view-reports-list .mui-select');
+    return { items: [...w.querySelectorAll('.mui-menu-item')].map(i => i.textContent.trim()) };
+  });
+  ok('switching language re-translates the rendered menu',
+    de.items.length > 0 && de.items.some(i => /Fertig|Bearbeitung|Fehlgeschlagen/.test(i)), de);
+  await page.evaluate(() => window.setLang && window.setLang('en'));
+  await page.waitForTimeout(300);
 
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
 

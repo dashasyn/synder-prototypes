@@ -1250,41 +1250,6 @@
   .filter-select-wrapper { display: inline-flex; align-items: stretch; }
   /* filled fields stay square-bottomed: the underline is the control's edge */
   .filter-select-wrapper .filter-select { border-radius: var(--radius) var(--radius) 0 0; }
-  /* A filled field with a value keeps the filled look -- MUI has no
-     "has value" tint, and the old blue fill read as a selected state.
-     The clear x becomes an end adornment INSIDE the field, the way
-     MUI's Autocomplete renders it, rather than a joined bordered box.
-
-     Both indicators sit hard against the RIGHT edge. Critical #1 of the
-     2026-08-27 review was a clear-x mounted mid-field, so the natural
-     "click it again to reopen the list" gesture silently wiped the
-     value. Do not re-centre these. There is a regression test. */
-  .filter-select-wrapper { position: relative; }
-  .filter-select-wrapper.has-value .filter-select {
-    padding-right: 56px;
-  }
-  .filter-x {
-    display: none;
-    position: absolute;
-    right: 28px;
-    top: 50%;
-    transform: translateY(-50%);
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    padding: 2px;
-    border: none;
-    border-radius: 50%;
-    background: transparent;
-    cursor: pointer;
-    color: rgba(0,0,0,0.54);
-    font-size: 16px;
-    line-height: 1;
-    transition: background-color 150ms cubic-bezier(0.4,0,0.2,1);
-  }
-  .filter-select-wrapper.has-value .filter-x { display: flex; }
-  .filter-x:hover { background: var(--action-hover); color: var(--text-primary); }
 
   .toolbar-clear-all {
     background: none;
@@ -1777,16 +1742,52 @@
   .mui-select-trigger .mui-select-value {
     flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .mui-select-trigger .mui-select-value:empty::before {
-    content: attr(data-placeholder); color: var(--text-secondary);
+  /* Without a header the value would sit against the top padding meant for
+     a shrunk label, so an unlabelled trigger centres its text instead. */
+  .mui-select-trigger.no-label { padding-top: 4px; }
+
+  /* Filled label, size="small": rests at 13px (centred in 48px), shrinks to
+     translateY(-9px) scale(.75) -- landing at 4px, same as the text fields. */
+  .mui-select-label {
+    position: absolute; left: 12px; top: 13px;
+    max-width: calc(100% - 68px);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 1rem; line-height: 1.4375em; color: var(--text-secondary);
+    pointer-events: none; transform-origin: top left;
+    transition: transform 200ms cubic-bezier(0.0,0,0.2,1), color 200ms;
+  }
+  .mui-select-label.shrink { transform: translateY(-9px) scale(0.75); }
+  .mui-select.open .mui-select-label,
+  .mui-select-trigger:focus-visible .mui-select-label { color: var(--primary-main); }
+
+  .mui-select-actions {
+    position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+    display: flex; align-items: center; gap: 2px;
   }
   .mui-select-caret {
-    position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
     width: 24px; height: 24px; display: grid; place-items: center;
     color: rgba(0,0,0,0.54); pointer-events: none;
     transition: transform 150ms cubic-bezier(0.4,0,0.2,1);
   }
-  .mui-select.open .mui-select-caret { transform: translateY(-50%) rotate(180deg); }
+  .mui-select.open .mui-select-caret { transform: rotate(180deg); }
+
+  /* The clear x exists only when there is a value to clear, and it lives
+     hard against the RIGHT edge beside the caret -- never mid-field.
+     A centred clear was Critical #1 of the 2026-08-27 review: the natural
+     "click it again to reopen the list" gesture silently wiped the value.
+     Do not re-centre it. There is a regression test. */
+  .mui-select-clear {
+    display: none;
+    width: 24px; height: 24px; place-items: center;
+    font-size: 18px; border-radius: 50%;
+    color: rgba(0,0,0,0.54); cursor: pointer;
+    transition: background-color 150ms cubic-bezier(0.4,0,0.2,1);
+  }
+  .mui-select-trigger.has-value .mui-select-clear { display: grid; }
+  .mui-select-clear:hover { background: var(--action-hover); color: var(--text-primary); }
+
+  /* room for both adornments */
+  .mui-select-trigger.has-value { padding-right: 58px; }
   .mui-select-trigger.input-error { box-shadow: inset 0 -2px 0 var(--error-main); }
 
   /* Menu paper. Flush under the field -- measured 1px between the
@@ -2955,7 +2956,7 @@
             <div class="schedule-fields" id="schedule-fields">
               <div class="form-group">
                 <label class="form-label" data-i18n="schedule_frequency">Frequency</label>
-                <select class="form-input" id="freq-select" onchange="updateFreqOptions()">
+                <select class="form-input" id="freq-select" data-mui-label-key="label_frequency" onchange="updateFreqOptions()">
                   <option value="daily" data-i18n="freq_daily">Daily</option>
                   <option value="weekly" data-i18n="freq_weekly">Weekly</option>
                   <option value="monthly" data-i18n="freq_monthly" selected>Monthly</option>
@@ -2981,7 +2982,7 @@
               <div id="freq-options-monthly" class="freq-option-block">
                 <label class="form-label"><span data-i18n="schedule_run_on">Run on day</span></label>
                 <div class="day-of-month-row">
-                  <select class="form-input form-input-narrow" id="month-day-select"></select>
+                  <select class="form-input form-input-narrow" id="month-day-select" data-mui-label-key="sel_day"></select>
                   <span class="freq-of-month" data-i18n="of_month">of the month</span>
                 </div>
                 <div class="freq-hint"><span class="material-icons" style="font-size:14px;vertical-align:middle;">info</span> <span data-i18n="hint_monthly">3rd of the month = previous month's data available (2-day delay)</span></div>
@@ -2990,15 +2991,15 @@
               <div id="freq-options-yearly" class="freq-option-block" style="display:none;">
                 <label class="form-label"><span data-i18n="schedule_run_on">Run on</span></label>
                 <div class="day-of-month-row">
-                  <select class="form-input form-input-narrow" id="yearly-month-select"></select>
-                  <select class="form-input form-input-narrow" id="yearly-day-select"></select>
+                  <select class="form-input form-input-narrow" id="yearly-month-select" data-mui-label-key="sel_month"></select>
+                  <select class="form-input form-input-narrow" id="yearly-day-select" data-mui-label-key="sel_day"></select>
                 </div>
                 <div class="freq-hint"><span class="material-icons" style="font-size:14px;vertical-align:middle;">info</span> <span data-i18n="hint_yearly">January 3rd = previous year's data available (2-day delay)</span></div>
               </div>
 
               <div id="freq-options-daily" class="freq-option-block" style="display:none;">
                 <label class="form-label"><span data-i18n="schedule_run_at">Run at</span></label>
-                <select class="form-input form-input-narrow" id="daily-time-select">
+                <select class="form-input form-input-narrow" id="daily-time-select" data-mui-label-key="sel_time">
                   <option value="06:00">06:00</option><option value="07:00">07:00</option>
                   <option value="08:00" selected>08:00</option><option value="09:00">09:00</option>
                   <option value="12:00">12:00</option><option value="18:00">18:00</option>
@@ -3062,24 +3063,22 @@
           <button class="search-clear-x" id="reports-search-clear" onclick="clearReportsSearch()" style="display:none" tabindex="-1" aria-label="Clear search">×</button>
         </div>
         <div class="filter-select-wrapper" id="reports-status-wrapper">
-          <select class="filter-select" id="reports-status-filter" onchange="filterReports()">
-            <option value="all" data-i18n="filter_all">All</option>
+          <select class="filter-select" id="reports-status-filter" data-mui-label-key="sel_status" onchange="filterReports()">
+            <option value=""></option>
             <option value="done" data-i18n="filter_done">Done</option>
             <option value="in_progress" data-i18n="filter_in_progress">In Progress</option>
             <option value="failed" data-i18n="filter_failed">Failed</option>
           </select>
-          <button class="filter-x" onclick="clearReportsStatus()" tabindex="-1" aria-label="Clear status filter">×</button>
         </div>
         <div class="filter-select-wrapper" id="reports-period-wrapper">
-          <select class="filter-select" id="reports-period-filter" onchange="filterReports()">
-            <option value="all" data-i18n="filter_all">All</option>
+          <select class="filter-select" id="reports-period-filter" data-mui-label-key="sel_period" onchange="filterReports()">
+            <option value=""></option>
             <option value="last_7_days" data-i18n="filter_period_last7">Last 7 days</option>
             <option value="current_month" data-i18n="filter_period_current_month">Current month</option>
             <option value="last_month" data-i18n="filter_period_last_month">Last month</option>
             <option value="last_year" data-i18n="filter_period_last_year">Last year</option>
             <option value="other" data-i18n="filter_period_other">Other</option>
           </select>
-          <button class="filter-x" onclick="clearReportsPeriod()" tabindex="-1" aria-label="Clear period filter">×</button>
         </div>
         <button class="toolbar-clear-all" id="reports-clear-all" onclick="clearReportsFilters()" style="display:none" data-i18n="clear_filters">Clear filters</button>
       </div>
@@ -3599,22 +3598,20 @@
           <button class="search-clear-x" id="sched-search-clear" onclick="clearSchedSearch()" style="display:none" tabindex="-1" aria-label="Clear search">×</button>
         </div>
         <div class="filter-select-wrapper" id="sched-freq-wrapper">
-          <select class="filter-select" id="sched-freq-filter" onchange="filterScheduled()">
-            <option value="all" data-i18n="filter_all">All</option>
+          <select class="filter-select" id="sched-freq-filter" data-mui-label-key="sel_frequency" onchange="filterScheduled()">
+            <option value=""></option>
             <option value="daily" data-i18n="freq_daily">Daily</option>
             <option value="weekly" data-i18n="freq_weekly">Weekly</option>
             <option value="monthly" data-i18n="freq_monthly">Monthly</option>
             <option value="yearly" data-i18n="freq_yearly">Yearly</option>
           </select>
-          <button class="filter-x" onclick="clearSchedFreq()" tabindex="-1" aria-label="Clear frequency filter">×</button>
         </div>
         <div class="filter-select-wrapper" id="sched-status-wrapper">
-          <select class="filter-select" id="sched-status-filter" onchange="filterScheduled()">
-            <option value="all" data-i18n="filter_all">All</option>
+          <select class="filter-select" id="sched-status-filter" data-mui-label-key="sel_status" onchange="filterScheduled()">
+            <option value=""></option>
             <option value="active" data-i18n="status_active">Active</option>
             <option value="paused" data-i18n="status_paused">Paused</option>
           </select>
-          <button class="filter-x" onclick="clearSchedStatus()" tabindex="-1" aria-label="Clear status filter">×</button>
         </div>
         <button class="toolbar-clear-all" id="sched-clear-all" onclick="clearSchedFilters()" style="display:none" data-i18n="clear_filters">Clear filters</button>
       </div>
@@ -3793,7 +3790,7 @@
         <div class="rpt-filter-col">
           <div class="rpt-filter-col-label" data-i18n="rpt_aufschluss_label">Aufschlüsseln</div>
           <div class="rpt-filter-dropdowns">
-            <select class="rpt-select" id="rpt-aufschluss-1" onchange="rptCascade()">
+            <select class="rpt-select" id="rpt-aufschluss-1" data-mui-label-key="sel_breakdown_1" onchange="rptCascade()">
               <option value="linienbuendel_abb" data-i18n="rpt_opt_linienbuendel_abb">Linienbündel (Abbringer)</option>
               <option value="tu_abb" data-i18n="rpt_opt_tu_abb">TU (Abbringer)</option>
               <option value="haltestelle_abb" data-i18n="rpt_opt_haltestelle_abb">Haltestelle (Abbringer)</option>
@@ -3803,7 +3800,7 @@
               <option value="betriebstag" data-i18n="rpt_opt_betriebstag">Betriebstag</option>
               <option value="kw" data-i18n="rpt_opt_kw">KW</option>
             </select>
-            <select class="rpt-select" id="rpt-aufschluss-2" onchange="rptCascade()">
+            <select class="rpt-select" id="rpt-aufschluss-2" data-mui-label-key="sel_breakdown_2" onchange="rptCascade()">
               <option value="" data-i18n="rpt_none">(none)</option>
               <option value="linie_abb" data-i18n="rpt_opt_linie_abb">Linie (Abbringer)</option>
               <option value="tu_abb" data-i18n="rpt_opt_tu_abb">TU (Abbringer)</option>
@@ -3811,7 +3808,7 @@
               <option value="betriebstag" data-i18n="rpt_opt_betriebstag">Betriebstag</option>
               <option value="kw" data-i18n="rpt_opt_kw">KW</option>
             </select>
-            <select class="rpt-select" id="rpt-aufschluss-3" onchange="rptCascade()">
+            <select class="rpt-select" id="rpt-aufschluss-3" data-mui-label-key="sel_breakdown_3" onchange="rptCascade()">
               <option value="" data-i18n="rpt_none">(none)</option>
               <option value="linie_abb" data-i18n="rpt_opt_linie_abb">Linie (Abbringer)</option>
               <option value="tu_abb" data-i18n="rpt_opt_tu_abb">TU (Abbringer)</option>
@@ -3926,7 +3923,7 @@
       </div>
     </div>
     <div class="rpt-raw-controls">
-      <select id="rpt-raw-pp" onchange="renderRawTable()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select>
+      <select id="rpt-raw-pp" data-mui-label-key="sel_rows_per_page" onchange="renderRawTable()"><option value="10">10</option><option value="25">25</option><option value="50">50</option></select>
       <span data-i18n="rpt_entries_per_page">Einträge anzeigen</span>
     </div>
     <div class="rpt-raw-table-wrap">
@@ -4027,13 +4024,13 @@
       <div class="fa-kpi-grid" id="fa-kpi-grid"></div>
       <div class="fa-mask-ub-filter">
         <span class="fa-mask-ub-filter-label" data-i18n="fa_ub_anzeigen">Anzeigen</span>
-        <select class="rpt-select" id="fa-ub-tu-sel" onchange="drawMaskTreemap(this.value)">
-          <option value="GESAMT" data-i18n="fa_mask_all">Alle TU</option>
+        <select class="rpt-select" id="fa-ub-tu-sel" data-mui-label-key="sel_show" onchange="drawMaskTreemap(this.value || 'GESAMT')">
+          <option value=""></option>
           <option value="AAGL">AAGL</option>
           <option value="AAGS">AAGS</option>
           <option value="AVJ">AVJ</option>
         </select>
-        <select class="rpt-select" id="fa-ub-metric-sel">
+        <select class="rpt-select" id="fa-ub-metric-sel" data-mui-label-key="sel_metric">
           <option value="fahrtzeit" data-i18n="fa_col_fahrtzeit">Fahrtzeit</option>
           <option value="fahrten" data-i18n="fa_col_fahrten">Fahrten</option>
           <option value="haltestellen" data-i18n="fa_col_haltestellen">Haltestellen</option>
@@ -4057,7 +4054,7 @@
           <div class="fa-filter-group">
             <div class="fa-filter-label" data-i18n="fa_aufschluss_label">Aufschlüsseln</div>
             <div class="fa-selects-row">
-              <select class="rpt-select" id="fa-auf-1" onchange="faCascade()" style="min-width:130px">
+              <select class="rpt-select" id="fa-auf-1" data-mui-label-key="sel_breakdown_1" onchange="faCascade()" style="min-width:130px">
                 <option value="tu" data-i18n="fa_opt_tu" selected>TU</option>
                 <option value="go" data-i18n="fa_opt_go">GO-Nr.</option>
                 <option value="region" data-i18n="fa_opt_region">Region</option>
@@ -4067,7 +4064,7 @@
                 <option value="linie" data-i18n="fa_opt_linie">Linie</option>
                 <option value="tag" data-i18n="fa_opt_tag">Betriebstag</option>
               </select>
-              <select class="rpt-select" id="fa-auf-2" onchange="faCascade()" style="min-width:130px">
+              <select class="rpt-select" id="fa-auf-2" data-mui-label-key="sel_breakdown_2" onchange="faCascade()" style="min-width:130px">
                 <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
                 <option value="tag" data-i18n="fa_opt_tag" selected>Betriebstag</option>
                 <option value="tu" data-i18n="fa_opt_tu">TU</option>
@@ -4078,7 +4075,7 @@
                 <option value="lb" data-i18n="fa_opt_lb">Linienbündel</option>
                 <option value="linie" data-i18n="fa_opt_linie">Linie</option>
               </select>
-              <select class="rpt-select" id="fa-auf-3" onchange="faCascade()" style="min-width:130px">
+              <select class="rpt-select" id="fa-auf-3" data-mui-label-key="sel_breakdown_3" onchange="faCascade()" style="min-width:130px">
                 <option value="" data-i18n="fa_opt_none" selected>keine Auswahl</option>
                 <option value="tu" data-i18n="fa_opt_tu">TU</option>
                 <option value="go" data-i18n="fa_opt_go">GO-Nr.</option>
@@ -4095,13 +4092,13 @@
           <div class="fa-filter-group">
             <div class="fa-filter-label" data-i18n="fa_add_aufschluss_label">zusätzlich Aufschlüsseln</div>
             <div class="fa-selects-row">
-              <select class="rpt-select" id="fa-add-1" onchange="faCascadeAdd()" style="min-width:220px">
+              <select class="rpt-select" id="fa-add-1" data-mui-label-key="sel_additional_1" onchange="faCascadeAdd()" style="min-width:220px">
                 <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
                 <option value="ausfallart" data-i18n="fa_opt_ausfallart">Ausfallart</option>
                 <option value="ersatz" data-i18n="fa_opt_ersatz">Ersatzverkehr (nur Bahn und Tram)</option>
                 <option value="ursache" data-i18n="fa_opt_ursache">Ausfallursache</option>
               </select>
-              <select class="rpt-select" id="fa-add-2" onchange="faCascadeAdd()" style="min-width:180px">
+              <select class="rpt-select" id="fa-add-2" data-mui-label-key="sel_additional_2" onchange="faCascadeAdd()" style="min-width:180px">
                 <option value="" data-i18n="fa_opt_none" selected>keine Auswahl</option>
                 <option value="ausfallart" data-i18n="fa_opt_ausfallart">Ausfallart</option>
                 <option value="ersatz" data-i18n="fa_opt_ersatz">Ersatzverkehr (nur Bahn und Tram)</option>
@@ -4231,7 +4228,7 @@
         </div>
       </div>
       <div class="fa-mask-controls">
-        <select class="rpt-select" style="min-width:60px" id="fa-mask-pp" onchange="renderFaMaskTable()">
+        <select class="rpt-select" style="min-width:60px" id="fa-mask-pp" data-mui-label-key="sel_rows_per_page" onchange="renderFaMaskTable()">
           <option value="10">10</option><option value="25">25</option><option value="50">50</option>
         </select>
         <span data-i18n="fa_mask_entries">Einträge anzeigen</span>
@@ -4306,7 +4303,7 @@
     <!-- Aufschlüsseln -->
     <div class="punct-filter-panel">
       <span class="punct-aufschluss-label" data-i18n="punct_aufschluss_label">Aufschlüsseln</span>
-      <select class="rpt-select" id="punct-auf-1" onchange="punctCascade()" style="min-width:145px">
+      <select class="rpt-select" id="punct-auf-1" data-mui-label-key="sel_breakdown_1" onchange="punctCascade()" style="min-width:145px">
         <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
         <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
         <option value="linienbuendel" selected data-i18n="fa_opt_lb">Linienbündel</option>
@@ -4319,7 +4316,7 @@
         <option value="vm" data-i18n="fa_opt_vm">Verkehrsmittel</option>
         <option value="region" data-i18n="fa_opt_region">Region</option>
       </select>
-      <select class="rpt-select" id="punct-auf-2" onchange="punctCascade()" style="min-width:145px">
+      <select class="rpt-select" id="punct-auf-2" data-mui-label-key="sel_breakdown_2" onchange="punctCascade()" style="min-width:145px">
         <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
         <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
         <option value="linienbuendel" data-i18n="fa_opt_lb">Linienbündel</option>
@@ -4332,7 +4329,7 @@
         <option value="vm" data-i18n="fa_opt_vm">Verkehrsmittel</option>
         <option value="region" data-i18n="fa_opt_region">Region</option>
       </select>
-      <select class="rpt-select" id="punct-auf-3" onchange="punctCascade()" style="min-width:145px">
+      <select class="rpt-select" id="punct-auf-3" data-mui-label-key="sel_breakdown_3" onchange="punctCascade()" style="min-width:145px">
         <option value="" selected data-i18n="fa_opt_none">keine Auswahl</option>
         <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
         <option value="linienbuendel" data-i18n="fa_opt_lb">Linienbündel</option>
@@ -4420,11 +4417,11 @@
       <div class="dqi-controls">
         <div class="dqi-control-group">
           <div class="dqi-control-label" data-i18n="dqi_show">Anzeigen</div>
-          <select class="rpt-select" id="dqi-dim" onchange="dqiDimChanged()">
+          <select class="rpt-select" id="dqi-dim" data-mui-label-key="sel_dimension" onchange="dqiDimChanged()">
             <option value="tu" data-i18n="dqi_dim_tu">TU (konzessioniert)</option>
             <option value="kanton" data-i18n="dqi_dim_kanton">Kanton</option>
           </select>
-          <select class="rpt-select" id="dqi-entity" onchange="renderDqiOverview()"></select>
+          <select class="rpt-select" id="dqi-entity" data-mui-label-key="sel_entity" onchange="renderDqiOverview()"></select>
         </div>
       </div>
 
@@ -4449,18 +4446,18 @@
       <div class="dqi-controls">
         <div class="dqi-control-group">
           <div class="dqi-control-label" data-i18n="rpt_aufschluss_label">Aufschlüsseln</div>
-          <select class="rpt-select" id="dqi-auf-1" onchange="dqiCascade()">
+          <select class="rpt-select" id="dqi-auf-1" data-mui-label-key="sel_breakdown_1" onchange="dqiCascade()">
             <option value="tu" data-i18n="dqi_dim_tu">TU (konzessioniert)</option>
             <option value="go" data-i18n="dqi_dim_go">GO-Nr.</option>
             <option value="region" data-i18n="fa_opt_region">Region</option>
           </select>
-          <select class="rpt-select" id="dqi-auf-2" onchange="dqiCascade()">
+          <select class="rpt-select" id="dqi-auf-2" data-mui-label-key="sel_breakdown_2" onchange="dqiCascade()">
             <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
             <option value="go" data-i18n="dqi_dim_go">GO-Nr.</option>
             <option value="region" data-i18n="fa_opt_region">Region</option>
             <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
           </select>
-          <select class="rpt-select" id="dqi-auf-3" onchange="dqiCascade()">
+          <select class="rpt-select" id="dqi-auf-3" data-mui-label-key="sel_breakdown_3" onchange="dqiCascade()">
             <option value="" data-i18n="fa_opt_none">keine Auswahl</option>
             <option value="region" data-i18n="fa_opt_region">Region</option>
             <option value="betriebstag" data-i18n="fa_opt_tag">Betriebstag</option>
@@ -4545,7 +4542,7 @@
         <div class="filter-row">
           <div class="filter-label" id="rd-threshold-label" data-i18n="rd_step_threshold">Pünktlichkeitsgrenzwert</div>
           <div class="filter-control">
-          <select class="rd-input" id="rd-threshold" aria-describedby="rd-threshold-helper">
+          <select class="rd-input" id="rd-threshold" data-mui-label-key="rd_step_threshold" aria-describedby="rd-threshold-helper">
             <option value="" data-i18n="rd_choose">Bitte auswählen</option>
             <option value="d299" data-i18n="rd_thr_1">Verfrühung > 04:59 Min (Abfahrt)</option>
             <option value="d59"  data-i18n="rd_thr_2">Verfrühung > 00:59 Min (Abfahrt)</option>
@@ -4747,7 +4744,7 @@
       <div class="fa-mask-field"><div class="fa-mask-field-label">Jahr</div><div class="fa-mask-field-value fa-mask-field-value--muted" data-i18n="punct_not_restricted">nicht eingeschränkt</div></div>
     </div>
     <div class="punct-raw-controls">
-      <select class="rpt-select" id="punct-raw-pp" onchange="punctRawPage=1;renderPunctRaw()" style="min-width:55px">
+      <select class="rpt-select" id="punct-raw-pp" data-mui-label-key="sel_rows_per_page" onchange="punctRawPage=1;renderPunctRaw()" style="min-width:55px">
         <option value="10">10</option><option value="25">25</option><option value="50">50</option>
       </select>
       <span data-i18n="fa_mask_entries">Einträge anzeigen</span>
@@ -4778,10 +4775,10 @@
           <tr class="punct-raw-search">
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="0" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="1" oninput="punctRawFilterChanged()"></th>
-            <th><select class="punct-raw-filter" data-col="2" onchange="punctRawFilterChanged()"><option data-i18n="filter_all_bracket">[Alle]</option><option>ja</option><option>nein</option></select></th>
+            <th><select class="punct-raw-filter" data-mui-nolabel data-col="2" onchange="punctRawFilterChanged()"><option value=""></option><option>ja</option><option>nein</option></select></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="3" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="4" oninput="punctRawFilterChanged()"></th>
-            <th><select class="punct-raw-filter" data-col="5" onchange="punctRawFilterChanged()"><option data-i18n="filter_all_bracket">[Alle]</option><option>Hinrichtung</option><option>Rückrichtung</option></select></th>
+            <th><select class="punct-raw-filter" data-mui-nolabel data-col="5" onchange="punctRawFilterChanged()"><option value=""></option><option>Hinrichtung</option><option>Rückrichtung</option></select></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="6" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="7" oninput="punctRawFilterChanged()"></th>
             <th><input type="text" placeholder="suchen" class="punct-raw-filter" data-col="8" oninput="punctRawFilterChanged()"></th>
@@ -4871,10 +4868,16 @@
     const menu = wrap.querySelector('.mui-menu');
     if (!sel || !valueEl || !menu) return;
     const opt = sel.options[sel.selectedIndex];
-    // An option with an empty value is a placeholder, not a choice.
-    const isPlaceholder = !opt || opt.value === '';
-    valueEl.textContent = isPlaceholder ? '' : opt.textContent.trim();
-    valueEl.setAttribute('data-placeholder', opt ? opt.textContent.trim() : '');
+    const empty = !opt || opt.value === '';
+    valueEl.textContent = empty ? '' : opt.textContent.trim();
+    // Label rests centred while empty, shrinks once a value exists; the
+    // clear x only exists when there is something to clear.
+    const trigger = wrap.querySelector('.mui-select-trigger');
+    if (trigger) {
+      trigger.classList.toggle('has-value', !empty);
+      const lab = trigger.querySelector('.mui-select-label');
+      if (lab) lab.classList.toggle('shrink', !empty);
+    }
     menu.querySelectorAll('.mui-menu-item').forEach(li => {
       const on = li.getAttribute('data-value') === sel.value;
       li.classList.toggle('selected', on);
@@ -4887,6 +4890,11 @@
     const menu = wrap.querySelector('.mui-menu');
     menu.innerHTML = '';
     Array.from(sel.options).forEach(opt => {
+      // An empty-valued option is the field's "nothing selected" state, not
+      // a choice. Ignat, 2026-09-15: "We don't need option 'All' in the
+      // dropdown. All selected by default." So it stays on the <select> as
+      // the sentinel and never appears in the menu.
+      if (opt.value === '') return;
       const li = document.createElement('li');
       li.className = 'mui-menu-item';
       li.setAttribute('role', 'option');
@@ -4926,9 +4934,37 @@
     trigger.setAttribute('aria-haspopup', 'listbox');
     trigger.setAttribute('aria-expanded', 'false');
     if (sel.id) trigger.setAttribute('aria-labelledby', sel.id + '-label');
-    trigger.innerHTML = '<span class="mui-select-value"></span>'
-      + '<span class="mui-select-caret material-icons">arrow_drop_down</span>';
+    // Every selector carries its own header (Ignat, 2026-09-15: "All
+    // selectors should have headers"). That header is MUI's filled label:
+    // it rests centred while the field is empty -- which is what says
+    // "unfiltered" now that the All option is gone -- and shrinks to the
+    // top once a value exists.
+    // Column filters inside a table header opt out: the column heading
+    // already names them, and a floating label in a narrow cell is unreadable.
+    const labelText = sel.hasAttribute('data-mui-nolabel') ? ''
+      : sel.getAttribute('data-mui-label-key') ? t(sel.getAttribute('data-mui-label-key'))
+      : (sel.getAttribute('data-mui-label') || '');
+    trigger.innerHTML =
+        (labelText ? '<span class="mui-select-label"></span>' : '')
+      + '<span class="mui-select-value"></span>'
+      + '<span class="mui-select-actions">'
+      +   '<span class="mui-select-clear material-icons" role="button" tabindex="-1">close</span>'
+      +   '<span class="mui-select-caret material-icons">arrow_drop_down</span>'
+      + '</span>';
+    const labelEl = trigger.querySelector('.mui-select-label');
+    if (labelEl) labelEl.textContent = labelText;
+    if (!labelText) trigger.classList.add('no-label');
     wrap.appendChild(trigger);
+
+    // the x clears the selector rather than opening the menu
+    trigger.querySelector('.mui-select-clear').addEventListener('click', e => {
+      e.stopPropagation();
+      sel.value = '';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      muiSyncSelect(wrap);
+      close();
+      trigger.focus();
+    });
 
     const menu = document.createElement('ul');
     menu.className = 'mui-menu';
@@ -5010,6 +5046,18 @@
       muiBuildMenu(wrap);
       sel.dispatchEvent(new Event('mui-options-changed'));
     }).observe(sel, { childList: true });
+  }
+
+  /** Re-resolve every rendered label and menu after a language change. */
+  function muiRefreshAll() {
+    document.querySelectorAll('.mui-select').forEach(wrap => {
+      const sel = wrap.querySelector('select.mui-select-native');
+      const lab = wrap.querySelector('.mui-select-label');
+      if (sel && lab && sel.getAttribute('data-mui-label-key')) {
+        lab.textContent = t(sel.getAttribute('data-mui-label-key'));
+      }
+      if (sel) muiBuildMenu(wrap);
+    });
   }
 
   function muiUpgradeSelects(root) {
@@ -5326,6 +5374,11 @@
       filter_all_bracket: '[All]',
       err_range_reversed: 'The end date is before the start date — the evaluation cannot run over a negative period.',
       err_login_required: 'Please enter your e-mail address and password.',
+      sel_status: 'Status', sel_period: 'Period', sel_frequency: 'Frequency',
+      sel_breakdown_1: 'Break down by', sel_breakdown_2: 'Then by', sel_breakdown_3: 'And then by',
+      sel_additional_1: 'Additionally by', sel_additional_2: 'And additionally by',
+      sel_dimension: 'Dimension', sel_entity: 'Entity', sel_show: 'Show', sel_metric: 'Metric',
+      sel_rows_per_page: 'Rows per page', sel_day: 'Day', sel_month: 'Month', sel_time: 'Time',
       err_email_required: 'E-mail address is required',
       err_password_required: 'Password is required',
       err_threshold_required: 'Punctuality threshold is required',
@@ -5793,6 +5846,11 @@
       filter_all_bracket: '[Alle]',
       err_range_reversed: 'Das Enddatum liegt vor dem Startdatum — die Auswertung kann keinen negativen Zeitraum verarbeiten.',
       err_login_required: 'Bitte E-Mail-Adresse und Passwort eingeben.',
+      sel_status: 'Status', sel_period: 'Zeitraum', sel_frequency: 'Frequenz',
+      sel_breakdown_1: 'Aufschlüsseln nach', sel_breakdown_2: 'Danach nach', sel_breakdown_3: 'Und danach nach',
+      sel_additional_1: 'Zusätzlich nach', sel_additional_2: 'Und zusätzlich nach',
+      sel_dimension: 'Dimension', sel_entity: 'Einheit', sel_show: 'Anzeigen', sel_metric: 'Kennzahl',
+      sel_rows_per_page: 'Zeilen pro Seite', sel_day: 'Tag', sel_month: 'Monat', sel_time: 'Zeit',
       err_email_required: 'E-Mail-Adresse ist erforderlich',
       err_password_required: 'Passwort ist erforderlich',
       err_threshold_required: 'Pünktlichkeitsgrenzwert ist erforderlich',
@@ -6148,6 +6206,10 @@
     document.querySelectorAll('[data-i18n]').forEach(el => {
       el.textContent = t(el.dataset.i18n);
     });
+
+    // Option text lives on the hidden <select>, so the rendered menus and
+    // the floating headers have to be rebuilt from it after a switch.
+    if (typeof muiRefreshAll === 'function') muiRefreshAll();
 
     // Update placeholders
     document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
@@ -7780,7 +7842,7 @@
 
     const query        = searchEl.value.toLowerCase();
     const statusFilter = statusEl.value;
-    const periodFilter = periodEl ? periodEl.value : 'all';
+    const periodFilter = periodEl ? periodEl.value : '';
 
     let totalVisible = 0;
 
@@ -7791,8 +7853,8 @@
         const status = row.dataset.status;
         const period = row.dataset.period || 'other';
         const ok = (!query || name.includes(query))
-                && (statusFilter === 'all' || status === statusFilter)
-                && (periodFilter === 'all' || period === periodFilter);
+                && (!statusFilter || status === statusFilter)
+                && (!periodFilter || period === periodFilter);
         row.style.display = ok ? '' : 'none';
         if (ok) { groupHasVisible = true; totalVisible++; }
       });
@@ -7806,8 +7868,8 @@
     if (emptyEl) emptyEl.style.display = totalVisible === 0 ? 'block' : 'none';
 
     const hasSearch = query.length > 0;
-    const hasStatus = statusFilter !== 'all';
-    const hasPeriod = periodFilter !== 'all';
+    const hasStatus = !!statusFilter;
+    const hasPeriod = !!periodFilter;
     document.getElementById('reports-search-clear').style.display = hasSearch ? 'block' : 'none';
     document.getElementById('reports-status-wrapper').classList.toggle('has-value', hasStatus);
     document.getElementById('reports-period-wrapper').classList.toggle('has-value', hasPeriod);
@@ -7819,17 +7881,17 @@
     filterReports();
   }
   function clearReportsStatus() {
-    document.getElementById('reports-status-filter').value = 'all';
+    document.getElementById('reports-status-filter').value = '';
     filterReports();
   }
   function clearReportsPeriod() {
-    document.getElementById('reports-period-filter').value = 'all';
+    document.getElementById('reports-period-filter').value = '';
     filterReports();
   }
   function clearReportsFilters() {
     document.getElementById('reports-search').value = '';
-    document.getElementById('reports-status-filter').value = 'all';
-    document.getElementById('reports-period-filter').value = 'all';
+    document.getElementById('reports-status-filter').value = '';
+    document.getElementById('reports-period-filter').value = '';
     filterReports();
   }
 
@@ -7856,14 +7918,14 @@
       const freq   = row.dataset.freq   || '';
       const status = row.dataset.status || '';
       const ok = (!query || name.includes(query))
-              && (freqFilter === 'all' || freq === freqFilter)
-              && (statFilter === 'all' || status === statFilter);
+              && (!freqFilter || freq === freqFilter)
+              && (!statFilter || status === statFilter);
       row.style.display = ok ? '' : 'none';
     });
 
     const hasSearch = query.length > 0;
-    const hasFreq   = freqFilter !== 'all';
-    const hasStat   = statFilter !== 'all';
+    const hasFreq   = !!freqFilter;
+    const hasStat   = !!statFilter;
     document.getElementById('sched-search-clear').style.display = hasSearch ? 'block' : 'none';
     document.getElementById('sched-freq-wrapper').classList.toggle('has-value', hasFreq);
     document.getElementById('sched-status-wrapper').classList.toggle('has-value', hasStat);
@@ -7879,17 +7941,17 @@
     filterScheduled();
   }
   function clearSchedFreq() {
-    document.getElementById('sched-freq-filter').value = 'all';
+    document.getElementById('sched-freq-filter').value = '';
     filterScheduled();
   }
   function clearSchedStatus() {
-    document.getElementById('sched-status-filter').value = 'all';
+    document.getElementById('sched-status-filter').value = '';
     filterScheduled();
   }
   function clearSchedFilters() {
     document.getElementById('sched-search').value = '';
-    document.getElementById('sched-freq-filter').value = 'all';
-    document.getElementById('sched-status-filter').value = 'all';
+    document.getElementById('sched-freq-filter').value = '';
+    document.getElementById('sched-status-filter').value = '';
     filterScheduled();
   }
 
@@ -8449,7 +8511,7 @@
       if (cell) {
         const col = id === 'rpt-raw-filter-conn' ? 11 : 12;
         const prev = cell.querySelector('select') ? cell.querySelector('select').value : '';
-        cell.innerHTML = `<select class="rpt-raw-filter" data-col="${col}" onchange="rptRawFilterChanged()"><option value="">${t('rpt_raw_all')}</option><option value="ja">${yesVal}</option><option value="nein">${noVal}</option></select>`;
+        cell.innerHTML = `<select class="rpt-raw-filter" data-mui-nolabel data-col="${col}" onchange="rptRawFilterChanged()"><option value=""></option><option value="ja">${yesVal}</option><option value="nein">${noVal}</option></select>`;
         cell.querySelector('select').value = prev;
       }
     });
