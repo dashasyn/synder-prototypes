@@ -17,6 +17,7 @@ const {
   Typography, Menu, MenuItem, Breadcrumbs, Link, Card, CardContent, TextField,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip,
   Stack, FormControl, InputLabel, Select, InputAdornment, Alert, Tooltip,
+  Tabs, Tab,
 } = M;
 
 const Icon = ({ children, sx }) =>
@@ -635,7 +636,29 @@ function FaRow({ tu, t }) {
 
 function ReportTripFailures({ go, row }) {
   const { t } = useT();
-  const tus = FA_DATA.tus || [];
+  // The vanilla offers eight controls here and my first pass had none —
+  // the parity check counted 8 -> 0. Show (which TU), Metric, and the same
+  // three-level breakdown plus two "additionally by" levels.
+  const [tu, setTu] = useState('');
+  const [metric, setMetric] = useState('0');
+  const [dims, setDims] = useState(['', '', '']);
+  const [add, setAdd] = useState(['', '']);
+
+  const all = FA_DATA.tus || [];
+  const tus = tu ? all.filter(x => x.id === tu) : all;
+
+  const METRICS = [
+    { value: '0', key: 'fa_col_fahrtzeit' },
+    { value: '1', key: 'fa_col_fahrten' },
+    { value: '2', key: 'fa_col_haltestellen' },
+  ];
+  const FA_DIMS = ['betriebstag', 'linie', 'tu', 'vm', 'region'];
+  const setLevel = (arr, setArr) => (i, v) => setArr(d => {
+    const n = [...d]; n[i] = v;
+    for (let j = i + 1; j < n.length; j++) n[j] = '';
+    return n;
+  });
+
   return html`
     <${Box}>
       <${PageHeader}
@@ -645,6 +668,33 @@ function ReportTripFailures({ go, row }) {
         action=${html`<${Button} variant="outlined"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
       <${Box} sx=${{ p: 3 }}>
+        <${Card} sx=${{ mb: 3 }}><${CardContent}>
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap sx=${{ mb: 2 }}>
+            <${FilterSelect} id="fa-ub-tu-sel" label=${t('sel_show')} value=${tu}
+              onChange=${setTu} minWidth=${200}
+              options=${all.map(x => ({ value: x.id, label: x.label }))} />
+            <${FilterSelect} id="fa-ub-metric-sel" label=${t('sel_metric')} value=${metric}
+              onChange=${v => setMetric(v || '0')} minWidth=${200}
+              options=${METRICS.map(m => ({ value: m.value, label: t(m.key) }))} />
+          <//>
+          <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('punct_aufschluss_label')}<//>
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap sx=${{ mb: 2 }}>
+            ${[0, 1, 2].map(i => html`
+              <${FilterSelect} key=${i} id=${'fa-auf-' + (i + 1)}
+                label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
+                value=${dims[i]} onChange=${v => setLevel(dims, setDims)(i, v)} minWidth=${200}
+                options=${FA_DIMS.filter(d => !dims.some((x, j) => x === d && j !== i))
+                  .map(d => ({ value: d, label: t(PUNCT_DIM_LABELS[d] || 'fa_opt_' + d) }))} />`)}
+          <//>
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+            ${[0, 1].map(i => html`
+              <${FilterSelect} key=${i} id=${'fa-add-' + (i + 1)}
+                label=${t(i === 0 ? 'sel_additional_1' : 'sel_additional_2')}
+                value=${add[i]} onChange=${v => setLevel(add, setAdd)(i, v)} minWidth=${200}
+                options=${FA_DIMS.filter(d => !add.some((x, j) => x === d && j !== i))
+                  .map(d => ({ value: d, label: t(PUNCT_DIM_LABELS[d] || 'fa_opt_' + d) }))} />`)}
+          <//>
+        <//><//>
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
           <${Table} id="fa-table">
             <${TableHead}><${TableRow}>
@@ -680,9 +730,16 @@ function ReportTripFailures({ go, row }) {
    identical because they all sit in the high nineties. */
 function ReportDQI({ go, row }) {
   const { t } = useT();
+  // The vanilla has TWO tabs and I had only built the table — Ignat spotted
+  // it, and scripts/qx-feature-parity.cjs now catches the whole class.
+  const [tab, setTab] = useState('overview');
   const [scope, setScope] = useState('tu');
+  const [entity, setEntity] = useState('');
   const rows = scope === 'tu' ? DQI_TU : DQI_KANTON;
   const bands = useMemo(() => DQI_INDICATORS.map((_, i) => dqiBand(i)), []);
+  // Entity narrows the overview to one company or canton; empty is all of them.
+  const entities = rows.filter(r => !r.total);
+  const shown = entity ? entities.filter(e => e.label === entity) : entities;
 
   return html`
     <${Box}>
@@ -692,12 +749,54 @@ function ReportDQI({ go, row }) {
         title=${row ? row.name : t('type_data_quality')} subtitle=${t('type_data_quality')}
         action=${html`<${Button} variant="outlined"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+      <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} id="dqi-tabs"
+               sx=${{ px: 3, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>
+        <${Tab} value="overview" label=${t('dqi_tab_overview')} />
+        <${Tab} value="table" label=${t('dqi_tab_table')} />
+      <//>
+
       <${Box} sx=${{ p: 3 }}>
         <${Card} sx=${{ mb: 3 }}><${CardContent}>
-          <${FilterSelect} id="dqi-scope" label=${t('dqi_show')} value=${scope}
-            onChange=${v => setScope(v || 'tu')} minWidth=${240}
-            options=${[{ value: 'tu', label: t('filter_tu') }, { value: 'kanton', label: t('filter_cantons') }]} />
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+            <${FilterSelect} id="dqi-dim" label=${t('sel_dimension')} value=${scope}
+              onChange=${v => { setScope(v || 'tu'); setEntity(''); }} minWidth=${240}
+              options=${[{ value: 'tu', label: t('dqi_dim_tu') },
+                         { value: 'kanton', label: t('dqi_dim_kanton') }]} />
+            <${FilterSelect} id="dqi-entity" label=${t('sel_entity')} value=${entity}
+              onChange=${setEntity} minWidth=${240}
+              options=${entities.map(e => ({ value: e.label, label: e.label }))} />
+          <//>
         <//><//>
+
+        ${tab === 'overview' && html`
+          <${Box} id="dqi-overview">
+            <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
+              ${t('dqi_lg_band')}
+            <//>
+            <${Box} sx=${{ display: 'grid', gap: 2,
+                            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+              ${DQI_INDICATORS.map((ind, i) => {
+                const b = bands[i];
+                return html`
+                  <${Card} key=${ind.n} className="dqi-card">
+                    <${CardContent}>
+                      <${Typography} variant="subtitle2" gutterBottom>${ind.n}. ${t(ind.key)}<//>
+                      <${Typography} variant="h5" sx=${{ mb: .5 }}>
+                        ${typeof DQI_NATIONAL[i] === 'number' ? DQI_NATIONAL[i].toFixed(2) : '—'}
+                      <//>
+                      <${Typography} variant="caption" color="text.secondary" display="block" sx=${{ mb: 1 }}>
+                        ${b.min.toFixed(2)} – ${b.max.toFixed(2)}
+                      <//>
+                      ${/* dqiSpark() is extracted from the vanilla, so the
+                            sparkline is the same generator, not a lookalike */''}
+                      <${Box} dangerouslySetInnerHTML=${{ __html: dqiSpark(shown[0] ? shown[0].label : 'CH', i, 12) }} />
+                    <//>
+                  <//>`;
+              })}
+            <//>
+          <//>`}
+
+        ${tab === 'table' && html`<${Box} id="dqi-table-panel">
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
           <${Table} id="dqi-table">
             <${TableHead}><${TableRow}>
@@ -708,7 +807,7 @@ function ReportDQI({ go, row }) {
                 <//>`)}
             <//><//>
             <${TableBody}>
-              ${rows.map((r, ri) => html`
+              ${(entity ? rows.filter(r => r.total || r.label === entity) : rows).map((r, ri) => html`
                 <${TableRow} key=${r.label + ri} hover
                              sx=${r.total ? { '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } } : {}}>
                   <${TableCell}>${r.label}<//>
@@ -726,6 +825,7 @@ function ReportDQI({ go, row }) {
             <//>
           <//>
         <//>
+        <//>`}
       <//>
     <//>`;
 }
@@ -853,7 +953,10 @@ function TopBar({ go }) {
 }
 
 function App() {
-  const [lang, setLang] = useState('de');
+  // The vanilla prototype starts in English (index.html: `let lang = 'en'`).
+  // This defaulted to German and my own suite asserted that as correct — a
+  // test that enshrined my invention rather than checking the original.
+  const [lang, setLang] = useState('en');
   const [route, setRoute] = useState({ name: 'list' });
   // data.js owns t() and its lang binding, because the extracted record sets
   // call it while they build. Duplicating the lookup here would give two

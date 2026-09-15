@@ -113,12 +113,19 @@ const fs = require('fs');
   const deHeading = await page.$eval('h5', e => e.textContent.trim());
   await page.click('#lang-trigger');
   await page.waitForTimeout(300);
-  await page.click('.MuiMenu-list li:first-child');   // EN
+  await page.click('.MuiMenu-list li:nth-child(2)');   // DE
   await page.waitForTimeout(400);
   const enHeading = await page.$eval('h5', e => e.textContent.trim());
   ok('the language switch actually re-renders the app',
     deHeading !== enHeading, { de: deHeading, en: enHeading });
-  ok('German is the default', deHeading === 'Auswertungen', deHeading);
+  // Parity, not preference: the vanilla starts in English, so this must too.
+  ok('the default language matches the vanilla prototype (English)',
+    deHeading === 'Evaluations', deHeading);
+  // switch back, or every assertion after this one runs in the other language
+  await page.click('#lang-trigger');
+  await page.waitForTimeout(300);
+  await page.click('.MuiMenu-list li:first-child');
+  await page.waitForTimeout(400);
 
   // ── navigation ───────────────────────────────────────────────
   await page.click('#qx-nav-trigger');
@@ -301,7 +308,7 @@ const fs = require('fs');
     punctuality:   '#punct-table',
     connection:    '#rpt-table',
     trip_failures: '#fa-table',
-    data_quality:  '#dqi-table',
+    data_quality:  '#dqi-tabs',
     raw_data:      '#raw-table',
     line_analysis: '#punct-table',
   };
@@ -310,8 +317,11 @@ const fs = require('fs');
     if (!name) { fails.push(`no evaluation of type ${group}`); continue; }
     await openByName(name);
     ok(`${group} opens its own report view`, (await page.$$(sel)).length === 1, sel);
-    const n = await page.$$eval('tbody tr', r => r.length);
-    ok(`${group} renders rows`, n > 0, n);
+    // DQI opens on a tab of cards rather than a table, so count whichever
+    // this view actually renders instead of assuming every report is a table.
+    const n = await page.evaluate(() =>
+      document.querySelectorAll('tbody tr').length + document.querySelectorAll('.dqi-card').length);
+    ok(`${group} renders content`, n > 0, n);
     ok(`${group} has no untranslated keys`, (await rawKeys(page)).length === 0, await rawKeys(page));
     await goBack();
   }
@@ -328,6 +338,12 @@ const fs = require('fs');
   await goBack();
 
   await openByName(await nameOf('data_quality'));
+  // the table lives behind the second tab; Overview is what opens
+  ok('DQI opens on the Overview tab', (await page.$$('#dqi-overview')).length === 1);
+  ok('the Overview shows a card per indicator',
+    (await page.$$('.dqi-card')).length === 10, (await page.$$('.dqi-card')).length);
+  await page.click('#dqi-tabs button:nth-child(2)');
+  await page.waitForTimeout(500);
   const dqi = await page.$$eval('#dqi-table tbody tr:first-child td',
     c => c.map(x => x.textContent.trim()).slice(0, 4));
   const dqiWant = await page.evaluate(() => [DQI_TU[0].label, ...DQI_TU[0].v.slice(0, 3).map(v => v.toFixed(2))]);
