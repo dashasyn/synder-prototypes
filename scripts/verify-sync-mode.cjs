@@ -220,23 +220,16 @@ function ok(name, cond) {
   ok('the reason is reachable only through the chip',
     (await page.locator('.mode-why').count()) === 0 && await chip.isVisible());
 
-  // ── 4c. Permanence — confirmed unchangeable by Ignat 2026-09-16; one short line, no essay ──
-  const perm = page.locator('.perm-under');
-  ok('permanence line visible', await perm.isVisible());
-  ok('permanence states the fact', /can't be changed later/i.test(await perm.textContent()));
-  ok('permanence is one short sentence, not an explanation',
-    (await perm.textContent()).trim().replace(/\s+/g, ' ').length <= 40);
-  ok('permanence sits below both cards',
-    (await perm.boundingBox()).y >
-      (await cardSum.boundingBox()).y + (await cardSum.boundingBox()).height - 1);
-  ok('permanence is grey, not a warning colour', await perm.evaluate(el => {
-    const m = getComputedStyle(el).color.match(/\d+/g).map(Number);
-    return Math.abs(m[0] - m[1]) < 40 && Math.abs(m[1] - m[2]) < 60 && m[0] < 160;
-  }));
-  ok('no yellow alert on the step', (await page.locator('.ob-wrap .alert-warning').count()) === 0);
-  ok('the new-organization workaround is not offered here',
-    !/another organization|second organization/i.test(await page.locator('.ob-wrap').textContent()));
+  // ── 4c. Nothing under the cards (Ignat, 2026-09-16) ──
+  ok('no permanence line', (await page.locator('.perm-under').count()) === 0);
   ok('no undecided nudge', (await page.locator('.perm-nudge').count()) === 0);
+  ok('the actions row follows the cards directly', await page.evaluate(() => {
+    const cards = document.querySelector('.modes');
+    return cards.nextElementSibling && cards.nextElementSibling.classList.contains('ob-actions');
+  }));
+  ok('the step makes no claim about changing the mode later',
+    !/changed later|can't be changed|another organization|second organization/i
+      .test(await page.locator('.ob-wrap').textContent()));
 
   // ── 6. Preview is button + modal, and the button does not promise real books ──
   const btnPt = page.locator('#mode-pt .pv-btn button');
