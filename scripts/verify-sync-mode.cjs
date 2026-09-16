@@ -40,15 +40,27 @@ function ok(name, cond) {
 
   // ── 1. Opens on the work, no intro screen, switcher first and full width ──
   ok('step heading visible on load', await h1.isVisible());
-  ok('heading is the sync-mode step',
-    (await h1.textContent()).trim() === 'How should we sync your data?');
+  ok('heading matches production wording',
+    (await h1.textContent()).trim() === 'Choose how Synder organizes your transactions');
+  // Ignat 2026-09-16: many integrations, not only Shopify — the step intro must stay generic.
+  const intro = (await h1.textContent()) + ' ' + (await page.locator('.ob-sub').textContent());
+  ok('the intro names no single sales channel', !/shopify|stripe|amazon|paypal|etsy/i.test(intro));
+  ok('the intro names no single accounting platform', !/quickbooks|xero|sage|netsuite/i.test(intro));
+  ok('the intro states the choice in product terms',
+    /record every transaction individually/i.test(intro) &&
+    /group them into\s+summary entries/i.test(intro.replace(/\s+/g, ' ')));
   // One variant left, so there is no switcher — AGENTS.md: one variant = no switcher.
   ok('no variant switcher on the page', (await page.locator('.variant-switch').count()) === 0);
   ok('the page opens directly on the product chrome',
     await page.evaluate(() => document.body.firstElementChild.classList.contains('ob-top')));
   ok('no prototype-only control left behind',
     (await page.locator('#md-1, #md-2, .vs-note').count()) === 0);
-  ok('no chevron band / stepper on this step', (await page.locator('text=Organize').count()) === 0);
+  ok('no chevron band / stepper on this step', await page.evaluate(() => {
+    const labels = ['Import', 'Organize', 'Customize', 'Sync'];
+    const exact = [...document.querySelectorAll('.ob-wrap *')]
+      .filter(el => !el.children.length && labels.includes(el.textContent.trim()));
+    return exact.length === 0 && document.querySelectorAll('.stepper, .chevron-band').length === 0;
+  }));
   ok('UI kit is the canonical linked stylesheet',
     await page.evaluate(() => !!document.querySelector(
       'link[href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css"]')));
@@ -257,6 +269,15 @@ function ok(name, cond) {
     return !el.classList.contains('btn') && parseFloat(cs.borderTopWidth) === 0 &&
            cs.backgroundColor === 'rgba(0, 0, 0, 0)';
   }));
+  // Ignat 2026-09-16: no underline at rest, underline on hover.
+  ok('trigger is not underlined at rest',
+    await pvLink.evaluate(el => getComputedStyle(el).textDecorationLine === 'none'));
+  await pvLink.hover();
+  ok('trigger underlines on hover',
+    await pvLink.evaluate(el => getComputedStyle(el).textDecorationLine === 'underline'));
+  await page.locator('.page-title').hover();
+  ok('underline goes away again',
+    await pvLink.evaluate(el => getComputedStyle(el).textDecorationLine === 'none'));
   ok('Continue is the only filled button on the step',
     (await page.locator('.ob-wrap .btn:not(.btn-outlined):not(.btn-text-plain)').count()) === 1);
   ok('the step carries exactly two buttons plus the link',
@@ -417,8 +438,13 @@ function ok(name, cond) {
     !/412/.test(text));
   ok('copy: no jargon left from the old card',
     !text.includes('summarize all transactions together'));
-  ok('copy: sample data is generic Shopify, not a real connected merchant',
-    text.includes('Shopify') && !text.includes('Dasha Test Company'));
+  await pvLink.click();
+  const sampleText = await page.locator('#pv-modal-body').textContent();
+  ok('copy: the sample names a generic store, not a real connected merchant',
+    sampleText.includes('Shopify') && !sampleText.includes('Dasha Test Company'));
+  ok('copy: the integration name appears only inside the sample, not on the step',
+    !/shopify/i.test(text));
+  await page.keyboard.press('Escape');
 
   await browser.close();
 
