@@ -178,7 +178,7 @@ function StationDetailView() {
               onChange=${e => patch(n => { n.longName = e.target.value; })} />
           <//>
 
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 2 }}>
+          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
             ${t('coordinates')}<//>
           <${Stack} direction="row" spacing=${2} alignItems="center" flexWrap="wrap" useFlexGap>
             <${TextField} type="number" label=${t('coordLat')} sx=${{ width: 170 }} placeholder="52.521992"
@@ -192,7 +192,7 @@ function StationDetailView() {
               startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>place<//>`}>${t('coordPreview')}<//>
           <//>
 
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 2 }}>
+          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
             ${t('scheduledChanges')}<//>
           <${Stack} spacing=${1.5}>
             ${d.nameChanges.map((nc, i) => html`
@@ -265,7 +265,7 @@ function StationDetailView() {
             options=${nameFileOptions} minWidth=${300}
             onChange=${v => patch(n => { n.stationNameFile = v; })} />
 
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 2.5 }}>
+          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
             ${t('transferFiles')}<//>
           ${d.transferAnnouncements.length ? html`
             <${Stack} spacing=${1} sx=${{ mb: 1.5 }}>
@@ -291,7 +291,7 @@ function StationDetailView() {
             onClick=${() => { setAddXfer(''); setAddXferErr(false); }}>${t('addTransfer')}<//>
 
           <${Divider} sx=${{ my: 2.5 }} />
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block' }}>
+          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mb: 1 }}>
             ${t('triggerPoints')}<//>
           <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
             <${TextField} type="number" label=${t('departureFromPrev')} sx=${{ width: 320 }}

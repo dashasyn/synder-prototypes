@@ -65,6 +65,10 @@ const theme = createTheme({
     MuiTextField:   { defaultProps: { size: 'small', variant: 'filled' } },
     MuiFormControl: { defaultProps: { size: 'small', variant: 'filled' } },
     MuiTable:       { defaultProps: { size: 'small' } },
+    // MUI's small TableCell is 6px 16px. The vanilla's rows breathe more than
+    // that and the tables are the main reading surface, so the vertical
+    // padding goes up while the size="small" type scale stays.
+    MuiTableCell:   { styleOverrides: { root: { paddingTop: 10, paddingBottom: 10 } } },
     MuiAppBar:      { defaultProps: { elevation: 0 } },
     MuiToolbar:     { defaultProps: { variant: 'dense' } },
     // measured: TableHead carries a band; MUI's own is transparent
@@ -154,7 +158,7 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id, req
 function PageHeader({ crumbs, title, titleAfter, subtitle, action }) {
   return html`
     <${Box} sx=${{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-                   px: 3, py: 2.5, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>
+                   px: 3, py: 3, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>
       <${Box}>
         ${crumbs && crumbs.length ? html`
           <${Breadcrumbs} separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`} sx=${{ mb: .5 }}>
@@ -167,7 +171,7 @@ function PageHeader({ crumbs, title, titleAfter, subtitle, action }) {
           <${Typography} variant="h6" sx=${{ fontWeight: 500 }}>${title}<//>
           ${titleAfter}
         <//>
-        ${subtitle ? html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: .25 }}>${subtitle}<//>` : null}
+        ${subtitle ? html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: .75 }}>${subtitle}<//>` : null}
       <//>
       ${action ? html`<${Box} sx=${{ pt: .5 }}>${action}<//>` : null}
     <//>`;
@@ -176,17 +180,17 @@ function PageHeader({ crumbs, title, titleAfter, subtitle, action }) {
 /** An outlined section card with a title row. The house style is flat. */
 function SectionCard({ title, subtitle, action, children, disablePadding, sx }) {
   return html`
-    <${Card} sx=${{ mb: 2, ...(sx || {}) }}>
+    <${Card} sx=${{ mb: 3, ...(sx || {}) }}>
       ${title ? html`
         <${Box} sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                       gap: 2, px: 2, py: 1.25, borderBottom: '1px solid #E7E7E7' }}>
+                       gap: 2, px: 3, py: 2, borderBottom: '1px solid #E7E7E7' }}>
           <${Stack} direction="row" spacing=${1.5} alignItems="baseline">
             <${Typography} variant="subtitle2" sx=${{ fontWeight: 500 }}>${title}<//>
             ${subtitle ? html`<${Typography} variant="caption" color="text.secondary">${subtitle}<//>` : null}
           <//>
           ${action}
         <//>` : null}
-      <${Box} sx=${disablePadding ? { p: 0 } : { p: 2 }}>${children}<//>
+      <${Box} sx=${disablePadding ? { p: 0 } : { p: 3 }}>${children}<//>
     <//>`;
 }
 
@@ -201,7 +205,10 @@ function LineBadge({ line, size = 'small' }) {
 
 /** Full-width page body with the 24px gutters the brief asks for. */
 function PageBody({ children, sx }) {
-  return html`<${Box} sx=${{ px: 3, py: 2.5, ...(sx || {}) }}>${children}<//>`;
+  // data-page-body is a stable hook for the spacing gate. Without it the gate
+  // matched the PageHeader first — which carries the same px — and a squeezed
+  // body passed the assertion.
+  return html`<${Box} data-page-body="" sx=${{ px: 3, py: 3, ...(sx || {}) }}>${children}<//>`;
 }
 
 /**
@@ -332,4 +339,53 @@ function EmptyRow({ colSpan, label }) {
   return html`
     <${TableRow}><${TableCell} colSpan=${colSpan} align="center"
       sx=${{ color: 'text.disabled', py: 4 }}>${label || '—'}<//><//>`;
+}
+
+/* ── Ordered lists: the grip and the row drag ───────────────────────
+   Shared, because three tables are drag-ordered — Sonderansagen, Anzeigetexte
+   and the playlist tracks — and the port had already grown a second, worse
+   reordering UI (arrow buttons) in the one place this helper was out of reach. */
+/** The ⠿ grip. The row itself is draggable; this marks where to grab. */
+const DragHandle = () => html`
+  <${Icon} sx=${{ fontSize: 18, color: 'text.disabled', cursor: 'grab', display: 'block' }}>drag_indicator<//>`;
+
+/**
+ * HTML5 row drag for an ordered list. Returns the props a TableRow needs
+ * plus the sx that marks the dragged row and the drop target — the
+ * vanilla did this with .dragging / .drag-over classes; here it is sx.
+ */
+function useRowDrag(onDrop) {
+  const ctx = useRef({ src: null });
+  const [src, setSrc] = useState(null);
+  const [over, setOver] = useState(null);
+  const end = () => { ctx.current.src = null; setSrc(null); setOver(null); };
+  const rowProps = i => ({
+    draggable: true,
+    onDragStart: e => {
+      ctx.current.src = i;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(i));
+      setSrc(i);
+    },
+    onDragOver: e => {
+      if (ctx.current.src === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (ctx.current.src !== i) setOver(i);
+    },
+    onDrop: e => {
+      e.preventDefault();
+      const from = ctx.current.src;
+      end();
+      if (from === null || from === i) return;
+      onDrop(from, i);
+    },
+    onDragEnd: end,
+  });
+  const rowSx = i => ({
+    cursor: 'grab',
+    ...(src === i ? { opacity: .4 } : null),
+    ...(over === i ? { '& td': { boxShadow: 'inset 0 2px 0 0 #2196F3' } } : null),
+  });
+  return { rowProps, rowSx };
 }

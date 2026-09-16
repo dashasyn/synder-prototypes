@@ -327,14 +327,16 @@ function PlaylistDetailView() {
     list.splice(newIdx, 0, item);
     bump();
   };
-  const moveBy = (i, d) => {
-    const j = i + d;
-    if (j < 0 || j >= list.length) return;
-    const [item] = list.splice(i, 1);
-    list.splice(j, 0, item);
-    bump();
-  };
   const removeTrack = i => { list.splice(i, 1); bump(); };
+
+  // The vanilla's playlist rows are draggable with a ⠿ grip, like every other
+  // ordered list in the tool. The port had replaced that with arrow buttons —
+  // one click per position step, and an affordance that exists nowhere else.
+  const { rowProps, rowSx } = useRowDrag((from, to) => {
+    const [item] = list.splice(from, 1);
+    list.splice(to, 0, item);
+    bump();
+  });
 
   const toPlaylists = () => { set({ soundTab: 'playlists' }); nav('sounds'); };
 
@@ -368,6 +370,7 @@ function PlaylistDetailView() {
           action=${html`<${Button} onClick=${() => setAddOpen(true)}>${t('plAddTrack')}<//>`}>
           <${Table} id="pl-track-table">
             <${TableHead}><${TableRow}>
+              <${TableCell} sx=${{ width: 32, pr: 0 }} />
               <${TableCell} sx=${{ width: 96 }}>${t('colPos')}<//>
               <${TableCell}>${t('colName')}<//>
               <${TableCell}>${t('colFilename')}<//>
@@ -378,7 +381,8 @@ function PlaylistDetailView() {
               ${list.length ? list.map((tid, i) => {
                 const f = soundFiles.find(x => x.id === tid) || { name: tid, filename: '—', duration: '—' };
                 return html`
-                  <${TableRow} key=${tid + '-' + i} hover>
+                  <${TableRow} key=${tid + '-' + i} hover ...${rowProps(i)} sx=${rowSx(i)}>
+                    <${TableCell} sx=${{ width: 32, pr: 0 }}><${DragHandle} /><//>
                     <${TableCell}>
                       ${/* hiddenLabel: the column heading names this field, the
                             one case the brief lets a control go unlabelled. */ ''}
@@ -394,21 +398,13 @@ function PlaylistDetailView() {
                       ${f.filename}<//>
                     <${TableCell} sx=${{ color: 'text.secondary' }}>${f.duration || '—'}<//>
                     <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                      <${IconButton} disabled=${i === 0} aria-label=${'move up ' + tid}
-                        onClick=${() => moveBy(i, -1)}>
-                        <${Icon} sx=${{ fontSize: 18 }}>arrow_upward<//>
-                      <//>
-                      <${IconButton} disabled=${i === list.length - 1} aria-label=${'move down ' + tid}
-                        onClick=${() => moveBy(i, 1)}>
-                        <${Icon} sx=${{ fontSize: 18 }}>arrow_downward<//>
-                      <//>
                       <${IconButton} color="error" aria-label=${'remove ' + tid}
                         onClick=${() => removeTrack(i)}>
                         <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
                       <//>
                     <//>
                   <//>`;
-              }) : html`<${EmptyRow} colSpan=${5} label=${t('plEmpty')} />`}
+              }) : html`<${EmptyRow} colSpan=${6} label=${t('plEmpty')} />`}
             <//>
           <//>
         <//>

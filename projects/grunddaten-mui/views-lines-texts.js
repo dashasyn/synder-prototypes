@@ -49,10 +49,6 @@
 
   /* ── Small shared pieces ────────────────────────────────────────── */
 
-  /** The ⠿ grip. The row itself is draggable; this marks where to grab. */
-  const DragHandle = () => html`
-    <${Icon} sx=${{ fontSize: 18, color: 'text.disabled', cursor: 'grab', display: 'block' }}>drag_indicator<//>`;
-
   /**
    * The position box. The vanilla commits on `change` (blur / Enter), not
    * on every keystroke, so this keeps its own value and commits the same
@@ -68,47 +64,6 @@
         onBlur=${() => { if (v !== String(value)) onCommit(v); }}
         onKeyDown=${e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }}
         sx=${{ width: 72, '& input': { textAlign: 'center', py: .75 } }} />`;
-  }
-
-  /**
-   * HTML5 row drag for an ordered list. Returns the props a TableRow needs
-   * plus the sx that marks the dragged row and the drop target — the
-   * vanilla did this with .dragging / .drag-over classes; here it is sx.
-   */
-  function useRowDrag(onDrop) {
-    const ctx = useRef({ src: null });
-    const [src, setSrc] = useState(null);
-    const [over, setOver] = useState(null);
-    const end = () => { ctx.current.src = null; setSrc(null); setOver(null); };
-    const rowProps = i => ({
-      draggable: true,
-      onDragStart: e => {
-        ctx.current.src = i;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(i));
-        setSrc(i);
-      },
-      onDragOver: e => {
-        if (ctx.current.src === null) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        if (ctx.current.src !== i) setOver(i);
-      },
-      onDrop: e => {
-        e.preventDefault();
-        const from = ctx.current.src;
-        end();
-        if (from === null || from === i) return;
-        onDrop(from, i);
-      },
-      onDragEnd: end,
-    });
-    const rowSx = i => ({
-      cursor: 'grab',
-      ...(src === i ? { opacity: .4 } : null),
-      ...(over === i ? { '& td': { boxShadow: 'inset 0 2px 0 0 #2196F3' } } : null),
-    });
-    return { rowProps, rowSx };
   }
 
   /* ════════════════════════════════════════════════════════════════
