@@ -43,10 +43,10 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
   // ── radio selection: exercise twice, record liveness after each ──
   await page.locator('#mode-sum').click(); await settle();
   const afterSum = { selected: await vis('#mode-sum.sel'),
-    other_still_visible: await vis('#mode-pt'), other_still_clickable: await vis('#mode-pt .pv-btn button') };
+    other_still_visible: await vis('#mode-pt'), other_still_clickable: await vis('.pv-link') };
   await page.locator('#r-pt').click(); await settle();
   const afterPt = { selected: await vis('#mode-pt.sel'),
-    other_still_visible: await vis('#mode-sum'), other_still_clickable: await vis('#mode-sum .pv-btn button') };
+    other_still_visible: await vis('#mode-sum'), other_still_clickable: await vis('.pv-link') };
   controls.push({ zone: 'mode cards', label: 'Sync mode radio group', type: 'radio group',
     text: 'Per transaction / Summary',
     after_interaction: {
@@ -69,7 +69,7 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
   const afterLeave = await tipOpacity();
   await chip.focus(); await settle();
   const onFocus = await tipOpacity();
-  await page.locator('#mode-sum .pv-btn button').focus(); await settle();
+  await page.locator('#r-sum').focus(); await settle();
   const onBlur = await tipOpacity();
   controls.push({ zone: 'card: Per transaction', label: 'Recommended chip with "?" and tooltip',
     type: 'chip with tooltip', text: 'Recommended ?  →  ' + tipText,
@@ -98,8 +98,8 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
     };
   }
 
-  async function openAndRead(cardId, label) {
-    await page.locator(`#${cardId} .pv-btn button`).click(); await settle();
+  async function openAndRead(label) {
+    await page.locator('.pv-link').click(); await settle();
     const opened = await vis('#pv-modal-bg');
     const title = await txt('#pv-modal-title');
     const alertText = await txt('#pv-modal .alert');
@@ -112,34 +112,27 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
       per_transaction, summary };
   }
 
-  const pvPt = await openAndRead('mode-pt', 'preview opened from the Per transaction card');
-  const pvSum = await openAndRead('mode-sum', 'preview opened from the Summary card');
-  // each card's own button, exercised end to end: open → read → close → open again
-  for (const [zone, id, res] of [['card: Per transaction', 'mode-pt', pvPt],
-                                 ['card: Summary', 'mode-sum', pvSum]]) {
-    await page.locator(`#${id} .pv-btn button`).click(); await settle();
-    const second = await vis('#pv-modal-bg');
-    await page.locator('#pv-modal .close-x').click(); await settle();
-    controls.push({ zone, label: 'Preview button', type: 'button opening a modal',
-      opens_panel: true, text: await txt(`#${id} .pv-btn button`),
-      after_interaction: { opened: res.opened, closed_via_x: res.closed,
-        opened_a_second_time: second, note: 'no Apply exists — the modal is read-only; Close is its commit path' },
-      commit_path: { picked: true, reached_apply: res.closed, second_interaction: second,
-        still_visible: await vis(`#${id} .pv-btn button`),
-        still_clickable: await vis(`#${id} .pv-btn button`) } });
-  }
+  const pvFirst = await openAndRead('first open');
+  const pvSecond = await openAndRead('second open');
+  controls.push({ zone: 'below the cards', label: 'Preview trigger (text link)',
+    opens_panel: true, type: 'link opening a modal', text: await txt('.pv-link'),
+    after_interaction: { opened: pvFirst.opened, closed_via_x: pvFirst.closed,
+      opened_a_second_time: pvSecond.opened,
+      note: 'one trigger for both modes; no Apply exists — the modal is read-only, Close is its commit path' },
+    commit_path: { picked: true, reached_apply: pvFirst.closed, second_interaction: pvSecond.opened,
+      still_visible: await vis('.pv-link'), still_clickable: await vis('.pv-link') } });
   // second interaction on the same control, and liveness afterwards
-  await page.locator('#mode-pt .pv-btn button').click(); await settle();
+  await page.locator('.pv-link').click(); await settle();
   const reopened = await vis('#pv-modal-bg');
   await page.keyboard.press('Escape'); await settle();
   controls.push({ zone: 'preview modal', label: 'Preview with sample data (modal)',
     type: 'modal', opens_panel: true,
-    text: JSON.stringify({ opened_from_per_transaction: pvPt, opened_from_summary: pvSum }),
+    text: JSON.stringify(pvFirst),
     after_interaction: {
       note: 'opened from each card, closed by ✕ and by Escape, reopened a second time',
       reopened_ok: reopened,
       cards_after_close: { pt_visible: await vis('#mode-pt'), sum_visible: await vis('#mode-sum'),
-        pt_button_clickable: await vis('#mode-pt .pv-btn button') }
+        trigger_clickable: await vis('.pv-link') }
     },
     commit_path: { picked: true, reached_apply: true, second_interaction: true,
       still_visible: true, still_clickable: true } });
@@ -158,7 +151,8 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
       { control: 'Continue / Back buttons', reason: 'prototype has no next or previous step wired; no navigation to observe' },
       { control: 'What happens after the choice is saved', reason: 'no backend in the prototype; the confirmation and first-sync behaviour cannot be observed here' },
       { control: 'Real QuickBooks output', reason: 'the register shown is authored sample data, not a live sync; its accuracy against production is unverified' },
-    { control: 'Single-mode preview', reason: 'removed 2026-09-16 — the preview now always shows both modes side by side, so there is no per-mode variant to exercise' }
+    { control: 'Single-mode preview', reason: 'removed 2026-09-16 — the preview now always shows both modes side by side, so there is no per-mode variant to exercise' },
+    { control: 'Per-card preview buttons', reason: 'removed 2026-09-16 — replaced by one text link below the cards' }
     ],
     controls
   };

@@ -68,8 +68,6 @@ function ok(name, cond) {
     await page.locator('#mode-pt .status.status-green').isVisible());
   ok('the Summary card carries no chip', (await page.locator('#mode-sum .status').count()) === 0);
   ok('only one chip on the step', (await page.locator('.modes .status').count()) === 1);
-  ok('buttons are kit buttons',
-    await page.locator('#mode-pt .pv-btn button.btn.btn-outlined').isVisible());
   ok('page actions use the kit primary + outlined pair',
     (await page.locator('.ob-actions .btn').count()) === 2 &&
     (await page.locator('.ob-actions .btn-outlined').count()) === 1);
@@ -124,6 +122,18 @@ function ok(name, cond) {
     /grows with your order volume/i.test(await page.locator('#mode-pt .mode-down').textContent()));
   ok('summary downside is the missing detail',
     (await page.locator('#mode-sum .mode-down').textContent()).includes('stay in Synder'));
+  // Ignat 2026-09-16: Summary is not payout-only — daily is the more common grouping.
+  const sumCard = (await page.locator('#mode-sum').textContent()).replace(/\s+/g, ' ');
+  ok('summary copy does not claim payout is the only grouping',
+    /daily/i.test(sumCard) && /per payout/i.test(sumCard));
+  ok('summary copy no longer says each payout becomes one entry',
+    !/each payout arrives/i.test(sumCard));
+  // Ignat 2026-09-16: sales tax follows the tax code, not the state — one state holds many codes.
+  const ptCard = (await page.locator('#mode-pt').textContent()).replace(/\s+/g, ' ');
+  ok('sales tax is described by tax code', /tax code/i.test(ptCard));
+  ok('sales tax copy no longer says per state', !/per state/i.test(ptCard));
+  ok('the tax line names the granularity below state level',
+    /county|city/i.test(ptCard));
   // Ignat 2026-09-16: QuickBooks is not connected at this step, so the cards cannot claim a
   // transaction count. Specific figures belong only inside the sample-labelled preview.
   const cardsText = (await page.locator('.modes').textContent()).replace(/\s+/g, ' ');
@@ -142,8 +152,8 @@ function ok(name, cond) {
   ok('no reason line in the card body', (await page.locator('.mode-why').count()) === 0);
   ok('the card body is description, lines and downside only', await page.evaluate(() => {
     const kids = [...document.querySelectorAll('#mode-pt .mode-body > *')].map(el => el.className);
-    return kids.length === 4 && kids[0] === 'mode-desc' && kids[1] === 'mode-lines' &&
-           kids[2] === 'mode-down' && kids[3] === 'pv-btn';
+    return kids.length === 3 && kids[0] === 'mode-desc' && kids[1] === 'mode-lines' &&
+           kids[2] === 'mode-down';
   }));
   ok('both cards have the same body structure', await page.evaluate(() => {
     const a = [...document.querySelectorAll('#mode-pt .mode-body > *')].map(el => el.className);
@@ -206,7 +216,7 @@ function ok(name, cond) {
   await chip.focus();
   ok('tooltip also appears on keyboard focus — the kit reveals on hover only',
     await opacitySettles(1));
-  await page.locator('#mode-sum .pv-btn button').focus();
+  await page.locator('#r-sum').focus();
   ok('tooltip hides on blur', await opacitySettles(0));
   ok('clicking the chip does not change the selected mode', await (async () => {
     await page.locator('#mode-sum').click();
@@ -220,25 +230,44 @@ function ok(name, cond) {
   // ── 4c. Nothing under the cards (Ignat, 2026-09-16) ──
   ok('no permanence line', (await page.locator('.perm-under').count()) === 0);
   ok('no undecided nudge', (await page.locator('.perm-nudge').count()) === 0);
-  ok('the actions row follows the cards directly', await page.evaluate(() => {
-    const cards = document.querySelector('.modes');
-    return cards.nextElementSibling && cards.nextElementSibling.classList.contains('ob-actions');
-  }));
+  ok('only the preview trigger sits between the cards and the actions',
+    await page.evaluate(() => {
+      const cards = document.querySelector('.modes');
+      const next = cards.nextElementSibling;
+      return next.classList.contains('pv-link-row') &&
+             next.nextElementSibling.classList.contains('ob-actions');
+    }));
   ok('the step makes no claim about changing the mode later',
     !/changed later|can't be changed|another organization|second organization/i
       .test(await page.locator('.ob-wrap').textContent()));
 
   // ── 6. Preview is button + modal, and the button does not promise real books ──
-  const btnPt = page.locator('#mode-pt .pv-btn button');
-  const btnSum = page.locator('#mode-sum .pv-btn button');
-  const labelPt = (await btnPt.textContent()).trim();
-  ok('both cards offer a preview button', await btnPt.isVisible() && await btnSum.isVisible());
-  ok('button calls it a preview', /preview/i.test(labelPt));
-  ok('button says the data is a sample', /sample/i.test(labelPt));
-  ok('button no longer promises real books',
-    !/see it in/i.test(labelPt) && !/see it in/i.test(await btnSum.textContent()));
-  ok('both buttons carry the same label', labelPt === (await btnSum.textContent()).trim());
+  // Ignat 2026-09-16: two outlined preview buttons competed with Continue. One low-weight trigger.
+  const pvLink = page.locator('.pv-link');
+  const label = (await pvLink.textContent()).trim();
+  ok('one preview trigger, not two', (await page.locator('.pv-link').count()) === 1);
+  ok('no preview button inside either card', (await page.locator('.mode .pv-btn').count()) === 0);
+  ok('preview trigger is visible', await pvLink.isVisible());
+  ok('trigger calls it a preview', /preview/i.test(label));
+  ok('trigger says the data is a sample', /sample/i.test(label));
+  ok('trigger does not promise real books', !/see it in/i.test(label));
+  ok('trigger says it shows both modes', /both/i.test(label));
+  ok('the trigger is a link, not a bordered button', await pvLink.evaluate(el => {
+    const cs = getComputedStyle(el);
+    return !el.classList.contains('btn') && parseFloat(cs.borderTopWidth) === 0 &&
+           cs.backgroundColor === 'rgba(0, 0, 0, 0)';
+  }));
+  ok('Continue is the only filled button on the step',
+    (await page.locator('.ob-wrap .btn:not(.btn-outlined):not(.btn-text-plain)').count()) === 1);
+  ok('the step carries exactly two buttons plus the link',
+    (await page.locator('.ob-wrap .btn').count()) === 2);
+  ok('the trigger sits below the cards, before the actions', await page.evaluate(() => {
+    const row = document.querySelector('.pv-link-row');
+    return row.previousElementSibling.classList.contains('modes') &&
+           row.nextElementSibling.classList.contains('ob-actions');
+  }));
   ok('no inline preview left in the cards', (await page.locator('.mode .table-wrap').count()) === 0);
+  const btnPt = pvLink, btnSum = pvLink;
 
   // ── 7. Modal — kit structure and measured padding ──
   await btnPt.click();
@@ -333,18 +362,20 @@ function ok(name, cond) {
     je.checking && Math.abs(je.checking.dr - 18432.67) < 0.005);
   ok('the note names the bank line rather than calling the total sales',
     /into Checking/.test(await pairSum.locator('.pv-note').textContent()));
+  ok('the sample says it is one of the groupings, not the only one',
+    /can also group/i.test((await pairSum.locator('.pv-note').textContent()).replace(/\s+/g, ' ')));
 
   // opening from either card gives the same pair
   await page.keyboard.press('Escape');
   ok('Escape closes', !(await modalBg.isVisible()));
-  await btnSum.click();
-  ok('opening from the summary card shows the same pair',
+  await pvLink.click();
+  ok('reopening shows the same pair',
     await page.locator('#pair-pt').isVisible() && await page.locator('#pair-sum').isVisible());
   ok('no single-mode path left', (await page.locator('#pv-modal-body > .pv-wrap').count()) === 0);
   await page.locator('#pv-modal .close-x').click();
   ok('close button works', !(await modalBg.isVisible()));
   ok('cards still interactive after closing',
-    await cardPt.isVisible() && await btnSum.isVisible());
+    await cardPt.isVisible() && await pvLink.isVisible());
   ok('opening a preview did not change the selected mode',
     await page.locator('#mode-pt.sel').isVisible());
 
@@ -354,7 +385,7 @@ function ok(name, cond) {
   ok('select: the kit radio followed the card click',
     await page.locator('#r-sum').isChecked() && await page.locator('#r-sum').isVisible());
   ok('select: per-transaction card still visible and clickable',
-    await cardPt.isVisible() && await btnPt.isVisible());
+    await cardPt.isVisible() && await page.locator('#r-pt').isVisible());
   await page.locator('#r-pt').click();
   ok('select: clicking the radio itself selects that card',
     await page.locator('#mode-pt.sel').isVisible());
