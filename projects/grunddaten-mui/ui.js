@@ -27,18 +27,30 @@ const {
   LinearProgress, ToggleButton, ToggleButtonGroup, FormHelperText, TablePagination,
 } = M;
 
+/* Material Icons render as ligature TEXT, so without aria-hidden the glyph name
+   is concatenated into the accessible name of whatever contains it — screen
+   readers announced "Everrunning expand more, button". Decorative at every call
+   site; the ones that need a name set aria-label on the button itself. */
 const Icon = ({ children, sx, ...rest }) =>
-  html`<span className="material-icons" style=${{ fontSize: 20, ...(sx || {}) }} ...${rest}>${children}</span>`;
+  html`<span className="material-icons" aria-hidden="true"
+        style=${{ fontSize: 20, ...(sx || {}) }} ...${rest}>${children}</span>`;
 
-/* ── The theme — copied verbatim, four measured deviations ──────────
+/* ── The theme — copied verbatim, three measured deviations ─────────
    · primary #2196F3 (Blue 500), not MUI's #1976D2 — sampled off an ADD
      EVENT button in ETC's own UI
-   · AppBar navy #1C2848 with a dense 48px toolbar, not 64px
    · cards outlined, 1px #E7E7E7, no shadow
    · TableHead carries an #F4F4F4 band (MUI's own is transparent)
    Field fill #F0F0F0, 48px filled fields and 36px dense menu items were
-   measured too and turned out to be MUI stock — so they are not here. */
-const NAVY = '#1C2848';
+   measured too and turned out to be MUI stock — so they are not here.
+
+   The AppBar is NOT one of them. ETC's own product bar is navy #1C2848 and
+   the port used it; Ignat, 2026-09-16: "wrong top bar". This prototype's
+   chrome is the vanilla's white 52px bar, and a port carries the source
+   across — the measured navy belongs to ETC screens, not to this one.
+   It also took MUI's light-palette disabled colour onto a dark ground,
+   which rendered three nav items at 1.14:1. */
+const BAR_BG = '#FFFFFF';
+const BAR_H = 52;
 
 const theme = createTheme({
   palette: {
@@ -96,13 +108,6 @@ const INITIAL = {
   evDraft: null,
   evSearch: '',
   evPickSearch: '',
-  musicVer: 'stations',  // 'stations' (V2) | 'events' (V1)
-  msStationId: null,
-  msLineId: null,
-  msDraft: null,
-  msPickSearch: '',
-  msApplySel: [],
-  msApplySearch: '',
   txtSel: [],            // display-text ids, survives paging
   txtLastSel: null,
   txtPage: 0,            // MUI TablePagination is 0-based
@@ -120,10 +125,17 @@ const INITIAL = {
  * rather than optional.
  */
 function FilterSelect({ label, value, onChange, options, minWidth = 180, id, required }) {
+  // The label has to be wired to the Select by id, not just rendered above it:
+  // an InputLabel with no `id` and a Select with no `labelId` leaves the
+  // combobox with no accessible name at all, and `required` on the FormControl
+  // only reaches the aria-hidden native input behind it.
+  const labelId = id ? id + '-label' : undefined;
   return html`
     <${FormControl} sx=${{ minWidth }} id=${id} required=${!!required}>
-      <${InputLabel}>${label}<//>
-      <${Select} value=${value || ''} label=${label} onChange=${e => onChange(e.target.value)}
+      <${InputLabel} id=${labelId}>${label}<//>
+      <${Select} value=${value || ''} label=${label} labelId=${labelId}
+        inputProps=${{ 'aria-required': !!required }}
+        onChange=${e => onChange(e.target.value)}
         endAdornment=${value ? html`
           <${InputAdornment} position="end" sx=${{ mr: 3 }}>
             <${IconButton} aria-label=${'Clear ' + label} onClick=${() => onChange('')}>
@@ -151,7 +163,7 @@ function PageHeader({ crumbs, title, titleAfter, subtitle, action }) {
                        variant="body2" onClick=${cr.onClick}>${cr.label}<//>`
               : html`<${Typography} key=${i} variant="body2" color="text.secondary">${cr.label}<//>`)}
           <//>` : null}
-        <${Stack} direction="row" spacing={1} alignItems="center">
+        <${Stack} direction="row" spacing=${1} alignItems="center">
           <${Typography} variant="h6" sx=${{ fontWeight: 500 }}>${title}<//>
           ${titleAfter}
         <//>
@@ -168,7 +180,7 @@ function SectionCard({ title, subtitle, action, children, disablePadding, sx }) 
       ${title ? html`
         <${Box} sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                        gap: 2, px: 2, py: 1.25, borderBottom: '1px solid #E7E7E7' }}>
-          <${Stack} direction="row" spacing={1.5} alignItems="baseline">
+          <${Stack} direction="row" spacing=${1.5} alignItems="baseline">
             <${Typography} variant="subtitle2" sx=${{ fontWeight: 500 }}>${title}<//>
             ${subtitle ? html`<${Typography} variant="caption" color="text.secondary">${subtitle}<//>` : null}
           <//>

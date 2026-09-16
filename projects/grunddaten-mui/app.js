@@ -14,7 +14,7 @@ const t_ = t;
    keeps its list's menu entry marked. */
 const NAV_PARENT = {
   detail: 'stations', lineDetail: 'lines', playlistDetail: 'sounds',
-  musicEvent: 'music', musicStations: 'music', musicStation: 'music',
+  musicEvent: 'music',
 };
 const navActive = (view, entry) => view === entry || NAV_PARENT[view] === entry;
 
@@ -38,12 +38,13 @@ function NavMenu({ label, active, id, children }) {
             translated, so a check that clicks "Konfiguration" cannot reach the
             same menu once the page is in English. */ ''}
       <${Button} color="inherit" data-nav=${id} onClick=${e => setAnchor(e.currentTarget)}
+        aria-haspopup="menu" aria-expanded=${!!anchor}
         endIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>expand_more<//>`}
-        sx=${{ height: 48, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
+        sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
                fontWeight: active ? 500 : 400,
                borderBottom: active ? '3px solid' : '3px solid transparent',
                borderColor: active ? 'primary.main' : 'transparent',
-               color: active ? 'primary.light' : 'inherit' }}>${label}<//>
+               color: active ? 'primary.main' : 'inherit' }}>${label}<//>
       <${Menu} anchorEl=${anchor} open=${!!anchor} onClose=${() => setAnchor(null)}
         anchorOrigin=${{ vertical: 'bottom', horizontal: 'left' }}>
         ${children(() => setAnchor(null))}
@@ -69,20 +70,21 @@ function Shell() {
         <b>Staging</b> – Here you can safely test features. Nothing will be played on DAISYs or ELAs.
       <//>
 
-      ${/* ETC top navigation. Navy #1C2848, dense 48px — both measured. */ ''}
-      <${AppBar} position="static" sx=${{ bgcolor: NAVY, flexShrink: 0 }}>
-        <${Toolbar} sx=${{ minHeight: 48, px: 2 }}>
+      ${/* The vanilla's own chrome: white, 52px, a hairline and a 1px shadow. */ ''}
+      <${AppBar} position="static" sx=${{ bgcolor: BAR_BG, color: 'text.primary', flexShrink: 0,
+                                          borderBottom: '1px solid', borderColor: 'divider',
+                                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <${Toolbar} sx=${{ minHeight: BAR_H, height: BAR_H, px: 2 }}>
           <${BvgHeart} />
-          <${Stack} direction="row" sx=${{ height: 48, alignItems: 'stretch' }}>
+          <${Stack} direction="row" sx=${{ height: BAR_H, alignItems: 'stretch' }}>
             ${['Incidents', 'Line view', 'Messages view'].map(l => html`
               <${Button} key=${l} color="inherit" disabled
-                sx=${{ height: 48, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
-                       color: 'rgba(255,255,255,0.5)' }}>${l}<//>`)}
+                sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14 }}>${l}<//>`)}
 
             <${NavMenu} id="evr" label=${t('evrMenu')} active=${EVR_VIEWS.includes(s.view)}>
               ${close => [
                 html`<${MenuItem} key="text" onClick=${close}><${ListItemText} primary=${t('evrText')} /><//>`,
-                item('music', t('evrMusic'), () => { close(); nav(s.musicVer === 'stations' ? 'musicStations' : 'music'); }),
+                item('music', t('evrMusic'), () => { close(); nav('music'); }),
               ]}
             <//>
 
@@ -107,21 +109,23 @@ function Shell() {
 
           <${Box} sx=${{ flexGrow: 1 }} />
 
-          <${Stack} direction="row" spacing={1} alignItems="center">
-            <${Button} color="inherit" sx=${{ textTransform: 'none' }}
+          <${Stack} direction="row" spacing=${1} alignItems="center">
+            <${Button} color="primary" sx=${{ textTransform: 'uppercase', fontSize: 13, fontWeight: 500,
+                                              letterSpacing: '0.04em' }}
               endIcon=${html`<${Icon} sx=${{ fontSize: 14 }}>north_east<//>`}>Virtual Daisy & ELA<//>
-            <${Typography} variant="body2" sx=${{ opacity: .8 }}>TN I, TN II, TN III<//>
+            <${Divider} orientation="vertical" flexItem sx=${{ my: 1.5 }} />
+            <${Typography} variant="body2" color="text.secondary">TN I, TN II, TN III<//>
             <${IconButton} color="inherit" aria-label="notifications">
               <${Icon} sx=${{ fontSize: 18 }}>notifications<//><//>
             <${ToggleButtonGroup} exclusive size="small" value=${state.lang}
               onChange=${(e, v) => v && app.setLang(v)}
-              sx=${{ '& .MuiToggleButton-root': { color: 'rgba(255,255,255,.7)', borderColor: 'rgba(255,255,255,.3)',
-                     py: .25, px: 1, fontSize: 12 },
-                     '& .Mui-selected': { color: '#fff !important', bgcolor: 'rgba(255,255,255,.18) !important' } }}>
+              sx=${{ '& .MuiToggleButton-root': { py: .25, px: 1, fontSize: 12 } }}>
               <${ToggleButton} value="de" aria-label="Deutsch">DE<//>
               <${ToggleButton} value="en" aria-label="English">EN<//>
             <//>
-            <${Avatar} sx=${{ width: 28, height: 28, fontSize: 11, bgcolor: 'primary.main' }}>BVG<//>
+            <${Avatar} sx=${{ width: 32, height: 32, fontSize: 11, fontWeight: 700,
+                              bgcolor: 'primary.main' }}>BVG<//>
+            <${Typography} variant="body2" color="text.secondary">BVG BVG<//>
           <//>
         <//>
       <//>
@@ -138,28 +142,6 @@ function Shell() {
       <${Snackbar} open=${!!app.toastMsg} autoHideDuration=${2400} onClose=${app.clearToast}
         message=${app.toastMsg} anchorOrigin=${{ vertical: 'bottom', horizontal: 'center' }} />
     <//>`;
-}
-
-/**
- * The prototype frame: a dark, full-viewport-width bar carrying the variant
- * switcher, first element in <body>, deliberately not product chrome so it
- * never reads as part of the design. Canonical markup per AGENTS.md; this is
- * the only thing the near-empty <style> block styles.
- */
-function VariantSwitch() {
-  const { t, s, setMusicVer } = useApp();
-  const note = s.musicVer === 'stations' ? t('msIntro') : t('evIntro');
-  return html`
-    <div className="variant-switch">
-      <span className="vs-label">${t('protoLabel')}</span>
-      <div className="vs-opts">
-        <button id="vs-1" className=${s.musicVer === 'stations' ? 'on' : ''}
-          onClick=${() => setMusicVer('stations')}>1 · ${t('verStations')}</button>
-        <button id="vs-2" className=${s.musicVer === 'events' ? 'on' : ''}
-          onClick=${() => setMusicVer('events')}>2 · ${t('verEvents')}</button>
-      </div>
-      <span className="vs-note">${note}</span>
-    </div>`;
 }
 
 function Root() {
@@ -193,23 +175,17 @@ function Root() {
     document.documentElement.lang = l;   // native date/time inputs follow this
   }, []);
 
-  const setMusicVer = useCallback(v => {
-    setS(prev => ({ ...prev, musicVer: v, evDraft: null, msDraft: null,
-                    view: v === 'stations' ? 'musicStations' : 'music' }));
-  }, []);
-
   const value = useMemo(() => ({
-    s, set, nav, t, lang, setLang, setMusicVer, rev,
+    s, set, nav, t, lang, setLang, rev,
     bump: () => setRev(r => r + 1),
     toast: m => setToastMsg(m),
     toastMsg, clearToast: () => setToastMsg(''),
-  }), [s, lang, rev, toastMsg, set, nav, t, setLang, setMusicVer]);
+  }), [s, lang, rev, toastMsg, set, nav, t, setLang]);
 
   return html`
     <${ThemeProvider} theme=${theme}>
       <${CssBaseline} />
       <${App.Provider} value=${value}>
-        <${VariantSwitch} />
         <${Shell} />
       <//>
     <//>`;

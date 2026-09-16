@@ -25,16 +25,16 @@ function StationsView() {
     (!s.lineFilter || r.line === s.lineFilter) &&
     (!q || r.station.name.toLowerCase().includes(q) || r.line.toLowerCase().includes(q)));
 
-  // the options come from the data, not from a list typed into the view
-  const lineOptions = [...new Set(allRows.map(r => r.line))]
-    .sort((a, b) => lineData.map(l => l.id).indexOf(a) - lineData.map(l => l.id).indexOf(b))
-    .map(l => ({ value: l, label: l }));
+  // Every line in the system, in lineData order — not only the lines that
+  // happen to have a station row. Deriving them from the rows dropped U7, and
+  // an absent option reads as a broken filter rather than an empty line.
+  const lineOptions = lineData.map(l => ({ value: l.id, label: l.id }));
 
   return html`
     <${React.Fragment}>
       <${PageHeader} title=${t('stations')} subtitle=${`${t('stationsSuffix', rows.length)} · BVG J/JK`} />
       <${PageBody}>
-        <${Stack} direction="row" spacing={2} sx=${{ mb: 2 }}>
+        <${Stack} direction="row" spacing=${2} sx=${{ mb: 2 }}>
           <${TextField} label=${t('searchPlaceholder')} value=${s.search} sx=${{ width: 320 }}
             onChange=${e => set({ search: e.target.value })}
             InputProps=${{ endAdornment: s.search ? html`
@@ -166,22 +166,25 @@ function StationDetailView() {
       <${PageBody}>
         ${/* ── Station name ── */ ''}
         <${SectionCard} title=${t('stationName')}>
-          <${Stack} direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
             <${TextField} label=${t('fullName')} required value=${d.name} sx=${{ width: 280 }}
               onChange=${e => patch(n => { n.name = e.target.value; })} />
             <${TextField} label=${t('shortName')} value=${d.shortName || ''} sx=${{ width: 180 }}
+              placeholder=${state.lang === 'de' ? 'z.B. Alex' : 'e.g. Alex'}
               onChange=${e => patch(n => { n.shortName = e.target.value; })} />
             <${TextField} label=${t('longName')} value=${d.longName || ''} sx=${{ width: 340 }}
+              placeholder=${state.lang === 'de' ? 'z.B. Bahnhof Berlin Alexanderplatz'
+                                                : 'e.g. Berlin Alexanderplatz station'}
               onChange=${e => patch(n => { n.longName = e.target.value; })} />
           <//>
 
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 2 }}>
             ${t('coordinates')}<//>
-          <${Stack} direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
-            <${TextField} type="number" label=${t('coordLat')} sx=${{ width: 170 }}
+          <${Stack} direction="row" spacing=${2} alignItems="center" flexWrap="wrap" useFlexGap>
+            <${TextField} type="number" label=${t('coordLat')} sx=${{ width: 170 }} placeholder="52.521992"
               inputProps=${{ step: 0.000001 }} value=${d.coords ? (d.coords.lat ?? '') : ''}
               onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lat: e.target.value }; })} />
-            <${TextField} type="number" label=${t('coordLon')} sx=${{ width: 170 }}
+            <${TextField} type="number" label=${t('coordLon')} sx=${{ width: 170 }} placeholder="13.413244"
               inputProps=${{ step: 0.000001 }} value=${d.coords ? (d.coords.lon ?? '') : ''}
               onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lon: e.target.value }; })} />
             ${/* the prerequisite disables what depends on it — brief §3 */ ''}
@@ -191,11 +194,11 @@ function StationDetailView() {
 
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 2 }}>
             ${t('scheduledChanges')}<//>
-          <${Stack} spacing={1.5}>
+          <${Stack} spacing=${1.5}>
             ${d.nameChanges.map((nc, i) => html`
               <${Card} key=${i} sx=${{ bgcolor: '#FAFAFA' }}>
                 <${Box} sx=${{ p: 1.5 }}>
-                  <${Stack} direction="row" spacing={2} alignItems="center" flexWrap="wrap" useFlexGap>
+                  <${Stack} direction="row" spacing=${2} alignItems="center" flexWrap="wrap" useFlexGap>
                     <${TextField} type="date" label=${state.lang === 'de' ? 'Datum' : 'Date'}
                       InputLabelProps=${{ shrink: true }} value=${nc.date || ''} sx=${{ width: 190 }}
                       onChange=${e => patch(n => { n.nameChanges[i].date = e.target.value; })} />
@@ -265,9 +268,9 @@ function StationDetailView() {
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 2.5 }}>
             ${t('transferFiles')}<//>
           ${d.transferAnnouncements.length ? html`
-            <${Stack} spacing={1} sx=${{ mb: 1.5 }}>
+            <${Stack} spacing=${1} sx=${{ mb: 1.5 }}>
               ${d.transferAnnouncements.map((ann, i) => html`
-                <${Stack} key=${i} direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap
+                <${Stack} key=${i} direction="row" spacing=${1.5} alignItems="center" flexWrap="wrap" useFlexGap
                   sx=${{ border: '1px solid #E7E7E7', borderRadius: 1, px: 1.5, py: 1 }}>
                   ${ann.isMain ? html`<${Chip} size="small" color="primary" label=${t('mainAnn')} />` : null}
                   <${Typography} variant="body2" sx=${{ fontFamily: 'monospace' }}>${sndName(ann.fileId)}<//>
@@ -290,7 +293,7 @@ function StationDetailView() {
           <${Divider} sx=${{ my: 2.5 }} />
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block' }}>
             ${t('triggerPoints')}<//>
-          <${Stack} direction="row" spacing={2} flexWrap="wrap" useFlexGap>
+          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
             <${TextField} type="number" label=${t('departureFromPrev')} sx=${{ width: 320 }}
               inputProps=${{ min: 0, max: 999 }} value=${d.triggerDeparture}
               InputProps=${{ endAdornment: html`<${InputAdornment} position="end">m<//>` }}
@@ -304,9 +307,9 @@ function StationDetailView() {
 
         ${/* ── Neighbours ── */ ''}
         <${SectionCard} title=${t('neighbors')} subtitle=${t('neighborsSubtitle')}>
-          <${Stack} spacing={2}>
+          <${Stack} spacing=${2}>
             ${[['prev', '←'], ['next', '→']].map(([k, arrow]) => html`
-              <${Stack} key=${k} direction="row" spacing={2} alignItems="center">
+              <${Stack} key=${k} direction="row" spacing=${2} alignItems="center">
                 <${Typography} sx=${{ color: 'text.disabled', width: 20 }}>${arrow}<//>
                 <${Typography} variant="body2" sx=${{ width: 220 }}>${d.neighborDist[k].name}<//>
                 <${TextField} type="number" label=${state.lang === 'de' ? 'Abstand' : 'Distance'}
