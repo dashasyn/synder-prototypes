@@ -136,8 +136,16 @@ function ok(name, cond) {
   // ── 4a. The reason is visible without hunting, with the tooltip for detail (review, 2026-09-16) ──
   const whyLine = page.locator('#mode-pt .mode-why');
   ok('a short reason is visible without interaction', await whyLine.isVisible());
-  ok('the visible reason names the stack',
-    /shopify/i.test(await whyLine.textContent()) && /quickbooks/i.test(await whyLine.textContent()));
+  // Ignat 2026-09-16: the real recommendation comes from the role + industry answered earlier,
+  // not from the integration pair. The reason must name that source, never invent a rationale.
+  ok('the visible reason names its source, not an invented rationale',
+    /your answers earlier/i.test(await whyLine.textContent()));
+  ok('the visible reason shows the answers it was derived from',
+    /business owner/i.test(await whyLine.textContent()) &&
+    /retail/i.test(await whyLine.textContent()));
+  ok('no invented accounting rationale on the card',
+    !/per-state/i.test(await whyLine.textContent()) &&
+    !/tax filing/i.test(await whyLine.textContent()));
   ok('the visible reason is short enough to read at a glance',
     (await whyLine.textContent()).trim().replace(/\s+/g, ' ').length <= 130);
   ok('only the recommended card carries a visible reason',
@@ -170,10 +178,12 @@ function ok(name, cond) {
   ok('tooltip hidden at rest', (await tipOpacity()) === 0);
   await chip.hover();
   ok('tooltip appears on hover', await opacitySettles(1));
-  ok('tooltip explains the recommendation for this stack',
-    /shopify/i.test(await tip.textContent()) && /quickbooks/i.test(await tip.textContent()));
-  ok('tooltip gives a reason, not a restatement',
-    /tax/i.test(await tip.textContent()) && /customer/i.test(await tip.textContent()));
+  ok('tooltip points at the answers the suggestion came from',
+    /role/i.test(await tip.textContent()) && /industry/i.test(await tip.textContent()));
+  ok('tooltip says the choice is still the user\'s',
+    /you can pick either mode/i.test(await tip.textContent()));
+  ok('tooltip invents no accounting rationale',
+    !/per-state/i.test(await tip.textContent()) && !/tax filing/i.test(await tip.textContent()));
   ok('tooltip is 14px, not the kit default 12px',
     await tip.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
   ok('tooltip stays inside the viewport on every edge', await tip.evaluate(el => {
@@ -206,19 +216,26 @@ function ok(name, cond) {
     return await page.locator('#mode-sum.sel').isVisible();
   })());
   await page.locator('#r-pt').click();
-  ok('tooltip and visible line say the same thing, not different things',
-    /per-state/i.test(await tip.textContent()) &&
-    /per-state/i.test(await whyLine.textContent()));
+  ok('tooltip and visible line agree on the source of the suggestion',
+    /retail/i.test(await tip.textContent()) && /retail/i.test(await whyLine.textContent()));
 
-  // ── 4c. Everything under the cards is gone (Ignat, 2026-09-15) ──
-  ok('no permanence line under the cards', (await page.locator('.perm-under').count()) === 0);
-  ok('no undecided nudge', (await page.locator('.perm-nudge').count()) === 0);
-  ok('the actions row follows the cards directly', await page.evaluate(() => {
-    const cards = document.querySelector('.modes');
-    return cards.nextElementSibling && cards.nextElementSibling.classList.contains('ob-actions');
+  // ── 4c. Permanence — confirmed unchangeable by Ignat 2026-09-16; one short line, no essay ──
+  const perm = page.locator('.perm-under');
+  ok('permanence line visible', await perm.isVisible());
+  ok('permanence states the fact', /can't be changed later/i.test(await perm.textContent()));
+  ok('permanence is one short sentence, not an explanation',
+    (await perm.textContent()).trim().replace(/\s+/g, ' ').length <= 40);
+  ok('permanence sits below both cards',
+    (await perm.boundingBox()).y >
+      (await cardSum.boundingBox()).y + (await cardSum.boundingBox()).height - 1);
+  ok('permanence is grey, not a warning colour', await perm.evaluate(el => {
+    const m = getComputedStyle(el).color.match(/\d+/g).map(Number);
+    return Math.abs(m[0] - m[1]) < 40 && Math.abs(m[1] - m[2]) < 60 && m[0] < 160;
   }));
-  ok('nothing on the step claims the choice is permanent',
-    !/can't be changed later/i.test(await page.locator('.ob-wrap').textContent()));
+  ok('no yellow alert on the step', (await page.locator('.ob-wrap .alert-warning').count()) === 0);
+  ok('the new-organization workaround is not offered here',
+    !/another organization|second organization/i.test(await page.locator('.ob-wrap').textContent()));
+  ok('no undecided nudge', (await page.locator('.perm-nudge').count()) === 0);
 
   // ── 6. Preview is button + modal, and the button does not promise real books ──
   const btnPt = page.locator('#mode-pt .pv-btn button');
