@@ -201,3 +201,16 @@ assertions) and not at all for *accounting truth*.
 **Scope line added to `domain-validator.md`:** when a screen renders a mock of an external
 accounting system, check its column set, transaction types and posting path against a real screen
 of that system; a sample's shape is a factual claim, not decoration.
+
+## MISS-2026-09-16b · Invented the reason behind a product recommendation
+**Lens that owned it:** Domain (accounting) / Trust.
+**What reached Ignat:** the "Recommended" card claimed "Recommended for Shopify → QuickBooks: keeps
+customer names and per-state sales tax in your books." Synder's real recommendation is driven by the
+role and industry collected earlier in onboarding, not by the integration pair or any tax argument.
+**Why it was missed:** the claim is about *product logic*, and both the state map and the Chromium
+suite only prove the string is rendered. Nothing in the pipeline asks "is this sentence true?" — the
+Domain validator inspected it and filed no finding, because from inside the screen the rationale is
+plausible accounting.
+**Scope line added to `trust-validator.md` and `domain-validator.md`:** treat any sentence that
+explains *why the product recommends, defaults to, or restricts* something as a claim requiring a
+source. If the state map does not carry one, report it as unverified rather than reading it as copy.

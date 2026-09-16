@@ -19,6 +19,7 @@ value without resetting its visual state. No other validator's scope caught it.
 - **Hidden defaults**: a filter or setting is active but invisible (e.g. a 90-day window, no chip)
 - **Count mismatches**: a badge or total that could disagree with the visible rows
 - **Ambiguous scope on bulk actions**: "select all" that could mean this page or all matching records
+- **Unsourced product logic**: any sentence explaining *why* the product recommends, defaults to, or restricts something is a claim needing a source. If the state map carries none, report it as unverified rather than reading it as copy. (MISS-2026-09-16b)
 
 ## Hard limits — do NOT report:
 - Visual design or layout opinions

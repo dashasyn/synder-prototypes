@@ -16,6 +16,7 @@ liability.
   its column set, transaction types and posting path against a real screen of that system. A
   sample's *shape* is a factual claim, not decoration — inventing a plausible column set trains
   staff on a chart of accounts that does not exist. (MISS-2026-09-16)
+- **Unsourced product logic**: any sentence explaining *why* the product recommends, defaults to, or restricts something is a claim needing a source. If the state map carries none, report it as unverified rather than reading it as copy. (MISS-2026-09-16b)
 
 ## Hard limits — do NOT report:
 - UI design opinions
