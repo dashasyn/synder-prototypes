@@ -159,9 +159,22 @@ function ok(name, cond) {
     /tax/i.test(await tip.textContent()) && /customer/i.test(await tip.textContent()));
   ok('tooltip is 14px, not the kit default 12px',
     await tip.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
-  ok('tooltip stays inside the viewport', await tip.evaluate(el => {
+  ok('tooltip stays inside the viewport on every edge', await tip.evaluate(el => {
     const r = el.getBoundingClientRect();
-    return r.left >= 0 && r.right <= window.innerWidth;
+    return r.left >= 0 && r.right <= window.innerWidth &&
+           r.top >= 0 && r.bottom <= window.innerHeight;
+  }));
+  // it shrink-to-fit against a chip-width wrapper before: ~130px wide and very tall
+  ok('tooltip is wide enough to read', await tip.evaluate(el =>
+    el.getBoundingClientRect().width >= 260));
+  ok('tooltip is a tooltip, not a paragraph', await tip.evaluate(el =>
+    el.getBoundingClientRect().height <= 120));
+  ok('tooltip text is not clipped', await tip.evaluate(el =>
+    el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1));
+  ok('tooltip opens below the chip, away from the top of the window', await page.evaluate(() => {
+    const t = document.getElementById('why-pt').getBoundingClientRect();
+    const c = document.querySelector('#mode-pt .why-chip').getBoundingClientRect();
+    return t.top >= c.bottom - 1;
   }));
   await page.locator('.ob-sub').hover();
   ok('tooltip hides again when the pointer leaves', await opacitySettles(0));
