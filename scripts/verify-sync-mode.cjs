@@ -133,25 +133,18 @@ function ok(name, cond) {
   ok('the bank-match claim is phrased as matching, not reconciling',
     /matches your bank deposit in one line/i.test(pageText));
 
-  // ── 4a. The reason is visible without hunting, with the tooltip for detail (review, 2026-09-16) ──
-  const whyLine = page.locator('#mode-pt .mode-why');
-  ok('a short reason is visible without interaction', await whyLine.isVisible());
-  // Ignat 2026-09-16: the real recommendation comes from the role + industry answered earlier,
-  // not from the integration pair. The reason must name that source, never invent a rationale.
-  ok('the visible reason names its source, not an invented rationale',
-    /your answers earlier/i.test(await whyLine.textContent()));
-  ok('the visible reason shows the answers it was derived from',
-    /business owner/i.test(await whyLine.textContent()) &&
-    /retail/i.test(await whyLine.textContent()));
-  ok('no invented accounting rationale on the card',
-    !/per-state/i.test(await whyLine.textContent()) &&
-    !/tax filing/i.test(await whyLine.textContent()));
-  ok('the visible reason is short enough to read at a glance',
-    (await whyLine.textContent()).trim().replace(/\s+/g, ' ').length <= 130);
-  ok('only the recommended card carries a visible reason',
-    (await page.locator('.mode-why').count()) === 1);
-  ok('the visible reason is 14px',
-    await whyLine.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
+  // ── 4a. The reason lives only in the chip tooltip (Ignat, 2026-09-16) ──
+  ok('no reason line in the card body', (await page.locator('.mode-why').count()) === 0);
+  ok('the card body is description, lines and downside only', await page.evaluate(() => {
+    const kids = [...document.querySelectorAll('#mode-pt .mode-body > *')].map(el => el.className);
+    return kids.length === 4 && kids[0] === 'mode-desc' && kids[1] === 'mode-lines' &&
+           kids[2] === 'mode-down' && kids[3] === 'pv-btn';
+  }));
+  ok('both cards have the same body structure', await page.evaluate(() => {
+    const a = [...document.querySelectorAll('#mode-pt .mode-body > *')].map(el => el.className);
+    const b = [...document.querySelectorAll('#mode-sum .mode-body > *')].map(el => el.className);
+    return JSON.stringify(a) === JSON.stringify(b);
+  }));
 
   // ── 4b. The tooltip on the Recommended chip keeps the detail (Ignat, 2026-09-15) ──
   const chip = page.locator('#mode-pt .why-chip');
@@ -216,8 +209,8 @@ function ok(name, cond) {
     return await page.locator('#mode-sum.sel').isVisible();
   })());
   await page.locator('#r-pt').click();
-  ok('tooltip and visible line agree on the source of the suggestion',
-    /retail/i.test(await tip.textContent()) && /retail/i.test(await whyLine.textContent()));
+  ok('the reason is reachable only through the chip',
+    (await page.locator('.mode-why').count()) === 0 && await chip.isVisible());
 
   // ── 4c. Permanence — confirmed unchangeable by Ignat 2026-09-16; one short line, no essay ──
   const perm = page.locator('.perm-under');
