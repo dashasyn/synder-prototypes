@@ -69,7 +69,7 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
   const afterLeave = await tipOpacity();
   await chip.focus(); await settle();
   const onFocus = await tipOpacity();
-  await page.locator('#md-1').focus(); await settle();
+  await page.locator('#mode-sum .pv-btn button').focus(); await settle();
   const onBlur = await tipOpacity();
   controls.push({ zone: 'card: Per transaction', label: 'Recommended chip with "?" and tooltip',
     type: 'chip with tooltip', text: 'Recommended ?  →  ' + tipText,
@@ -82,26 +82,38 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
       still_visible: true, still_clickable: true } });
 
   // ── preview modal: open, read, close, reopen from the other card ──
+  // The preview always renders both registers; read each column separately.
+  async function readColumn(col) {
+    const root = `#pair-${col}`;
+    const headers = await page.locator(`${root} thead th`).allTextContents();
+    const rows = await page.locator(`${root} tbody tr`).evaluateAll(trs =>
+      trs.map(tr => [...tr.querySelectorAll('td')].map(td => td.textContent.trim()).join(' | ')));
+    return {
+      heading: await txt(`${root} h3`),
+      table_caption: await txt(`${root} .pv-cap`),
+      columns: headers.map(h => h.trim()),
+      rows,
+      footer: await txt(`${root} .pv-foot`),
+      note: await txt(`${root} .pv-note`)
+    };
+  }
+
   async function openAndRead(cardId, label) {
     await page.locator(`#${cardId} .pv-btn button`).click(); await settle();
     const opened = await vis('#pv-modal-bg');
     const title = await txt('#pv-modal-title');
     const alertText = await txt('#pv-modal .alert');
     const modeLine = await txt('#pv-modal-mode');
-    const cap = await txt('#pv-modal-body .pv-cap');
-    const headers = await page.locator('#pv-modal-body thead th').allTextContents();
-    const rows = await page.locator('#pv-modal-body tbody tr').evaluateAll(trs =>
-      trs.map(tr => [...tr.querySelectorAll('td')].map(td => td.textContent.trim()).join(' | ')));
-    const foot = await txt('#pv-modal-body .pv-foot');
-    const note = await txt('#pv-modal-body .pv-note');
+    const per_transaction = await readColumn('pt');
+    const summary = await readColumn('sum');
     await page.locator('#pv-modal .close-x').click(); await settle();
     const closed = !(await vis('#pv-modal-bg'));
     return { label, opened, closed, title, disclosure: alertText, mode_line: modeLine,
-      table_caption: cap, columns: headers.map(h => h.trim()), rows, footer: foot, note };
+      per_transaction, summary };
   }
 
-  const pvPt = await openAndRead('mode-pt', 'Per transaction preview');
-  const pvSum = await openAndRead('mode-sum', 'Summary preview');
+  const pvPt = await openAndRead('mode-pt', 'preview opened from the Per transaction card');
+  const pvSum = await openAndRead('mode-sum', 'preview opened from the Summary card');
   // each card's own button, exercised end to end: open → read → close → open again
   for (const [zone, id, res] of [['card: Per transaction', 'mode-pt', pvPt],
                                  ['card: Summary', 'mode-sum', pvSum]]) {
@@ -122,7 +134,7 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
   await page.keyboard.press('Escape'); await settle();
   controls.push({ zone: 'preview modal', label: 'Preview with sample data (modal)',
     type: 'modal', opens_panel: true,
-    text: JSON.stringify({ per_transaction: pvPt, summary: pvSum }),
+    text: JSON.stringify({ opened_from_per_transaction: pvPt, opened_from_summary: pvSum }),
     after_interaction: {
       note: 'opened from each card, closed by ✕ and by Escape, reopened a second time',
       reopened_ok: reopened,
@@ -130,20 +142,6 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
         pt_button_clickable: await vis('#mode-pt .pv-btn button') }
     },
     commit_path: { picked: true, reached_apply: true, second_interaction: true,
-      still_visible: true, still_clickable: true } });
-
-  // ── prototype-only switcher: modal content variants ──
-  await page.locator('#md-2').click(); await settle();
-  await page.locator('#mode-pt .pv-btn button').click(); await settle();
-  const pairCols = await page.locator('#pv-modal-body .pv-pair-col h3').allTextContents();
-  const pairCaps = await page.locator('#pv-modal-body .pv-cap').allTextContents();
-  await page.keyboard.press('Escape'); await settle();
-  await page.locator('#md-1').click(); await settle();
-  controls.push({ zone: 'prototype switcher (not product chrome)',
-    label: 'Modal content: chosen mode only / both modes side by side',
-    type: 'toggle buttons', text: 'variant 2 shows both registers: ' + JSON.stringify(pairCols) +
-      ' captions: ' + JSON.stringify(pairCaps.map(c => c.trim())),
-    commit_path: { toggled: true, reached_apply: true, second_interaction: true,
       still_visible: true, still_clickable: true } });
 
   // ── page actions ──
@@ -159,7 +157,8 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
     not_exercised: [
       { control: 'Continue / Back buttons', reason: 'prototype has no next or previous step wired; no navigation to observe' },
       { control: 'What happens after the choice is saved', reason: 'no backend in the prototype; the confirmation and first-sync behaviour cannot be observed here' },
-      { control: 'Real QuickBooks output', reason: 'the register shown is authored sample data, not a live sync; its accuracy against production is unverified' }
+      { control: 'Real QuickBooks output', reason: 'the register shown is authored sample data, not a live sync; its accuracy against production is unverified' },
+    { control: 'Single-mode preview', reason: 'removed 2026-09-16 — the preview now always shows both modes side by side, so there is no per-mode variant to exercise' }
     ],
     controls
   };

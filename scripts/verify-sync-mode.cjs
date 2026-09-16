@@ -32,7 +32,6 @@ function ok(name, cond) {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   await page.goto(target, { waitUntil: 'networkidle' });
 
-  const sw = page.locator('.variant-switch');
   const h1 = page.locator('.page-title');
   const cardPt = page.locator('#mode-pt');
   const cardSum = page.locator('#mode-sum');
@@ -40,15 +39,15 @@ function ok(name, cond) {
   const modal = page.locator('#pv-modal');
 
   // ── 1. Opens on the work, no intro screen, switcher first and full width ──
-  ok('switcher visible', await sw.isVisible());
   ok('step heading visible on load', await h1.isVisible());
   ok('heading is the sync-mode step',
     (await h1.textContent()).trim() === 'How should we sync your data?');
-  ok('switcher is first element in body',
-    await page.evaluate(() => document.body.firstElementChild.classList.contains('variant-switch')));
-  const swBox = await sw.boundingBox();
-  ok('switcher spans the viewport width', swBox.width >= 1279 && swBox.x === 0);
-  ok('switcher sits above the page content', swBox.y + swBox.height <= (await h1.boundingBox()).y);
+  // One variant left, so there is no switcher — AGENTS.md: one variant = no switcher.
+  ok('no variant switcher on the page', (await page.locator('.variant-switch').count()) === 0);
+  ok('the page opens directly on the product chrome',
+    await page.evaluate(() => document.body.firstElementChild.classList.contains('ob-top')));
+  ok('no prototype-only control left behind',
+    (await page.locator('#md-1, #md-2, .vs-note').count()) === 0);
   ok('no chevron band / stepper on this step', (await page.locator('text=Organize').count()) === 0);
   ok('UI kit is the canonical linked stylesheet',
     await page.evaluate(() => !!document.querySelector(
@@ -78,7 +77,7 @@ function ok(name, cond) {
   // ── 3. Type scale — nothing authored below 14px ──
   const small = await page.evaluate(() => {
     const out = [];
-    document.querySelectorAll('.ob-wrap *, .variant-switch *, #pv-modal *').forEach(el => {
+    document.querySelectorAll('.ob-wrap *, #pv-modal *').forEach(el => {
       if (!el.textContent.trim()) return;
       if (el.children.length && !el.matches('li, p, span, button, h1, h2, h3, th, td, div.pv-cap, div.pv-foot')) return;
       const cs = getComputedStyle(el);
@@ -97,8 +96,6 @@ function ok(name, cond) {
   ok('card lines are 14px', await page.locator('#mode-pt .mode-lines li')
     .first().evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
   ok('downside line is 14px', await page.locator('#mode-pt .mode-down')
-    .evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
-  ok('switcher text is 14px', await page.locator('#md-1')
     .evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
   // kit gap: .close-x sets no font-size, so the ✕ inherits the UA button default of 13.33px
   ok('modal close glyph is at least 14px', await page.locator('#pv-modal .close-x')
@@ -209,7 +206,7 @@ function ok(name, cond) {
   await chip.focus();
   ok('tooltip also appears on keyboard focus — the kit reveals on hover only',
     await opacitySettles(1));
-  await page.locator('#md-1').focus();
+  await page.locator('#mode-sum .pv-btn button').focus();
   ok('tooltip hides on blur', await opacitySettles(0));
   ok('clicking the chip does not change the selected mode', await (async () => {
     await page.locator('#mode-sum').click();
@@ -274,54 +271,49 @@ function ok(name, cond) {
     /sample/i.test(await page.locator('#pv-modal-body .pv-cap').first().textContent()));
   ok('disclosure sits above the register', (await alert.boundingBox()).y < pvBox.y);
 
-  // ── 9. Modal content ──
-  // Default is now variant 2 (side by side); switch to 1 for the single-register checks.
-  ok('preview defaults to side by side', await page.evaluate(() =>
-    document.body.classList.contains('md2') && document.getElementById('md-2').classList.contains('on')));
-  ok('the side-by-side pair is what opens by default',
-    await page.locator('#pair-pt').isVisible() && await page.locator('#pair-sum').isVisible());
-  await page.keyboard.press('Escape');
-  await page.click('#md-1');
-  await btnPt.click();
-  const mBoxSingle = await modal.boundingBox();
-  const body1 = await page.locator('#pv-modal-body').textContent();
-  ok('v1: register is a kit table',
-    await page.locator('#pv-modal-body table.table.table--sm').isVisible());
-  ok('v1: register cells are 14px', await page.locator('#pv-modal-body tbody td')
-    .first().evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
-  ok('v1: modal names the mode it is showing',
-    (await page.locator('#pv-modal-mode').textContent()).includes('Per transaction'));
-  ok('v1: register shows customer names', body1.includes('Amelia Hart'));
-  ok('v1: register has four columns', (await page.locator('#pv-modal-body th').count()) === 4);
-  ok('v1: register names the QuickBooks accounts',
-    body1.includes('Shopify Sales') && body1.includes('Merchant fees'));
-  ok('v1: eight sample rows plus the grouping deposit',
-    (await page.locator('#pv-modal-body tbody tr').count()) === 9);
-  ok('v1: the bank deposit that groups the receipts is shown',
-    await page.locator('#pv-modal-body tr.deposit').isVisible() &&
-    /Bank Deposit/.test(await page.locator('#pv-modal-body tr.deposit').textContent()));
-  ok('v1: the deposit lands in a bank account',
-    /Checking/.test(await page.locator('#pv-modal-body tr.deposit').textContent()));
-  ok('v1: the note names the clearing account the cash waits in',
-    /Undeposited Funds/.test(await page.locator('#pv-modal-body .pv-note').textContent()));
-  ok('v1: footer reconciles the sample to the real count',
-    body1.includes('412 entries') && body1.includes('404 not shown'));
-  ok('v1: a note explains the consequence, not just the rows',
-    /groups them into the single line your bank feed shows/
-      .test((await page.locator('#pv-modal-body .pv-note').textContent()).replace(/\s+/g, ' ')));
-  ok('v1: the other mode is NOT in the modal — the cost of this option',
-    !body1.includes('Journal Entry'));
-  await page.keyboard.press('Escape');
-  ok('v1: Escape closes', !(await modalBg.isVisible()));
+  // ── 9. The preview always shows both modes side by side (Ignat, 2026-09-16) ──
+  const pairPt = page.locator('#pair-pt');
+  const pairSum = page.locator('#pair-sum');
+  ok('both registers visible at once', await pairPt.isVisible() && await pairSum.isVisible());
+  const pBox = await pairPt.boundingBox(), sBox = await pairSum.boundingBox();
+  ok('they sit side by side, not stacked', Math.abs(pBox.y - sBox.y) < 40 && sBox.x > pBox.x);
+  ok('both columns labelled',
+    (await pairPt.locator('h3').textContent()).includes('Per transaction') &&
+    (await pairSum.locator('h3').textContent()).includes('Summary'));
+  ok('the many-vs-one contrast is on screen together',
+    /412 entries/.test(await pairPt.textContent()) && /1 entry/.test(await pairSum.textContent()));
+  ok('both registers are kit tables',
+    (await page.locator('#pv-modal-body table.table.table--sm').count()) === 2);
+  ok('both registers marked as samples',
+    (await page.locator('#pv-modal-body .pv-cap').count()) === 2 &&
+    (await page.locator('#pv-modal-body .pv-cap').first().textContent()).includes('Sample') &&
+    (await page.locator('#pv-modal-body .pv-cap').last().textContent()).includes('Sample'));
+  ok('the modal names the sample, not a chosen mode',
+    /both ways/i.test(await page.locator('#pv-modal-mode').textContent()));
 
-  await btnSum.click();
-  const body1s = await page.locator('#pv-modal-body').textContent();
-  ok('v1: summary modal shows the journal entry', body1s.includes('Journal Entry'));
-  ok('v1: summary lines name real QuickBooks accounts',
-    body1s.includes('Sales of Product Income') && body1s.includes('Sales Tax Payable'));
-  ok('v1: summary footer states 1 entry for the same 412 orders',
-    body1s.includes('1 entry') && body1s.includes('412 orders'));
-  const je = await page.locator('#pv-modal-body .pv-wrap').first().evaluate(el => {
+  // per-transaction column: customer names, the deposit that groups them, the clearing account
+  const ptText = await pairPt.textContent();
+  ok('per-transaction register shows customer names', ptText.includes('Amelia Hart'));
+  ok('per-transaction register names the QuickBooks accounts',
+    ptText.includes('Shopify Sales') && ptText.includes('Merchant fees'));
+  ok('eight sample rows plus the grouping deposit',
+    (await pairPt.locator('tbody tr').count()) === 9);
+  ok('the bank deposit that groups the receipts is shown',
+    /Bank Deposit/.test(await pairPt.locator('tr.deposit').textContent()) &&
+    /Checking/.test(await pairPt.locator('tr.deposit').textContent()));
+  ok('the note names the clearing account the cash waits in',
+    /Undeposited Funds/.test(await pairPt.locator('.pv-note').textContent()));
+  ok('footer reconciles the sample to the sample count',
+    ptText.includes('412 entries') && ptText.includes('404 not shown'));
+
+  // summary column: a balanced journal entry with the cash side shown
+  const sumText = await pairSum.textContent();
+  ok('summary register shows the journal entry', sumText.includes('Journal Entry'));
+  ok('summary lines name real QuickBooks accounts',
+    sumText.includes('Sales of Product Income') && sumText.includes('Sales Tax Payable'));
+  ok('summary preview has Debit and Credit columns',
+    (await pairSum.locator('th.c-dr').count()) === 1 && (await pairSum.locator('th.c-cr').count()) === 1);
+  const je = await pairSum.locator('.pv-wrap').evaluate(el => {
     const num = t => { const v = parseFloat(t.replace(/,/g, '')); return isNaN(v) ? 0 : v; };
     const rows = [...el.querySelectorAll('tbody tr')];
     const head = { dr: num(rows[0].querySelector('.c-dr').textContent),
@@ -330,71 +322,31 @@ function ok(name, cond) {
       account: r.querySelector('.c-acct').textContent.trim(),
       dr: num(r.querySelector('.c-dr').textContent),
       cr: num(r.querySelector('.c-cr').textContent) }));
-    const dr = lines.reduce((a, l) => a + l.dr, 0);
-    const cr = lines.reduce((a, l) => a + l.cr, 0);
-    const checking = lines.find(l => /checking/i.test(l.account));
-    return { head, dr, cr, checking };
+    return { head, dr: lines.reduce((a, l) => a + l.dr, 0), cr: lines.reduce((a, l) => a + l.cr, 0),
+             checking: lines.find(l => /checking/i.test(l.account)) };
   });
-  ok('v1: the journal entry balances — debits equal credits', Math.abs(je.dr - je.cr) < 0.005);
-  ok('v1: the header total matches the posted lines',
+  ok('the journal entry balances — debits equal credits', Math.abs(je.dr - je.cr) < 0.005);
+  ok('the header total matches the posted lines',
     Math.abs(je.head.dr - je.dr) < 0.005 && Math.abs(je.head.cr - je.cr) < 0.005);
-  ok('v1: the cash side is shown, not implied', !!je.checking);
-  ok('v1: the Checking debit is the payout the bank feed shows',
+  ok('the cash side is shown, not implied', !!je.checking);
+  ok('the Checking debit is the payout the bank feed shows',
     je.checking && Math.abs(je.checking.dr - 18432.67) < 0.005);
-  ok('v1: summary preview has Debit and Credit columns',
-    (await page.locator('#pv-modal-body th.c-dr').count()) === 1 &&
-    (await page.locator('#pv-modal-body th.c-cr').count()) === 1);
-  ok('v1: the note names the bank line rather than calling the total sales',
-    /into Checking/.test(await page.locator('#pv-modal-body .pv-note').textContent()));
-  await page.locator('#pv-modal .close-x').click();
-  ok('v1: close button works', !(await modalBg.isVisible()));
-  ok('v1: cards still interactive after closing',
-    await cardPt.isVisible() && await btnSum.isVisible());
-  ok('v1: opening a preview did not change the selected mode',
-    await page.locator('#mode-pt.sel').isVisible());
+  ok('the note names the bank line rather than calling the total sales',
+    /into Checking/.test(await pairSum.locator('.pv-note').textContent()));
 
-  // ── 10. Modal content, variant 2 — both modes side by side ──
-  await page.click('#md-2');
-  await btnPt.click();
-  const pairPt = page.locator('#pair-pt');
-  const pairSum = page.locator('#pair-sum');
-  ok('v2: both registers visible at once', await pairPt.isVisible() && await pairSum.isVisible());
-  const pBox = await pairPt.boundingBox(), sBox = await pairSum.boundingBox();
-  ok('v2: they sit side by side, not stacked', Math.abs(pBox.y - sBox.y) < 40 && sBox.x > pBox.x);
-  ok('v2: both columns labelled',
-    (await pairPt.locator('h3').textContent()).includes('Per transaction') &&
-    (await pairSum.locator('h3').textContent()).includes('Summary'));
-  ok('v2: the 412-vs-1 contrast is on screen together',
-    (await pairPt.textContent()).includes('412 entries') &&
-    (await pairSum.textContent()).includes('1 entry'));
-  ok('v2: disclosure still shown', await page.locator('#pv-modal .alert-info').isVisible());
-  ok('v2: both registers marked as samples',
-    (await page.locator('#pv-modal-body .pv-cap').count()) === 2 &&
-    (await page.locator('#pv-modal-body .pv-cap').first().textContent()).includes('Sample') &&
-    (await page.locator('#pv-modal-body .pv-cap').last().textContent()).includes('Sample'));
-  const m2 = await modal.boundingBox();
-  ok('v2: modal widens for the pair', m2.width > mBoxSingle.width);
-  ok('v2: modal still fits the viewport', m2.x >= 0 && m2.x + m2.width <= 1280);
-  ok('v2: left padding survives the wider layout',
-    (await pairPt.locator('.pv-wrap').boundingBox()).x - m2.x >= 20);
-  const rBox = await pairSum.locator('.pv-wrap').boundingBox();
-  ok('v2: right padding survives the wider layout',
-    (m2.x + m2.width) - (rBox.x + rBox.width) >= 20);
-  ok('v2: both tables are still kit tables',
-    (await page.locator('#pv-modal-body table.table.table--sm').count()) === 2);
+  // opening from either card gives the same pair
   await page.keyboard.press('Escape');
+  ok('Escape closes', !(await modalBg.isVisible()));
   await btnSum.click();
-  ok('v2: opening from the summary card shows the same pair',
+  ok('opening from the summary card shows the same pair',
     await page.locator('#pair-pt').isVisible() && await page.locator('#pair-sum').isVisible());
-  await page.keyboard.press('Escape');
-  ok('v2: closes cleanly', !(await modalBg.isVisible()));
-
-  await page.click('#md-1');
-  await btnPt.click();
-  ok('switching back to v1 restores the single register',
-    (await page.locator('#pv-modal-body').textContent()).includes('Amelia Hart') &&
-    (await page.locator('#pair-sum').count()) === 0);
-  await page.keyboard.press('Escape');
+  ok('no single-mode path left', (await page.locator('#pv-modal-body > .pv-wrap').count()) === 0);
+  await page.locator('#pv-modal .close-x').click();
+  ok('close button works', !(await modalBg.isVisible()));
+  ok('cards still interactive after closing',
+    await cardPt.isVisible() && await btnSum.isVisible());
+  ok('opening a preview did not change the selected mode',
+    await page.locator('#mode-pt.sel').isVisible());
 
   // ── 11. Choosing a mode — liveness, not just state ──
   await cardSum.click();
@@ -427,10 +379,6 @@ function ok(name, cond) {
   ok('a11y: close control has an accessible name',
     (await page.locator('#pv-modal .close-x').getAttribute('aria-label')) === 'Close');
   await page.keyboard.press('Escape');
-  await page.locator('#md-2').focus();
-  ok('a11y: switcher buttons are focusable',
-    await page.evaluate(() => document.activeElement.id === 'md-2'));
-  await page.click('#md-1');
 
   // ── 13. Copy consistency ──
   const text = await page.locator('.ob-wrap').textContent();
