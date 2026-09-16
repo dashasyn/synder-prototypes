@@ -186,3 +186,18 @@ unlabelled parallel-flow round still fails. The check got narrower in scope, not
 
 Worth noting because the temptation was to edit the round number instead. That would have made the
 check pass by falsifying the artifact, which is exactly the v1 failure this file exists to record.
+
+## MISS-2026-09-16 · QuickBooks preview invented a column set that does not exist
+**Lens that owned it:** Domain (accounting).
+**What reached Ignat:** the sync-mode preview rendered a QuickBooks register as
+`Date | Entry | Account | Amount`. Real QBO Sales transactions is
+`Date | Type | No. | Customer | Memo | Amount | Status | Action`; "Entry" is not a QBO column.
+Production also shows Payment / Invoice pairs (A/R, statuses Closed / Paid) where the preview shows
+Sales Receipts (no A/R).
+**Why it was missed:** no validator ran. The preview was built 2026-09-14 and revised four times on
+copy and kit compliance; the accountant lens was never spawned until Ignat asked for it on 09-16,
+after sending a production screenshot. The build was verified heavily for *behaviour* (124 Chromium
+assertions) and not at all for *accounting truth*.
+**Scope line added to `domain-validator.md`:** when a screen renders a mock of an external
+accounting system, check its column set, transaction types and posting path against a real screen
+of that system; a sample's shape is a factual claim, not decoration.

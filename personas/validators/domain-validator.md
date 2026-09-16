@@ -12,6 +12,10 @@ liability.
 - **Missing distinctions**: flows that blur payment vs. invoice vs. transaction vs. payout
 - **Data integrity risks**: actions without confirmation that could affect the books irreversibly
 - **Multi-client workflow gaps**: anything that would break when managing 40+ clients
+- **Mocked external systems**: when a screen renders a preview of QuickBooks, Xero or Sage, check
+  its column set, transaction types and posting path against a real screen of that system. A
+  sample's *shape* is a factual claim, not decoration — inventing a plausible column set trains
+  staff on a chart of accounts that does not exist. (MISS-2026-09-16)
 
 ## Hard limits — do NOT report:
 - UI design opinions

@@ -127,8 +127,25 @@ function ok(name, cond) {
     (await page.locator('#mode-pt .mode-down').textContent()).includes('412 entries'));
   ok('summary downside is the missing detail',
     (await page.locator('#mode-sum .mode-down').textContent()).includes('stay in Synder'));
+  // accountant round DOM-2: matching a bank line is not reconciliation
+  const pageText = (await page.locator('.ob-wrap').textContent()).replace(/\s+/g, ' ');
+  ok('nothing claims the sync reconciles in one click', !/reconciles in one click/i.test(pageText));
+  ok('the bank-match claim is phrased as matching, not reconciling',
+    /matches your bank deposit in one line/i.test(pageText));
 
-  // ── 4b. The reason now lives in a tooltip on the Recommended chip (Ignat, 2026-09-15) ──
+  // ── 4a. The reason is visible without hunting, with the tooltip for detail (review, 2026-09-16) ──
+  const whyLine = page.locator('#mode-pt .mode-why');
+  ok('a short reason is visible without interaction', await whyLine.isVisible());
+  ok('the visible reason names the stack',
+    /shopify/i.test(await whyLine.textContent()) && /quickbooks/i.test(await whyLine.textContent()));
+  ok('the visible reason is short enough to read at a glance',
+    (await whyLine.textContent()).trim().replace(/\s+/g, ' ').length <= 130);
+  ok('only the recommended card carries a visible reason',
+    (await page.locator('.mode-why').count()) === 1);
+  ok('the visible reason is 14px',
+    await whyLine.evaluate(el => parseFloat(getComputedStyle(el).fontSize) >= 14));
+
+  // ── 4b. The tooltip on the Recommended chip keeps the detail (Ignat, 2026-09-15) ──
   const chip = page.locator('#mode-pt .why-chip');
   const tip = page.locator('#why-pt');
   ok('recommended chip visible', await chip.isVisible());
@@ -189,7 +206,9 @@ function ok(name, cond) {
     return await page.locator('#mode-sum.sel').isVisible();
   })());
   await page.locator('#r-pt').click();
-  ok('no reason block left in the card body', (await page.locator('.mode-why').count()) === 0);
+  ok('tooltip and visible line say the same thing, not different things',
+    /per-state/i.test(await tip.textContent()) &&
+    /per-state/i.test(await whyLine.textContent()));
 
   // ── 4c. Everything under the cards is gone (Ignat, 2026-09-15) ──
   ok('no permanence line under the cards', (await page.locator('.perm-under').count()) === 0);
@@ -222,7 +241,7 @@ function ok(name, cond) {
     await page.locator('#pv-modal > .modal-footer').isVisible());
   const mBox = await modal.boundingBox();
   const titleBox = await page.locator('#pv-modal-title').boundingBox();
-  const pvBox = await page.locator('#pv-modal-body .pv-wrap').boundingBox();
+  const pvBox = await page.locator('#pv-modal-body .pv-wrap').first().boundingBox();
   const footBox = await page.locator('#pv-modal > .modal-footer').boundingBox();
   ok('title has left padding', titleBox.x - mBox.x >= 20);
   ok('preview has left padding', pvBox.x - mBox.x >= 20);
@@ -244,7 +263,16 @@ function ok(name, cond) {
     /sample/i.test(await page.locator('#pv-modal-body .pv-cap').first().textContent()));
   ok('disclosure sits above the register', (await alert.boundingBox()).y < pvBox.y);
 
-  // ── 9. Modal content, variant 1 — chosen mode only ──
+  // ── 9. Modal content ──
+  // Default is now variant 2 (side by side); switch to 1 for the single-register checks.
+  ok('preview defaults to side by side', await page.evaluate(() =>
+    document.body.classList.contains('md2') && document.getElementById('md-2').classList.contains('on')));
+  ok('the side-by-side pair is what opens by default',
+    await page.locator('#pair-pt').isVisible() && await page.locator('#pair-sum').isVisible());
+  await page.keyboard.press('Escape');
+  await page.click('#md-1');
+  await btnPt.click();
+  const mBoxSingle = await modal.boundingBox();
   const body1 = await page.locator('#pv-modal-body').textContent();
   ok('v1: register is a kit table',
     await page.locator('#pv-modal-body table.table.table--sm').isVisible());
@@ -256,11 +284,20 @@ function ok(name, cond) {
   ok('v1: register has four columns', (await page.locator('#pv-modal-body th').count()) === 4);
   ok('v1: register names the QuickBooks accounts',
     body1.includes('Shopify Sales') && body1.includes('Merchant fees'));
-  ok('v1: eight sample rows shown', (await page.locator('#pv-modal-body tbody tr').count()) === 8);
+  ok('v1: eight sample rows plus the grouping deposit',
+    (await page.locator('#pv-modal-body tbody tr').count()) === 9);
+  ok('v1: the bank deposit that groups the receipts is shown',
+    await page.locator('#pv-modal-body tr.deposit').isVisible() &&
+    /Bank Deposit/.test(await page.locator('#pv-modal-body tr.deposit').textContent()));
+  ok('v1: the deposit lands in a bank account',
+    /Checking/.test(await page.locator('#pv-modal-body tr.deposit').textContent()));
+  ok('v1: the note names the clearing account the cash waits in',
+    /Undeposited Funds/.test(await page.locator('#pv-modal-body .pv-note').textContent()));
   ok('v1: footer reconciles the sample to the real count',
-    body1.includes('412 entries') && body1.includes('404 more'));
+    body1.includes('412 entries') && body1.includes('404 not shown'));
   ok('v1: a note explains the consequence, not just the rows',
-    (await page.locator('#pv-modal-body .pv-note').textContent()).includes('412 entries to one deposit line'));
+    /groups them into the single line your bank feed shows/
+      .test((await page.locator('#pv-modal-body .pv-note').textContent()).replace(/\s+/g, ' ')));
   ok('v1: the other mode is NOT in the modal — the cost of this option',
     !body1.includes('Journal Entry'));
   await page.keyboard.press('Escape');
@@ -273,14 +310,31 @@ function ok(name, cond) {
     body1s.includes('Sales of Product Income') && body1s.includes('Sales Tax Payable'));
   ok('v1: summary footer states 1 entry for the same 412 orders',
     body1s.includes('1 entry') && body1s.includes('412 orders'));
-  const sums = await page.locator('#pv-modal-body .pv-wrap').evaluate(el => {
-    const num = t => parseFloat(t.replace(/−/g, '-').replace(/,/g, ''));
+  const je = await page.locator('#pv-modal-body .pv-wrap').first().evaluate(el => {
+    const num = t => { const v = parseFloat(t.replace(/,/g, '')); return isNaN(v) ? 0 : v; };
     const rows = [...el.querySelectorAll('tbody tr')];
-    const head = num(rows[0].querySelector('.c-amt').textContent.trim());
-    const lines = rows.slice(1).map(r => num(r.querySelector('.c-amt').textContent.trim()));
-    return { head, total: lines.reduce((a, b) => a + b, 0) };
+    const head = { dr: num(rows[0].querySelector('.c-dr').textContent),
+                   cr: num(rows[0].querySelector('.c-cr').textContent) };
+    const lines = rows.slice(1).map(r => ({
+      account: r.querySelector('.c-acct').textContent.trim(),
+      dr: num(r.querySelector('.c-dr').textContent),
+      cr: num(r.querySelector('.c-cr').textContent) }));
+    const dr = lines.reduce((a, l) => a + l.dr, 0);
+    const cr = lines.reduce((a, l) => a + l.cr, 0);
+    const checking = lines.find(l => /checking/i.test(l.account));
+    return { head, dr, cr, checking };
   });
-  ok('v1: journal-entry lines sum to the deposit', Math.abs(sums.head - sums.total) < 0.005);
+  ok('v1: the journal entry balances — debits equal credits', Math.abs(je.dr - je.cr) < 0.005);
+  ok('v1: the header total matches the posted lines',
+    Math.abs(je.head.dr - je.dr) < 0.005 && Math.abs(je.head.cr - je.cr) < 0.005);
+  ok('v1: the cash side is shown, not implied', !!je.checking);
+  ok('v1: the Checking debit is the payout the bank feed shows',
+    je.checking && Math.abs(je.checking.dr - 18432.67) < 0.005);
+  ok('v1: summary preview has Debit and Credit columns',
+    (await page.locator('#pv-modal-body th.c-dr').count()) === 1 &&
+    (await page.locator('#pv-modal-body th.c-cr').count()) === 1);
+  ok('v1: the note names the bank line rather than calling the total sales',
+    /into Checking/.test(await page.locator('#pv-modal-body .pv-note').textContent()));
   await page.locator('#pv-modal .close-x').click();
   ok('v1: close button works', !(await modalBg.isVisible()));
   ok('v1: cards still interactive after closing',
@@ -308,7 +362,7 @@ function ok(name, cond) {
     (await page.locator('#pv-modal-body .pv-cap').first().textContent()).includes('Sample') &&
     (await page.locator('#pv-modal-body .pv-cap').last().textContent()).includes('Sample'));
   const m2 = await modal.boundingBox();
-  ok('v2: modal widens for the pair', m2.width > mBox.width);
+  ok('v2: modal widens for the pair', m2.width > mBoxSingle.width);
   ok('v2: modal still fits the viewport', m2.x >= 0 && m2.x + m2.width <= 1280);
   ok('v2: left padding survives the wider layout',
     (await pairPt.locator('.pv-wrap').boundingBox()).x - m2.x >= 20);
