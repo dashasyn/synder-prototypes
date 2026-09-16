@@ -123,10 +123,18 @@ function ok(name, cond) {
   ok('downside visible on both cards',
     await page.locator('#mode-pt .mode-down').isVisible() &&
     await page.locator('#mode-sum .mode-down').isVisible());
-  ok('per-transaction downside is the row count',
-    (await page.locator('#mode-pt .mode-down').textContent()).includes('412 entries'));
+  ok('per-transaction downside names the cost without inventing a volume',
+    /grows with your order volume/i.test(await page.locator('#mode-pt .mode-down').textContent()));
   ok('summary downside is the missing detail',
     (await page.locator('#mode-sum .mode-down').textContent()).includes('stay in Synder'));
+  // Ignat 2026-09-16: QuickBooks is not connected at this step, so the cards cannot claim a
+  // transaction count. Specific figures belong only inside the sample-labelled preview.
+  const cardsText = (await page.locator('.modes').textContent()).replace(/\s+/g, ' ');
+  ok('no invented transaction count on the cards', !/\b412\b/.test(cardsText));
+  ok('no figure on the cards is presented as the user\'s own data',
+    !/\d[\d,]{2,}/.test(cardsText));
+  ok('both card downsides are abstract, not numeric', await page.evaluate(() =>
+    [...document.querySelectorAll('.mode-down')].every(el => !/\d/.test(el.textContent))));
   // accountant round DOM-2: matching a bank line is not reconciliation
   const pageText = (await page.locator('.ob-wrap').textContent()).replace(/\s+/g, ' ');
   ok('nothing claims the sync reconciles in one click', !/reconciles in one click/i.test(pageText));
@@ -433,8 +441,8 @@ function ok(name, cond) {
 
   // ── 13. Copy consistency ──
   const text = await page.locator('.ob-wrap').textContent();
-  ok('copy: the same 412 is used on both sides of the comparison',
-    (text.match(/412/g) || []).length >= 2);
+  ok('copy: the sample figure appears only inside the sample preview, never on the step',
+    !/412/.test(text));
   ok('copy: no jargon left from the old card',
     !text.includes('summarize all transactions together'));
   ok('copy: sample data is generic Shopify, not a real connected merchant',
