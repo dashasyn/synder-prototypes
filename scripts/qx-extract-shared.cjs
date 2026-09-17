@@ -96,17 +96,79 @@ const rows = [];
   while ((m = trRe.exec(section))) {
     const [, status, name, rest, body] = m;
     const attr = k => (rest.match(new RegExp(`data-${k}="([^"]*)"`)) || [, ''])[1];
-    const tds = [...body.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x =>
-      x[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+    const cells = [...body.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(x => x[1]);
+    const tds = cells.map(x =>
+      x.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
     // the group whose heading most recently precedes this row
     const group = groups.filter(x => x.at < m.index).pop();
+
+    /* The ACTIONS a row offers, read out of its last cell.
+       Ignat, 2026-09-17: "the preview are wrong". They were — the React port
+       put preview+delete on every row, while the vanilla gives preview only to
+       DONE rows, download instead of preview to raw_data, and delete-only to
+       everything else. Two done trip_failures rows and every line_analysis row
+       have no preview either. Rather than infer a rule from that (and get the
+       exceptions wrong), the action list travels with the row. */
+    const actionCell = cells[cells.length - 1] || '';
+    const actions = [...actionCell.matchAll(
+      /<button[^>]*>[\s\S]*?<span class="material-icons"[^>]*>\s*(\w+)/g)].map(x => x[1]);
+
     rows.push({
       group: group ? group.key : 'punctuality',
       name, status,
-      periodKey: attr('period'),
+      periodKey: attr('period') || 'other',
       von: attr('von'), bis: attr('bis'),
       period: tds[1] || '', created: tds[2] || '',
+      actions,
     });
+  }
+}
+
+/* ── 1b. the scheduled reports, also read out of the markup ──────────
+   The port shipped three schedules I typed by hand while the vanilla has six,
+   with different columns and a Last run it never showed. Same mistake as the
+   evaluation rows, left in place after I said it would be fixed "next pass". */
+const schedules = [];
+{
+  const i = src.indexOf('id="view-scheduled"');
+  const j = src.indexOf('<div id="view-', i + 10);
+  const section = src.slice(i, j > 0 ? j : undefined);
+  const re = /<tr data-name="([^"]*)" data-freq="([^"]*)" data-status="([^"]*)">([\s\S]*?)<\/tr>/g;
+  let m;
+  while ((m = re.exec(section))) {
+    const [, name, freq, status, body] = m;
+    const tds = [...body.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)]
+      .map(x => x[1].replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim());
+    const keys = [...body.matchAll(/data-i18n="([^"]*)"/g)].map(x => x[1]);
+    const actions = [...body.matchAll(
+      /<button[^>]*>[\s\S]*?<span class="material-icons"[^>]*>\s*(\w+)/g)].map(x => x[1]);
+    schedules.push({
+      name, freq, status,
+      freqKey: keys[0] || ('freq_' + freq),   // the badge's own wording
+      next: tds[2] || '', last: tds[3] || '',
+      actions,
+    });
+  }
+  if (schedules.length < 2) {
+    console.error('EXTRACTION INCOMPLETE — schedules not found in the markup');
+    process.exit(1);
+  }
+}
+
+// Actions must survive the trip. A markup change that stops the cell matching
+// would otherwise hand the port a list where nothing is clickable, silently.
+{
+  const noActions = rows.filter(r => !r.actions.length).map(r => r.name);
+  const kinds = new Set(rows.flatMap(r => r.actions));
+  if (noActions.length) {
+    console.error('EXTRACTION INCOMPLETE — rows with no actions:', noActions.join(', '));
+    process.exit(1);
+  }
+  for (const need of ['visibility', 'download', 'delete']) {
+    if (!kinds.has(need)) {
+      console.error(`EXTRACTION INCOMPLETE — no row offers "${need}"`);
+      process.exit(1);
+    }
   }
 }
 
@@ -221,6 +283,9 @@ function setDataLang(l) { lang = l; }
 /** The evaluations list, read out of the vanilla prototype's markup. */
 var EVALUATIONS = ${JSON.stringify(rows, null, 2)};
 
+/** The scheduled reports, likewise. */
+var SCHEDULES = ${JSON.stringify(schedules, null, 2)};
+
 ${helpers.map(x => `var ${x.name} = ${x.body};`).join('\n')}
 
 ${consts.map(x => `var ${x.name} = ${x.body};`).join('\n\n')}
@@ -252,6 +317,7 @@ fs.writeFileSync(OUT, out);
   }
 }
 console.log(`evaluation rows   ${rows.length}`);
+console.log(`schedules         ${schedules.length}`);
 console.log(`domain constants  ${consts.length}  (${consts.map(x => x.name).slice(0, 8).join(', ')}…)`);
 console.log(`pure functions    ${pure.length}`);
 console.log(`written           ${path.relative(process.cwd(), OUT)}  ${(out.length / 1024).toFixed(1)} KB`);

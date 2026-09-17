@@ -58,7 +58,45 @@ const fs = require('fs');
   await page.goto(target, { waitUntil: 'networkidle', timeout: 60000 });
   await page.waitForTimeout(1500);
 
-  ok('the app mounted', (await page.$$('[class*="Mui"]')).length > 50);
+  ok('the app mounted', (await page.$$('[class*="Mui"]')).length > 20);
+
+  try {
+
+  /* ── the login screen, BEFORE dismissing it ───────────────────────
+     Ignat, 2026-09-17: "There is no sign in." There wasn't. Neither checker
+     could see that: this suite had no login step, and the parity checker
+     signs in on its first line. A view you dismiss is a view you don't test —
+     the same lesson the vanilla's login taught on 2026-09-14, unlearned. */
+  ok('the app opens on a login screen', !!(await page.$('#view-login')));
+  const loginLook = await page.evaluate(() => {
+    const card = document.querySelector('#view-login .MuiPaper-root');
+    const cs = getComputedStyle(document.getElementById('view-login'));
+    const field = document.querySelector('#login-email');
+    return {
+      opaque: cs.backgroundColor,
+      filled: !!field.closest('.MuiFilledInput-root'),
+      cardShadow: card ? getComputedStyle(card).boxShadow : null,
+    };
+  });
+  ok('the login background is opaque, not an alpha scrim',
+    loginLook.opaque === 'rgb(240, 242, 245)', loginLook.opaque);
+  ok('login fields are the same filled fields as the rest of the app', loginLook.filled);
+  ok('the login card is flat', loginLook.cardShadow === 'none', loginLook.cardShadow);
+  ok('no untranslated keys on the login screen', (await rawKeys(page)).length === 0, await rawKeys(page));
+
+  // empty submit puts a message under each field, not one for the form
+  await page.click('#login-submit');
+  await page.waitForTimeout(300);
+  const loginErr = await page.evaluate(() => [...document.querySelectorAll('.Mui-error')]
+    .filter(e => e.classList.contains('MuiFormHelperText-root')).map(e => e.textContent.trim()));
+  ok('an empty submit errors both fields separately', loginErr.length === 2, loginErr);
+  ok('an empty submit does not let you in', !!(await page.$('#view-login')));
+
+  await page.fill('#login-email', 'a@b.c');
+  await page.fill('#login-password', 'x');
+  await page.click('#login-submit');
+  await page.waitForTimeout(600);
+  ok('a filled submit signs in', !(await page.$('#view-login')));
 
   // ── layout gate, before anything else ────────────────────────
   const layout = await page.evaluate(() => {
@@ -127,6 +165,76 @@ const fs = require('fs');
   await page.click('.MuiMenu-list li:first-child');
   await page.waitForTimeout(400);
 
+  /* ── the evaluations list: filters, counts, row actions ───────────
+     Ignat, 2026-09-17: "the filters are wrong", "the preview are wrong".
+     Both were. The period filter was state nothing read, and every row got
+     preview+delete regardless of what the vanilla gives it. */
+  const rowCount = () => page.$$eval('tbody tr', r => r.length);
+  const allRows = await rowCount();
+  ok('the list renders every evaluation', allRows === 28, allRows);
+
+  // period: pick "Last 7 days" and the row count must actually change
+  await page.click('#f-period');
+  await page.waitForTimeout(250);
+  await page.click('.MuiMenu-list li:first-child');
+  await page.waitForTimeout(400);
+  const p7 = await rowCount();
+  const want7 = await page.evaluate(() =>
+    EVALUATIONS.filter(r => r.periodKey === 'last_7_days').length);
+  ok('the period filter actually filters', p7 === want7 && p7 < allRows, { p7, want7, allRows });
+  ok('the header count follows the filter',
+    (await page.$eval('h5 + p, .MuiTypography-body2', e => e.textContent)).startsWith(String(p7)));
+
+  // clear-all appears only when something is filtered, and restores the list
+  ok('a Clear filters button appears once a filter is set', !!(await page.$('#f-clear-all')));
+  await page.click('#f-clear-all');
+  await page.waitForTimeout(400);
+  ok('Clear filters restores every row', (await rowCount()) === allRows);
+  ok('Clear filters then hides itself', !(await page.$('#f-clear-all')));
+
+  // a filter that matches nothing shows the empty state, not a blank page
+  await page.fill('#f-search', 'zzzzzzzz');
+  await page.waitForTimeout(400);
+  ok('a search matching nothing shows the empty state', !!(await page.$('#empty-state')));
+  await page.click('#f-search-clear');
+  await page.waitForTimeout(400);
+  ok('the search clear restores every row', (await rowCount()) === allRows);
+
+  // row actions must match the vanilla's, per row, not one set for all
+  const actionMismatch = await page.evaluate(() => {
+    const bad = [];
+    const MAP = { visibility: 'view', download: 'download', delete: 'delete' };
+    for (const r of EVALUATIONS) {
+      const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(r.name));
+      if (!tr) { bad.push(r.name + ': missing'); continue; }
+      const got = [...tr.querySelectorAll('button')].map(b => b.getAttribute('aria-label')).sort();
+      const want = r.actions.map(a => MAP[a]).sort();
+      if (got.join() !== want.join()) bad.push(`${r.name}: ${got} != ${want}`);
+    }
+    return bad;
+  });
+  ok('every row offers exactly the actions the vanilla gives it',
+    actionMismatch.length === 0, actionMismatch.slice(0, 3));
+
+  // delete asks first, then offers undo — the vanilla's cfAsk + showUndoToast
+  await page.click('tbody tr button[aria-label="delete"]');
+  await page.waitForTimeout(400);
+  ok('delete opens a confirmation rather than deleting', !!(await page.$('#confirm-dialog')));
+  ok('the list is untouched while the dialog is open', (await rowCount()) === allRows);
+  await page.click('#confirm-delete');
+  await page.waitForTimeout(500);
+  ok('confirming removes the row', (await rowCount()) === allRows - 1);
+  ok('an undo toast is offered', await page.isVisible('#undo-btn'));
+  await page.click('#undo-btn');
+  await page.waitForTimeout(500);
+  ok('undo puts the row back', (await rowCount()) === allRows);
+
+  // download reports back instead of doing nothing
+  await page.click('tbody tr button[aria-label="download"]');
+  await page.waitForTimeout(400);
+  ok('download confirms it started', await page.isVisible('#note-toast'));
+  await page.waitForTimeout(100);
+
   // ── navigation ───────────────────────────────────────────────
   await page.click('#qx-nav-trigger');
   await page.waitForTimeout(300);
@@ -138,6 +246,44 @@ const fs = require('fs');
   ok('it navigates to Scheduled reports',
     (await page.$eval('h5', e => e.textContent)).toLowerCase().includes('scheduled'));
   ok('no untranslated keys on scheduled reports', (await rawKeys(page)).length === 0, await rawKeys(page));
+
+  /* Scheduled reports, rebuilt against the vanilla: six real schedules, its
+     columns, its three filters, and pause/resume — the only action here that
+     changes anything, and the one the port was missing. */
+  const schedRows = await page.$$eval('#sched-table tbody tr', r => r.length);
+  const schedWant = await page.evaluate(() => SCHEDULES.length);
+  ok('every schedule is listed, from the extracted data', schedRows === schedWant && schedRows === 6,
+    { schedRows, schedWant });
+  const schedCols = await page.$$eval('#sched-table thead th', th => th.map(e => e.textContent.trim()));
+  ok('the schedule table carries a Last run column', schedCols.length === 6, schedCols);
+
+  await page.click('#s-status');
+  await page.waitForTimeout(250);
+  await page.click('.MuiMenu-list li:nth-child(2)');       // paused
+  await page.waitForTimeout(400);
+  const pausedRows = await page.$$eval('#sched-table tbody tr', r => r.length);
+  const pausedWant = await page.evaluate(() => SCHEDULES.filter(s => s.status === 'paused').length);
+  ok('the schedule status filter filters', pausedRows === pausedWant && pausedRows < schedRows,
+    { pausedRows, pausedWant });
+  await page.click('#s-clear-all');
+  await page.waitForTimeout(400);
+
+  await page.fill('#s-search', 'zzzzzz');
+  await page.waitForTimeout(400);
+  ok('a schedule search matching nothing shows the empty state', !!(await page.$('#sched-empty')));
+  await page.fill('#s-search', '');
+  await page.waitForTimeout(400);
+
+  const pauseBefore = (await page.$$('#sched-table button[aria-label="pause"]')).length;
+  await page.click('#sched-table button[aria-label="pause"]');
+  await page.waitForTimeout(400);
+  const pauseAfter = (await page.$$('#sched-table button[aria-label="pause"]')).length;
+  ok('pausing a schedule flips it to resume', pauseAfter === pauseBefore - 1,
+    { pauseBefore, pauseAfter });
+  await page.click('#sched-table button[aria-label="resume"]');
+  await page.waitForTimeout(400);
+  ok('resuming flips it back',
+    (await page.$$('#sched-table button[aria-label="pause"]')).length === pauseBefore);
 
   // ── the creation flow ────────────────────────────────────────
   await page.click('#qx-nav-trigger');
@@ -251,7 +397,9 @@ const fs = require('fs');
   await page.waitForTimeout(200);
   const backToList = await page.$('#new-eval-btn');
   if (!backToList) { await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(1500); }
-  await page.click('tbody tr a');
+  // Reports are reached by the row's PREVIEW action, as in the vanilla —
+  // the name is plain text there, and only done rows offer a preview.
+  await page.click('tbody tr button[aria-label="view"]');
   await page.waitForTimeout(700);
 
   ok('opening an evaluation lands on the punctuality report',
@@ -291,8 +439,10 @@ const fs = require('fs');
   //    from the extracted logic rather than anything retyped here ──────
   const openByName = async name => {
     await page.evaluate(n => {
-      const a = [...document.querySelectorAll('tbody a')].find(x => x.textContent.trim() === n);
-      if (a) a.click();
+      const row = [...document.querySelectorAll('tbody tr')]
+        .find(tr => tr.textContent.includes(n));
+      const b = row && row.querySelector('button[aria-label="view"]');
+      if (b) b.click();
     }, name);
     await page.waitForTimeout(700);
   };
@@ -300,8 +450,12 @@ const fs = require('fs');
     await page.evaluate(() => { const a = document.querySelector('.MuiBreadcrumbs-root a'); if (a) a.click(); });
     await page.waitForTimeout(500);
   };
+  // The first row of a group is often in_progress or failed, and those carry
+  // no preview at all in the vanilla — so ask for one that does.
   const nameOf = g => page.evaluate(gr => {
-    const r = EVALUATIONS.find(x => x.group === gr); return r && r.name;
+    const r = EVALUATIONS.find(x => x.group === gr && x.actions.includes('visibility'))
+           || EVALUATIONS.find(x => x.group === gr);
+    return r && r.name;
   }, g);
 
   const EXPECT = {
@@ -309,9 +463,14 @@ const fs = require('fs');
     connection:    '#rpt-table',
     trip_failures: '#fa-table',
     data_quality:  '#dqi-tabs',
-    raw_data:      '#raw-table',
-    line_analysis: '#punct-table',
   };
+  // Line Analysis is deliberately absent: not one of its rows carries a
+  // preview in the vanilla, so it has no report to open. Asserted rather than
+  // assumed, because "I ported it and nothing happens" looks identical.
+  const lineActs = await page.evaluate(() =>
+    [...new Set(EVALUATIONS.filter(r => r.group === 'line_analysis').flatMap(r => r.actions))]);
+  ok('no line-analysis row offers a preview, as in the vanilla',
+    !lineActs.includes('visibility'), lineActs);
   for (const [group, sel] of Object.entries(EXPECT)) {
     const name = await nameOf(group);
     if (!name) { fails.push(`no evaluation of type ${group}`); continue; }
@@ -360,8 +519,13 @@ const fs = require('fs');
     JSON.stringify(rpt) === JSON.stringify(rptWant), { rpt, rptWant });
   await goBack();
 
-  // Raw data: per-column filtering and paging over the real 4 950 rows
-  await openByName(await nameOf('raw_data'));
+  // Raw data: per-column filtering and paging over the real 4 950 rows.
+  // It is reached from a PUNCTUALITY row's table_chart action (openPunctRaw),
+  // not from the list — a raw_data row in the list is a finished export and
+  // offers download only. Routing it from the list left this view unreachable.
+  await openByName(await nameOf('punctuality'));
+  await page.click('#punct-table tbody tr:first-child button[aria-label="raw"]');
+  await page.waitForTimeout(700);
   const firstPage = await page.$$eval('#raw-table tbody tr', r => r.length);
   ok('raw data pages at 25 rows', firstPage === 25, firstPage);
   const totalRaw = await page.evaluate(() => PUNCT_RAW.length);
@@ -390,15 +554,42 @@ const fs = require('fs');
   await page.waitForTimeout(700);
   ok('a trip-failures row opens the Ausfallmaske', (await page.$$('#fa-mask-causes')).length === 1);
   ok('the mask has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
+
+  /* The mask's trip table. The parity checker read "tables 1 -> 0" here and I
+     took it for a formatting difference; it was the whole list of cancelled
+     trips, plus its date window and rows-per-page. */
+  ok('the Ausfallmaske lists the individual trips', (await page.$$('#fa-mask-table')).length === 1);
+  const maskCols = await page.$$eval('#fa-mask-table thead th', th => th.length);
+  ok('the trip table has all 14 columns', maskCols === 14, maskCols);
+  const maskRows = await page.$$eval('#fa-mask-table tbody tr', r => r.length);
+  ok('the trip table pages at 10', maskRows === 10, maskRows);
+
+  await page.click('#fa-mask-pp .MuiSelect-select');
+  await page.waitForTimeout(250);
+  await page.click('.MuiMenu-list li:nth-child(2)');       // 25
+  await page.waitForTimeout(400);
+  const maskAll = await page.evaluate(() => FA_MASK_DATA.length);
+  ok('rows-per-page changes what the table shows',
+    (await page.$$eval('#fa-mask-table tbody tr', r => r.length)) === Math.min(25, maskAll));
+
+  await page.fill('#fa-mask-von', '01.01.2099');
+  await page.click('#fa-mask-apply');
+  await page.waitForTimeout(400);
+  ok('a date window that matches nothing shows the empty state',
+    !!(await page.$('#fa-mask-empty')));
+  await page.click('#fa-mask-reset');
+  await page.waitForTimeout(400);
+  ok('reset restores the trips', (await page.$$('#fa-mask-table')).length === 1);
   await goBack();
 
-  // Raw Data Export config comes from New evaluation. A row in the list is a
-  // FINISHED export and must open the table — an earlier routing sent every
-  // raw_data row to the config and made the table unreachable.
-  await openByName(await nameOf('raw_data'));
-  ok('a raw-data row opens the table, not the config',
-    (await page.$$('#raw-table')).length === 1 && (await page.$$('#rd-run-btn')).length === 0);
-  await goBack();
+  // A raw_data row in the list is a FINISHED export: download, no preview.
+  const rawActs = await page.evaluate(() => {
+    const r = EVALUATIONS.find(x => x.group === 'raw_data' && x.status === 'done');
+    const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(r.name));
+    return [...tr.querySelectorAll('button')].map(b => b.getAttribute('aria-label'));
+  });
+  ok('a done raw-data row offers download and delete, not preview',
+    rawActs.includes('download') && rawActs.includes('delete') && !rawActs.includes('view'), rawActs);
 
   await page.click('#new-eval-btn');
   await page.waitForTimeout(600);
@@ -420,6 +611,12 @@ const fs = require('fs');
   ok('the config has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
 
   ok('no console errors', errors.length === 0, errors.slice(0, 4));
+  } catch (e) {
+    // A thrown click used to kill the run and print a stack instead of the
+    // 99 results already collected, which hides WHICH gate caught the bug.
+    const where = (e.stack || '').split('\n').find(l => l.includes('verify-qx-react')) || '';
+    fails.push(`the run stopped early: ${e.message.split('\n')[0]} ${where.trim()}`);
+  }
 
   await browser.close();
   console.log(`\n${pass} assertions passed, ${fails.length} failed`);

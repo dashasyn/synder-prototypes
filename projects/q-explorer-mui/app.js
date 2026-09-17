@@ -17,8 +17,10 @@ const {
   Typography, Menu, MenuItem, Breadcrumbs, Link, Card, CardContent, TextField,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip,
   Stack, FormControl, InputLabel, Select, InputAdornment, Alert, Tooltip,
-  Tabs, Tab,
+  Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
+  Snackbar,
 } = M;
+const Fragment = React.Fragment;
 
 const Icon = ({ children, sx }) =>
   html`<span className="material-icons" style=${{ fontSize: 20, ...(sx || {}) }}>${children}</span>`;
@@ -66,15 +68,10 @@ const TYPE_KEYS = ['punctuality', 'raw_data', 'data_quality', 'connection', 'tri
    prototype (scripts/qx-extract-shared.cjs). Ignat, 2026-09-15: "Now you
    lost almost all logic" — he was right, the first pass retyped a handful
    of sample rows. Nothing here is retyped now; re-run the extractor to
-   resync. Schedules are still local: the vanilla builds them in markup
-   the same way, and they come across in the next pass. */
+   resync. Schedules now come across the same way — they were three rows I
+   typed by hand against the vanilla's six until 2026-09-17. */
 const ROWS = EVALUATIONS;
 
-const SCHEDULES = [
-  { name: 'Pünktlichkeit – wöchentlich', type: 'punctuality',   freq: 'weekly',  next: '01.06.2026 06:00', status: 'active' },
-  { name: 'Rohdaten – täglich',          type: 'raw_data',      freq: 'daily',   next: '26.05.2026 06:00', status: 'active' },
-  { name: 'Fahrtausfälle – monatlich',   type: 'trip_failures', freq: 'monthly', next: '01.06.2026 07:00', status: 'paused' },
-];
 
 // The real data carries a `running` status my invented sample rows never had —
 // which is exactly the kind of gap retyping data hides.
@@ -120,6 +117,60 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id }) {
     <//>`;
 }
 
+/**
+ * Row actions, and what each one does.
+ *
+ * The icon names come from the vanilla's own markup via the extractor, so the
+ * port cannot offer an action the original does not — and cannot miss one.
+ */
+const ROW_ACTIONS = {
+  visibility: { key: 'act_preview', aria: 'view' },
+  download:   { key: 'rd_download', aria: 'download' },
+  delete:     { key: 'act_delete',  aria: 'delete', color: 'error' },
+};
+
+/**
+ * Delete-with-confirm, an undo toast, and plain notifications — the vanilla's
+ * cfAsk() / showUndoToast() / showRptApplyToast(), none of which existed in
+ * the port. Its delete icon was rendered and wired to nothing.
+ */
+function useListActions(t, deletedToastKey) {
+  const [removed, setRemoved] = useState([]);
+  const [pending, setPending] = useState(null);
+  const [undoable, setUndoable] = useState(null);
+  const [note, setNote] = useState('');
+
+  const confirm = () => {
+    setRemoved(r => [...r, pending]);
+    setUndoable(pending);
+    setPending(null);
+  };
+  const undo = () => {
+    setRemoved(r => r.filter(n => n !== undoable));
+    setUndoable(null);
+  };
+
+  const ui = html`
+    <${Fragment}>
+      <${Dialog} open=${!!pending} onClose=${() => setPending(null)} id="confirm-dialog">
+        <${DialogTitle}>${t('cf_del_eval_title')}<//>
+        <${DialogContent}><${DialogContentText}>${t('cf_del_eval_body')}<//><//>
+        <${DialogActions}>
+          <${Button} onClick=${() => setPending(null)} id="confirm-cancel">${t('cf_cancel')}<//>
+          <${Button} color="error" variant="contained" onClick=${confirm}
+            id="confirm-delete">${t('cf_delete')}<//>
+        <//>
+      <//>
+      <${Snackbar} open=${!!undoable} autoHideDuration=${6000} id="undo-toast"
+        onClose=${() => setUndoable(null)} message=${t(deletedToastKey)}
+        action=${html`<${Button} size="small" id="undo-btn" onClick=${undo}>${t('undo')}<//>`} />
+      <${Snackbar} open=${!!note} autoHideDuration=${4000} id="note-toast"
+        onClose=${() => setNote('')} message=${note} />
+    <//>`;
+
+  return { removed, askDelete: setPending, notify: setNote, ui };
+}
+
 /* ── Page header: breadcrumb, title, action in the corner ─────────── */
 function PageHeader({ crumbs, title, subtitle, action }) {
   return html`
@@ -146,35 +197,59 @@ function EvaluationsList({ go }) {
   const [status, setStatus] = useState('');
   const [period, setPeriod] = useState('');
   const [q, setQ] = useState('');
+  const { removed, askDelete, notify, ui: actionUi } = useListActions(t, 'toast_eval_deleted');
 
   // Matching on the LABEL, not the raw value, so selecting "In Progress"
   // returns the `running` rows too rather than silently dropping them.
+  //
+  // The PERIOD clause was missing entirely until 2026-09-17: the state was
+  // set and read by nothing, so picking a period changed the look of the
+  // field and not one row. Ignat: "the filters are wrong."
   const rows = useMemo(() => ROWS.filter(r =>
+    !removed.includes(r.name) &&
     (!status || t(STATUS_KEY[r.status] || r.status) === t(STATUS_KEY[status] || status)) &&
-    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, q, t]);
+    (!period || r.periodKey === period) &&
+    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, period, q, t, removed]);
   const groups = [...new Set(rows.map(r => r.group))];
+  const dirty = !!(q || status || period);
+  const clearAll = () => { setQ(''); setStatus(''); setPeriod(''); };
+
+  // The vanilla's own five period options, by its own keys and values.
+  const periodOptions = [
+    ['last_7_days', 'filter_period_last7'],
+    ['current_month', 'filter_period_current_month'],
+    ['last_month', 'filter_period_last_month'],
+    ['last_year', 'filter_period_last_year'],
+    ['other', 'filter_period_other'],
+  ].map(([value, key]) => ({ value, label: t(key) }));
 
   return html`
     <${Box}>
       <${PageHeader} title=${t('page_evaluations')}
-        subtitle=${`${rows.length} ${t('nav_evaluations').toLowerCase()}`}
+        subtitle=${`${rows.length} ${t(rows.length === 1 ? 'eval_count_one' : 'eval_count_many')}`}
         action=${html`<${Button} variant="contained" id="new-eval-btn"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
                         onClick=${() => go('new')}>${t('btn_new_eval')}<//>`} />
 
       <${Box} sx=${{ p: 3 }}>
-        <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }}>
+        <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }} alignItems="center">
           <${TextField} label=${t('search_placeholder')} value=${q}
-            onChange=${e => setQ(e.target.value)} sx=${{ minWidth: 280 }} id="f-search" />
+            onChange=${e => setQ(e.target.value)} sx=${{ minWidth: 280 }} id="f-search"
+            InputProps=${q ? { endAdornment: html`
+              <${InputAdornment} position="end">
+                <${IconButton} aria-label=${t('clear_filters')} id="f-search-clear"
+                  onClick=${() => setQ('')}><${Icon} sx=${{ fontSize: 18 }}>close<//><//>
+              <//>` } : undefined} />
           <${FilterSelect} id="f-status" label=${t('sel_status')} value=${status} onChange=${setStatus}
             options=${statusOptions(t)} />
           <${FilterSelect} id="f-period" label=${t('sel_period')} value=${period} onChange=${setPeriod}
-            options=${['last_7', 'cur_month', 'last_month', 'last_year']
-              .map(p => ({ value: p, label: t('preset_' + p) }))} />
+            options=${periodOptions} />
+          ${dirty && html`
+            <${Button} id="f-clear-all" onClick=${clearAll}>${t('clear_filters')}<//>`}
         <//>
 
         ${rows.length === 0 && html`
-          <${Alert} severity="info" id="empty-state">${t('no_results')}<//>`}
+          <${Alert} severity="info" id="empty-state">${t('empty_no_evals')}<//>`}
 
         ${groups.map(g => html`
           <${Box} key=${g} sx=${{ mb: 4 }}>
@@ -196,11 +271,11 @@ function EvaluationsList({ go }) {
                 <${TableBody}>
                   ${rows.filter(r => r.group === g).map(r => html`
                     <${TableRow} key=${r.name} hover>
-                      <${TableCell}>
-                        <${Link} href="#" underline="hover"
-                          onClick=${e => { e.preventDefault(); go('report', r); }}>${r.name}<//>
-                        ${r.note && html`<${Typography} variant="caption" color="error" display="block">${r.note}<//>`}
-                      <//>
+                      ${/* Plain text, as in the vanilla. It was a Link here, which
+                            opened a report for failed and in-progress rows that
+                            have none — the report is reached by the preview
+                            action, and only rows that carry one have it. */''}
+                      <${TableCell}>${r.name}<//>
                       <${TableCell}>${r.period}<//>
                       <${TableCell}>${r.created}<//>
                       <${TableCell}>
@@ -208,14 +283,20 @@ function EvaluationsList({ go }) {
                                  label=${t(STATUS_KEY[r.status])} color=${STATUS_COLOUR[r.status]} />
                       <//>
                       <${TableCell} align="right">
-                        <${Tooltip} title=${t('act_preview')}>
-                          <${IconButton} aria-label="view" onClick=${() => go('report', r)}>
-                            <${Icon}>visibility<//>
-                          <//>
-                        <//>
-                        <${Tooltip} title=${t('act_delete')}>
-                          <${IconButton} aria-label="delete"><${Icon}>delete_outline<//><//>
-                        <//>
+                        ${r.actions.map(a => {
+                          const spec = ROW_ACTIONS[a];
+                          if (!spec) return null;
+                          const onClick =
+                            a === 'visibility' ? () => go('report', r)
+                          : a === 'download'   ? () => notify(t('rd_download_started').replace('{name}', r.name))
+                          : a === 'delete'     ? () => askDelete(r.name)
+                          : undefined;
+                          return html`
+                            <${Tooltip} key=${a} title=${t(spec.key)}>
+                              <${IconButton} aria-label=${spec.aria} color=${spec.color}
+                                onClick=${onClick}><${Icon}>${a}<//><//>
+                            <//>`;
+                        })}
                       <//>
                     <//>`)}
                 <//>
@@ -223,35 +304,68 @@ function EvaluationsList({ go }) {
             <//>
           <//>`)}
       <//>
+      ${actionUi}
     <//>`;
 }
 
 /* ── Screen: Scheduled reports ────────────────────────────────────── */
+/**
+ * Rebuilt 2026-09-17 against the vanilla rather than against memory.
+ * It had three schedules I typed by hand (the real file has six), a Type
+ * column the original does not show, no Last run column that it does, and
+ * one filter out of three. Pause/resume was missing entirely — the only
+ * action on this screen that changes anything.
+ */
 function ScheduledReports({ go }) {
   const { t } = useT();
   const [freq, setFreq] = useState('');
-  const rows = SCHEDULES.filter(s => !freq || s.freq === freq);
+  const [status, setStatus] = useState('');
+  const [q, setQ] = useState('');
+  const [paused, setPaused] = useState({});          // name -> overridden status
+  const { removed, askDelete, ui: actionUi } = useListActions(t, 'toast_sched_deleted');
+
+  const statusOf = s => paused[s.name] || s.status;
+  const rows = SCHEDULES.filter(s =>
+    !removed.includes(s.name) &&
+    (!freq || s.freq === freq) &&
+    (!status || statusOf(s) === status) &&
+    (!q || s.name.toLowerCase().includes(q.toLowerCase())));
+  const dirty = !!(q || freq || status);
+
+  const toggle = s => setPaused(p => ({
+    ...p, [s.name]: statusOf(s) === 'active' ? 'paused' : 'active' }));
 
   return html`
     <${Box}>
       <${PageHeader} title=${t('page_scheduled')}
-        subtitle=${`${rows.length} ${t('scheduled_subtitle') ? '' : ''}`.trim() || undefined}
-        action=${html`<${Button} variant="contained"
+        subtitle=${t('scheduled_subtitle')}
+        action=${html`<${Button} variant="contained" id="new-sched-btn"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
                         onClick=${() => go('new')}>${t('btn_schedule')}<//>`} />
       <${Box} sx=${{ p: 3 }}>
-        <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }}>
-          <${FilterSelect} id="f-freq" label=${t('sel_frequency')} value=${freq} onChange=${setFreq}
-            options=${['daily', 'weekly', 'monthly'].map(f => ({ value: f, label: t('freq_' + f) }))} />
+        <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }} alignItems="center">
+          <${TextField} label=${t('sched_search_placeholder')} value=${q} id="s-search"
+            onChange=${e => setQ(e.target.value)} sx=${{ minWidth: 280 }} />
+          <${FilterSelect} id="s-freq" label=${t('sel_frequency')} value=${freq} onChange=${setFreq}
+            options=${['daily', 'weekly', 'monthly', 'yearly']
+              .map(f => ({ value: f, label: t('freq_' + f) }))} />
+          <${FilterSelect} id="s-status" label=${t('sel_status')} value=${status} onChange=${setStatus}
+            options=${['active', 'paused'].map(v => ({ value: v, label: t('status_' + v) }))} />
+          ${dirty && html`<${Button} id="s-clear-all"
+            onClick=${() => { setQ(''); setFreq(''); setStatus(''); }}>${t('clear_filters')}<//>`}
         <//>
+
+        ${rows.length === 0 && html`
+          <${Alert} severity="info" id="sched-empty">${t('empty_no_schedules')}<//>`}
+
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
-          <${Table}>
+          <${Table} id="sched-table">
             <${TableHead}>
               <${TableRow}>
                 <${TableCell}>${t('col_name')}<//>
-                <${TableCell}>${t('sel_eval_type')}<//>
-                <${TableCell}>${t('sel_frequency')}<//>
+                <${TableCell}>${t('col_frequency')}<//>
                 <${TableCell}>${t('col_next_run')}<//>
+                <${TableCell}>${t('col_last_run')}<//>
                 <${TableCell}>${t('col_status')}<//>
                 <${TableCell} align="right">${t('col_actions')}<//>
               <//>
@@ -259,24 +373,39 @@ function ScheduledReports({ go }) {
             <${TableBody}>
               ${rows.map(s => html`
                 <${TableRow} key=${s.name} hover>
-                  <${TableCell}><${Link} href="#" underline="hover"
-                    onClick=${e => e.preventDefault()}>${s.name}<//><//>
-                  <${TableCell}>${t('type_' + s.type)}<//>
-                  <${TableCell}>${t('freq_' + s.freq)}<//>
+                  <${TableCell}>${s.name}<//>
+                  ${/* the badge carries its own wording — "Weekly (Monday)",
+                        "Monthly (1st)" — not just the raw frequency */''}
+                  <${TableCell}><${Chip} size="small" variant="outlined"
+                                         label=${t(s.freqKey)} /><//>
                   <${TableCell}>${s.next}<//>
+                  <${TableCell}>${s.last}<//>
                   <${TableCell}>
-                    <${Chip} size="small" variant="outlined" label=${s.status}
-                             color=${STATUS_COLOUR[s.status]} />
+                    <${Chip} size="small" variant="outlined" label=${t('status_' + statusOf(s))}
+                             color=${statusOf(s) === 'active' ? 'success' : 'default'} />
                   <//>
                   <${TableCell} align="right">
-                    <${IconButton} aria-label="edit"><${Icon}>edit<//><//>
-                    <${IconButton} aria-label="delete"><${Icon}>delete_outline<//><//>
+                    <${Tooltip} title=${t(statusOf(s) === 'active' ? 'act_pause' : 'act_resume')}>
+                      <${IconButton} aria-label=${statusOf(s) === 'active' ? 'pause' : 'resume'}
+                        onClick=${() => toggle(s)}>
+                        <${Icon}>${statusOf(s) === 'active' ? 'pause_circle' : 'play_circle'}<//>
+                      <//>
+                    <//>
+                    <${Tooltip} title=${t('act_edit')}>
+                      <${IconButton} aria-label="edit" onClick=${() => go('new')}>
+                        <${Icon}>edit<//><//>
+                    <//>
+                    <${Tooltip} title=${t('act_delete')}>
+                      <${IconButton} aria-label="delete" color="error"
+                        onClick=${() => askDelete(s.name)}><${Icon}>delete<//><//>
+                    <//>
                   <//>
                 <//>`)}
             <//>
           <//>
         <//>
       <//>
+      ${actionUi}
     <//>`;
 }
 
@@ -387,7 +516,7 @@ function fmtPct(v) {
   return (v === null || v === undefined) ? '—' : v.toFixed(2) + '%';
 }
 
-function PunctRow({ node, depth, t, onChart }) {
+function PunctRow({ node, depth, t, onChart, onRaw }) {
   const [open, setOpen] = useState(depth === 0);
   const kids = node.children || [];
   const pad = 16 + depth * 20;
@@ -420,10 +549,19 @@ function PunctRow({ node, depth, t, onChart }) {
               <${Icon}>bar_chart<//>
             <//>
           <//>
+          ${/* The vanilla gives every punctuality row TWO actions — chart and
+                the raw data table (openPunctRaw). Only the chart was ported,
+                which is why the 4 950-row table had no way in. */''}
+          <${Tooltip} title=${t('rpt_action_raw')}>
+            <${IconButton} aria-label="raw" onClick=${() => onRaw && onRaw(node)}>
+              <${Icon}>table_chart<//>
+            <//>
+          <//>
         <//>
       <//>
       ${open && kids.map((k, i) =>
-        html`<${PunctRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t} onChart=${onChart} />`)}
+        html`<${PunctRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t}
+               onChart=${onChart} onRaw=${onRaw} />`)}
     <//>`;
 }
 
@@ -498,7 +636,8 @@ function ReportPunctuality({ go, row }) {
                     format: v => v.toFixed(1) + '%',
                     items: (node.children && node.children.length ? node.children : [node])
                       .map(c => ({ label: c.label, value: c.agg.wert || 0 })),
-                  } })} />`)}
+                  } })}
+                  onRaw=${() => go('raw', row)} />`)}
               <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
                 <${TableCell}>${t('rpt_gesamt')}<//>
                 <${TableCell} align="right">${fmtInt(total.soll)}<//>
@@ -876,7 +1015,7 @@ function ReportDQI({ go, row }) {
    140 x 13 — with per-column filters and paging. Every column filter is
    an ordinary text field: a Select would need MUI X Pro for multi-column
    filtering, which the licence question has not settled. */
-function RawDataTable({ go, row, rows, title }) {
+function RawDataTable({ go, row, rows, title, onBack, backLabel }) {
   const { t } = useT();
   const [filters, setFilters] = useState({});
   const [page, setPage] = useState(0);
@@ -895,7 +1034,9 @@ function RawDataTable({ go, row, rows, title }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: title }]}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                   ...(onBack ? [{ label: backLabel, onClick: onBack }] : []),
+                   { label: title }]}
         title=${title}
         subtitle=${`${filtered.length.toLocaleString('de-CH')} / ${rows.length.toLocaleString('de-CH')}`} />
       <${Box} sx=${{ p: 3 }}>
@@ -1058,10 +1199,33 @@ function RohdatenConfig({ go, row }) {
    The per-TU failure breakdown: which causes account for the lost minutes.
    FA_UBERSICHT_DATA carries the cause list with its own colours and
    percentages, so the bars are the data's colours, not a palette I chose. */
+// The 14 column headings, in the vanilla's own order and by its own keys.
+const MASK_COLS = ['fa_mask_col_tag', 'fa_mask_col_tu', 'fa_mask_col_go', 'fa_mask_col_lb',
+  'fa_mask_col_linie', 'fa_mask_col_fahrt_id', 'fa_mask_col_fahrt_tu', 'fa_mask_col_halt_von',
+  'fa_mask_col_aus_von', 'fa_mask_col_halt_bis', 'fa_mask_col_aus_bis', 'fa_mask_col_anz_halt',
+  'fa_mask_col_ausfallart', 'fa_mask_col_ersatz'];
+
 function Ausfallmaske({ go, row, tuId }) {
   const { t } = useT();
   const key = tuId && FA_UBERSICHT_DATA[tuId] ? tuId : 'GESAMT';
   const d = FA_UBERSICHT_DATA[key] || { causes: [], totalMin: 0, ausMin: 0 };
+  const [von, setVon] = useState('');
+  const [bis, setBis] = useState('');
+  const [range, setRange] = useState({ von: '', bis: '' });
+  const [pp, setPp] = useState(10);
+  const [page, setPage] = useState(0);
+
+  // the vanilla's own date window, through its own faMaskStamp()
+  const filtered = useMemo(() => {
+    const from = faMaskStamp(range.von), to = faMaskStamp(range.bis);
+    if (!from && !to) return FA_MASK_DATA;
+    return FA_MASK_DATA.filter(r => {
+      const st = faMaskStamp(r[0]);
+      if (st === null) return false;
+      return (!from || st >= from) && (!to || st <= to);
+    });
+  }, [range]);
+  const shown = filtered.slice(page * pp, page * pp + pp);
 
   return html`
     <${Box}>
@@ -1100,6 +1264,61 @@ function Ausfallmaske({ go, row, tuId }) {
               <//>
             <//>`)}
         <//><//>
+
+        ${/* The trip table, its Ausfall von/bis filter and its rows-per-page
+              select. All three were missing: the parity checker reported this
+              view as "tables 1 -> 0" and I had read that as a formatting
+              difference rather than a missing table. It is the only place the
+              individual cancelled trips are listed. */''}
+        <${Stack} direction="row" spacing=${2} sx=${{ mt: 3, mb: 2 }} alignItems="center">
+          <${TextField} label=${t('fa_mask_ausfall_von')} id="fa-mask-von"
+            placeholder="dd.mm.yyyy" value=${von} onChange=${e => setVon(e.target.value)} />
+          <${TextField} label=${t('fa_mask_ausfall_bis')} id="fa-mask-bis"
+            placeholder="dd.mm.yyyy" value=${bis} onChange=${e => setBis(e.target.value)} />
+          <${Button} variant="contained" id="fa-mask-apply"
+            onClick=${() => { setRange({ von, bis }); setPage(0); }}>${t('fa_mask_apply')}<//>
+          <${Button} id="fa-mask-reset"
+            onClick=${() => { setVon(''); setBis(''); setRange({ von: '', bis: '' }); setPage(0); }}>
+            ${t('fa_mask_reset')}<//>
+          <${Box} sx=${{ flex: 1 }} />
+          <${FilterSelect} id="fa-mask-pp" label=${t('sel_rows_per_page')} minWidth=${110}
+            value=${String(pp)} onChange=${v => { setPp(Number(v) || 10); setPage(0); }}
+            options=${['10', '25', '50'].map(v => ({ value: v, label: v }))} />
+        <//>
+
+        ${filtered.length === 0 ? html`
+          <${Alert} severity="info" id="fa-mask-empty" action=${html`
+            <${Button} size="small" onClick=${() => { setVon(''); setBis(''); setRange({ von: '', bis: '' }); }}>
+              ${t('raw_clear_filters')}<//>`}>${t('fa_mask_no_match')}<//>` : html`
+          <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+            <${Table} id="fa-mask-table">
+              <${TableHead}>
+                <${TableRow}>
+                  ${MASK_COLS.map(c => html`<${TableCell} key=${c}>${t(c)}<//>`)}
+                <//>
+              <//>
+              <${TableBody}>
+                ${shown.map((r, i) => html`
+                  <${TableRow} key=${i} hover>
+                    ${r.map((c, k) => html`<${TableCell} key=${k}>${c}<//>`)}
+                  <//>`)}
+              <//>
+            <//>
+          <//>`}
+
+        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mt: 2 }}>
+          <${Typography} variant="body2" color="text.secondary" id="fa-mask-info">
+            ${t('fa_pager_info')
+                .replace('{start}', filtered.length === 0 ? 0 : page * pp + 1)
+                .replace('{end}', Math.min((page + 1) * pp, filtered.length))
+                .replace('{total}', filtered.length)}
+          <//>
+          <${Box} sx=${{ flex: 1 }} />
+          <${Button} disabled=${page === 0} id="fa-mask-prev"
+            onClick=${() => setPage(p => p - 1)}>${t('rpt_pager_prev')}<//>
+          <${Button} disabled=${(page + 1) * pp >= filtered.length} id="fa-mask-next"
+            onClick=${() => setPage(p => p + 1)}>${t('rpt_pager_next')}<//>
+        <//>
       <//>
     <//>`;
 }
@@ -1123,7 +1342,7 @@ function NotPorted({ go, row }) {
 }
 
 /* ── Shell ────────────────────────────────────────────────────────── */
-function TopBar({ go }) {
+function TopBar({ go, onLogout }) {
   const { t, lang, setLang } = useT();
   const [anchor, setAnchor] = useState(null);
   const [langAnchor, setLangAnchor] = useState(null);
@@ -1156,7 +1375,72 @@ function TopBar({ go }) {
             <${MenuItem} key=${l} selected=${l === lang}
               onClick=${() => { setLang(l); setLangAnchor(null); }}>${l.toUpperCase()}<//>`)}
         <//>
-        <${Button} color="inherit" startIcon=${html`<${Icon}>logout<//>`}>${t('btn_logout')}<//>
+        <${Button} color="inherit" id="logout-btn" onClick=${onLogout}
+                   startIcon=${html`<${Icon}>logout<//>`}>${t('btn_logout')}<//>
+      <//>
+    <//>`;
+}
+
+/**
+ * Screen: Login.
+ *
+ * Ignat, 2026-09-17: "There is no sign in." Correct — the port had no login
+ * screen at all, and neither of my two checkers could see it: the assertion
+ * suite has no login step, and the parity checker signs in on its first line
+ * and then walks views by id, so the one view it dismissed is the one view it
+ * never compared. Same failure as 2026-09-14, when the vanilla's own login
+ * shipped broken for exactly this reason.
+ *
+ * Validation is the vanilla's doLogin(): each field owns its own message,
+ * which is MUI's error + helperText unmodified.
+ */
+function Login({ onLogin }) {
+  const { t } = useT();
+  const [email, setEmail] = useState('');
+  const [pass, setPass] = useState('');
+  const [err, setErr] = useState({});
+
+  const submit = () => {
+    const next = {
+      email: email.trim() ? '' : t('err_email_required'),
+      pass: pass.trim() ? '' : t('err_password_required'),
+    };
+    setErr(next);
+    if (!next.email && !next.pass) onLogin();
+  };
+
+  return html`
+    <${Box} id="view-login" sx=${{ minHeight: 'calc(100vh - 36px)', bgcolor: '#F0F2F5',
+             display: 'flex', flexDirection: 'column', alignItems: 'center',
+             justifyContent: 'center', gap: 3, p: 3 }}>
+      ${/* the Swiss flag from the vanilla's own markup */''}
+      <${Box} component="svg" viewBox="0 0 40 44" aria-hidden="true" sx=${{ width: 40, height: 44 }}>
+        <path d="m38.5778 3.2s-7.2-3.2-19.3-3.2c-12.00002 0-19.2000222 3.2-19.2000222 3.2s-.6999998 14.1 2.1000022 22.1c4.8 14 17.20002 18 17.20002 18s12.3-3.9 17.2-18c2.6-8 2-22.1 2-22.1z" fill="#ff0000"></path>
+        <path d="m32.0779 15.4v7.8h-9v9.1h-7.7v-9.1h-8.99997v-7.8h8.99997v-9.09995h7.7v9.09995z" fill="#ffffff"></path>
+      <//>
+      <${Card} sx=${{ width: 360, p: 3 }}>
+        <${Typography} variant="h6">${t('login_title')}<//>
+        <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
+          ${t('login_subtitle')}<//>
+        <${TextField} fullWidth id="login-email" type="email" label=${t('login_email')}
+          placeholder="name@organisation.ch" value=${email} sx=${{ mb: 2 }}
+          onChange=${e => setEmail(e.target.value)}
+          error=${!!err.email} helperText=${err.email || ' '} />
+        <${TextField} fullWidth id="login-password" type="password" label=${t('login_password')}
+          value=${pass} sx=${{ mb: 2 }} onChange=${e => setPass(e.target.value)}
+          error=${!!err.pass} helperText=${err.pass || ' '} />
+        <${Button} fullWidth variant="contained" id="login-submit"
+          onClick=${submit}>${t('login_submit')}<//>
+        <${Box} sx=${{ mt: 2, textAlign: 'center' }}>
+          <${Link} href="#" variant="body2" underline="hover"
+            onClick=${e => e.preventDefault()}>${t('login_forgot')}<//>
+        <//>
+      <//>
+      <${Stack} direction="row" spacing=${1}>
+        ${['util_impressum', 'util_dokumente', 'util_kontakt', 'util_support'].map(k =>
+          html`<${Button} key=${k} size="small" color="inherit"
+                 sx=${{ color: 'text.secondary', fontSize: 12 }}
+                 endIcon=${html`<${Icon} sx=${{ fontSize: 14 }}>open_in_new<//>`}>${t(k)}<//>`)}
       <//>
     <//>`;
 }
@@ -1167,6 +1451,7 @@ function App() {
   // test that enshrined my invention rather than checking the original.
   const [lang, setLang] = useState('en');
   const [route, setRoute] = useState({ name: 'list' });
+  const [authed, setAuthed] = useState(false);
   // data.js owns t() and its lang binding, because the extracted record sets
   // call it while they build. Duplicating the lookup here would give two
   // implementations that can disagree.
@@ -1193,18 +1478,30 @@ function App() {
                                    backLabel=${route.chart.backLabel}
                                    onBack=${() => go('report', route.row)} />` :
     route.name === 'mask'      ? html`<${Ausfallmaske} go=${go} row=${route.row} tuId=${route.tuId} />` :
+    route.name === 'raw'       ? html`<${RawDataTable} go=${go} row=${route.row} rows=${PUNCT_RAW}
+                                        title=${t('rpt_action_raw')}
+                                        backLabel=${route.row ? route.row.name : ''}
+                                        onBack=${() => go('report', route.row)} />` :
     route.name === 'rohdaten'  ? html`<${RohdatenConfig} go=${go} row=${route.row} />` :
     (route.name === 'report' && route.row && route.row.group === 'raw_data')
                                ? html`<${RawDataTable} go=${go} row=${route.row} rows=${PUNCT_RAW}
                                         title=${route.row.name} />` :
                                  html`<${NotPorted} go=${go} row=${route.row} />`;
 
+  if (!authed) return html`
+    <${I18n.Provider} value=${{ t, lang, setLang }}>
+      <${ThemeProvider} theme=${theme}>
+        <${CssBaseline} />
+        <${Login} onLogin=${() => { setAuthed(true); setRoute({ name: 'list' }); }} />
+      <//>
+    <//>`;
+
   return html`
     <${I18n.Provider} value=${{ t, lang, setLang }}>
       <${ThemeProvider} theme=${theme}>
         <${CssBaseline} />
         <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 36px)' }}>
-          <${TopBar} go=${go} />
+          <${TopBar} go=${go} onLogout=${() => setAuthed(false)} />
           <${Box} sx=${{ flex: 1 }}>${screen}<//>
           <${Box} component="footer" sx=${{ display: 'flex', justifyContent: 'flex-end', gap: 1,
                    px: 3, py: .5, bgcolor: '#fff', borderTop: '1px solid #E7E7E7' }}>

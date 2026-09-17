@@ -22,16 +22,19 @@ const VANILLA = 'file://' + path.resolve(__dirname, '../projects/q-explorer-prot
 const REACT   = 'file://' + path.resolve(__dirname, '../projects/q-explorer-mui/index.html');
 
 /** Affordances of whatever is currently on screen, as stable labels. */
-const affordances = page => page.evaluate(() => {
+const affordances = (page, root) => page.evaluate(sel => {
+  // Scoped, because the vanilla renders the whole app behind its login screen
+  // — counting document-wide there reports six tables the user cannot see.
+  const scope = (sel && document.querySelector(sel)) || document;
   const seen = { tabs: [], buttons: [], selects: [], tables: 0, inputs: 0 };
   const vis = el => el.offsetParent !== null || getComputedStyle(el).position === 'fixed';
   const label = el => (el.getAttribute('aria-label') || el.textContent || '')
     .replace(/\s+/g, ' ').trim().slice(0, 40);
 
-  for (const el of document.querySelectorAll('[role="tab"], .dqi-tab, .MuiTab-root')) {
+  for (const el of scope.querySelectorAll('[role="tab"], .dqi-tab, .MuiTab-root')) {
     if (vis(el)) seen.tabs.push(label(el));
   }
-  for (const el of document.querySelectorAll('button, a.btn, .MuiButton-root')) {
+  for (const el of scope.querySelectorAll('button, a.btn, .MuiButton-root')) {
     if (!vis(el)) continue;
     const l = label(el);
     // icon-only buttons carry a ligature name, not prose — skip them here
@@ -42,17 +45,23 @@ const affordances = page => page.evaluate(() => {
   // .mui-select with a visible trigger, so counting both doubles its total
   // and invents gaps that are not there.
   const controls = new Set();
-  for (const el of document.querySelectorAll('.mui-select, .MuiFormControl-root, select')) {
+  for (const el of scope.querySelectorAll('.mui-select, .MuiFormControl-root, select')) {
     if (!vis(el)) continue;
+    // The language switcher is app chrome on every view, and the two build it
+    // differently — a native <select> in the vanilla, a Button + Menu in the
+    // port. Counting it charged the port a phantom missing control on SIX
+    // views and buried the two gaps that were real.
+    if (el.id === 'topbar-lang-select' || el.closest('#topbar-lang-select')) continue;
+    if (el.id === 'lang-trigger') continue;
     if (el.closest('.mui-select') && !el.classList.contains('mui-select')) continue;
     if (el.closest('.MuiFormControl-root') && !el.classList.contains('MuiFormControl-root')) continue;
     controls.add(el);
   }
   seen.selects = [...controls].map(el => label(el).slice(0, 24));
-  seen.tables = [...document.querySelectorAll('table')].filter(vis).length;
-  seen.inputs = [...document.querySelectorAll('input')].filter(vis).length;
+  seen.tables = [...scope.querySelectorAll('table')].filter(vis).length;
+  seen.inputs = [...scope.querySelectorAll('input')].filter(vis).length;
   return seen;
-});
+}, root || null);
 
 const uniq = a => [...new Set(a.filter(Boolean))];
 
@@ -62,16 +71,20 @@ const uniq = a => [...new Set(a.filter(Boolean))];
   /* ── vanilla: walk its views by id ─────────────────────────────── */
   const v = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   await v.goto(VANILLA, { waitUntil: 'networkidle' });
+  // The login screen is compared BEFORE it is dismissed. Signing in on the
+  // first line is exactly why this checker could not see that the React port
+  // had no login at all (Ignat, 2026-09-17: "There is no sign in").
+  const vanillaLogin = await affordances(v, '#view-login');
   await v.fill('#login-email', 'a@b.c');
   await v.fill('#login-password', 'x');
   await v.click('.btn-login');
   await v.waitForTimeout(500);
 
-  const VIEWS = ['reports-list', 'scheduled', 'wizard', 'report-punct', 'report-fa',
+  const VIEWS = ['login', 'reports-list', 'scheduled', 'wizard', 'report-punct', 'report-fa',
                  'report-dqi', 'report-connection', 'rohdaten', 'raw-punct',
                  'ausfallmaske', 'chart-punct', 'chart-fa', 'chart-connection'];
-  const vanilla = {};
-  for (const view of VIEWS) {
+  const vanilla = { login: vanillaLogin };
+  for (const view of VIEWS.filter(x => x !== 'login')) {
     await v.evaluate(n => window.showView && window.showView(n), view);
     await v.waitForTimeout(300);
     vanilla[view] = await affordances(v);
@@ -84,13 +97,22 @@ const uniq = a => [...new Set(a.filter(Boolean))];
   await r.waitForTimeout(1600);
 
   const react = {};
+  react['login'] = await affordances(r, '#view-login');
+  if (await r.$('#login-email')) {
+    await r.fill('#login-email', 'a@b.c');
+    await r.fill('#login-password', 'x');
+    await r.click('#login-submit');
+    await r.waitForTimeout(700);
+  }
   react['reports-list'] = await affordances(r);
 
   const openGroup = async group => {
     await r.evaluate(g => {
-      const row = EVALUATIONS.find(x => x.group === g);
-      const a = [...document.querySelectorAll('tbody a')].find(x => x.textContent.trim() === row.name);
-      if (a) a.click();
+      const row = EVALUATIONS.find(x => x.group === g && x.actions.includes('visibility'))
+               || EVALUATIONS.find(x => x.group === g);
+      const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(row.name));
+      const b = tr && tr.querySelector('button[aria-label="view"]');
+      if (b) b.click();
     }, group);
     await r.waitForTimeout(700);
   };
@@ -102,13 +124,21 @@ const uniq = a => [...new Set(a.filter(Boolean))];
   const MAP = {
     'report-punct': 'punctuality', 'report-fa': 'trip_failures',
     'report-dqi': 'data_quality', 'report-connection': 'connection',
-    'raw-punct': 'raw_data',
   };
   for (const [view, group] of Object.entries(MAP)) {
     await openGroup(group);
     react[view] = await affordances(r);
     await back();
   }
+  // the raw table hangs off a punctuality row (openPunctRaw), not off a
+  // raw_data row — a raw_data row in the list is a finished export
+  await openGroup('punctuality');
+  await r.click('#punct-table tbody tr:first-child button[aria-label="raw"]').catch(() => {});
+  await r.waitForTimeout(600);
+  react['raw-punct'] = await affordances(r);
+  await r.evaluate(() => { const a = document.querySelector('.MuiBreadcrumbs-root a'); if (a) a.click(); });
+  await r.waitForTimeout(500);
+
   // the chart / mask / rohdaten screens are reached through a row action
   await openGroup('punctuality');
   await r.click('#punct-table tbody tr:first-child button[aria-label="chart"]').catch(() => {});

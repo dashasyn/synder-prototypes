@@ -25,7 +25,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "19.05–25.05.2026",
-    "created": "25.05.2026"
+    "created": "25.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "punctuality",
@@ -35,7 +38,11 @@ var EVALUATIONS = [
     "von": "01.04.2026",
     "bis": "30.04.2026",
     "period": "01.04–30.04.2026",
-    "created": "03.05.2026"
+    "created": "03.05.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "punctuality",
@@ -45,7 +52,11 @@ var EVALUATIONS = [
     "von": "26.04.2026",
     "bis": "25.05.2026",
     "period": "26.04–25.05.2026",
-    "created": "26.05.2026"
+    "created": "26.05.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "punctuality",
@@ -55,7 +66,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.01–26.05.2026",
-    "created": "24.05.2026"
+    "created": "24.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "punctuality",
@@ -65,7 +79,11 @@ var EVALUATIONS = [
     "von": "19.05.2026",
     "bis": "25.05.2026",
     "period": "19.05–25.05.2026",
-    "created": "25.05.2026"
+    "created": "25.05.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "punctuality",
@@ -75,7 +93,11 @@ var EVALUATIONS = [
     "von": "01.01.2025",
     "bis": "31.12.2025",
     "period": "01.01–31.12.2025",
-    "created": "08.01.2026"
+    "created": "08.01.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "raw_data",
@@ -85,7 +107,11 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "24.05.2026",
-    "created": "25.05.2026"
+    "created": "25.05.2026",
+    "actions": [
+      "download",
+      "delete"
+    ]
   },
   {
     "group": "raw_data",
@@ -95,7 +121,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.05–23.05.2026",
-    "created": "25.05.2026"
+    "created": "25.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "raw_data",
@@ -105,7 +134,11 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "11.05–17.05.2026",
-    "created": "20.05.2026"
+    "created": "20.05.2026",
+    "actions": [
+      "download",
+      "delete"
+    ]
   },
   {
     "group": "raw_data",
@@ -115,7 +148,11 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.04–30.04.2026",
-    "created": "05.05.2026"
+    "created": "05.05.2026",
+    "actions": [
+      "download",
+      "delete"
+    ]
   },
   {
     "group": "line_analysis",
@@ -125,7 +162,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.01–31.12.2025",
-    "created": "24.05.2026"
+    "created": "24.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "line_analysis",
@@ -135,7 +175,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.04–30.04.2026",
-    "created": "03.05.2026"
+    "created": "03.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "line_analysis",
@@ -145,7 +188,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "26.04–25.05.2026",
-    "created": "26.05.2026"
+    "created": "26.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "line_analysis",
@@ -155,7 +201,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.05–26.05.2026",
-    "created": "26.05.2026"
+    "created": "26.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "data_quality",
@@ -165,7 +214,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.02–30.04.2026",
-    "created": "22.05.2026"
+    "created": "22.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "data_quality",
@@ -175,7 +227,11 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.04–30.04.2026",
-    "created": "03.05.2026"
+    "created": "03.05.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "data_quality",
@@ -185,7 +241,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.01–26.05.2026",
-    "created": "26.05.2026"
+    "created": "26.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "data_quality",
@@ -195,7 +254,11 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.01–31.12.2025",
-    "created": "12.01.2026"
+    "created": "12.01.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "connection",
@@ -205,7 +268,11 @@ var EVALUATIONS = [
     "von": "01.04.2026",
     "bis": "30.04.2026",
     "period": "01.04–30.04.2026",
-    "created": "20.05.2026"
+    "created": "20.05.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "connection",
@@ -215,7 +282,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.05–24.05.2026",
-    "created": "25.05.2026"
+    "created": "25.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "connection",
@@ -225,7 +295,11 @@ var EVALUATIONS = [
     "von": "01.01.2026",
     "bis": "31.03.2026",
     "period": "01.01–31.03.2026",
-    "created": "08.04.2026"
+    "created": "08.04.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "connection",
@@ -235,7 +309,11 @@ var EVALUATIONS = [
     "von": "01.03.2026",
     "bis": "31.03.2026",
     "period": "01.03–31.03.2026",
-    "created": "15.04.2026"
+    "created": "15.04.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "connection",
@@ -245,7 +323,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.01–31.12.2025",
-    "created": "10.02.2026"
+    "created": "10.02.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "trip_failures",
@@ -255,7 +336,11 @@ var EVALUATIONS = [
     "von": "01.04.2026",
     "bis": "30.04.2026",
     "period": "01.04–30.04.2026",
-    "created": "25.05.2026"
+    "created": "25.05.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "trip_failures",
@@ -265,7 +350,11 @@ var EVALUATIONS = [
     "von": "10.06.2026",
     "bis": "23.06.2026",
     "period": "19.05–25.05.2026",
-    "created": "25.05.2026"
+    "created": "25.05.2026",
+    "actions": [
+      "visibility",
+      "delete"
+    ]
   },
   {
     "group": "trip_failures",
@@ -275,7 +364,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.05–26.05.2026",
-    "created": "26.05.2026"
+    "created": "26.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "trip_failures",
@@ -285,7 +377,10 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.04–30.04.2026",
-    "created": "15.05.2026"
+    "created": "15.05.2026",
+    "actions": [
+      "delete"
+    ]
   },
   {
     "group": "trip_failures",
@@ -295,7 +390,92 @@ var EVALUATIONS = [
     "von": "",
     "bis": "",
     "period": "01.01–31.12.2025",
-    "created": "10.01.2026"
+    "created": "10.01.2026",
+    "actions": [
+      "delete"
+    ]
+  }
+];
+
+/** The scheduled reports, likewise. */
+var SCHEDULES = [
+  {
+    "name": "Fahrtausfälle DPM – Wöchentlich",
+    "freq": "weekly",
+    "status": "active",
+    "freqKey": "freq_weekly_mon",
+    "next": "01.06.2026",
+    "last": "25.05.2026",
+    "actions": [
+      "pause_circle",
+      "edit",
+      "delete"
+    ]
+  },
+  {
+    "name": "Pünktlichkeit – Kanton ZH, Monatlich",
+    "freq": "monthly",
+    "status": "active",
+    "freqKey": "freq_monthly_1st",
+    "next": "01.06.2026",
+    "last": "01.05.2026",
+    "actions": [
+      "pause_circle",
+      "edit",
+      "delete"
+    ]
+  },
+  {
+    "name": "Rohdaten Export – Täglich",
+    "freq": "daily",
+    "status": "paused",
+    "freqKey": "freq_daily",
+    "next": "26.05.2026",
+    "last": "25.05.2026",
+    "actions": [
+      "play_circle",
+      "edit",
+      "delete"
+    ]
+  },
+  {
+    "name": "Linienanalyse – SBB Monatlich",
+    "freq": "monthly",
+    "status": "active",
+    "freqKey": "freq_monthly",
+    "next": "01.06.2026",
+    "last": "01.05.2026",
+    "actions": [
+      "pause_circle",
+      "edit",
+      "delete"
+    ]
+  },
+  {
+    "name": "Datenqualitätsindex – Wöchentlich BE/FR",
+    "freq": "weekly",
+    "status": "active",
+    "freqKey": "freq_weekly",
+    "next": "02.06.2026",
+    "last": "26.05.2026",
+    "actions": [
+      "pause_circle",
+      "edit",
+      "delete"
+    ]
+  },
+  {
+    "name": "Jahresbericht Pünktlichkeit 2025",
+    "freq": "yearly",
+    "status": "paused",
+    "freqKey": "freq_yearly",
+    "next": "15.01.2027",
+    "last": "15.01.2026",
+    "actions": [
+      "play_circle",
+      "edit",
+      "delete"
+    ]
   }
 ];
 
