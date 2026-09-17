@@ -68,6 +68,7 @@ var EVALUATIONS = [
     "period": "01.01–26.05.2026",
     "created": "24.05.2026",
     "actions": [
+      "refresh",
       "delete"
     ]
   },
@@ -190,6 +191,7 @@ var EVALUATIONS = [
     "period": "26.04–25.05.2026",
     "created": "26.05.2026",
     "actions": [
+      "refresh",
       "delete"
     ]
   },
@@ -216,6 +218,7 @@ var EVALUATIONS = [
     "period": "01.02–30.04.2026",
     "created": "22.05.2026",
     "actions": [
+      "refresh",
       "delete"
     ]
   },
@@ -325,6 +328,7 @@ var EVALUATIONS = [
     "period": "01.01–31.12.2025",
     "created": "10.02.2026",
     "actions": [
+      "refresh",
       "delete"
     ]
   },

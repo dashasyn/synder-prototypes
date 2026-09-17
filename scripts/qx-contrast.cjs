@@ -27,14 +27,18 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await page.goto(target, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(1200);
   await page.fill('#login-email', 'a@b.c');
   await page.fill('#login-password', 'x');
-  await page.click('.btn-login');
-  await page.waitForTimeout(400);
+  // the vanilla's submit is .btn-login, the React port's is #login-submit
+  await page.click((await page.$('.btn-login')) ? '.btn-login' : '#login-submit');
+  await page.waitForTimeout(600);
+  // the React port has no window.showView; it routes through React state
+  const hasShowView = await page.evaluate(() => typeof window.showView === 'function');
 
   const all = [];
-  for (const v of VIEWS) {
-    await page.evaluate(n => window.showView(n), v);
+  for (const v of (hasShowView ? VIEWS : ['reports-list'])) {
+    if (hasShowView) { await page.evaluate(n => window.showView(n), v); }
     await page.waitForTimeout(250);
     const nodes = await page.evaluate(view => {
       const parse = s => {
@@ -55,7 +59,11 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
         return base;
       };
       const out = [];
-      for (const el of document.querySelectorAll(`#view-${view} *`)) {
+      // The React port has no #view-<name> containers — scoping to them
+      // scanned nothing and reported "0 below AA", which reads exactly like a
+      // clean result. Fall back to the whole body when the id is absent.
+      const root = document.getElementById('view-' + view) || document.body;
+      for (const el of root.querySelectorAll('*')) {
         if (el.offsetParent === null) continue;
         const txt = [...el.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim())
           .map(n => n.textContent.trim()).join(' ');

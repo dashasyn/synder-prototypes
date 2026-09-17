@@ -108,10 +108,15 @@ function statusOptions(t) {
 /* ── A filter select. No All option — an empty value IS all, the label
       names the field, and the ✕ clears it. Ignat, 2026-09-15. ───────── */
 function FilterSelect({ label, value, onChange, options, minWidth = 180, id }) {
+  // A11Y round 1: the InputLabel had no id and the Select no labelId, so both
+  // filters reported an EMPTY accessible name — visually labelled, unnamed to
+  // a screen reader. MUI wires this only if you give it the pair.
+  const labelId = (id || 'sel') + '-label';
   return html`
     <${FormControl} sx=${{ minWidth }} id=${id}>
-      <${InputLabel}>${label}<//>
-      <${Select} value=${value} label=${label} onChange=${e => onChange(e.target.value)}
+      <${InputLabel} id=${labelId}>${label}<//>
+      <${Select} value=${value} label=${label} labelId=${labelId}
+        onChange=${e => onChange(e.target.value)}
         endAdornment=${value ? html`
           <${InputAdornment} position="end" sx=${{ mr: 3 }}>
             <${IconButton} aria-label=${'Clear ' + label} onClick=${() => onChange('')}>
@@ -129,10 +134,23 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id }) {
  * The icon names come from the vanilla's own markup via the extractor, so the
  * port cannot offer an action the original does not — and cannot miss one.
  */
+/* The vanilla annotates rows at RUNTIME, after the markup is in the DOM:
+   annotateFailedRows() and markUnavailableActions(). My extractor reads the
+   static markup, so neither was ever visible to it — the port shipped without
+   both and the parity checker agreed, because the control census matched.
+   Fidelity validator, round 1, FID-1 and FID-2. */
+const FAIL_REASON_OF = row => {
+  const failed = EVALUATIONS.filter(r => r.status === 'failed');
+  const i = failed.findIndex(r => r.name === row.name);
+  return i < 0 ? null : FAIL_REASONS[i % FAIL_REASONS.length];
+};
+const IS_RUNNING = st => st === 'in_progress' || st === 'running';
+
 const ROW_ACTIONS = {
   visibility: { key: 'act_preview', aria: 'view' },
   download:   { key: 'rd_download', aria: 'download' },
   delete:     { key: 'act_delete',  aria: 'delete', color: 'error' },
+  refresh:    { key: 'act_retry',   aria: 'retry' },
 };
 
 /**
@@ -205,6 +223,29 @@ function EvaluationsList({ go }) {
   const [q, setQ] = useState('');
   const { removed, askDelete, notify, ui: actionUi } = useListActions(t, 'toast_eval_deleted');
   const [collapsed, setCollapsed] = useState([]);
+  // retryEvaluation(): a failed row flips to in_progress, loses its reason and
+  // its retry button, and its remaining actions go dead while it runs.
+  const [retried, setRetried] = useState([]);
+  // initSortableHeaders()/sortByColumn(): every header except Actions sorts the
+  // group's rows, ascending then descending, with an indicator. Another runtime
+  // feature the markup never showed. (Fidelity round 1, FID-3.)
+  const [sort, setSort] = useState({ col: null, dir: 'asc' });
+  const COLS = ['col_name', 'col_period', 'col_created', 'col_status'];
+  const sortValue = (r, col) =>
+    col === 'col_name' ? r.name
+    : col === 'col_period' ? r.period
+    : col === 'col_created' ? r.created
+    : t(STATUS_KEY[retried.includes(r.name) ? 'in_progress' : r.status]);
+  const sorted = list => {
+    if (!sort.col) return list;
+    return [...list].sort((a, b) => {
+      const c = String(sortValue(a, sort.col)).localeCompare(String(sortValue(b, sort.col)), 'de');
+      return sort.dir === 'asc' ? c : -c;
+    });
+  };
+  const toggleSort = col =>
+    setSort(s2 => ({ col, dir: s2.col === col && s2.dir === 'asc' ? 'desc' : 'asc' }));
+  const statusOf = r => (retried.includes(r.name) ? 'in_progress' : r.status);
   const toggleGroup = g =>
     setCollapsed(c => c.includes(g) ? c.filter(x => x !== g) : [...c, g]);
 
@@ -216,9 +257,10 @@ function EvaluationsList({ go }) {
   // field and not one row. Ignat: "the filters are wrong."
   const rows = useMemo(() => ROWS.filter(r =>
     !removed.includes(r.name) &&
-    (!status || t(STATUS_KEY[r.status] || r.status) === t(STATUS_KEY[status] || status)) &&
+    (!status || t(STATUS_KEY[retried.includes(r.name) ? 'in_progress' : r.status] || r.status)
+                  === t(STATUS_KEY[status] || status)) &&
     (!period || r.periodKey === period) &&
-    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, period, q, t, removed]);
+    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, period, q, t, removed, retried]);
   const groups = [...new Set(rows.map(r => r.group))];
   const dirty = !!(q || status || period);
   const clearAll = () => { setQ(''); setStatus(''); setPeriod(''); };
@@ -289,40 +331,65 @@ function EvaluationsList({ go }) {
               <${Table}>
                 <${TableHead}>
                   <${TableRow}>
-                    <${TableCell}>${t('col_name')}<//>
-                    <${TableCell}>${t('col_period')}<//>
-                    <${TableCell}>${t('col_created')}<//>
-                    <${TableCell}>${t('col_status')}<//>
+                    ${COLS.map(c => html`
+                      <${TableCell} key=${c} sortDirection=${sort.col === c ? sort.dir : false}>
+                        <${M.TableSortLabel} active=${sort.col === c}
+                          direction=${sort.col === c ? sort.dir : 'asc'}
+                          onClick=${() => toggleSort(c)}>${t(c)}<//>
+                      <//>`)}
                     <${TableCell} align="right">${t('col_actions')}<//>
                   <//>
                 <//>
                 <${TableBody}>
-                  ${rows.filter(r => r.group === g).map(r => html`
+                  ${sorted(rows.filter(r => r.group === g)).map(r => html`
                     <${TableRow} key=${r.name} hover>
                       ${/* Plain text, as in the vanilla. It was a Link here, which
                             opened a report for failed and in-progress rows that
                             have none — the report is reached by the preview
                             action, and only rows that carry one have it. */''}
-                      <${TableCell}>${r.name}<//>
+                      <${TableCell}>
+                        ${r.name}
+                        ${statusOf(r) === 'failed' && FAIL_REASON_OF(r) && html`
+                          <${Typography} variant="caption" color="error" display="block"
+                            className="fail-reason">${t(FAIL_REASON_OF(r))}<//>`}
+                      <//>
                       <${TableCell}>${r.period}<//>
                       <${TableCell}>${r.created}<//>
                       <${TableCell}>
-                        <${Chip} size="small" variant="outlined"
-                                 label=${t(STATUS_KEY[r.status])} color=${STATUS_COLOUR[r.status]} />
+                        <${Tooltip} title=${statusOf(r) === 'failed' && FAIL_REASON_OF(r)
+                                             ? t(FAIL_REASON_OF(r)) : ''}>
+                          <${Chip} size="small" variant="outlined"
+                                   sx=${statusOf(r) === 'failed' ? { cursor: 'help' } : undefined}
+                                   label=${t(STATUS_KEY[statusOf(r)])} color=${STATUS_COLOUR[statusOf(r)]} />
+                        <//>
                       <//>
                       <${TableCell} align="right">
-                        ${r.actions.map(a => {
+                        ${(statusOf(r) === 'failed' ? r.actions
+                            : r.actions.filter(a => a !== 'refresh')).map(a => {
                           const spec = ROW_ACTIONS[a];
                           if (!spec) return null;
+                          const off = IS_RUNNING(statusOf(r));
                           const onClick =
                             a === 'visibility' ? () => go('report', r)
                           : a === 'download'   ? () => notify(t('rd_download_started').replace('{name}', r.name))
                           : a === 'delete'     ? () => askDelete(r.name)
+                          : a === 'refresh'    ? () => setRetried(x => [...x, r.name])
                           : undefined;
+                          // A11Y round 1: "view"/"delete" alone never said WHICH
+                          // evaluation. The name goes in the accessible name.
+                          const aria = `${t(spec.key)}: ${r.name}`;
+                          const btn = html`
+                            ${/* aria-label carries the row identity for screen
+                                  readers; data-act is the stable hook the
+                                  checkers select on, so naming and testing do
+                                  not fight over the same attribute. */''}
+                            <${IconButton} aria-label=${aria} data-act=${a} color=${spec.color}
+                              disabled=${off} aria-disabled=${off || undefined}
+                              onClick=${off ? undefined : onClick}><${Icon}>${a}<//><//>`;
                           return html`
-                            <${Tooltip} key=${a} title=${t(spec.key)}>
-                              <${IconButton} aria-label=${spec.aria} color=${spec.color}
-                                onClick=${onClick}><${Icon}>${a}<//><//>
+                            <${Tooltip} key=${a}
+                              title=${off ? t('act_unavailable_running') : t(spec.key)}>
+                              <span>${btn}</span>
                             <//>`;
                         })}
                       <//>

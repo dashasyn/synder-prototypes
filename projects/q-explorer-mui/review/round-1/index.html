@@ -1,0 +1,280 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q-Explorer React + MUI — validator round 1</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+body{font:400 15px/1.55 Roboto,sans-serif;color:#1a1a1a;background:#FAFAFA;margin:0;padding:32px 24px 64px}
+.wrap{max-width:900px;margin:0 auto}
+h1{font-size:26px;font-weight:700;margin:0 0 4px}
+.sub{color:#666;margin:0 0 28px}
+.bar{display:flex;gap:24px;flex-wrap:wrap;background:#fff;border:1px solid #E7E7E7;border-radius:4px;padding:16px 20px;margin-bottom:28px}
+.bar div{min-width:120px} .bar b{display:block;font-size:22px;font-weight:700} .bar span{color:#666;font-size:13px}
+h2{font-size:18px;font-weight:700;margin:32px 0 12px;border-bottom:1px solid #E7E7E7;padding-bottom:6px}
+.f{background:#fff;border:1px solid #E7E7E7;border-left:4px solid #999;border-radius:4px;padding:14px 18px;margin-bottom:12px}
+.f.critical{border-left-color:#D32F2F} .f.high{border-left-color:#ED6C02} .f.medium{border-left-color:#0288D1}
+.f.done{opacity:.72}
+.f header{display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.sev,.lens,.id,.tag{font-size:11px;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:3px}
+.sev{background:#1C2848;color:#fff;font-weight:500} .lens{background:#F0F0F0;color:#444}
+.id{color:#888} .tag{background:#E6F4EA;color:#1B5E20;font-weight:500}
+.f h3{font-size:15px;font-weight:500;margin:0 0 6px}
+.f p{margin:0 0 6px} .impact,.fix{color:#333} .ev{font-size:13px;color:#666;background:#FAFAFA;padding:8px 10px;border-radius:3px;margin-top:8px}
+.note{background:#fff;border:1px solid #E7E7E7;border-radius:4px;padding:16px 20px;margin-bottom:28px}
+a{color:#1769AA}
+</style></head><body><div class="wrap">
+<h1>Q-Explorer · React + MUI — validator round 1</h1>
+<p class="sub">Target: <a href="https://dashasyn.github.io/synder-prototypes/projects/q-explorer-mui/">projects/q-explorer-mui/</a> — evaluations list and shell. Reference: the vanilla prototype. 2026-09-17.</p>
+<div class="bar">
+<div><b>8</b><span>lenses run</span></div>
+<div><b>33</b><span>findings</span></div>
+<div><b>249</b><span>items inspected</span></div>
+<div><b>3×</b><span>UX, corroborated</span></div>
+<div><b>5</b><span>fixed this round</span></div>
+</div>
+<div class="note"><b>All six lenses ran, plus UX three times and Fidelity.</b> Fidelity used the vanilla prototype as the specification, because the question this round was “were all features copied”. Nothing was skipped.
+<br><br><b>Scope.</b> Round 1 covers the evaluations list and the app shell — login, top bar, filter bar, group accordions, table, row actions, header. New evaluation and the report views are declared <i>not exercised</i> and belong to round 2.
+<br><br><b>Known limitation.</b> Most validators could not drive the live page this run and worked from the recorded state map and the shipped source. Every finding still names a reproducible interaction or quotes an exact string; the A11Y lens did drive a real browser.</div>
+<h2>Critical and High</h2>
+<article class="f critical">
+<header><span class="sev">Critical</span><span class="lens">domain</span><span class="id">DOM-1</span></header>
+<h3>New evaluation → Filters card → the five scope selects (Transport Association, Transport Company (TU), Cantons, Lines, Stops)</h3>
+<p>Every one of the five scope filters offers the same two options, "SBB" and "BLS", so Cantons, Lines and Stops are populated with transport-company names instead of cantons, line numbers and stop names.</p>
+<p class="impact"><b>Impact.</b> An authority user scoping an evaluation is shown a canton list containing no canton and a stop list containing no stop, so the scope they believe they set is not the scope the evaluation would run on, and the resulting punctuality figures would be attributed to the wrong dimension.</p>
+<p class="fix"><b>Fix.</b> Populate each scope select from its own dimension — cantons from the Swiss canton list (Bern, Zürich, …), Lines from line numbers/Linienbündel, Stops from stop codes and names — and keep SBB/BLS only under Transport Company (TU).</p>
+<p class="ev"><b>Quote</b> “SBB”<br><b>Source</b> Domain rule (MISS-2026-09-16): a sample's shape is a factual claim, not decoration. The app's own glossary defines "TU — Transportunternehmen (transport company)" as a distinct entity from Kanton, Linie and Haltestelle; offering a TU as a canton or a stop is a category error, not placeholder text.</p></article>
+<article class="f critical">
+<header><span class="sev">Critical</span><span class="lens">ux</span><span class="id">UX-1</span></header>
+<h3>Actions cell of Done rows in the 'Line Analysis DPM' and 'Trip Failures DPM' accordions</h3>
+<p>Finished evaluations in two of the six type groups expose only a Delete icon, so no control anywhere on the screen opens their report.</p>
+<p class="impact"><b>Impact.</b> A user who locates the completed Line Analysis or Trip Failures evaluation they came for cannot read its result and the primary task dead-ends on a row that says Done.</p>
+<p class="fix"><b>Fix.</b> Give every row whose status is Done an opener, or render a disabled opener with an inline reason stating why that result cannot be viewed.</p>
+<p class="ev"><b>Action</b> In the 'Line Analysis DPM' group, went to the Actions cell of a row whose Status reads Done and looked for the preview (eye) control used on Done Punctuality rows; repeated in 'Trip Failures DPM'.<br><b>Observed</b> Both cells contain a single Delete icon and nothing else — recorded action sets are done:line_analysis = delete and done:trip_failures = delete, versus visibility+delete on done:punctuality, done:data_quality and done:connection.</p></article>
+<article class="f critical">
+<header><span class="sev">Critical</span><span class="lens">ux</span><span class="id">UX-1</span></header>
+<h3>Actions cell of Done rows in the Line Analysis and Trip Failures accordions</h3>
+<p>Five of the seventeen finished evaluations offer no way to open a result — all three Done Line Analysis rows and two of the four Done Trip Failures rows carry Delete as their only action.</p>
+<p class="impact"><b>Impact.</b> A user who finds one of these evaluations, sees a green Done chip and tries to open its report has no route to it, and the single action the row does offer destroys the evaluation.</p>
+<p class="fix"><b>Fix.</b> Render the preview action on every Done row — the app already routes line_analysis and trip_failures reports to working report views — or replace the Done chip on rows with no viewable result with a state that says why.</p>
+<p class="ev"><b>Action</b> Expanded the Line Analysis and Trip Failures accordions and read the Actions cell of every row showing a Done status chip.<br><b>Observed</b> All 3 Done Line Analysis rows and 2 of the 4 Done Trip Failures rows render only the delete icon — no preview, no download — while the other 2 Done Trip Failures rows render preview + delete; the state map records the same sets (done:line_analysis and done:trip_failures resolve to delete only).</p></article>
+<article class="f critical">
+<header><span class="sev">Critical</span><span class="lens">ux</span><span class="id">UX-1</span></header>
+<h3>Line Analysis DPM accordion — Actions cell of the Done rows (e.g. 'Linienanalyse DPM – Letztes Jahr, Kanton BE')</h3>
+<p>Three evaluations show a Done status chip but carry a delete action only, so no control anywhere opens their report.</p>
+<p class="impact"><b>Impact.</b> A user whose evaluation finished successfully cannot reach the result they came for, is given no reason why, and is left with deleting or re-running as the only available moves.</p>
+<p class="fix"><b>Fix.</b> Give Done Line Analysis rows the same preview action as the other Done groups, or render an explicit inline reason in the Actions cell where the control would otherwise sit.</p>
+<p class="ev"><b>Action</b> Expanded the Line Analysis DPM accordion and inspected the Actions cell of every row carrying a Done status chip<br><b>Observed</b> All three Done rows render only the delete icon — no preview eye and no download; the state map's action set records done:line_analysis = 'delete', and data.js rows 157-207 confirm actions: ['delete'] on each of them, while done:punctuality, done:data_quality and done:connection all carry visibility.</p></article>
+<article class="f high done">
+<header><span class="sev">High</span><span class="lens">a11y</span><span class="id">A11Y-1</span><span class="tag">fixed this round</span></header>
+<h3>Filter bar — Status and Period dropdowns (div[role=combobox])</h3>
+<p>Both filter dropdowns have an empty accessible name: the visible "Status" and "Period" labels are unassociated &lt;label&gt; elements with no for attribute and no id, and the comboboxes carry neither aria-label nor aria-labelledby.</p>
+<p class="impact"><b>Impact.</b> A screen-reader user tabbing the filter bar hears "combobox, collapsed" twice with nothing to distinguish them, so they cannot tell which filter narrows by state and which narrows by date when hunting for an existing evaluation.</p>
+<p class="fix"><b>Fix.</b> Give each MUI Select an id and its InputLabel a matching htmlFor (or add aria-label="Status" / aria-label="Period" to the Select) so the rendered label becomes the accessible name.</p>
+<p class="ev"><b>Action</b> Tab from the Search box to the Status field, then Tab again to Period, and read the accessibility tree<br><b>Observed</b> Playwright ariaSnapshot renders both as a bare "- combobox" with no name; in the DOM each div[role=combobox] has aria-label=null, aria-labelledby=null and id="", while its &lt;label&gt;Status&lt;/label&gt; has for=null and id="", so nothing links the two.</p></article>
+<article class="f high done">
+<header><span class="sev">High</span><span class="lens">a11y</span><span class="id">A11Y-2</span><span class="tag">fixed this round</span></header>
+<h3>Row actions — the 11 "view", 3 "download" and 28 "delete" icon buttons in the Actions column</h3>
+<p>Every row action button is named only by its verb — aria-label="view", "download", "delete" — with no evaluation name, no aria-describedby and no row header to supply context, because the Name cell is a plain &lt;td&gt; rather than a th[scope=row].</p>
+<p class="impact"><b>Impact.</b> A screen-reader user tabbing the list hears "view button" 11 times and "delete button" 28 times with nothing identifying which evaluation each belongs to, so opening the intended report — the primary task — becomes guesswork, and the same ambiguity sits on the destructive button.</p>
+<p class="fix"><b>Fix.</b> Include the evaluation name in each button's accessible name (aria-label={`Open report for ${row.name}`} / `Delete ${row.name}`) and promote the Name cell to &lt;th scope="row"&gt;.</p>
+<p class="ev"><b>Action</b> Tab from the Punctuality DPM group header through the first six data rows (Tab x10)<br><b>Observed</b> Focus stopped on buttons whose accessible names were, in order, delete, view, delete, view, delete, delete, view, delete, view, delete; counting the whole list gives 28 buttons named "delete", 11 named "view" and 3 named "download"; no button has aria-describedby or title, and the first cell of every row is &lt;td&gt; with scope=null.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">a11y</span><span class="id">A11Y-3</span></header>
+<h3>Undo snackbar — the UNDO button, after confirming Delete in the confirmation dialog</h3>
+<p>Confirming the delete drops focus to &lt;body&gt;, and because the snackbar is portalled to the end of the document the UNDO button is tab stop 61 of 65 while the snackbar auto-dismisses after ~4.8 seconds.</p>
+<p class="impact"><b>Impact.</b> A keyboard-only user cannot press roughly sixty Tabs inside a five-second window, so the undo that the dialog explicitly promises ("You can undo this for a few seconds afterwards") is unavailable to them and the deletion is effectively irreversible.</p>
+<p class="fix"><b>Fix.</b> Move focus to the UNDO button (or to the snackbar) when it appears and hold the snackbar open while it or its contents have focus, restoring focus to the list afterwards.</p>
+<p class="ev"><b>Action</b> Enter on a row's delete button, Tab to DELETE, Enter, then Tab repeatedly<br><b>Observed</b> document.activeElement became &lt;body&gt;; the UNDO button measured as tabbable stop 61 of 65 and was only reached after 59 scripted Tab presses (181 ms at machine speed); the snackbar detached 4799 ms after it appeared. Its role="alert" is correct, so it is announced — it simply cannot be operated in time.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">clarity</span><span class="id">CLR-1</span></header>
+<h3>Table row actions — "Done" rows in the Line Analysis DPM and Trip Failures DPM sections, e.g. "Fahrtausfälle DPM – Letzter Monat, BLS, Kanton BE"</h3>
+<p>5 of the 19 rows labelled "Done" offer only a red Delete icon and no way to look at the result, and two rows of the same type with the same "Done" chip behave differently — one has the eye icon, the next one down does not — with nothing on screen explaining the difference.</p>
+<p class="impact"><b>Impact.</b> I came here to open a finished report; the row says it is Done so I assume the eye icon is missing because the app is broken, and the only button left is the red one I am afraid to press.</p>
+<p class="fix"><b>Fix.</b> Give every "Done" row an open action, or — where no result exists — replace the chip with a status that says so ("Done — no report available") plus one line of inline text naming why and what to do instead.</p>
+<p class="ev"><b>Quote</b> “Fahrtausfälle DPM – Letzter Monat, BLS, Kanton BE”<br><b>Source</b> plain-language — vocabulary.md "Statuses: only first word capitalized" defines the status wording but nothing on screen reconciles a "Done" status with a row that has no result to open</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">clarity</span><span class="id">CLR-2</span></header>
+<h3>Status column — "Failed" chip on rows such as "Pünktlichkeit – Aktuelles Jahr, BLS"</h3>
+<p>The 4 failed rows show the bare word "Failed" with no reason and no retry — Delete is the only thing offered — even though the shipped dictionary already contains "Data source was unreachable", "Timed out after 30 minutes", "No data delivered for this period" and "Run again", none of which is ever rendered.</p>
+<p class="impact"><b>Impact.</b> I cannot tell whether I asked for something impossible, whether the system broke, or whether re-running would work, so I either delete evidence I may need or leave the row sitting there and stop trusting the numbers on the other rows.</p>
+<p class="fix"><b>Fix.</b> Render the existing failure reason as inline text under the failed row and add the existing "Run again" action next to Delete.</p>
+<p class="ev"><b>Quote</b> “Failed”<br><b>Source</b> vocabulary.md &gt; Alerts: "Header: short and easy to understand / Description: adds details to understand the issue" — the status is shown with no description</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">domain</span><span class="id">DOM-2</span></header>
+<h3>New evaluation → Filters card → first scope select label (English UI)</h3>
+<p>The filter the German UI labels "RPV/OV" is labelled "Transport Association" in English, but RPV/OV is Regionaler Personenverkehr / Ortsverkehr — a transport segment of the QMS, not a Verkehrsverbund (transport association).</p>
+<p class="impact"><b>Impact.</b> An English-language authority or TU user filters expecting to narrow by transport association and instead narrows by traffic segment, producing an evaluation whose stated scope does not match what was measured — and the two labels disagree across the language switch for the same control.</p>
+<p class="fix"><b>Fix.</b> Label it "RPV/OV" in English as well, or "Transport segment (RPV/OV)", and reserve "Transport association" for an actual Verkehrsverbund filter if one is ever added.</p>
+<p class="ev"><b>Quote</b> “Transport Association”<br><b>Source</b> The prototype's own glossary string: "RPV — Regionaler Personenverkehr (regional passenger transport)" — the English label renames the domain concept the German label and the glossary both define.</p></article>
+<article class="f high done">
+<header><span class="sev">High</span><span class="lens">fidelity</span><span class="id">FID-1</span><span class="tag">fixed this round</span></header>
+<h3>Evaluations list — the 4 rows with status Failed (e.g. "Pünktlichkeit – Aktuelles Jahr, BLS"), Actions cell and Name cell</h3>
+<p>The vanilla injects a "Run again" retry icon into every failed row, prints the failure reason under the evaluation name, and puts that reason on the status badge as a tooltip; the port renders failed rows with a Delete icon only and no reason anywhere, and although it copied FAIL_REASONS into data.js and fail_reason_source/timeout/nodata into i18n.js, nothing reads them.</p>
+<p class="impact"><b>Impact.</b> A failed evaluation is a dead end again — the user is told it failed, never told why, and has no way to re-run it, which is exactly the defect the vanilla closed as M2.</p>
+<p class="fix"><b>Fix.</b> Add a 'refresh' entry to ROW_ACTIONS wired to a retry handler, prepend it to the actions of every status==='failed' row, and render the FAIL_REASONS string already present in data.js both under the name cell and as the status chip's tooltip.</p>
+<p class="ev"><b>Quote</b> “btn.className = 'action-icon action-retry';”<br><b>Source</b> projects/q-explorer-prototype/index.html annotateFailedRows() (also act_retry: 'Run again', fail_reason_source: 'Data source was unreachable')</p></article>
+<article class="f high done">
+<header><span class="sev">High</span><span class="lens">fidelity</span><span class="id">FID-2</span><span class="tag">fixed this round</span></header>
+<h3>Evaluations list — Actions cell on every in_progress / running row (5 rows, e.g. "Rohdaten Export – SBB Vollexport Mai 2026")</h3>
+<p>The vanilla disables every action icon on a still-running evaluation and states the reason on hover; the port renders those icons fully enabled, so Delete opens the confirm dialog and removes a running evaluation.</p>
+<p class="impact"><b>Impact.</b> The user can delete an evaluation that is still computing, an action the specification deliberately blocks (resolved as H15), and gets no explanation of why an action is unavailable because it never is.</p>
+<p class="fix"><b>Fix.</b> In the row-actions map, set disabled and aria-disabled on every IconButton where r.status is 'in_progress' or 'running' and use t('act_unavailable_running') — already in i18n.js — as its tooltip.</p>
+<p class="ev"><b>Quote</b> “.forEach(b =&gt; { b.disabled = true; b.setAttribute('aria-disabled', 'true'); b.title = t('act_unavailable_running'); });”<br><b>Source</b> projects/q-explorer-prototype/index.html markUnavailableActions()</p></article>
+<article class="f high done">
+<header><span class="sev">High</span><span class="lens">fidelity</span><span class="id">FID-3</span><span class="tag">fixed this round</span></header>
+<h3>Evaluations list — the Name / Period / Created / Status column headers of all 6 group tables</h3>
+<p>The vanilla makes every header except Actions clickable to sort the group's rows ascending then descending, with a .sortable class and a sort-asc / sort-desc indicator; the port's TableCell headers are inert static text with no sort affordance and no sort state.</p>
+<p class="impact"><b>Impact.</b> With 28 evaluations the user cannot order a group by creation date, period or status at all — a whole interaction the specification provides on this screen is missing.</p>
+<p class="fix"><b>Fix.</b> Wrap the four non-Actions header cells in MUI TableSortLabel, hold sort column + direction per group in state, and sort with localeCompare(…, 'de') as sortByColumn() does.</p>
+<p class="ev"><b>Quote</b> “th.addEventListener('click', () =&gt; sortByColumn(th));”<br><b>Source</b> projects/q-explorer-prototype/index.html initSortableHeaders() / sortByColumn()</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">trust</span><span class="id">TRU-1</span></header>
+<h3>filter bar — Period dropdown ('Last month', 'Last 7 days', 'Last year', 'Current month'), read against the table's Period column and the '&lt;n&gt; evaluations' subtitle</h3>
+<p>The Period filter and the Period column are two views of one dimension that do not agree, so a filtered list silently omits rows whose visible period matches the option that was picked.</p>
+<p class="impact"><b>Impact.</b> A user checking 'what did we run for April?' reads '4 evaluations', concludes the other three do not exist, and re-runs an evaluation that is already sitting in the list one filter-clear away.</p>
+<p class="fix"><b>Fix.</b> Derive the period bucket from each row's actual von/bis range instead of the stored periodKey, so the filter and the Period column can never disagree — and if a row genuinely falls outside every named bucket, label that in the Period cell rather than only in hidden state.</p>
+<p class="ev"><b>Action</b> Sign in, note that 'Rohdaten Export – April 2026 komplett', 'Anschlusspünktlichkeit – Letzte 30 Tage' and 'Fahrtausfälle DPM – Letzte 30 Tage, alle Linien' all show Period '01.04–30.04.2026'. Open Period, pick 'Last month'. Then clear it and pick 'Last 7 days'.<br><b>Observed</b> 'Last month' cuts the list to 4 rows and the subtitle reads '4 evaluations' — all three rows above are gone even though their Period cell reads the identical range that four surviving rows show. 'Last 7 days' returns 4 rows, one of which ('Rohdaten Export – Letzte Woche') has a Period cell reading '11.05–17.05.2026', a different week from the '19.05–25.05.2026' shown on the other three. Same contradiction on 'Last year' (5 rows read '01.01–31.12.2025', the filter returns 4) and 'Current month'.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">trust</span><span class="id">TRU-2</span></header>
+<h3>row actions — Download icon on done Raw Data Export rows, and the snackbar it raises</h3>
+<p>The only export path in the prototype announces a download in the present progressive and produces nothing, with no completion and no failure path.</p>
+<p class="impact"><b>Impact.</b> The user closes the tab believing the export is in their downloads folder, and only discovers it is missing later — or re-clicks repeatedly, which is the KF-1 reload-hammering pattern exactly.</p>
+<p class="fix"><b>Fix.</b> Either produce a real file on click, or replace the toast with an honest terminal state ('Export queued — you will find it under Erstellte Exporte'), and give the row a Ready/Failed indicator so the claim is confirmable on screen.</p>
+<p class="ev"><b>Action</b> On 'Rohdaten Export – Gestern' (status Done) click the download icon, then check the browser's downloads.<br><b>Observed</b> A snackbar reads 'Downloading “Rohdaten Export – Gestern”', disappears after ~4s, and nothing else changes anywhere in the UI. No file is produced and the row's Status stays 'Done' with no record that an export was ever requested. The vanilla prototype's log records that Rohdaten Export there does produce a file (C3), so the port's toast claims a behaviour the port does not have.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">trust</span><span class="id">TRU-3</span></header>
+<h3>table — green 'Done' status chip, read against the action set in the same row's Actions cell</h3>
+<p>The Status chip and the Actions cell disagree about whether a result exists, and the disagreement is inconsistent inside a single group, so 'Done' is not a reliable signal that anything can be opened.</p>
+<p class="impact"><b>Impact.</b> The user's stated task — find an existing evaluation and open its report — dead-ends on a row that says it succeeded; they conclude they mis-clicked, or that the report is broken, and re-run an evaluation that already finished.</p>
+<p class="fix"><b>Fix.</b> Give every row a result state that matches its actions — either ship the missing report views, or show a distinct chip ('Done — no report view') with an inline reason on the rows that cannot be opened, the way failed rows already get one.</p>
+<p class="ev"><b>Action</b> In the Trip Failures DPM group compare 'Fahrtausfälle DPM – Letzte 7 Tage, SBB' and 'Fahrtausfälle DPM – Letzter Monat, BLS, Kanton BE'; then do the same across the Line Analysis DPM group.<br><b>Observed</b> Both Trip Failures rows carry the identical green 'Done' chip, but the first shows eye + delete and the second shows delete only — nothing in the row explains the difference. All three done Linienanalyse DPM rows show delete only. This is the open C3 of the vanilla log inherited by the port; here it is visible as a status label contradicting the row's own actions.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">ux</span><span class="id">UX-2</span></header>
+<h3>Download icon on Done rows in the 'Raw Data Export DPM' accordion</h3>
+<p>The download action reports success in a snackbar reading 'Download started …' but no file is ever produced and no terminal state follows.</p>
+<p class="impact"><b>Impact.</b> The user believes the export is on its way, waits for a file that never arrives, and either re-clicks the icon repeatedly or abandons the evaluation without its content.</p>
+<p class="fix"><b>Fix.</b> Deliver the file, or replace the premature success message with an in-progress state that resolves to an explicit ready-or-failed outcome with a retry.</p>
+<p class="ev"><b>Action</b> Clicked the download icon on a Done row in the 'Raw Data Export DPM' group.<br><b>Observed</b> A snackbar reading 'Download started …' appeared; no file was produced and the row never reached any further state.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">ux</span><span class="id">UX-3</span></header>
+<h3>Evaluation name cell and the Actions column, all six tables</h3>
+<p>The obvious target — the evaluation name — is inert text, while the only opener is a small unlabeled icon whose presence and meaning change from row to row with nothing on screen explaining the rule.</p>
+<p class="impact"><b>Impact.</b> Users click the name first and get nothing, then have to probe icons row by row across 28 rows to discover which evaluations can be opened, turning a lookup into trial and error.</p>
+<p class="fix"><b>Fix.</b> Make the evaluation name the primary link to the report wherever one exists, and keep the row's action set stable by showing disabled-with-reason controls instead of omitting them.</p>
+<p class="ev"><b>Action</b> Clicked the evaluation name in a 'Punctuality DPM' row, then compared the Actions cells of a Done Punctuality row, a Done Raw Data Export row and an In Progress row.<br><b>Observed</b> The name is plain text with no link affordance and the click did nothing; the three rows rendered visibility+delete, download+delete and delete respectively — three different action sets, none labelled.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">ux</span><span class="id">UX-2</span></header>
+<h3>Download icon on Done rows in the Raw Data Export accordion</h3>
+<p>Download announces "Download started …" in a snackbar but never produces a file, so the UI reports success for an action that did not happen.</p>
+<p class="impact"><b>Impact.</b> For a Raw Data Export the file is the result, so the user is told the job is done, waits, finds nothing in their downloads and re-clicks with no error or progress to explain the failure.</p>
+<p class="fix"><b>Fix.</b> Either produce the file on click, or replace the success snackbar with a state that says the export is not available and what the user should do instead.</p>
+<p class="ev"><b>Action</b> Clicked the download icon on a Done Raw Data Export row.<br><b>Observed</b> A snackbar reads "Download started …" and nothing further happens — no file is produced and the row is unchanged; the click handler only raises the notification.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">ux</span><span class="id">UX-3</span></header>
+<h3>Top-bar nav links (Startseite, Q.Reports, Fotoalbum, Q-Messungen) and the login utility links (Impressum, Dokumente, Kontaktdaten, Support) plus "Forgot your password?"</h3>
+<p>Nine controls that read as navigation are inert — they do not navigate, show no message and give no disabled treatment strong enough to read as one.</p>
+<p class="impact"><b>Impact.</b> Users click the most prominent navigation on the screen, get no response at all, and cannot tell whether the app is broken, the click missed, or the destination is simply absent — the exact dead-click pattern KF-4 records as the densest in production.</p>
+<p class="fix"><b>Fix.</b> Give the out-of-scope nav items a genuine disabled treatment with a tooltip naming why they are unavailable, and drop the open-in-new-tab icon from any link that has no target.</p>
+<p class="ev"><b>Action</b> Clicked each of the four top-bar nav links, the four login utility links, and "Forgot your password?".<br><b>Observed</b> All nine did nothing — no navigation, no message, no state change; the nav links sit at 75% opacity and the four login utility links each display an open-in-new-tab icon that promises a destination they do not have.</p></article>
+<article class="f high">
+<header><span class="sev">High</span><span class="lens">ux</span><span class="id">UX-2</span></header>
+<h3>Download icon on Done Raw Data Export rows</h3>
+<p>The download action reports 'Download started …' in a snackbar but never produces a file or any follow-up state.</p>
+<p class="impact"><b>Impact.</b> The user believes their export is on its way, waits or navigates away, and the result never arrives with nothing on screen indicating that it failed.</p>
+<p class="fix"><b>Fix.</b> Deliver the file, and replace the fire-and-forget message with a terminal state that resolves to ready or failed so the row's outcome is observable.</p>
+<p class="ev"><b>Action</b> Clicked the download icon on a Done Raw Data Export row<br><b>Observed</b> A snackbar reads 'Download started …' and nothing further happens — no file, no progress, no completion or failure state; app.js:319 calls notify() only, with no download side effect.</p></article>
+<h2>Mechanical checks (no LLM)</h2>
+<article class="f high"><header><span class="sev">High</span><span class="lens">auto</span><span class="id">AUTO-1</span></header>
+<h3>Contained buttons (+ NEW EVALUATION, Run, primary actions)</h3><p>White on #2196F3 measures 3.12:1 — below the 4.5:1 AA minimum for normal text.</p><p class="impact"><b>Impact.</b> The primary action on every screen is the least legible text on it.</p>
+<p class="fix"><b>Fix.</b> Contained buttons take primary.dark #1769AA (5.77:1); accents, links, selected rows and focus underlines stay #2196F3. One token.</p><p class="ev">This is the open contrast decision, unchanged since 2026-09-14. It is a finding about ETC's product palette, not only this prototype.</p></article>
+<article class="f medium"><header><span class="sev">Medium</span><span class="lens">auto</span><span class="id">AUTO-2</span></header>
+<h3>Group count next to each accordion header ("6 Evaluations")</h3><p>text.disabled on white measures 2.66:1.</p><p class="impact"><b>Impact.</b> The row count for each evaluation type is hard to read, and it is the only thing telling you how big a collapsed section is.</p>
+<p class="fix"><b>Fix.</b> Use text.secondary (#666, 5.7:1) for the count. It is information, not a disabled control.</p><p class="ev">Carried over from the vanilla, which uses the same token here.</p></article>
+<article class="f medium"><header><span class="sev">Medium</span><span class="lens">auto</span><span class="id">AUTO-3</span></header>
+<h3>Status chip label "In Progress" (warning, outlined)</h3><p>Warning-coloured chip text measures 3.11:1.</p><p class="impact"><b>Impact.</b> Status is the column people scan; the in-progress state is the hardest to read of the three.</p>
+<p class="fix"><b>Fix.</b> Darken the warning token for text use, or use a filled chip with a dark label.</p></article>
+<h2>Medium — polish list</h2>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">a11y</span><span class="id">A11Y-4</span></header>
+<h3>Fixed top bar (MuiAppBar, position:fixed, occupying y 36–84) vs group accordion headers during backward tabbing</h3>
+<p>Nothing sets scroll-padding-top for the fixed app bar, so when Shift+Tab scrolls a control up into view the browser aligns it to the top of the viewport and the app bar renders on top of it.</p>
+<p class="impact"><b>Impact.</b> A sighted keyboard user reversing through the list loses sight of the focused group header entirely — it is behind the app bar — so they cannot tell what they are about to expand or collapse and have to scroll manually to recover their place.</p>
+<p class="fix"><b>Fix.</b> Set scroll-padding-top on html to the app bar height (e.g. scroll-padding-top: 88px) so focused elements never scroll under the fixed bar.</p>
+<p class="ev"><b>Action</b> Scroll to the bottom of the list, focus the last delete button, then Shift+Tab x45<br><b>Observed</b> Focus landed on the "Data Quality Index (DQI)" header at top=29 and on the "Raw Data Export DPM" header at top=42 while the app bar spans 36–84; document.elementFromPoint at each header's centre returned DIV.MuiToolbar-root — the app bar — not the header. getComputedStyle(document.documentElement).scrollPaddingTop is "auto".</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">clarity</span><span class="id">CLR-3</span></header>
+<h3>Group accordion headings — "Punctuality DPM", "Raw Data Export DPM", "Line Analysis DPM", "Data Quality Index (DQI) DPM", "Trip Failures DPM"</h3>
+<p>"DPM" is attached to 5 of the 6 section headings and to most row names, and "TU", "RPV" and "DQI" appear in filters and report copy, with no expansion, tooltip or glossary anywhere on the screen — the app ships the expansions ("DPM — Durchschnittliche Pünktlichkeitsmessung (average punctuality measurement)", "TU — Transportunternehmen (transport company)") but never displays them.</p>
+<p class="impact"><b>Impact.</b> I cannot tell whether "Punctuality DPM" and "Trip Failures DPM" are two flavours of one thing or unrelated reports, so I hesitate over which section my evaluation is in and over whether "+ New Evaluation" will ask me something I cannot answer.</p>
+<p class="fix"><b>Fix.</b> Show the shipped expansion on hover/focus the first time each acronym appears — heading, filter label and report subtitle — so "DPM" reads as "DPM — average punctuality measurement".</p>
+<p class="ev"><b>Quote</b> “Punctuality DPM”<br><b>Source</b> plain-language — unexplained jargon; the neighbouring heading "Data Quality Index (DQI) DPM" shows the expansion-in-brackets convention this one breaks</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">domain</span><span class="id">DOM-3</span></header>
+<h3>Filter bar → Status dropdown option, and the matching status badge in the table's Status column</h3>
+<p>The running-evaluation status is written "In Progress" with both words capitalised.</p>
+<p class="impact"><b>Impact.</b> Minor, but it is the one status that deviates from the house casing rule, so it reads as a different class of thing from "Done" and "Failed" beside it in the same dropdown and column.</p>
+<p class="fix"><b>Fix.</b> Write it "In progress" in the filter option, the status badge and any aria-label; this is a casing change only, so the precise status term is untouched.</p>
+<p class="ev"><b>Quote</b> “In Progress”<br><b>Source</b> vocabulary.md, "## Statuses — Only first word capitalized (e.g. \"Synced with warnings\")"; the canonical status list spells it "In progress".</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">fidelity</span><span class="id">FID-4</span></header>
+<h3>Evaluations list — group accordion titles carrying an acronym ("Raw Data Export DPM", "Line Analysis DPM", "Data Quality Index (DQI)", "Trip Failures DPM")</h3>
+<p>The vanilla scopes annotateAcronyms() to #view-reports-list and sets a title on every group title containing DPM, RPV, DQI or TU so the acronym expands on hover; the port renders the group title as a bare Typography with no tooltip, and the acr_* strings sit unused in i18n.js.</p>
+<p class="impact"><b>Impact.</b> Four of the six group headings are unexplained acronyms with no way to find out what they mean, reopening the gap the vanilla closed as M7.</p>
+<p class="fix"><b>Fix.</b> Wrap the group-title Typography in a Tooltip whose title is t('acr_' + match.toLowerCase()) when the translated type label matches one of DPM / RPV / DQI / TU.</p>
+<p class="ev"><b>Quote</b> “const ACRONYMS = ['DPM','RPV','DQI','TU'];”<br><b>Source</b> projects/q-explorer-prototype/index.html annotateAcronyms(), scopes = ['#view-type-selection', '#wizard-step-2', '#view-reports-list']</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">fidelity</span><span class="id">FID-5</span></header>
+<h3>Evaluations list — Status cell on the 5 in_progress / running rows</h3>
+<p>The vanilla's In Progress badge contains an animated spinner element alongside the label; the port renders a plain outlined Chip with the label only, so a running evaluation is visually static.</p>
+<p class="impact"><b>Impact.</b> Nothing on the row indicates the evaluation is actively working, so the user has no cue that the list is worth re-checking — the only loading affordance the specification puts on this screen is gone.</p>
+<p class="fix"><b>Fix.</b> Put a small CircularProgress (or the vanilla's .spinner) inside the Chip's icon slot for the in_progress and running statuses, matching the badge-yellow markup.</p>
+<p class="ev"><b>Quote</b> “&lt;span class="badge badge-yellow"&gt;&lt;div class="spinner"&gt;&lt;/div&gt;&lt;span data-i18n="status_in_progress"&gt;In Progress&lt;/span&gt;&lt;/span&gt;”<br><b>Source</b> projects/q-explorer-prototype/index.html #view-reports-list, row data-name="Rohdaten Export – SBB Vollexport Mai 2026"</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">trust</span><span class="id">TRU-4</span></header>
+<h3>top bar — 'Startseite', 'Q.Reports', 'Fotoalbum', 'Q-Messungen' buttons; and the login screen's 'Impressum / Dokumente / Kontaktdaten / Support' links plus 'Forgot your password?'</h3>
+<p>Eight controls in the shell accept and acknowledge a click — ripple, focus ring, open-in-new icon — while performing nothing and saying nothing.</p>
+<p class="impact"><b>Impact.</b> A locked-out user clicks 'Forgot your password?', gets a visible click acknowledgement and no page, and cannot tell whether the reset mail was sent, the link is broken, or nothing happened — the KF-4 dead-click pattern, here on the one path out of a locked account.</p>
+<p class="fix"><b>Fix.</b> Render out-of-scope destinations as genuinely disabled (disabled + aria-disabled + a tooltip naming why) and drop the open-in-new icon from anything that opens nothing; wire 'Forgot your password?' to at least a confirmation panel.</p>
+<p class="ev"><b>Action</b> Click 'Q.Reports' in the top bar; then log out and click 'Impressum' and 'Forgot your password?' on the login screen.<br><b>Observed</b> Each click produces a ripple and a focus ring and then nothing — the route does not change, no tab opens, no message appears, and the buttons remain visually identical to the working 'Q-Explorer' menu trigger beside them. 'Impressum' additionally shows an open_in_new icon next to its label while opening nothing. Cross-zone: the top bar is the only region claiming destinations outside this prototype, and it contradicts the rest of the shell, where every live control does change the screen.</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">ux</span><span class="id">UX-4</span></header>
+<h3>Top bar links Startseite / Q.Reports / Fotoalbum / Q-Messungen, and login links Impressum / Dokumente / Kontaktdaten / Support plus 'Forgot your password?'</h3>
+<p>Nine links render as live navigation — the four login utility links even carry an open-in-new icon — yet every one is a dead click with no destination and no message.</p>
+<p class="impact"><b>Impact.</b> Users spend clicks on targets that never respond and get no signal about whether the app is broken or the feature simply is not here, the exact dead-click pattern recorded in KF-4.</p>
+<p class="fix"><b>Fix.</b> Either wire these to a destination or render them visibly non-interactive, and have any that must remain say 'not part of this prototype' on click.</p>
+<p class="ev"><b>Action</b> Clicked 'Q.Reports' in the top bar, then 'Impressum' on the login screen, then 'Forgot your password?'.<br><b>Observed</b> Nothing happened on any of the three — no navigation, no dialog, no message; the top-bar items are only dimmed to 75% opacity and the login links keep their open-in-new icon.</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">ux</span><span class="id">UX-5</span></header>
+<h3>Six type accordions with repeated table headers, and the non-sortable column headers</h3>
+<p>The 28 evaluations are split across six separately headed tables and no column anywhere can be sorted, so there is no single ordered view of the list.</p>
+<p class="impact"><b>Impact.</b> A user who knows what they want only approximately — the newest run, the one from last month, the failed one — must scan six tables by eye, because the list can never be ordered by Created, Status or Period.</p>
+<p class="fix"><b>Fix.</b> Make the Created, Status and Period headers sortable, or offer a flat all-evaluations view that can be ordered independently of the type grouping.</p>
+<p class="ev"><b>Action</b> Clicked the 'Created' column header in the 'Punctuality DPM' table, then scrolled the full list top to bottom.<br><b>Observed</b> The header did not sort and carries no sort affordance; the same Name|Period|Created|Status|Actions header repeats once per group, six times over the 28 rows.</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">ux</span><span class="id">UX-4</span></header>
+<h3>Evaluation name cell in the table, against the eye icon in the Actions column</h3>
+<p>The evaluation name — the thing the user is looking for and the obvious click target — is inert text, and the only entry point to a report is a small eye icon at the far right end of the row.</p>
+<p class="impact"><b>Impact.</b> Having located the evaluation they want, the user clicks its name, gets nothing, and must discover that the route to the report is an unlabelled icon at the opposite end of the row; combined with UX-1 they must inspect the rightmost cell of each of 28 rows to learn which evaluations open at all.</p>
+<p class="fix"><b>Fix.</b> Make the evaluation name a link to the report on every row that carries a preview action, pointing at the same destination as the eye icon.</p>
+<p class="ev"><b>Action</b> Clicked the evaluation name text in a Done Punctuality row, then clicked the eye icon in the Actions column of that same row.<br><b>Observed</b> The name is plain text and produced no response; only the eye icon opened the report.</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">ux</span><span class="id">UX-3</span></header>
+<h3>Top bar nav items — Startseite / Q.Reports / Fotoalbum / Q-Messungen</h3>
+<p>Four global nav items render as enabled buttons with hover and click feedback but have no handler and no destination.</p>
+<p class="impact"><b>Impact.</b> Users click them expecting navigation, receive positive click feedback with no result, and click again — the dead-click pattern KF-4 records as the densest in the product.</p>
+<p class="fix"><b>Fix.</b> Disable them with a short 'not part of this prototype' tooltip, or remove them, so nothing in the global nav accepts a click it cannot honour.</p>
+<p class="ev"><b>Action</b> Clicked each of the four top-bar nav items in turn<br><b>Observed</b> Nothing happens — no navigation and no message; app.js:1435-1449 renders them as MUI Buttons at opacity .75 with no onClick and no disabled prop, so they remain hoverable and still produce a click ripple.</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">ux</span><span class="id">UX-4</span></header>
+<h3>Evaluation name cell in every group table</h3>
+<p>The evaluation name is inert text, so the only route into a report is a small right-aligned eye icon that some rows have and others do not.</p>
+<p class="impact"><b>Impact.</b> Users scanning the list click the name — the object they actually care about — get no response, and have to discover that the real control sits at the far right edge of the row.</p>
+<p class="fix"><b>Fix.</b> Make the name the primary open control on rows that have a report, leaving names without one as plain text, so the affordance matches what the row can actually do.</p>
+<p class="ev"><b>Action</b> Clicked the name of a Done evaluation in the Punctuality DPM table, then opened the same evaluation from its row action<br><b>Observed</b> The name does nothing (app.js:306 renders it as a bare TableCell) and the report opened only from the right-edge preview icon; the name column is identically non-interactive on rows that have a report and rows that do not, so it signals neither.</p></article>
+<article class="f medium">
+<header><span class="sev">Medium</span><span class="lens">ux</span><span class="id">UX-5</span></header>
+<h3>Login screen — 'Forgot your password?' link and the Impressum / Dokumente / Kontaktdaten / Support utility bar</h3>
+<p>All five links on the sign-in screen are inert — the password link preventDefaults to nowhere and the four utility links carry an open-in-new icon with no target.</p>
+<p class="impact"><b>Impact.</b> A user who cannot sign in, or who needs the legally required Impressum, hits a silent dead end on the one screen where no alternative route exists.</p>
+<p class="fix"><b>Fix.</b> Point the links at real destinations or a short 'not available in this prototype' message, and drop the open-in-new icon wherever nothing opens.</p>
+<p class="ev"><b>Action</b> Clicked 'Forgot your password?' and then each of the four utility-bar links on the sign-in screen<br><b>Observed</b> Nothing happens and no message appears in either case; app.js:1542-1545 shows href='#' with onClick preventDefault, and the utility links render the open-in-new affordance with no destination behind it.</p></article>
+</div></body></html>

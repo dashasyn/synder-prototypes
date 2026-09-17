@@ -1,0 +1,101 @@
+{
+  "validator": "trust",
+  "round": 1,
+  "target": "projects/q-explorer-mui/ — Q-Explorer React + MUI port (evaluations list + shell)",
+  "checked": [
+    { "zone": "filter bar", "item": "Period dropdown vs. the table's Period column (same dimension, two sources)" },
+    { "zone": "filter bar", "item": "Status dropdown vs. the table's Status chip (same dimension) — honest: 'In Progress' matches on the label, so it returns both in_progress and running rows, 28 -> 5" },
+    { "zone": "filter bar", "item": "Status dropdown has no 'All' entry — empty means all; checked for a hidden default (none: empty really is unfiltered)" },
+    { "zone": "filter bar", "item": "Search vs. Status vs. Period — three filters AND-ed; checked whether one silently discards another (it does not; each keeps its own displayed value)" },
+    { "zone": "filter bar", "item": "'Clear filters' appears only while a filter is set, clears all three, then removes itself — display and state stay in step" },
+    { "zone": "filter bar", "item": "Status clear X restores 28 rows and disappears — no stale X" },
+    { "zone": "header", "item": "'<n> evaluations' subtitle vs. the rows actually rendered, under filters and under group collapse" },
+    { "zone": "group accordions", "item": "per-group '<n> Evaluations' count vs. the rows inside that group after filtering" },
+    { "zone": "group accordions", "item": "collapse state vs. the header count — the count follows the filters, not the collapse" },
+    { "zone": "table", "item": "Status chip vs. the action set offered on that row (does 'Done' always mean a result exists?)" },
+    { "zone": "table", "item": "column headers — not sortable and give no sort affordance, so nothing is claimed" },
+    { "zone": "table", "item": "Evaluation name is plain text, not a link — no navigation is implied" },
+    { "zone": "row actions", "item": "Preview (eye) vs. Status chip — present on 11 of 19 done rows" },
+    { "zone": "row actions", "item": "Download vs. what the browser actually produces" },
+    { "zone": "row actions", "item": "Delete confirmation text ('the evaluation and its result will be removed') vs. rows that have no result yet" },
+    { "zone": "row actions", "item": "Delete -> undo snackbar -> restored row; the list is untouched while the dialog is open" },
+    { "zone": "top bar", "item": "Startseite / Q.Reports / Fotoalbum / Q-Messungen vs. what they do" },
+    { "zone": "top bar", "item": "Q-Explorer menu trigger (Evaluations, Scheduled Reports) — both destinations real, aria-expanded tracks" },
+    { "zone": "top bar", "item": "EN/DE language menu — re-renders the page in both directions, no stale strings on the list" },
+    { "zone": "top bar", "item": "Log out — leaves immediately with no confirmation, but makes no claim it does not honour" },
+    { "zone": "login", "item": "Sign in with empty fields — refused, two field-level messages, screen does not change" },
+    { "zone": "login", "item": "'Forgot your password?' and the four utility links vs. what they do" }
+  ],
+  "findings": [
+    {
+      "id": "TRU-1",
+      "severity": "High",
+      "confidence": 90,
+      "element": "filter bar — Period dropdown ('Last month', 'Last 7 days', 'Last year', 'Current month'), read against the table's Period column and the '<n> evaluations' subtitle",
+      "claims": "Picking Period = 'Last month' shows the evaluations whose period is last month, and the '4 evaluations' subtitle is the complete count of them.",
+      "actual": "The filter matches a hidden per-row tag that disagrees with the Period cell shown to the user: 7 rows display exactly '01.04–30.04.2026' but only 4 carry the last_month tag, and 13 of 28 rows are tagged 'other' and are unreachable by any named option.",
+      "finding": "The Period filter and the Period column are two views of one dimension that do not agree, so a filtered list silently omits rows whose visible period matches the option that was picked.",
+      "user_impact": "A user checking 'what did we run for April?' reads '4 evaluations', concludes the other three do not exist, and re-runs an evaluation that is already sitting in the list one filter-clear away.",
+      "suggested_fix": "Derive the period bucket from each row's actual von/bis range instead of the stored periodKey, so the filter and the Period column can never disagree — and if a row genuinely falls outside every named bucket, label that in the Period cell rather than only in hidden state.",
+      "evidence": {
+        "action": "Sign in, note that 'Rohdaten Export – April 2026 komplett', 'Anschlusspünktlichkeit – Letzte 30 Tage' and 'Fahrtausfälle DPM – Letzte 30 Tage, alle Linien' all show Period '01.04–30.04.2026'. Open Period, pick 'Last month'. Then clear it and pick 'Last 7 days'.",
+        "observed": "'Last month' cuts the list to 4 rows and the subtitle reads '4 evaluations' — all three rows above are gone even though their Period cell reads the identical range that four surviving rows show. 'Last 7 days' returns 4 rows, one of which ('Rohdaten Export – Letzte Woche') has a Period cell reading '11.05–17.05.2026', a different week from the '19.05–25.05.2026' shown on the other three. Same contradiction on 'Last year' (5 rows read '01.01–31.12.2025', the filter returns 4) and 'Current month'."
+      }
+    },
+    {
+      "id": "TRU-2",
+      "severity": "High",
+      "confidence": 92,
+      "element": "row actions — Download icon on done Raw Data Export rows, and the snackbar it raises",
+      "claims": "A snackbar reading 'Downloading “<evaluation name>”' — a transfer is under way and a file is arriving.",
+      "actual": "The click only sets a notification string; no file, no blob, no navigation, no download is initiated. The snackbar auto-hides after 4 seconds and is never replaced by a 'ready' or 'failed' state.",
+      "finding": "The only export path in the prototype announces a download in the present progressive and produces nothing, with no completion and no failure path.",
+      "user_impact": "The user closes the tab believing the export is in their downloads folder, and only discovers it is missing later — or re-clicks repeatedly, which is the KF-1 reload-hammering pattern exactly.",
+      "suggested_fix": "Either produce a real file on click, or replace the toast with an honest terminal state ('Export queued — you will find it under Erstellte Exporte'), and give the row a Ready/Failed indicator so the claim is confirmable on screen.",
+      "evidence": {
+        "action": "On 'Rohdaten Export – Gestern' (status Done) click the download icon, then check the browser's downloads.",
+        "observed": "A snackbar reads 'Downloading “Rohdaten Export – Gestern”', disappears after ~4s, and nothing else changes anywhere in the UI. No file is produced and the row's Status stays 'Done' with no record that an export was ever requested. The vanilla prototype's log records that Rohdaten Export there does produce a file (C3), so the port's toast claims a behaviour the port does not have."
+      }
+    },
+    {
+      "id": "TRU-3",
+      "severity": "High",
+      "confidence": 85,
+      "element": "table — green 'Done' status chip, read against the action set in the same row's Actions cell",
+      "claims": "The green 'Done' chip says the evaluation finished and its result is available.",
+      "actual": "5 of the 19 done rows offer no way to reach a result — only Delete. Three Linienanalyse DPM rows and two Fahrtausfälle DPM rows are done with no eye and no download, while other rows in the very same group with the identical 'Done' chip do have the eye.",
+      "finding": "The Status chip and the Actions cell disagree about whether a result exists, and the disagreement is inconsistent inside a single group, so 'Done' is not a reliable signal that anything can be opened.",
+      "user_impact": "The user's stated task — find an existing evaluation and open its report — dead-ends on a row that says it succeeded; they conclude they mis-clicked, or that the report is broken, and re-run an evaluation that already finished.",
+      "suggested_fix": "Give every row a result state that matches its actions — either ship the missing report views, or show a distinct chip ('Done — no report view') with an inline reason on the rows that cannot be opened, the way failed rows already get one.",
+      "evidence": {
+        "action": "In the Trip Failures DPM group compare 'Fahrtausfälle DPM – Letzte 7 Tage, SBB' and 'Fahrtausfälle DPM – Letzter Monat, BLS, Kanton BE'; then do the same across the Line Analysis DPM group.",
+        "observed": "Both Trip Failures rows carry the identical green 'Done' chip, but the first shows eye + delete and the second shows delete only — nothing in the row explains the difference. All three done Linienanalyse DPM rows show delete only. This is the open C3 of the vanilla log inherited by the port; here it is visible as a status label contradicting the row's own actions."
+      }
+    },
+    {
+      "id": "TRU-4",
+      "severity": "Medium",
+      "confidence": 88,
+      "element": "top bar — 'Startseite', 'Q.Reports', 'Fotoalbum', 'Q-Messungen' buttons; and the login screen's 'Impressum / Dokumente / Kontaktdaten / Support' links plus 'Forgot your password?'",
+      "claims": "Eight live navigation targets — MUI buttons that hover, ripple and take keyboard focus; four of them carry an 'open in new tab' icon, which promises a destination in a new window.",
+      "actual": "None has a handler. The top-bar four are rendered at 75% opacity but are not disabled; the login utility links and 'Forgot your password?' call preventDefault and stop. No navigation, no new tab, no 'not available' message.",
+      "finding": "Eight controls in the shell accept and acknowledge a click — ripple, focus ring, open-in-new icon — while performing nothing and saying nothing.",
+      "user_impact": "A locked-out user clicks 'Forgot your password?', gets a visible click acknowledgement and no page, and cannot tell whether the reset mail was sent, the link is broken, or nothing happened — the KF-4 dead-click pattern, here on the one path out of a locked account.",
+      "suggested_fix": "Render out-of-scope destinations as genuinely disabled (disabled + aria-disabled + a tooltip naming why) and drop the open-in-new icon from anything that opens nothing; wire 'Forgot your password?' to at least a confirmation panel.",
+      "evidence": {
+        "action": "Click 'Q.Reports' in the top bar; then log out and click 'Impressum' and 'Forgot your password?' on the login screen.",
+        "observed": "Each click produces a ripple and a focus ring and then nothing — the route does not change, no tab opens, no message appears, and the buttons remain visually identical to the working 'Q-Explorer' menu trigger beside them. 'Impressum' additionally shows an open_in_new icon next to its label while opening nothing. Cross-zone: the top bar is the only region claiming destinations outside this prototype, and it contradicts the rest of the shell, where every live control does change the screen."
+      }
+    }
+  ],
+  "gaps": [
+    "The live page could not be fetched this round (browser access closed mid-run), so every finding above was reproduced against the shipped source of the deployed build — projects/q-explorer-mui/app.js, data.js, i18n.js — cross-read with the state map. Anything recorded in neither is unverified.",
+    "The state map's per-row action table is lossy: it records one action set per status:group key, but the data holds two different sets under done:trip_failures (two rows with eye + delete, two with delete only). Any conclusion drawn from that summary alone under-reports how many done rows cannot be opened.",
+    "Delete is live and enabled on all 5 in-progress/running rows, and its confirmation says 'The evaluation and its result will be removed from the list.' Nothing records whether the running computation is actually cancelled or keeps running invisibly, so this is reported as unverified rather than as a finding. Note the vanilla resolved the same control as disabled-with-a-reason (H15); the port re-enables it.",
+    "Period option 'Other' returns the 13 rows that carry no named bucket. Nothing in the UI or the map says whether 'Other' is meant to read as 'custom range' or as 'unclassified', so its honesty as a label is unverified.",
+    "New evaluation -> Run was not exercised (state map not_exercised), so whether a newly created evaluation receives a period bucket that agrees with its own date range — the defect in TRU-1 — is unknown for created rows.",
+    "Report views beyond their first screen were not exercised, so whether an opened report's period and generated-at agree with the list row that launched it could not be checked this round.",
+    "The undo snackbar and the notification snackbar are separate components that can be open at the same time (delete a row, then click a download icon within 6 seconds). Whether one hides the other, and therefore whether the undo window can be lost without the user seeing it, is not recorded."
+  ],
+  "reference_gaps": []
+}

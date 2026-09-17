@@ -236,11 +236,12 @@ const fs = require('fs');
   // row actions must match the vanilla's, per row, not one set for all
   const actionMismatch = await page.evaluate(() => {
     const bad = [];
-    const MAP = { visibility: 'view', download: 'download', delete: 'delete' };
+    const MAP = { visibility: 'visibility', download: 'download', delete: 'delete',
+                    refresh: 'refresh' };
     for (const r of EVALUATIONS) {
       const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(r.name));
       if (!tr) { bad.push(r.name + ': missing'); continue; }
-      const got = [...tr.querySelectorAll('button')].map(b => b.getAttribute('aria-label')).sort();
+      const got = [...tr.querySelectorAll('button[data-act]')].map(b => b.getAttribute('data-act')).sort();
       const want = r.actions.map(a => MAP[a]).sort();
       if (got.join() !== want.join()) bad.push(`${r.name}: ${got} != ${want}`);
     }
@@ -250,7 +251,8 @@ const fs = require('fs');
     actionMismatch.length === 0, actionMismatch.slice(0, 3));
 
   // delete asks first, then offers undo — the vanilla's cfAsk + showUndoToast
-  await page.click('tbody tr button[aria-label="delete"]');
+  // a running row's actions are disabled now, so pick a live one
+  await page.click('tbody tr button[data-act="delete"]:not([disabled])');
   await page.waitForTimeout(400);
   ok('delete opens a confirmation rather than deleting', !!(await page.$('#confirm-dialog')));
   ok('the list is untouched while the dialog is open', (await rowCount()) === allRows);
@@ -263,7 +265,7 @@ const fs = require('fs');
   ok('undo puts the row back', (await rowCount()) === allRows);
 
   // download reports back instead of doing nothing
-  await page.click('tbody tr button[aria-label="download"]');
+  await page.click('tbody tr button[data-act="download"]:not([disabled])');
   await page.waitForTimeout(400);
   ok('download confirms it started', await page.isVisible('#note-toast'));
   await page.waitForTimeout(100);
@@ -304,6 +306,80 @@ const fs = require('fs');
   await page.click('#group-punctuality');
   await page.waitForTimeout(400);
   ok('clicking it again restores the rows', (await rowCount()) === beforeCollapse);
+
+  /* ── the three runtime features the extractor could not see ───────
+     Validator round 1, Fidelity FID-1/2/3: the vanilla annotates rows AFTER
+     load — annotateFailedRows(), markUnavailableActions(), initSortableHeaders().
+     My extractor reads static markup, so none of them existed in the port and
+     the parity checker agreed, because the control census matched. */
+  const failedRow = await page.evaluate(() => {
+    const r = EVALUATIONS.find(x => x.status === 'failed');
+    const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(r.name));
+    return {
+      name: r.name,
+      reason: tr.querySelector('.fail-reason') ? tr.querySelector('.fail-reason').textContent.trim() : null,
+      acts: [...tr.querySelectorAll('button[data-act]')].map(b => b.getAttribute('data-act')),
+    };
+  });
+  ok('a failed row prints its failure reason', !!failedRow.reason && failedRow.reason.length > 5,
+    failedRow.reason);
+  ok('a failed row offers Run again', failedRow.acts.includes('refresh'), failedRow.acts);
+
+  const runningOff = await page.evaluate(() => {
+    const r = EVALUATIONS.find(x => x.status === 'in_progress' || x.status === 'running');
+    const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(r.name));
+    return [...tr.querySelectorAll('button[data-act]')].map(b => b.disabled);
+  });
+  ok('every action on a still-running evaluation is disabled',
+    runningOff.length > 0 && runningOff.every(Boolean), runningOff);
+
+  // retry flips the row to in-progress and takes its reason away, as the vanilla does
+  await page.click(`tbody tr button[data-act="refresh"]`);
+  await page.waitForTimeout(500);
+  const afterRetry = await page.evaluate(n => {
+    const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(n));
+    return { text: tr.textContent, reason: !!tr.querySelector('.fail-reason'),
+             acts: [...tr.querySelectorAll('button[data-act]')].map(b => b.getAttribute('data-act')),
+             disabled: [...tr.querySelectorAll('button[data-act]')].every(b => b.disabled) };
+  }, failedRow.name);
+  ok('Run again moves the row to In Progress', /In Progress/i.test(afterRetry.text), afterRetry.text.slice(0, 80));
+  ok('the failure reason goes away once it is rerunning', !afterRetry.reason);
+  ok('Run again itself goes away', !afterRetry.acts.includes('refresh'), afterRetry.acts);
+  ok('and its remaining actions go dead while it runs', afterRetry.disabled);
+
+  // sortable headers
+  const firstBefore = await page.$eval('tbody tr', r => r.textContent.slice(0, 40));
+  const sortLabel = page.locator('thead .MuiTableSortLabel-root').first();
+  await sortLabel.scrollIntoViewIfNeeded();
+  await sortLabel.click();
+  await page.waitForTimeout(400);
+  const firstAsc = await page.$eval('tbody tr', r => r.textContent.slice(0, 40));
+  await sortLabel.click();
+  await page.waitForTimeout(400);
+  const firstDesc = await page.$eval('tbody tr', r => r.textContent.slice(0, 40));
+  ok('column headers sort the rows', firstAsc !== firstDesc,
+    { firstBefore, firstAsc, firstDesc });
+  ok('the sorted column shows its direction',
+    (await page.$$eval('thead [aria-sort]', e => e.length)) > 0
+    || (await page.$$eval('thead .Mui-active', e => e.length)) > 0);
+
+  // A11Y round 1: both filter dropdowns reported an empty accessible name
+  const names = await page.evaluate(() => ['f-status', 'f-period'].map(id => {
+    const el = document.querySelector('#' + id + ' [role="combobox"]');
+    const lid = el && el.getAttribute('aria-labelledby');
+    if (!lid) return null;
+    return lid.split(/\s+/).map(x => (document.getElementById(x) || {}).textContent || '')
+      .join(' ').trim();
+  }));
+  ok('both filter dropdowns have a real accessible name',
+    names.every(n => n && n.length > 2), names);
+
+  const rowBtnName = await page.evaluate(() => {
+    const b = document.querySelector('tbody button[data-act="delete"]');
+    return b && b.getAttribute('aria-label');
+  });
+  ok('a row action names the evaluation it acts on, not just its verb',
+    !!rowBtnName && rowBtnName.length > 12, rowBtnName);
 
   // ── navigation ───────────────────────────────────────────────
   await page.click('#qx-nav-trigger');
@@ -469,7 +545,7 @@ const fs = require('fs');
   if (!backToList) { await page.reload({ waitUntil: 'networkidle' }); await page.waitForTimeout(1500); }
   // Reports are reached by the row's PREVIEW action, as in the vanilla —
   // the name is plain text there, and only done rows offer a preview.
-  await page.click('tbody tr button[aria-label="view"]');
+  await page.click('tbody tr button[data-act="visibility"]');
   await page.waitForTimeout(700);
 
   ok('opening an evaluation lands on the punctuality report',
@@ -521,7 +597,7 @@ const fs = require('fs');
     await page.evaluate(n => {
       const row = [...document.querySelectorAll('tbody tr')]
         .find(tr => tr.textContent.includes(n));
-      const b = row && row.querySelector('button[aria-label="view"]');
+      const b = row && row.querySelector('button[data-act="visibility"]');
       if (b) b.click();
     }, name);
     await page.waitForTimeout(700);
@@ -685,10 +761,10 @@ const fs = require('fs');
   const rawActs = await page.evaluate(() => {
     const r = EVALUATIONS.find(x => x.group === 'raw_data' && x.status === 'done');
     const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(r.name));
-    return [...tr.querySelectorAll('button')].map(b => b.getAttribute('aria-label'));
+    return [...tr.querySelectorAll('button[data-act]')].map(b => b.getAttribute('data-act'));
   });
   ok('a done raw-data row offers download and delete, not preview',
-    rawActs.includes('download') && rawActs.includes('delete') && !rawActs.includes('view'), rawActs);
+    rawActs.includes('download') && rawActs.includes('delete') && !rawActs.includes('visibility'), rawActs);
 
   await page.click('#new-eval-btn');
   await page.waitForTimeout(600);

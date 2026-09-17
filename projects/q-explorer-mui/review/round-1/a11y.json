@@ -1,0 +1,100 @@
+{
+  "validator": "a11y",
+  "round": 1,
+  "target": "projects/q-explorer-mui/ — Q-Explorer React + MUI port (evaluations list + shell)",
+  "checked": [
+    { "zone": "login", "item": "E-mail / Password / Sign in — tab order and reachability" },
+    { "zone": "login", "item": "Forgot your password? and the 4 utility buttons — reachable by Tab, UA focus outline present" },
+    { "zone": "login", "item": "focus placement after Sign in — lands on <body>, no heading focus, no live announcement" },
+    { "zone": "top bar", "item": "Startseite / Q-Explorer / Q.Reports / Fotoalbum / Q-Messungen / EN / Log out — all 7 Tab-reachable" },
+    { "zone": "top bar", "item": "Q-Explorer menu trigger — aria-expanded present and flips false/true" },
+    { "zone": "top bar", "item": "fixed AppBar (position:fixed, 36–84px, z-index 200) vs focused content on forward and backward Tab" },
+    { "zone": "top bar", "item": "accessible names carry the icon ligature: \"logout Log out\", \"Q-Explorer expand_more\"" },
+    { "zone": "header", "item": "+ New Evaluation — Tab-reachable, name \"add New Evaluation\"" },
+    { "zone": "filter bar", "item": "Search field — labelled \"Search evaluations...\" via <label for=f-search>, focus underline visible" },
+    { "zone": "filter bar", "item": "Status and Period comboboxes — accessible name computation" },
+    { "zone": "filter bar", "item": "Status dropdown keyboard operation — ArrowDown/Enter picks an option, focus returns to the combobox" },
+    { "zone": "filter bar", "item": "Status clear X — Tab-reachable, aria-label \"Clear Status\"" },
+    { "zone": "filter bar", "item": "Clear filters — Tab-reachable, appears and disappears inside the tab order without stranding focus" },
+    { "zone": "group accordions", "item": "6 headers — div role=button tabindex=0, reachable by Tab" },
+    { "zone": "group accordions", "item": "Enter and Space both toggle; aria-expanded flips true→false→true; row count 28→22→28" },
+    { "zone": "group accordions", "item": "focus visibility — 1px UA outline renders on the header" },
+    { "zone": "table", "item": "thead uses 5 real <th scope=\"col\"> cells; no caption, no aria-label, body cells are <td> with no scope=\"row\"" },
+    { "zone": "table", "item": "evaluation name is plain text, not a link — the only route to a report is the row view button" },
+    { "zone": "row actions", "item": "view / download / delete icon buttons — accessible names and row identity" },
+    { "zone": "row actions", "item": "icon-only buttons all carry an aria-label (none announce as a bare ligature)" },
+    { "zone": "row actions", "item": "focus visibility on MUI IconButton — focus ripple renders on :focus-visible (verified by screenshot, not by computed style)" },
+    { "zone": "delete dialog", "item": "opens from Enter on the delete button; role=dialog with aria-labelledby on the title" },
+    { "zone": "delete dialog", "item": "focus trap — Tab ×6 and Shift+Tab ×3 stayed on Cancel/Delete, never escaped to the page" },
+    { "zone": "delete dialog", "item": "Escape closes the dialog and returns focus to the exact delete button that opened it" },
+    { "zone": "delete dialog", "item": "background containment — #root gets aria-hidden=\"true\" while the dialog is open" },
+    { "zone": "delete dialog", "item": "Cancel and Delete focus indicators — ripple overlay visible on keyboard focus" },
+    { "zone": "undo snackbar", "item": "announcement — SnackbarContent carries role=\"alert\"" },
+    { "zone": "undo snackbar", "item": "keyboard reachability of UNDO and the auto-dismiss window" },
+    { "zone": "undo snackbar", "item": "focus placement after the delete is confirmed" }
+  ],
+  "findings": [
+    {
+      "id": "A11Y-1",
+      "severity": "High",
+      "confidence": 95,
+      "element": "Filter bar — Status and Period dropdowns (div[role=combobox])",
+      "finding": "Both filter dropdowns have an empty accessible name: the visible \"Status\" and \"Period\" labels are unassociated <label> elements with no for attribute and no id, and the comboboxes carry neither aria-label nor aria-labelledby.",
+      "user_impact": "A screen-reader user tabbing the filter bar hears \"combobox, collapsed\" twice with nothing to distinguish them, so they cannot tell which filter narrows by state and which narrows by date when hunting for an existing evaluation.",
+      "suggested_fix": "Give each MUI Select an id and its InputLabel a matching htmlFor (or add aria-label=\"Status\" / aria-label=\"Period\" to the Select) so the rendered label becomes the accessible name.",
+      "evidence": {
+        "action": "Tab from the Search box to the Status field, then Tab again to Period, and read the accessibility tree",
+        "observed": "Playwright ariaSnapshot renders both as a bare \"- combobox\" with no name; in the DOM each div[role=combobox] has aria-label=null, aria-labelledby=null and id=\"\", while its <label>Status</label> has for=null and id=\"\", so nothing links the two."
+      }
+    },
+    {
+      "id": "A11Y-2",
+      "severity": "High",
+      "confidence": 90,
+      "element": "Row actions — the 11 \"view\", 3 \"download\" and 28 \"delete\" icon buttons in the Actions column",
+      "finding": "Every row action button is named only by its verb — aria-label=\"view\", \"download\", \"delete\" — with no evaluation name, no aria-describedby and no row header to supply context, because the Name cell is a plain <td> rather than a th[scope=row].",
+      "user_impact": "A screen-reader user tabbing the list hears \"view button\" 11 times and \"delete button\" 28 times with nothing identifying which evaluation each belongs to, so opening the intended report — the primary task — becomes guesswork, and the same ambiguity sits on the destructive button.",
+      "suggested_fix": "Include the evaluation name in each button's accessible name (aria-label={`Open report for ${row.name}`} / `Delete ${row.name}`) and promote the Name cell to <th scope=\"row\">.",
+      "evidence": {
+        "action": "Tab from the Punctuality DPM group header through the first six data rows (Tab x10)",
+        "observed": "Focus stopped on buttons whose accessible names were, in order, delete, view, delete, view, delete, delete, view, delete, view, delete; counting the whole list gives 28 buttons named \"delete\", 11 named \"view\" and 3 named \"download\"; no button has aria-describedby or title, and the first cell of every row is <td> with scope=null."
+      }
+    },
+    {
+      "id": "A11Y-3",
+      "severity": "High",
+      "confidence": 88,
+      "element": "Undo snackbar — the UNDO button, after confirming Delete in the confirmation dialog",
+      "finding": "Confirming the delete drops focus to <body>, and because the snackbar is portalled to the end of the document the UNDO button is tab stop 61 of 65 while the snackbar auto-dismisses after ~4.8 seconds.",
+      "user_impact": "A keyboard-only user cannot press roughly sixty Tabs inside a five-second window, so the undo that the dialog explicitly promises (\"You can undo this for a few seconds afterwards\") is unavailable to them and the deletion is effectively irreversible.",
+      "suggested_fix": "Move focus to the UNDO button (or to the snackbar) when it appears and hold the snackbar open while it or its contents have focus, restoring focus to the list afterwards.",
+      "evidence": {
+        "action": "Enter on a row's delete button, Tab to DELETE, Enter, then Tab repeatedly",
+        "observed": "document.activeElement became <body>; the UNDO button measured as tabbable stop 61 of 65 and was only reached after 59 scripted Tab presses (181 ms at machine speed); the snackbar detached 4799 ms after it appeared. Its role=\"alert\" is correct, so it is announced — it simply cannot be operated in time."
+      }
+    },
+    {
+      "id": "A11Y-4",
+      "severity": "Medium",
+      "confidence": 85,
+      "element": "Fixed top bar (MuiAppBar, position:fixed, occupying y 36–84) vs group accordion headers during backward tabbing",
+      "finding": "Nothing sets scroll-padding-top for the fixed app bar, so when Shift+Tab scrolls a control up into view the browser aligns it to the top of the viewport and the app bar renders on top of it.",
+      "user_impact": "A sighted keyboard user reversing through the list loses sight of the focused group header entirely — it is behind the app bar — so they cannot tell what they are about to expand or collapse and have to scroll manually to recover their place.",
+      "suggested_fix": "Set scroll-padding-top on html to the app bar height (e.g. scroll-padding-top: 88px) so focused elements never scroll under the fixed bar.",
+      "evidence": {
+        "action": "Scroll to the bottom of the list, focus the last delete button, then Shift+Tab x45",
+        "observed": "Focus landed on the \"Data Quality Index (DQI)\" header at top=29 and on the \"Raw Data Export DPM\" header at top=42 while the app bar spans 36–84; document.elementFromPoint at each header's centre returned DIV.MuiToolbar-root — the app bar — not the header. getComputedStyle(document.documentElement).scrollPaddingTop is \"auto\"."
+      }
+    }
+  ],
+  "gaps": [
+    "No real screen reader was run — every name, role and state conclusion comes from the DOM plus Playwright's ARIA snapshot, so actual NVDA/JAWS/VoiceOver verbalisation (including whether table browse mode supplies the row name to the action buttons) is unverified.",
+    "The state map records control state and after-interaction text only; it carries no tab order, no focus placement and no keyboard-operation data, so the entire keyboard and focus picture here was re-derived live rather than cross-checked against the map.",
+    "state map not_exercised \"Run (New evaluation)\": focus placement on entering and leaving the full-screen New evaluation page was never exercised, so whether focus moves to the new view and returns to the + New Evaluation button on breadcrumb-back is unknown.",
+    "state map not_exercised \"Report views beyond the first screen\": the view button was not followed, so focus placement on opening a report — the second half of the primary task — is unverified.",
+    "Download snackbar (\"Download started …\") was not timed or tab-counted separately; only the undo snackbar was measured, so its reachability is assumed-similar rather than proven.",
+    "Language switch to DE was not re-inventoried, so whether the aria-labels \"view\"/\"delete\"/\"download\" and \"Clear Status\" translate with the UI is unknown.",
+    "Focus visibility was confirmed by screenshot on nine control types; computed style alone reports outline:0 and a transparent background on every MUI ButtonBase, so any conclusion about focus visibility drawn from computed style in this prototype is unreliable and future rounds must screenshot."
+  ],
+  "reference_gaps": []
+}

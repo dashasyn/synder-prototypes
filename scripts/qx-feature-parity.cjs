@@ -137,7 +137,7 @@ const uniq = a => [...new Set(a.filter(Boolean))];
       const row = EVALUATIONS.find(x => x.group === g && x.actions.includes('visibility'))
                || EVALUATIONS.find(x => x.group === g);
       const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(row.name));
-      const b = tr && tr.querySelector('button[aria-label="view"]');
+      const b = tr && tr.querySelector('button[data-act="visibility"]');
       if (b) b.click();
     }, group);
     await r.waitForTimeout(700);

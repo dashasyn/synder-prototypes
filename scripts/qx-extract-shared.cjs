@@ -113,6 +113,14 @@ const rows = [];
     const actions = [...actionCell.matchAll(
       /<button[^>]*>[\s\S]*?<span class="material-icons"[^>]*>\s*(\w+)/g)].map(x => x[1]);
 
+    /* The vanilla adds a "Run again" button to every FAILED row at runtime, in
+       annotateFailedRows() — it is not in the markup this reads, which is
+       exactly why the port shipped without it and the parity checker agreed.
+       (Fidelity validator, round 1, FID-1.) Reading the markup alone is a
+       blind spot in this extractor: anything the vanilla injects after load is
+       invisible to it, so a runtime rule has to be encoded deliberately. */
+    if (status === 'failed') actions.unshift('refresh');
+
     rows.push({
       group: group ? group.key : 'punctuality',
       name, status,
@@ -210,7 +218,7 @@ const chips = [];
     console.error('EXTRACTION INCOMPLETE — rows with no actions:', noActions.join(', '));
     process.exit(1);
   }
-  for (const need of ['visibility', 'download', 'delete']) {
+  for (const need of ['visibility', 'download', 'delete', 'refresh']) {
     if (!kinds.has(need)) {
       console.error(`EXTRACTION INCOMPLETE — no row offers "${need}"`);
       process.exit(1);
