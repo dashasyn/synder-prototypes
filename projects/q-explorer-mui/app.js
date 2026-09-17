@@ -219,7 +219,6 @@ function PageHeader({ crumbs, title, subtitle, action }) {
 function EvaluationsList({ go }) {
   const { t } = useT();
   const [status, setStatus] = useState('');
-  const [period, setPeriod] = useState('');
   const [q, setQ] = useState('');
   const { removed, askDelete, notify, ui: actionUi } = useListActions(t, 'toast_eval_deleted');
   const [collapsed, setCollapsed] = useState([]);
@@ -229,12 +228,24 @@ function EvaluationsList({ go }) {
   // initSortableHeaders()/sortByColumn(): every header except Actions sorts the
   // group's rows, ascending then descending, with an indicator. Another runtime
   // feature the markup never showed. (Fidelity round 1, FID-3.)
-  const [sort, setSort] = useState({ col: null, dir: 'asc' });
+  // Ignat, 2026-09-17: "normally it should be sorted descending for column
+  // Erstellt". That is the default now, and the first click on a column starts
+  // descending for dates, ascending for text — newest-first is what you want
+  // from a date, A-Z from a name.
+  const [sort, setSort] = useState({ col: 'col_created', dir: 'desc' });
   const COLS = ['col_name', 'col_period', 'col_created', 'col_status'];
+  const DATE_COLS = ['col_period', 'col_created'];
+  // dd.mm.yyyy sorts wrong as text — "03.05.2026" lands before "08.01.2026".
+  // The vanilla's sortByColumn() compares the cell text and has that bug; a
+  // date column that sorts by its day-of-month is worse than no sorting.
+  const swissDate = v => {
+    const m = String(v).match(/(\d{2})\.(\d{2})\.(\d{4})\s*$/);
+    return m ? `${m[3]}${m[2]}${m[1]}` : String(v);
+  };
   const sortValue = (r, col) =>
     col === 'col_name' ? r.name
-    : col === 'col_period' ? r.period
-    : col === 'col_created' ? r.created
+    : col === 'col_period' ? swissDate(r.period)
+    : col === 'col_created' ? swissDate(r.created)
     : t(STATUS_KEY[retried.includes(r.name) ? 'in_progress' : r.status]);
   const sorted = list => {
     if (!sort.col) return list;
@@ -244,7 +255,9 @@ function EvaluationsList({ go }) {
     });
   };
   const toggleSort = col =>
-    setSort(s2 => ({ col, dir: s2.col === col && s2.dir === 'asc' ? 'desc' : 'asc' }));
+    setSort(s2 => s2.col === col
+      ? { col, dir: s2.dir === 'asc' ? 'desc' : 'asc' }
+      : { col, dir: DATE_COLS.includes(col) ? 'desc' : 'asc' });
   const statusOf = r => (retried.includes(r.name) ? 'in_progress' : r.status);
   const toggleGroup = g =>
     setCollapsed(c => c.includes(g) ? c.filter(x => x !== g) : [...c, g]);
@@ -259,20 +272,14 @@ function EvaluationsList({ go }) {
     !removed.includes(r.name) &&
     (!status || t(STATUS_KEY[retried.includes(r.name) ? 'in_progress' : r.status] || r.status)
                   === t(STATUS_KEY[status] || status)) &&
-    (!period || r.periodKey === period) &&
-    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, period, q, t, removed, retried]);
+    (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, q, t, removed, retried]);
   const groups = [...new Set(rows.map(r => r.group))];
-  const dirty = !!(q || status || period);
-  const clearAll = () => { setQ(''); setStatus(''); setPeriod(''); };
-
-  // The vanilla's own five period options, by its own keys and values.
-  const periodOptions = [
-    ['last_7_days', 'filter_period_last7'],
-    ['current_month', 'filter_period_current_month'],
-    ['last_month', 'filter_period_last_month'],
-    ['last_year', 'filter_period_last_year'],
-    ['other', 'filter_period_other'],
-  ].map(([value, key]) => ({ value, label: t(key) }));
+  const dirty = !!(q || status);
+  const clearAll = () => { setQ(''); setStatus(''); };
+  // Ignat, 2026-09-17: "I think we dont need the Filter Zeitraum." Dropped.
+  // The Period column is still there and now sorts, which is the thing people
+  // actually used that filter for. periodKey stays in the extracted data so
+  // re-running the extractor does not have to know about this decision.
 
   return html`
     <${Box}>
@@ -293,8 +300,6 @@ function EvaluationsList({ go }) {
               <//>` } : undefined} />
           <${FilterSelect} id="f-status" label=${t('sel_status')} value=${status} onChange=${setStatus}
             options=${statusOptions(t)} />
-          <${FilterSelect} id="f-period" label=${t('sel_period')} value=${period} onChange=${setPeriod}
-            options=${periodOptions} />
           ${dirty && html`
             <${Button} id="f-clear-all" onClick=${clearAll}>${t('clear_filters')}<//>`}
         <//>
@@ -1497,9 +1502,18 @@ function TopBar({ go, onLogout }) {
           is what left it looking broken once the banner went. */''}
     <${AppBar} position="fixed" sx=${{ bgcolor: NAVY, zIndex: 200, top: 0 }}>
       <${Toolbar} sx=${{ gap: 0.5 }}>
-        <${Box} sx=${{ width: 24, height: 24, bgcolor: '#E30613', color: '#fff', mr: 3,
-                        display: 'grid', placeItems: 'center', borderRadius: '2px',
-                        fontWeight: 700, fontSize: 16, lineHeight: 1 }}>+<//>
+        ${/* The same extracted lockup the login screen uses — flag plus the
+              QMS RPV CH wordmark — instead of the red "+" placeholder I had
+              here. The wordmark's paths carry no fill, so they render black by
+              default and would be invisible on the navy bar; they are forced
+              white here rather than in the SVG, which stays as the vanilla
+              wrote it. Scaled to the 48px dense toolbar. */''}
+        <${Box} id="topbar-logo" aria-label="QMS RPV CH · Q-Explorer" role="img"
+          sx=${{ display: 'flex', alignItems: 'center', gap: '10px', mr: 3,
+                  '& .login-flag': { width: 25, height: 28, display: 'block' },
+                  '& .login-name': { width: 98, height: 28, display: 'block' },
+                  '& .login-name path': { fill: '#fff' } }}
+          dangerouslySetInnerHTML=${{ __html: LOGIN_LOGO_SVG }} />
         <${Button} color="inherit" sx=${{ opacity: .75 }}>Startseite<//>
         <${Button} color="inherit" id="qx-nav-trigger" aria-haspopup="menu"
                    aria-expanded=${!!anchor}

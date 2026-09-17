@@ -87,6 +87,25 @@ const shellProbe = page => page.evaluate(() => {
   };
 });
 
+/**
+ * Differences Ignat has ASKED for. Without these the checker reports agreed
+ * decisions as regressions, and a checker that cries wolf is one nobody reads.
+ *
+ * They are printed, not hidden: a silent allowance is how a real gap hides
+ * behind a deliberate one. The Zeitraum case also shows why the count metric
+ * needs the note — the port dropped that filter and still totals the same,
+ * because its search field is a MUI FormControl while the vanilla's is a bare
+ * input. Same number, different composition. "ok" by coincidence is not "ok".
+ */
+const DELIBERATE = {
+  'reports-list': [
+    'Zeitraum filter removed on request 2026-09-17; the Period column sorts instead',
+  ],
+  'raw-punct': [
+    'column filters are text inputs, not selects — multi-column filtering is MUI X Pro and the tier is unsettled',
+  ],
+};
+
 const uniq = a => [...new Set(a.filter(Boolean))];
 
 (async () => {
@@ -266,6 +285,8 @@ const uniq = a => [...new Set(a.filter(Boolean))];
     } else {
       console.log(`${view.padEnd(20)} ok`);
     }
+    for (const d of DELIBERATE[view] || [])
+      console.log(`${' '.repeat(20)} · by request: ${d}`);
   }
   console.log(`\n${gaps} gap(s)\n`);
 })();

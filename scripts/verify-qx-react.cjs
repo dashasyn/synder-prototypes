@@ -206,17 +206,19 @@ const fs = require('fs');
   const allRows = await rowCount();
   ok('the list renders every evaluation', allRows === 28, allRows);
 
-  // period: pick "Last 7 days" and the row count must actually change
-  await page.click('#f-period');
+  // Zeitraum was dropped on Ignat's ask (2026-09-17); the Period column sorts
+  // instead. Asserted as an absence so it cannot creep back in unnoticed.
+  ok('the Zeitraum filter is gone', !(await page.$('#f-period')));
+
+  // status still filters, and the header count follows it
+  await page.click('#f-status .MuiSelect-select');
   await page.waitForTimeout(250);
   await page.click('.MuiMenu-list li:first-child');
   await page.waitForTimeout(400);
-  const p7 = await rowCount();
-  const want7 = await page.evaluate(() =>
-    EVALUATIONS.filter(r => r.periodKey === 'last_7_days').length);
-  ok('the period filter actually filters', p7 === want7 && p7 < allRows, { p7, want7, allRows });
+  const nFiltered = await rowCount();
+  ok('the status filter actually filters', nFiltered < allRows, { nFiltered, allRows });
   ok('the header count follows the filter',
-    (await page.$eval('h5 + p, .MuiTypography-body2', e => e.textContent)).startsWith(String(p7)));
+    (await page.$eval('h5 + p, .MuiTypography-body2', e => e.textContent)).startsWith(String(nFiltered)));
 
   // clear-all appears only when something is filtered, and restores the list
   ok('a Clear filters button appears once a filter is set', !!(await page.$('#f-clear-all')));
@@ -375,7 +377,7 @@ const fs = require('fs');
     || (await page.$$eval('thead .Mui-active', e => e.length)) > 0);
 
   // A11Y round 1: both filter dropdowns reported an empty accessible name
-  const names = await page.evaluate(() => ['f-status', 'f-period'].map(id => {
+  const names = await page.evaluate(() => ['f-status'].map(id => {
     const el = document.querySelector('#' + id + ' [role="combobox"]');
     const lid = el && el.getAttribute('aria-labelledby');
     if (!lid) return null;
@@ -391,6 +393,79 @@ const fs = require('fs');
   });
   ok('a row action names the evaluation it acts on, not just its verb',
     !!rowBtnName && rowBtnName.length > 12, rowBtnName);
+
+  /* ── the logo, and sorting ────────────────────────────────────────
+     Ignat, 2026-09-17: use the sign-in logo in the top bar; drop Zeitraum;
+     make the columns sortable; default to Erstellt descending. */
+  const logo = await page.evaluate(() => {
+    const el = document.getElementById('topbar-logo');
+    if (!el) return null;
+    const flag = el.querySelector('.login-flag');
+    const name = el.querySelector('.login-name');
+    const p = name && name.querySelector('path');
+    return {
+      hasFlag: !!flag, hasName: !!name,
+      nameFill: p ? getComputedStyle(p).fill : null,
+      h: Math.round(el.getBoundingClientRect().height),
+      barH: Math.round(document.querySelector('.MuiAppBar-root').getBoundingClientRect().height),
+    };
+  });
+  ok('the top bar carries the real lockup, flag and wordmark',
+    !!logo && logo.hasFlag && logo.hasName, logo);
+  ok('the wordmark is white, not the default black on navy',
+    logo.nameFill === 'rgb(255, 255, 255)', logo.nameFill);
+  ok('the lockup fits inside the 48px bar', logo.h <= logo.barH, logo);
+
+  // the default sort: Erstellt, descending, and as DATES not text
+  /* Reload before judging the DEFAULT sort. Earlier assertions in this suite
+     click sort headers, so by the time this runs the order is whatever they
+     left behind — the first version of this check read a perfectly sorted
+     table as unsorted for exactly that reason. A default is only a default on
+     a fresh load. */
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.waitForTimeout(1400);
+  await page.fill('#login-email', 'a@b.c');
+  await page.fill('#login-password', 'x');
+  await page.click('#login-submit');
+  await page.waitForTimeout(800);
+
+  // Each type is its own table, so the order has to hold INSIDE every group —
+  // reading the first six rows of the page walks across group boundaries and
+  // reports an unsorted sequence that is in fact correctly sorted.
+  const perGroup = await page.$$eval('table', ts => ts.map(t =>
+    [...t.querySelectorAll('tbody tr')].map(r => r.children[2].textContent.trim())));
+  const toNum = d => { const m = d.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+    return m ? +(m[3] + m[2] + m[1]) : 0; };
+  const groupsSorted = perGroup.map(g => g.map(toNum).filter(Boolean))
+    .filter(g => g.length > 1);
+  ok('every group opens sorted by Erstellt, newest first',
+    groupsSorted.length > 0 && groupsSorted.every(g => g.every((v, i) => i === 0 || g[i - 1] >= v)),
+    perGroup[0]);
+  // A text sort of dd.mm.yyyy puts 08.01.2026 above 03.05.2026. A real date
+  // sort cannot, so look for a group where the two orders disagree.
+  const textWrong = await page.evaluate(() => {
+    const t = [...document.querySelectorAll('table')]
+      .map(x => [...x.querySelectorAll('tbody tr')].map(r => r.children[2].textContent.trim()))
+      .find(g => g.length > 1);
+    const byText = [...t].sort((a, b) => b.localeCompare(a, 'de'));
+    return { actual: t, byText };
+  });
+  ok('Erstellt sorts as dates, not as text',
+    JSON.stringify(textWrong.actual) !== JSON.stringify(textWrong.byText)
+      || textWrong.actual.length < 2, textWrong);
+  const active = await page.$eval('thead .Mui-active', e => e.textContent.trim()).catch(() => null);
+  ok('the Erstellt header shows it is the sorted column', !!active, active);
+
+  // every column is sortable, and clicking one re-orders the rows
+  const labels = await page.$$eval('thead .MuiTableSortLabel-root',
+    e => [...new Set(e.map(x => x.textContent.trim()))]);
+  ok('all four data columns are sortable, Actions is not', labels.length === 4, labels);
+  const firstBefore2 = await page.$eval('tbody tr', r => r.textContent.slice(0, 40));
+  const nameSort = page.locator('thead .MuiTableSortLabel-root').first();
+  await nameSort.click();
+  await page.waitForTimeout(400);
+  ok('clicking Name re-sorts the rows',
+    (await page.$eval('tbody tr', r => r.textContent.slice(0, 40))) !== firstBefore2);
 
   // ── navigation ───────────────────────────────────────────────
   await page.click('#qx-nav-trigger');
