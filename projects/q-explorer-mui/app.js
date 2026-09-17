@@ -537,6 +537,10 @@ function ScheduledReports({ go }) {
  * come from the extracted DATA now, and Lines/Stops cascade off the chosen TU
  * exactly as renderLinesOptions() does.
  */
+/* buildScheduleDateSelects(): German writes "3.", English "3rd". MONTH_NAMES,
+   DAY_CHOICES and ORDINAL_EN all come from the extracted data. */
+const dayOrdinal = (n, lang) => (lang === 'de' ? n + '.' : ORDINAL_EN(n));
+
 /** yyyy-mm-dd (what <input type=date> gives) → dd.mm.yyyy, as the vanilla shows it. */
 const fmtSwiss = v => {
   const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -636,7 +640,8 @@ function NewEvaluation({ go, initialType }) {
   const [period, setPeriod] = useState('cur_month');
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
-  const [days, setDays] = useState([]);
+  // The vanilla's day buttons all start .active — every weekday included.
+  const [days, setDays] = useState([...ALL_DAYS]);
   const [modes, setModes] = useState([]);
   const [tu, setTu] = useState([]);
   const [cantons, setCantons] = useState([]);
@@ -644,6 +649,15 @@ function NewEvaluation({ go, initialType }) {
   const [stops, setStops] = useState([]);
   const [name, setName] = useState('');
   const [nameEdited, setNameEdited] = useState(false);
+  const [notify, setNotify] = useState(true);
+  const [email, setEmail] = useState('analyst@company.ch');
+  const [scheduled, setScheduled] = useState(false);
+  const [freq, setFreq] = useState('monthly');
+  const [schedDays, setSchedDays] = useState(['Wed']);
+  const [monthDay, setMonthDay] = useState('3');
+  const [yearMonth, setYearMonth] = useState('1');
+  const [yearDay, setYearDay] = useState('1');
+  const [dailyTime, setDailyTime] = useState('08:00');
 
   const locked = !type;
   const nameError = touched && !name.trim();
@@ -710,20 +724,18 @@ function NewEvaluation({ go, initialType }) {
                       nothing ever set it, so a hand-written name was wiped by
                       the next filter change. */''}
                 onChange=${e => { setNameEdited(true); setName(e.target.value); }} />
-              <${FormControl} required sx=${{ flex: 1 }}>
-                <${InputLabel}>${t('sel_eval_type')}<//>
-                <${Select} id="eval-type" value=${type} label=${t('sel_eval_type')}
-                           onChange=${e => {
-                             // Raw Data Export has its own config form rather
-                             // than the period/scope cards — same as the vanilla.
-                             if (e.target.value === 'raw_data') { go('rohdaten'); return; }
-                             setType(e.target.value);
-                           }}>
-                  ${TYPE_KEYS.map(k => html`
-                    <${MenuItem} key=${k} value=${k}>
-                      <${Icon} sx=${{ fontSize: 18, mr: 1, color: 'primary.main' }}>${TYPE_ICON[k]}<//>
-                      ${t('type_' + k)}
-                    <//>`)}
+              ${/* Ignat, 2026-09-17: "Remove evaluation type from inside,
+                    because changing the type should trigger change the name and
+                    the layout." Right — and it overrules what I argued when the
+                    popup landed. The type is chosen once, in the popup, and
+                    shown here read-only so the page still says what it is. */''}
+              <${Box} sx=${{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}
+                      id="eval-type">
+                <${Icon} sx=${{ fontSize: 20, color: 'primary.main' }}>${TYPE_ICON[type]}<//>
+                <${Box}>
+                  <${Typography} variant="caption" color="text.secondary" display="block">
+                    ${t('sel_eval_type')}<//>
+                  <${Typography} variant="body2">${type ? t('type_' + type) : '—'}<//>
                 <//>
               <//>
             <//>
@@ -801,6 +813,135 @@ function NewEvaluation({ go, initialType }) {
                 ${!tu.length && !cantons.length && !lines.length && !stops.length
                   ? ' · ' + t('all_lines') : ''}
               <//>
+            <//>
+          <//>
+
+          ${/* ── Step 3: Run — notification and scheduling ──────────────
+                Ignat, 2026-09-17: "You lost notification block", "you lost
+                Setup scheduled report part". Both were simply never ported;
+                the port stopped after Time Period and Scope. */''}
+          <${Card} sx=${{ mt: 3 }} id="run-card">
+            <${CardContent}>
+              <${Typography} variant="h6" gutterBottom>${t('step_run')}<//>
+
+              <${Stack} direction="row" spacing=${2} alignItems="flex-start"
+                        id="notify-section" sx=${{ mb: 2 }}>
+                <${Icon} sx=${{ color: 'text.secondary' }}>notifications<//>
+                <${Box} sx=${{ flex: 1 }}>
+                  <${Typography} variant="body2" sx=${{ mb: 1 }}>${t('notify_label')}<//>
+                  <${TextField} id="notify-email" type="email" size="small"
+                    sx=${{ minWidth: 280 }} value=${email} disabled=${!notify}
+                    onChange=${e => setEmail(e.target.value)} />
+                <//>
+                <${M.Switch} id="notify-checkbox" checked=${notify}
+                  inputProps=${{ 'aria-label': t('notify_label') }}
+                  onChange=${e => setNotify(e.target.checked)} />
+              <//>
+
+              <${Divider} sx=${{ my: 2 }} />
+
+              <${FormControlLabel} sx=${{ alignItems: 'flex-start', m: 0 }}
+                control=${html`<${Checkbox} id="schedule-checkbox" checked=${scheduled}
+                  disabled=${period === 'custom'}
+                  onChange=${e => setScheduled(e.target.checked)} />`}
+                label=${html`
+                  <${Box} sx=${{ pt: 1 }}>
+                    <${Typography} variant="body2">${t('schedule_label')}<//>
+                    <${Typography} variant="caption" color="text.secondary" display="block">
+                      ${t('schedule_note')}<//>
+                  <//>`} />
+
+              ${/* A custom range cannot be scheduled: every run would return
+                    the same fixed period. The vanilla says so and offers the
+                    way out rather than just disabling the box. */''}
+              ${period === 'custom' && html`
+                <${Alert} severity="info" id="schedule-blocked-note" sx=${{ mt: 1 }}
+                  action=${html`<${Button} size="small" id="schedule-blocked-link"
+                    onClick=${() => setPeriod('cur_month')}>${t('schedule_blocked_link')}<//>`}>
+                  ${t('schedule_blocked')}
+                <//>`}
+
+              ${scheduled && period !== 'custom' && html`
+                <${Box} id="schedule-fields" sx=${{ mt: 2 }}>
+                  <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap
+                            alignItems="flex-start">
+                    <${FormControl} sx=${{ minWidth: 180 }} id="freq-select">
+                      <${InputLabel} id="freq-select-label">${t('schedule_frequency')}<//>
+                      <${Select} labelId="freq-select-label" label=${t('schedule_frequency')}
+                        value=${freq} onChange=${e => setFreq(e.target.value)}>
+                        ${['daily', 'weekly', 'monthly', 'yearly'].map(f =>
+                          html`<${MenuItem} key=${f} value=${f}>${t('freq_' + f)}<//>`)}
+                      <//>
+                    <//>
+
+                    ${freq === 'weekly' && html`
+                      <${Box} id="freq-options-weekly">
+                        <${Typography} variant="caption" color="text.secondary" display="block"
+                          sx=${{ mb: .5 }}>${t('schedule_run_on')}<//>
+                        <${Stack} direction="row" spacing=${1} id="sched-days-row"
+                                  flexWrap="wrap" useFlexGap>
+                          ${ALL_DAYS.map(d => html`
+                            <${Chip} key=${d} size="small" clickable
+                              id=${'sched-day-' + d}
+                              label=${(DAY_LABELS[lang] || DAY_LABELS.en)[d] || d}
+                              color=${schedDays.includes(d) ? 'primary' : 'default'}
+                              variant=${schedDays.includes(d) ? 'filled' : 'outlined'}
+                              onClick=${() => setSchedDays(x => x.includes(d)
+                                ? x.filter(y => y !== d) : [...x, d])} />`)}
+                        <//>
+                      <//>`}
+
+                    ${freq === 'monthly' && html`
+                      <${Box} id="freq-options-monthly" sx=${{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <${FormControl} sx=${{ minWidth: 100 }}>
+                          <${InputLabel} id="month-day-label">${t('sel_day')}<//>
+                          <${Select} labelId="month-day-label" label=${t('sel_day')} id="month-day-select"
+                            value=${monthDay} onChange=${e => setMonthDay(e.target.value)}>
+                            ${DAY_CHOICES.map(n => html`
+                              <${MenuItem} key=${n} value=${String(n)}>${dayOrdinal(n, lang)}<//>`)}
+                          <//>
+                        <//>
+                        <${Typography} variant="body2" color="text.secondary">${t('of_month')}<//>
+                      <//>`}
+
+                    ${freq === 'yearly' && html`
+                      <${Box} id="freq-options-yearly" sx=${{ display: 'flex', gap: 1 }}>
+                        <${FormControl} sx=${{ minWidth: 140 }}>
+                          <${InputLabel} id="year-month-label">${t('sel_month')}<//>
+                          <${Select} labelId="year-month-label" label=${t('sel_month')} id="yearly-month-select"
+                            value=${yearMonth} onChange=${e => setYearMonth(e.target.value)}>
+                            ${(MONTH_NAMES[lang] || MONTH_NAMES.en).map((m, k) => html`
+                              <${MenuItem} key=${m} value=${String(k + 1)}>${m}<//>`)}
+                          <//>
+                        <//>
+                        <${FormControl} sx=${{ minWidth: 100 }}>
+                          <${InputLabel} id="year-day-label">${t('sel_day')}<//>
+                          <${Select} labelId="year-day-label" label=${t('sel_day')} id="yearly-day-select"
+                            value=${yearDay} onChange=${e => setYearDay(e.target.value)}>
+                            ${DAY_CHOICES.map(n => html`
+                              <${MenuItem} key=${n} value=${String(n)}>${dayOrdinal(n, lang)}<//>`)}
+                          <//>
+                        <//>
+                      <//>`}
+
+                    ${freq === 'daily' && html`
+                      <${FormControl} sx=${{ minWidth: 140 }} id="freq-options-daily">
+                        <${InputLabel} id="daily-time-label">${t('sel_time')}<//>
+                        <${Select} labelId="daily-time-label" label=${t('sel_time')} id="daily-time-select"
+                          value=${dailyTime} onChange=${e => setDailyTime(e.target.value)}>
+                          ${['06:00', '07:00', '08:00', '09:00', '12:00', '18:00'].map(x =>
+                            html`<${MenuItem} key=${x} value=${x}>${x}<//>`)}
+                        <//>
+                      <//>`}
+                  <//>
+
+                  <${Stack} direction="row" spacing=${.75} alignItems="center" sx=${{ mt: 1.5 }}
+                            id="freq-hint">
+                    <${Icon} sx=${{ fontSize: 14, color: 'text.secondary' }}>info<//>
+                    <${Typography} variant="caption" color="text.secondary">
+                      ${t('hint_' + freq)}<//>
+                  <//>
+                <//>`}
             <//>
           <//>
         <//>

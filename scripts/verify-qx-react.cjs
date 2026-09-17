@@ -648,6 +648,53 @@ const fs = require('fs');
   ok('editing the name stops it being regenerated',
     (await nameAt()) === 'My own name', await nameAt());
 
+  /* ── the Run card: notification and scheduling ────────────────────
+     Ignat, 2026-09-17: "You lost notification block", "you lost Setup
+     scheduled report part". Both were never ported — the page stopped after
+     Time Period and Scope. */
+  ok('the evaluation type is no longer editable inside the page',
+    !(await page.$('#eval-type .MuiSelect-select')) && !!(await page.$('#eval-type')));
+  ok('but the page still says which type it is',
+    /nktlich|unctual/i.test(await page.$eval('#eval-type', e => e.textContent)));
+
+  ok('every weekday starts selected, as the vanilla does',
+    (await page.$$eval('[id^="day-"] ', e => e.length)) === 7
+    && (await page.$$eval('[id^="day-"].MuiChip-filledPrimary', e => e.length)) === 7);
+
+  ok('the notification block is there', !!(await page.$('#notify-section')));
+  ok('it offers an e-mail address', !!(await page.$('#notify-email')));
+  const emailOn = await page.$eval('#notify-email', e => e.disabled);
+  await page.click('#notify-checkbox');
+  await page.waitForTimeout(350);
+  ok('turning notification off disables the address field',
+    emailOn === false && (await page.$eval('#notify-email', e => e.disabled)) === true);
+  await page.click('#notify-checkbox');
+  await page.waitForTimeout(350);
+
+  ok('the scheduled-report block is there', !!(await page.$('#schedule-checkbox')));
+  ok('the frequency fields stay hidden until it is switched on',
+    !(await page.$('#schedule-fields')));
+  await page.click('#schedule-checkbox');
+  await page.waitForTimeout(400);
+  ok('switching it on reveals the frequency fields', !!(await page.$('#schedule-fields')));
+  ok('it defaults to Monthly with a day-of-month', !!(await page.$('#freq-options-monthly')));
+
+  // the "Run on" control follows the frequency
+  await page.click('#freq-select .MuiSelect-select');
+  await page.waitForTimeout(300);
+  await page.click('.MuiMenu-list li:nth-child(2)');   // weekly
+  await page.waitForTimeout(400);
+  ok('choosing Weekly swaps in the day-of-week buttons',
+    !!(await page.$('#sched-days-row')) && !(await page.$('#freq-options-monthly')));
+  await page.click('#freq-select .MuiSelect-select');
+  await page.waitForTimeout(300);
+  await page.click('.MuiMenu-list li:first-child');    // daily
+  await page.waitForTimeout(400);
+  ok('choosing Daily swaps in the time picker',
+    !!(await page.$('#daily-time-select')) && !(await page.$('#sched-days-row')));
+  ok('each frequency explains when the data is available',
+    (await page.textContent('#freq-hint')).length > 10);
+
   // the period presets, and the custom range with its reversed-date error
   await page.click('#preset-custom');
   await page.waitForTimeout(300);
@@ -665,7 +712,20 @@ const fs = require('fs');
   // days of week
   await page.click('#day-Mon');
   await page.waitForTimeout(300);
-  ok('days of the week can be picked', !!(await page.$('#day-Mon')));
+  ok('days of the week can be toggled off',
+    (await page.$$eval('[id^="day-"].MuiChip-filledPrimary', e => e.length)) === 6);
+
+  /* A custom range cannot be scheduled — every run would return the same fixed
+     period. The vanilla says so and offers the way out rather than just
+     grateying the box, so the port does too. */
+  ok('a custom range blocks scheduling and explains why',
+    !!(await page.$('#schedule-blocked-note'))
+    && (await page.$eval('#schedule-checkbox', e => e.disabled)));
+  await page.click('#schedule-blocked-link');
+  await page.waitForTimeout(400);
+  ok('the note offers a working way back to a rolling period',
+    !(await page.$('#schedule-blocked-note'))
+    && !(await page.$eval('#schedule-checkbox', e => e.disabled)));
 
   // Raw Data Export still bypasses this page for its own config form
   await page.click('.MuiBreadcrumbs-root a');
