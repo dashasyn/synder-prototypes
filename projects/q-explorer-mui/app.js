@@ -204,6 +204,9 @@ function EvaluationsList({ go }) {
   const [period, setPeriod] = useState('');
   const [q, setQ] = useState('');
   const { removed, askDelete, notify, ui: actionUi } = useListActions(t, 'toast_eval_deleted');
+  const [collapsed, setCollapsed] = useState([]);
+  const toggleGroup = g =>
+    setCollapsed(c => c.includes(g) ? c.filter(x => x !== g) : [...c, g]);
 
   // Matching on the LABEL, not the raw value, so selecting "In Progress"
   // returns the `running` rows too rather than silently dropping them.
@@ -257,12 +260,31 @@ function EvaluationsList({ go }) {
         ${rows.length === 0 && html`
           <${Alert} severity="info" id="empty-state">${t('empty_no_evals')}<//>`}
 
+        ${/* Each type is an accordion in the vanilla — a clickable group-header
+              with a rotating chevron and aria-expanded, collapsing its table.
+              Mine was a static heading. Controls and tables both matched, which
+              is why the parity checker had nothing to say. */''}
         ${groups.map(g => html`
-          <${Box} key=${g} sx=${{ mb: 4 }}>
-            <${Typography} variant="subtitle2" sx=${{ mb: 1, textTransform: 'uppercase',
-                             color: 'text.secondary', letterSpacing: '.08em' }}>
-              ${t('type_' + g)} · ${rows.filter(r => r.group === g).length}
+          <${Box} key=${g} className="report-group" sx=${{ mb: 1 }}>
+            <${Box} className="group-header" role="button" tabIndex=${0}
+              id=${'group-' + g} aria-expanded=${!collapsed.includes(g)}
+              onClick=${() => toggleGroup(g)}
+              onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroup(g); } }}
+              sx=${{ display: 'flex', alignItems: 'center', gap: 1, py: '10px 8px',
+                      cursor: 'pointer', userSelect: 'none' }}>
+              <${Icon} sx=${{ fontSize: 16, color: 'text.disabled',
+                               transition: 'transform .15s',
+                               transform: collapsed.includes(g) ? 'rotate(-90deg)' : 'none' }}>
+                expand_more<//>
+              <${Typography} variant="subtitle2" sx=${{ textTransform: 'uppercase',
+                               color: 'text.secondary', letterSpacing: '.05em' }}>
+                ${t('type_' + g)}
+              <//>
+              <${Typography} variant="body2" sx=${{ color: 'text.disabled' }}>
+                ${rows.filter(r => r.group === g).length} ${t('evaluations_word')}
+              <//>
             <//>
+            ${!collapsed.includes(g) && html`
             <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
               <${Table}>
                 <${TableHead}>
@@ -307,7 +329,7 @@ function EvaluationsList({ go }) {
                     <//>`)}
                 <//>
               <//>
-            <//>
+            <//>`}
           <//>`)}
       <//>
       ${actionUi}
@@ -391,13 +413,13 @@ function ScheduledReports({ go }) {
                              color=${statusOf(s) === 'active' ? 'success' : 'default'} />
                   <//>
                   <${TableCell} align="right">
-                    <${Tooltip} title=${t(statusOf(s) === 'active' ? 'act_pause' : 'act_resume')}>
+                    <${Tooltip} title=${t(statusOf(s) === 'active' ? 'sched_pause' : 'sched_resume')}>
                       <${IconButton} aria-label=${statusOf(s) === 'active' ? 'pause' : 'resume'}
                         onClick=${() => toggle(s)}>
                         <${Icon}>${statusOf(s) === 'active' ? 'pause_circle' : 'play_circle'}<//>
                       <//>
                     <//>
-                    <${Tooltip} title=${t('act_edit')}>
+                    <${Tooltip} title=${t('sched_edit')}>
                       <${IconButton} aria-label="edit" onClick=${() => go('new')}>
                         <${Icon}>edit<//><//>
                     <//>
@@ -531,7 +553,7 @@ function PunctRow({ node, depth, t, onChart, onRaw }) {
       <${TableRow} hover>
         <${TableCell} sx=${{ pl: `${pad}px` }}>
           ${kids.length > 0 && html`
-            <${IconButton} aria-label=${open ? 'collapse' : 'expand'}
+            <${IconButton} aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open}
                            onClick=${() => setOpen(o => !o)} sx=${{ mr: .5 }}>
               <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
             <//>`}
@@ -573,7 +595,10 @@ function PunctRow({ node, depth, t, onChart, onRaw }) {
 
 function ReportPunctuality({ go, row }) {
   const { t } = useT();
-  const [dims, setDims] = useState(['linienbuendel', '', '']);
+  // The vanilla's punct-auf-1/2 carry selected="linienbuendel" and
+  // selected="linie", so the report opens TWO levels deep. Mine opened one,
+  // which is a quieter version of "the report is missing rows".
+  const [dims, setDims] = useState(['linienbuendel', 'linie', '']);
 
   const active = dims.filter(Boolean);
   const tree = useMemo(
@@ -674,7 +699,7 @@ function RptRow({ node, depth, cols, onChart }) {
       <${TableRow} hover>
         <${TableCell} sx=${{ pl: `${16 + depth * 20}px` }}>
           ${kids.length > 0 && html`
-            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} sx=${{ mr: .5 }}>
+            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
               <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
             <//>`}
           ${node.label}
@@ -691,6 +716,51 @@ function RptRow({ node, depth, cols, onChart }) {
       <//>
       ${open && kids.map((k, i) => html`
         <${RptRow} key=${k.label + i} node=${k} depth=${depth + 1} cols=${cols} onChart=${onChart} />`)}
+    <//>`;
+}
+
+/**
+ * The Connection report's parameter chips.
+ *
+ * Read-only by design: they carry a caret and a pointer cursor, so they read
+ * as filters, and the vanilla answers that with a "read-only" footer inside
+ * each dropdown rather than by removing the affordance. Reproduced, footer
+ * and all — dropping the footer would leave the misleading half.
+ */
+function ParamChips() {
+  const { t } = useT();
+  const [open, setOpen] = useState(null);
+  return html`
+    <${Stack} direction="row" spacing=${1} sx=${{ mb: 2, flexWrap: 'wrap', gap: 1 }}
+              id="rpt-param-row">
+      ${CONNECTION_CHIPS.map((c, i) => html`
+        <${Box} key=${i} sx=${{ position: 'relative' }}>
+          <${Chip} size="small" variant="outlined" clickable
+            id=${'chip-' + i} role="button" aria-expanded=${open === i}
+            title=${t('chip_readonly_title')}
+            onClick=${() => setOpen(o => (o === i ? null : i))}
+            icon=${html`<${Icon} sx=${{ fontSize: 14 }}>${c.icon}<//>`}
+            label=${c.label}
+            deleteIcon=${html`<${Icon} sx=${{ fontSize: 14,
+                                transition: 'transform .15s',
+                                transform: open === i ? 'rotate(180deg)' : 'none' }}>expand_more<//>`}
+            onDelete=${() => setOpen(o => (o === i ? null : i))} />
+          ${open === i && html`
+            <${Paper} variant="outlined" className="rpt-chip-dropdown"
+              sx=${{ position: 'absolute', zIndex: 10, mt: .5, minWidth: 220,
+                      maxHeight: 280, overflow: 'auto', borderColor: '#E7E7E7' }}>
+              <${Typography} variant="caption" sx=${{ display: 'block', px: 1.5, pt: 1,
+                               color: 'text.secondary', fontWeight: 500 }}>
+                ${t(c.headerKey)}<//>
+              ${c.items.map((it, k) => html`
+                <${Typography} key=${k} variant="body2" sx=${{ px: 1.5, py: .5 }}>${it}<//>`)}
+              <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: .75, px: 1.5, py: 1,
+                              borderTop: '1px solid #E7E7E7', color: 'text.secondary' }}>
+                <${Icon} sx=${{ fontSize: 14 }}>visibility<//>
+                <${Typography} variant="caption">${t('chip_readonly')}<//>
+              <//>
+            <//>`}
+        <//>`)}
     <//>`;
 }
 
@@ -719,6 +789,7 @@ function ReportConnection({ go, row }) {
         action=${html`<${Button} variant="outlined"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
       <${Box} sx=${{ p: 3 }}>
+        <${ParamChips} />
         <${Card} sx=${{ mb: 3 }}><${CardContent}>
           <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('punct_aufschluss_label')}<//>
           <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
@@ -777,7 +848,7 @@ function FaRow({ tu, t, onMask, onChart }) {
       <${TableRow} hover>
         <${TableCell}>
           ${days.length > 0 && html`
-            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} sx=${{ mr: .5 }}>
+            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
               <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
             <//>`}
           ${tu.label}
@@ -1353,13 +1424,17 @@ function TopBar({ go, onLogout }) {
   const [anchor, setAnchor] = useState(null);
   const [langAnchor, setLangAnchor] = useState(null);
   return html`
-    <${AppBar} position="static" sx=${{ bgcolor: NAVY }}>
+    ${/* The vanilla's #topbar is position:fixed, height 48, z-index 200, and
+          #main carries a matching margin-top:48px. Mine was position:static,
+          so the bar scrolled away on every long table. */''}
+    <${AppBar} position="fixed" sx=${{ bgcolor: NAVY, zIndex: 200, top: '36px' }}>
       <${Toolbar} sx=${{ gap: 0.5 }}>
         <${Box} sx=${{ width: 24, height: 24, bgcolor: '#E30613', color: '#fff', mr: 3,
                         display: 'grid', placeItems: 'center', borderRadius: '2px',
                         fontWeight: 700, fontSize: 16, lineHeight: 1 }}>+<//>
         <${Button} color="inherit" sx=${{ opacity: .75 }}>Startseite<//>
         <${Button} color="inherit" id="qx-nav-trigger" aria-haspopup="menu"
+                   aria-expanded=${!!anchor}
                    onClick=${e => setAnchor(e.currentTarget)}
                    endIcon=${html`<${Icon}>expand_more<//>`}
                    sx=${{ borderBottom: '2px solid #fff', borderRadius: 0 }}>Q-Explorer<//>
@@ -1374,6 +1449,7 @@ function TopBar({ go, onLogout }) {
         <${Button} color="inherit" sx=${{ opacity: .75 }}>Q-Messungen<//>
         <${Box} sx=${{ flex: 1 }} />
         <${Button} color="inherit" variant="outlined" id="lang-trigger"
+                   aria-haspopup="menu" aria-expanded=${!!langAnchor}
                    onClick=${e => setLangAnchor(e.currentTarget)}
                    sx=${{ borderColor: 'rgba(255,255,255,.4)' }}>${lang.toUpperCase()}<//>
         <${Menu} anchorEl=${langAnchor} open=${!!langAnchor} onClose=${() => setLangAnchor(null)}>
@@ -1541,7 +1617,7 @@ function App() {
         <${CssBaseline} />
         <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 36px)' }}>
           <${TopBar} go=${go} onLogout=${() => setAuthed(false)} />
-          <${Box} sx=${{ flex: 1 }}>${screen}<//>
+          <${Box} sx=${{ flex: 1, mt: '48px' }}>${screen}<//>
           <${Box} component="footer" sx=${{ display: 'flex', justifyContent: 'flex-end', gap: 1,
                    px: 3, py: .5, bgcolor: '#fff', borderTop: '1px solid #E7E7E7' }}>
             ${['util_impressum', 'util_dokumente', 'util_support', 'util_kontakt'].map(k =>

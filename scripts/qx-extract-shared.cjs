@@ -175,6 +175,32 @@ let loginLogo = '';
   }
 }
 
+/* ── 1d. the Connection report's parameter chips ─────────────────────
+   A read-only summary row — "15 TU's", "8 Kantone" — where the partial ones
+   expand into the full membership list. Ignat, 2026-09-17: "and other". This
+   was the "other": three expandable chips the port had no equivalent for, and
+   a census of selects and tables could never see them. */
+const chips = [];
+{
+  const i = src.indexOf('id="view-report-connection"');
+  const j = src.indexOf('<div id="view-', i + 10);
+  const section = src.slice(i, j > 0 ? j : undefined);
+  const re = /<div class="rpt-chip-wrap">([\s\S]*?)<\/div>\s*<\/div>/g;
+  let m;
+  while ((m = re.exec(section))) {
+    const w = m[1];
+    const icon = (w.match(/<span class="material-icons">(\w+)<\/span>/) || [, ''])[1];
+    const label = (w.match(/<\/span>([^<]+)<span class="material-icons rpt-chip-caret">/) || [, ''])[1].trim();
+    const headerKey = (w.match(/rpt-chip-dd-header" data-i18n="([^"]+)"/) || [, ''])[1];
+    const items = [...w.matchAll(/<div class="rpt-chip-dd-item">([^<]*)<\/div>/g)].map(x => x[1].trim());
+    if (label) chips.push({ icon, label, headerKey, items });
+  }
+  if (!chips.length) {
+    console.error('EXTRACTION INCOMPLETE — connection parameter chips not found');
+    process.exit(1);
+  }
+}
+
 // Actions must survive the trip. A markup change that stops the cell matching
 // would otherwise hand the port a list where nothing is clickable, silently.
 {
@@ -306,6 +332,9 @@ var EVALUATIONS = ${JSON.stringify(rows, null, 2)};
 /** The login lockup: Swiss flag + QMS RPV CH wordmark, verbatim. */
 var LOGIN_LOGO_SVG = ${JSON.stringify(loginLogo)};
 
+/** The Connection report's read-only parameter chips. */
+var CONNECTION_CHIPS = ${JSON.stringify(chips, null, 2)};
+
 /** The scheduled reports, likewise. */
 var SCHEDULES = ${JSON.stringify(schedules, null, 2)};
 
@@ -341,6 +370,7 @@ fs.writeFileSync(OUT, out);
 }
 console.log(`evaluation rows   ${rows.length}`);
 console.log(`schedules         ${schedules.length}`);
+console.log(`param chips       ${chips.length}  (${chips.map(c => c.label).join(', ')})`);
 console.log(`login logo        ${(loginLogo.length / 1024).toFixed(1)} KB of SVG`);
 console.log(`domain constants  ${consts.length}  (${consts.map(x => x.name).slice(0, 8).join(', ')}…)`);
 console.log(`pure functions    ${pure.length}`);

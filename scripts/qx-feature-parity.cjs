@@ -26,7 +26,7 @@ const affordances = (page, root) => page.evaluate(sel => {
   // Scoped, because the vanilla renders the whole app behind its login screen
   // — counting document-wide there reports six tables the user cannot see.
   const scope = (sel && document.querySelector(sel)) || document;
-  const seen = { tabs: [], buttons: [], selects: [], tables: 0, inputs: 0 };
+  const seen = { tabs: [], buttons: [], selects: [], tables: 0, inputs: 0, expanders: 0 };
   const vis = el => el.offsetParent !== null || getComputedStyle(el).position === 'fixed';
   const label = el => (el.getAttribute('aria-label') || el.textContent || '')
     .replace(/\s+/g, ' ').trim().slice(0, 40);
@@ -58,10 +58,33 @@ const affordances = (page, root) => page.evaluate(sel => {
     controls.add(el);
   }
   seen.selects = [...controls].map(el => label(el).slice(0, 24));
+  /* Anything that collapses. Ignat, 2026-09-17: "on evaluations page each
+     section was an accordeon. Now they are not collapsable." Controls and
+     tables both matched on that view, so counting only those had nothing to
+     say — a static heading and an accordion header look identical to a census
+     of selects. aria-expanded is what actually distinguishes them. */
+  seen.expanders = [...scope.querySelectorAll('[aria-expanded]')].filter(vis)
+    // a dropdown trigger also carries aria-expanded; counting those puts the
+    // select census back in and hides the accordions this is here to find
+    .filter(el => !el.matches('[role="combobox"], .mui-select-trigger, .MuiSelect-select')
+               && !el.closest('.mui-select, .MuiSelect-select')).length;
   seen.tables = [...scope.querySelectorAll('table')].filter(vis).length;
   seen.inputs = [...scope.querySelectorAll('input')].filter(vis).length;
   return seen;
 }, root || null);
+
+
+/** Shell properties that hold across every view — measured once per app. */
+const shellProbe = page => page.evaluate(() => {
+  const bar = document.querySelector('#topbar') || document.querySelector('.MuiAppBar-root');
+  if (!bar) return { barPos: 'none', barH: 0, barTop: false };
+  const b = bar.getBoundingClientRect();
+  return {
+    barPos: getComputedStyle(bar).position,
+    barH: Math.round(b.height),
+    barTop: Math.round(b.top) === 0,
+  };
+});
 
 const uniq = a => [...new Set(a.filter(Boolean))];
 
@@ -83,6 +106,8 @@ const uniq = a => [...new Set(a.filter(Boolean))];
   const VIEWS = ['login', 'reports-list', 'scheduled', 'wizard', 'report-punct', 'report-fa',
                  'report-dqi', 'report-connection', 'rohdaten', 'raw-punct',
                  'ausfallmaske', 'chart-punct', 'chart-fa', 'chart-connection'];
+  const shell = {};
+  shell.v = await shellProbe(v);
   const vanilla = { login: vanillaLogin };
   for (const view of VIEWS.filter(x => x !== 'login')) {
     await v.evaluate(n => window.showView && window.showView(n), view);
@@ -104,6 +129,7 @@ const uniq = a => [...new Set(a.filter(Boolean))];
     await r.click('#login-submit');
     await r.waitForTimeout(700);
   }
+  shell.r = await shellProbe(r);
   react['reports-list'] = await affordances(r);
 
   const openGroup = async group => {
@@ -196,7 +222,18 @@ const uniq = a => [...new Set(a.filter(Boolean))];
 
   /* ── report ────────────────────────────────────────────────────── */
   console.log('\nFeature parity — vanilla vs React port\n');
-  let gaps = 0;
+
+  // Shell properties are true on every view at once, so they belong here
+  // rather than in the per-view table. The top bar being position:fixed is
+  // one of them, and no census of controls would ever notice it.
+  const shellLines = [];
+  for (const [k, want, got] of [
+    ['top bar position', shell.v.barPos, shell.r.barPos],
+    ['top bar height', shell.v.barH, shell.r.barH],
+    ['top bar pinned to the top edge', shell.v.barTop, shell.r.barTop],
+  ]) if (String(want) !== String(got)) shellLines.push(`${k}: ${want} -> ${got}`);
+  console.log(`${'shell'.padEnd(20)} ${shellLines.length ? shellLines.join('\n' + ' '.repeat(21)) : 'ok'}`);
+  let gaps = shellLines.length;
   for (const view of VIEWS) {
     const a = vanilla[view];
     const b = react[view];
@@ -215,6 +252,8 @@ const uniq = a => [...new Set(a.filter(Boolean))];
     if (a.selects.length > b.selects.length)
       lines.push(`controls ${a.selects.length} -> ${b.selects.length}`);
     if (a.tables > b.tables) lines.push(`tables ${a.tables} -> ${b.tables}`);
+    if (a.expanders > b.expanders)
+      lines.push(`collapsible ${a.expanders} -> ${b.expanders}`);
     if (lines.length) {
       console.log(`${view.padEnd(20)} ${lines.join('\n' + ' '.repeat(21))}`);
       gaps += lines.length;

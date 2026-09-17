@@ -268,6 +268,43 @@ const fs = require('fs');
   ok('download confirms it started', await page.isVisible('#note-toast'));
   await page.waitForTimeout(100);
 
+  /* ── the shell and the accordions ─────────────────────────────────
+     Ignat, 2026-09-17: "each section was an accordeon. Now they are not
+     collapsable" and "the topbar should be fixed". Both true, and the parity
+     checker had said this view was fine — because it counted controls and
+     tables, and a static heading has exactly as many of each as an accordion
+     header does. */
+  const bar = await page.evaluate(() => {
+    const el = document.querySelector('.MuiAppBar-root');
+    const b = el.getBoundingClientRect();
+    return { pos: getComputedStyle(el).position, top: Math.round(b.top) };
+  });
+  ok('the top bar is fixed, as #topbar is in the vanilla', bar.pos === 'fixed', bar);
+
+  await page.evaluate(() => window.scrollTo(0, 400));
+  await page.waitForTimeout(250);
+  ok('the top bar stays put when the page scrolls',
+    (await page.evaluate(() => Math.round(document.querySelector('.MuiAppBar-root')
+      .getBoundingClientRect().top))) === bar.top);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(250);
+
+  const heads = await page.$$('.group-header');
+  ok('every evaluation type is an accordion header', heads.length === 6, heads.length);
+  const beforeCollapse = await rowCount();
+  await page.click('#group-punctuality');
+  await page.waitForTimeout(400);
+  const afterCollapse = await rowCount();
+  ok('clicking a group header collapses its table', afterCollapse < beforeCollapse,
+    { beforeCollapse, afterCollapse });
+  ok('the collapsed header says so',
+    (await page.getAttribute('#group-punctuality', 'aria-expanded')) === 'false');
+  ok('the header itself stays visible and clickable when collapsed',
+    await page.isVisible('#group-punctuality'));
+  await page.click('#group-punctuality');
+  await page.waitForTimeout(400);
+  ok('clicking it again restores the rows', (await rowCount()) === beforeCollapse);
+
   // ── navigation ───────────────────────────────────────────────
   await page.click('#qx-nav-trigger');
   await page.waitForTimeout(300);
@@ -465,8 +502,18 @@ const fs = require('fs');
     !lvl2.includes(lvl1Label), { lvl1Label, lvl2 });
   await page.click('.MuiMenu-list li:first-child');
   await page.waitForTimeout(600);
+  /* The report now OPENS two levels deep, matching the vanilla's
+     selected="linienbuendel" / selected="linie". Counting rows after adding a
+     THIRD level proves nothing — depth-2 nodes render collapsed, so the
+     visible count is unchanged and the assertion would be measuring the
+     default expansion state, not the breakdown. Clearing a level is the
+     change that must move the count. */
+  ok('the report opens two levels deep, as the vanilla does',
+    (await page.$eval('#punct-auf-2 .MuiSelect-select', e => e.textContent.trim())).length > 0);
+  await page.click('#punct-auf-2 button[aria-label^="Clear"]');
+  await page.waitForTimeout(600);
   const l2 = await page.$$eval('#punct-table tbody tr', r => r.length);
-  ok('adding a second level expands the tree', l2 > l1, { l1, l2 });
+  ok('clearing the second level collapses the tree back', l2 < l1, { l1, l2 });
 
   // ── every evaluation type opens its own view, with numbers that come
   //    from the extracted logic rather than anything retyped here ──────
@@ -548,6 +595,25 @@ const fs = require('fs');
     c => c.map(x => x.textContent.trim()).slice(1, 4));
   const rptWant = await page.evaluate(() =>
     RPT_DATA.gesamt.slice(0, 3).map(v => v === null ? '—' : v.toFixed(2) + '%'));
+  /* The read-only parameter chips — three expandable summaries the port had
+     no equivalent for, and the "and other" in Ignat's message. */
+  const chipCount = await page.$$eval('#rpt-param-row [role="button"]', e => e.length);
+  const chipWant = await page.evaluate(() => CONNECTION_CHIPS.length);
+  ok('the Connection report carries its parameter chips',
+    chipCount === chipWant && chipCount === 3, { chipCount, chipWant });
+  await page.click('#chip-0');
+  await page.waitForTimeout(350);
+  ok('a chip expands into its membership list',
+    (await page.$$eval('.rpt-chip-dropdown', e => e.length)) === 1);
+  ok('the dropdown says it is read-only rather than pretending to filter',
+    (await page.textContent('.rpt-chip-dropdown')).length > 20);
+  ok('the expanded chip reports its state',
+    (await page.getAttribute('#chip-0', 'aria-expanded')) === 'true');
+  await page.click('#chip-0');
+  await page.waitForTimeout(300);
+  ok('clicking the chip again closes it',
+    (await page.$$eval('.rpt-chip-dropdown', e => e.length)) === 0);
+
   ok('Connection totals equal RPT_DATA.gesamt',
     JSON.stringify(rpt) === JSON.stringify(rptWant), { rpt, rptWant });
   await goBack();

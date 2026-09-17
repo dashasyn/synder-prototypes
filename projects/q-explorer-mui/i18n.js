@@ -157,9 +157,6 @@ var translations = {
       act_retry: 'Run again',
       act_preview: 'Preview',
       act_delete: 'Delete',
-      act_pause: 'Pause',
-      act_resume: 'Resume',
-      act_edit: 'Edit',
       /* The vanilla's login card is hardcoded German and ignores the language
          toggle entirely — a real defect in it, not a decision. Carried here as
          keys so the port's login follows the chosen language. */
@@ -649,9 +646,6 @@ var translations = {
       act_retry: 'Erneut ausführen',
       act_preview: 'Vorschau',
       act_delete: 'Löschen',
-      act_pause: 'Pausieren',
-      act_resume: 'Fortsetzen',
-      act_edit: 'Bearbeiten',
       login_title: 'Anmelden',
       login_subtitle: 'QMS RPV CH · Q-Explorer',
       login_email: 'E-Mail',
