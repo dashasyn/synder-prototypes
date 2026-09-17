@@ -78,11 +78,44 @@ const fs = require('fs');
       cardShadow: card ? getComputedStyle(card).boxShadow : null,
     };
   });
-  ok('the login background is opaque, not an alpha scrim',
-    loginLook.opaque === 'rgb(240, 242, 245)', loginLook.opaque);
+  ok('the login background is opaque, not an alpha scrim, and matches the vanilla',
+    loginLook.opaque === 'rgb(250, 250, 250)', loginLook.opaque);
   ok('login fields are the same filled fields as the rest of the app', loginLook.filled);
   ok('the login card is flat', loginLook.cardShadow === 'none', loginLook.cardShadow);
   ok('no untranslated keys on the login screen', (await rawKeys(page)).length === 0, await rawKeys(page));
+
+  /* Login fidelity, measured against the vanilla rather than eyeballed.
+     Ignat, 2026-09-17: "Add login page as it was." My first pass invented a
+     layout — no wordmark, a primary-blue button, a footer instead of the
+     bottom utility bar. Every number below was read off the vanilla. */
+  const loginGeom = await page.evaluate(() => {
+    const box = el => { if (!el) return null; const b = el.getBoundingClientRect();
+      return { w: Math.round(b.width), h: Math.round(b.height), x: Math.round(b.x) }; };
+    const card = document.getElementById('login-card');
+    const btn = document.getElementById('login-submit');
+    const bar = document.getElementById('login-utility-bar');
+    return {
+      card: box(card), pad: getComputedStyle(card).padding,
+      flag: box(document.querySelector('.login-flag')),
+      name: box(document.querySelector('.login-name')),
+      btn: box(btn), btnBg: getComputedStyle(btn).backgroundColor,
+      barBottom: bar ? Math.round(window.innerHeight - bar.getBoundingClientRect().bottom) : null,
+      links: bar ? bar.querySelectorAll('button').length : 0,
+      forgot: !!document.getElementById('login-forgot'),
+    };
+  });
+  ok('the login card is the vanilla\'s 380px with 36/40 padding',
+    loginGeom.card.w === 380 && loginGeom.pad === '36px 40px', loginGeom);
+  ok('the Swiss flag is 56x62', loginGeom.flag && loginGeom.flag.w === 56 && loginGeom.flag.h === 62,
+    loginGeom.flag);
+  ok('the QMS RPV CH wordmark is there at 210x61',
+    loginGeom.name && loginGeom.name.w === 210 && loginGeom.name.h === 61, loginGeom.name);
+  ok('the submit button is navy, full width and 39px tall',
+    loginGeom.btnBg === 'rgb(28, 40, 72)' && loginGeom.btn.h === 39 && loginGeom.btn.w === 298,
+    { bg: loginGeom.btnBg, btn: loginGeom.btn });
+  ok('the forgot-password link is there', loginGeom.forgot);
+  ok('the utility bar is pinned to the bottom with its four links',
+    loginGeom.barBottom === 0 && loginGeom.links === 4, loginGeom);
 
   // empty submit puts a message under each field, not one for the form
   await page.click('#login-submit');

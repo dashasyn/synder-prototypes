@@ -34,6 +34,12 @@ const useT = () => useContext(I18n);
 
 const NAVY = '#1C2848';
 
+// the icon each utility link carries in the vanilla's login bar
+const UTIL_ICON = {
+  util_impressum: 'gavel', util_dokumente: 'folder_open',
+  util_kontakt: 'contact_page', util_support: 'support_agent',
+};
+
 const theme = createTheme({
   palette: {
     primary: { main: '#2196F3', dark: '#1769AA', light: '#64B5F6' },
@@ -1408,39 +1414,72 @@ function Login({ onLogin }) {
     setErr(next);
     if (!next.email && !next.pass) onLogin();
   };
+  const onKey = e => { if (e.key === 'Enter') submit(); };
+
+  const util = k => html`
+    <${Box} component="button" key=${k} onClick=${e => e.preventDefault()}
+      sx=${{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: 'none',
+              border: 'none', p: 0, font: 'inherit', fontSize: 13, cursor: 'pointer',
+              color: 'primary.dark' }}>
+      <${Icon} sx=${{ fontSize: 18 }}>${UTIL_ICON[k]}<//>
+      ${t(k)}
+      <${Icon} sx=${{ fontSize: 14 }}>open_in_new<//>
+    <//>`;
 
   return html`
-    <${Box} id="view-login" sx=${{ minHeight: 'calc(100vh - 36px)', bgcolor: '#F0F2F5',
+    <${Box} id="view-login" sx=${{ position: 'fixed', inset: 0, bgcolor: '#FAFAFA', zIndex: 500,
              display: 'flex', flexDirection: 'column', alignItems: 'center',
-             justifyContent: 'center', gap: 3, p: 3 }}>
-      ${/* the Swiss flag from the vanilla's own markup */''}
-      <${Box} component="svg" viewBox="0 0 40 44" aria-hidden="true" sx=${{ width: 40, height: 44 }}>
-        <path d="m38.5778 3.2s-7.2-3.2-19.3-3.2c-12.00002 0-19.2000222 3.2-19.2000222 3.2s-.6999998 14.1 2.1000022 22.1c4.8 14 17.20002 18 17.20002 18s12.3-3.9 17.2-18c2.6-8 2-22.1 2-22.1z" fill="#ff0000"></path>
-        <path d="m32.0779 15.4v7.8h-9v9.1h-7.7v-9.1h-8.99997v-7.8h8.99997v-9.09995h7.7v9.09995z" fill="#ffffff"></path>
-      <//>
-      <${Card} sx=${{ width: 360, p: 3 }}>
-        <${Typography} variant="h6">${t('login_title')}<//>
-        <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
+             justifyContent: 'center' }}>
+
+      ${/* flag 56x62 + the QMS RPV CH wordmark 210x61, extracted verbatim from
+            the vanilla rather than redrawn — see LOGIN_LOGO_SVG in data.js */''}
+      <${Box} className="login-logo" id="login-logo"
+        sx=${{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
+                mb: 4, '& .login-flag': { width: 56, height: 62 },
+                '& .login-name': { width: 210, height: 61 } }}
+        dangerouslySetInnerHTML=${{ __html: LOGIN_LOGO_SVG }} />
+
+      <${Paper} variant="outlined" id="login-card"
+        sx=${{ width: 380, p: '36px 40px', borderColor: '#E7E7E7', boxShadow: 'none' }}>
+        <${Typography} component="h2" sx=${{ fontSize: 22, fontWeight: 700, mb: .5 }}>
+          ${t('login_title')}<//>
+        <${Typography} sx=${{ fontSize: 14, color: 'text.secondary', mb: 3.5 }}>
           ${t('login_subtitle')}<//>
+
         <${TextField} fullWidth id="login-email" type="email" label=${t('login_email')}
-          placeholder="name@organisation.ch" value=${email} sx=${{ mb: 2 }}
-          onChange=${e => setEmail(e.target.value)}
-          error=${!!err.email} helperText=${err.email || ' '} />
+          placeholder="name@organisation.ch" value=${email} sx=${{ mb: err.email ? 0 : 2.25 }}
+          onChange=${e => setEmail(e.target.value)} onKeyDown=${onKey}
+          error=${!!err.email} helperText=${err.email || ''} />
         <${TextField} fullWidth id="login-password" type="password" label=${t('login_password')}
-          value=${pass} sx=${{ mb: 2 }} onChange=${e => setPass(e.target.value)}
-          error=${!!err.pass} helperText=${err.pass || ' '} />
-        <${Button} fullWidth variant="contained" id="login-submit"
-          onClick=${submit}>${t('login_submit')}<//>
-        <${Box} sx=${{ mt: 2, textAlign: 'center' }}>
-          <${Link} href="#" variant="body2" underline="hover"
-            onClick=${e => e.preventDefault()}>${t('login_forgot')}<//>
-        <//>
+          placeholder="••••••••" value=${pass} sx=${{ mb: err.pass ? 0 : 2.25 }}
+          onChange=${e => setPass(e.target.value)} onKeyDown=${onKey}
+          error=${!!err.pass} helperText=${err.pass || ''} />
+
+        ${/* navy, not primary blue — the vanilla's .btn-login is --appbar-navy */''}
+        ${/* the vanilla's .btn-login is taller than MUI's small button:
+              padding 8/10 with line-height 1.75 gives 39px, not 31px */''}
+        <${Button} fullWidth variant="contained" id="login-submit" onClick=${submit}
+          sx=${{ mt: 1, bgcolor: NAVY, padding: '8px 10px', lineHeight: 1.75,
+                  '&:hover': { bgcolor: '#141D36' } }}>
+          ${t('login_submit')}<//>
+
+        <${Link} href="#" id="login-forgot" underline="none"
+          onClick=${e => e.preventDefault()}
+          sx=${{ display: 'block', textAlign: 'center', mt: 2, fontSize: 13 }}>
+          ${t('login_forgot')}<//>
       <//>
-      <${Stack} direction="row" spacing=${1}>
-        ${['util_impressum', 'util_dokumente', 'util_kontakt', 'util_support'].map(k =>
-          html`<${Button} key=${k} size="small" color="inherit"
-                 sx=${{ color: 'text.secondary', fontSize: 12 }}
-                 endIcon=${html`<${Icon} sx=${{ fontSize: 14 }}>open_in_new<//>`}>${t(k)}<//>`)}
+
+      ${/* the utility bar sits on the bottom edge of the viewport: the three
+            document links left, Support right — Impressum is a legal
+            requirement in CH/DE, so it is not decoration */''}
+      <${Box} id="login-utility-bar"
+        sx=${{ position: 'absolute', left: 0, right: 0, bottom: 0, display: 'flex',
+                alignItems: 'center', justifyContent: 'space-between', gap: 2, p: '14px 24px' }}>
+        <${Box} sx=${{ display: 'flex', alignItems: 'center', flexWrap: 'wrap',
+                        gap: '8px 26px' }}>
+          ${['util_impressum', 'util_dokumente', 'util_kontakt'].map(util)}
+        <//>
+        ${util('util_support')}
       <//>
     <//>`;
 }

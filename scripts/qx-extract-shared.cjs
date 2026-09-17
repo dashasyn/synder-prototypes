@@ -155,6 +155,26 @@ const schedules = [];
   }
 }
 
+/* ── 1c. the login lockup ────────────────────────────────────────────
+   The Swiss flag and the QMS RPV CH wordmark are two inline SVGs, the second
+   a 200-path lettering outline. Extracted rather than hand-copied for the
+   usual reason, plus a practical one: it is far too big to retype correctly. */
+let loginLogo = '';
+{
+  const i = src.indexOf('<div class="login-logo">');
+  const j = src.indexOf('<div class="login-card">', i);
+  if (i < 0 || j < 0) {
+    console.error('EXTRACTION INCOMPLETE — login logo not found');
+    process.exit(1);
+  }
+  loginLogo = src.slice(i + '<div class="login-logo">'.length, j)
+    .replace(/<\/div>\s*$/, '').trim();
+  if (!/login-flag/.test(loginLogo) || !/login-name/.test(loginLogo)) {
+    console.error('EXTRACTION INCOMPLETE — login logo is missing the flag or the wordmark');
+    process.exit(1);
+  }
+}
+
 // Actions must survive the trip. A markup change that stops the cell matching
 // would otherwise hand the port a list where nothing is clickable, silently.
 {
@@ -283,6 +303,9 @@ function setDataLang(l) { lang = l; }
 /** The evaluations list, read out of the vanilla prototype's markup. */
 var EVALUATIONS = ${JSON.stringify(rows, null, 2)};
 
+/** The login lockup: Swiss flag + QMS RPV CH wordmark, verbatim. */
+var LOGIN_LOGO_SVG = ${JSON.stringify(loginLogo)};
+
 /** The scheduled reports, likewise. */
 var SCHEDULES = ${JSON.stringify(schedules, null, 2)};
 
@@ -318,6 +341,7 @@ fs.writeFileSync(OUT, out);
 }
 console.log(`evaluation rows   ${rows.length}`);
 console.log(`schedules         ${schedules.length}`);
+console.log(`login logo        ${(loginLogo.length / 1024).toFixed(1)} KB of SVG`);
 console.log(`domain constants  ${consts.length}  (${consts.map(x => x.name).slice(0, 8).join(', ')}…)`);
 console.log(`pure functions    ${pure.length}`);
 console.log(`written           ${path.relative(process.cwd(), OUT)}  ${(out.length / 1024).toFixed(1)} KB`);
