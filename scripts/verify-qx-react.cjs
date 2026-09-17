@@ -540,6 +540,11 @@ const fs = require('fs');
     };
   });
   ok('New evaluation opens the type popup first', !!dlg, dlg);
+  // Ignat, 2026-09-17: "Popup should appear over the Evaluations page."
+  // It used to navigate first and open the dialog on top of the half-dead
+  // form, so Cancel had to undo a navigation.
+  ok('the popup opens OVER the evaluations list, without navigating first',
+    (await page.$$('tbody tr')).length > 0 && !(await page.$('#run-btn')));
   ok('the popup offers all six types', dlg.count === 6, dlg.count);
   ok('every type carries its icon from the extracted EVAL_TYPES',
     dlg.icons.length === 6 && dlg.icons.every(i => i && i.length > 2), dlg.icons);
@@ -575,6 +580,92 @@ const fs = require('fs');
     !chosen.runDisabled && chosen.lockedOpacity === '1', chosen);
   ok('the breadcrumb offers the way back', /Evaluations/.test(chosen.crumbs), chosen.crumbs);
   ok('no untranslated keys on new evaluation', (await rawKeys(page)).length === 0, await rawKeys(page));
+
+  /* ── the creation flow: generated name and working filters ────────
+     Ignat, 2026-09-17: "when an empty evaluation opens - show generated name"
+     and "Filters don't work. Please check carefully creation flow." Every
+     scope filter was a Select with two hardcoded options, SBB and BLS, and no
+     state — so Cantons, Lines and Stops all offered company names. */
+  // MUI puts a TextField's id on the input itself, so "#eval-name input"
+  // matches nothing — a selector that finds nothing throws rather than lying,
+  // which is the one good thing about this class of mistake.
+  const nameAt = () => page.$eval('#eval-name', e => e.value);
+  const gen = await nameAt();
+  ok('an empty evaluation opens with a generated name', gen.length > 0, gen);
+  ok('the generated name names the type and the period',
+    /nktlich|unctual/i.test(gen) && /month|Monat/i.test(gen), gen);
+
+  // the five scope filters carry real, distinct option sets
+  const scope = await page.evaluate(() => {
+    const ids = ['f-modes', 'f-tu', 'f-cantons', 'f-lines', 'f-stops'];
+    return ids.map(id => !!document.getElementById(id));
+  });
+  ok('all five scope filters are there', scope.every(Boolean), scope);
+
+  const optionsOf = async id => {
+    await page.click(`#${id} .MuiSelect-select`);
+    await page.waitForTimeout(300);
+    const opts = await page.$$eval('.MuiMenu-list li', e => e.map(x => x.textContent.trim()));
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(250);
+    return opts;
+  };
+  const tuOpts = await optionsOf('f-tu');
+  const cantonOpts = await optionsOf('f-cantons');
+  const lineOpts = await optionsOf('f-lines');
+  ok('transport companies come from ALL_TU, not two hardcoded names',
+    tuOpts.length === (await page.evaluate(() => ALL_TU.length)) && tuOpts.length > 2, tuOpts.length);
+  ok('cantons are cantons, not company names',
+    cantonOpts.length === 26 && !cantonOpts.some(c => /SBB|BLS/.test(c)), cantonOpts.slice(0, 3));
+  ok('lines are line numbers, not company names',
+    lineOpts.length > 10 && !lineOpts.some(c => /^SBB|^BLS/.test(c)), lineOpts.slice(0, 3));
+
+  // picking a TU cascades into the lines on offer, as renderLinesOptions does
+  await page.click('#f-tu .MuiSelect-select');
+  await page.waitForTimeout(300);
+  await page.click('.MuiMenu-list li:first-child');
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  const linesAfterTu = await optionsOf('f-lines');
+  ok('choosing a transport company narrows the lines on offer',
+    linesAfterTu.length < lineOpts.length && linesAfterTu.length > 0,
+    { before: lineOpts.length, after: linesAfterTu.length });
+
+  // and the generated name follows the filters
+  const nameAfter = await nameAt();
+  ok('the generated name follows the filters', nameAfter !== gen, { gen, nameAfter });
+
+  // typing in the name stops it following, as nameManuallyEdited does
+  await page.fill('#eval-name', 'My own name');
+  await page.waitForTimeout(200);
+  await page.click('#f-cantons .MuiSelect-select');
+  await page.waitForTimeout(300);
+  await page.click('.MuiMenu-list li:first-child');
+  await page.waitForTimeout(300);
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  ok('editing the name stops it being regenerated',
+    (await nameAt()) === 'My own name', await nameAt());
+
+  // the period presets, and the custom range with its reversed-date error
+  await page.click('#preset-custom');
+  await page.waitForTimeout(300);
+  ok('picking Custom reveals the date fields', !!(await page.$('#custom-dates')));
+  await page.fill('#date-from', '2026-05-20');
+  await page.fill('#date-to', '2026-05-01');
+  await page.waitForTimeout(400);
+  const reversed = await page.$$eval('.MuiFormHelperText-root.Mui-error', e => e.length);
+  ok('a reversed date range is refused', reversed > 0, reversed);
+  await page.fill('#date-to', '2026-05-25');
+  await page.waitForTimeout(400);
+  ok('correcting the range clears the error',
+    (await page.$$eval('.MuiFormHelperText-root.Mui-error', e => e.length)) === 0);
+
+  // days of week
+  await page.click('#day-Mon');
+  await page.waitForTimeout(300);
+  ok('days of the week can be picked', !!(await page.$('#day-Mon')));
 
   // Raw Data Export still bypasses this page for its own config form
   await page.click('.MuiBreadcrumbs-root a');

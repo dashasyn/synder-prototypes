@@ -209,6 +209,24 @@ const chips = [];
   }
 }
 
+/* ── 1e. how a schedule's name maps to an evaluation type ────────────
+   editSchedule() derives the type from a name prefix, because a schedule row
+   carries no type of its own. Pulled out of the function body so the port
+   uses the same table rather than a retyped one. */
+let schedTypeMap = null;
+{
+  const at = js.indexOf('const typeMap = {');
+  if (at < 0) {
+    console.error('EXTRACTION INCOMPLETE — editSchedule typeMap not found');
+    process.exit(1);
+  }
+  schedTypeMap = balanced(js, js.indexOf('{', at));
+  if (!schedTypeMap || !/trip_failures/.test(schedTypeMap)) {
+    console.error('EXTRACTION INCOMPLETE — editSchedule typeMap did not parse');
+    process.exit(1);
+  }
+}
+
 // Actions must survive the trip. A markup change that stops the cell matching
 // would otherwise hand the port a list where nothing is clickable, silently.
 {
@@ -343,6 +361,9 @@ var EVALUATIONS = ${JSON.stringify(rows, null, 2)};
 
 /** The login lockup: Swiss flag + QMS RPV CH wordmark, verbatim. */
 var LOGIN_LOGO_SVG = ${JSON.stringify(loginLogo)};
+
+/** editSchedule()'s name-prefix -> evaluation type table. */
+var SCHED_TYPE_MAP = ${schedTypeMap};
 
 /** The Connection report's read-only parameter chips. */
 var CONNECTION_CHIPS = ${JSON.stringify(chips, null, 2)};

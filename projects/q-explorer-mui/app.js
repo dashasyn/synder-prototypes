@@ -18,7 +18,8 @@ const {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Chip,
   Stack, FormControl, InputLabel, Select, InputAdornment, Alert, Tooltip,
   Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
-  Snackbar,
+  Snackbar, Checkbox, ListItemText, OutlinedInput, ToggleButton, ToggleButtonGroup,
+  FormControlLabel, Divider,
 } = M;
 const Fragment = React.Fragment;
 
@@ -224,6 +225,7 @@ function EvaluationsList({ go }) {
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
   const { removed, askDelete, notify, ui: actionUi } = useListActions(t, 'toast_eval_deleted');
+  const { openPicker, pickerUi } = useTypePicker(go);
   const [collapsed, setCollapsed] = useState([]);
   // retryEvaluation(): a failed row flips to in_progress, loses its reason and
   // its retry button, and its remaining actions go dead while it runs.
@@ -290,7 +292,7 @@ function EvaluationsList({ go }) {
         subtitle=${`${rows.length} ${t(rows.length === 1 ? 'eval_count_one' : 'eval_count_many')}`}
         action=${html`<${Button} variant="contained" id="new-eval-btn"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
-                        onClick=${() => go('new')}>${t('btn_new_eval')}<//>`} />
+                        onClick=${openPicker}>${t('btn_new_eval')}<//>`} />
 
       <${Box} sx=${{ p: 3 }}>
         <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }} alignItems="center">
@@ -408,6 +410,7 @@ function EvaluationsList({ go }) {
           <//>`)}
       <//>
       ${actionUi}
+      ${pickerUi}
     <//>`;
 }
 
@@ -426,6 +429,7 @@ function ScheduledReports({ go }) {
   const [q, setQ] = useState('');
   const [paused, setPaused] = useState({});          // name -> overridden status
   const { removed, askDelete, ui: actionUi } = useListActions(t, 'toast_sched_deleted');
+  const { openPicker, pickerUi } = useTypePicker(go);
 
   const statusOf = s => paused[s.name] || s.status;
   const rows = SCHEDULES.filter(s =>
@@ -444,7 +448,7 @@ function ScheduledReports({ go }) {
         subtitle=${t('scheduled_subtitle')}
         action=${html`<${Button} variant="contained" id="new-sched-btn"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
-                        onClick=${() => go('new')}>${t('btn_schedule')}<//>`} />
+                        onClick=${openPicker}>${t('btn_schedule')}<//>`} />
       <${Box} sx=${{ p: 3 }}>
         <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }} alignItems="center">
           <${TextField} label=${t('sched_search_placeholder')} value=${q} id="s-search"
@@ -495,7 +499,16 @@ function ScheduledReports({ go }) {
                       <//>
                     <//>
                     <${Tooltip} title=${t('sched_edit')}>
-                      <${IconButton} aria-label="edit" onClick=${() => go('new')}>
+                      ${/* editSchedule(): the type comes from the name prefix,
+                            through the extracted SCHED_TYPE_MAP — a schedule row
+                            carries no type of its own. */''}
+                      <${IconButton} aria-label="edit" onClick=${() => {
+                        const key = Object.keys(SCHED_TYPE_MAP)
+                          .find(k => s.name.startsWith(k));
+                        const ty = key ? SCHED_TYPE_MAP[key] : 'punctuality';
+                        if (ty === 'raw_data') { go('rohdaten'); return; }
+                        go('new', null, { evalType: ty, schedName: s.name });
+                      }}>
                         <${Icon}>edit<//><//>
                     <//>
                     <${Tooltip} title=${t('act_delete')}>
@@ -509,47 +522,68 @@ function ScheduledReports({ go }) {
         <//>
       <//>
       ${actionUi}
+      ${pickerUi}
     <//>`;
 }
 
 /* ── Screen: New evaluation ───────────────────────────────────────── */
 /**
- * Screen: New evaluation.
+ * A scope filter: multi-select with checkboxes, a summary line, and a clear ✕.
  *
- * Ignat, 2026-09-17: "bring back the popup with evaluation types and icons. I
- * prefer the popup." That settles Q7 from 2026-09-15, where I built both
- * variants in the vanilla and he picked neither at the time. This is variant 1:
- * the type is chosen in a dialog first, then the full-screen details page
- * opens with it already set. The type stays a field on the page so it can be
- * changed without starting over — that is what openEvaluationPage() does.
+ * Ignat, 2026-09-17: "Filters don't work." They did not — every one of the five
+ * scope filters was a Select with two hardcoded options, SBB and BLS, and no
+ * state behind it. So Cantons, Lines and Stops all offered transport-company
+ * names, which is also DOM-1 from this morning's validator round. The options
+ * come from the extracted DATA now, and Lines/Stops cascade off the chosen TU
+ * exactly as renderLinesOptions() does.
  */
-function NewEvaluation({ go, initialType }) {
+/** yyyy-mm-dd (what <input type=date> gives) → dd.mm.yyyy, as the vanilla shows it. */
+const fmtSwiss = v => {
+  const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : v;
+};
+
+function ScopeSelect({ id, label, values, options, onChange, minWidth = 210 }) {
   const { t } = useT();
-  const [type, setType] = useState(initialType || '');
-  const [name, setName] = useState('');
-  const [touched, setTouched] = useState(false);
-  // The dialog opens on arrival unless a type was already chosen.
-  const [picking, setPicking] = useState(!initialType);
-  const locked = !type;
-  const nameError = touched && !name.trim();
+  const labelId = id + '-label';
+  return html`
+    <${FormControl} sx=${{ minWidth }} id=${id}>
+      <${InputLabel} id=${labelId}>${label}<//>
+      <${Select} multiple labelId=${labelId} label=${label} value=${values}
+        onChange=${e => onChange(typeof e.target.value === 'string'
+                                  ? e.target.value.split(',') : e.target.value)}
+        renderValue=${v => v.length > 2 ? `${v.length} ${t('selected_word')}` : v.join(', ')}
+        MenuProps=${{ PaperProps: { sx: { maxHeight: 320 } } }}>
+        ${options.length === 0 && html`
+          <${MenuItem} disabled value="">${t('no_options')}<//>`}
+        ${options.map(o => html`
+          <${MenuItem} key=${o.id} value=${o.id}>
+            <${Checkbox} size="small" checked=${values.indexOf(o.id) > -1} />
+            <${ListItemText} primary=${o.label} />
+          <//>`)}
+      <//>
+    <//>`;
+}
 
-  // Raw Data Export has never used this page — it opens its own config form.
-  const choose = k => {
-    setPicking(false);
-    if (k === 'raw_data') { go('rohdaten'); return; }
-    setType(k);
-  };
-
-  const typeDialog = html`
-    <${Dialog} open=${picking} id="type-dialog" maxWidth="sm" fullWidth
-      onClose=${() => { setPicking(false); go('list'); }}>
+/**
+ * The evaluation-type popup.
+ *
+ * Ignat, 2026-09-17: "Popup should appear over the Evaluations page." It did
+ * not — it opened on top of the already-navigated New evaluation page, so the
+ * half-dead form was visible behind it and Cancel had to undo a navigation.
+ * It belongs to the list; only picking a type navigates.
+ */
+function TypeDialog({ open, onClose, onPick }) {
+  const { t } = useT();
+  return html`
+    <${Dialog} open=${open} id="type-dialog" maxWidth="sm" fullWidth onClose=${onClose}>
       <${DialogTitle}>${t('dlg_pick_type')}<//>
       <${DialogContent} dividers>
         ${EVAL_TYPES.map(x => html`
           <${Box} key=${x.key} role="button" tabIndex=${0}
             id=${'type-option-' + x.key}
-            onClick=${() => choose(x.key)}
-            onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(x.key); } }}
+            onClick=${() => onPick(x.key)}
+            onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(x.key); } }}
             sx=${{ display: 'flex', gap: 1.5, alignItems: 'flex-start', p: 1.5, mx: -1,
                     borderRadius: 1, cursor: 'pointer',
                     '&:hover': { bgcolor: 'action.hover' } }}>
@@ -562,18 +596,101 @@ function NewEvaluation({ go, initialType }) {
           <//>`)}
       <//>
       <${DialogActions}>
-        <${Button} id="type-dialog-cancel"
-          ${/* cf_cancel, not btn_cancel: the vanilla's dialog markup asks for
-                btn_cancel and that key does not exist in either dictionary, so
-                its Cancel button literally renders the string "btn_cancel".
-                Caught here by the raw-key gate. */''}
-          onClick=${() => { setPicking(false); go('list'); }}>${t('cf_cancel')}<//>
+        ${/* cf_cancel, not btn_cancel: the vanilla's markup asks for btn_cancel
+              and that key exists in neither dictionary, so its own button
+              literally renders the string "btn_cancel". */''}
+        <${Button} id="type-dialog-cancel" onClick=${onClose}>${t('cf_cancel')}<//>
       <//>
     <//>`;
+}
+
+/** Shared by the two screens that can start an evaluation. */
+function useTypePicker(go) {
+  const [open, setOpen] = useState(false);
+  const pick = k => {
+    setOpen(false);
+    // Raw Data Export has never used the details page — its own config form.
+    if (k === 'raw_data') { go('rohdaten'); return; }
+    go('new', null, { evalType: k });
+  };
+  const ui = html`<${TypeDialog} open=${open} onClose=${() => setOpen(false)} onPick=${pick} />`;
+  return { openPicker: () => setOpen(true), pickerUi: ui };
+}
+
+/**
+ * Screen: New evaluation.
+ *
+ * Ignat, 2026-09-17: "bring back the popup with evaluation types and icons. I
+ * prefer the popup." That settles Q7 from 2026-09-15, where I built both
+ * variants in the vanilla and he picked neither at the time. This is variant 1:
+ * the type is chosen in a dialog first, then the full-screen details page
+ * opens with it already set. The type stays a field on the page so it can be
+ * changed without starting over — that is what openEvaluationPage() does.
+ */
+function NewEvaluation({ go, initialType }) {
+  const { t, lang } = useT();
+  const [type, setType] = useState(initialType || '');
+  const [touched, setTouched] = useState(false);
+
+  /* The creation flow's real state — the vanilla's `state` object. */
+  const [period, setPeriod] = useState('cur_month');
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [days, setDays] = useState([]);
+  const [modes, setModes] = useState([]);
+  const [tu, setTu] = useState([]);
+  const [cantons, setCantons] = useState([]);
+  const [lines, setLines] = useState([]);
+  const [stops, setStops] = useState([]);
+  const [name, setName] = useState('');
+  const [nameEdited, setNameEdited] = useState(false);
+
+  const locked = !type;
+  const nameError = touched && !name.trim();
+  // validateCustomRange(): the end date must not precede the start.
+  const rangeReversed = period === 'custom' && !!from && !!to && from > to;
+
+  /* Lines and stops cascade off the chosen transport companies, as
+     renderLinesOptions() does — with no TU picked it offers every line. */
+  const lineOptions = useMemo(() => {
+    const src = tu.length ? tu.flatMap(id => DATA.tuLines[id] || [])
+                          : Object.values(DATA.tuLines).flat();
+    return [...new Set(src)].sort().map(x => ({ id: x, label: x }));
+  }, [tu]);
+  const stopOptions = useMemo(() =>
+    (DATA.allStops || []).map(x => ({ id: x, label: x })), []);
+  const tuOptions = ALL_TU.map(x => ({ id: x.id, label: x.label }));
+  const cantonOptions = ALL_CANTONS.map(c => ({ id: c, label: (CANTON_NAMES[c] || c) }));
+  const modeOptions = FLAT_MODES.map(m => ({ id: m.id, label: m.label }));
+
+  /* updateAutoName(): "<type> – <period>, <filters>", and it stops following
+     the form the moment the name is edited by hand. */
+  const periodLabel = period === 'custom'
+    ? (from && to ? `${fmtSwiss(from)} – ${fmtSwiss(to)}` : t('preset_custom'))
+    : t('preset_' + period);
+  const autoName = useMemo(() => {
+    if (!type) return '';
+    const parts = [];
+    if (tu.length) parts.push(tu.join(', '));
+    if (cantons.length) parts.push(t('canton_label') + ' ' + cantons.join(', '));
+    if (lines.length) parts.push(t('filter_lines') + ': ' + lines.join(', '));
+    if (stops.length) parts.push(t('filter_stops') + ': ' + stops.join(', '));
+    const base = parts.length ? ', ' + parts.join(', ') : ', ' + t('all_lines');
+    const dayPart = days.length && days.length < 7 ? ', ' + days.join('/') : '';
+    return `${t('type_' + type)} – ${periodLabel}${base}${dayPart}`;
+  }, [type, tu, cantons, lines, stops, days, periodLabel, t]);
+
+  // The generated name lands in the field; typing in it takes over.
+  React.useEffect(() => { if (!nameEdited) setName(autoName); }, [autoName, nameEdited]);
+
+  // Dropping a TU drops the lines that belonged only to it.
+  React.useEffect(() => {
+    setLines(l => l.filter(x => lineOptions.some(o => o.id === x)));
+  }, [lineOptions]);
+
 
   return html`
     <${Box}>
-      ${typeDialog}
       <${PageHeader}
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: t('new_eval_title') }]}
         title=${t('new_eval_title')}
@@ -588,7 +705,11 @@ function NewEvaluation({ go, initialType }) {
               <${TextField} required label=${t('label_eval_name')} sx=${{ flex: 1 }}
                 id="eval-name" value=${name} error=${nameError}
                 helperText=${nameError ? t('err_name_required') : ' '}
-                onChange=${e => setName(e.target.value)} />
+                ${/* nameManuallyEdited: once it is typed in, the generator
+                      stops overwriting it. I had the flag and the effect but
+                      nothing ever set it, so a hand-written name was wiped by
+                      the next filter change. */''}
+                onChange=${e => { setNameEdited(true); setName(e.target.value); }} />
               <${FormControl} required sx=${{ flex: 1 }}>
                 <${InputLabel}>${t('sel_eval_type')}<//>
                 <${Select} id="eval-type" value=${type} label=${t('sel_eval_type')}
@@ -614,17 +735,39 @@ function NewEvaluation({ go, initialType }) {
             <${CardContent}>
               <${Typography} variant="h6" gutterBottom>${t('step_time_period')}<//>
               <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
-                ${locked ? t('hint_pick_type_first') : t('step1_subtitle')}
+                ${t('step1_subtitle')}
               <//>
-              <${Stack} direction="row" spacing=${1} sx=${{ mb: 2 }}>
-                ${['last_7', 'cur_month', 'last_month', 'last_year', 'custom'].map((p, i) =>
-                  html`<${Chip} key=${p} label=${t('preset_' + p)} clickable
-                                color=${i === 1 ? 'primary' : 'default'}
-                                variant=${i === 1 ? 'filled' : 'outlined'} />`)}
+              ${/* selectPreset(): the vanilla's six presets, one of them custom */''}
+              <${Stack} direction="row" spacing=${1} sx=${{ mb: 2 }} flexWrap="wrap" useFlexGap
+                        id="preset-group">
+                ${['last_7', 'cur_month', 'last_month', 'cur_year', 'last_year', 'custom'].map(p =>
+                  html`<${Chip} key=${p} id=${'preset-' + p} label=${t('preset_' + p)} clickable
+                                onClick=${() => setPeriod(p)}
+                                color=${period === p ? 'primary' : 'default'}
+                                variant=${period === p ? 'filled' : 'outlined'} />`)}
               <//>
-              <${Stack} direction="row" spacing=${2}>
-                <${TextField} label=${t('label_from')} type="date" InputLabelProps=${{ shrink: true }} />
-                <${TextField} label=${t('label_to')} type="date" InputLabelProps=${{ shrink: true }} />
+
+              ${period === 'custom' && html`
+                <${Stack} direction="row" spacing=${2} sx=${{ mb: 2 }} id="custom-dates">
+                  <${TextField} label=${t('label_from')} type="date" id="date-from"
+                    InputLabelProps=${{ shrink: true }} value=${from}
+                    onChange=${e => setFrom(e.target.value)} />
+                  <${TextField} label=${t('label_to')} type="date" id="date-to"
+                    InputLabelProps=${{ shrink: true }} value=${to}
+                    onChange=${e => setTo(e.target.value)}
+                    error=${rangeReversed}
+                    helperText=${rangeReversed ? t('err_range_reversed') : ' '} />
+                <//>`}
+
+              <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 1 }}>
+                ${t('label_days_of_week')}<//>
+              <${Stack} direction="row" spacing=${1} id="days-row" flexWrap="wrap" useFlexGap>
+                ${ALL_DAYS.map(d => html`
+                  <${Chip} key=${d} id=${'day-' + d} clickable size="small"
+                    label=${(DAY_LABELS[lang] || DAY_LABELS.en)[d] || d}
+                    color=${days.includes(d) ? 'primary' : 'default'}
+                    variant=${days.includes(d) ? 'filled' : 'outlined'}
+                    onClick=${() => setDays(x => x.includes(d) ? x.filter(y => y !== d) : [...x, d])} />`)}
               <//>
             <//>
           <//>
@@ -636,16 +779,27 @@ function NewEvaluation({ go, initialType }) {
                 ${t('step2_subtitle')}
               <//>
               <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-                ${[['filter_transport_assoc', 'rpv'], ['filter_tu', 'tu'],
-                   ['chip_cantons', 'canton'], ['filter_lines', 'line'], ['filter_stops', 'stop']]
-                  .map(([k, id]) => html`
-                    <${FormControl} key=${id} sx=${{ minWidth: 200 }}>
-                      <${InputLabel}>${t(k)}<//>
-                      <${Select} label=${t(k)} value="">
-                        <${MenuItem} value="a">SBB<//>
-                        <${MenuItem} value="b">BLS<//>
-                      <//>
-                    <//>`)}
+                <${ScopeSelect} id="f-modes" label=${t('filter_transport_mode')}
+                  values=${modes} options=${modeOptions} onChange=${setModes} />
+                <${ScopeSelect} id="f-tu" label=${t('filter_tu')}
+                  values=${tu} options=${tuOptions} onChange=${setTu} />
+                <${ScopeSelect} id="f-cantons" label=${t('filter_cantons')}
+                  values=${cantons} options=${cantonOptions} onChange=${setCantons} />
+                <${ScopeSelect} id="f-lines" label=${t('filter_lines')}
+                  values=${lines} options=${lineOptions} onChange=${setLines} />
+                <${ScopeSelect} id="f-stops" label=${t('filter_stops')}
+                  values=${stops} options=${stopOptions} onChange=${setStops} />
+              <//>
+
+              ${/* the vanilla's summary-filters row: what the run will cover */''}
+              <${Divider} sx=${{ my: 2 }} />
+              <${Typography} variant="body2" color="text.secondary" id="summary-filters">
+                ${periodLabel}${tu.length ? ' · ' + tu.join(', ') : ''}
+                ${cantons.length ? ' · ' + t('canton_label') + ' ' + cantons.join(', ') : ''}
+                ${lines.length ? ' · ' + lines.length + ' ' + t('filter_lines') : ''}
+                ${stops.length ? ' · ' + stops.length + ' ' + t('filter_stops') : ''}
+                ${!tu.length && !cantons.length && !lines.length && !stops.length
+                  ? ' · ' + t('all_lines') : ''}
               <//>
             <//>
           <//>
