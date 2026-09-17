@@ -68,7 +68,10 @@ const theme = createTheme({
   },
 });
 
-const TYPE_KEYS = ['punctuality', 'raw_data', 'data_quality', 'connection', 'trip_failures', 'line_analysis'];
+// The six types and their icons come from the extracted EVAL_TYPES now; this
+// used to be a hand-typed copy of the keys with no icons at all.
+const TYPE_KEYS = EVAL_TYPES.map(x => x.key);
+const TYPE_ICON = Object.fromEntries(EVAL_TYPES.map(x => [x.key, x.icon]));
 
 /* The evaluations come from data.js, extracted straight out of the vanilla
    prototype (scripts/qx-extract-shared.cjs). Ignat, 2026-09-15: "Now you
@@ -510,16 +513,67 @@ function ScheduledReports({ go }) {
 }
 
 /* ── Screen: New evaluation ───────────────────────────────────────── */
-function NewEvaluation({ go }) {
+/**
+ * Screen: New evaluation.
+ *
+ * Ignat, 2026-09-17: "bring back the popup with evaluation types and icons. I
+ * prefer the popup." That settles Q7 from 2026-09-15, where I built both
+ * variants in the vanilla and he picked neither at the time. This is variant 1:
+ * the type is chosen in a dialog first, then the full-screen details page
+ * opens with it already set. The type stays a field on the page so it can be
+ * changed without starting over — that is what openEvaluationPage() does.
+ */
+function NewEvaluation({ go, initialType }) {
   const { t } = useT();
-  const [type, setType] = useState('');
+  const [type, setType] = useState(initialType || '');
   const [name, setName] = useState('');
   const [touched, setTouched] = useState(false);
+  // The dialog opens on arrival unless a type was already chosen.
+  const [picking, setPicking] = useState(!initialType);
   const locked = !type;
   const nameError = touched && !name.trim();
 
+  // Raw Data Export has never used this page — it opens its own config form.
+  const choose = k => {
+    setPicking(false);
+    if (k === 'raw_data') { go('rohdaten'); return; }
+    setType(k);
+  };
+
+  const typeDialog = html`
+    <${Dialog} open=${picking} id="type-dialog" maxWidth="sm" fullWidth
+      onClose=${() => { setPicking(false); go('list'); }}>
+      <${DialogTitle}>${t('dlg_pick_type')}<//>
+      <${DialogContent} dividers>
+        ${EVAL_TYPES.map(x => html`
+          <${Box} key=${x.key} role="button" tabIndex=${0}
+            id=${'type-option-' + x.key}
+            onClick=${() => choose(x.key)}
+            onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(x.key); } }}
+            sx=${{ display: 'flex', gap: 1.5, alignItems: 'flex-start', p: 1.5, mx: -1,
+                    borderRadius: 1, cursor: 'pointer',
+                    '&:hover': { bgcolor: 'action.hover' } }}>
+            <${Icon} sx=${{ fontSize: 22, color: 'primary.main' }}>${x.icon}<//>
+            <${Box}>
+              <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${t('type_' + x.key)}<//>
+              <${Typography} variant="caption" color="text.secondary" display="block">
+                ${t('type_' + x.key + '_desc')}<//>
+            <//>
+          <//>`)}
+      <//>
+      <${DialogActions}>
+        <${Button} id="type-dialog-cancel"
+          ${/* cf_cancel, not btn_cancel: the vanilla's dialog markup asks for
+                btn_cancel and that key does not exist in either dictionary, so
+                its Cancel button literally renders the string "btn_cancel".
+                Caught here by the raw-key gate. */''}
+          onClick=${() => { setPicking(false); go('list'); }}>${t('cf_cancel')}<//>
+      <//>
+    <//>`;
+
   return html`
     <${Box}>
+      ${typeDialog}
       <${PageHeader}
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: t('new_eval_title') }]}
         title=${t('new_eval_title')}
@@ -544,7 +598,11 @@ function NewEvaluation({ go }) {
                              if (e.target.value === 'raw_data') { go('rohdaten'); return; }
                              setType(e.target.value);
                            }}>
-                  ${TYPE_KEYS.map(k => html`<${MenuItem} key=${k} value=${k}>${t('type_' + k)}<//>`)}
+                  ${TYPE_KEYS.map(k => html`
+                    <${MenuItem} key=${k} value=${k}>
+                      <${Icon} sx=${{ fontSize: 18, mr: 1, color: 'primary.main' }}>${TYPE_ICON[k]}<//>
+                      ${t('type_' + k)}
+                    <//>`)}
                 <//>
               <//>
             <//>
@@ -1658,7 +1716,7 @@ function App() {
   const screen =
     route.name === 'list'      ? html`<${EvaluationsList} go=${go} />` :
     route.name === 'scheduled' ? html`<${ScheduledReports} go=${go} />` :
-    route.name === 'new'       ? html`<${NewEvaluation} go=${go} />` :
+    route.name === 'new'       ? html`<${NewEvaluation} go=${go} initialType=${route.evalType} />` :
     (route.name === 'report' && route.row && route.row.group === 'punctuality')
                                ? html`<${ReportPunctuality} go=${go} row=${route.row} />` :
     (route.name === 'report' && route.row && route.row.group === 'connection')

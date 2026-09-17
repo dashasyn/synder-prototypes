@@ -525,28 +525,72 @@ const fs = require('fs');
   await page.click('#new-eval-btn');
   await page.waitForTimeout(500);
 
-  const blank = await page.evaluate(() => ({
+  /* Variant 1, settled by Ignat 2026-09-17: the type is chosen in a POPUP
+     first, then the details page opens with it set. */
+  const dlg = await page.evaluate(() => {
+    const d = document.getElementById('type-dialog');
+    if (!d) return null;
+    const opts = [...d.querySelectorAll('[id^="type-option-"]')];
+    return {
+      count: opts.length,
+      icons: opts.map(o => (o.querySelector('.material-icons') || {}).textContent),
+      labels: opts.map(o => o.textContent.trim().slice(0, 30)),
+      title: (d.querySelector('.MuiDialogTitle-root') || {}).textContent,
+      hasCancel: !!document.getElementById('type-dialog-cancel'),
+    };
+  });
+  ok('New evaluation opens the type popup first', !!dlg, dlg);
+  ok('the popup offers all six types', dlg.count === 6, dlg.count);
+  ok('every type carries its icon from the extracted EVAL_TYPES',
+    dlg.icons.length === 6 && dlg.icons.every(i => i && i.length > 2), dlg.icons);
+  const wantIcons = await page.evaluate(() => EVAL_TYPES.map(x => x.icon));
+  ok('the icons are the vanilla\'s own, not ones I picked',
+    JSON.stringify(dlg.icons) === JSON.stringify(wantIcons), { got: dlg.icons, wantIcons });
+  ok('each type is described, not just named',
+    dlg.labels.every(l => l.length > 10), dlg.labels);
+  ok('the popup can be cancelled', dlg.hasCancel);
+  ok('no untranslated keys in the type popup', (await rawKeys(page)).length === 0, await rawKeys(page));
+
+  // cancelling returns to the list rather than leaving a half-open page
+  await page.click('#type-dialog-cancel');
+  await page.waitForTimeout(400);
+  ok('cancelling the popup returns to the evaluations list',
+    !!(await page.$('#f-search')) && !(await page.$('#run-btn')));
+
+  await page.click('#new-eval-btn');
+  await page.waitForTimeout(500);
+  await page.click('#type-option-punctuality');
+  await page.waitForTimeout(500);
+  const chosen = await page.evaluate(() => ({
+    gone: !document.getElementById('type-dialog'),
     runDisabled: document.getElementById('run-btn').disabled,
     lockedOpacity: getComputedStyle(document.getElementById('needs-type')).opacity,
+    typeValue: (document.querySelector('#eval-type') || {}).textContent,
     crumbs: document.querySelector('.MuiBreadcrumbs-root').textContent,
   }));
-  ok('New evaluation opens with Run disabled', blank.runDisabled, blank);
-  ok('the cards below the type are dimmed until it is set',
-    blank.lockedOpacity === '0.5', blank.lockedOpacity);
-  ok('the breadcrumb offers the way back', /Evaluations/.test(blank.crumbs), blank.crumbs);
+  ok('picking a type closes the popup and opens the details page', chosen.gone, chosen);
+  ok('the page arrives with the chosen type already set',
+    /nktlich|unctual/i.test(chosen.typeValue || ''), chosen.typeValue);
+  ok('picking a type enables Run and undims the page',
+    !chosen.runDisabled && chosen.lockedOpacity === '1', chosen);
+  ok('the breadcrumb offers the way back', /Evaluations/.test(chosen.crumbs), chosen.crumbs);
   ok('no untranslated keys on new evaluation', (await rawKeys(page)).length === 0, await rawKeys(page));
 
-  // choosing a type unlocks the page
-  await page.click('#eval-type');
-  await page.waitForTimeout(300);
-  await page.click('.MuiMenu-list li:first-child');
+  // Raw Data Export still bypasses this page for its own config form
+  await page.click('.MuiBreadcrumbs-root a');
   await page.waitForTimeout(400);
-  const chosen = await page.evaluate(() => ({
-    runDisabled: document.getElementById('run-btn').disabled,
-    lockedOpacity: getComputedStyle(document.getElementById('needs-type')).opacity,
-  }));
-  ok('choosing a type enables Run and undims the page',
-    !chosen.runDisabled && chosen.lockedOpacity === '1', chosen);
+  await page.click('#new-eval-btn');
+  await page.waitForTimeout(500);
+  await page.click('#type-option-raw_data');
+  await page.waitForTimeout(600);
+  ok('Raw Data Export goes straight to its own config, as in the vanilla',
+    (await page.$$('#rd-run-btn')).length === 1 && !(await page.$('#type-dialog')));
+  await page.click('.MuiBreadcrumbs-root a');
+  await page.waitForTimeout(400);
+  await page.click('#new-eval-btn');
+  await page.waitForTimeout(500);
+  await page.click('#type-option-punctuality');
+  await page.waitForTimeout(500);
 
   // breadcrumb really navigates
   await page.click('.MuiBreadcrumbs-root a');
@@ -854,12 +898,7 @@ const fs = require('fs');
 
   await page.click('#new-eval-btn');
   await page.waitForTimeout(600);
-  await page.click('#eval-type');
-  await page.waitForTimeout(300);
-  await page.evaluate(() => {
-    const li = [...document.querySelectorAll('.MuiMenu-list li')].find(x => /Raw Data|Rohdaten/.test(x.textContent));
-    if (li) li.click();
-  });
+  await page.click('#type-option-raw_data');
   await page.waitForTimeout(700);
   ok('choosing Raw Data Export opens its config form',
     (await page.$$('#rd-run-btn')).length === 1);

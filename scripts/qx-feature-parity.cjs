@@ -216,19 +216,18 @@ const uniq = a => [...new Set(a.filter(Boolean))];
 
   // Raw Data Export config is reached from New evaluation, not from a row —
   // a row in the list is a FINISHED export and opens the table.
+  // New evaluation now opens the TYPE POPUP first (Ignat picked variant 1 on
+  // 2026-09-17), so both of these go through it rather than the type select.
   await r.click('#new-eval-btn');
   await r.waitForTimeout(600);
-  await r.click('#eval-type');
-  await r.waitForTimeout(300);
-  await r.evaluate(() => {
-    const li = [...document.querySelectorAll('.MuiMenu-list li')].find(x => /Raw Data|Rohdaten/.test(x.textContent));
-    if (li) li.click();
-  });
+  await r.click('#type-option-raw_data');
   await r.waitForTimeout(700);
   react['rohdaten'] = await affordances(r);
   await back();
 
   await r.click('#new-eval-btn');
+  await r.waitForTimeout(600);
+  await r.click('#type-option-punctuality');
   await r.waitForTimeout(600);
   react['wizard'] = await affordances(r);
   await back();

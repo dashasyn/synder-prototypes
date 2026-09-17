@@ -228,7 +228,11 @@ const chips = [];
 
 /* ── 2. the domain constants ─────────────────────────────────────── */
 // Shell/browser plumbing stays behind; only the domain model travels.
-const SKIP = new Set(['MUI_SELECT_OPEN', 'VIEW_HASH', 'HASH_VIEW', 'EVAL_TYPES',
+// EVAL_TYPES was on this list until 2026-09-17, filed as shell plumbing. It is
+// not: it is the six evaluation types and the icon each one carries, which is
+// domain data the type dialog is built from. Skipping it meant the port had a
+// hand-typed copy of the keys and no icons at all.
+const SKIP = new Set(['MUI_SELECT_OPEN', 'VIEW_HASH', 'HASH_VIEW',
                       'INFO_ICONS', 'INFO_DOCS', 'INFO_TITLES']);
 const consts = [];
 // NOT just object and array literals. Four of the most important constants

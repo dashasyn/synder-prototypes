@@ -5,7 +5,7 @@
    port and the vanilla prototype share one source of truth for the domain
    model. Re-run to resync; the vanilla file is never modified.
 
-   28 evaluation rows · 43 domain constants · 76 pure functions
+   28 evaluation rows · 44 domain constants · 76 pure functions
    ══════════════════════════════════════════════════════════════════ */
 
 /* The extracted code calls t() while building its record sets, and the
@@ -548,6 +548,15 @@ var SCHEDULES = [
 var scl = n => Math.round((n || 0) * _punctScale);
 var sclPunkt = (punkt, ist) => Math.min(scl(ist), Math.round(scl(punkt) * _punctPctShift));
 var _punctScale = 1, _punctPctShift = 1;
+
+var EVAL_TYPES = [
+    { key: 'punctuality',   icon: 'schedule' },
+    { key: 'raw_data',      icon: 'table_view' },
+    { key: 'data_quality',  icon: 'verified' },
+    { key: 'connection',    icon: 'swap_horiz' },
+    { key: 'trip_failures', icon: 'cancel' },
+    { key: 'line_analysis', icon: 'timeline' },
+  ];
 
 var DATA = {
     rpv: {
