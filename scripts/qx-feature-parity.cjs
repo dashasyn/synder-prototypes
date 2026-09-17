@@ -83,6 +83,7 @@ const shellProbe = page => page.evaluate(() => {
     barPos: getComputedStyle(bar).position,
     barH: Math.round(b.height),
     barTop: Math.round(b.top) === 0,
+    barTopPx: Math.round(b.top),
   };
 });
 
@@ -230,8 +231,13 @@ const uniq = a => [...new Set(a.filter(Boolean))];
   for (const [k, want, got] of [
     ['top bar position', shell.v.barPos, shell.r.barPos],
     ['top bar height', shell.v.barH, shell.r.barH],
-    ['top bar pinned to the top edge', shell.v.barTop, shell.r.barTop],
   ]) if (String(want) !== String(got)) shellLines.push(`${k}: ${want} -> ${got}`);
+  // The bar's ABSOLUTE top is not comparable: the vanilla still carries the
+  // variant-switcher bar above its own chrome, and the React port's banner was
+  // removed on 2026-09-17. What matters is that each sits at the top of its own
+  // app — for the port, with no banner left, that means the viewport edge.
+  if (shell.r.barTopPx !== 0)
+    shellLines.push(`port top bar is ${shell.r.barTopPx}px from the viewport top, not pinned to it`);
   console.log(`${'shell'.padEnd(20)} ${shellLines.length ? shellLines.join('\n' + ' '.repeat(21)) : 'ok'}`);
   let gaps = shellLines.length;
   for (const view of VIEWS) {

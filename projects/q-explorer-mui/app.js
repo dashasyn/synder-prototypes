@@ -1492,9 +1492,10 @@ function TopBar({ go, onLogout }) {
   const [langAnchor, setLangAnchor] = useState(null);
   return html`
     ${/* The vanilla's #topbar is position:fixed, height 48, z-index 200, and
-          #main carries a matching margin-top:48px. Mine was position:static,
-          so the bar scrolled away on every long table. */''}
-    <${AppBar} position="fixed" sx=${{ bgcolor: NAVY, zIndex: 200, top: '36px' }}>
+          #main carries a matching margin-top:48px. Ignat removed the prototype
+          banner on 2026-09-17; the bar sat at top:36 only to clear it, which
+          is what left it looking broken once the banner went. */''}
+    <${AppBar} position="fixed" sx=${{ bgcolor: NAVY, zIndex: 200, top: 0 }}>
       <${Toolbar} sx=${{ gap: 0.5 }}>
         <${Box} sx=${{ width: 24, height: 24, bgcolor: '#E30613', color: '#fff', mr: 3,
                         display: 'grid', placeItems: 'center', borderRadius: '2px',
@@ -1682,7 +1683,7 @@ function App() {
     <${I18n.Provider} value=${{ t, lang, setLang }}>
       <${ThemeProvider} theme=${theme}>
         <${CssBaseline} />
-        <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: 'calc(100vh - 36px)' }}>
+        <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
           <${TopBar} go=${go} onLogout=${() => setAuthed(false)} />
           <${Box} sx=${{ flex: 1, mt: '48px' }}>${screen}<//>
           <${Box} component="footer" sx=${{ display: 'flex', justifyContent: 'flex-end', gap: 1,

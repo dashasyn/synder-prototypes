@@ -282,6 +282,17 @@ const fs = require('fs');
     return { pos: getComputedStyle(el).position, top: Math.round(b.top) };
   });
   ok('the top bar is fixed, as #topbar is in the vanilla', bar.pos === 'fixed', bar);
+  // Ignat removed the prototype banner on 2026-09-17; the bar had been offset
+  // 36px to clear it, which is what left it looking broken once it went.
+  ok('the top bar is pinned to the viewport edge, with no banner above it',
+    bar.top === 0, bar.top);
+  const clearance = await page.evaluate(() => {
+    const b = document.querySelector('.MuiAppBar-root').getBoundingClientRect();
+    const h = document.querySelector('h5').getBoundingClientRect();
+    return { barBottom: Math.round(b.bottom), headingTop: Math.round(h.top) };
+  });
+  ok('the fixed bar does not cover the page heading',
+    clearance.headingTop >= clearance.barBottom, clearance);
 
   await page.evaluate(() => window.scrollTo(0, 400));
   await page.waitForTimeout(250);
