@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TxnRecon — two sides / close-out</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+  html,body{height:100%;margin:0}
+  body{font-family:var(--font-family);background:var(--bg-page);color:var(--text-primary);
+       font-size:14px;display:flex;flex-direction:column}
+
+  /* prototype chrome — deliberately not product UI */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:13px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:12px;
+    text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+    border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+    font-family:inherit;font-size:13px;padding:5px 12px;border-radius:4px;cursor:pointer;
+    white-space:nowrap}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+  .variant-switch .vs-note{margin-left:auto;opacity:.6;font-size:12px}
+
+  .stage{flex:1;min-height:0;overflow:auto}
+  .variant{display:none}
+  .variant.on{display:block}
+
+  /* product chrome */
+  .bar{background:var(--color-white);border-bottom:1px solid var(--color-grey-20);height:56px;
+       display:flex;align-items:center;gap:16px;padding:0 20px}
+  .bar .x{width:32px;height:32px;border:0;background:none;cursor:pointer;border-radius:4px;
+          color:var(--color-grey-50);font-size:18px;line-height:1}
+  .bar .x:hover{background:var(--color-grey-10);color:var(--color-grey)}
+  .bar .sep{width:1px;height:24px;background:var(--color-grey-20)}
+  .bar h1{font-size:15px;font-weight:500;margin:0}
+  .bar .sp{flex:1}
+  .safe{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--text-primary)}
+  .btn{height:36px;padding:0 16px;border-radius:4px;border:1px solid var(--color-grey-20);
+       background:var(--color-white);color:var(--text-primary);font:inherit;font-size:14px;
+       cursor:pointer}
+  .btn:hover{background:var(--color-grey-10)}
+  .btn.primary{background:var(--color-primary);border-color:var(--color-primary);
+               color:var(--color-white)}
+  .btn.primary:hover{background:var(--color-primary-hover);border-color:var(--color-primary-hover)}
+  .btn.sm{height:30px;padding:0 12px;font-size:13px}
+  .btn:focus-visible,.acct-tab:focus-visible,.lnk:focus-visible{outline:2px solid var(--color-primary);
+       outline-offset:2px}
+
+  .wrap{max-width:820px;margin:0 auto;padding:24px 24px 72px}
+  .wrap.wide{max-width:1080px}
+
+  /* account switcher inside the product */
+  .acct-tabs{display:flex;gap:6px;margin-bottom:20px;flex-wrap:wrap}
+  .acct-tab{background:var(--color-white);border:1px solid var(--color-grey-20);border-radius:4px;
+            padding:7px 13px;font:inherit;font-size:13px;color:var(--color-grey-50);cursor:pointer}
+  .acct-tab:hover{border-color:var(--color-grey-30);color:var(--text-primary)}
+  .acct-tab[aria-selected="true"]{background:var(--color-primary-10);border-color:var(--color-primary);
+            color:var(--color-primary);font-weight:500}
+
+  .panel{display:none}
+  .panel.on{display:block}
+
+  h2.acct{font-size:20px;font-weight:500;margin:0 0 4px}
+  .acct-sub{color:var(--color-grey-50);margin:0 0 20px;font-size:13px}
+  .acct-sub .dot{margin:0 7px;opacity:.5}
+
+  /* the two sides */
+  .sides{display:grid;grid-template-columns:1fr auto 1fr;align-items:stretch;gap:0;
+         background:var(--color-white);border:1px solid var(--color-grey-20);border-radius:6px;
+         overflow:hidden}
+  .side{padding:22px 24px;text-align:center}
+  .side .n{font-size:38px;font-weight:300;line-height:1.1;letter-spacing:-.01em}
+  .side .lbl{font-size:13px;color:var(--color-grey-50);margin-top:4px}
+  .gap-col{display:flex;flex-direction:column;align-items:center;justify-content:center;
+           padding:0 22px;border-left:1px solid var(--color-grey-20);
+           border-right:1px solid var(--color-grey-20);min-width:118px}
+  .gap-col .d{font-size:20px;font-weight:500}
+  .gap-col .dl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;
+               color:var(--color-grey-50);margin-top:2px}
+  .gap-col.even .d{color:var(--color-green)}
+  .gap-col.diff .d{color:var(--color-yellow)}
+
+  /* verdict */
+  .verdict{display:flex;gap:11px;align-items:flex-start;padding:14px 16px;border-radius:6px;
+           margin-top:14px;font-size:14px;line-height:1.5}
+  .verdict .ic{font-size:15px;line-height:1.4;flex:0 0 auto}
+  .verdict b{font-weight:500}
+  .verdict.clean{background:var(--color-green-light);color:#14602c}
+  .verdict.review{background:var(--color-yellow-light);color:#7a4508}
+  .verdict.block{background:var(--color-red-light);color:#8f1f1f}
+  .verdict a{color:inherit;font-weight:500}
+
+  /* delta breakdown */
+  .breakdown{background:var(--color-white);border:1px solid var(--color-grey-20);border-radius:6px;
+             margin-top:14px;overflow:hidden}
+  .bd-head{padding:12px 16px;border-bottom:1px solid var(--color-grey-20);font-size:13px;
+           font-weight:500}
+  .bd-row{display:flex;gap:14px;align-items:flex-start;padding:12px 16px;
+          border-bottom:1px solid var(--color-grey-10)}
+  .bd-row:last-child{border-bottom:0}
+  .bd-n{flex:0 0 34px;text-align:right;font-size:16px;font-weight:500}
+  .bd-t{flex:1}
+  .bd-t .h{font-size:13.5px}
+  .bd-t .s{font-size:12.5px;color:var(--color-grey-50);margin-top:2px}
+  .chip{display:inline-block;font-size:11px;padding:1px 8px;border-radius:10px;font-weight:500;
+        white-space:nowrap}
+  .chip.auto{background:var(--color-green-light);color:#14602c}
+  .chip.manual{background:var(--color-yellow-light);color:#7a4508}
+  .chip.ignored{background:var(--color-grey-10);color:var(--color-grey-50)}
+  .chip.open{background:var(--color-yellow-light);color:#7a4508}
+
+  /* run summary */
+  .summary{background:var(--color-white);border:1px solid var(--color-grey-20);border-radius:6px;
+           margin-top:14px;padding:16px}
+  .summary .sh{display:flex;align-items:center;margin-bottom:10px}
+  .summary .sh h3{font-size:13px;font-weight:500;margin:0;flex:1}
+  .kv{display:flex;gap:12px;padding:6px 0;font-size:13.5px}
+  .kv .k{flex:0 0 150px;color:var(--color-grey-50)}
+  .lnk{background:none;border:0;padding:0;font:inherit;font-size:13px;color:var(--color-primary);
+       cursor:pointer;text-decoration:underline}
+  .cover{margin-top:12px;padding-top:12px;border-top:1px solid var(--color-grey-10);
+         font-size:13px;color:var(--color-grey-50)}
+  .rule{margin-top:12px;font-size:12.5px;color:var(--color-grey-50);line-height:1.55}
+  .actions{display:flex;gap:10px;justify-content:flex-end;margin-top:18px}
+
+  /* ---- variant 2 : close-out list ---- */
+  .close-head{display:flex;align-items:flex-end;gap:16px;margin-bottom:18px}
+  .close-head h2{font-size:20px;font-weight:500;margin:0 0 4px}
+  .close-head p{margin:0;color:var(--color-grey-50);font-size:13px}
+  .close-head .sp{flex:1}
+  .rows{background:var(--color-white);border:1px solid var(--color-grey-20);border-radius:6px;
+        overflow:hidden}
+  .row{display:grid;grid-template-columns:minmax(210px,1.4fr) 128px 118px 150px 1fr auto;
+       gap:16px;align-items:center;padding:14px 18px;border-bottom:1px solid var(--color-grey-10)}
+  .row:last-child{border-bottom:0}
+  .row.head{background:var(--bg-page);padding:9px 18px;border-bottom:1px solid var(--color-grey-20);
+            font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-grey-50)}
+  .row .an{font-size:14px}
+  .row .as{font-size:12.5px;color:var(--color-grey-50);margin-top:2px}
+  .row .per{font-size:13.5px}
+  .row .pergap{font-size:12px;color:var(--color-yellow);margin-top:2px}
+  .row .cnt{font-size:14px;white-space:nowrap}
+  .row .cnt .eq{color:var(--color-green)}
+  .row .cnt .ne{color:var(--color-yellow)}
+  .row .vd{font-size:12.5px;color:var(--color-grey-50);line-height:1.45}
+  .total{display:flex;align-items:center;gap:14px;margin-top:16px;padding:14px 18px;
+         background:var(--color-white);border:1px solid var(--color-grey-20);border-radius:6px}
+  .total .t{flex:1;font-size:13.5px}
+  .foot-rule{margin-top:14px;font-size:12.5px;color:var(--color-grey-50);line-height:1.55}
+  .hidden{display:none !important}
+</style>
+</head>
+<body>
+<div class="variant-switch">
+  <span class="vs-label">What varies</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Two sides</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Close-out list</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+
+<div class="stage">
+
+<!-- ═══════════ VARIANT 1 · TWO SIDES ═══════════ -->
+<div class="variant on" id="variant-1">
+  <div class="bar">
+    <button class="x" type="button" aria-label="Close">✕</button>
+    <div class="sep"></div>
+    <h1>New reconciliation</h1>
+    <div class="sp"></div>
+    <span class="safe">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3l7 3v6c0 4.2-2.8 7.6-7 9-4.2-1.4-7-4.8-7-9V6l7-3z"/></svg>
+      Read-only. Nothing in your books changes.
+    </span>
+    <button class="btn primary" type="button" id="v1-run">Start reconciliation</button>
+  </div>
+
+  <div class="wrap">
+    <div class="acct-tabs" role="tablist" aria-label="Account to reconcile">
+      <button class="acct-tab" role="tab" aria-selected="true" aria-controls="p-stripe" id="t-stripe" type="button" data-acct="stripe">Stripe mzkt.by</button>
+      <button class="acct-tab" role="tab" aria-selected="false" aria-controls="p-shopify" id="t-shopify" type="button" data-acct="shopify">Shopify Payments</button>
+      <button class="acct-tab" role="tab" aria-selected="false" aria-controls="p-paypal" id="t-paypal" type="button" data-acct="paypal">PayPal clearing</button>
+      <button class="acct-tab" role="tab" aria-selected="false" aria-controls="p-amazon" id="t-amazon" type="button" data-acct="amazon">Amazon clearing</button>
+    </div>
+
+    <!-- Stripe · difference fully explained -->
+    <div class="panel on" id="p-stripe" role="tabpanel" aria-labelledby="t-stripe">
+      <h2 class="acct">Stripe mzkt.by <span style="font-weight:400;color:var(--color-grey-50);font-size:15px">· USD</span></h2>
+      <p class="acct-sub">August 1–31, 2026 <span class="dot">·</span> mzkt.by (Stripe) <span class="dot">·</span> imported automatically from both sides</p>
+
+      <div class="sides">
+        <div class="side"><div class="n">48</div><div class="lbl">in QuickBooks</div></div>
+        <div class="gap-col diff"><div class="d">+4</div><div class="dl">difference</div></div>
+        <div class="side"><div class="n">44</div><div class="lbl">in Stripe</div></div>
+      </div>
+
+      <div class="verdict clean">
+        <span class="ic">✓</span>
+        <div><b>This will finish clean.</b> All four extra lines are transaction types Stripe can never
+        match — we'll mark them Ignored so they don't hold the period open.</div>
+      </div>
+
+      <div class="breakdown">
+        <div class="bd-head">What the difference of 4 is</div>
+        <div class="bd-row">
+          <div class="bd-n">3</div>
+          <div class="bd-t">
+            <div class="h">Balance transfers <span class="chip ignored">Pre-ignored</span></div>
+            <div class="s">Never synced to books, so they can't be matched. Expected, not an error.</div>
+          </div>
+        </div>
+        <div class="bd-row">
+          <div class="bd-n">1</div>
+          <div class="bd-t">
+            <div class="h">Reserve transaction <span class="chip ignored">Pre-ignored</span></div>
+            <div class="s">Stripe reserves cannot be matched against a books entry.</div>
+          </div>
+        </div>
+        <div class="bd-row">
+          <div class="bd-n">0</div>
+          <div class="bd-t">
+            <div class="h">Unexplained</div>
+            <div class="s">Nothing left that would need your review after the run.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary">
+        <div class="sh"><h3>This run</h3><button class="lnk" type="button" data-cust="stripe">Customize</button></div>
+        <div class="kv"><span class="k">Account to reconcile</span><span>Stripe mzkt.by · USD</span></div>
+        <div class="kv"><span class="k">Period</span><span>August 1–31, 2026 — next unreconciled month</span></div>
+        <div class="kv"><span class="k">Data</span><span>Automatic both sides <span class="chip auto">No files needed</span></span></div>
+        <div class="cust hidden" id="cust-stripe">
+          <div class="kv" style="padding-top:12px;margin-top:6px;border-top:1px solid var(--color-grey-10)">
+            <span class="k"><label for="c-per-stripe">Period</label></span>
+            <span><select id="c-per-stripe"><option>August 1–31, 2026</option><option>April 1–30, 2026 — gap</option><option>July 1–31, 2026 — gap</option></select></span>
+          </div>
+          <div class="kv"><span class="k"><label for="c-imp-stripe">Import method</label></span>
+            <span><select id="c-imp-stripe"><option>Automatic</option><option>Upload files instead</option></select></span>
+          </div>
+        </div>
+        <p class="cover">Reconciled so far: March, May, June. <b>Two earlier gaps — April and July.</b>
+          <button class="lnk" type="button" onclick="setVariant(2)">See all accounts</button></p>
+      </div>
+
+      <p class="rule">Matching compares transaction ID and amount. Dates are not compared.
+        One run covers one account and one period, and periods can't overlap.</p>
+
+      <div class="actions">
+        <button class="btn" type="button">Change account</button>
+        <button class="btn primary" type="button">Start · about 20 min</button>
+      </div>
+    </div>
+
+    <!-- Shopify · real unexplained gap -->
+    <div class="panel" id="p-shopify" role="tabpanel" aria-labelledby="t-shopify">
+      <h2 class="acct">Shopify Payments <span style="font-weight:400;color:var(--color-grey-50);font-size:15px">· USD</span></h2>
+      <p class="acct-sub">August 1–31, 2026 <span class="dot">·</span> My store (Shopify) <span class="dot">·</span> imported automatically from both sides</p>
+
+      <div class="sides">
+        <div class="side"><div class="n">62</div><div class="lbl">in QuickBooks</div></div>
+        <div class="gap-col diff"><div class="d">+5</div><div class="dl">difference</div></div>
+        <div class="side"><div class="n">57</div><div class="lbl">in Shopify</div></div>
+      </div>
+
+      <div class="verdict review">
+        <span class="ic">!</span>
+        <div><b>3 lines will need your review.</b> Two of the five are known unmatchable and will be
+        pre-ignored. The other three have no counterpart in Shopify — most often orders paid through
+        a gateway other than Shopify Payments, which this account doesn't cover.</div>
+      </div>
+
+      <div class="breakdown">
+        <div class="bd-head">What the difference of 5 is</div>
+        <div class="bd-row">
+          <div class="bd-n">2</div>
+          <div class="bd-t">
+            <div class="h">Pre-converted currency payouts <span class="chip ignored">Pre-ignored</span></div>
+            <div class="s">Expected behaviour on multicurrency payouts, not an error.</div>
+          </div>
+        </div>
+        <div class="bd-row">
+          <div class="bd-n">3</div>
+          <div class="bd-t">
+            <div class="h">No counterpart in Shopify <span class="chip open">Needs review</span></div>
+            <div class="s">Will land in "Missing in integration" for you to resolve or ignore.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary">
+        <div class="sh"><h3>This run</h3><button class="lnk" type="button" data-cust="shopify">Customize</button></div>
+        <div class="kv"><span class="k">Account to reconcile</span><span>Shopify Payments · USD</span></div>
+        <div class="kv"><span class="k">Period</span><span>August 1–31, 2026 — next unreconciled month</span></div>
+        <div class="kv"><span class="k">Data</span><span>Automatic both sides <span class="chip auto">No files needed</span></span></div>
+        <div class="cust hidden" id="cust-shopify">
+          <div class="kv" style="padding-top:12px;margin-top:6px;border-top:1px solid var(--color-grey-10)">
+            <span class="k"><label for="c-per-shopify">Period</label></span>
+            <span><select id="c-per-shopify"><option>August 1–31, 2026</option><option>Custom…</option></select></span>
+          </div>
+        </div>
+        <p class="cover">Reconciled so far: every month since March. No gaps.</p>
+      </div>
+
+      <p class="rule">This account covers Shopify Payments only — orders paid through other gateways
+        aren't included in the comparison.</p>
+
+      <div class="actions">
+        <button class="btn" type="button">Change account</button>
+        <button class="btn primary" type="button">Start · about 20 min</button>
+      </div>
+    </div>
+
+    <!-- PayPal · not ready, unsynced in period -->
+    <div class="panel" id="p-paypal" role="tabpanel" aria-labelledby="t-paypal">
+      <h2 class="acct">PayPal clearing <span style="font-weight:400;color:var(--color-grey-50);font-size:15px">· EUR</span></h2>
+      <p class="acct-sub">August 1–31, 2026 <span class="dot">·</span> Great payments for every one (PayPal) <span class="dot">·</span> you'll upload one report</p>
+
+      <div class="sides">
+        <div class="side"><div class="n">31</div><div class="lbl">in QuickBooks</div></div>
+        <div class="gap-col diff"><div class="d">?</div><div class="dl">not known yet</div></div>
+        <div class="side"><div class="n">—</div><div class="lbl">in PayPal</div></div>
+      </div>
+
+      <div class="verdict block">
+        <span class="ic">✕</span>
+        <div><b>12 transactions in August aren't in your books yet.</b> Reconcile now and all twelve
+        come back as missing in accounting, even though nothing is wrong.
+        <button class="lnk" type="button" style="color:inherit">Sync them first</button> — or run anyway and expect 12 false rows.</div>
+      </div>
+
+      <div class="breakdown">
+        <div class="bd-head">Before this can run</div>
+        <div class="bd-row">
+          <div class="bd-n">12</div>
+          <div class="bd-t">
+            <div class="h">Imported into Synder, not yet synced to QuickBooks</div>
+            <div class="s">They exist on the PayPal side but have no books entry to match against yet.</div>
+          </div>
+        </div>
+        <div class="bd-row">
+          <div class="bd-n">1</div>
+          <div class="bd-t">
+            <div class="h">Activity report needed <span class="chip manual">You upload this</span></div>
+            <div class="s">PayPal can't be read automatically. Reports → Activity download, transaction type "Balance affecting".</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="summary">
+        <div class="sh"><h3>This run</h3><button class="lnk" type="button" data-cust="paypal">Customize</button></div>
+        <div class="kv"><span class="k">Account to reconcile</span><span>PayPal clearing · EUR</span></div>
+        <div class="kv"><span class="k">Period</span><span>August 1–31, 2026 — next unreconciled month</span></div>
+        <div class="kv"><span class="k">Data</span><span>QuickBooks automatic, PayPal uploaded <span class="chip manual">1 file</span></span></div>
+        <div class="cust hidden" id="cust-paypal">
+          <div class="kv" style="padding-top:12px;margin-top:6px;border-top:1px solid var(--color-grey-10)">
+            <span class="k"><label for="c-per-paypal">Period</label></span>
+            <span><select id="c-per-paypal"><option>August 1–31, 2026</option><option>Custom…</option></select></span>
+          </div>
+        </div>
+        <p class="cover">Reconciled so far: June, July. August is the next open month.</p>
+      </div>
+
+      <p class="rule">Currency conversions and account holds are excluded from PayPal comparisons —
+        they'd otherwise show up as differences that aren't real.</p>
+
+      <div class="actions">
+        <button class="btn" type="button">Sync 12 transactions</button>
+        <button class="btn primary" type="button">Upload report and run</button>
+      </div>
+    </div>
+
+    <!-- Amazon · perfectly even -->
+    <div class="panel" id="p-amazon" role="tabpanel" aria-labelledby="t-amazon">
+      <h2 class="acct">Amazon clearing <span style="font-weight:400;color:var(--color-grey-50);font-size:15px">· USD</span></h2>
+      <p class="acct-sub">August 1–31, 2026 <span class="dot">·</span> Amazon Seller US <span class="dot">·</span> imported automatically from both sides</p>
+
+      <div class="sides">
+        <div class="side"><div class="n">19</div><div class="lbl">in QuickBooks</div></div>
+        <div class="gap-col even"><div class="d">0</div><div class="dl">difference</div></div>
+        <div class="side"><div class="n">19</div><div class="lbl">in Amazon</div></div>
+      </div>
+
+      <div class="verdict clean">
+        <span class="ic">✓</span>
+        <div><b>Both sides agree on count.</b> Amounts are still compared line by line, so a
+        difference can appear — but nothing is missing from either side.</div>
+      </div>
+
+      <div class="summary">
+        <div class="sh"><h3>This run</h3><button class="lnk" type="button" data-cust="amazon">Customize</button></div>
+        <div class="kv"><span class="k">Account to reconcile</span><span>Amazon clearing · USD</span></div>
+        <div class="kv"><span class="k">Period</span><span>August 1–31, 2026 — next unreconciled month</span></div>
+        <div class="kv"><span class="k">Data</span><span>Automatic both sides <span class="chip auto">No files needed</span></span></div>
+        <div class="cust hidden" id="cust-amazon">
+          <div class="kv" style="padding-top:12px;margin-top:6px;border-top:1px solid var(--color-grey-10)">
+            <span class="k"><label for="c-per-amazon">Period</label></span>
+            <span><select id="c-per-amazon"><option>August 1–31, 2026</option><option>Custom…</option></select></span>
+          </div>
+        </div>
+        <p class="cover">Reconciled so far: every month since February. No gaps.</p>
+      </div>
+
+      <p class="rule">Equal counts don't guarantee equal amounts — a line matched by ID with a
+        different amount is reported as a discrepancy.</p>
+
+      <div class="actions">
+        <button class="btn" type="button">Change account</button>
+        <button class="btn primary" type="button">Start · about 20 min</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ VARIANT 2 · CLOSE-OUT LIST ═══════════ -->
+<div class="variant" id="variant-2">
+  <div class="bar">
+    <button class="x" type="button" aria-label="Close">✕</button>
+    <div class="sep"></div>
+    <h1>Reconciliation</h1>
+    <div class="sp"></div>
+    <span class="safe">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 3l7 3v6c0 4.2-2.8 7.6-7 9-4.2-1.4-7-4.8-7-9V6l7-3z"/></svg>
+      Read-only. Nothing in your books changes.
+    </span>
+    <button class="btn primary" type="button" id="v2-queue">Queue 3 runs</button>
+  </div>
+
+  <div class="wrap wide">
+    <div class="close-head">
+      <div>
+        <h2>Close August</h2>
+        <p>Every account with an open period. One run per account — that's how reconciliation is scoped.</p>
+      </div>
+      <div class="sp"></div>
+      <button class="btn sm" type="button">Show reconciled accounts</button>
+    </div>
+
+    <div class="rows">
+      <div class="row head">
+        <div>Account to reconcile</div>
+        <div>Integration</div>
+        <div>Data</div>
+        <div>Next open period</div>
+        <div>Both sides</div>
+        <div></div>
+      </div>
+
+      <div class="row">
+        <div>
+          <div class="an">Stripe mzkt.by</div>
+          <div class="as">USD</div>
+        </div>
+        <div>mzkt.by (Stripe)</div>
+        <div><span class="chip auto">Automatic</span></div>
+        <div>
+          <div class="per">August</div>
+          <div class="pergap">2 earlier gaps · Apr, Jul</div>
+        </div>
+        <div>
+          <div class="cnt">48 <span class="ne">↔</span> 44</div>
+          <div class="vd">4 never-matchable, pre-ignored · will finish clean</div>
+        </div>
+        <div><button class="btn sm" type="button" onclick="setVariant(1)">Run</button></div>
+      </div>
+
+      <div class="row">
+        <div>
+          <div class="an">Shopify Payments</div>
+          <div class="as">USD</div>
+        </div>
+        <div>My store (Shopify)</div>
+        <div><span class="chip auto">Automatic</span></div>
+        <div>
+          <div class="per">August</div>
+        </div>
+        <div>
+          <div class="cnt">62 <span class="ne">↔</span> 57</div>
+          <div class="vd">3 will need review after the run</div>
+        </div>
+        <div><button class="btn sm" type="button" onclick="setVariant(1)">Run</button></div>
+      </div>
+
+      <div class="row">
+        <div>
+          <div class="an">Amazon clearing</div>
+          <div class="as">USD</div>
+        </div>
+        <div>Amazon Seller US</div>
+        <div><span class="chip auto">Automatic</span></div>
+        <div>
+          <div class="per">August</div>
+        </div>
+        <div>
+          <div class="cnt">19 <span class="eq">↔</span> 19</div>
+          <div class="vd">Counts agree</div>
+        </div>
+        <div><button class="btn sm" type="button" onclick="setVariant(1)">Run</button></div>
+      </div>
+
+      <div class="row">
+        <div>
+          <div class="an">PayPal clearing</div>
+          <div class="as">EUR</div>
+        </div>
+        <div>Great payments for every one (PayPal)</div>
+        <div><span class="chip manual">1 file</span></div>
+        <div>
+          <div class="per">August</div>
+        </div>
+        <div>
+          <div class="cnt">31 <span class="ne">↔</span> —</div>
+          <div class="vd">12 not synced to books yet · sync before running</div>
+        </div>
+        <div><button class="btn sm" type="button">Sync first</button></div>
+      </div>
+    </div>
+
+    <div class="total">
+      <div class="t"><b>3 of 4 accounts can run now.</b> Roughly an hour in total — we'll email you
+        as each one finishes. PayPal needs a sync and a file first.</div>
+      <button class="btn" type="button">Fill the April and July gaps too</button>
+      <button class="btn primary" type="button">Queue 3 runs</button>
+    </div>
+
+    <p class="foot-rule">Only accounts that hold an integration's balance are listed — a fees or
+      sales account has no balance to reconcile. Periods can't overlap, so each account is offered
+      its next unreconciled month.</p>
+  </div>
+</div>
+
+</div>
+
+<script>
+  var NOTES = {
+    1: 'Sample data · the difference between the two sides, explained before you run',
+    2: 'Sample data · every account with an open period, one run each'
+  };
+  function setVariant(n) {
+    document.getElementById('variant-1').classList.toggle('on', n === 1);
+    document.getElementById('variant-2').classList.toggle('on', n === 2);
+    document.getElementById('vs-1').classList.toggle('on', n === 1);
+    document.getElementById('vs-2').classList.toggle('on', n === 2);
+    document.getElementById('vs-note').textContent = NOTES[n];
+    try { history.replaceState(null, '', '#v' + n); } catch (e) {}
+  }
+
+  // account tabs — panels are pre-rendered and toggled, so focus is never destroyed
+  var tabs = document.querySelectorAll('.acct-tab');
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      var id = t.getAttribute('data-acct');
+      tabs.forEach(function (o) {
+        o.setAttribute('aria-selected', o === t ? 'true' : 'false');
+      });
+      document.querySelectorAll('#variant-1 .panel').forEach(function (p) {
+        p.classList.toggle('on', p.id === 'p-' + id);
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-cust]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var box = document.getElementById('cust-' + b.getAttribute('data-cust'));
+      var nowHidden = box.classList.toggle('hidden');
+      b.textContent = nowHidden ? 'Customize' : 'Done';
+    });
+  });
+
+  var h = (location.hash || '').replace(/^#/, '');
+  setVariant(h === 'v2' ? 2 : 1);
+</script>
+</body>
+</html>
