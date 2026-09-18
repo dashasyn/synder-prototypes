@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TxnRecon — balancing journal entry</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+  html,body{height:100%;margin:0}
+  body{font-family:var(--font-family);background:var(--color-white);color:var(--text-primary);
+       font-size:13px;display:flex;flex-direction:column}
+
+  /* prototype chrome */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:13px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:12px;
+    text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+    border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+    font-family:inherit;font-size:13px;padding:5px 12px;border-radius:4px;cursor:pointer;
+    white-space:nowrap}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+  .variant-switch .vs-note{margin-left:auto;opacity:.6;font-size:12px}
+
+  .stage{flex:1;min-height:0;overflow:auto;position:relative;background:var(--color-white)}
+  .variant{display:none}
+  .variant.on{display:block}
+
+  /* product chrome */
+  .topbar{display:flex;align-items:center;gap:14px;padding:0 16px;height:44px;
+          border-bottom:1px solid var(--color-grey-20)}
+  .topbar .x{width:28px;height:28px;border:0;background:none;cursor:pointer;border-radius:4px;
+             color:var(--color-grey-50);font-size:16px}
+  .topbar .x:hover{background:var(--color-grey-10)}
+  .topbar .sep{width:1px;height:20px;background:var(--color-grey-20)}
+  .topbar .ttl{font-size:13px;font-weight:500}
+  .topbar .sp{flex:1}
+  .btn{height:32px;padding:0 14px;border-radius:4px;border:1px solid var(--color-grey-20);
+       background:var(--color-white);color:var(--color-primary);font:inherit;font-size:13px;
+       cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--color-primary-5)}
+  .btn.primary{background:var(--color-primary);border-color:var(--color-primary);color:var(--color-white)}
+  .btn.primary:hover{background:var(--color-primary-hover);border-color:var(--color-primary-hover)}
+  .btn.primary[disabled]{background:var(--color-grey-20);border-color:var(--color-grey-20);
+       color:var(--color-grey-50);cursor:not-allowed}
+  .btn.plain{color:var(--text-primary)}
+  .btn.danger{background:var(--color-red);border-color:var(--color-red);color:var(--color-white)}
+  .btn.sm{height:28px;padding:0 11px;font-size:12.5px}
+  .btn:focus-visible,.tab:focus-visible,.kebab:focus-visible,.lnk:focus-visible,
+  .mi:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--color-primary);
+       outline-offset:1px}
+
+  .page{padding:18px 22px 60px}
+  h1.rt{font-size:22px;font-weight:500;margin:0 0 3px;display:flex;align-items:center;gap:10px}
+  .st-chip{font-size:11px;font-weight:500;padding:2px 9px;border-radius:10px;
+           background:var(--color-green-light);color:#14602c}
+  .sub{color:var(--color-grey-50);font-size:12.5px;margin:0 0 14px}
+
+  .tabs{display:flex;gap:2px;border-bottom:1px solid var(--color-grey-20);margin-bottom:14px}
+  .tab{background:none;border:0;border-bottom:2px solid transparent;padding:9px 14px;font:inherit;
+       font-size:13px;color:var(--color-grey-50);cursor:pointer;display:flex;gap:7px;align-items:center}
+  .tab:hover{color:var(--text-primary)}
+  .tab[aria-selected="true"]{color:var(--color-primary);border-bottom-color:var(--color-primary);
+       font-weight:500}
+  .tab .c{font-size:11.5px;padding:1px 7px;border-radius:9px;background:var(--color-grey-10);
+          color:var(--color-grey-50)}
+  .tab.matched .c{background:var(--color-green-light);color:#14602c}
+  .tab.disc .c{background:var(--color-yellow-light);color:#7a4508}
+  .tab.miss .c{background:var(--color-red-light);color:#8f1f1f}
+
+  .hintbar{display:flex;align-items:center;gap:12px;background:var(--color-primary-10);
+           border-radius:4px;padding:9px 14px;margin-bottom:14px;font-size:12.5px;
+           color:var(--color-primary)}
+  .hintbar .sp{flex:1}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .col h2{font-size:15px;font-weight:500;margin:0 0 10px}
+  .filters{background:var(--bg-page);border-radius:4px;padding:11px 13px;margin-bottom:10px;
+           display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end}
+  .fl{display:flex;flex-direction:column;gap:4px}
+  .fl label{font-size:11.5px;color:var(--color-grey-50)}
+  .fl input,.fl select{height:28px;border:1px solid var(--color-grey-20);border-radius:4px;
+       padding:0 7px;font:inherit;font-size:12.5px;background:var(--color-white);min-width:88px}
+
+  .bulk{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--color-primary-5);
+        border:1px solid var(--color-primary-20);border-radius:4px;margin-bottom:8px;font-size:12.5px}
+  .bulk.hidden{display:none}
+
+  table.tx{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.tx th{text-align:left;font-weight:500;color:var(--color-grey-50);font-size:11.5px;
+       padding:8px 8px;border-bottom:1px solid var(--color-grey-20);white-space:nowrap}
+  table.tx td{padding:9px 8px;border-bottom:1px solid var(--color-grey-10);vertical-align:middle}
+  table.tx td.num{text-align:right;white-space:nowrap}
+  table.tx tr.inelig td{color:var(--color-grey-50)}
+  .idcell{max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+  .kebab{width:26px;height:26px;border:0;background:none;border-radius:4px;cursor:pointer;
+         color:var(--color-grey-50);font-size:15px;line-height:1}
+  .kebab:hover{background:var(--color-grey-10);color:var(--text-primary)}
+  .lnk{background:none;border:0;padding:0;font:inherit;font-size:12.5px;color:var(--color-primary);
+       cursor:pointer}
+  .lnk:hover{text-decoration:underline}
+  .empty-note{padding:22px;text-align:center;color:var(--color-grey-50);font-size:12.5px}
+
+  /* row menu */
+  .menu{position:absolute;z-index:60;background:var(--color-white);border:1px solid var(--color-grey-20);
+        border-radius:4px;box-shadow:0 7px 14px rgba(129,142,165,.25);min-width:184px;padding:4px 0}
+  .menu.hidden{display:none}
+  .mi{display:block;width:100%;text-align:left;background:none;border:0;padding:8px 14px;font:inherit;
+      font-size:12.5px;color:var(--text-primary);cursor:pointer}
+  .mi:hover:not([disabled]){background:var(--color-grey-10)}
+  .mi[disabled]{color:var(--color-grey-30);cursor:not-allowed}
+  .menu .why{padding:6px 14px 8px;font-size:11.5px;color:var(--color-grey-50);line-height:1.45;
+             border-top:1px solid var(--color-grey-10);margin-top:2px}
+  .menu .why ul{margin:4px 0 0;padding-left:15px}
+
+  /* side sheet */
+  .scrim{position:absolute;inset:0;background:rgba(26,27,36,.5);z-index:80}
+  .scrim.hidden{display:none}
+  .sheet{position:absolute;top:0;right:0;bottom:0;width:min(62%,900px);background:var(--color-white);
+         z-index:90;display:flex;flex-direction:column;box-shadow:0 7px 14px rgba(129,142,165,.25)}
+  .sheet.hidden{display:none}
+  .sheet-head{display:flex;align-items:center;gap:12px;padding:12px 20px;
+              border-bottom:1px solid var(--color-grey-20)}
+  .sheet-head h2{font-size:14px;font-weight:500;margin:0;flex:1}
+  .sheet-body{flex:1;overflow:auto;padding:18px 20px 40px}
+  .jehead{display:flex;gap:26px;align-items:flex-start;margin-bottom:14px}
+  .jefields{flex:1;display:flex;flex-wrap:wrap;gap:14px}
+  .f{display:flex;flex-direction:column;gap:4px}
+  .f label{font-size:12px;color:var(--text-primary)}
+  .f .req{color:var(--color-red)}
+  .f input,.f select{height:32px;border:1px solid var(--color-grey-20);border-radius:4px;padding:0 9px;
+       font:inherit;font-size:13px;background:var(--color-white);min-width:150px}
+  .f input[readonly],.f select[disabled]{background:var(--color-grey-5);color:var(--color-grey-50)}
+  .totals{border-radius:6px;padding:12px 18px;display:flex;gap:28px;min-width:280px}
+  .totals.ok{background:var(--color-green-light)}
+  .totals.bad{background:var(--color-red-light)}
+  .totals .tl{font-size:12px;color:var(--color-grey-50)}
+  .totals .tv{font-size:18px;font-weight:500;margin-top:2px}
+  .totals.bad .tv{color:#8f1f1f}
+  .oob{margin-top:6px;font-size:12px;color:#8f1f1f;font-weight:500;flex-basis:100%}
+  .oneje{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;color:var(--color-grey-50);
+         margin:0 0 18px}
+  h3.sec{font-size:15px;font-weight:500;margin:0 0 10px}
+  table.lines{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.lines th{text-align:left;font-weight:500;font-size:12px;padding:7px 8px;
+       border-bottom:1px solid var(--color-grey-20)}
+  table.lines th.n,table.lines td.n{text-align:right;width:104px}
+  table.lines td{padding:6px 8px;border-bottom:1px solid var(--color-grey-10)}
+  table.lines input,table.lines select{width:100%;height:30px;border:1px solid var(--color-grey-20);
+       border-radius:4px;padding:0 8px;font:inherit;font-size:12.5px;background:var(--color-white)}
+  table.lines input[readonly],table.lines select[disabled]{background:var(--color-grey-5);
+       color:var(--color-grey-50)}
+  table.lines td.n input{text-align:right}
+  .rm{width:26px;height:26px;border:0;background:none;color:var(--color-grey-50);cursor:pointer;
+      border-radius:4px;font-size:14px}
+  .rm:hover{background:var(--color-grey-10);color:var(--color-red)}
+  .linefoot{display:flex;align-items:center;margin-top:10px;font-size:12.5px}
+  .linefoot .sp{flex:1}
+  .linefoot .tt{display:flex;gap:26px}
+  .linefoot .tt span{min-width:96px;text-align:right}
+  .memo textarea{width:100%;min-height:62px;border:1px solid var(--color-grey-20);border-radius:4px;
+       padding:9px;font:inherit;font-size:12.5px;resize:vertical}
+  .tokhelp{font-size:11.5px;color:var(--color-grey-50);margin-top:5px;line-height:1.5}
+
+  /* modals */
+  .modal-scrim{position:absolute;inset:0;background:rgba(26,27,36,.5);z-index:120;
+               display:flex;align-items:center;justify-content:center}
+  .modal-scrim.hidden{display:none}
+  .modal{background:var(--color-white);border-radius:8px;max-width:440px;width:calc(100% - 48px);
+         box-shadow:0 7px 14px rgba(129,142,165,.25);overflow:hidden}
+  .modal h2{font-size:17px;font-weight:500;margin:0;padding:20px 24px 10px;line-height:1.35}
+  .modal .mb{padding:0 24px 16px;font-size:12.5px;color:var(--color-grey-50);line-height:1.6}
+  .modal .mb ul{margin:7px 0 0;padding-left:17px}
+  .modal .ma{display:flex;justify-content:flex-end;gap:9px;padding:12px 24px;
+             border-top:1px solid var(--color-grey-10);background:var(--bg-page)}
+
+  /* toasts */
+  .toasts{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:200;
+          display:flex;flex-direction:column;gap:9px;align-items:center;pointer-events:none}
+  .toast{display:flex;gap:10px;align-items:flex-start;padding:11px 14px;border-radius:4px;
+         font-size:12.5px;min-width:300px;max-width:430px;color:var(--color-white);
+         pointer-events:auto;line-height:1.45}
+  .toast.ok{background:#2e7d32}
+  .toast.err{background:var(--color-red)}
+  .toast .tx{flex:1}
+  .toast .cl{background:none;border:0;color:inherit;cursor:pointer;font-size:14px;line-height:1;
+             opacity:.85;padding:0}
+
+  /* journal entries drawer (variant 2) */
+  .listpage{display:flex;min-height:520px}
+  .side{width:198px;border-right:1px solid var(--color-grey-20);padding:10px 0;flex:0 0 auto;
+        font-size:12.5px;background:var(--color-white)}
+  .side .grp{padding:8px 16px;color:var(--color-grey-50);font-size:11.5px;text-transform:uppercase;
+             letter-spacing:.04em}
+  .side a{display:block;padding:7px 16px 7px 26px;color:var(--text-primary);text-decoration:none}
+  .side a.on{background:var(--color-primary);color:var(--color-white);font-weight:500}
+  .side a.cur{background:var(--color-primary-10);color:var(--color-primary);font-weight:500}
+  .main{flex:1;padding:18px 22px;min-width:0}
+  .jerow-name{color:var(--color-primary);background:none;border:0;padding:0;font:inherit;
+              font-size:12.5px;cursor:pointer}
+  .jerow-name:hover{text-decoration:underline}
+  .memo-cell{max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hidden{display:none !important}
+  .sronly{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+</style>
+</head>
+<body>
+<div class="variant-switch">
+  <span class="vs-label">What varies</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Create JE flow</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Journal entries</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+
+<div class="stage" id="stage">
+
+<!-- ═══════════ VARIANT 1 ═══════════ -->
+<div class="variant on" id="variant-1">
+  <div class="topbar">
+    <button class="x" type="button" aria-label="Close">✕</button>
+    <div class="sep"></div>
+    <span class="ttl">Reconciliation results</span>
+    <div class="sp"></div>
+    <button class="btn sm" type="button">Copy share link</button>
+    <button class="btn sm" type="button">Refresh data</button>
+  </div>
+
+  <div class="page">
+    <h1 class="rt">My wonderful flowers (Stripe) <span class="st-chip">Finished</span></h1>
+    <p class="sub">Stripe Clearing / Mar 20–23, 2025</p>
+
+    <div class="tabs" role="tablist" aria-label="Reconciliation results">
+      <button class="tab matched" role="tab" aria-selected="false" type="button" data-tab="matched">Matched <span class="c" id="c-matched">100,000</span></button>
+      <button class="tab disc" role="tab" aria-selected="false" type="button" data-tab="disc">Discrepancy <span class="c">30</span></button>
+      <button class="tab miss" role="tab" aria-selected="true" type="button" data-tab="miss">Missing source <span class="c" id="c-miss">8</span></button>
+      <button class="tab" role="tab" aria-selected="false" type="button" data-tab="ign">Ignored <span class="c">10</span></button>
+      <button class="tab hidden" role="tab" aria-selected="false" type="button" data-tab="je" id="tab-je">Journal entry <span class="c">1</span></button>
+    </div>
+
+    <!-- MISSING SOURCE -->
+    <div id="panel-miss">
+      <div class="hintbar">
+        <span>Manually match transactions for accurate reconciliation.</span>
+        <span class="sp"></span>
+        <button class="btn sm" type="button">Match manually</button>
+      </div>
+
+      <div class="cols">
+        <div class="col">
+          <h2>Missing in accounting</h2>
+          <div class="filters">
+            <div class="fl"><label for="f-search">Search</label><input id="f-search" placeholder="Search…"></div>
+            <div class="fl"><label for="f-from">From</label><input id="f-from" type="date" value="2024-02-22"></div>
+            <div class="fl"><label for="f-to">To</label><input id="f-to" type="date" value="2024-03-22"></div>
+            <div class="fl"><label for="f-cur">Currency</label><select id="f-cur"><option>All</option><option>USD</option></select></div>
+            <button class="btn primary sm" type="button">Apply</button>
+            <button class="btn sm" type="button">Reset filters</button>
+          </div>
+
+          <div class="bulk hidden" id="bulk">
+            <span id="bulk-count">0 selected</span>
+            <button class="btn sm" type="button" id="bulk-create">Create journal entry</button>
+            <button class="btn sm" type="button">Ignore</button>
+          </div>
+
+          <table class="tx">
+            <thead>
+              <tr>
+                <th style="width:28px"><input type="checkbox" id="sel-all" aria-label="Select all rows"></th>
+                <th>Date</th><th>Primary ID</th><th>Secondary ID</th><th>Transaction type</th>
+                <th class="num">Amount</th><th style="width:34px"></th>
+              </tr>
+            </thead>
+            <tbody id="miss-body"></tbody>
+          </table>
+          <p class="empty-note hidden" id="miss-empty">Nothing missing in accounting for this period.</p>
+        </div>
+
+        <div class="col">
+          <h2>Missing in integration</h2>
+          <div class="filters">
+            <div class="fl"><label for="g-search">Search</label><input id="g-search" placeholder="Search…"></div>
+            <div class="fl"><label for="g-from">From</label><input id="g-from" type="date" value="2024-02-22"></div>
+            <div class="fl"><label for="g-to">To</label><input id="g-to" type="date" value="2024-03-22"></div>
+            <button class="btn primary sm" type="button">Apply</button>
+            <button class="btn sm" type="button">Reset filters</button>
+          </div>
+          <table class="tx">
+            <thead>
+              <tr><th style="width:28px"></th><th>Date</th><th>Primary ID</th><th>Transaction type</th>
+                  <th class="num">Amount</th><th style="width:60px"></th></tr>
+            </thead>
+            <tbody>
+              <tr><td><input type="checkbox" aria-label="Select row"></td><td>May 10, 2024</td><td><span class="idcell">ch_3Qai9EE4pygkgel…</span></td><td>Invoice payment</td><td class="num">80,000.00 USD</td><td><button class="lnk" type="button">Ignore</button></td></tr>
+              <tr><td><input type="checkbox" aria-label="Select row"></td><td>May 10, 2024</td><td><span class="idcell">ch_3Qai9EE4pygkgel…</span></td><td>Invoice payment</td><td class="num">80,000.00 USD</td><td><button class="lnk" type="button">Ignore</button></td></tr>
+              <tr><td><input type="checkbox" aria-label="Select row"></td><td>May 10, 2024</td><td><span class="idcell">ch_3Qai9EE4ovokgel…</span></td><td>Invoice payment</td><td class="num">80,000.00 USD</td><td><button class="lnk" type="button">Ignore</button></td></tr>
+            </tbody>
+          </table>
+          <p class="tokhelp">A journal entry only fixes rows missing in <em>accounting</em> — these are missing in the integration, so they can't be created in your books.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- JOURNAL ENTRY TAB -->
+    <div id="panel-je" class="hidden">
+      <table class="tx" style="max-width:840px">
+        <thead><tr><th>Date</th><th>Name</th><th>Memo</th><th class="num">Net on account</th><th style="width:34px"></th></tr></thead>
+        <tbody id="je-body"></tbody>
+      </table>
+      <p class="empty-note hidden" id="je-empty">No journal entries here yet</p>
+    </div>
+
+    <!-- MATCHED TAB -->
+    <div id="panel-matched" class="hidden">
+      <table class="tx" style="max-width:980px">
+        <thead><tr><th>Date</th><th>Primary ID</th><th>Transaction type</th><th class="num">Amount</th><th>Description</th></tr></thead>
+        <tbody id="matched-body"></tbody>
+      </table>
+      <p class="tokhelp">Rows matched through a balancing entry carry its journal entry number in <strong>Description</strong>. Transaction type is left as it was.</p>
+    </div>
+
+    <div id="panel-other" class="hidden"><p class="empty-note">Not part of this prototype.</p></div>
+  </div>
+</div>
+
+<!-- ═══════════ VARIANT 2 ═══════════ -->
+<div class="variant" id="variant-2">
+  <div class="listpage">
+    <div class="side">
+      <div class="grp">Reconciliation</div>
+      <a href="#" onclick="return false">Balance reconciliation</a>
+      <a href="#" class="cur" onclick="return false">Transaction reconciliation</a>
+      <a href="#" class="on" onclick="return false">Journal entries</a>
+      <a href="#" onclick="return false">Chart of accounts</a>
+    </div>
+    <div class="main">
+      <h1 class="rt" style="font-size:20px">Transaction reconciliation</h1>
+      <p class="sub">Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+      <table class="tx" style="max-width:520px">
+        <thead><tr><th>Date range</th><th>Integration</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>Jun 30, 2025 – May 30, 2026</td><td>My wonderful flowers (Stripe)</td><td>Reconciled</td></tr>
+          <tr><td>Jun 30, 2025 – May 30, 2026</td><td>My wonderful flowers (Stripe)</td><td>Not reconciled</td></tr>
+          <tr><td>Jun 30, 2025 – May 30, 2026</td><td>My wonderful flowers (Stripe)</td><td>N/A</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="scrim" id="v2-scrim"></div>
+  <div class="sheet" id="v2-sheet" role="dialog" aria-modal="true" aria-labelledby="v2-title" style="width:min(62%,880px)">
+    <div class="sheet-head">
+      <h2 id="v2-title">Journal entries</h2>
+      <button class="x" type="button" aria-label="Close" style="border:0;background:none;cursor:pointer;font-size:16px;color:var(--color-grey-50)">✕</button>
+    </div>
+    <div class="sheet-body">
+      <p class="oneje"><span aria-hidden="true">ⓘ</span> These journal entries were created to balance missing transactions in your books.</p>
+      <div class="filters">
+        <div class="fl"><label for="je-search">Search</label><input id="je-search" placeholder="Search by name or memo"></div>
+        <div class="fl"><label for="je-from">Date from</label><input id="je-from" type="date" value="2024-02-22"></div>
+        <div class="fl"><label for="je-to">Date to</label><input id="je-to" type="date" value="2024-02-22"></div>
+        <button class="btn primary sm" type="button">Apply</button>
+        <button class="btn sm" type="button">Reset filters</button>
+        <span style="flex:1"></span>
+        <button class="btn sm" type="button" id="v2-toggle-empty">Show empty state</button>
+      </div>
+      <table class="tx">
+        <thead><tr><th>Date</th><th>Name</th><th>Memo</th><th class="num">Net on account</th><th style="width:34px"></th></tr></thead>
+        <tbody id="v2-body"></tbody>
+      </table>
+      <p class="empty-note hidden" id="v2-empty">No journal entries here yet</p>
+    </div>
+  </div>
+</div>
+
+<!-- shared overlays -->
+<div class="toasts" id="toasts"></div>
+<div class="menu hidden" id="rowmenu" role="menu"></div>
+
+<div class="scrim hidden" id="sheet-scrim"></div>
+<div class="sheet hidden" id="je-sheet" role="dialog" aria-modal="true" aria-labelledby="je-sheet-title">
+  <div class="sheet-head">
+    <h2 id="je-sheet-title">Journal entry details</h2>
+    <button class="btn" type="button" id="je-cancel">Cancel</button>
+    <button class="btn primary" type="button" id="je-post">Post to books</button>
+  </div>
+  <div class="sheet-body">
+    <div class="jehead">
+      <div class="jefields">
+        <div class="f">
+          <label for="je-num">Journal entry number <span class="req">*</span></label>
+          <input id="je-num" readonly value="SYN-TXNRECON-12345678">
+        </div>
+        <div class="f">
+          <label for="je-date">Date</label>
+          <input id="je-date" type="date" value="2025-03-23" min="2025-03-20" max="2025-03-23">
+        </div>
+        <div class="f">
+          <label for="je-cur">Currency</label>
+          <select id="je-cur" disabled><option>USD</option></select>
+        </div>
+      </div>
+      <div class="totals ok" id="je-totals" role="status">
+        <div><div class="tl">Total debit</div><div class="tv" id="tot-d">0.00 USD</div></div>
+        <div><div class="tl">Total credit</div><div class="tv" id="tot-c">0.00 USD</div></div>
+        <div class="oob hidden" id="je-oob"></div>
+      </div>
+    </div>
+
+    <p class="oneje"><span aria-hidden="true">ⓘ</span> Only one journal entry can be created per reconciliation. Include all needed transactions.</p>
+
+    <h3 class="sec">Entry lines</h3>
+    <table class="lines">
+      <thead><tr><th>Account</th><th>Description</th><th class="n">Debit</th><th class="n">Credit</th><th style="width:30px"></th></tr></thead>
+      <tbody id="lines-body"></tbody>
+    </table>
+    <div class="linefoot">
+      <button class="lnk" type="button" id="add-line">Add line</button>
+      <span class="sp"></span>
+      <div class="tt"><span>Total</span><span id="foot-d">0.00 USD</span><span id="foot-c">0.00 USD</span></div>
+    </div>
+    <p class="tokhelp" id="tokhelp"></p>
+
+    <h3 class="sec" style="margin-top:22px">Memo</h3>
+    <div class="memo">
+      <label class="sronly" for="je-memo">Memo</label>
+      <textarea id="je-memo">Balancing journal entry created from Synder's Transaction Reconciliation</textarea>
+    </div>
+  </div>
+</div>
+
+<div class="modal-scrim hidden" id="modal-scrim">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" id="modal">
+    <h2 id="modal-title"></h2>
+    <div class="mb" id="modal-body"></div>
+    <div class="ma" id="modal-actions"></div>
+  </div>
+</div>
+
+</div>
+
+<script>
+(function () {
+  /* ────────── data ────────── */
+  var CLEARING = 'Stripe Clearing';
+  var INCOME = 'Stripe Sales';
+  var ACCOUNTS = ['Stripe Clearing', 'Stripe Sales', 'Stripe Fees', 'Sales of Product Income',
+                  'Cost of Goods Sold', 'Undeposited Funds'];
+  var DOC = 'SYN-TXNRECON-12345678';
+
+  // "Missing in accounting" rows. reason=null → eligible.
+  var ROWS = [
+    { id: 'r1', date: '2024-05-10', pid: 'ch_3Qai9EE4pygkgelb1ESq8sWp', sid: 'RF_88', type: 'Invoice payment', amt: 80,  cur: 'USD', txdate: '2024-03-15' },
+    { id: 'r2', date: '2024-05-10', pid: 'ch_3Qai9EE4pygkgelb1ESq8sWq', sid: 'RF_89', type: 'Invoice payment', amt: 90,  cur: 'USD', txdate: '2024-03-15' },
+    { id: 'r3', date: '2024-05-10', pid: '',  sid: '',      type: 'Invoice payment', amt: 30,  cur: 'USD', txdate: '2024-03-16', reason: 'ids' },
+    { id: 'r4', date: '2024-05-10', pid: 'ch_3Qai9EE4pygkgelb1ESq8sWr', sid: 'RF_90', type: 'Invoice payment', amt: 100, cur: 'GBP', txdate: '2024-03-16', reason: 'cur' },
+    { id: 'r5', date: '2024-05-10', pid: 'ch_3Qai9EE4pygkgelb1ESq8sWs', sid: '',      type: 'Invoice payment', amt: 20,  cur: 'USD', txdate: '2024-03-17' },
+    { id: 'r6', date: '2024-05-10', pid: 'ch_3Qai9EE4pygkgelb1ESq8sWt', sid: 'RF_92', type: 'Invoice payment', amt: 30,  cur: 'USD', txdate: '' },
+    { id: 'r7', date: '2024-05-10', pid: 'ch_3Qai9EE4pygkgelb1ESq8sWu', sid: 'RF_93', type: 'Invoice payment', amt: 90,  cur: 'EUR', txdate: '2024-03-18', reason: 'cur' },
+    { id: 'r8', date: '2024-05-10', pid: 'ch_3Qai9EE4pygkgelb1ESq8sWv', sid: 'RF_94', type: 'Invoice payment', amt: 40,  cur: 'USD', txdate: '2024-03-19' }
+  ];
+
+  var state = {
+    sel: {},           // row id -> true
+    lines: [],         // JE lines currently in the sheet
+    pendingRows: [],   // rows the sheet was opened for
+    je: null,          // created JE
+    matched: [],       // rows moved to Matched
+    tab: 'miss',
+    lastFocus: null,
+    menuRow: null
+  };
+
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+  var money = function (n, c) {
+    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (c || 'USD');
+  };
+  var token = function (r) {
+    var t = [];
+    if (r.txdate) t.push('date:' + r.txdate);
+    if (r.pid) t.push('p_id:' + r.pid);
+    if (r.sid) t.push('s_id:' + r.sid);
+    return t.join(' ');
+  };
+  var isOpen = function (r) { return state.matched.indexOf(r.id) === -1; };
+
+  /* ────────── missing-in-accounting table ────────── */
+  function renderMiss() {
+    var body = $('miss-body'), html = '';
+    var open = ROWS.filter(isOpen);
+    open.forEach(function (r) {
+      var inel = !!r.reason;
+      html += '<tr class="' + (inel ? 'inelig' : '') + '" data-row="' + r.id + '">' +
+        '<td><input type="checkbox" data-sel="' + r.id + '" aria-label="Select transaction ' + esc(r.pid || 'without id') + '"' +
+          (state.sel[r.id] ? ' checked' : '') + '></td>' +
+        '<td>May 10, 2024</td>' +
+        '<td><span class="idcell">' + (r.pid ? esc(r.pid) : '–') + '</span></td>' +
+        '<td><span class="idcell">' + (r.sid ? esc(r.sid) : '–') + '</span></td>' +
+        '<td>' + esc(r.type) + '</td>' +
+        '<td class="num">' + money(r.amt, r.cur) + '</td>' +
+        '<td><button class="kebab" type="button" data-menu="' + r.id + '" aria-haspopup="menu" aria-label="Actions for this transaction">⋯</button></td>' +
+      '</tr>';
+    });
+    body.innerHTML = html;
+    $('miss-empty').classList.toggle('hidden', open.length > 0);
+    $('c-miss').textContent = String(open.length);
+    var selCount = Object.keys(state.sel).filter(function (k) { return state.sel[k]; }).length;
+    $('bulk').classList.toggle('hidden', selCount === 0);
+    $('bulk-count').textContent = selCount + ' selected';
+  }
+
+  function renderMatched() {
+    var html = '';
+    state.matched.forEach(function (id) {
+      var r = ROWS.filter(function (x) { return x.id === id; })[0];
+      html += '<tr><td>May 10, 2024</td><td><span class="idcell">' + esc(r.pid) + '</span></td>' +
+        '<td>' + esc(r.type) + '</td><td class="num">' + money(r.amt, r.cur) + '</td>' +
+        '<td>' + esc(DOC) + '</td></tr>';
+    });
+    $('matched-body').innerHTML = html || '<tr><td colspan="5" class="empty-note">No rows matched through a balancing entry yet.</td></tr>';
+    $('c-matched').textContent = (100000 + state.matched.length).toLocaleString('en-US');
+  }
+
+  function renderJeTab() {
+    var html = '';
+    if (state.je) {
+      html = '<tr><td>' + esc(state.je.date) + '</td><td>' + esc(state.je.doc) + '</td>' +
+        '<td class="memo-cell">' + esc(state.je.memo) + '</td>' +
+        '<td class="num">' + money(state.je.net, 'USD') + '</td>' +
+        '<td><button class="kebab" type="button" id="je-kebab" aria-haspopup="menu" aria-label="Actions for this journal entry">⋯</button></td></tr>';
+    }
+    $('je-body').innerHTML = html;
+    $('je-empty').classList.toggle('hidden', !!state.je);
+    $('tab-je').classList.toggle('hidden', !state.je);
+  }
+
+  /* ────────── tabs ────────── */
+  function showTab(name) {
+    state.tab = name;
+    document.querySelectorAll('#variant-1 .tab').forEach(function (t) {
+      t.setAttribute('aria-selected', t.getAttribute('data-tab') === name ? 'true' : 'false');
+    });
+    $('panel-miss').classList.toggle('hidden', name !== 'miss');
+    $('panel-je').classList.toggle('hidden', name !== 'je');
+    $('panel-matched').classList.toggle('hidden', name !== 'matched');
+    $('panel-other').classList.toggle('hidden', name === 'miss' || name === 'je' || name === 'matched');
+  }
+  document.querySelectorAll('#variant-1 .tab').forEach(function (t) {
+    t.addEventListener('click', function () { showTab(t.getAttribute('data-tab')); });
+  });
+
+  /* ────────── selection ────────── */
+  $('miss-body').addEventListener('change', function (e) {
+    var cb = e.target.closest('[data-sel]');
+    if (!cb) return;
+    state.sel[cb.getAttribute('data-sel')] = cb.checked;
+    var selCount = Object.keys(state.sel).filter(function (k) { return state.sel[k]; }).length;
+    $('bulk').classList.toggle('hidden', selCount === 0);
+    $('bulk-count').textContent = selCount + ' selected';
+  });
+  $('sel-all').addEventListener('change', function () {
+    var on = this.checked;
+    ROWS.filter(isOpen).forEach(function (r) { state.sel[r.id] = on; });
+    renderMiss();
+  });
+
+  /* ────────── row menu ────────── */
+  var REASON_TEXT = {
+    cur: "Currency doesn't match account currency (USD)",
+    ids: 'Primary and secondary IDs are missing'
+  };
+  function openRowMenu(btn, rowId) {
+    var r = ROWS.filter(function (x) { return x.id === rowId; })[0];
+    var m = $('rowmenu');
+    var html = '<button class="mi" type="button" role="menuitem" data-act="ignore">Ignore</button>';
+    if (r.reason) {
+      html += '<button class="mi" type="button" role="menuitem" disabled>Create journal entry</button>' +
+        '<div class="why">Cannot create a journal entry — ' +
+        (r.reason === 'ids' ? 'primary and secondary IDs are missing.' :
+         "currency doesn't match account currency (USD).") + '</div>';
+    } else {
+      html += '<button class="mi" type="button" role="menuitem" data-act="create">Create journal entry</button>';
+    }
+    m.innerHTML = html;
+    var rect = btn.getBoundingClientRect(), st = $('stage').getBoundingClientRect();
+    m.style.top = (rect.bottom - st.top + $('stage').scrollTop + 4) + 'px';
+    m.style.left = Math.max(8, rect.right - st.left - 184) + 'px';
+    m.classList.remove('hidden');
+    state.menuRow = rowId;
+    state.lastFocus = btn;
+    var first = m.querySelector('.mi:not([disabled])');
+    if (first) first.focus();
+  }
+  function closeRowMenu(restore) {
+    $('rowmenu').classList.add('hidden');
+    state.menuRow = null;
+    if (restore && state.lastFocus && state.lastFocus.isConnected) state.lastFocus.focus();
+  }
+  $('miss-body').addEventListener('click', function (e) {
+    var k = e.target.closest('[data-menu]');
+    if (k) { e.stopPropagation(); openRowMenu(k, k.getAttribute('data-menu')); }
+  });
+  $('rowmenu').addEventListener('click', function (e) {
+    var mi = e.target.closest('[data-act]');
+    if (!mi) return;
+    var act = mi.getAttribute('data-act'), rowId = state.menuRow;
+    closeRowMenu(false);
+    if (act === 'create') startCreate([rowId]);
+    if (act === 'ignore') { state.sel[rowId] = false; renderMiss(); }
+  });
+  document.addEventListener('click', function (e) {
+    if (!$('rowmenu').classList.contains('hidden') && !e.target.closest('#rowmenu') && !e.target.closest('[data-menu]') && !e.target.closest('#je-kebab')) closeRowMenu(false);
+  });
+
+  /* ────────── modals ────────── */
+  function openModal(title, bodyHtml, actions) {
+    $('modal-title').textContent = title;
+    $('modal-body').innerHTML = bodyHtml;
+    var a = $('modal-actions');
+    a.innerHTML = '';
+    actions.forEach(function (act) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn' + (act.kind ? ' ' + act.kind : '');
+      b.textContent = act.label;
+      b.addEventListener('click', function () { closeModal(); if (act.fn) act.fn(); });
+      a.appendChild(b);
+    });
+    state.lastFocus = document.activeElement;
+    $('modal-scrim').classList.remove('hidden');
+    var f = a.querySelector('button');
+    if (f) f.focus();
+  }
+  function closeModal() {
+    $('modal-scrim').classList.add('hidden');
+    if (state.lastFocus && state.lastFocus.isConnected) state.lastFocus.focus();
+  }
+  $('modal-scrim').addEventListener('click', function (e) { if (e.target === this) closeModal(); });
+
+  /* ────────── toasts ────────── */
+  function toast(kind, text) {
+    var t = document.createElement('div');
+    t.className = 'toast ' + kind;
+    t.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+    t.innerHTML = '<span class="tx">' + esc(text) + '</span>' +
+      '<button class="cl" type="button" aria-label="Dismiss">✕</button>';
+    t.querySelector('.cl').addEventListener('click', function () { t.remove(); });
+    $('toasts').appendChild(t);
+    setTimeout(function () { if (t.isConnected) t.remove(); }, 9000);
+    return t;
+  }
+
+  /* ────────── create flow ────────── */
+  function startCreate(ids) {
+    if (state.je) {
+      openModal('You can have only one journal entry per reconciliation',
+        'You already have a journal entry for this reconciliation. To add more transactions, delete the existing entry first and create a new one.',
+        [{ label: 'Got it', kind: 'primary' }]);
+      return;
+    }
+    var picked = ROWS.filter(function (r) { return ids.indexOf(r.id) > -1 && isOpen(r); });
+    var good = picked.filter(function (r) { return !r.reason; });
+    var bad = picked.filter(function (r) { return !!r.reason; });
+
+    if (good.length === 0) {
+      var reasons = {};
+      bad.forEach(function (r) { reasons[r.reason] = true; });
+      openModal('No transactions can be added',
+        'All selected transactions have one or more issues:<ul>' +
+        Object.keys(reasons).map(function (k) { return '<li>' + REASON_TEXT[k] + '</li>'; }).join('') +
+        '</ul>', [{ label: 'Close', kind: 'primary' }]);
+      return;
+    }
+    if (bad.length > 0) {
+      var rs = {};
+      bad.forEach(function (r) { rs[r.reason] = true; });
+      openModal('Some transactions can’t be added',
+        bad.length + ' of the selected transactions can’t be added to a journal entry:<ul>' +
+        Object.keys(rs).map(function (k) { return '<li>' + REASON_TEXT[k] + '</li>'; }).join('') +
+        '</ul><p style="margin:10px 0 0">Proceed with the remaining ' + good.length + ' transaction' +
+        (good.length === 1 ? '' : 's') + '?</p>',
+        [{ label: 'Cancel' }, { label: 'Create journal entry', kind: 'primary', fn: function () { openSheet(good); } }]);
+      return;
+    }
+    openSheet(good);
+  }
+
+  function openSheet(rows) {
+    state.pendingRows = rows;
+    state.lines = rows.map(function (r) {
+      return { kind: 'clearing', account: CLEARING, desc: token(r), debit: r.amt, credit: 0, rowId: r.id };
+    });
+    var net = rows.reduce(function (a, r) { return a + r.amt; }, 0);
+    state.lines.push({ kind: 'income', account: INCOME, desc: 'Balancing entry', debit: 0, credit: net });
+    renderLines();
+    state.lastFocus = document.activeElement;
+    $('sheet-scrim').classList.remove('hidden');
+    $('je-sheet').classList.remove('hidden');
+    $('je-date').focus();
+  }
+  function closeSheet() {
+    $('sheet-scrim').classList.add('hidden');
+    $('je-sheet').classList.add('hidden');
+    if (state.lastFocus && state.lastFocus.isConnected) state.lastFocus.focus();
+  }
+
+  function renderLines() {
+    var html = '';
+    state.lines.forEach(function (l, i) {
+      var locked = l.kind === 'clearing';
+      html += '<tr>' +
+        '<td>' + (locked
+          ? '<input readonly value="' + esc(l.account) + '" aria-label="Account, locked">'
+          : '<select data-f="account" data-i="' + i + '" aria-label="Account">' +
+            ACCOUNTS.map(function (a) { return '<option' + (a === l.account ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') +
+            '</select>') + '</td>' +
+        '<td>' + (locked
+          ? '<input readonly value="' + esc(l.desc) + '" aria-label="Description, locked">'
+          : '<input data-f="desc" data-i="' + i + '" value="' + esc(l.desc) + '" aria-label="Description">') + '</td>' +
+        '<td class="n">' + (locked
+          ? '<input readonly value="' + (l.debit ? l.debit.toFixed(2) : '') + '" aria-label="Debit, locked">'
+          : '<input data-f="debit" data-i="' + i + '" value="' + (l.debit ? l.debit.toFixed(2) : '') + '" aria-label="Debit">') + '</td>' +
+        '<td class="n">' + (locked
+          ? '<input readonly value="' + (l.credit ? l.credit.toFixed(2) : '') + '" aria-label="Credit, locked">'
+          : '<input data-f="credit" data-i="' + i + '" value="' + (l.credit ? l.credit.toFixed(2) : '') + '" aria-label="Credit">') + '</td>' +
+        '<td>' + (locked ? '' : '<button class="rm" type="button" data-rm="' + i + '" aria-label="Remove line">✕</button>') + '</td>' +
+      '</tr>';
+    });
+    $('lines-body').innerHTML = html;
+    var n = state.pendingRows.length;
+    $('tokhelp').innerHTML = 'The ' + n + ' locked line' + (n === 1 ? '' : 's') +
+      ' carry the transaction’s date and IDs as their description. That string is what matches the line back to the transaction, so it can’t be edited — it will appear on the entry in QuickBooks.';
+    recalc();
+  }
+
+  function recalc() {
+    var d = state.lines.reduce(function (a, l) { return a + (+l.debit || 0); }, 0);
+    var c = state.lines.reduce(function (a, l) { return a + (+l.credit || 0); }, 0);
+    $('tot-d').textContent = money(d); $('tot-c').textContent = money(c);
+    $('foot-d').textContent = money(d); $('foot-c').textContent = money(c);
+    var diff = Math.round((d - c) * 100) / 100;
+    var balanced = diff === 0 && d > 0;
+    $('je-totals').className = 'totals ' + (balanced ? 'ok' : 'bad');
+    $('je-oob').classList.toggle('hidden', balanced);
+    if (!balanced) {
+      $('je-oob').textContent = d === 0 && c === 0 ? 'Add an amount to post this entry.'
+        : 'Out of balance by ' + money(Math.abs(diff)) + ' — ' + (diff > 0 ? 'credit' : 'debit') + ' side is short.';
+    }
+    $('je-post').disabled = !balanced;
+    return balanced;
+  }
+
+  $('lines-body').addEventListener('input', function (e) {
+    var el = e.target.closest('[data-f]');
+    if (!el) return;
+    var i = +el.getAttribute('data-i'), f = el.getAttribute('data-f');
+    if (f === 'debit' || f === 'credit') {
+      state.lines[i][f] = parseFloat(el.value) || 0;
+      if (f === 'debit' && state.lines[i].debit) state.lines[i].credit = 0;
+      if (f === 'credit' && state.lines[i].credit) state.lines[i].debit = 0;
+    } else {
+      state.lines[i][f] = el.value;
+    }
+    recalc();
+  });
+  $('lines-body').addEventListener('click', function (e) {
+    var rm = e.target.closest('[data-rm]');
+    if (!rm) return;
+    state.lines.splice(+rm.getAttribute('data-rm'), 1);
+    renderLines();
+    var add = $('add-line'); if (add) add.focus();
+  });
+  $('add-line').addEventListener('click', function () {
+    state.lines.push({ kind: 'extra', account: ACCOUNTS[1], desc: '', debit: 0, credit: 0 });
+    renderLines();
+    var inputs = $('lines-body').querySelectorAll('[data-f="desc"]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  });
+  $('je-cancel').addEventListener('click', function () { closeSheet(); });
+
+  $('je-post').addEventListener('click', function () {
+    if (!recalc()) return;
+    var rows = state.pendingRows.slice();
+    var net = rows.reduce(function (a, r) { return a + r.amt; }, 0);
+    closeSheet();
+    toast('ok', 'Journal entry sent to your books.');
+    setTimeout(function () {
+      state.je = { doc: DOC, date: 'Mar 23, 2025', memo: $('je-memo').value, net: net };
+      rows.forEach(function (r) { state.matched.push(r.id); state.sel[r.id] = false; });
+      toast('ok', 'Journal entry created in your books. ' + rows.length + ' rows moved to Matched.');
+      renderMiss(); renderMatched(); renderJeTab();
+    }, 1200);
+  });
+
+  /* ────────── JE tab row menu ────────── */
+  $('je-body').addEventListener('click', function (e) {
+    var k = e.target.closest('#je-kebab');
+    if (!k) return;
+    e.stopPropagation();
+    var m = $('rowmenu');
+    m.innerHTML = '<button class="mi" type="button" role="menuitem" data-je="books">View in books</button>' +
+                  '<button class="mi" type="button" role="menuitem" data-je="del">Delete</button>';
+    var rect = k.getBoundingClientRect(), st = $('stage').getBoundingClientRect();
+    m.style.top = (rect.bottom - st.top + $('stage').scrollTop + 4) + 'px';
+    m.style.left = Math.max(8, rect.right - st.left - 184) + 'px';
+    m.classList.remove('hidden');
+    state.lastFocus = k;
+    m.querySelector('.mi').focus();
+  });
+  $('rowmenu').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-je]');
+    if (!b) return;
+    var act = b.getAttribute('data-je');
+    closeRowMenu(false);
+    if (act === 'books') toast('ok', 'Opens the journal entry in QuickBooks in a new browser tab.');
+    if (act === 'del') confirmDelete();
+  });
+
+  function confirmDelete() {
+    openModal('Delete journal entry',
+      'The journal entry will be deleted from your books and Synder. The reconciliation it belongs to will refresh. This cannot be undone.',
+      [{ label: 'Cancel' }, { label: 'Delete journal entry', kind: 'danger', fn: function () {
+        var n = state.matched.length;
+        state.je = null;
+        state.matched = [];
+        renderMiss(); renderMatched(); renderJeTab();
+        showTab('miss');
+        toast('ok', 'Journal entry deleted. ' + n + ' rows are back in Missing in accounting.');
+      } }]);
+  }
+
+  $('bulk-create').addEventListener('click', function () {
+    startCreate(Object.keys(state.sel).filter(function (k) { return state.sel[k]; }));
+  });
+
+  /* ────────── variant 2 ────────── */
+  var V2 = [1, 2, 3, 4, 5].map(function () {
+    return { date: 'May 10, 2024', doc: DOC, memo: "Balancing journal entry created from Synder's Transaction Reconciliation", net: 90000 };
+  });
+  function renderV2(empty) {
+    $('v2-body').innerHTML = empty ? '' : V2.map(function (j) {
+      return '<tr><td>' + j.date + '</td><td><button class="jerow-name" type="button">' + j.doc + '</button></td>' +
+        '<td class="memo-cell">' + esc(j.memo) + '</td><td class="num">' + money(j.net) + '</td>' +
+        '<td><button class="kebab" type="button" aria-haspopup="menu" aria-label="Actions">⋯</button></td></tr>';
+    }).join('');
+    $('v2-empty').classList.toggle('hidden', !empty);
+    $('v2-toggle-empty').textContent = empty ? 'Show populated state' : 'Show empty state';
+  }
+  var v2empty = false;
+  $('v2-toggle-empty').addEventListener('click', function () { v2empty = !v2empty; renderV2(v2empty); });
+
+  /* ────────── escape + variant ────────── */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!$('modal-scrim').classList.contains('hidden')) { closeModal(); return; }
+    if (!$('je-sheet').classList.contains('hidden')) { closeSheet(); return; }
+    if (!$('rowmenu').classList.contains('hidden')) { closeRowMenu(true); }
+  });
+
+  var NOTES = {
+    1: 'Sample data · copy and layout follow the Create_JE_flow frames',
+    2: 'Sample data · org-wide list, populated and empty'
+  };
+  window.setVariant = function (n) {
+    $('variant-1').classList.toggle('on', n === 1);
+    $('variant-2').classList.toggle('on', n === 2);
+    $('vs-1').classList.toggle('on', n === 1);
+    $('vs-2').classList.toggle('on', n === 2);
+    $('vs-note').textContent = NOTES[n];
+    try { history.replaceState(null, '', '#v' + n); } catch (err) {}
+  };
+
+  renderMiss(); renderMatched(); renderJeTab(); renderV2(false);
+  showTab('miss');
+  var h = (location.hash || '').replace(/^#/, '');
+  window.setVariant(h === 'v2' ? 2 : 1);
+})();
+</script>
+</body>
+</html>
