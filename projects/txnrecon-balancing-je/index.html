@@ -118,7 +118,9 @@
   .pager .pg span.on{background:var(--color-primary-10);color:var(--color-primary);font-weight:500}
   .empty-note{padding:26px;text-align:center;color:var(--color-grey-50);font-size:12.5px}
 
-  /* results preview */
+  /* results preview — a full-screen overlay over the whole app, sidebar included.
+     #stage is the positioned ancestor, so inset:0 covers the shell. */
+  #screen-results{position:absolute;inset:0;background:var(--color-white);z-index:70;overflow:auto}
   .topbar{display:flex;align-items:center;gap:14px;padding:0 16px;height:44px;
           border-bottom:1px solid var(--color-grey-20)}
   .topbar .x{width:28px;height:28px;border:0;background:none;cursor:pointer;border-radius:4px;
@@ -315,6 +317,7 @@
             <div class="hintbar">
               <span>Manually match transactions for accurate reconciliation.</span>
               <span class="sp"></span>
+              <button class="btn sm hidden" type="button" id="top-create">Create journal entry</button>
               <button class="btn sm" type="button">Match manually</button>
             </div>
             <div class="cols">
@@ -330,8 +333,7 @@
                 </div>
                 <div class="bulk hidden" id="bulk">
                   <span id="bulk-count">0 selected</span>
-                  <button class="btn sm" type="button" id="bulk-create">Create journal entry</button>
-                  <button class="btn sm" type="button">Ignore</button>
+                  <button class="btn sm" type="button" id="bulk-ignore">Ignore</button>
                 </div>
                 <table class="tx">
                   <thead><tr>
@@ -351,15 +353,17 @@
                   <button class="btn primary sm" type="button">Apply</button>
                   <button class="btn sm" type="button">Reset filters</button>
                 </div>
+                <div class="bulk hidden" id="int-bulk">
+                  <span id="int-bulk-count">0 selected</span>
+                  <button class="btn sm" type="button" id="int-bulk-ignore">Ignore</button>
+                </div>
                 <table class="tx">
-                  <thead><tr><th style="width:28px"></th><th>Date</th><th>Primary ID</th><th>Transaction type</th>
+                  <thead><tr><th style="width:28px"><input type="checkbox" id="int-sel-all" aria-label="Select all rows missing in integration"></th>
+                    <th>Date</th><th>Primary ID</th><th>Transaction type</th>
                     <th class="num">Amount</th><th style="width:60px"></th></tr></thead>
-                  <tbody>
-                    <tr><td><input type="checkbox" aria-label="Select row"></td><td>May 10, 2024</td><td><span class="idcell">ch_3Qai9EE4pygkgel…</span></td><td>Invoice payment</td><td class="num">80,000.00 USD</td><td><button class="lnk" type="button">Ignore</button></td></tr>
-                    <tr><td><input type="checkbox" aria-label="Select row"></td><td>May 10, 2024</td><td><span class="idcell">ch_3Qai9EE4pygkgel…</span></td><td>Invoice payment</td><td class="num">80,000.00 USD</td><td><button class="lnk" type="button">Ignore</button></td></tr>
-                    <tr><td><input type="checkbox" aria-label="Select row"></td><td>May 10, 2024</td><td><span class="idcell">ch_3Qai9EE4ovokgel…</span></td><td>Invoice payment</td><td class="num">80,000.00 USD</td><td><button class="lnk" type="button">Ignore</button></td></tr>
-                  </tbody>
+                  <tbody id="int-body"></tbody>
                 </table>
+                <p class="empty-note hidden" id="int-empty">Nothing missing in the integration for this period.</p>
                 <p class="tokhelp">A journal entry only fixes rows missing in <em>accounting</em> — these are missing in the integration, so they can't be created in your books.</p>
               </div>
             </div>
@@ -501,20 +505,29 @@
     { id:'r8', pid:'ch_3Qai9EE4pygkgelb1ESq8sWv', sid:'RF_94', type:'Invoice payment', amt:40,  cur:'USD', txdate:'2024-03-19' }
   ];
 
+  /* "Missing in integration" — in books, absent from the platform report.
+     A journal entry cannot fix these, so the only bulk action here is Ignore. */
+  var INT_ROWS = [
+    { id:'i1', pid:'ch_3Qai9EE4pygkgelb1ESq8sX1', type:'Invoice payment', amt:80000, cur:'USD' },
+    { id:'i2', pid:'ch_3Qai9EE4pygkgelb1ESq8sX2', type:'Invoice payment', amt:80000, cur:'USD' },
+    { id:'i3', pid:'ch_3Qai9EE4ovokgelb1ESq8sX3', type:'Invoice payment', amt:80000, cur:'USD' },
+    { id:'i4', pid:'ch_3Qai9EE4pygkgelb1ESq8sX4', type:'Invoice payment', amt:80000, cur:'USD' }
+  ];
+
   /* journal entries that already exist across the org */
   var JES = [
     { id:'je-a', doc:'SYN-TXNRECON-90114882', date:'Feb 28, 2025', memo:"Balancing journal entry created from Synder's Transaction Reconciliation", net:1420.55, recon:'rc3' },
     { id:'je-b', doc:'SYN-TXNRECON-77420913', date:'Dec 31, 2024', memo:"Balancing journal entry created from Synder's Transaction Reconciliation", net:860.00,  recon:'rc5' }
   ];
 
-  var state = { sel:{}, lines:[], pendingRows:[], je:null, matched:[], recon:RECONS[1],
-                lastFocus:null, menuRow:null, menuJe:null, flashJe:null };
+  var state = { sel:{}, intSel:{}, intIgnored:[], accIgnored:[], lines:[], pendingRows:[], je:null, matched:[],
+                recon:RECONS[1], lastFocus:null, menuRow:null, menuJe:null, flashJe:null };
 
   var token = function (r) {
     var t=[]; if(r.txdate)t.push('date:'+r.txdate); if(r.pid)t.push('p_id:'+r.pid); if(r.sid)t.push('s_id:'+r.sid);
     return t.join(' ');
   };
-  var isOpen = function (r) { return state.matched.indexOf(r.id) === -1; };
+  var isOpen = function (r) { return state.matched.indexOf(r.id) === -1 && state.accIgnored.indexOf(r.id) === -1; };
 
   /* ───── list ───── */
   function renderList() {
@@ -564,10 +577,38 @@
         '<td><button class="kebab" type="button" data-menu="' + r.id + '" aria-haspopup="menu" aria-label="Actions for this transaction">⋯</button></td></tr>';
     }).join('');
     $('miss-empty').classList.toggle('hidden', open.length > 0);
-    $('c-miss').textContent = String(open.length);
-    var n = Object.keys(state.sel).filter(function (k) { return state.sel[k]; }).length;
+    $('c-miss').textContent = String(open.length + INT_ROWS.filter(intOpen).length);
+    syncAccountingSelection();
+  }
+  function selectedAccounting() {
+    return Object.keys(state.sel).filter(function (k) { return state.sel[k]; });
+  }
+  function syncAccountingSelection() {
+    var n = selectedAccounting().length;
     $('bulk').classList.toggle('hidden', n === 0);
     $('bulk-count').textContent = n + ' selected';
+    // Create journal entry lives in the top action row, beside Match manually —
+    // not in either table's bulk bar.
+    $('top-create').classList.toggle('hidden', n === 0);
+  }
+
+  var intOpen = function (r) { return state.intIgnored.indexOf(r.id) === -1; };
+  function renderInt() {
+    var open = INT_ROWS.filter(intOpen);
+    $('int-body').innerHTML = open.map(function (r) {
+      return '<tr data-introw="' + r.id + '">' +
+        '<td><input type="checkbox" data-intsel="' + r.id + '" aria-label="Select transaction ' + esc(r.pid) + '"' + (state.intSel[r.id] ? ' checked' : '') + '></td>' +
+        '<td>May 10, 2024</td><td><span class="idcell">' + esc(r.pid) + '</span></td>' +
+        '<td>' + esc(r.type) + '</td><td class="num">' + money(r.amt, r.cur) + '</td>' +
+        '<td><button class="lnk" type="button" data-intignore="' + r.id + '">Ignore</button></td></tr>';
+    }).join('');
+    $('int-empty').classList.toggle('hidden', open.length > 0);
+    syncIntSelection();
+  }
+  function syncIntSelection() {
+    var n = Object.keys(state.intSel).filter(function (k) { return state.intSel[k]; }).length;
+    $('int-bulk').classList.toggle('hidden', n === 0);
+    $('int-bulk-count').textContent = n + ' selected';
   }
   function renderMatched() {
     $('matched-body').innerHTML = state.matched.map(function (id) {
@@ -601,14 +642,48 @@
   $('miss-body').addEventListener('change', function (e) {
     var cb = e.target.closest('[data-sel]'); if (!cb) return;
     state.sel[cb.getAttribute('data-sel')] = cb.checked;
-    var n = Object.keys(state.sel).filter(function (k) { return state.sel[k]; }).length;
-    $('bulk').classList.toggle('hidden', n === 0);
-    $('bulk-count').textContent = n + ' selected';
+    syncAccountingSelection();
   });
   $('sel-all').addEventListener('change', function () {
     var on = this.checked;
     ROWS.filter(isOpen).forEach(function (r) { state.sel[r.id] = on; });
     renderMiss();
+  });
+  $('int-body').addEventListener('change', function (e) {
+    var cb = e.target.closest('[data-intsel]'); if (!cb) return;
+    state.intSel[cb.getAttribute('data-intsel')] = cb.checked;
+    syncIntSelection();
+  });
+  $('int-sel-all').addEventListener('change', function () {
+    var on = this.checked;
+    INT_ROWS.filter(intOpen).forEach(function (r) { state.intSel[r.id] = on; });
+    renderInt();
+  });
+  $('int-body').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-intignore]'); if (!b) return;
+    ignoreInt([b.getAttribute('data-intignore')]);
+  });
+  function ignoreInt(ids) {
+    ids.forEach(function (id) {
+      if (state.intIgnored.indexOf(id) === -1) state.intIgnored.push(id);
+      state.intSel[id] = false;
+    });
+    $('int-sel-all').checked = false;
+    renderInt(); renderMiss();
+    toast('ok', ids.length + (ids.length === 1 ? ' transaction' : ' transactions') + ' moved to Ignored.');
+  }
+  $('int-bulk-ignore').addEventListener('click', function () {
+    ignoreInt(Object.keys(state.intSel).filter(function (k) { return state.intSel[k]; }));
+  });
+  $('bulk-ignore').addEventListener('click', function () {
+    var ids = selectedAccounting();
+    ids.forEach(function (id) {
+      if (state.accIgnored.indexOf(id) === -1) state.accIgnored.push(id);
+      state.sel[id] = false;
+    });
+    $('sel-all').checked = false;
+    renderMiss();
+    toast('ok', ids.length + (ids.length === 1 ? ' transaction' : ' transactions') + ' moved to Ignored.');
   });
 
   /* ───── menus ───── */
@@ -658,7 +733,11 @@
       var act = a.getAttribute('data-act'), rowId = state.menuRow;
       closeMenu(false);
       if (act === 'create') startCreate([rowId]);
-      if (act === 'ignore') { state.sel[rowId] = false; renderMiss(); }
+      if (act === 'ignore') {
+        if (state.accIgnored.indexOf(rowId) === -1) state.accIgnored.push(rowId);
+        state.sel[rowId] = false; renderMiss();
+        toast('ok','1 transaction moved to Ignored.');
+      }
       return;
     }
     if (!j) return;
@@ -805,9 +884,7 @@
     if (d.length) d[d.length - 1].focus();
   });
   $('je-cancel').addEventListener('click', closeSheet);
-  $('bulk-create').addEventListener('click', function () {
-    startCreate(Object.keys(state.sel).filter(function (k) { return state.sel[k]; }));
-  });
+  $('top-create').addEventListener('click', function () { startCreate(selectedAccounting()); });
 
   $('je-post').addEventListener('click', function () {
     if (!recalc()) return;
@@ -891,7 +968,7 @@
     if (!$('rowmenu').classList.contains('hidden')) return closeMenu(true);
   });
 
-  renderList(); renderMiss(); renderMatched(); renderJeTab(); renderJeList(); showTab('miss');
+  renderList(); renderInt(); renderMiss(); renderMatched(); renderJeTab(); renderJeList(); showTab('miss');
 })();
 </script>
 </body>

@@ -37,6 +37,22 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     ok('list hidden while previewing', !(await p.locator('#screen-list').isVisible()));
     ok('preview header reflects the clicked row', (await txt('#r-sub')).includes('Mar 20, 2025 – Mar 23, 2025'));
     ok('Missing source tab selected', (await p.locator('.tab[data-tab="miss"]').getAttribute('aria-selected'))==='true');
+    ok('results overlay paints over the sidebar (occlusion, not visibility)', await p.evaluate(()=>{
+      const sb=document.querySelector('.sidebar'), ov=document.getElementById('screen-results');
+      const r=sb.getBoundingClientRect();
+      const hit=document.elementFromPoint(r.left+r.width/2, r.top+Math.min(r.height/2,300));
+      return !!hit && (ov===hit || ov.contains(hit));}));
+    ok('overlay spans the whole stage', await p.evaluate(()=>{
+      const r=document.getElementById('screen-results').getBoundingClientRect();
+      const s=document.getElementById('stage').getBoundingClientRect();
+      return Math.abs(r.left-s.left)<2 && Math.abs(r.top-s.top)<2 && Math.abs(r.width-s.width)<2;}));
+    ok('nothing from the app shell is hittable behind the overlay', await p.evaluate(()=>{
+      const a=document.querySelector('.sidebar a'); if(!a) return true;
+      const r=a.getBoundingClientRect(); if(!r.width||!r.height) return true;
+      const t=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);
+      return !a.contains(t)&&t!==a;}));
+    ok('Create journal entry is not in either table bulk bar', await p.evaluate(()=>
+      ![...document.querySelectorAll('#bulk button, #int-bulk button')].some(b=>/journal entry/i.test(b.textContent))));
     ok('close returns to the list', await (async()=>{await p.locator('#back-to-list').click();await p.waitForTimeout(200);return await vis('#screen-list')})());
     ok('focus returns to the row that was opened', (await active()).includes('rowlink'), await active());
 
@@ -71,7 +87,18 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     ok('focus returns to kebab', (await active()).includes('kebab'));
 
     await p.locator('#sel-all').check(); await p.waitForTimeout(200);
-    await p.locator('#bulk-create').click(); await p.waitForTimeout(250);
+    ok('accounting bulk bar shows only Ignore', (await p.locator('#bulk button').allInnerTexts()).map(t=>t.trim()).join('/')==='Ignore');
+    ok('Create journal entry appears in the top action row on selection', await p.locator('#top-create').isVisible());
+    ok('top Create journal entry is hittable', await hittable('#top-create'));
+    ok('integration column has a select-all', await p.locator('#int-sel-all').isVisible());
+    await p.locator('#int-sel-all').check(); await p.waitForTimeout(200);
+    ok('integration bulk bar appears', await p.locator('#int-bulk').isVisible());
+    ok('integration bulk bar shows only Ignore', (await p.locator('#int-bulk button').allInnerTexts()).map(t=>t.trim()).join('/')==='Ignore');
+    ok('integration bulk count', (await txt('#int-bulk-count'))==='4 selected');
+    await p.locator('#int-bulk-ignore').click(); await p.waitForTimeout(300);
+    ok('bulk ignore empties the integration column', await p.locator('#int-empty').isVisible());
+    ok('integration bulk bar goes away', !(await p.locator('#int-bulk').isVisible()));
+    await p.locator('#top-create').click(); await p.waitForTimeout(250);
     ok('partial-block modal', (await txt('#modal-title')).includes("Some transactions can"));
     ok('names the remaining count', (await txt('#modal-body')).includes('Proceed with the remaining 5 transactions?'));
     ok('modal takes focus', await p.evaluate(()=>document.getElementById('modal').contains(document.activeElement)));
@@ -108,7 +135,7 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
 
     await p.locator('#je-post').click(); await p.waitForTimeout(400);
     ok('sheet closes on post', !(await p.locator('#je-sheet').isVisible()));
-    ok('sent toast', (await txt('.toast')).includes('Journal entry sent to your books.'));
+    ok('sent toast', (await p.locator('.toast').allInnerTexts()).some(t=>t.includes('Journal entry sent to your books.')));
     await p.waitForTimeout(1300);
     ok('created+matched toast', /5 rows moved to Matched\./.test((await p.locator('.toast').allInnerTexts()).join(' | ')));
     ok('rows left Missing in accounting', (await p.locator('#miss-body tr').count())===3);
@@ -120,7 +147,7 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     /* ---- one-JE rule ---- */
     await p.locator('.tab[data-tab="miss"]').click(); await p.waitForTimeout(150);
     await p.locator('#miss-body tr:first-child input[data-sel]').check(); await p.waitForTimeout(120);
-    await p.locator('#bulk-create').click(); await p.waitForTimeout(250);
+    await p.locator('#top-create').click(); await p.waitForTimeout(250);
     ok('one-JE modal', (await txt('#modal-title'))==='You can have only one journal entry per reconciliation');
     await p.locator('#modal-actions .btn').click(); await p.waitForTimeout(150);
 
