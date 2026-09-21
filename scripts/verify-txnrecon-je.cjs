@@ -136,9 +136,26 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     /* ---- create flow ---- */
     await p.locator('#list-body tr[data-rc="rc2"]').click(); await p.waitForTimeout(250);
     await p.locator('#miss-body tr[data-row="r3"] .kebab').click(); await p.waitForTimeout(150);
-    ok('ineligible row: Create journal entry disabled', await p.locator('#rowmenu .mi[disabled]').isVisible());
+    ok('ineligible row: Create journal entry marked disabled', await p.locator('#rowmenu .mi[aria-disabled="true"]').isVisible());
     ok('row menu is hittable on the results page', await hittable('#rowmenu .mi'));
-    ok('reason stated in the menu', (await txt('#rowmenu .why')).includes('primary and secondary IDs are missing'));
+    ok('reason is NOT shown as a block under the item', !(await p.locator('#rowmenu .mi-tip').isVisible()));
+    ok('reason appears on hover', await (async()=>{
+      await p.locator('#rowmenu .mi-wrap').hover(); await p.waitForTimeout(250);
+      return await p.locator('#rowmenu .mi-tip').isVisible();})());
+    ok('hover reason names the cause', (await txt('#rowmenu .mi-tip')).includes('primary and secondary IDs are missing'));
+    ok('tooltip stays inside the viewport', await p.evaluate(()=>{
+      const t=document.querySelector('#rowmenu .mi-tip'); const r=t.getBoundingClientRect();
+      return r.left>=0 && r.top>=0 && r.right<=window.innerWidth && r.bottom<=window.innerHeight;}));
+    ok('reason hides again when the pointer leaves', await (async()=>{
+      await p.mouse.move(5,5); await p.waitForTimeout(250);
+      return !(await p.locator('#rowmenu .mi-tip').isVisible());})());
+    ok('reason is reachable by keyboard, not mouse only', await (async()=>{
+      await p.locator('#rowmenu .mi[aria-disabled="true"]').focus(); await p.waitForTimeout(250);
+      return await p.locator('#rowmenu .mi-tip').isVisible();})());
+    ok('aria-disabled is honoured as not-actionable', !(await p.locator('#rowmenu .mi[aria-disabled="true"]').isEnabled()));
+    ok('forcing a click on it still opens nothing', await (async()=>{
+      await p.locator('#rowmenu .mi[aria-disabled="true"]').dispatchEvent('click'); await p.waitForTimeout(250);
+      return await p.locator('#je-sheet').isHidden();})());
     await p.keyboard.press('Escape'); await p.waitForTimeout(150);
     ok('focus returns to kebab', (await active()).includes('kebab'));
 
