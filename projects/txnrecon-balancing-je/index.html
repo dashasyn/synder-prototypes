@@ -164,6 +164,32 @@
           box-shadow:0 7px 14px rgba(129,142,165,.25)}
   .mi-wrap:hover .mi-tip,.mi-wrap:focus-within .mi-tip{opacity:1;visibility:visible}
 
+  /* matched view — expandable match groups */
+  .exp{width:22px;height:22px;border:0;background:none;cursor:pointer;color:var(--color-grey-50);
+       font-size:11px;line-height:1;border-radius:3px}
+  .exp:hover{background:var(--color-grey-10);color:var(--text-primary)}
+  .exp .chev{display:inline-block;transition:transform .12s}
+  .exp[aria-expanded="true"] .chev{transform:rotate(90deg)}
+  tr.detail-row>td{padding:0;border-bottom:1px solid var(--color-grey-20)}
+  .detail{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:12px 14px;background:var(--bg-page)}
+  .dtl h4{font-size:12px;font-weight:500;margin:0 0 7px;color:var(--text-primary)}
+  table.sub{width:100%;border-collapse:collapse;font-size:11.5px;background:var(--color-white)}
+  table.sub th{text-align:left;font-weight:500;color:var(--color-grey-50);font-size:11px;
+       padding:6px 7px;border-bottom:1px solid var(--color-grey-20);white-space:nowrap}
+  table.sub td{padding:7px;border-bottom:1px solid var(--color-grey-10);white-space:nowrap}
+  table.sub td.num{text-align:right}
+  .info-wrap{position:relative;display:inline-block}
+  .info-btn{width:18px;height:18px;border:0;background:none;cursor:pointer;color:var(--color-grey-50);
+            font-size:12px;line-height:1;border-radius:50%;padding:0}
+  .info-btn:hover{color:var(--color-primary)}
+  .info-tip{position:absolute;top:calc(100% + 6px);right:0;width:214px;background:var(--color-white);
+            color:var(--text-primary);border:1px solid var(--color-grey-20);border-radius:4px;
+            padding:9px 11px;font-size:11.5px;line-height:1.5;z-index:130;white-space:normal;
+            opacity:0;visibility:hidden;transition:opacity .12s;
+            box-shadow:0 7px 14px rgba(129,142,165,.25)}
+  .info-tip b{display:block;font-weight:500;margin-bottom:3px}
+  .info-wrap:hover .info-tip,.info-wrap:focus-within .info-tip{opacity:1;visibility:visible}
+
   /* sheets */
   .scrim{position:absolute;inset:0;background:rgba(26,27,36,.5);z-index:80}
   .sheet{position:absolute;top:0;right:0;bottom:0;width:min(64%,920px);background:var(--color-white);
@@ -433,11 +459,33 @@
           </div>
 
           <div id="panel-matched" class="hidden">
-            <table class="tx" style="max-width:1000px">
-              <thead><tr><th>Date</th><th>Primary ID</th><th>Transaction type</th><th class="num">Amount</th><th>Description</th></tr></thead>
+            <div class="filters">
+              <div class="fl"><label for="m-search">Search</label><input id="m-search" placeholder="Search…"></div>
+              <div class="fl"><label for="m-from">Date range</label><input id="m-from" type="date" value="2024-02-22"></div>
+              <div class="fl"><label for="m-to" aria-hidden="true">&nbsp;</label><input id="m-to" type="date" value="2024-03-22" aria-label="Date range end"></div>
+              <div class="fl"><label for="m-amt-a">Amount</label><input id="m-amt-a" placeholder="From"></div>
+              <div class="fl"><label for="m-amt-b" aria-hidden="true">&nbsp;</label><input id="m-amt-b" placeholder="To" aria-label="Amount to"></div>
+              <div class="fl"><label for="m-cur">Currency</label><select id="m-cur"><option>All</option><option>USD</option></select></div>
+              <button class="btn primary sm" type="button">Apply</button>
+              <button class="btn sm" type="button">Reset filters</button>
+            </div>
+            <table class="tx">
+              <thead><tr>
+                <th style="width:28px"><input type="checkbox" aria-label="Select all matches"></th>
+                <th style="width:26px"></th>
+                <th>Matching ID</th><th class="num">Total amount</th><th>Date</th>
+                <th>Types</th><th>Match type</th><th class="num">Count</th>
+              </tr></thead>
               <tbody id="matched-body"></tbody>
             </table>
-            <p class="tokhelp">Rows matched through a balancing entry carry its journal entry number in <strong>Description</strong>. Transaction type is left as it was.</p>
+            <div class="pager">
+              <span>Rows per page: 10</span>
+              <span id="m-count">0 of 0</span>
+              <span class="pg"><span class="on">1</span></span>
+            </div>
+            <p class="tokhelp">Expand a match to see the accounting and integration rows side by side.
+              A row created by a balancing entry shows <strong>Journal entry</strong> as its transaction type,
+              and its Description carries the entry number — hover the ⓘ.</p>
           </div>
 
           <div id="panel-other" class="hidden"><p class="empty-note">Not part of this prototype.</p></div>
@@ -567,6 +615,18 @@
     { id:'i2', pid:'ch_3Qai9EE4pygkgelb1ESq8sX2', type:'Invoice payment', amt:80000, cur:'USD' },
     { id:'i3', pid:'ch_3Qai9EE4ovokgelb1ESq8sX3', type:'Invoice payment', amt:80000, cur:'USD' },
     { id:'i4', pid:'ch_3Qai9EE4pygkgelb1ESq8sX4', type:'Invoice payment', amt:80000, cur:'USD' }
+  ];
+
+  /* matches that already existed in this reconciliation, matched the ordinary way */
+  var MATCHED_SEED = [
+    { id:'g1', mid:'ch_3Qai9EE4pygkgelb1ESq8sWa', total:90000, date:'May 10, 2024',
+      types:'Invoice payment, Expense, Purchase, Refund', match:'Auto', count:10,
+      acc:[{ pid:'CH_123', sid:'RF_88', date:'May 10, 2024', type:'Invoice payment', amt:80000 }],
+      int:[{ pid:'CH_123', sid:'RF_88', date:'May 10, 2024', type:'Invoice payment', amt:80000 }] },
+    { id:'g2', mid:'ch_3Qai9EE4pygkgelb1ESq8sWb', total:45000, date:'May 10, 2024',
+      types:'Invoice payment', match:'Manual', count:2,
+      acc:[{ pid:'CH_204', sid:'RF_91', date:'May 10, 2024', type:'Deposit', amt:45000 }],
+      int:[{ pid:'CH_204', sid:'RF_91', date:'May 10, 2024', type:'Invoice payment', amt:45000 }] }
   ];
 
   /* manual journals that already exist on the Journal entries page (from production) */
@@ -725,14 +785,64 @@
     $('int-bulk').classList.toggle('hidden', n === 0);
     $('int-bulk-count').textContent = n + ' selected';
   }
-  function renderMatched() {
-    $('matched-body').innerHTML = state.matched.map(function (id) {
+  function matchedGroups() {
+    // Rows matched through the balancing entry join the ordinary matches. On the
+    // accounting side their transaction type is Journal entry and the Description
+    // carries the entry number (FDD S4).
+    var fromJe = state.matched.map(function (id) {
       var r = ROWS.filter(function (x) { return x.id === id; })[0];
-      return '<tr><td>May 10, 2024</td><td><span class="idcell">' + esc(r.pid) + '</span></td><td>' + esc(r.type) +
-        '</td><td class="num">' + money(r.amt, r.cur) + '</td><td>' + esc(DOC) + '</td></tr>';
-    }).join('') || '<tr><td colspan="5" class="empty-note">No rows matched through a balancing entry yet.</td></tr>';
+      return {
+        id: 'je-' + r.id, mid: r.pid, total: r.amt, date: 'May 10, 2024',
+        types: r.type, match: 'Auto', count: 1,
+        acc: [{ pid: r.pid, sid: r.sid, date: 'May 10, 2024', type: 'Journal entry', amt: r.amt,
+                je: state.je ? { doc: state.je.doc, memo: state.je.memo } : null }],
+        int: [{ pid: r.pid, sid: r.sid, date: 'May 10, 2024', type: r.type, amt: r.amt }]
+      };
+    });
+    return fromJe.concat(MATCHED_SEED);
+  }
+  function subTable(rows, side) {
+    return '<h4>' + side + ' rows (' + rows.length + ')</h4>' +
+      '<table class="sub"><thead><tr><th>Primary ID</th><th>Secondary ID</th><th>Date</th>' +
+      '<th>Transaction type</th><th class="num">Amount</th><th>Description</th></tr></thead><tbody>' +
+      rows.map(function (r) {
+        var desc = r.je
+          ? '<span class="info-wrap"><button class="info-btn" type="button" aria-label="Description details">\u24d8</button>' +
+            '<span class="info-tip" role="tooltip"><b>' + esc(r.je.doc) + '</b>' + esc(r.je.memo) + '</span></span>'
+          : '<span class="info-wrap"><button class="info-btn" type="button" aria-label="Description details">\u24d8</button>' +
+            '<span class="info-tip" role="tooltip">No description on this row.</span></span>';
+        return '<tr><td>' + esc(r.pid || '\u2013') + '</td><td>' + esc(r.sid || '\u2013') + '</td>' +
+          '<td>' + esc(r.date) + '</td><td>' + esc(r.type) + '</td>' +
+          '<td class="num">' + money(r.amt, 'USD') + '</td><td>' + desc + '</td></tr>';
+      }).join('') + '</tbody></table>';
+  }
+  function renderMatched() {
+    var gs = matchedGroups();
+    $('matched-body').innerHTML = gs.map(function (g) {
+      return '<tr data-grp="' + g.id + '">' +
+          '<td><input type="checkbox" aria-label="Select match ' + esc(g.mid) + '"></td>' +
+          '<td><button class="exp" type="button" data-exp="' + g.id + '" aria-expanded="false" ' +
+              'aria-controls="d-' + g.id + '" aria-label="Show matched rows for ' + esc(g.mid) + '">' +
+              '<span class="chev" aria-hidden="true">\u276f</span></button></td>' +
+          '<td><span class="idcell" style="max-width:190px">' + esc(g.mid) + '</span></td>' +
+          '<td class="num">' + money(g.total, 'USD') + '</td>' +
+          '<td>' + esc(g.date) + '</td><td>' + esc(g.types) + '</td>' +
+          '<td>' + esc(g.match) + '</td><td class="num">' + g.count + '</td></tr>' +
+        '<tr class="detail-row hidden" id="d-' + g.id + '"><td colspan="8"><div class="detail">' +
+          '<div class="dtl">' + subTable(g.acc, 'Accounting') + '</div>' +
+          '<div class="dtl">' + subTable(g.int, 'Integration') + '</div>' +
+        '</div></td></tr>';
+    }).join('');
+    $('m-count').textContent = gs.length ? ('1\u2013' + gs.length + ' of ' + gs.length) : '0 of 0';
     $('c-matched').textContent = (100000 + state.matched.length).toLocaleString('en-US');
   }
+  $('matched-body').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-exp]'); if (!b) return;
+    var d = $('d-' + b.getAttribute('data-exp'));
+    var open = d.classList.toggle('hidden');
+    b.setAttribute('aria-expanded', open ? 'false' : 'true');
+  });
+
   function renderJeTab() {
     $('je-body').innerHTML = state.je ? '<tr><td>' + esc(state.je.date) + '</td><td>' + esc(state.je.doc) + '</td>' +
       '<td class="memo-cell">' + esc(state.je.memo) + '</td><td class="num">' + money(state.je.net) + '</td>' +

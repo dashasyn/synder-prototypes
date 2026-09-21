@@ -215,9 +215,49 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     ok('created+matched toast', /5 rows moved to Matched\./.test((await p.locator('.toast').allInnerTexts()).join(' | ')));
     ok('rows left Missing in accounting', (await p.locator('#miss-body tr').count())===3);
     ok('Journal entry tab appears', await p.locator('#tab-je').isVisible());
-    await p.locator('.tab[data-tab="matched"]').click(); await p.waitForTimeout(200);
-    ok('DocNumber in Matched Description', (await txt('#matched-body')).includes('SYN-TXNRECON-12345678'));
+    await p.locator('.tab[data-tab="matched"]').click(); await p.waitForTimeout(250);
     ok('matched count incremented', (await txt('#c-matched'))==='100,005');
+    ok('match view columns follow the frame', (await p.locator('#panel-matched > table > thead th').allInnerTexts()).map(t=>t.trim()).slice(2).join('/')==='Matching ID/Total amount/Date/Types/Match type/Count');
+    ok('match view has its own filters incl. Amount and Currency', await p.locator('#m-amt-a').isVisible() && await p.locator('#m-cur').isVisible());
+    ok('5 JE matches + 2 pre-existing groups', (await p.locator('#matched-body tr[data-grp]').count())===7);
+    ok('both Auto and Manual match types present', await p.evaluate(()=>{
+      const t=[...document.querySelectorAll('#matched-body tr[data-grp]')].map(r=>r.children[6].textContent.trim());
+      return t.includes('Auto')&&t.includes('Manual');}));
+    ok('detail rows collapsed by default', !(await p.locator('#matched-body .detail-row').first().isVisible()));
+    ok('expand control reports collapsed', (await p.locator('#matched-body [data-exp]').first().getAttribute('aria-expanded'))==='false');
+
+    await p.locator('#matched-body [data-exp]').first().click(); await p.waitForTimeout(250);
+    ok('expanding shows the detail', await p.locator('#matched-body .detail-row').first().isVisible());
+    ok('aria-expanded flips', (await p.locator('#matched-body [data-exp]').first().getAttribute('aria-expanded'))==='true');
+    ok('accounting and integration panels side by side', (await p.locator('#matched-body .detail-row').first().locator('.dtl').count())===2);
+    ok('panel headings name their side', (await txt('#matched-body .detail-row .dtl h4')).startsWith('Accounting rows'));
+    ok('sub-table columns match the frame', (await p.locator('#matched-body .detail-row table.sub thead th').allInnerTexts()).map(t=>t.trim()).slice(0,6).join('/')==='Primary ID/Secondary ID/Date/Transaction type/Amount/Description');
+    ok('accounting side shows Journal entry as the type', (await txt('#matched-body .detail-row .dtl:first-child table.sub tbody')).includes('Journal entry'));
+    ok('integration side keeps the original type', (await txt('#matched-body .detail-row .dtl:last-child table.sub tbody')).includes('Invoice payment'));
+
+    ok('description tooltip hidden at rest', !(await p.locator('#matched-body .detail-row .info-tip').first().isVisible()));
+    ok('description tooltip appears on hover', await (async()=>{
+      await p.locator('#matched-body .detail-row .dtl:first-child .info-wrap').first().hover(); await p.waitForTimeout(250);
+      return await p.locator('#matched-body .detail-row .dtl:first-child .info-tip').first().isVisible();})());
+    ok('tooltip carries the journal entry number', (await txt('#matched-body .detail-row .dtl:first-child .info-tip')).includes('SYN-TXNRECON-12345678'));
+    ok('tooltip carries the memo', (await txt('#matched-body .detail-row .dtl:first-child .info-tip')).includes("Balancing journal entry created from Synder's Transaction Reconciliation"));
+    ok('tooltip stays inside the viewport', await p.evaluate(()=>{
+      const t=document.querySelector('#matched-body .detail-row .dtl:first-child .info-tip');
+      const r=t.getBoundingClientRect();
+      return r.left>=0 && r.top>=0 && r.right<=window.innerWidth && r.bottom<=window.innerHeight;}));
+    ok('tooltip reachable by keyboard', await (async()=>{
+      await p.mouse.move(2,2); await p.waitForTimeout(200);
+      await p.locator('#matched-body .detail-row .dtl:first-child .info-btn').first().focus(); await p.waitForTimeout(250);
+      return await p.locator('#matched-body .detail-row .dtl:first-child .info-tip').first().isVisible();})());
+    ok('a pre-existing match carries no entry number', await (async()=>{
+      const last=p.locator('#matched-body tr[data-grp]').last();
+      await last.locator('[data-exp]').click(); await p.waitForTimeout(250);
+      const t=await p.locator('#matched-body .detail-row').last().innerText();
+      return !t.includes('SYN-TXNRECON-');})());
+    ok('collapsing again works', await (async()=>{
+      await p.locator('#matched-body [data-exp]').first().click(); await p.waitForTimeout(250);
+      return !(await p.locator('#matched-body .detail-row').first().isVisible());})());
+    ok('expand button still hittable after two toggles', await hittable('#matched-body [data-exp]'));
 
     /* ---- one-JE rule ---- */
     await p.locator('.tab[data-tab="miss"]').click(); await p.waitForTimeout(150);
