@@ -34,7 +34,14 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     /* ---- row opens the preview ---- */
     await p.locator('#list-body tr[data-rc="rc2"]').click(); await p.waitForTimeout(250);
     ok('row click opens the reconciliation preview', await vis('#screen-results'));
-    ok('list hidden while previewing', !(await p.locator('#screen-list').isVisible()));
+    ok('the list underneath is fully covered by the overlay', await p.evaluate(()=>{
+      const ov=document.getElementById('screen-results');
+      const probes=[document.querySelector('#screen-list h1'), document.querySelector('#list-body tr'), document.getElementById('open-je-list')];
+      return probes.filter(Boolean).every(el=>{
+        const r=el.getBoundingClientRect();
+        if(!r.width||!r.height) return true;
+        const hit=document.elementFromPoint(r.left+r.width/2, r.top+r.height/2);
+        return !!hit && (ov===hit || ov.contains(hit));});}));
     ok('preview header reflects the clicked row', (await txt('#r-sub')).includes('Mar 20, 2025 – Mar 23, 2025'));
     ok('Missing source tab selected', (await p.locator('.tab[data-tab="miss"]').getAttribute('aria-selected'))==='true');
     ok('results overlay paints over the sidebar (occlusion, not visibility)', await p.evaluate(()=>{
@@ -73,8 +80,53 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     await p.keyboard.press('Escape'); await p.waitForTimeout(200);
     ok('Escape closes the drawer', !(await p.locator('#jel-sheet').isVisible()));
     ok('focus returns to the Journal entries button', (await active()).includes('open-je-list'), await active());
-    await p.locator('#nav-je').click(); await p.waitForTimeout(200);
-    ok('sidebar Journal entries opens it too', await vis('#jel-sheet'));
+    await p.locator('#open-je-list').click(); await p.waitForTimeout(200);
+    ok('the list button re-opens the side sheet', await vis('#jel-sheet'));
+    await p.locator('#jel-close').click(); await p.waitForTimeout(200);
+
+
+    /* ---- SCREEN C · Journal entries page (sidebar) ---- */
+    await p.locator('#nav-journals').click(); await p.waitForTimeout(250);
+    ok('sidebar Manual Journals opens a separate page', await vis('#screen-journals'));
+    ok('reconciliations list is hidden', !(await p.locator('#screen-list').isVisible()));
+    ok('it is a page, not a drawer', !(await p.locator('#jel-sheet').isVisible()));
+    ok('page title matches production', (await txt('#journals-h1'))==='Journal entries');
+    ok('subtitle matches production', (await txt('#screen-journals .phead p')).startsWith('Adjust the summary amounts for a specific day'));
+    ok('New entry button', (await txt('#screen-journals .acts .btn'))==='New entry');
+    ok('summaries refresh note present', (await txt('#screen-journals .info')).includes('Refresh corresponding summaries manually'));
+    ok('nav marks Manual Journals current', (await p.locator('#nav-journals').getAttribute('class')).includes('cur'));
+    ok('columns match production plus Type', (await p.locator('#screen-journals thead th').allInnerTexts()).map(t=>t.trim()).slice(0,5).join('/')==='Date/Name/Type/Memo/Amount');
+    ok('both manual journals listed', (await txt('#journals-body')).includes('Test 1234') && (await txt('#journals-body')).includes('tytbuyf'));
+    ok('balancing entries listed alongside them', (await txt('#journals-body')).includes('SYN-TXNRECON-'));
+    ok('4 rows with no filter', (await p.locator('#journals-body tr').count())===4);
+    ok('amount formatted like production', (await txt('#journals-body tr:last-child td.num')).match(/^\$\d[\d,]*\.\d\d [A-Z]{3}$/)!==null, await txt('#journals-body tr:last-child td.num'));
+
+    await p.selectOption('#j-type','manual'); await p.waitForTimeout(200);
+    ok('Type=Manual filters to manual journals only', (await p.locator('#journals-body tr').count())===2);
+    ok('no balancing rows under Manual', !(await txt('#journals-body')).includes('SYN-TXNRECON-'));
+    ok('row count line updates', (await txt('#j-count'))==='1–2 of 2');
+    await p.selectOption('#j-type','balancing'); await p.waitForTimeout(200);
+    ok('Type=Balancing filters to balancing entries only', (await p.locator('#journals-body tr').count())===2);
+    ok('no manual rows under Balancing', !(await txt('#journals-body')).includes('Test 1234'));
+
+    ok('balancing row menu carries View reconciliation', await (async()=>{
+      await p.locator('#journals-body tr:first-child .kebab').click(); await p.waitForTimeout(150);
+      const r = await hittable('#rowmenu [data-je="recon"]'); await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+      return r;})());
+    await p.selectOption('#j-type','manual'); await p.waitForTimeout(200);
+    ok('manual row menu has no View reconciliation', await (async()=>{
+      await p.locator('#journals-body tr:first-child .kebab').click(); await p.waitForTimeout(150);
+      const n = await p.locator('#rowmenu [data-je="recon"]').count(); await p.keyboard.press('Escape'); await p.waitForTimeout(150);
+      return n===0;})());
+    await p.selectOption('#j-type','all'); await p.waitForTimeout(200);
+    await p.locator('#j-reset').click(); await p.waitForTimeout(200);
+    ok('Reset filters restores all rows', (await p.locator('#journals-body tr').count())===4);
+
+    /* all three surfaces still exist */
+    await p.locator('#nav-txnrecon').click(); await p.waitForTimeout(200);
+    ok('back to the reconciliations list', await vis('#screen-list'));
+    await p.locator('#open-je-list').click(); await p.waitForTimeout(250);
+    ok('surface 3 — side sheet still opens from the list', await vis('#jel-sheet'));
     await p.locator('#jel-close').click(); await p.waitForTimeout(200);
 
     /* ---- create flow ---- */
@@ -155,6 +207,14 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     await p.locator('#back-to-list').click(); await p.waitForTimeout(200);
     await p.locator('#open-je-list').click(); await p.waitForTimeout(250);
     ok('new entry appears in the drawer', (await p.locator('#jel-body tr').count())===3);
+    ok('new entry also reaches the Journal entries page', await (async()=>{
+      await p.locator('#jel-close').click(); await p.waitForTimeout(200);
+      await p.locator('#nav-journals').click(); await p.waitForTimeout(250);
+      const n=(await p.locator('#journals-body tr').count());
+      const hasNew=(await txt('#journals-body')).includes('SYN-TXNRECON-12345678');
+      await p.locator('#nav-txnrecon').click(); await p.waitForTimeout(200);
+      await p.locator('#open-je-list').click(); await p.waitForTimeout(250);
+      return n===5 && hasNew;})());
     ok('new entry is first', (await txt('#jel-body tr:first-child')).includes('SYN-TXNRECON-12345678'));
     await p.locator('#jel-body tr:first-child .kebab').click(); await p.waitForTimeout(150);
     ok('drawer menu View reconciliation is hittable, not just visible', await hittable('#rowmenu [data-je="recon"]'));

@@ -107,6 +107,9 @@
   .st.rec{background:var(--color-green-light);color:#14602c}
   .st.not{background:var(--color-yellow-light);color:#7a4508}
   .st.na{background:var(--color-grey-10);color:var(--color-grey-50)}
+  .ty{font-size:11px;padding:2px 8px;border-radius:3px;font-weight:500;white-space:nowrap}
+  .ty.manual{background:var(--color-grey-10);color:var(--color-grey-50)}
+  .ty.balancing{background:var(--color-primary-10);color:var(--color-primary)}
   .kebab{width:26px;height:26px;border:0;background:none;border-radius:4px;cursor:pointer;
          color:var(--color-grey-50);font-size:15px;line-height:1}
   .kebab:hover{background:var(--color-grey-10);color:var(--text-primary)}
@@ -229,23 +232,25 @@
     <div class="sidebar">
       <div class="who"><span class="av">LA</span><span>Lara Croft</span></div>
       <div class="nav">
+        <a href="#" onclick="return false">Dashboard</a>
         <a href="#" onclick="return false">Mapping</a>
         <a href="#" onclick="return false">Summaries</a>
         <div class="grp">Reconciliation</div>
         <a href="#" class="sub" onclick="return false">Balance reconciliation</a>
         <a href="#" class="sub cur" id="nav-txnrecon" onclick="return false">Transaction reconciliation <span class="chip-new">New</span></a>
-        <a href="#" class="sub" id="nav-je" onclick="return false">Journal entries</a>
+        <a href="#" class="sub" id="nav-journals" onclick="return false">Manual Journals</a>
         <a href="#" class="sub" onclick="return false">Chart of accounts</a>
         <a href="#" onclick="return false">Products and services</a>
-        <a href="#" onclick="return false">AI reports</a>
-        <a href="#" onclick="return false">Reporting</a>
+        <a href="#" onclick="return false">Analytics</a>
         <a href="#" onclick="return false">Settings</a>
-        <a href="#" onclick="return false">Release notes</a>
+        <a href="#" onclick="return false">AI Agents</a>
+        <a href="#" onclick="return false">What's New</a>
+        <a href="#" onclick="return false">Custom development</a>
       </div>
     </div>
 
     <div class="content">
-      <div class="appbar">Syncs left: <b>1000</b></div>
+      <div class="appbar">Balance : <b>1000</b> <button class="lnk" type="button">How it works?</button></div>
 
       <!-- ══════ SCREEN A · RECONCILIATIONS LIST ══════ -->
       <div class="page" id="screen-list">
@@ -287,6 +292,49 @@
           <span>Rows per page: 10</span>
           <span>1–8 of 1002</span>
           <span class="pg"><span class="on">1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>…</span><span>10</span></span>
+        </div>
+      </div>
+
+      <!-- ══════ SCREEN C · JOURNAL ENTRIES (separate page, sidebar) ══════ -->
+      <div class="page hidden" id="screen-journals">
+        <div class="phead">
+          <div>
+            <h1 tabindex="-1" id="journals-h1">Journal entries</h1>
+            <p>Adjust the summary amounts for a specific day by creating a journal entry.</p>
+          </div>
+          <div class="sp"></div>
+          <div class="acts"><button class="btn primary" type="button">New entry</button></div>
+        </div>
+
+        <p class="info" style="margin-bottom:14px"><span aria-hidden="true">ⓘ</span>
+          Refresh corresponding summaries manually to see updated amounts.
+          <button class="lnk" type="button">Learn more</button></p>
+
+        <div class="filters">
+          <div class="fl"><label for="j-search">Search</label><input id="j-search" placeholder="Search…"></div>
+          <div class="fl"><label for="j-from">Date from</label><input id="j-from" type="date"></div>
+          <div class="fl"><label for="j-to">Date to</label><input id="j-to" type="date"></div>
+          <div class="fl"><label for="j-type">Type</label>
+            <select id="j-type">
+              <option value="all">All</option>
+              <option value="manual">Manual</option>
+              <option value="balancing">Balancing</option>
+            </select>
+          </div>
+          <button class="btn primary sm" type="button" id="j-apply">Apply</button>
+          <button class="btn sm" type="button" id="j-reset">Reset filters</button>
+        </div>
+
+        <table class="tx">
+          <thead><tr><th>Date</th><th>Name</th><th>Type</th><th>Memo</th><th class="num">Amount</th><th style="width:34px"></th></tr></thead>
+          <tbody id="journals-body"></tbody>
+        </table>
+        <p class="empty-note hidden" id="journals-empty">No journal entries here yet</p>
+
+        <div class="pager">
+          <span>Rows per page: 25</span>
+          <span id="j-count">1–4 of 4</span>
+          <span class="pg"><span class="on">1</span></span>
         </div>
       </div>
 
@@ -514,6 +562,12 @@
     { id:'i4', pid:'ch_3Qai9EE4pygkgelb1ESq8sX4', type:'Invoice payment', amt:80000, cur:'USD' }
   ];
 
+  /* manual journals that already exist on the Journal entries page (from production) */
+  var MANUAL = [
+    { id:'mj-1', date:'02/12/2026', name:'Test 1234', memo:'', amt:30, cur:'USD' },
+    { id:'mj-2', date:'01/13/2026', name:'tytbuyf',   memo:'', amt:20, cur:'CAD' }
+  ];
+
   /* journal entries that already exist across the org */
   var JES = [
     { id:'je-a', doc:'SYN-TXNRECON-90114882', date:'Feb 28, 2025', memo:"Balancing journal entry created from Synder's Transaction Reconciliation", net:1420.55, recon:'rc3' },
@@ -528,6 +582,62 @@
     return t.join(' ');
   };
   var isOpen = function (r) { return state.matched.indexOf(r.id) === -1 && state.accIgnored.indexOf(r.id) === -1; };
+
+  /* ───── screens ───── */
+  function showScreen(name) {
+    $('screen-list').classList.toggle('hidden', name !== 'list');
+    $('screen-journals').classList.toggle('hidden', name !== 'journals');
+    $('nav-txnrecon').classList.toggle('cur', name === 'list');
+    $('nav-journals').classList.toggle('cur', name === 'journals');
+    if (name === 'journals') renderJournals();
+  }
+  $('nav-txnrecon').addEventListener('click', function () { showScreen('list'); });
+  $('nav-journals').addEventListener('click', function () { showScreen('journals'); $('journals-h1').focus(); });
+
+  /* ───── journal entries page ───── */
+  function allJournals() {
+    var bal = JES.map(function (j) {
+      return { id:j.id, date:j.date, name:j.doc, memo:j.memo, amt:j.net, cur:'USD', type:'balancing', recon:j.recon };
+    });
+    var man = MANUAL.map(function (m) { return Object.assign({ type:'manual' }, m); });
+    return bal.concat(man);
+  }
+  function renderJournals() {
+    var want = $('j-type').value;
+    var rows = allJournals().filter(function (j) { return want === 'all' || j.type === want; });
+    $('journals-body').innerHTML = rows.map(function (j) {
+      return '<tr data-jrow="' + j.id + '">' +
+        '<td>' + esc(j.date) + '</td><td>' + esc(j.name) + '</td>' +
+        '<td><span class="ty ' + j.type + '">' + (j.type === 'balancing' ? 'Balancing' : 'Manual') + '</span></td>' +
+        '<td class="memo-cell">' + esc(j.memo || '') + '</td>' +
+        '<td class="num">$' + j.amt.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + esc(j.cur) + '</td>' +
+        '<td><button class="kebab" type="button" data-jkebab="' + j.id + '" aria-haspopup="menu" aria-label="Actions for ' + esc(j.name) + '">⋯</button></td></tr>';
+    }).join('');
+    $('journals-empty').classList.toggle('hidden', rows.length > 0);
+    $('j-count').textContent = rows.length ? ('1–' + rows.length + ' of ' + rows.length) : '0 of 0';
+  }
+  $('j-type').addEventListener('change', renderJournals);
+  $('j-apply').addEventListener('click', renderJournals);
+  $('j-reset').addEventListener('click', function () {
+    $('j-search').value = ''; $('j-from').value = ''; $('j-to').value = ''; $('j-type').value = 'all';
+    renderJournals();
+  });
+  $('journals-body').addEventListener('click', function (e) {
+    var k = e.target.closest('[data-jkebab]'); if (!k) return;
+    e.stopPropagation();
+    var id = k.getAttribute('data-jkebab');
+    var j = allJournals().filter(function (x) { return x.id === id; })[0];
+    state.menuJe = id;
+    // A balancing entry belongs to a reconciliation, so it carries the two extra
+    // actions the FDD specifies; a manual journal has neither.
+    var html = j && j.type === 'balancing'
+      ? '<button class="mi" type="button" role="menuitem" data-je="recon">View reconciliation</button>' +
+        '<button class="mi" type="button" role="menuitem" data-je="books">View in books</button>' +
+        '<button class="mi" type="button" role="menuitem" data-je="del">Delete</button>'
+      : '<button class="mi" type="button" role="menuitem" data-je="books">View in books</button>' +
+        '<button class="mi" type="button" role="menuitem" data-je="del">Delete</button>';
+    placeMenu(k, html);
+  });
 
   /* ───── list ───── */
   function renderList() {
@@ -551,7 +661,6 @@
     state.recon = rc;
     $('r-title').textContent = rc.int;
     $('r-sub').textContent = rc.acc + ' / ' + rc.range;
-    $('screen-list').classList.add('hidden');
     $('screen-results').classList.remove('hidden');
     $('nav-txnrecon').classList.add('cur');
     showTab(state.je ? 'je' : 'miss');
@@ -559,9 +668,11 @@
   }
   function backToList() {
     $('screen-results').classList.add('hidden');
-    $('screen-list').classList.remove('hidden');
-    var b = $('list-body').querySelector('[data-open="' + state.recon.id + '"]');
-    if (b) b.focus(); else $('open-je-list').focus();
+    var onList = !$('screen-list').classList.contains('hidden');
+    var b = onList ? $('list-body').querySelector('[data-open="' + state.recon.id + '"]') : null;
+    if (b) b.focus();
+    else if (onList) $('open-je-list').focus();
+    else $('nav-journals').focus();
   }
   $('back-to-list').addEventListener('click', backToList);
 
@@ -898,7 +1009,7 @@
       JES.unshift(state.je);
       rows.forEach(function (r) { state.matched.push(r.id); state.sel[r.id] = false; });
       toast('ok','Journal entry created in your books. ' + rows.length + ' rows moved to Matched.');
-      renderMiss(); renderMatched(); renderJeTab(); renderJeList();
+      renderMiss(); renderMatched(); renderJeTab(); renderJeList(); renderJournals();
     }, 1200);
   });
 
@@ -923,7 +1034,8 @@
     if (state.lastFocus && state.lastFocus.isConnected) state.lastFocus.focus();
   }
   $('open-je-list').addEventListener('click', openJeList);
-  $('nav-je').addEventListener('click', openJeList);
+  // The sidebar item now opens the full Journal entries page; the side sheet is
+  // reached from the "Journal entries" button on the reconciliations list.
   $('jel-close').addEventListener('click', closeJeList);
   $('jel-scrim').addEventListener('click', closeJeList);
 
@@ -946,6 +1058,7 @@
       [{ label:'Cancel' }, { label:'Delete journal entry', kind:'danger', fn:function () {
         var id = (which === 'current') ? (state.je && state.je.id) : which;
         JES = JES.filter(function (j) { return j.id !== id; });
+        MANUAL = MANUAL.filter(function (m) { return m.id !== id; });
         if (state.je && state.je.id === id) {
           var n = state.matched.length;
           state.je = null; state.matched = [];
@@ -955,7 +1068,7 @@
         } else {
           toast('ok','Journal entry deleted. Its reconciliation will refresh.');
         }
-        renderJeList();
+        renderJeList(); renderJournals();
       } }]);
   }
 
@@ -968,7 +1081,7 @@
     if (!$('rowmenu').classList.contains('hidden')) return closeMenu(true);
   });
 
-  renderList(); renderInt(); renderMiss(); renderMatched(); renderJeTab(); renderJeList(); showTab('miss');
+  renderList(); renderJournals(); renderInt(); renderMiss(); renderMatched(); renderJeTab(); renderJeList(); showTab('miss');
 })();
 </script>
 </body>
