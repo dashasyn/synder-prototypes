@@ -217,8 +217,10 @@ const fs = require('fs');
   await page.waitForTimeout(400);
   const nFiltered = await rowCount();
   ok('the status filter actually filters', nFiltered < allRows, { nFiltered, allRows });
-  ok('the header count follows the filter',
-    (await page.$eval('#page-header h6 + p', e => e.textContent)).startsWith(String(nFiltered)));
+  // Ignat removed the "N evaluations" subtitle on 2026-09-22 — asserted as an
+  // absence so it cannot creep back in.
+  ok('the evaluations header carries no count subtitle',
+    !(await page.$('#page-header h6 + p')));
 
   // clear-all appears only when something is filtered, and restores the list
   ok('a Clear filters button appears once a filter is set', !!(await page.$('#f-clear-all')));
@@ -434,8 +436,18 @@ const fs = require('fs');
   // reports an unsorted sequence that is in fact correctly sorted.
   const perGroup = await page.$$eval('table', ts => ts.map(t =>
     [...t.querySelectorAll('tbody tr')].map(r => r.children[2].textContent.trim())));
-  const toNum = d => { const m = d.match(/(\d{2})\.(\d{2})\.(\d{4})/);
-    return m ? +(m[3] + m[2] + m[1]) : 0; };
+  // Dates render as "26 May 2026" since 2026-09-22 (Ignat: short month names).
+  // The old dd.mm.yyyy parser returned 0 for every cell, which emptied the
+  // list and failed the assertion — the right way round for a parser that no
+  // longer matches what is on screen.
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+               'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const toNum = d => {
+    const m = String(d).match(/(\d{1,2})\s+([A-Za-zä]{3})\s+(\d{4})/);
+    if (!m) return 0;
+    const mi = MON.indexOf(m[2]);
+    return mi < 0 ? 0 : +(m[3] + String(mi + 1).padStart(2, '0') + m[1].padStart(2, '0'));
+  };
   const groupsSorted = perGroup.map(g => g.map(toNum).filter(Boolean))
     .filter(g => g.length > 1);
   ok('every group opens sorted by Erstellt, newest first',
@@ -492,16 +504,41 @@ const fs = require('fs');
   ok('the list header fits in the measured budget', hdr.h <= 60, hdr.h);
   ok('the primary action is a small button in the corner',
     hdr.btnH >= 29 && hdr.btnH <= 32 && hdr.btnRight === 24, hdr);
-  // the count used to be a third row; it shares the title's line now
-  const sub = await page.evaluate(() => {
-    const h = document.getElementById('page-header');
-    const title = h.querySelector('h6');
-    const p2 = h.querySelector('h6 + p');
-    if (!p2) return null;
-    return Math.abs(title.getBoundingClientRect().top - p2.getBoundingClientRect().top);
-  });
-  ok('the count shares the title line rather than taking a third row',
-    sub !== null && sub < 12, sub);
+
+
+  /* ── dates carry a short month name, in both languages ────────────
+     Ignat, 2026-09-22: "1 Aug 2026 - it is easier to understand." The data
+     still holds dd.mm.yyyy; this is a render-time formatter, so re-running the
+     extractor cannot undo it. */
+  const dateCells = await page.$$eval('tbody tr', rs =>
+    rs.slice(0, 8).map(r => [r.children[1].textContent.trim(), r.children[2].textContent.trim()]));
+  const flat = dateCells.flat();
+  ok('no date still renders as dd.mm.yyyy',
+    !flat.some(v => /^\d{2}\.\d{2}\.\d{4}/.test(v)), flat.slice(0, 4));
+  ok('single dates read like "26 May 2026"',
+    dateCells.every(([, c]) => /^\d{1,2} [A-Za-zä]{3} \d{4}$/.test(c)), dateCells.map(x => x[1]).slice(0, 3));
+  ok('periods read like "19 May – 25 May 2026"',
+    dateCells.some(([p2]) => /^\d{1,2} [A-Za-zä]{3} – \d{1,2} [A-Za-zä]{3} \d{4}$/.test(p2)),
+    dateCells.map(x => x[0]).slice(0, 3));
+
+  ok('the primary action says Add, not New',
+    /add/i.test(await page.textContent('#new-eval-btn')), await page.textContent('#new-eval-btn'));
+
+  // German gets German abbreviations from the extracted MONTH_NAMES
+  await page.click('#lang-trigger');
+  await page.waitForTimeout(300);
+  await page.click('.MuiMenu-list li:nth-child(2)');
+  await page.waitForTimeout(500);
+  const deDates = await page.$$eval('tbody tr', rs =>
+    rs.slice(0, 8).map(r => r.children[2].textContent.trim()));
+  ok('German dates use German month abbreviations',
+    deDates.some(d => /Mai|Okt|Dez|Mär/.test(d)), deDates.slice(0, 4));
+  ok('the German button also says "hinzufügen", not "Neue"',
+    /hinzu/i.test(await page.textContent('#new-eval-btn')), await page.textContent('#new-eval-btn'));
+  await page.click('#lang-trigger');
+  await page.waitForTimeout(300);
+  await page.click('.MuiMenu-list li:first-child');
+  await page.waitForTimeout(500);
 
   // ── navigation ───────────────────────────────────────────────
   await page.click('#qx-nav-trigger');
@@ -889,17 +926,36 @@ const fs = require('fs');
   const l1 = await page.$$eval('#punct-table tbody tr', r => r.length);
   ok('the first breakdown level renders rows', l1 > 5, l1);
 
-  // The numbers must come from the extracted logic, not from anything
-  // re-typed here: compare the Gesamt row against punctAggregate directly.
-  const totals = await page.$$eval('#punct-table tbody tr:last-child td',
-    c => c.map(x => x.textContent.trim()));
-  const expect = await page.evaluate(() => {
-    const a = punctAggregate(PUNCT_RECORDS);
-    const f = n => Math.round(n).toLocaleString('de-CH');
-    return [f(a.soll), f(a.ist), f(a.punkt), f(a.delta), a.wert.toFixed(2) + '%'];
+  /* This assertion used to say "the totals row equals punctAggregate over every
+     record", and it was WRONG — it enshrined my own model. The vanilla's Gesamt
+     is PUNCT_DATA.gesamt through scl()/sclPunkt(), which its own comment calls
+     "the whole network, not the sum of the rows below it". Third time a test of
+     mine has encoded my mistake rather than checked the original, so what it
+     checks now is the property that distinguishes the two: the Gesamt is FIRST,
+     it says it is network-wide, and it does NOT equal the sum of the rows.
+     The exact figures are proved against the vanilla by qx-content-parity.cjs,
+     which is the non-circular place to prove them. */
+  const gesamt = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll('#punct-table tbody tr')];
+    const cells = r => [...r.children].map(c => c.textContent.trim());
+    const num = v => +String(v).replace(/[.\s'’]/g, '').replace(',', '.') || 0;
+    const first = cells(rows[0]);
+    const sumSoll = rows.slice(1).reduce((n, r) => n + num(cells(r)[1]), 0);
+    return { first, scope: rows[0].textContent, sumSoll, gesamtSoll: num(first[1]) };
   });
-  ok('the totals row equals punctAggregate over every record',
-    JSON.stringify(totals.slice(1, 6)) === JSON.stringify(expect), { totals: totals.slice(1, 6), expect });
+  ok('the Gesamt row comes first, not last', /total|gesamt/i.test(gesamt.first[0]), gesamt.first[0]);
+  ok('it says it covers the whole network',
+    /network|netz/i.test(gesamt.scope), gesamt.scope.slice(0, 60));
+  ok('and it is not the sum of the rows beneath it',
+    gesamt.gesamtSoll > 0 && gesamt.gesamtSoll !== gesamt.sumSoll,
+    { gesamtSoll: gesamt.gesamtSoll, sumSoll: gesamt.sumSoll });
+
+  // the KPI row above the table — four figures the port had nowhere
+  const kpis = await page.$$eval('#kpi-row .MuiCard-root', cs => cs.length);
+  ok('the report carries its four KPI cards', kpis === 4, kpis);
+  const kpiPct = await page.$eval('#kpi-row h5', e => e.textContent.trim());
+  ok('the headline KPI is the overall punctuality percentage',
+    /^\d{1,3},\d{2}%$/.test(kpiPct), kpiPct);
 
   // the cascade must not offer a dimension already taken above
   await page.click('#punct-auf-2');
@@ -918,10 +974,17 @@ const fs = require('fs');
      change that must move the count. */
   ok('the report opens two levels deep, as the vanilla does',
     (await page.$eval('#punct-auf-2 .MuiSelect-select', e => e.textContent.trim())).length > 0);
-  await page.click('#punct-auf-2 button[aria-label^="Clear"]');
-  await page.waitForTimeout(600);
+  /* Rows now arrive COLLAPSED, as the vanilla's do, so clearing a breakdown
+     level no longer changes the visible count — what changes it is expanding a
+     row. That is the behaviour worth asserting. */
+  await page.click('#punct-table tbody tr button[aria-label="expand"]');
+  await page.waitForTimeout(500);
   const l2 = await page.$$eval('#punct-table tbody tr', r => r.length);
-  ok('clearing the second level collapses the tree back', l2 < l1, { l1, l2 });
+  ok('expanding a row reveals its children', l2 > l1, { l1, l2 });
+  await page.click('#punct-table tbody tr button[aria-label="collapse"]');
+  await page.waitForTimeout(500);
+  ok('collapsing it hides them again',
+    (await page.$$eval('#punct-table tbody tr', r => r.length)) === l1);
 
   // ── every evaluation type opens its own view, with numbers that come
   //    from the extracted logic rather than anything retyped here ──────
@@ -1021,6 +1084,16 @@ const fs = require('fs');
   await page.waitForTimeout(300);
   ok('clicking the chip again closes it',
     (await page.$$eval('.rpt-chip-dropdown', e => e.length)) === 0);
+
+  const subInline = await page.evaluate(() => {
+    const h = document.getElementById('page-header');
+    const title = h.querySelector('h6');
+    const p2 = h.querySelector('h6 + p');
+    if (!p2) return null;
+    return Math.abs(title.getBoundingClientRect().top - p2.getBoundingClientRect().top);
+  });
+  ok('a header subtitle shares the title line rather than taking a third row',
+    subInline !== null && subInline < 12, subInline);
 
   ok('Connection totals equal RPT_DATA.gesamt',
     JSON.stringify(rpt) === JSON.stringify(rptWant), { rpt, rptWant });

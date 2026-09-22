@@ -292,7 +292,7 @@ var translations = {
       btn_started: 'Started',
 
       page_evaluations: 'Evaluations',
-      btn_new_eval: 'New Evaluation',
+      btn_new_eval: 'Add Evaluation',
       search_placeholder: 'Search evaluations...',
       filter_all: 'All',
       filter_done: 'Done',
@@ -780,7 +780,7 @@ var translations = {
       btn_started: 'Gestartet',
 
       page_evaluations: 'Auswertungen',
-      btn_new_eval: 'Neue Auswertung',
+      btn_new_eval: 'Auswertung hinzufügen',
       search_placeholder: 'Auswertungen durchsuchen...',
       filter_all: 'Alle',
       filter_done: 'Fertig',

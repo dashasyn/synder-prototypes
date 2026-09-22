@@ -251,7 +251,7 @@ function PageHeader({ crumbs, title, subtitle, action }) {
 
 /* ── Screen: Evaluations ──────────────────────────────────────────── */
 function EvaluationsList({ go }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
   const { removed, askDelete, notify, ui: actionUi } = useListActions(t, 'toast_eval_deleted');
@@ -319,7 +319,6 @@ function EvaluationsList({ go }) {
   return html`
     <${Box}>
       <${PageHeader} title=${t('page_evaluations')}
-        subtitle=${`${rows.length} ${t(rows.length === 1 ? 'eval_count_one' : 'eval_count_many')}`}
         action=${html`<${Button} variant="contained" id="new-eval-btn"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
                         onClick=${openPicker}>${t('btn_new_eval')}<//>`} />
@@ -393,8 +392,8 @@ function EvaluationsList({ go }) {
                           <${Typography} variant="caption" color="error" display="block"
                             className="fail-reason">${t(FAIL_REASON_OF(r))}<//>`}
                       <//>
-                      <${TableCell}>${r.period}<//>
-                      <${TableCell}>${r.created}<//>
+                      <${TableCell}>${fmtPeriod(r.period, lang)}<//>
+                      <${TableCell}>${fmtDate(r.created, lang)}<//>
                       <${TableCell}>
                         <${Tooltip} title=${statusOf(r) === 'failed' && FAIL_REASON_OF(r)
                                              ? t(FAIL_REASON_OF(r)) : ''}>
@@ -453,7 +452,7 @@ function EvaluationsList({ go }) {
  * action on this screen that changes anything.
  */
 function ScheduledReports({ go }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const [freq, setFreq] = useState('');
   const [status, setStatus] = useState('');
   const [q, setQ] = useState('');
@@ -515,8 +514,8 @@ function ScheduledReports({ go }) {
                         "Monthly (1st)" — not just the raw frequency */''}
                   <${TableCell}><${Chip} size="small" variant="outlined"
                                          label=${t(s.freqKey)} /><//>
-                  <${TableCell}>${s.next}<//>
-                  <${TableCell}>${s.last}<//>
+                  <${TableCell}>${fmtDate(s.next, lang)}<//>
+                  <${TableCell}>${fmtDate(s.last, lang)}<//>
                   <${TableCell}>
                     <${Chip} size="small" variant="outlined" label=${t('status_' + statusOf(s))}
                              color=${statusOf(s) === 'active' ? 'success' : 'default'} />
@@ -570,6 +569,35 @@ function ScheduledReports({ go }) {
 /* buildScheduleDateSelects(): German writes "3.", English "3rd". MONTH_NAMES,
    DAY_CHOICES and ORDINAL_EN all come from the extracted data. */
 const dayOrdinal = (n, lang) => (lang === 'de' ? n + '.' : ORDINAL_EN(n));
+
+/**
+ * Dates, with a short month name.
+ *
+ * Ignat, 2026-09-22: "Update all dates and dates periods to use short month
+ * name. 1 Aug 2026 - it is easier to understand." The data carries dd.mm.yyyy
+ * and ranges as dd.mm–dd.mm.yyyy, so this is a render-time formatter — the
+ * extracted values stay exactly as the vanilla wrote them, and re-running the
+ * extractor cannot undo the decision.
+ *
+ * Month names come from the extracted MONTH_NAMES; the first three characters
+ * are the correct abbreviation in both languages (März→Mär, Oktober→Okt,
+ * September→Sep), so there is no second list to keep in step.
+ */
+const shortMonth = (m, lang) =>
+  ((MONTH_NAMES[lang] || MONTH_NAMES.en)[m - 1] || '').slice(0, 3);
+
+/** "25.05.2026" → "25 May 2026"; leaves anything it does not recognise alone. */
+const fmtDate = (v, lang) => {
+  const m = String(v).match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})(.*)$/);
+  return m ? `${+m[1]} ${shortMonth(+m[2], lang)} ${m[3]}${m[4] || ''}` : v;
+};
+
+/** "19.05–25.05.2026" → "19 May – 25 May 2026". Falls through to fmtDate. */
+const fmtPeriod = (v, lang) => {
+  const r = String(v).match(/^(\d{1,2})\.(\d{1,2})\s*[–-]\s*(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  if (r) return `${+r[1]} ${shortMonth(+r[2], lang)} – ${+r[3]} ${shortMonth(+r[4], lang)} ${r[5]}`;
+  return fmtDate(v, lang);
+};
 
 /** yyyy-mm-dd (what <input type=date> gives) → dd.mm.yyyy, as the vanilla shows it. */
 const fmtSwiss = v => {
@@ -710,7 +738,8 @@ function NewEvaluation({ go, initialType }) {
   /* updateAutoName(): "<type> – <period>, <filters>", and it stops following
      the form the moment the name is edited by hand. */
   const periodLabel = period === 'custom'
-    ? (from && to ? `${fmtSwiss(from)} – ${fmtSwiss(to)}` : t('preset_custom'))
+    ? (from && to ? `${fmtDate(fmtSwiss(from), lang)} – ${fmtDate(fmtSwiss(to), lang)}`
+                  : t('preset_custom'))
     : t('preset_' + period);
   const autoName = useMemo(() => {
     if (!type) return '';
@@ -992,15 +1021,86 @@ function NewEvaluation({ go, initialType }) {
 const PUNCT_DIMS = ['betriebstag', 'linienbuendel', 'linie', 'haltestelle',
                     'monat', 'kw', 'tu_konz', 'tu_fahr', 'vm', 'region'];
 
+/* The vanilla formats numbers with its OWN helpers, and they differ per
+   report: fmtN gives "764.942" for punctuality, faNum gives "953'278" for trip
+   failures, and percentages carry a decimal COMMA. Mine used toLocaleString
+   and a decimal point, so every figure in the port read differently from the
+   same figure in the vanilla — qx-content-parity.cjs, 2026-09-22. Both come
+   from the extracted data, so there is one implementation, not two. */
 function fmtInt(n) {
-  return (n === null || n === undefined) ? '—' : Math.round(n).toLocaleString('de-CH');
+  return (n === null || n === undefined) ? '—' : fmtN(Math.round(n));
 }
 function fmtPct(v) {
-  return (v === null || v === undefined) ? '—' : v.toFixed(2) + '%';
+  return (v === null || v === undefined) ? '—' : v.toFixed(2).replace('.', ',') + '%';
+}
+
+/**
+ * The KPI row above a report's table — renderPunctKpi() in the vanilla.
+ *
+ * Ignat, 2026-09-22: "I need you to repeat all functions, big numbers, small
+ * numbers, graphs, tables." The big numbers were missing outright: the port
+ * went straight from the breakdown selects to the table, so four figures that
+ * the vanilla puts at the top of the page — overall punctuality against the
+ * threshold, planned, actual, delta — existed nowhere. qx-content-parity.cjs
+ * is what found them; the affordance checker counted a card and a table on
+ * both sides and said ok.
+ */
+/**
+ * Apply an evaluation's own scale before reading any punctuality figure.
+ *
+ * showPunctReport() sets `_punctScale = evalScale(row, period)` and
+ * `_punctPctShift = evalPctShift(row)` before it renders, so EVERY punctuality
+ * evaluation shows different numbers — the scale is a pure function of the
+ * row's name and the length of its period. The port ignored that and showed
+ * one set of figures for all six, which is why its Gesamt read 2.101.488
+ * against the vanilla's 764.942 for the same row.
+ *
+ * Both functions and the two scale variables come from the extracted data, so
+ * this sets the same globals the extracted getters read.
+ */
+function applyPunctScale(row) {
+  /* rowPeriod() prefers the row's OWN von/bis and counts the days between
+     them; only when those are absent does it fall back to periodFromKey().
+     Using the key alone gave 30 days where the row spans 31 — a 3.3% error
+     that put every figure slightly wrong while the percentage still matched,
+     which is exactly the kind of near-miss a content diff catches and an eye
+     does not. */
+  const period = rowPeriod({ dataset: {
+    von: (row && row.von) || '', bis: (row && row.bis) || '',
+    period: (row && row.periodKey) || '',
+  } });
+  _punctScale = evalScale({ dataset: { name: (row && row.name) || '' } }, period);
+  _punctPctShift = evalPctShift({ dataset: { name: (row && row.name) || '' } });
+}
+
+function KpiRow({ cards }) {
+  return html`
+    <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }} flexWrap="wrap" useFlexGap
+              id="kpi-row">
+      ${cards.map((c, i) => html`
+        <${Card} key=${i} sx=${{ flex: '1 1 200px', minWidth: 200 }}>
+          <${CardContent} sx=${{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+            <${Typography} variant="caption" color="text.secondary"
+              sx=${{ textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 600 }}>
+              ${c.label}<//>
+            <${Typography} variant="h5" sx=${{ my: .25,
+              color: c.tone === 'good' ? 'success.main' : c.tone === 'bad' ? 'error.main' : 'text.primary' }}>
+              ${c.value}<//>
+            <${Stack} direction="row" spacing=${.5} alignItems="center">
+              ${c.icon && html`<${Icon} sx=${{ fontSize: 13,
+                color: c.tone === 'good' ? 'success.main' : 'error.main' }}>${c.icon}<//>`}
+              <${Typography} variant="caption" color="text.secondary">${c.foot}<//>
+            <//>
+          <//>
+        <//>`)}
+    <//>`;
 }
 
 function PunctRow({ node, depth, t, onChart, onRaw }) {
-  const [open, setOpen] = useState(depth === 0);
+  // The vanilla renders every child row .punct-hidden with its expander
+  // .collapsed — 20 rows on arrival, not 44. Mine opened the top level, so the
+  // table arrived twice the size it should be.
+  const [open, setOpen] = useState(false);
   const kids = node.children || [];
   const pad = 16 + depth * 20;
   return html`
@@ -1056,10 +1156,22 @@ function ReportPunctuality({ go, row }) {
   const [dims, setDims] = useState(['linienbuendel', 'linie', '']);
 
   const active = dims.filter(Boolean);
-  const tree = useMemo(
-    () => punctBuildTree(PUNCT_RECORDS, active.length ? active : ['linienbuendel']),
-    [dims.join('|')]);
-  const total = useMemo(() => punctAggregate(PUNCT_RECORDS), []);
+  // the scale must be set BEFORE anything reads a record — the rows are getters
+  const tree = useMemo(() => {
+    applyPunctScale(row);
+    return punctBuildTree(PUNCT_RECORDS, active.length ? active : ['linienbuendel']);
+  }, [dims.join('|'), row && row.name]);
+  /* renderPunctReport(): the Gesamt row is PUNCT_DATA.gesamt through scl()/
+     sclPunkt() — "the whole network, not the sum of the rows below it", as the
+     vanilla's own comment puts it. I had been using punctAggregate over the
+     displayed records, which is a different and smaller number: 152.727
+     against the network's 764.942. qx-content-parity.cjs, 2026-09-22. */
+  const total = useMemo(() => {
+    applyPunctScale(row);
+    const g = PUNCT_DATA.gesamt;
+    const soll = scl(g.soll), ist = scl(g.ist), punkt = sclPunkt(g.punkt, g.ist);
+    return { soll, ist, punkt, delta: soll - ist, wert: ist > 0 ? (punkt / ist) * 100 : null };
+  }, [row && row.name]);
 
   // each level offers only what the levels above have not taken
   const setLevel = (i, value) => setDims(d => {
@@ -1084,6 +1196,17 @@ function ReportPunctuality({ go, row }) {
                         ${t('export_csv')}<//>`} />
 
       <${Box} sx=${{ p: 3 }}>
+        ${/* renderPunctKpi(): overall against the threshold, planned, actual,
+              delta — the four figures the vanilla puts above the table. */''}
+        <${KpiRow} cards=${[
+          { label: t('punct_kpi_overall'), value: fmtPct(total.wert),
+            tone: total.wert === null ? '' : total.wert >= PUNCT_THRESHOLD ? 'good' : 'bad',
+            icon: total.wert === null ? '' : total.wert >= PUNCT_THRESHOLD ? 'check_circle' : 'warning',
+            foot: `${t('rpt_threshold_label')}: ${PUNCT_THRESHOLD}%` },
+          { label: t('punct_col_soll'),  value: fmtInt(total.soll),  foot: t('punct_kpi_planned_foot') },
+          { label: t('punct_col_ist'),   value: fmtInt(total.ist),   foot: t('punct_kpi_actual_foot') },
+          { label: t('punct_col_delta'), value: fmtInt(total.delta), foot: t('punct_kpi_delta_foot') },
+        ]} />
         <${Card} sx=${{ mb: 3 }}>
           <${CardContent}>
             <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>
@@ -1114,6 +1237,37 @@ function ReportPunctuality({ go, row }) {
               <//>
             <//>
             <${TableBody}>
+              ${/* The vanilla puts Gesamt FIRST, with a note that it is the whole
+                    network rather than the sum of the rows beneath it. */''}
+              <${TableRow} sx=${{ '& td': { fontWeight: 700, bgcolor: '#FAFAFA',
+                                             borderBottom: '2px solid #E7E7E7' } }}>
+                <${TableCell}>
+                  ${t('rpt_gesamt')}
+                  <${Typography} variant="caption" color="text.secondary" sx=${{ ml: .75 }}>
+                    ${t('punct_gesamt_scope')}<//>
+                <//>
+                <${TableCell} align="right">${fmtInt(total.soll)}<//>
+                <${TableCell} align="right">${fmtInt(total.ist)}<//>
+                <${TableCell} align="right">${fmtInt(total.punkt)}<//>
+                <${TableCell} align="right">${fmtInt(total.delta)}<//>
+                <${TableCell} align="right">${fmtPct(total.wert)}<//>
+                ${/* the Gesamt row carries the same two actions as any other —
+                      openPunctChart(-1) charts the whole network */''}
+                <${TableCell} align="right">
+                  <${Tooltip} title=${t('rpt_action_chart')}>
+                    <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
+                      title: t('rpt_gesamt'),
+                      backLabel: t('type_punctuality'),
+                      format: v => v.toFixed(1) + '%',
+                      items: tree.map(c => ({ label: c.label, value: c.agg.wert || 0 })),
+                    } })}><${Icon}>bar_chart<//><//>
+                  <//>
+                  <${Tooltip} title=${t('rpt_action_raw')}>
+                    <${IconButton} aria-label="raw" onClick=${() => go('raw', row)}>
+                      <${Icon}>table_chart<//><//>
+                  <//>
+                <//>
+              <//>
               ${tree.map((n, i) => html`
                 <${PunctRow} key=${n.label + i} node=${n} depth=${0} t=${t}
                   onChart=${node => go('chart', row, { chart: {
@@ -1124,15 +1278,6 @@ function ReportPunctuality({ go, row }) {
                       .map(c => ({ label: c.label, value: c.agg.wert || 0 })),
                   } })}
                   onRaw=${() => go('raw', row)} />`)}
-              <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
-                <${TableCell}>${t('rpt_gesamt')}<//>
-                <${TableCell} align="right">${fmtInt(total.soll)}<//>
-                <${TableCell} align="right">${fmtInt(total.ist)}<//>
-                <${TableCell} align="right">${fmtInt(total.punkt)}<//>
-                <${TableCell} align="right">${fmtInt(total.delta)}<//>
-                <${TableCell} align="right">${fmtPct(total.wert)}<//>
-                <${TableCell} />
-              <//>
             <//>
           <//>
         <//>
@@ -1738,7 +1883,7 @@ const MASK_COLS = ['fa_mask_col_tag', 'fa_mask_col_tu', 'fa_mask_col_go', 'fa_ma
   'fa_mask_col_ausfallart', 'fa_mask_col_ersatz'];
 
 function Ausfallmaske({ go, row, tuId }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const key = tuId && FA_UBERSICHT_DATA[tuId] ? tuId : 'GESAMT';
   const d = FA_UBERSICHT_DATA[key] || { causes: [], totalMin: 0, ausMin: 0 };
   const [von, setVon] = useState('');
@@ -1832,7 +1977,8 @@ function Ausfallmaske({ go, row, tuId }) {
               <${TableBody}>
                 ${shown.map((r, i) => html`
                   <${TableRow} key=${i} hover>
-                    ${r.map((c, k) => html`<${TableCell} key=${k}>${c}<//>`)}
+                    ${r.map((c, k) => html`
+                      <${TableCell} key=${k}>${k === 0 ? fmtDate(c, lang) : c}<//>`)}
                   <//>`)}
               <//>
             <//>
