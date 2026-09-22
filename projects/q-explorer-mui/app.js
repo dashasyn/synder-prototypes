@@ -1493,7 +1493,10 @@ function ReportTripFailures({ go, row }) {
   // three-level breakdown plus two "additionally by" levels.
   const [tu, setTu] = useState('');
   const [metric, setMetric] = useState('0');
-  const [dims, setDims] = useState(['', '', '']);
+  // dqi-auf-1 has no "no selection" and starts on TU, exactly as the markup
+  // does; the three levels offer DIFFERENT option sets, which is why a single
+  // shared list would have been wrong.
+  const [dims, setDims] = useState(['tu', '', '']);
   const [add, setAdd] = useState(['', '']);
 
   const all = FA_DATA.tus || [];
@@ -1587,27 +1590,105 @@ function ReportTripFailures({ go, row }) {
    extracted — gives each indicator's observed min/max, which is what the
    colouring is relative to; a fixed scale would make every column look
    identical because they all sit in the high nineties. */
+/** renderDqiParams(): the read-only chip row above the report. */
+function DqiParams({ row }) {
+  const { t, lang } = useT();
+  const period = rowPeriod({ dataset: {
+    von: (row && row.von) || '', bis: (row && row.bis) || '',
+    period: (row && row.periodKey) || '' } });
+  const chips = [
+    { icon: 'date_range', text: `${fmtDate(period.von, lang)} – ${fmtDate(period.bis, lang)}`, strong: true },
+    { text: t('dqi_chip_weekdays') },
+    { text: 'RPV' },
+    { text: t('dqi_chip_modes') },
+    { text: t('dqi_chip_concession') },
+    { icon: 'business', text: t('dqi_chip_all_tu') },
+    { icon: 'public', text: t('dqi_chip_all_regions') },
+    { icon: 'map', text: t('dqi_chip_all_cantons') },
+    { text: t('dqi_chip_all_lines'), dashed: true },
+  ];
+  return html`
+    <${Stack} direction="row" spacing=${1} flexWrap="wrap" useFlexGap id="dqi-params-bar"
+              sx=${{ px: 3, pb: 1 }}>
+      ${chips.map((c, i) => html`
+        <${Chip} key=${i} size="small" variant="outlined"
+          sx=${c.dashed ? { borderStyle: 'dashed' } : undefined}
+          icon=${c.icon ? html`<${Icon} sx=${{ fontSize: 14 }}>${c.icon}<//>` : undefined}
+          label=${c.strong ? html`<strong>${c.text}</strong>` : c.text} />`)}
+    <//>`;
+}
+
+/**
+ * Screen: Data Quality Index.
+ *
+ * Ignat, 2026-09-22, with his screen beside mine: "tables have different names,
+ * different structure... I need same data." Everything below is read off
+ * renderDqiTable()/renderDqiParams() rather than designed:
+ *   · the ten columns are named "<n>. <indicator>", not numbered 1–10
+ *   · a Swiss-average (RPV) row sits above the entities
+ *   · a value BELOW the national average is red, and each cell carries its
+ *     detail button
+ *   · every row has chart / by-day / LOG actions
+ *   · the Table tab breaks down through three cascading levels and can show
+ *     only below-average entries — Show/Entity belong to OVERVIEW, and I had
+ *     them on the wrong tab
+ *   · the params chip row and the scope note were missing entirely
+ */
 function ReportDQI({ go, row }) {
-  const { t } = useT();
-  // The vanilla has TWO tabs and I had only built the table — Ignat spotted
-  // it, and scripts/qx-feature-parity.cjs now catches the whole class.
+  const { t, lang } = useT();
   const [tab, setTab] = useState('overview');
   const [scope, setScope] = useState('tu');
   const [entity, setEntity] = useState('');
-  const rows = scope === 'tu' ? DQI_TU : DQI_KANTON;
+  const [dims, setDims] = useState(['', '', '']);
+  const [onlyBelow, setOnlyBelow] = useState(false);
+  const [open, setOpen] = useState([]);
+  const [note, setNote] = useState('');
+
+  const rows = scope === 'tu' ? DQI_TU : DQI_KANTON;          // dqiEntities()
   const bands = useMemo(() => DQI_INDICATORS.map((_, i) => dqiBand(i)), []);
-  // Entity narrows the overview to one company or canton; empty is all of them.
   const entities = rows.filter(r => !r.total);
   const shown = entity ? entities.filter(e => e.label === entity) : entities;
+  const dqiPct = v => v.toFixed(2).replace('.', ',') + '%';   // the vanilla's own
+
+  const stamp = evalStamp({ dataset: { name: (row && row.name) || '' } });
+  const period = rowPeriod({ dataset: {
+    von: (row && row.von) || '', bis: (row && row.bis) || '',
+    period: (row && row.periodKey) || '' } });
+
+  const anyBelow = e => e.v.some((v, i) => v < DQI_NATIONAL[i]);
+  const visible = rows.filter(r => r.total || !onlyBelow || anyBelow(r));
+  const hiddenCount = rows.filter(r => !r.total && onlyBelow && !anyBelow(r)).length;
+
+  // the cascade: a level never offers what a level above it already took
+  const DIM_LEVELS = [
+    [['tu', 'dqi_dim_tu'], ['go', 'dqi_dim_go'], ['region', 'fa_opt_region']],
+    [['go', 'dqi_dim_go'], ['region', 'fa_opt_region'], ['betriebstag', 'fa_opt_tag']],
+    [['region', 'fa_opt_region'], ['betriebstag', 'fa_opt_tag']],
+  ];
+  const setLevel = (i, v) => setDims(d => {
+    const n = [...d]; n[i] = v;
+    for (let k = i + 1; k < 3; k++) if (n[k] === v) n[k] = '';
+    return n;
+  });
 
   return html`
     <${Box}>
       <${PageHeader}
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
                   { label: row ? row.name : t('type_data_quality') }]}
-        title=${row ? row.name : t('type_data_quality')} subtitle=${t('type_data_quality')}
+        title=${row ? row.name : t('type_data_quality')}
+        ${/* the vanilla's dqi-eval-sub: the period and when it was generated */''}
+        subtitle=${`${t('rpt_period_label')} ${fmtDate(period.von, lang)} – ${fmtDate(period.bis, lang)} · ${t('rpt_generated_at')} ${stamp}`}
         action=${html`<${Button} variant="outlined"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+
+      <${DqiParams} row=${row} />
+
+      <${Alert} severity="info" id="dqi-scope-note" sx=${{ mx: 3, mb: 2 }}
+        action=${html`<${Button} size="small" id="dqi-infoblatt">${t('dqi_infoblatt')}<//>`}>
+        ${t('dqi_scope_note')}
+      <//>
+
       <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} id="dqi-tabs"
                sx=${{ px: 3, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>
         <${Tab} value="overview" label=${t('dqi_tab_overview')} />
@@ -1615,23 +1696,21 @@ function ReportDQI({ go, row }) {
       <//>
 
       <${Box} sx=${{ p: 3 }}>
-        <${Card} sx=${{ mb: 3 }}><${CardContent}>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-            <${FilterSelect} id="dqi-dim" label=${t('sel_dimension')} value=${scope}
-              onChange=${v => { setScope(v || 'tu'); setEntity(''); }} minWidth=${240}
-              options=${[{ value: 'tu', label: t('dqi_dim_tu') },
-                         { value: 'kanton', label: t('dqi_dim_kanton') }]} />
-            <${FilterSelect} id="dqi-entity" label=${t('sel_entity')} value=${entity}
-              onChange=${setEntity} minWidth=${240}
-              options=${entities.map(e => ({ value: e.label, label: e.label }))} />
-          <//>
-        <//><//>
-
         ${tab === 'overview' && html`
           <${Box} id="dqi-overview">
-            <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
-              ${t('dqi_lg_band')}
-            <//>
+            ${/* "Anzeigen" — Show/Entity live on THIS tab in the vanilla */''}
+            <${Card} sx=${{ mb: 3 }}><${CardContent}>
+              <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('dqi_show')}<//>
+              <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+                <${FilterSelect} id="dqi-dim" label=${t('sel_dimension')} value=${scope}
+                  onChange=${v => { setScope(v || 'tu'); setEntity(''); }} minWidth=${240}
+                  options=${[{ value: 'tu', label: t('dqi_dim_tu') },
+                             { value: 'kanton', label: t('dqi_dim_kanton') }]} />
+                <${FilterSelect} id="dqi-entity" label=${t('sel_entity')} value=${entity}
+                  onChange=${setEntity} minWidth=${240}
+                  options=${entities.map(e => ({ value: e.label, label: e.label }))} />
+              <//>
+            <//><//>
             <${Box} sx=${{ display: 'grid', gap: 2,
                             gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
               ${DQI_INDICATORS.map((ind, i) => {
@@ -1641,13 +1720,11 @@ function ReportDQI({ go, row }) {
                     <${CardContent}>
                       <${Typography} variant="subtitle2" gutterBottom>${ind.n}. ${t(ind.key)}<//>
                       <${Typography} variant="h5" sx=${{ mb: .5 }}>
-                        ${typeof DQI_NATIONAL[i] === 'number' ? DQI_NATIONAL[i].toFixed(2) : '—'}
+                        ${typeof DQI_NATIONAL[i] === 'number' ? dqiPct(DQI_NATIONAL[i]) : '—'}
                       <//>
                       <${Typography} variant="caption" color="text.secondary" display="block" sx=${{ mb: 1 }}>
-                        ${b.min.toFixed(2)} – ${b.max.toFixed(2)}
+                        ${dqiPct(b.min)} – ${dqiPct(b.max)}
                       <//>
-                      ${/* dqiSpark() is extracted from the vanilla, so the
-                            sparkline is the same generator, not a lookalike */''}
                       <${Box} dangerouslySetInnerHTML=${{ __html: dqiSpark(shown[0] ? shown[0].label : 'CH', i, 12) }} />
                     <//>
                   <//>`;
@@ -1655,37 +1732,103 @@ function ReportDQI({ go, row }) {
             <//>
           <//>`}
 
-        ${tab === 'table' && html`<${Box} id="dqi-table-panel">
-        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
-          <${Table} id="dqi-table">
-            <${TableHead}><${TableRow}>
-              <${TableCell}>${t('rpt_col_name')}<//>
-              ${DQI_INDICATORS.map(ind => html`
-                <${Tooltip} key=${ind.n} title=${t(ind.key)}>
-                  <${TableCell} align="right">${ind.n}<//>
-                <//>`)}
+        ${tab === 'table' && html`
+          <${Box} id="dqi-table-panel">
+            <${Card} sx=${{ mb: 3 }}><${CardContent}>
+              <${Stack} direction="row" spacing=${4} flexWrap="wrap" useFlexGap alignItems="flex-start">
+                <${Box}>
+                  <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('rpt_aufschluss_label')}<//>
+                  <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+                    ${[0, 1, 2].map(i => html`
+                      <${FilterSelect} key=${i} id=${'dqi-auf-' + (i + 1)} minWidth=${200}
+                        label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
+                        value=${dims[i]} onChange=${v => setLevel(i, v)}
+                        options=${DIM_LEVELS[i]
+                          .filter(([d]) => !dims.some((x, k) => x === d && k !== i))
+                          .map(([d, key]) => ({ value: d, label: t(key) }))} />`)}
+                  <//>
+                <//>
+                <${Box}>
+                  <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('dqi_filter')}<//>
+                  <${FormControlLabel}
+                    control=${html`<${Checkbox} id="dqi-only-below" checked=${onlyBelow}
+                      onChange=${e => setOnlyBelow(e.target.checked)} />`}
+                    label=${html`<${Typography} variant="body2">${t('dqi_only_below')}<//>`} />
+                <//>
+              <//>
             <//><//>
-            <${TableBody}>
-              ${(entity ? rows.filter(r => r.total || r.label === entity) : rows).map((r, ri) => html`
-                <${TableRow} key=${r.label + ri} hover
-                             sx=${r.total ? { '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } } : {}}>
-                  <${TableCell}>${r.label}<//>
-                  ${r.v.map((v, i) => {
-                    const b = bands[i];
-                    const low = typeof v === 'number' && b && v <= b.min + (b.max - b.min) * 0.25;
-                    return html`<${TableCell} key=${i} align="right">
-                      <${Typography} variant="body2" component="span"
-                        color=${typeof v !== 'number' ? 'text.disabled' : low ? 'error.main' : 'text.primary'}>
-                        ${typeof v === 'number' ? v.toFixed(2) : '—'}
+
+            <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+              <${Table} id="dqi-table">
+                <${TableHead}><${TableRow}>
+                  <${TableCell}>${t('rpt_col_name')}<//>
+                  ${DQI_INDICATORS.map(ind => html`
+                    <${TableCell} key=${ind.n} align="right" sx=${{ verticalAlign: 'bottom' }}>
+                      <${Tooltip} title=${t(ind.key)}>
+                        <${Box} sx=${{ display: 'flex', gap: .5, alignItems: 'flex-start',
+                                        maxWidth: 130, ml: 'auto' }}>
+                          <${Icon} sx=${{ fontSize: 14, color: 'text.disabled' }}>info<//>
+                          <${Typography} variant="caption">${ind.n}. ${t(ind.key)}<//>
+                        <//>
                       <//>
-                    <//>`;
-                  })}
-                <//>`)}
+                    <//>`)}
+                  <${TableCell} align="right">${t('col_actions')}<//>
+                <//><//>
+                <${TableBody}>
+                  ${/* the Swiss average (RPV) row the vanilla puts above the
+                        entities — every value below it is what turns red */''}
+                  <${TableRow} id="dqi-row-avg" sx=${{ '& td': { fontWeight: 600, bgcolor: '#FAFAFA' } }}>
+                    <${TableCell}>${t('dqi_lg_avg')}<//>
+                    ${DQI_NATIONAL.map((v, i) => html`
+                      <${TableCell} key=${i} align="right">${dqiPct(v)}<//>`)}
+                    <${TableCell} />
+                  <//>
+                  ${visible.map((r, ri) => html`
+                    <${TableRow} key=${r.label + ri} hover>
+                      <${TableCell} sx=${r.total ? { fontWeight: 600 } : undefined}>${r.label}<//>
+                      ${r.v.map((v, i) => html`
+                        <${TableCell} key=${i} align="right"
+                          sx=${{ color: v < DQI_NATIONAL[i] ? 'error.main' : 'text.primary' }}>
+                          <${Box} sx=${{ display: 'inline-flex', alignItems: 'center', gap: .25 }}>
+                            ${dqiPct(v)}
+                            <${IconButton} aria-label="detail" size="small"
+                              onClick=${() => setNote(t('dqi_open_detail') + ' · ' + r.label)}>
+                              <${Icon} sx=${{ fontSize: 14 }}>list<//><//>
+                          <//>
+                        <//>`)}
+                      <${TableCell} align="right">
+                        <${Tooltip} title=${t('rpt_action_chart')}>
+                          <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
+                            title: r.label, backLabel: t('type_data_quality'),
+                            format: v => v.toFixed(2) + '%',
+                            items: DQI_INDICATORS.map((ind, i) => ({ label: String(ind.n), value: r.v[i] })),
+                          } })}><${Icon}>bar_chart<//><//>
+                        <//>
+                        <${Tooltip} title=${t('dqi_by_day')}>
+                          <${IconButton} aria-label="by-day"
+                            onClick=${() => setNote(t('dqi_by_day_toast'))}>
+                            <${Icon}>calendar_today<//><//>
+                        <//>
+                        <${Button} size="small" aria-label="log"
+                          onClick=${() => setNote(t('dqi_log_toast'))}>LOG<//>
+                      <//>
+                    <//>`)}
+                <//>
+              <//>
             <//>
-          <//>
-        <//>
-        <//>`}
+
+            <${Stack} direction="row" spacing=${.75} alignItems="center" sx=${{ mt: 1.5 }}
+                      id="dqi-table-note">
+              <${Icon} sx=${{ fontSize: 14, color: 'text.secondary' }}>info<//>
+              <${Typography} variant="caption" color="text.secondary">
+                ${t('dqi_note_red').replace('{n}', String(visible.filter(r => !r.total).length))}
+                ${onlyBelow ? ' ' + t('dqi_note_filtered').replace('{n}', String(hiddenCount)) : ''}
+              <//>
+            <//>
+          <//>`}
       <//>
+      <${Snackbar} open=${!!note} autoHideDuration=${3000} message=${note}
+        onClose=${() => setNote('')} id="dqi-toast" />
     <//>`;
 }
 

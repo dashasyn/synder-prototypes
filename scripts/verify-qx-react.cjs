@@ -1111,10 +1111,41 @@ const fs = require('fs');
     (await page.$$('.dqi-card')).length === 10, (await page.$$('.dqi-card')).length);
   await page.click('#dqi-tabs button:nth-child(2)');
   await page.waitForTimeout(500);
-  const dqi = await page.$$eval('#dqi-table tbody tr:first-child td',
+  /* The Swiss average (RPV) row now sits ABOVE the entities, as the vanilla's
+     renderDqiTable() writes it, so the first row is no longer DQI_TU[0] — and
+     values carry a decimal comma and a % sign, which is dqiPct(). */
+  const avgRow = await page.$$eval('#dqi-row-avg td',
     c => c.map(x => x.textContent.trim()).slice(0, 4));
-  const dqiWant = await page.evaluate(() => [DQI_TU[0].label, ...DQI_TU[0].v.slice(0, 3).map(v => v.toFixed(2))]);
-  ok('DQI first row equals DQI_TU[0]',
+  const avgWant = await page.evaluate(() =>
+    ['Swiss average (RPV)', ...DQI_NATIONAL.slice(0, 3).map(v => v.toFixed(2).replace('.', ',') + '%')]);
+  ok('the Swiss average row equals DQI_NATIONAL',
+    JSON.stringify(avgRow) === JSON.stringify(avgWant), { avgRow, avgWant });
+
+  /* textContent picks up Material icon LIGATURES — the word "info" or "list"
+     sits in the DOM as the glyph's text. Strip them before comparing, or every
+     cell reads as if it had stray words in it. */
+  const stripIcons = el => {
+    const c = el.cloneNode(true);
+    c.querySelectorAll('.material-icons').forEach(i => i.remove());
+    return c.textContent.trim();
+  };
+  const cols = await page.evaluate(() => {
+    const strip = el => { const c = el.cloneNode(true);
+      c.querySelectorAll('.material-icons').forEach(i => i.remove()); return c.textContent.trim(); };
+    return [...document.querySelectorAll('#dqi-table thead th')].map(strip);
+  });
+  ok('the columns are named, not numbered 1-10',
+    cols.length === 12 && /^1\./.test(cols[1]) && cols[1].length > 6, cols.slice(0, 3));
+  ok('the last column is Actions', /action|aktion/i.test(cols[cols.length - 1]), cols[cols.length - 1]);
+
+  const dqi = await page.evaluate(() => {
+    const strip = el => { const c = el.cloneNode(true);
+      c.querySelectorAll('.material-icons').forEach(i => i.remove()); return c.textContent.trim(); };
+    return [...document.querySelectorAll('#dqi-row-avg ~ tr td')].map(strip).slice(0, 4);
+  });
+  const dqiWant = await page.evaluate(() =>
+    [DQI_TU[0].label, ...DQI_TU[0].v.slice(0, 3).map(v => v.toFixed(2).replace('.', ',') + '%')]);
+  ok('the first entity row equals DQI_TU[0]',
     JSON.stringify(dqi) === JSON.stringify(dqiWant), { dqi, dqiWant });
   await goBack();
 
