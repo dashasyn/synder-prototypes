@@ -1244,7 +1244,7 @@ function ReportPunctuality({ go, row }) {
               <${TableRow} sx=${{ '& td': { fontWeight: 700, bgcolor: '#FAFAFA',
                                              borderBottom: '2px solid #E7E7E7' } }}>
                 <${TableCell}>
-                  ${t('rpt_gesamt')}
+                  ${t('rpt_gesamt') + ' '}
                   <${Typography} variant="caption" color="text.secondary" sx=${{ ml: .75 }}>
                     ${t('punct_gesamt_scope')}<//>
                 <//>
@@ -1293,31 +1293,43 @@ function ReportPunctuality({ go, row }) {
    over RPT_RECORDS, both from data.js. The value columns come from
    RPT_DATA.gesamt's own length, so adding a metric upstream adds a column
    here rather than silently dropping one. */
-function RptRow({ node, depth, cols, onChart }) {
-  const [open, setOpen] = useState(depth === 0);
+function RptRow({ node, depth, t, val, onChart, onRaw }) {
+  // collapsed on arrival, as the vanilla's .rpt-hidden / .rpt-collapsed do
+  const [open, setOpen] = useState(false);
   const kids = node.children || [];
+  // a row with nothing in it says so once, rather than seven silent n/a cells
+  const allNull = node.v.every(v => v === null || v === undefined);
   return html`
     <${React.Fragment}>
-      <${TableRow} hover>
+      <${TableRow} hover sx=${allNull ? { opacity: .7 } : undefined}>
         <${TableCell} sx=${{ pl: `${16 + depth * 20}px` }}>
-          ${kids.length > 0 && html`
-            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
+          ${kids.length > 0 ? html`
+            <${IconButton} onClick=${() => setOpen(o => !o)}
+              aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
               <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
-            <//>`}
+            <//>` : html`<${Box} component="span" sx=${{ display: 'inline-block', width: 22 }} />`}
           ${node.label}
+          ${allNull && html`
+            <${Chip} size="small" variant="outlined" sx=${{ ml: 1 }}
+              icon=${html`<${Icon} sx=${{ fontSize: 11 }}>block<//>`}
+              label=${t('rpt_no_data')} />`}
         <//>
-        ${cols.map((_, i) => html`
-          <${TableCell} key=${i} align="right">
-            ${node.v[i] === null || node.v[i] === undefined ? '—' : node.v[i].toFixed(2) + '%'}
-          <//>`)}
+        ${node.v.map((_, i) => html`
+          <${TableCell} key=${i} align="right">${val(node.v[i])}<//>`)}
         <${TableCell} align="right">
-          <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(node)}>
-            <${Icon}>bar_chart<//>
+          <${Tooltip} title=${t('rpt_action_chart')}>
+            <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(node)}>
+              <${Icon}>bar_chart<//><//>
+          <//>
+          <${Tooltip} title=${t('rpt_action_raw')}>
+            <${IconButton} aria-label="raw" onClick=${() => onRaw && onRaw(node)}>
+              <${Icon}>table_chart<//><//>
           <//>
         <//>
       <//>
       ${open && kids.map((k, i) => html`
-        <${RptRow} key=${k.label + i} node=${k} depth=${depth + 1} cols=${cols} onChart=${onChart} />`)}
+        <${RptRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t} val=${val}
+          onChart=${onChart} onRaw=${onRaw} />`)}
     <//>`;
 }
 
@@ -1366,6 +1378,19 @@ function ParamChips() {
     <//>`;
 }
 
+/**
+ * Screen: Connection punctuality.
+ *
+ * Rebuilt 2026-09-22 against renderConnectionReport(). What was wrong:
+ *   · the header is TWO rows — "Connection punctuality rate" spanning four
+ *     columns and "Feeder punctuality" spanning three — and I had generated
+ *     "Feeder punctuality 1…6", which named nothing
+ *   · the Gesamt row was missing; it comes FIRST, from RPT_DATA.gesamt
+ *   · renderKpiGrid() puts four figures above the table; there were none
+ *   · rows arrive collapsed, and a row whose values are all null carries a
+ *     "no data" badge rather than seven silent n/a cells
+ *   · fmtVal() colours each value against RPT_THRESHOLD
+ */
 function ReportConnection({ go, row }) {
   const { t } = useT();
   const DIMS = Object.keys(RPT_DIM_LABELS);
@@ -1374,13 +1399,22 @@ function ReportConnection({ go, row }) {
   const tree = useMemo(
     () => rptBuildTree(RPT_RECORDS, active.length ? active : ['linienbuendel_abb']),
     [dims.join('|')]);
-  const cols = RPT_DATA.gesamt;
 
   const setLevel = (i, v) => setDims(d => {
     const n = [...d]; n[i] = v;
     for (let j = i + 1; j < n.length; j++) n[j] = '';
     return n;
   });
+
+  // fmtVal(): n/a, or two decimals with a % and a colour against the threshold
+  const val = v => v === null || v === undefined || v === ''
+    ? html`<${Typography} variant="body2" component="span" color="text.disabled">n/a<//>`
+    : html`<${Typography} variant="body2" component="span"
+             color=${v >= RPT_THRESHOLD ? 'success.main' : 'error.main'}>
+             ${v.toFixed(2)}%<//>`;
+
+  const KPI_KEYS = ['rpt_time_all_day', 'rpt_time_hvz_morning',
+                    'rpt_time_hvz_evening', 'rpt_time_last_trip'];
 
   return html`
     <${Box}>
@@ -1392,6 +1426,16 @@ function ReportConnection({ go, row }) {
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamChips} />
+
+        ${/* renderKpiGrid(): the first four metrics, against RPT_THRESHOLD */''}
+        <${KpiRow} cards=${RPT_DATA.gesamt.slice(0, 4).map((v, i) => ({
+          label: t(KPI_KEYS[i]),
+          value: v === null ? 'n/a' : v.toFixed(2).replace('.', ',') + '%',
+          tone: v === null ? '' : v >= RPT_THRESHOLD ? 'good' : 'bad',
+          icon: v === null ? '' : v >= RPT_THRESHOLD ? 'check_circle' : 'warning',
+          foot: `${t('rpt_threshold_label')}: ${RPT_THRESHOLD}%`,
+        }))} />
+
         <${Card} sx=${{ mb: 3 }}><${CardContent}>
           <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('punct_aufschluss_label')}<//>
           <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
@@ -1403,28 +1447,68 @@ function ReportConnection({ go, row }) {
                   .map(d => ({ value: d, label: t(RPT_DIM_LABELS[d]) }))} />`)}
           <//>
         <//><//>
+
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
           <${Table} id="rpt-table">
-            <${TableHead}><${TableRow}>
-              <${TableCell}>${t('rpt_col_name')}<//>
-              ${cols.map((_, i) => html`<${TableCell} key=${i} align="right">
-                ${i === 0 ? t('rpt_col_apcq') : t('rpt_col_punct_zub') + ' ' + i}<//>`)}
-              <${TableCell} align="right">${t('col_actions')}<//>
-            <//><//>
-            <${TableBody}>
-              ${tree.map((n, i) => html`
-                <${RptRow} key=${n.label + i} node=${n} depth=${0} cols=${cols}
-                  onChart=${node => go('chart', row, { chart: {
-                    title: node.label, backLabel: t('type_connection'),
-                    format: v => v.toFixed(1) + '%',
-                    items: (node.children && node.children.length ? node.children : [node])
-                      .map(c => ({ label: c.label, value: c.v[0] || 0 })),
-                  } })} />`)}
-              <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
-                <${TableCell}>${t('rpt_gesamt')}<//>
-                ${cols.map((v, i) => html`<${TableCell} key=${i} align="right">${v === null ? '—' : v.toFixed(2) + '%'}<//>`)}
+            <${TableHead}>
+              ${/* the grouped header row: 4 columns of connection punctuality,
+                    3 of feeder punctuality */''}
+              <${TableRow}>
+                <${TableCell} />
+                <${TableCell} colSpan=${4} align="center">${t('rpt_col_apcq')}<//>
+                <${TableCell} colSpan=${3} align="center">${t('rpt_col_punct_zub')}<//>
                 <${TableCell} />
               <//>
+              <${TableRow}>
+                ${/* The vanilla writes the dimension label into the FIRST th of
+                      the whole thead — which is the top row's spacer cell, and
+                      that cell is color:transparent. So the visible heading
+                      never changes: it stays "Name / Line bundle". Matching
+                      what is on screen rather than what the code intends. */''}
+                <${TableCell}>${t('rpt_col_name')}<//>
+                ${['rpt_time_all_day', 'rpt_time_hvz_morning', 'rpt_time_hvz_evening',
+                   'rpt_time_last_trip', 'rpt_time_all_day', 'rpt_time_hvz_morning',
+                   'rpt_time_hvz_evening'].map((k, i) => html`
+                  <${TableCell} key=${i} align="right">${t(k)}<//>`)}
+                <${TableCell} align="right">${t('col_actions')}<//>
+              <//>
+            <//>
+            <${TableBody}>
+              ${/* Gesamt first, network-wide, from RPT_DATA.gesamt */''}
+              <${TableRow} sx=${{ '& td': { fontWeight: 700, bgcolor: '#FAFAFA',
+                                             borderBottom: '2px solid #E7E7E7' } }}>
+                <${TableCell}>
+                  ${t('rpt_gesamt') + ' '}
+                  <${Typography} variant="caption" color="text.secondary" sx=${{ ml: .75 }}>
+                    ${t('punct_gesamt_scope')}<//>
+                <//>
+                ${RPT_DATA.gesamt.map((v, i) => html`
+                  <${TableCell} key=${i} align="right">${val(v)}<//>`)}
+                <${TableCell} align="right">
+                  <${Tooltip} title=${t('rpt_action_chart')}>
+                    <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
+                      title: t('rpt_gesamt'), backLabel: t('type_connection'),
+                      format: v => v.toFixed(2) + '%',
+                      items: RPT_DATA.gesamt.map((v2, i) => ({
+                        label: t(['rpt_time_all_day', 'rpt_time_hvz_morning', 'rpt_time_hvz_evening',
+                                  'rpt_time_last_trip', 'rpt_time_all_day', 'rpt_time_hvz_morning',
+                                  'rpt_time_hvz_evening'][i]), value: v2 || 0 })),
+                    } })}><${Icon}>bar_chart<//><//>
+                  <//>
+                  <${Tooltip} title=${t('rpt_action_raw')}>
+                    <${IconButton} aria-label="raw" onClick=${() => go('raw', row)}>
+                      <${Icon}>table_chart<//><//>
+                  <//>
+                <//>
+              <//>
+              ${tree.map((n, i) => html`
+                <${RptRow} key=${n.label + i} node=${n} depth=${0} t=${t} val=${val}
+                  onChart=${node => go('chart', row, { chart: {
+                    title: node.label, backLabel: t('type_connection'),
+                    format: v => v.toFixed(2) + '%',
+                    items: node.v.map((v, k) => ({ label: String(k + 1), value: v || 0 })),
+                  } })}
+                  onRaw=${() => go('raw', row)} />`)}
             <//>
           <//>
         <//>
@@ -1436,53 +1520,67 @@ function ReportConnection({ go, row }) {
    Each TU carries six metrics and a list of Betriebstage. The failure-rate
    colouring uses faPct(), extracted, so the thresholds match the vanilla
    (0 / <2 / 2–5 / 5–50 / 50+) rather than being re-invented here. */
-function FaRow({ tu, t, onMask, onChart }) {
+/**
+ * A Trip Failures row — NINE metric columns, not five.
+ *
+ * renderFATable(): trips (total / cancelled / rate), journey time as h:mm:ss
+ * through fmtMin(), and stops — each group the same three. The port showed
+ * five columns and called the journey-time minutes a count. Ignat, 2026-09-22.
+ */
+function FaRow({ tu, t, onMask, onChart, depth = 0 }) {
   const [open, setOpen] = useState(false);
   const days = tu.tage || [];
-  const rate = v => {
-    const pct = faPct(v[1], v[0]);
+  const v = tu.v;
+  // faPctCell(): 0 is grey, and the rate climbs through warning to error
+  const rate = (a, b) => {
+    const pct = faPct(a, b);
     const colour = pct === 0 ? 'text.disabled' : pct >= 50 ? 'error.main'
                  : pct >= 5 ? 'warning.main' : pct >= 2 ? 'warning.light' : 'success.main';
     return html`<${Typography} variant="body2" component="span" color=${colour}>${pct.toFixed(2)}%<//>`;
   };
+  const allZero = v[1] === 0 && v[3] === 0 && v[5] === 0;
+  const totalFail = v[0] > 0 && v[1] >= v[0];
   return html`
     <${React.Fragment}>
       <${TableRow} hover>
-        <${TableCell}>
-          ${days.length > 0 && html`
-            <${IconButton} onClick=${() => setOpen(o => !o)} aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
+        <${TableCell} sx=${{ pl: `${16 + depth * 20}px` }}>
+          ${days.length > 0 ? html`
+            <${IconButton} onClick=${() => setOpen(o => !o)}
+              aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
               <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
-            <//>`}
+            <//>` : html`<${Box} component="span" sx=${{ display: 'inline-block', width: 28 }} />`}
           ${tu.label}
+          ${allZero && html`
+            <${Chip} size="small" variant="outlined" color="success" sx=${{ ml: 1 }}
+              icon=${html`<${Icon} sx=${{ fontSize: 11 }}>check_circle<//>`}
+              label=${t('fa_kein_ausfall')} />`}
+          ${totalFail && html`
+            <${Chip} size="small" variant="outlined" color="error" sx=${{ ml: 1 }}
+              icon=${html`<${Icon} sx=${{ fontSize: 11 }}>warning<//>`} label="100%" />`}
         <//>
-        <${TableCell} align="right">${faNum(tu.v[0])}<//>
-        <${TableCell} align="right">${faNum(tu.v[1])}<//>
-        <${TableCell} align="right">${rate(tu.v)}<//>
-        <${TableCell} align="right">${faNum(tu.v[2])}<//>
-        <${TableCell} align="right">${faNum(tu.v[3])}<//>
+        <${TableCell} align="right">${faNum(v[0])}<//>
+        <${TableCell} align="right">${faNum(v[1])}<//>
+        <${TableCell} align="right">${rate(v[1], v[0])}<//>
+        <${TableCell} align="right">${fmtMin(v[2])}<//>
+        <${TableCell} align="right">${fmtMin(v[3])}<//>
+        <${TableCell} align="right">${rate(v[3], v[2])}<//>
+        <${TableCell} align="right">${faNum(v[4])}<//>
+        <${TableCell} align="right">${faNum(v[5])}<//>
+        <${TableCell} align="right">${rate(v[5], v[4])}<//>
         <${TableCell} align="right">
           <${Tooltip} title=${t('rpt_action_chart')}>
             <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(tu)}>
-              <${Icon}>bar_chart<//>
-            <//>
+              <${Icon}>bar_chart<//><//>
           <//>
           <${Tooltip} title=${t('fa_mask_title')}>
             <${IconButton} aria-label="mask" onClick=${() => onMask && onMask(tu)}>
-              <${Icon}>fact_check<//>
-            <//>
+              <${Icon}>fact_check<//><//>
           <//>
         <//>
       <//>
       ${open && days.map((d, i) => html`
-        <${TableRow} key=${d.d + i} hover>
-          <${TableCell} sx=${{ pl: '52px' }}>${d.d}<//>
-          <${TableCell} align="right">${faNum(d.v[0])}<//>
-          <${TableCell} align="right">${faNum(d.v[1])}<//>
-          <${TableCell} align="right">${rate(d.v)}<//>
-          <${TableCell} align="right">${faNum(d.v[2])}<//>
-          <${TableCell} align="right">${faNum(d.v[3])}<//>
-          <${TableCell} />
-        <//>`)}
+        <${FaRow} key=${d.d + i} depth=${1} t=${t} onMask=${onMask} onChart=${onChart}
+          tu=${{ id: tu.id + '/' + d.d, label: d.d, v: d.v, tage: [] }} />`)}
     <//>`;
 }
 
@@ -1523,6 +1621,24 @@ function ReportTripFailures({ go, row }) {
         action=${html`<${Button} variant="outlined"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
       <${Box} sx=${{ p: 3 }}>
+        ${/* renderFAKpi(): three cards — trips, journey time, stops — each
+              showing the total, the cancelled count and the rate, with the
+              rate turning red above 3%. The port had none of them. */''}
+        <${KpiRow} cards=${[
+          { label: t('fa_col_fahrten'),
+            value: faNum(FA_DATA.gesamt[0]),
+            tone: faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]) > 3 ? 'bad' : '',
+            foot: `${faNum(FA_DATA.gesamt[1])} ${t('fa_col_ausgefallen')} · ${t('fa_kpi_rate')}: ${faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2)}%` },
+          { label: t('fa_col_fahrtzeit'),
+            value: fmtMin(FA_DATA.gesamt[2]),
+            tone: faPct(FA_DATA.gesamt[3], FA_DATA.gesamt[2]) > 3 ? 'bad' : '',
+            foot: `${fmtMin(FA_DATA.gesamt[3])} ${t('fa_col_ausgefallen')} · ${t('fa_kpi_rate')}: ${faPct(FA_DATA.gesamt[3], FA_DATA.gesamt[2]).toFixed(2)}%` },
+          { label: t('fa_col_haltestellen'),
+            value: faNum(FA_DATA.gesamt[4]),
+            tone: faPct(FA_DATA.gesamt[5], FA_DATA.gesamt[4]) > 3 ? 'bad' : '',
+            foot: `${faNum(FA_DATA.gesamt[5])} ${t('fa_col_ausgefallen')} · ${t('fa_kpi_rate')}: ${faPct(FA_DATA.gesamt[5], FA_DATA.gesamt[4]).toFixed(2)}%` },
+        ]} />
+
         <${Card} sx=${{ mb: 3 }}><${CardContent}>
           <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap sx=${{ mb: 2 }}>
             <${FilterSelect} id="fa-ub-tu-sel" label=${t('sel_show')} value=${tu}
@@ -1552,16 +1668,36 @@ function ReportTripFailures({ go, row }) {
         <//><//>
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
           <${Table} id="fa-table">
-            <${TableHead}><${TableRow}>
-              <${TableCell}>${t('fa_col_name')}<//>
-              <${TableCell} align="right">${t('fa_col_gesamt')}<//>
-              <${TableCell} align="right">${t('fa_col_ausgefallen')}<//>
-              <${TableCell} align="right">${t('fa_col_ausfallquote')}<//>
-              <${TableCell} align="right">${t('fa_col_fahrtzeit')}<//>
-              <${TableCell} align="right">${t('fa_col_haltestellen')}<//>
-              <${TableCell} align="right">${t('col_actions')}<//>
-            <//><//>
+            ${/* two header rows: Trips / Journey time / Stops, each split into
+                  total, cancelled and rate */''}
+            <${TableHead}>
+              <${TableRow}>
+                <${TableCell} />
+                <${TableCell} colSpan=${3} align="center">${t('fa_col_fahrten')}<//>
+                <${TableCell} colSpan=${3} align="center">${t('fa_col_fahrtzeit')}<//>
+                <${TableCell} colSpan=${3} align="center">${t('fa_col_haltestellen')}<//>
+                <${TableCell} />
+              <//>
+              <${TableRow}>
+                <${TableCell}>${t('fa_col_name')}<//>
+                ${[0, 1, 2].map(g => html`
+                  <${React.Fragment} key=${g}>
+                    <${TableCell} align="right">${t('fa_col_gesamt')}<//>
+                    <${TableCell} align="right">${t('fa_col_ausgefallen')}<//>
+                    <${TableCell} align="right">${t('fa_col_ausfallquote')}<//>
+                  <//>`)}
+                <${TableCell} align="right">${t('fa_col_aktionen')}<//>
+              <//>
+            <//>
             <${TableBody}>
+              ${/* the Gesamt row comes first, from FA_DATA.gesamt */''}
+              <${FaRow} t=${t} onChart=${() => go('chart', row, { chart: {
+                  title: t('fa_row_gesamt'), backLabel: t('type_trip_failures'),
+                  format: v => faNum(Math.round(v)),
+                  items: FA_DATA.tus.map(x => ({ label: x.label, value: x.v[1] })),
+                } })}
+                onMask=${() => go('mask', row, { tuId: 'GESAMT' })}
+                tu=${{ id: 'GESAMT', label: t('fa_row_gesamt'), v: FA_DATA.gesamt, tage: [] }} />
               ${tus.map((tu, i) => html`
                 <${FaRow} key=${tu.id + i} tu=${tu} t=${t}
                   onMask=${x => go('mask', row, { tuId: x.id })}
@@ -1570,14 +1706,6 @@ function ReportTripFailures({ go, row }) {
                     format: v => faNum(Math.round(v)),
                     items: (x.tage || []).map(d => ({ label: d.d, value: d.v[1] || 0 })),
                   } })} />`)}
-              <${TableRow} sx=${{ '& td': { fontWeight: 500, bgcolor: '#FAFAFA' } }}>
-                <${TableCell}>${t('fa_col_gesamt')}<//>
-                ${FA_DATA.gesamt.slice(0, 2).map((v, i) => html`<${TableCell} key=${i} align="right">${faNum(v)}<//>`)}
-                <${TableCell} align="right">${faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2)}%<//>
-                <${TableCell} align="right">${faNum(FA_DATA.gesamt[2])}<//>
-                <${TableCell} align="right">${faNum(FA_DATA.gesamt[3])}<//>
-                <${TableCell} />
-              <//>
             <//>
           <//>
         <//>
@@ -1647,7 +1775,8 @@ function ReportDQI({ go, row }) {
   const rows = scope === 'tu' ? DQI_TU : DQI_KANTON;          // dqiEntities()
   const bands = useMemo(() => DQI_INDICATORS.map((_, i) => dqiBand(i)), []);
   const entities = rows.filter(r => !r.total);
-  const shown = entity ? entities.filter(e => e.label === entity) : entities;
+  // renderDqiOverview() falls back to entities[1], then [0], when none is picked
+  const sel = entities.find(e => e.label === entity) || rows[1] || rows[0];
   const dqiPct = v => v.toFixed(2).replace('.', ',') + '%';   // the vanilla's own
 
   const stamp = evalStamp({ dataset: { name: (row && row.name) || '' } });
@@ -1711,25 +1840,79 @@ function ReportDQI({ go, row }) {
                   options=${entities.map(e => ({ value: e.label, label: e.label }))} />
               <//>
             <//><//>
-            <${Box} sx=${{ display: 'grid', gap: 2,
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
-              ${DQI_INDICATORS.map((ind, i) => {
-                const b = bands[i];
-                return html`
-                  <${Card} key=${ind.n} className="dqi-card">
-                    <${CardContent}>
-                      <${Typography} variant="subtitle2" gutterBottom>${ind.n}. ${t(ind.key)}<//>
-                      <${Typography} variant="h5" sx=${{ mb: .5 }}>
-                        ${typeof DQI_NATIONAL[i] === 'number' ? dqiPct(DQI_NATIONAL[i]) : '—'}
+
+            ${/* renderDqiOverview(): one ROW per indicator — a 12-month spark,
+                  a 14-day spark, the indicator's name, and a 0–100 track
+                  carrying the national band, the national average and this
+                  entity. I had built a grid of ten cards instead, which was my
+                  invention and had never been compared to anything. */''}
+            <${Card} id="dqi-chart-card"><${CardContent}>
+              <${Typography} variant="subtitle2" id="dqi-chart-title" sx=${{ mb: 2 }}>
+                ${`${t('dqi_overview_of')} ${t(scope === 'kanton' ? 'dqi_dim_kanton' : 'dqi_word_tu')}: ${sel.label}`}
+              <//>
+
+              <${Box} sx=${{ display: 'grid', gap: 1, alignItems: 'center',
+                              gridTemplateColumns: '110px 110px minmax(200px, 1fr) minmax(220px, 2fr)' }}>
+                <${Typography} variant="caption" color="text.secondary">${t('dqi_trend_12m')}<//>
+                <${Typography} variant="caption" color="text.secondary">${t('dqi_trend_14d')}<//>
+                <${Box} /><${Box} />
+
+                ${DQI_INDICATORS.map((ind, i) => {
+                  const band = bands[i];
+                  const v = sel.v[i], avg = DQI_NATIONAL[i];
+                  const left = band.min, width = Math.max(0.6, band.max - band.min);
+                  return html`
+                    <${React.Fragment} key=${ind.n}>
+                      <${Box} dangerouslySetInnerHTML=${{ __html: dqiSpark(sel.label, i, 12) }} />
+                      <${Box} dangerouslySetInnerHTML=${{ __html: dqiSpark(sel.label, i, 14) }} />
+                      <${Typography} variant="caption">
+                        <strong>${ind.n}.</strong> ${t(ind.key)}<//>
+                      <${Tooltip} title=${`${t('dqi_lg_avg')} ${dqiPct(avg)} · ${sel.label} ${dqiPct(v)}`}>
+                        <${Box} className="dqi-track"
+                          sx=${{ position: 'relative', height: 18, bgcolor: '#F4F4F4',
+                                  borderRadius: 1 }}>
+                          <${Box} sx=${{ position: 'absolute', top: 6, height: 6, borderRadius: 3,
+                                          bgcolor: 'rgba(33,150,243,.25)',
+                                          left: `${left}%`, width: `${width}%` }} />
+                          <${Box} sx=${{ position: 'absolute', top: 4, width: 10, height: 10,
+                                          transform: 'rotate(45deg)', bgcolor: 'text.disabled',
+                                          left: `calc(${avg}% - 5px)` }} />
+                          <${Box} sx=${{ position: 'absolute', top: 4, width: 10, height: 10,
+                                          transform: 'rotate(45deg)', bgcolor: 'primary.main',
+                                          left: `calc(${v}% - 5px)` }} />
+                        <//>
                       <//>
-                      <${Typography} variant="caption" color="text.secondary" display="block" sx=${{ mb: 1 }}>
-                        ${dqiPct(b.min)} – ${dqiPct(b.max)}
-                      <//>
-                      <${Box} dangerouslySetInnerHTML=${{ __html: dqiSpark(shown[0] ? shown[0].label : 'CH', i, 12) }} />
-                    <//>
-                  <//>`;
-              })}
-            <//>
+                    <//>`;
+                })}
+              <//>
+
+              ${/* the 0–100 axis under the track column */''}
+              <${Box} sx=${{ display: 'grid', mt: .5,
+                              gridTemplateColumns: '110px 110px minmax(200px, 1fr) minmax(220px, 2fr)' }}>
+                <${Box} /><${Box} /><${Box} />
+                <${Stack} direction="row" justifyContent="space-between" id="dqi-axis">
+                  ${[0, 20, 40, 60, 80, 100].map(n => html`
+                    <${Typography} key=${n} variant="caption" color="text.secondary">${n}<//>`)}
+                <//>
+              <//>
+
+              <${Stack} direction="row" spacing=${3} sx=${{ mt: 2 }} flexWrap="wrap" useFlexGap
+                        id="dqi-legend">
+                <${Stack} direction="row" spacing=${.75} alignItems="center">
+                  <${Box} sx=${{ width: 18, height: 6, borderRadius: 3, bgcolor: 'rgba(33,150,243,.25)' }} />
+                  <${Typography} variant="caption" color="text.secondary">${t('dqi_lg_band')}<//>
+                <//>
+                <${Stack} direction="row" spacing=${.75} alignItems="center">
+                  <${Box} sx=${{ width: 9, height: 9, transform: 'rotate(45deg)', bgcolor: 'text.disabled' }} />
+                  <${Typography} variant="caption" color="text.secondary">${t('dqi_lg_avg')}<//>
+                <//>
+                <${Stack} direction="row" spacing=${.75} alignItems="center">
+                  <${Box} sx=${{ width: 9, height: 9, transform: 'rotate(45deg)', bgcolor: 'primary.main' }} />
+                  <${Typography} variant="caption" color="text.secondary" id="dqi-legend-entity">
+                    ${sel.label}<//>
+                <//>
+              <//>
+            <//><//>
           <//>`}
 
         ${tab === 'table' && html`
@@ -1837,11 +2020,28 @@ function ReportDQI({ go, row }) {
    140 x 13 — with per-column filters and paging. Every column filter is
    an ordinary text field: a Select would need MUI X Pro for multi-column
    filtering, which the licence question has not settled. */
+/* The raw table's eighteen columns are NAMED in the vanilla's markup; the port
+   numbered them 1…18, which tells a reader nothing about what they are looking
+   at. Ignat, 2026-09-22: "tables have different names". The vanilla's
+   punct-raw-pp also starts at 10 rows, not 25. */
+const RAW_COLS = ['punct_raw_col_tag', 'punct_raw_col_bavlinie', 'punct_raw_col_qualrel',
+  'punct_raw_col_tulinie', 'punct_raw_col_fahrtid', 'punct_raw_col_richtung',
+  'punct_raw_col_lfdnr', 'punct_raw_col_messpunkt', 'punct_raw_col_soll_bav_an',
+  'punct_raw_col_soll_tu_an', 'punct_raw_col_ist_tu_an', 'punct_raw_col_delta_bav_an',
+  'punct_raw_col_delta_tu_an', 'punct_raw_col_soll_bav_ab', 'punct_raw_col_soll_tu_ab',
+  'punct_raw_col_ist_tu_ab', 'punct_raw_col_delta_bav_ab', 'punct_raw_col_delta_tu_ab'];
+
+/* Two of the eighteen filters are SELECTS in the vanilla, not free text —
+   quality-relevant (ja/nein) and direction. Everything else is a search box.
+   Enumerated columns get a list; that is a per-column decision, not the MUI X
+   Pro multi-column feature the licence question is about. */
+const RAW_ENUM = { 2: ['ja', 'nein'], 5: ['Hinrichtung', 'Rückrichtung'] };
+
 function RawDataTable({ go, row, rows, title, onBack, backLabel }) {
   const { t } = useT();
   const [filters, setFilters] = useState({});
   const [page, setPage] = useState(0);
-  const perPage = 25;
+  const [perPage, setPerPage] = useState(10);
 
   const filtered = useMemo(() => {
     const active = Object.entries(filters).filter(([, v]) => v && v.trim());
@@ -1862,19 +2062,34 @@ function RawDataTable({ go, row, rows, title, onBack, backLabel }) {
         title=${title}
         subtitle=${`${filtered.length.toLocaleString('de-CH')} / ${rows.length.toLocaleString('de-CH')}`} />
       <${Box} sx=${{ p: 3 }}>
+        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mb: 2 }}>
+          <${FilterSelect} id="raw-pp" label=${t('sel_rows_per_page')} minWidth=${110}
+            value=${String(perPage)}
+            onChange=${v => { setPerPage(Number(v) || 10); setPage(0); }}
+            options=${['10', '25', '50'].map(v => ({ value: v, label: v }))} />
+          <${Typography} variant="body2" color="text.secondary">${t('fa_mask_entries')}<//>
+        <//>
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', overflowX: 'auto' }}>
           <${Table} id="raw-table">
             <${TableHead}>
               <${TableRow}>
-                ${rows[0].map((_, i) => html`<${TableCell} key=${i}>${i + 1}<//>`)}
+                ${rows[0].map((_, i) => html`
+                  <${TableCell} key=${i} sx=${{ whiteSpace: 'nowrap' }}>
+                    ${RAW_COLS[i] ? t(RAW_COLS[i]) : String(i + 1)}<//>`)}
               <//>
               <${TableRow}>
                 ${rows[0].map((_, i) => html`
                   <${TableCell} key=${i} sx=${{ p: .5 }}>
-                    <${TextField} variant="standard" size="small" placeholder="…"
-                      value=${filters[i] || ''}
-                      onChange=${e => { setPage(0); setFilters(f => ({ ...f, [i]: e.target.value })); }}
-                      sx=${{ minWidth: 70 }} />
+                    ${RAW_ENUM[i] ? html`
+                      <${FilterSelect} id=${'raw-f-' + i} minWidth=${120}
+                        label=${t(RAW_COLS[i])} value=${filters[i] || ''}
+                        onChange=${v => { setPage(0); setFilters(f => ({ ...f, [i]: v })); }}
+                        options=${RAW_ENUM[i].map(o => ({ value: o, label: o }))} />`
+                    : html`
+                      <${TextField} variant="standard" size="small" placeholder="…"
+                        value=${filters[i] || ''}
+                        onChange=${e => { setPage(0); setFilters(f => ({ ...f, [i]: e.target.value })); }}
+                        sx=${{ minWidth: 70 }} />`}
                   <//>`)}
               <//>
             <//>
@@ -2031,6 +2246,9 @@ function Ausfallmaske({ go, row, tuId }) {
   const { t, lang } = useT();
   const key = tuId && FA_UBERSICHT_DATA[tuId] ? tuId : 'GESAMT';
   const d = FA_UBERSICHT_DATA[key] || { causes: [], totalMin: 0, ausMin: 0 };
+  const period = rowPeriod({ dataset: {
+    von: (row && row.von) || '', bis: (row && row.bis) || '',
+    period: (row && row.periodKey) || '' } });
   const [von, setVon] = useState('');
   const [bis, setBis] = useState('');
   const [range, setRange] = useState({ von: '', bis: '' });
@@ -2057,20 +2275,29 @@ function Ausfallmaske({ go, row, tuId }) {
                   { label: t('fa_mask_title') }]}
         title=${t('fa_mask_title')} subtitle=${key} />
       <${Box} sx=${{ p: 3, maxWidth: 1000 }}>
-        <${Card} sx=${{ mb: 3 }}><${CardContent}>
-          <${Stack} direction="row" spacing=${4}>
-            <${Box}>
-              <${Typography} variant="caption" color="text.secondary">${t('fa_col_fahrtzeit')}<//>
-              <${Typography} variant="h5">${fmtHM(d.totalMin)}<//>
-            <//>
-            <${Box}>
-              <${Typography} variant="caption" color="text.secondary">${t('fa_col_ausgefallen')}<//>
-              <${Typography} variant="h5" color="error.main">${fmtHM(d.ausMin)}<//>
-            <//>
-            <${Box}>
-              <${Typography} variant="caption" color="text.secondary">${t('fa_col_ausfallquote')}<//>
-              <${Typography} variant="h5">${faPct(d.ausMin, d.totalMin).toFixed(2)}%<//>
-            <//>
+        ${/* openFAMask() writes a FIELD GRID here — period, weekdays, RPV,
+              transport mode, concession, TUs, regions, cantons — not the three
+              big figures I had invented. "Unlimited" is the dimmed default. */''}
+        <${Card} sx=${{ mb: 3 }} id="fa-mask-header"><${CardContent}>
+          <${Box} sx=${{ display: 'grid', gap: 1.5,
+                          gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+            ${[
+              [lang === 'de' ? 'von' : 'from', fmtDate(period.von, lang), false],
+              [lang === 'de' ? 'bis' : 'to', fmtDate(period.bis, lang), false],
+              [t('fa_mask_wochentage'), t('fa_mask_unlimited'), true],
+              [t('fa_mask_rpv'), 'RPV', false],
+              [t('fa_mask_vm'), t('fa_mask_unlimited'), true],
+              [t('fa_mask_konz'), t('fa_mask_licensed'), false],
+              [t('fa_mask_tus'), key === 'GESAMT' ? t('fa_mask_all') : key, false],
+              [t('fa_mask_regionen'), t('fa_mask_unlimited'), true],
+              [t('fa_mask_kantone'), t('fa_mask_unlimited'), true],
+            ].map(([label, value, dim], i) => html`
+              <${Box} key=${i}>
+                <${Typography} variant="caption" color="text.secondary" display="block">
+                  ${label}<//>
+                <${Typography} variant="body2" color=${dim ? 'text.disabled' : 'text.primary'}>
+                  ${value}<//>
+              <//>`)}
           <//>
         <//><//>
         <${Card} id="fa-mask-causes"><${CardContent}>

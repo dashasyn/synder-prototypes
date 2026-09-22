@@ -64,11 +64,27 @@ const probe = page => page.evaluate(() => {
     .replace(/[’' ]/g, '')          // Swiss thousands apostrophe, nbsp
     .replace(/\s+/g, ' ').trim();
 
+  /* Material icon LIGATURES are text: a cell with two icon buttons reads
+     "bar_charttable_chart", and the vanilla's whitespace between buttons makes
+     it "bar_chart table_chart" — a difference that is pure markup whitespace.
+     Strip the glyphs before comparing anything. */
+  const txt = el => {
+    const c = el.cloneNode(true);
+    c.querySelectorAll('.material-icons').forEach(i => i.remove());
+    return norm(c.textContent);
+  };
+
   const tables = [...document.querySelectorAll('table')].filter(vis).map(t => ({
-    headers: [...t.querySelectorAll('thead th')].map(th => norm(th.textContent)).filter(Boolean),
+    /* A header row made of INPUTS is a filter row, not column headers. The
+       vanilla's native <select> carries its options as text ("ja nein"), a MUI
+       Select keeps them in a portal — so comparing those cells compares the
+       widget, not the content. Controls are the affordance checker's job. */
+    headers: [...t.querySelectorAll('thead th')]
+      .filter(th => !th.querySelector('input, select, textarea, [role="combobox"]'))
+      .map(txt).filter(Boolean),
     rows: [...t.querySelectorAll('tbody tr')].filter(vis).length,
     sample: [...t.querySelectorAll('tbody tr')].filter(vis).slice(0, 3)
-      .map(r => [...r.children].map(c => norm(c.textContent)).filter(x => x !== '')),
+      .map(r => [...r.children].map(txt).filter(x => x !== '')),
   }));
 
   // "big numbers": standalone numeric text rendered at 16px or more
@@ -95,6 +111,19 @@ const probe = page => page.evaluate(() => {
 
   return { tables, bigNumbers: bigNumbers.sort(), tabs, charts };
 });
+
+/**
+ * Differences that are deliberate. Printed, never silently tolerated — a quiet
+ * allowance is where a real regression hides.
+ */
+const DELIBERATE = {
+  'report-connection': [
+    ['col', 'Line bundle (connector)',
+     'the vanilla writes the breakdown label into the header\'s top-left SPACER cell, which is color:transparent — the text is in the DOM but invisible, and reproducing it would put unreadable text in front of a screen reader'],
+  ],
+};
+const allowed = (view, kind, value) =>
+  (DELIBERATE[view] || []).some(([k, v]) => k === kind && v === value);
 
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -151,7 +180,18 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     van['chart-punct'] = await probe(v);
   }
   if (VIEWS.includes('ausfallmaske')) {
-    await vOpenGroup('trip_failures'); await vRowAction('grid_on');
+    // the mask button's idle icon is fact_check, not grid_on — with the wrong
+    // icon the click did nothing and the vanilla stayed on the FA report, so
+    // the checker compared the FA table against the mask's trip table
+    /* The mask button is a small state machine: the first click starts a fake
+       2-3s load (hourglass_top), and only once it is ready (check_circle) does
+       a click open the mask. One click left the vanilla on the FA report. */
+    /* The ready-state control is an <a>, not a <button>, so the icon sweep
+       never found it — and the first click only starts a 2-3s fake load.
+       openFAMask() is the function behind both, so call it directly. */
+    await vOpenGroup('trip_failures');
+    await v.evaluate(() => window.openFAMask && window.openFAMask('AAGL'));
+    await v.waitForTimeout(900);
     van['ausfallmaske'] = await probe(v);
   }
   if (VIEWS.includes('chart-fa')) {
@@ -231,7 +271,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     at.forEach((ta, i) => {
       const tb = bt[i];
       if (!tb) return;
-      const missing = ta.headers.filter(h => !tb.headers.includes(h));
+      const missing = ta.headers.filter(h => !tb.headers.includes(h) && !allowed(view, 'col', h));
       const extra = tb.headers.filter(h => !ta.headers.includes(h));
       if (missing.length) lines.push(`t${i} cols   missing ${JSON.stringify(missing.slice(0, 8))}`);
       if (extra.length) lines.push(`t${i} cols   extra   ${JSON.stringify(extra.slice(0, 6))}`);
@@ -257,6 +297,8 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
     if (lines.length) { console.log(`${view.padEnd(20)} ${lines.join('\n' + ' '.repeat(21))}`); gaps += lines.length; }
     else console.log(`${view.padEnd(20)} ok`);
+    for (const [, v, why] of DELIBERATE[view] || [])
+      console.log(`${' '.repeat(20)} · allowed: "${v}" — ${why}`);
   }
   console.log(`\n${gaps} content gap(s)\n`);
 })();

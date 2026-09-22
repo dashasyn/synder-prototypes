@@ -1087,7 +1087,8 @@ const fs = require('fs');
     // DQI opens on a tab of cards rather than a table, so count whichever
     // this view actually renders instead of assuming every report is a table.
     const n = await page.evaluate(() =>
-      document.querySelectorAll('tbody tr').length + document.querySelectorAll('.dqi-card').length);
+      document.querySelectorAll('tbody tr').length
+      + document.querySelectorAll('.dqi-track').length);
     ok(`${group} renders content`, n > 0, n);
     ok(`${group} has no untranslated keys`, (await rawKeys(page)).length === 0, await rawKeys(page));
     await goBack();
@@ -1096,7 +1097,8 @@ const fs = require('fs');
   // Trip Failures: the totals row and the failure rate come from FA_DATA
   // and the extracted faNum/faPct, not from anything written in the view.
   await openByName(await nameOf('trip_failures'));
-  const fa = await page.$$eval('#fa-table tbody tr:last-child td',
+  // renderFATable() puts the Gesamt row FIRST, as every other report does
+  const fa = await page.$$eval('#fa-table tbody tr:first-child td',
     c => c.map(x => x.textContent.trim()).slice(1, 4));
   const faWant = await page.evaluate(() => [faNum(FA_DATA.gesamt[0]), faNum(FA_DATA.gesamt[1]),
     faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2) + '%']);
@@ -1107,8 +1109,22 @@ const fs = require('fs');
   await openByName(await nameOf('data_quality'));
   // the table lives behind the second tab; Overview is what opens
   ok('DQI opens on the Overview tab', (await page.$$('#dqi-overview')).length === 1);
-  ok('the Overview shows a card per indicator',
-    (await page.$$('.dqi-card')).length === 10, (await page.$$('.dqi-card')).length);
+  /* renderDqiOverview() is a ROW per indicator — two sparklines, the name, and
+     a 0-100 track carrying the national band, the national average and the
+     selected entity. The grid of ten cards was my invention. */
+  const ov = await page.evaluate(() => ({
+    tracks: document.querySelectorAll('.dqi-track').length,
+    sparks: document.querySelectorAll('#dqi-overview svg').length,
+    legend: !!document.getElementById('dqi-legend'),
+    axis: (document.getElementById('dqi-axis') || {}).textContent,
+    title: (document.getElementById('dqi-chart-title') || {}).textContent,
+  }));
+  ok('the Overview draws a track per indicator', ov.tracks === 10, ov.tracks);
+  ok('each indicator carries a 12-month and a 14-day sparkline',
+    ov.sparks >= 20, ov.sparks);
+  ok('the band / average / entity legend is there', ov.legend);
+  ok('the track runs on a 0-100 axis', ov.axis === '020406080100', ov.axis);
+  ok('the chart says which entity it describes', /:/.test(ov.title || ''), ov.title);
   await page.click('#dqi-tabs button:nth-child(2)');
   await page.waitForTimeout(500);
   /* The Swiss average (RPV) row now sits ABOVE the entities, as the vanilla's
@@ -1150,10 +1166,12 @@ const fs = require('fs');
   await goBack();
 
   await openByName(await nameOf('connection'));
-  const rpt = await page.$$eval('#rpt-table tbody tr:last-child td',
+  /* Gesamt comes FIRST in the vanilla's renderConnectionReport(), and a null
+     reads "n/a" through fmtVal(), not an em dash. */
+  const rpt = await page.$$eval('#rpt-table tbody tr:first-child td',
     c => c.map(x => x.textContent.trim()).slice(1, 4));
   const rptWant = await page.evaluate(() =>
-    RPT_DATA.gesamt.slice(0, 3).map(v => v === null ? '—' : v.toFixed(2) + '%'));
+    RPT_DATA.gesamt.slice(0, 3).map(v => v === null ? 'n/a' : v.toFixed(2) + '%'));
   /* The read-only parameter chips — three expandable summaries the port had
      no equivalent for, and the "and other" in Ignat's message. */
   const chipCount = await page.$$eval('#rpt-param-row [role="button"]', e => e.length);
@@ -1194,8 +1212,9 @@ const fs = require('fs');
   await openByName(await nameOf('punctuality'));
   await page.click('#punct-table tbody tr:first-child button[aria-label="raw"]');
   await page.waitForTimeout(700);
+  // the vanilla's punct-raw-pp starts at 10, not 25
   const firstPage = await page.$$eval('#raw-table tbody tr', r => r.length);
-  ok('raw data pages at 25 rows', firstPage === 25, firstPage);
+  ok('raw data opens at 10 rows a page, as the vanilla does', firstPage === 10, firstPage);
   const totalRaw = await page.evaluate(() => PUNCT_RAW.length);
   ok('the raw set is the real one, not a sample', totalRaw > 1000, totalRaw);
   await page.fill('#raw-table thead tr:nth-child(2) input', 'zzzzzz');
@@ -1205,7 +1224,7 @@ const fs = require('fs');
   await page.fill('#raw-table thead tr:nth-child(2) input', '');
   await page.waitForTimeout(500);
   ok('clearing the filter restores the page',
-    (await page.$$eval('#raw-table tbody tr', r => r.length)) === 25);
+    (await page.$$eval('#raw-table tbody tr', r => r.length)) === 10);
   await goBack();
 
   // ── the views reached through a row action ───────────────────
