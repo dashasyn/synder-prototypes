@@ -200,22 +200,52 @@ function useListActions(t, deletedToastKey) {
 }
 
 /* ── Page header: breadcrumb, title, action in the corner ─────────── */
+/**
+ * Page header — breadcrumb, title, primary action in the corner.
+ *
+ * Ignat, 2026-09-22, with two screenshots of ETC's own pages: "page header
+ * size / paddings and margins / breadcrumbs / button sizes and positions ...
+ * In your current version headers are very wide and take a lot of space."
+ *
+ * Measured off those screenshots rather than guessed (scripts/sample-etc-header.cjs).
+ * The scale falls out of the ratios: breadcrumb ink 11px to title ink 16px is
+ * 1.45, which is body2 14 over h6 20 (caption/h6 would be 1.67) — so the
+ * capture is at 0.835, and at that scale their primary button is 30px, exactly
+ * MUI small. Their header runs 74px from the app bar to the first content row;
+ * mine ran 100px.
+ *
+ *   theirs            was            now
+ *   title      20px   24px (h5)      20px (h6)
+ *   breadcrumb 14px   16px           14px
+ *   padding    12px   20px           12px
+ *   crumb→title 0     4px            0
+ *   total      74px   100px          76px
+ *
+ * The subtitle moves onto the title's own line: it was a third row costing
+ * ~20px, and none of their headers has one.
+ */
 function PageHeader({ crumbs, title, subtitle, action }) {
   return html`
-    <${Box} sx=${{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-                    px: 3, py: 2.5, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>
-      <${Box}>
+    <${Box} id="page-header"
+      sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              gap: 2, px: 3, py: 1.5, bgcolor: '#fff' }}>
+      <${Box} sx=${{ minWidth: 0 }}>
         ${crumbs && html`
-          <${Breadcrumbs} separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`} sx=${{ mb: .5 }}>
+          <${Breadcrumbs} sx=${{ fontSize: 14 }}
+            separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`}>
             ${crumbs.map((c, i) => c.onClick
               ? html`<${Link} key=${i} underline="hover" color="text.secondary" href="#"
+                              sx=${{ fontSize: 14 }}
                               onClick=${e => { e.preventDefault(); c.onClick(); }}>${c.label}<//>`
               : html`<${Typography} key=${i} color="text.primary" variant="body2">${c.label}<//>`)}
           <//>`}
-        <${Typography} variant="h5">${title}<//>
-        ${subtitle && html`<${Typography} variant="body2" color="text.secondary">${subtitle}<//>`}
+        <${Box} sx=${{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
+          <${Typography} variant="h6" noWrap>${title}<//>
+          ${subtitle && html`
+            <${Typography} variant="body2" color="text.secondary" noWrap>${subtitle}<//>`}
+        <//>
       <//>
-      <${Box}>${action}<//>
+      <${Box} sx=${{ flexShrink: 0 }}>${action}<//>
     <//>`;
 }
 

@@ -181,12 +181,12 @@ const fs = require('fs');
   ok('no untranslated keys on the evaluations list',
     (await rawKeys(page)).length === 0, await rawKeys(page));
 
-  const deHeading = await page.$eval('h5', e => e.textContent.trim());
+  const deHeading = await page.$eval('#page-header h6', e => e.textContent.trim());
   await page.click('#lang-trigger');
   await page.waitForTimeout(300);
   await page.click('.MuiMenu-list li:nth-child(2)');   // DE
   await page.waitForTimeout(400);
-  const enHeading = await page.$eval('h5', e => e.textContent.trim());
+  const enHeading = await page.$eval('#page-header h6', e => e.textContent.trim());
   ok('the language switch actually re-renders the app',
     deHeading !== enHeading, { de: deHeading, en: enHeading });
   // Parity, not preference: the vanilla starts in English, so this must too.
@@ -218,7 +218,7 @@ const fs = require('fs');
   const nFiltered = await rowCount();
   ok('the status filter actually filters', nFiltered < allRows, { nFiltered, allRows });
   ok('the header count follows the filter',
-    (await page.$eval('h5 + p, .MuiTypography-body2', e => e.textContent)).startsWith(String(nFiltered)));
+    (await page.$eval('#page-header h6 + p', e => e.textContent)).startsWith(String(nFiltered)));
 
   // clear-all appears only when something is filtered, and restores the list
   ok('a Clear filters button appears once a filter is set', !!(await page.$('#f-clear-all')));
@@ -290,7 +290,7 @@ const fs = require('fs');
     bar.top === 0, bar.top);
   const clearance = await page.evaluate(() => {
     const b = document.querySelector('.MuiAppBar-root').getBoundingClientRect();
-    const h = document.querySelector('h5').getBoundingClientRect();
+    const h = document.querySelector('#page-header h6').getBoundingClientRect();
     return { barBottom: Math.round(b.bottom), headingTop: Math.round(h.top) };
   });
   ok('the fixed bar does not cover the page heading',
@@ -467,6 +467,42 @@ const fs = require('fs');
   ok('clicking Name re-sorts the rows',
     (await page.$eval('tbody tr', r => r.textContent.slice(0, 40))) !== firstBefore2);
 
+  /* ── page header geometry, measured off ETC's own screens ─────────
+     Ignat, 2026-09-22: "headers are very wide and take a lot of space."
+     Every number below was read out of his two screenshots by
+     scripts/sample-etc-header.cjs, not chosen: title 20px, breadcrumb 14px,
+     a small primary button in the corner, and 74px from the app bar to the
+     first row of content. Mine ran 100px on a 24px title and a 16px crumb. */
+  const hdr = await page.evaluate(() => {
+    const h = document.getElementById('page-header');
+    const b = h.getBoundingClientRect();
+    const title = h.querySelector('h6');
+    const btn = h.querySelector('.MuiButton-root');
+    return {
+      h: Math.round(b.height),
+      pad: getComputedStyle(h).padding,
+      titleTag: title && title.tagName,
+      titleFont: title && getComputedStyle(title).fontSize,
+      btnH: btn && Math.round(btn.getBoundingClientRect().height),
+      btnRight: btn && Math.round(window.innerWidth - btn.getBoundingClientRect().right),
+    };
+  });
+  ok('the page title is 20px, not 24px', hdr.titleTag === 'H6' && hdr.titleFont === '20px', hdr);
+  ok('the header pads 12px vertically, 24px horizontally', hdr.pad === '12px 24px', hdr.pad);
+  ok('the list header fits in the measured budget', hdr.h <= 60, hdr.h);
+  ok('the primary action is a small button in the corner',
+    hdr.btnH >= 29 && hdr.btnH <= 32 && hdr.btnRight === 24, hdr);
+  // the count used to be a third row; it shares the title's line now
+  const sub = await page.evaluate(() => {
+    const h = document.getElementById('page-header');
+    const title = h.querySelector('h6');
+    const p2 = h.querySelector('h6 + p');
+    if (!p2) return null;
+    return Math.abs(title.getBoundingClientRect().top - p2.getBoundingClientRect().top);
+  });
+  ok('the count shares the title line rather than taking a third row',
+    sub !== null && sub < 12, sub);
+
   // ── navigation ───────────────────────────────────────────────
   await page.click('#qx-nav-trigger');
   await page.waitForTimeout(300);
@@ -476,7 +512,7 @@ const fs = require('fs');
   await page.click('.MuiMenu-list li:nth-child(2)');
   await page.waitForTimeout(400);
   ok('it navigates to Scheduled reports',
-    (await page.$eval('h5', e => e.textContent)).toLowerCase().includes('scheduled'));
+    (await page.$eval('#page-header h6', e => e.textContent)).toLowerCase().includes('scheduled'));
   ok('no untranslated keys on scheduled reports', (await rawKeys(page)).length === 0, await rawKeys(page));
 
   /* Scheduled reports, rebuilt against the vanilla: six real schedules, its
@@ -579,6 +615,21 @@ const fs = require('fs');
   ok('picking a type enables Run and undims the page',
     !chosen.runDisabled && chosen.lockedOpacity === '1', chosen);
   ok('the breadcrumb offers the way back', /Evaluations/.test(chosen.crumbs), chosen.crumbs);
+  const hdr2 = await page.evaluate(() => {
+    const h = document.getElementById('page-header');
+    const cr = h.querySelector('.MuiBreadcrumbs-root');
+    const title = h.querySelector('h6');
+    return {
+      h: Math.round(h.getBoundingClientRect().height),
+      crumbFont: getComputedStyle(cr).fontSize,
+      crumbAbove: cr.getBoundingClientRect().bottom <= title.getBoundingClientRect().top + 1,
+    };
+  });
+  ok('the breadcrumb is 14px, as theirs is', hdr2.crumbFont === '14px', hdr2.crumbFont);
+  ok('the breadcrumb sits above the title', hdr2.crumbAbove, hdr2);
+  ok('a header with a breadcrumb still fits the measured 74px budget',
+    hdr2.h <= 80, hdr2.h);
+
   ok('no untranslated keys on new evaluation', (await rawKeys(page)).length === 0, await rawKeys(page));
 
   /* ── the creation flow: generated name and working filters ────────
