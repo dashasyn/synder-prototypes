@@ -767,11 +767,16 @@ function NewEvaluation({ go, initialType }) {
       <${PageHeader}
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: t('new_eval_title') }]}
         title=${t('new_eval_title')}
+        ${/* Ignat, 2026-09-22: "remove evaluation type from the first block".
+              Gone from the identity card — but the page still has to say which
+              type it is, so it moves to the header subtitle where it costs no
+              height. Say if you would rather it were nowhere. */''}
+        subtitle=${type ? t('type_' + type) : ''}
         action=${html`<${Button} variant="contained" id="run-btn" disabled=${locked}
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>play_arrow<//>`}
                         onClick=${() => setTouched(true)}>${t('btn_run_now')}<//>`} />
 
-      <${Box} sx=${{ p: 3, maxWidth: 1100 }}>
+      <${Box} sx=${{ p: 3, maxWidth: 1100, mx: 'auto' }}>
         <${Card} sx=${{ mb: 3 }}>
           <${CardContent}>
             <${Stack} direction="row" spacing=${2}>
@@ -783,20 +788,6 @@ function NewEvaluation({ go, initialType }) {
                       nothing ever set it, so a hand-written name was wiped by
                       the next filter change. */''}
                 onChange=${e => { setNameEdited(true); setName(e.target.value); }} />
-              ${/* Ignat, 2026-09-17: "Remove evaluation type from inside,
-                    because changing the type should trigger change the name and
-                    the layout." Right — and it overrules what I argued when the
-                    popup landed. The type is chosen once, in the popup, and
-                    shown here read-only so the page still says what it is. */''}
-              <${Box} sx=${{ flex: 1, display: 'flex', alignItems: 'center', gap: 1 }}
-                      id="eval-type">
-                <${Icon} sx=${{ fontSize: 20, color: 'primary.main' }}>${TYPE_ICON[type]}<//>
-                <${Box}>
-                  <${Typography} variant="caption" color="text.secondary" display="block">
-                    ${t('sel_eval_type')}<//>
-                  <${Typography} variant="body2">${type ? t('type_' + type) : '—'}<//>
-                <//>
-              <//>
             <//>
           <//>
         <//>
@@ -811,8 +802,10 @@ function NewEvaluation({ go, initialType }) {
               ${/* selectPreset(): the vanilla's six presets, one of them custom */''}
               <${Stack} direction="row" spacing=${1} sx=${{ mb: 2 }} flexWrap="wrap" useFlexGap
                         id="preset-group">
-                ${['last_7', 'cur_month', 'last_month', 'cur_year', 'last_year', 'custom'].map(p =>
-                  html`<${Chip} key=${p} id=${'preset-' + p} label=${t('preset_' + p)} clickable
+                ${['last_7', 'last_week', 'cur_month', 'last_month', 'cur_year', 'last_year', 'custom'].map(p =>
+                  html`<${Chip} key=${p} id=${'preset-' + p} clickable
+                                title=${p === 'last_week' ? t('preset_last_week_hint') : ''}
+                                label=${t('preset_' + p)}
                                 onClick=${() => setPeriod(p)}
                                 color=${period === p ? 'primary' : 'default'}
                                 variant=${period === p ? 'filled' : 'outlined'} />`)}
@@ -879,47 +872,40 @@ function NewEvaluation({ go, initialType }) {
                 Ignat, 2026-09-17: "You lost notification block", "you lost
                 Setup scheduled report part". Both were simply never ported;
                 the port stopped after Time Period and Scope. */''}
+          ${/* Ignat, 2026-09-22: "I don't like 'Run' block. Schedule is very
+                small. It is an important checkbox. Users really need it... maybe
+                details, additional, schedule and notification? I want
+                notification to be a checkbox too, not a toggle."
+
+                So: the card says what it holds rather than "Run"; SCHEDULE comes
+                first and carries the weight, because it is the decision people
+                come here to make; and notification is a checkbox like it. */''}
           <${Card} sx=${{ mt: 3 }} id="run-card">
             <${CardContent}>
-              <${Typography} variant="h6" gutterBottom>${t('step_run')}<//>
+              <${Typography} variant="h6" gutterBottom>${t('step_schedule_notify')}<//>
 
-              <${Stack} direction="row" spacing=${2} alignItems="flex-start"
-                        id="notify-section" sx=${{ mb: 2 }}>
-                <${Icon} sx=${{ color: 'text.secondary' }}>notifications<//>
-                <${Box} sx=${{ flex: 1 }}>
-                  <${Typography} variant="body2" sx=${{ mb: 1 }}>${t('notify_label')}<//>
-                  <${TextField} id="notify-email" type="email" size="small"
-                    sx=${{ minWidth: 280 }} value=${email} disabled=${!notify}
-                    onChange=${e => setEmail(e.target.value)} />
-                <//>
-                <${M.Switch} id="notify-checkbox" checked=${notify}
-                  inputProps=${{ 'aria-label': t('notify_label') }}
-                  onChange=${e => setNotify(e.target.checked)} />
-              <//>
+              <${Box} id="schedule-block"
+                sx=${{ p: 2, mb: 2, borderRadius: 1, bgcolor: 'action.hover' }}>
+                <${FormControlLabel} sx=${{ alignItems: 'flex-start', m: 0 }}
+                  control=${html`<${Checkbox} id="schedule-checkbox" checked=${scheduled}
+                    disabled=${period === 'custom'}
+                    onChange=${e => setScheduled(e.target.checked)} />`}
+                  label=${html`
+                    <${Box} sx=${{ pt: 1 }}>
+                      <${Typography} variant="subtitle2">${t('schedule_label')}<//>
+                      <${Typography} variant="caption" color="text.secondary" display="block">
+                        ${t('schedule_note')}<//>
+                    <//>`} />
 
-              <${Divider} sx=${{ my: 2 }} />
-
-              <${FormControlLabel} sx=${{ alignItems: 'flex-start', m: 0 }}
-                control=${html`<${Checkbox} id="schedule-checkbox" checked=${scheduled}
-                  disabled=${period === 'custom'}
-                  onChange=${e => setScheduled(e.target.checked)} />`}
-                label=${html`
-                  <${Box} sx=${{ pt: 1 }}>
-                    <${Typography} variant="body2">${t('schedule_label')}<//>
-                    <${Typography} variant="caption" color="text.secondary" display="block">
-                      ${t('schedule_note')}<//>
-                  <//>`} />
-
-              ${/* A custom range cannot be scheduled: every run would return
-                    the same fixed period. The vanilla says so and offers the
-                    way out rather than just disabling the box. */''}
-              ${period === 'custom' && html`
-                <${Alert} severity="info" id="schedule-blocked-note" sx=${{ mt: 1 }}
-                  action=${html`<${Button} size="small" id="schedule-blocked-link"
-                    onClick=${() => setPeriod('cur_month')}>${t('schedule_blocked_link')}<//>`}>
-                  ${t('schedule_blocked')}
-                <//>`}
-
+                ${/* A custom range cannot be scheduled: every run would return
+                      the same fixed period. The vanilla says so and offers the
+                      way out rather than just disabling the box. */''}
+                ${period === 'custom' && html`
+                  <${Alert} severity="info" id="schedule-blocked-note" sx=${{ mt: 1 }}
+                    action=${html`<${Button} size="small" id="schedule-blocked-link"
+                      onClick=${() => setPeriod('cur_month')}>${t('schedule_blocked_link')}<//>`}>
+                    ${t('schedule_blocked')}
+                  <//>`}
               ${scheduled && period !== 'custom' && html`
                 <${Box} id="schedule-fields" sx=${{ mt: 2 }}>
                   <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap
@@ -1001,6 +987,22 @@ function NewEvaluation({ go, initialType }) {
                       ${t('hint_' + freq)}<//>
                   <//>
                 <//>`}
+              <//>
+
+              <${Divider} sx=${{ my: 2 }} />
+
+              <${Stack} direction="row" spacing=${2} alignItems="flex-start" id="notify-section">
+                <${FormControlLabel} sx=${{ alignItems: 'flex-start', m: 0, flex: 1 }}
+                  control=${html`<${Checkbox} id="notify-checkbox" checked=${notify}
+                    onChange=${e => setNotify(e.target.checked)} />`}
+                  label=${html`
+                    <${Box} sx=${{ pt: 1 }}>
+                      <${Typography} variant="subtitle2">${t('notify_label')}<//>
+                      <${TextField} id="notify-email" type="email" size="small"
+                        sx=${{ minWidth: 280, mt: 1 }} value=${email} disabled=${!notify}
+                        onChange=${e => setEmail(e.target.value)} />
+                    <//>`} />
+              <//>
             <//>
           <//>
         <//>
@@ -1834,7 +1836,7 @@ function RohdatenConfig({ go, row }) {
         action=${html`<${Button} variant="contained" id="rd-run-btn"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>play_arrow<//>`}
                         onClick=${() => setTouched(true)}>${t('rd_run')}<//>`} />
-      <${Box} sx=${{ p: 3, maxWidth: 1100 }}>
+      <${Box} sx=${{ p: 3, maxWidth: 1100, mx: 'auto' }}>
         <${Card} sx=${{ mb: 3 }}><${CardContent}>
           <${Typography} variant="h6" gutterBottom>${t('rd_section_title')}<//>
           <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>

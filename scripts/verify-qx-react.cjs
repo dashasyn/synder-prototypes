@@ -643,7 +643,8 @@ const fs = require('fs');
     gone: !document.getElementById('type-dialog'),
     runDisabled: document.getElementById('run-btn').disabled,
     lockedOpacity: getComputedStyle(document.getElementById('needs-type')).opacity,
-    typeValue: (document.querySelector('#eval-type') || {}).textContent,
+    // the type left the identity card on 2026-09-22; the header carries it
+    typeValue: (document.querySelector('#page-header h6 + p') || {}).textContent,
     crumbs: document.querySelector('.MuiBreadcrumbs-root').textContent,
   }));
   ok('picking a type closes the popup and opens the details page', chosen.gone, chosen);
@@ -740,14 +741,45 @@ const fs = require('fs');
      Ignat, 2026-09-17: "You lost notification block", "you lost Setup
      scheduled report part". Both were never ported — the page stopped after
      Time Period and Scope. */
-  ok('the evaluation type is no longer editable inside the page',
-    !(await page.$('#eval-type .MuiSelect-select')) && !!(await page.$('#eval-type')));
-  ok('but the page still says which type it is',
-    /nktlich|unctual/i.test(await page.$eval('#eval-type', e => e.textContent)));
+  /* Ignat, 2026-09-22: "remove evaluation type from the first block". It is
+     not a control and not in the card — the header names it instead. */
+  ok('the evaluation type is not a control anywhere on the page',
+    !(await page.$('#eval-type')) && !(await page.$('#eval-type-select')));
+  ok('the identity card holds the name and nothing else',
+    (await page.$$eval('#eval-name', e => e.length)) === 1);
+  ok('but the header still says which type it is',
+    /nktlich|unctual/i.test(await page.$eval('#page-header h6 + p', e => e.textContent)));
 
   ok('every weekday starts selected, as the vanilla does',
     (await page.$$eval('[id^="day-"] ', e => e.length)) === 7
     && (await page.$$eval('[id^="day-"].MuiChip-filledPrimary', e => e.length)) === 7);
+
+  /* ── the third card, rebuilt 2026-09-22 ───────────────────────────
+     "I don't like 'Run' block. Schedule is very small... I want notification
+     to be a checkbox too, not a toggle." */
+  const card3 = await page.evaluate(() => {
+    const c = document.getElementById('run-card');
+    const h = c.querySelector('h6');
+    const sched = document.getElementById('schedule-checkbox');
+    const noti = document.getElementById('notify-checkbox');
+    const box = el => el.getBoundingClientRect();
+    return {
+      title: h.textContent.trim(),
+      schedIsCheckbox: !!sched.closest('.MuiCheckbox-root'),
+      notiIsCheckbox: !!noti.closest('.MuiCheckbox-root'),
+      notiIsSwitch: !!noti.closest('.MuiSwitch-root'),
+      schedFirst: box(sched).top < box(noti).top,
+      schedHighlighted: !!document.getElementById('schedule-block'),
+    };
+  });
+  ok('the card is no longer called "Run"', !/^run$/i.test(card3.title), card3.title);
+  ok('it names what it holds — schedule and notification',
+    /schedul|zeitplan/i.test(card3.title) && /notif|benachricht/i.test(card3.title), card3.title);
+  ok('notification is a checkbox, not a toggle',
+    card3.notiIsCheckbox && !card3.notiIsSwitch, card3);
+  ok('the schedule is a checkbox too', card3.schedIsCheckbox);
+  ok('the schedule comes first, where the weight belongs', card3.schedFirst, card3);
+  ok('and it sits in its own highlighted block', card3.schedHighlighted);
 
   ok('the notification block is there', !!(await page.$('#notify-section')));
   ok('it offers an e-mail address', !!(await page.$('#notify-email')));
@@ -782,6 +814,31 @@ const fs = require('fs');
     !!(await page.$('#daily-time-select')) && !(await page.$('#sched-days-row')));
   ok('each frequency explains when the data is available',
     (await page.textContent('#freq-hint')).length > 10);
+
+  /* Ignat, 2026-09-22: "Time Period. Last week (previous full week Mon - Sun)"
+     and "move the blocks to the center". */
+  ok('Last week is offered as a preset', !!(await page.$('#preset-last_week')));
+  ok('and it explains what it means on hover',
+    /mon|mo/i.test(await page.getAttribute('#preset-last_week', 'title') || ''),
+    await page.getAttribute('#preset-last_week', 'title'));
+  await page.click('#preset-last_week');
+  await page.waitForTimeout(400);
+  /* Read the SUMMARY line, not the name field: an earlier assertion types a
+     custom name, which switches the generator off, so the name is whatever it
+     was left as. Same order-dependence that made the default-sort check read a
+     sorted table as unsorted. */
+  ok('picking Last week is reflected in what the run will cover',
+    /last week|letzte woche/i.test(await page.textContent('#summary-filters')),
+    await page.textContent('#summary-filters'));
+
+  const centred = await page.evaluate(() => {
+    const card = document.getElementById('run-card').getBoundingClientRect();
+    const left = Math.round(card.left);
+    const right = Math.round(window.innerWidth - card.right);
+    return { left, right };
+  });
+  ok('the blocks are centred, not pinned left',
+    Math.abs(centred.left - centred.right) <= 2 && centred.left > 40, centred);
 
   // the period presets, and the custom range with its reversed-date error
   await page.click('#preset-custom');
