@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sync credit notes — settings control</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+  body{margin:0;display:flex;flex-direction:column;min-height:100vh;background:var(--color-grey-5)}
+
+  /* switcher — deliberately not product chrome */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:13px;flex-wrap:wrap}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:12px;
+    text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+    border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+    font-family:inherit;font-size:13px;padding:5px 12px;border-radius:4px;cursor:pointer}
+  .variant-switch button.on{background:var(--color-white);color:var(--color-grey)}
+  .variant-switch button:disabled{opacity:.35;cursor:not-allowed}
+  .vs-sep{width:1px;height:22px;background:rgba(255,255,255,.2)}
+  .vs-note{opacity:.65;font-size:12px}
+
+  .stage{flex:1;padding:24px;display:flex;justify-content:center}
+  .screen{width:100%;max-width:840px}
+
+  /* settings card, production shape: label + helper + control on the right */
+  .set-card{background:var(--color-white);border-radius:var(--radius-sm);
+    box-shadow:var(--shadow-card);overflow:hidden}
+  .set-tabs{display:flex;gap:0;border-bottom:1px solid var(--border-default);padding:0 20px;
+    overflow-x:auto}
+  .set-tab{padding:14px 14px;font-size:14px;color:var(--text-secondary);white-space:nowrap;
+    border-bottom:2px solid transparent;cursor:default}
+  .set-tab.on{color:var(--color-primary);border-bottom-color:var(--color-primary);font-weight:500}
+  .set-body{padding:4px 20px 20px}
+  .set-group{font-size:12px;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--color-grey-50);padding:20px 0 4px;font-weight:500}
+
+  .row{display:flex;align-items:flex-start;gap:16px;padding:16px 0;
+    border-bottom:1px solid var(--border-default)}
+  .row:last-child{border-bottom:none}
+  .row-main{flex:1;min-width:0}
+  .row-label{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-primary);
+    font-weight:500;flex-wrap:wrap}
+  .row-help{font-size:13px;color:var(--text-secondary);line-height:1.5;margin-top:4px}
+  .row-ctl{flex-shrink:0;padding-top:2px;display:flex;align-items:center;gap:8px}
+  .row.is-new{background:var(--color-primary-5);margin:0 -20px;padding-left:20px;
+    padding-right:20px;border-left:3px solid var(--color-primary)}
+
+  .lock-note{display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;
+    color:var(--text-secondary)}
+  .lock-note .material-icons{font-size:16px;color:var(--color-grey-50)}
+  .toggle.locked{cursor:not-allowed;opacity:.85}
+  .gate{display:flex;align-items:center;gap:10px;margin-top:8px;font-size:13px;
+    color:var(--text-secondary)}
+  .toggle.gated{cursor:not-allowed;opacity:.4}
+  .chip{display:inline-block;font-size:11px;font-weight:500;padding:2px 8px;border-radius:10px;
+    letter-spacing:.02em}
+  .chip-upgrade{background:var(--color-status-grey-bg);color:var(--color-grey-50)}
+
+  /* pre-settle screen */
+  .settle-head{margin-bottom:4px}
+  .settle-list{list-style:none;margin:0;padding:0}
+  .settle-foot{display:flex;justify-content:flex-end;gap:12px;padding:20px;
+    border-top:1px solid var(--border-default)}
+
+  /* confirm dialog */
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;
+    align-items:center;justify-content:center;z-index:50}
+  .modal-bg.open{display:flex}
+  .dlg{background:var(--color-white);border-radius:var(--radius-sm);width:440px;max-width:92vw;
+    box-shadow:var(--shadow-modal,0 8px 24px rgba(0,0,0,.2))}
+  .dlg-h{padding:20px 20px 0;font-size:18px;font-weight:500;color:var(--text-primary)}
+  .dlg-b{padding:8px 20px 0;font-size:14px;color:var(--text-secondary);line-height:1.55}
+  .dlg-f{display:flex;justify-content:flex-end;gap:8px;padding:20px}
+</style>
+</head>
+<body>
+
+<div class="variant-switch">
+  <span class="vs-label">Surface</span>
+  <div class="vs-opts">
+    <button id="sf-pt" class="on" onclick="setSurface('pt')">1 · Per Transaction</button>
+    <button id="sf-sum" onclick="setSurface('sum')">2 · Summary Sync</button>
+    <button id="sf-rr" onclick="setSurface('rr')">3 · RevRec enablement (CSM)</button>
+  </div>
+  <span class="vs-sep"></span>
+  <span class="vs-label">Org state</span>
+  <div class="vs-opts">
+    <button id="st-pro" class="on" onclick="setState('pro')">Pro+, RevRec off</button>
+    <button id="st-below" onclick="setState('below')">Below Pro</button>
+    <button id="st-lock" onclick="setState('lock')">RevRec on</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+
+<div class="stage">
+  <div class="screen" id="screen"></div>
+</div>
+
+<div class="modal-bg" id="confirm">
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+    <div class="dlg-h" id="dlg-title">Turn off credit note sync?</div>
+    <div class="dlg-b">Credit notes already in your books stay there. New credit notes reach your
+      books only when an invoice or payment syncs.</div>
+    <div class="dlg-f">
+      <button class="btn btn-text" id="dlg-cancel" onclick="closeConfirm()">Cancel</button>
+      <button class="btn btn-danger" id="dlg-ok" onclick="confirmOff()">Turn off</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var surface = 'pt', state = 'pro';
+var cnOn = false;            // customer preference, Pro+ / RevRec-off path
+
+/* ---- copy ------------------------------------------------------------- */
+/* Existing rows are the LIVE strings captured on Per Transaction → Invoices
+   (reports/pt-settings-copy, 2 Sep 2026). The new row follows the v2 house
+   rules: present tense, Synder is the actor, "your books", "Learn more →". */
+
+var CN = {
+  label: 'Sync credit notes',
+  help: 'Synder imports credit notes from Stripe as separate transactions as they happen. '
+      + 'When disabled, credit notes reach your books only when an invoice or payment syncs. '
+      + '<a class="text-link" href="#">Learn more →</a>',
+  lock: 'Locked on while Revenue Recognition is enabled.',
+  gate: 'Available on a higher plan.'
+};
+
+var PT_ROWS = [
+  { label: 'Apply payments to unpaid Invoice transactions', on: true,
+    help: 'Payment will be applied to the matching unpaid Invoice transaction.' },
+  { label: 'Cancel sync if there is no matching open invoice found for a payment', on: false,
+    help: 'If you enable this setting, Synder will search across the existing invoices in your '
+        + 'books and if the matching invoice doesn’t exist, it will cancel synchronization.' },
+  { label: 'Sync unpaid (open) invoices', on: true,
+    help: 'This setting allows you to sync open invoices with your accounting system. Once '
+        + 'received, the payment will be automatically attached to the corresponding invoice and '
+        + 'the invoice will be marked as paid. <a class="text-link" href="#">Learn more &gt;&gt;</a>' },
+  { cn: true },
+  { label: 'Sync zero invoices', on: false,
+    help: 'Enable this setting to import and sync invoices where all line amounts are 0 and the '
+        + 'totals are 0. <a class="text-link" href="#">Learn more &gt;&gt;</a>' }
+];
+
+var SUM_ROWS = [
+  { label: 'Sync unpaid (open) invoices', on: true,
+    help: 'This setting allows you to sync open invoices with your accounting system. Once '
+        + 'received, the payment will be automatically attached to the corresponding invoice and '
+        + 'the invoice will be marked as paid. <a class="text-link" href="#">Learn more &gt;&gt;</a>' },
+  { cn: true }
+];
+
+/* ---- render ------------------------------------------------------------ */
+function esc(s){ return s; }
+
+function cnRow(){
+  var locked = (state === 'lock');
+  var gated  = (state === 'below');
+  var on     = locked ? true : (gated ? false : cnOn);
+
+  var chip = gated ? ' <span class="chip chip-upgrade" id="cn-chip">Upgrade to use</span>' : '';
+  var extra = '';
+  if (locked) {
+    extra = '<div class="lock-note" id="cn-lock"><span class="material-icons">lock</span>'
+          + CN.lock + '</div>';
+  } else if (gated) {
+    extra = '<div class="gate" id="cn-gate"><span>' + CN.gate
+          + '</span><a class="text-link" href="#" id="cn-upgrade">Upgrade</a></div>';
+  }
+
+  var cls = 'toggle' + (on ? ' on' : '') + (locked ? ' locked' : '') + (gated ? ' gated' : '');
+  var attrs = 'id="cn-toggle" role="switch" aria-checked="' + on + '" aria-label="'
+            + CN.label + '" tabindex="0"'
+            + (locked || gated ? ' aria-disabled="true"' : ' onclick="flipCn()"');
+
+  return '<div class="row is-new" id="cn-row">'
+       +   '<div class="row-main">'
+       +     '<div class="row-label"><span id="cn-label">' + CN.label + '</span>' + chip + '</div>'
+       +     '<div class="row-help" id="cn-help">' + CN.help + '</div>'
+       +     extra
+       +   '</div>'
+       +   '<div class="row-ctl"><div class="' + cls + '" ' + attrs + '></div></div>'
+       + '</div>';
+}
+
+function plainRow(r, i){
+  return '<div class="row">'
+       +   '<div class="row-main">'
+       +     '<div class="row-label">' + r.label + '</div>'
+       +     '<div class="row-help">' + r.help + '</div>'
+       +   '</div>'
+       +   '<div class="row-ctl"><div class="toggle' + (r.on ? ' on' : '')
+       +     '" role="switch" aria-checked="' + r.on + '" aria-label="' + r.label + '"></div></div>'
+       + '</div>';
+}
+
+function rowsHtml(rows){
+  return rows.map(function(r, i){ return r.cn ? cnRow() : plainRow(r, i); }).join('');
+}
+
+function ptScreen(){
+  var tabs = ['General','Sales','Invoices','Products/Services','Taxes','Fees','Expenses','Payouts'];
+  return '<div class="page-header"><div class="page-header-text">'
+       +   '<div class="page-title">Per transaction settings</div>'
+       +   '<div class="page-subtitle">Stripe · QuickBooks Online</div></div></div>'
+       + '<div class="set-card"><div class="set-tabs">'
+       + tabs.map(function(t){ return '<div class="set-tab' + (t === 'Invoices' ? ' on' : '')
+           + '">' + t + '</div>'; }).join('')
+       + '</div><div class="set-body">' + rowsHtml(PT_ROWS) + '</div></div>';
+}
+
+function sumScreen(){
+  return '<div class="page-header"><div class="page-header-text">'
+       +   '<div class="page-title">Summary sync settings</div>'
+       +   '<div class="page-subtitle">Stripe · Daily summary · QuickBooks Online</div></div></div>'
+       + '<div class="set-card"><div class="set-body">'
+       +   '<div class="set-group">Invoices</div>'
+       +   rowsHtml(SUM_ROWS)
+       + '</div></div>';
+}
+
+function rrScreen(){
+  return '<div class="page-header"><div class="page-header-text">'
+       +   '<div class="page-title settle-head">Enable Revenue Recognition</div>'
+       +   '<div class="page-subtitle">Review what will be applied, then enable.</div></div></div>'
+       + '<div class="set-card"><div class="set-body">'
+       +   '<div class="set-group">Settings that will be applied</div>'
+
+       /* existing pattern, for contrast: the blocking red error */
+       +   '<div class="row"><div class="row-main">'
+       +     '<div class="row-label">Sync unpaid (open) invoices</div>'
+       +     '<div class="row-help">This setting allows you to sync open invoices with your '
+       +       'accounting system.</div>'
+       +     '<div class="form-error-msg" id="rr-error" style="margin-top:8px">Turn this on before '
+       +       'enabling Revenue Recognition with schedule start = invoice date.</div>'
+       +   '</div><div class="row-ctl"><div class="toggle" role="switch" aria-checked="false" '
+       +     'aria-label="Sync unpaid (open) invoices"></div></div></div>'
+
+       /* the new control */
+       +   cnRowSettle()
+       + '</div>'
+       + '<div class="settle-foot"><button class="btn btn-outlined">Back</button>'
+       +   '<button class="btn" id="rr-enable">Enable Revenue Recognition</button></div>'
+       + '</div>';
+}
+
+function cnRowSettle(){
+  return '<div class="row is-new" id="cn-row"><div class="row-main">'
+       +   '<div class="row-label"><span id="cn-label">' + CN.label + '</span></div>'
+       +   '<div class="row-help" id="cn-help">' + CN.help + '</div>'
+       +   '<div class="lock-note" id="cn-lock"><span class="material-icons">lock</span>'
+       +     'Revenue Recognition turns this on and keeps it on. You can’t turn it off later.'
+       +   '</div>'
+       + '</div><div class="row-ctl"><div class="toggle on locked" id="cn-toggle" role="switch" '
+       +   'aria-checked="true" aria-disabled="true" aria-label="' + CN.label + '" tabindex="0">'
+       + '</div></div></div>';
+}
+
+var NOTES = {
+  'pt|pro':   'Toggleable. Placed after Sync unpaid (open) invoices.',
+  'pt|below': 'Shown, not hidden. Upgrade to use.',
+  'pt|lock':  'On and not disableable.',
+  'sum|pro':  'Same control, next to Sync open invoices.',
+  'sum|below':'Same gate as Per Transaction.',
+  'sum|lock': 'Same lock as Per Transaction.',
+  'rr|pro':   'Locked on, with a preview — not a blocking red error.',
+  'rr|below': 'Locked on, with a preview — not a blocking red error.',
+  'rr|lock':  'Locked on, with a preview — not a blocking red error.'
+};
+
+function render(){
+  var el = document.getElementById('screen');
+  el.innerHTML = surface === 'pt' ? ptScreen() : (surface === 'sum' ? sumScreen() : rrScreen());
+  document.getElementById('vs-note').textContent = NOTES[surface + '|' + state] || '';
+  ['pt','sum','rr'].forEach(function(s){
+    document.getElementById('sf-' + (s === 'sum' ? 'sum' : s === 'rr' ? 'rr' : 'pt'))
+      .classList.toggle('on', surface === s);
+  });
+  var map = { pro:'st-pro', below:'st-below', lock:'st-lock' };
+  Object.keys(map).forEach(function(k){
+    var b = document.getElementById(map[k]);
+    b.classList.toggle('on', state === k);
+    b.disabled = (surface === 'rr');   // org state doesn't vary the CSM screen
+  });
+}
+
+function setSurface(s){ surface = s; render(); }
+function setState(s){ if (surface === 'rr') return; state = s; render(); }
+
+function flipCn(){
+  if (cnOn) { document.getElementById('confirm').classList.add('open');
+              document.getElementById('dlg-cancel').focus(); return; }
+  cnOn = true; render();
+}
+function closeConfirm(){ document.getElementById('confirm').classList.remove('open'); render(); }
+function confirmOff(){ cnOn = false; closeConfirm(); }
+
+document.addEventListener('keydown', function(e){
+  if (e.key === 'Escape') closeConfirm();
+});
+
+render();
+</script>
+</body>
+</html>
