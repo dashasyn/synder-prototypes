@@ -25,11 +25,41 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     ok('Journal entries button present', await vis('#open-je-list'));
     ok('Add reconciliation button present', (await p.locator('#screen-list .acts .btn.primary').innerText()).trim()==='Add reconciliation');
     ok('Active / Deleted tabs', (await p.locator('#screen-list .tabs .tab').allInnerTexts()).join('/')==='Active/Deleted');
-    ok('8 reconciliation rows', (await p.locator('#list-body tr').count())===8);
+    ok('8 active reconciliation rows', (await p.locator('#list-body tr').count())===8);
     ok('status chips render all three values', await p.evaluate(()=>{
       const s=[...document.querySelectorAll('#list-body .st')].map(e=>e.textContent.trim());
       return s.includes('Reconciled')&&s.includes('Not reconciled')&&s.includes('N/A');}));
     ok('no horizontal overflow on the list', await p.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+
+    /* ---- deleted reconciliations ---- */
+    ok('no deleted rows under Active', await p.evaluate(()=>
+      ![...document.querySelectorAll('#list-body tr')].some(r=>/Aug 1, 2024|Jul 1, 2024/.test(r.textContent))));
+    await p.locator('#screen-list .tab[data-ltab="deleted"]').click(); await p.waitForTimeout(250);
+    ok('Deleted tab selected', (await p.locator('#screen-list .tab[data-ltab="deleted"]').getAttribute('aria-selected'))==='true');
+    ok('Deleted tab lists only the deleted ones', (await p.locator('#list-body tr').count())===2);
+    ok('a deleted reconciliation keeps its status', (await txt('#list-body')).includes('Reconciled'));
+    await p.locator('#list-body tr').first().click(); await p.waitForTimeout(250);
+    ok('deleted banner shows inside a deleted reconciliation', await vis('#del-banner'));
+    ok('banner heading', (await txt('#del-banner b'))==='Deleted reconciliation');
+    ok('banner body is the approved copy', (await txt('#del-banner span'))==="View only, and this can't be undone. The period is free to reconcile again.");
+    ok('banner sits above the tabs', await p.evaluate(()=>
+      document.getElementById('del-banner').getBoundingClientRect().bottom <=
+      document.querySelector('#screen-results .tabs').getBoundingClientRect().top + 1));
+    ok('banner is inside the viewport', await p.evaluate(()=>{
+      const r=document.getElementById('del-banner').getBoundingClientRect();
+      return r.top>=0 && r.bottom<=window.innerHeight && r.left>=0 && r.right<=window.innerWidth;}));
+    ok('banner is neutral, not an error colour', await p.evaluate(()=>{
+      const c=getComputedStyle(document.getElementById('del-banner')).backgroundColor;
+      const m=c.match(/\d+/g).map(Number);
+      return Math.abs(m[0]-m[1])<12 && Math.abs(m[1]-m[2])<12;}));
+    ok('status chip still shown, not stripped', await vis('#screen-results .st-chip'));
+    ok('Refresh data stays available on a deleted reconciliation', await hittable('#screen-results .topbar .btn:last-child'));
+    await p.locator('#back-to-list').click(); await p.waitForTimeout(250);
+    await p.locator('#screen-list .tab[data-ltab="active"]').click(); await p.waitForTimeout(250);
+    ok('back on Active, 8 rows again', (await p.locator('#list-body tr').count())===8);
+    await p.locator('#list-body tr[data-rc="rc1"]').click(); await p.waitForTimeout(250);
+    ok('banner hidden on an active reconciliation', !(await p.locator('#del-banner').isVisible()));
+    await p.locator('#back-to-list').click(); await p.waitForTimeout(250);
 
     /* ---- row opens the preview ---- */
     await p.locator('#list-body tr[data-rc="rc2"]').click(); await p.waitForTimeout(250);

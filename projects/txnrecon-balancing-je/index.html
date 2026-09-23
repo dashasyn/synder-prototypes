@@ -136,6 +136,12 @@
   .st-chip{font-size:11px;font-weight:500;padding:2px 9px;border-radius:10px;
            background:var(--color-green-light);color:#14602c}
   .sub{color:var(--color-grey-50);font-size:12.5px;margin:0 0 14px}
+  /* Neutral, not an error — deletion is a state. Sits above the tabs so it reframes
+     the Reconciled / Attention required status rather than contradicting it. */
+  .del-banner{background:var(--color-grey-10);border-radius:4px;padding:11px 16px;margin:0 0 14px;
+              font-size:12.5px;line-height:1.5}
+  .del-banner b{display:block;font-weight:500;margin-bottom:2px}
+  .del-banner span{color:var(--color-grey-50)}
   .hintbar{display:flex;align-items:center;gap:12px;background:var(--color-primary-10);border-radius:4px;
            padding:9px 14px;margin:14px 0;font-size:12.5px;color:var(--color-primary)}
   .hintbar .sp{flex:1}
@@ -310,8 +316,8 @@
         </div>
 
         <div class="tabs" role="tablist" aria-label="Reconciliations">
-          <button class="tab" role="tab" aria-selected="true" type="button">Active</button>
-          <button class="tab" role="tab" aria-selected="false" type="button">Deleted</button>
+          <button class="tab" role="tab" aria-selected="true" type="button" data-ltab="active">Active</button>
+          <button class="tab" role="tab" aria-selected="false" type="button" data-ltab="deleted">Deleted</button>
         </div>
 
         <table class="tx">
@@ -323,7 +329,7 @@
 
         <div class="pager">
           <span>Rows per page: 10</span>
-          <span>1–8 of 1002</span>
+          <span id="list-count">1–6 of 1002</span>
           <span class="pg"><span class="on">1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>…</span><span>10</span></span>
         </div>
       </div>
@@ -385,6 +391,11 @@
         <div class="page">
           <h1 class="rt"><span id="r-title">My wonderful flowers (Stripe)</span> <span class="st-chip">Finished</span></h1>
           <p class="sub" id="r-sub">Stripe clearing / Mar 20–23, 2025</p>
+
+          <div class="del-banner hidden" id="del-banner">
+            <b>Deleted reconciliation</b>
+            <span>View only, and this can't be undone. The period is free to reconcile again.</span>
+          </div>
 
           <div class="tabs" role="tablist" aria-label="Reconciliation results">
             <button class="tab matched" role="tab" aria-selected="false" type="button" data-tab="matched">Matched <span class="c" id="c-matched">100,000</span></button>
@@ -590,6 +601,8 @@
     { id:'rc1', range:'Jun 30, 2025 – May 30, 2026', int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'rec',  stl:'Reconciled' },
     { id:'rc2', range:'Mar 20, 2025 – Mar 23, 2025', int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'not',  stl:'Not reconciled' },
     { id:'rc3', range:'Feb 1, 2025 – Feb 28, 2025',  int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'na',   stl:'N/A' },
+    { id:'rc9', range:'Aug 1, 2024 – Aug 31, 2024',  int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'rec',  stl:'Reconciled',     deleted:true },
+    { id:'rc10', range:'Jul 1, 2024 – Jul 31, 2024', int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'not',  stl:'Not reconciled', deleted:true },
     { id:'rc4', range:'Jan 1, 2025 – Jan 31, 2025',  int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'na',   stl:'N/A' },
     { id:'rc5', range:'Dec 1, 2024 – Dec 31, 2024',  int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'rec',  stl:'Reconciled' },
     { id:'rc6', range:'Nov 1, 2024 – Nov 30, 2024',  int:'My wonderful flowers (Stripe)', acc:'Stripe clearing', created:'May 10, 2024', st:'not',  stl:'Not reconciled' },
@@ -642,7 +655,7 @@
   ];
 
   var state = { sel:{}, intSel:{}, intIgnored:[], accIgnored:[], lines:[], pendingRows:[], je:null, matched:[],
-                recon:RECONS[1], lastFocus:null, menuRow:null, menuJe:null, flashJe:null };
+                recon:RECONS[1], listTab:'active', lastFocus:null, menuRow:null, menuJe:null, flashJe:null };
 
   var token = function (r) {
     var t=[]; if(r.txdate)t.push('date:'+r.txdate); if(r.pid)t.push('p_id:'+r.pid); if(r.sid)t.push('s_id:'+r.sid);
@@ -708,7 +721,8 @@
 
   /* ───── list ───── */
   function renderList() {
-    $('list-body').innerHTML = RECONS.map(function (r) {
+    var want = state.listTab === 'deleted';
+    $('list-body').innerHTML = RECONS.filter(function (r) { return !!r.deleted === want; }).map(function (r) {
       return '<tr class="clickable" data-rc="' + r.id + '">' +
         '<td><button class="rowlink" type="button" data-open="' + r.id + '">' + esc(r.range) + '</button></td>' +
         '<td><span class="brandchip"><span class="b">S</span>' + esc(r.int) + '</span></td>' +
@@ -716,7 +730,17 @@
         '<td><span class="st ' + r.st + '">' + esc(r.stl) + '</span></td>' +
         '<td><button class="kebab" type="button" aria-label="Actions for this reconciliation">⋯</button></td></tr>';
     }).join('');
+    $('list-count').textContent = '1\u20136 of 1002';
   }
+  document.querySelectorAll('#screen-list .tab[data-ltab]').forEach(function (t) {
+    t.addEventListener('click', function () {
+      state.listTab = t.getAttribute('data-ltab');
+      document.querySelectorAll('#screen-list .tab[data-ltab]').forEach(function (o) {
+        o.setAttribute('aria-selected', o === t ? 'true' : 'false');
+      });
+      renderList();
+    });
+  });
   $('list-body').addEventListener('click', function (e) {
     if (e.target.closest('.kebab')) { e.stopPropagation(); return; }
     var tr = e.target.closest('[data-rc]');
@@ -728,6 +752,7 @@
     state.recon = rc;
     $('r-title').textContent = rc.int;
     $('r-sub').textContent = rc.acc + ' / ' + rc.range;
+    $('del-banner').classList.toggle('hidden', !rc.deleted);
     $('screen-results').classList.remove('hidden');
     $('nav-txnrecon').classList.add('cur');
     showTab(state.je ? 'je' : 'miss');
