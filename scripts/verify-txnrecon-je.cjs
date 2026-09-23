@@ -42,7 +42,30 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     ok('inputs use the kit input height', (await p.locator('#l-from').first().evaluate(e=>Math.round(e.getBoundingClientRect().height)+'px'))===await kit('--input-height'));
     ok('inputs use the kit body type', (await fs('#l-from'))===await kit('--font-body2'));
     ok('table cells use the kit body type', (await fs('#list-body td'))===await kit('--font-body2'));
-    ok('table headers use the kit caption size (12px)', (await fs('#screen-list thead th'))==='12px');
+    const toRGB=async v=>p.evaluate(c=>{const e=document.createElement('span');e.style.color=c;
+      document.body.appendChild(e);const r=getComputedStyle(e).color;e.remove();return r;}, v);
+    const style=s2=>p.locator(s2).first().evaluate(e=>{const c=getComputedStyle(e);
+      return {size:c.fontSize,weight:c.fontWeight,color:c.color};});
+    ok('tables use the kit table component', await p.evaluate(()=>
+      !!document.querySelector('#screen-list table.table.table--sm')));
+    ok('table headers use the kit subtitle2, not a hand-rolled caption', await (async()=>{
+      const h=await style('#screen-list thead th');
+      return h.size===await kit('--font-subtitle2') && h.weight===await kit('--font-subtitle2-weight')
+          && h.color===await toRGB(await kit('--text-primary'));})());
+    ok('filter labels use the kit form-label (dark and bold, not small grey)', await (async()=>{
+      const l=await style('#screen-list .fl label');
+      return l.size===await kit('--font-subtitle2') && l.weight===await kit('--font-subtitle2-weight')
+          && l.color===await toRGB(await kit('--text-primary'));})());
+    ok('every filter label carries the kit class', await p.evaluate(()=>
+      [...document.querySelectorAll('.fl label, .f label')]
+        .filter(l=>!l.classList.contains('sronly'))
+        .every(l=>l.classList.contains('form-label'))));
+    ok('inactive tabs are kit text-primary, not grey', await (async()=>{
+      const t=await style('#screen-list .tab[data-ltab="deleted"]');
+      return t.color===await toRGB(await kit('--text-primary'));})());
+    ok('the selected tab is kit primary', await (async()=>{
+      const t=await style('#screen-list .tab.active');
+      return t.color===await toRGB(await kit('--color-primary'));})());
     ok('table dividers use the kit border token', await p.evaluate(async()=>{
       const want=getComputedStyle(document.documentElement).getPropertyValue('--border-default').trim();
       const probe=document.createElement('span'); probe.style.color=want; document.body.appendChild(probe);
