@@ -224,7 +224,10 @@ function MusicEventsView() {
 
   return html`
     <${Box}>
-      <${PageHeader} title=${t('musicTitle')} subtitle=${t('evIntro')}
+      ${/* Ignat, 2026-09-23: the heading is the same name the top-bar dropdown
+            uses, so it reads as one place rather than two. Pointing both at
+            t('evrMusic') is what keeps them equal. */ ''}
+      <${PageHeader} title=${t('evrMusic')}
         action=${html`<${Button} variant="contained" id="ev-new" onClick=${newEvent}>${t('newEvent')}<//>`} />
       <${PageBody}>
         <${Stack} direction="row" spacing=${2} alignItems="center" sx=${{ mb: 2 }}>
@@ -260,7 +263,7 @@ function MusicEventsView() {
                       <${Tooltip} title=${state.lang === 'de' ? 'Löschen' : 'Delete'}>
                         <${IconButton} color="error"
                           aria-label=${(state.lang === 'de' ? 'Löschen: ' : 'Delete: ') + ev.name}
-                          onClick=${() => setDelEv(ev)}><${Icon} sx=${{ fontSize: 18 }}>close<//><//>
+                          onClick=${() => setDelEv(ev)}><${Icon} sx=${{ fontSize: 18 }}>delete_outline<//><//>
                       <//>
                     <//>
                   <//>`;
@@ -352,7 +355,7 @@ function MusicEventEditView() {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('musicTitle'), onClick: cancel }, { label: title }]}
+        crumbs=${[{ label: t('evrMusic'), onClick: cancel }, { label: title }]}
         title=${title}
         action=${html`
           <${Stack} direction="row" spacing=${1}>

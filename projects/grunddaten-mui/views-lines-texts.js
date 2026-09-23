@@ -313,10 +313,7 @@
     const { t, lang } = useApp();
     return html`
       <${Box}>
-        <${PageHeader} title=${t('lineMgmt')}
-          subtitle=${lang === 'de'
-            ? 'Aktivieren und deaktivieren Sie Linien nach Zeitplan.'
-            : 'Activate and deactivate lines by schedule.'} />
+        <${PageHeader} title=${t('lineMgmt')} />
         <${PageBody}>
           ${lineData.filter(l => l.id === 'U12').map(l => html`
             <${Card} key=${l.id} sx=${{ mb: 2 }}>
@@ -458,7 +455,7 @@
 
     return html`
       <${Box}>
-        <${PageHeader} title=${t('displayTexts')} subtitle=${t('textsIntro')}
+        <${PageHeader} title=${t('displayTexts')}
           action=${html`<${Button} variant="contained" id="txt-add" onClick=${openNew}>${t('addText')}<//>`} />
 
         <${PageBody}>
@@ -525,7 +522,7 @@
                         <${Tooltip} title=${lang === 'de' ? 'Löschen' : 'Delete'}>
                           <${IconButton} color="error" aria-label=${`delete ${tx.id}`}
                             onClick=${() => setDel({ kind: 'one', idx: gi })}>
-                            <${Icon} sx=${{ fontSize: 18 }}>close<//>
+                            <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
                           <//>
                         <//>
                       <//>
@@ -624,7 +621,7 @@
 
     return html`
       <${Box}>
-        <${PageHeader} title=${t('spcPage')} subtitle=${t('spcIntro')}
+        <${PageHeader} title=${t('spcPage')}
           action=${html`<${Button} variant="contained" id="spc-add" onClick=${() => open(-1)}>${t('addSpc')}<//>`} />
 
         <${PageBody}>
@@ -657,7 +654,7 @@
                         <${Tooltip} title=${lang === 'de' ? 'Löschen' : 'Delete'}>
                           <${IconButton} color="error" aria-label=${`delete ${sp.id}`}
                             onClick=${() => setDel(i)}>
-                            <${Icon} sx=${{ fontSize: 18 }}>close<//>
+                            <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
                           <//>
                         <//>
                       <//>

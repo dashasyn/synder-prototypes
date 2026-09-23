@@ -612,7 +612,7 @@ function SoundsView() {
 
   return html`
     <${Box}>
-      <${PageHeader} title=${t('sounds')} subtitle=${t('musicLibIntro')} action=${action} />
+      <${PageHeader} title=${t('sounds')} action=${action} />
 
       <${Tabs} id="snd-tabs" value=${tab} onChange=${(e, v) => set({ soundTab: v })}
         sx=${{ px: 3, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>

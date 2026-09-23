@@ -212,7 +212,7 @@ function StationDetailView() {
                     <${Box} sx=${{ flexGrow: 1 }} />
                     <${IconButton} color="error" aria-label=${`remove name change ${i}`}
                       onClick=${() => patch(n => { n.nameChanges.splice(i, 1); })}>
-                      <${Icon} sx=${{ fontSize: 18 }}>close<//><//>
+                      <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//><//>
                   <//>
                 <//>
               <//>`)}
@@ -282,7 +282,7 @@ function StationDetailView() {
                   <${Button} onClick=${() => openSchedule(i)}>${t('editSchedule')}<//>
                   <${IconButton} color="error" aria-label=${`remove transfer ${i}`}
                     onClick=${() => patch(n => { n.transferAnnouncements.splice(i, 1); })}>
-                    <${Icon} sx=${{ fontSize: 18 }}>close<//><//>
+                    <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//><//>
                 <//>`)}
             <//>` : html`
             <${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>
