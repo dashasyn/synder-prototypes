@@ -31,6 +31,24 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
       return s.includes('Reconciled')&&s.includes('Not reconciled')&&s.includes('N/A');}));
     ok('no horizontal overflow on the list', await p.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
 
+    /* ---- design-system conformance: values come from the kit, not from me ---- */
+    const kit=n=>p.evaluate(v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim(), n);
+    const fs=s2=>p.locator(s2).first().evaluate(e=>getComputedStyle(e).fontSize);
+    ok('the UI kit stylesheet is actually linked', await p.evaluate(()=>
+      [...document.styleSheets].some(ss=>ss.href&&/synder-ui-kit\.css/.test(ss.href))));
+    ok('base type is the kit Body_2, not a shrunken one', (await p.evaluate(()=>getComputedStyle(document.body).fontSize))===await kit('--font-body2'));
+    ok('buttons use the kit button type', (await fs('#screen-list .btn.primary'))===await kit('--font-button'));
+    ok('buttons use the kit button height', (await p.locator('#screen-list .btn.primary').first().evaluate(e=>Math.round(e.getBoundingClientRect().height)+'px'))===await kit('--btn-height'));
+    ok('inputs use the kit input height', (await p.locator('#l-from').first().evaluate(e=>Math.round(e.getBoundingClientRect().height)+'px'))===await kit('--input-height'));
+    ok('inputs use the kit body type', (await fs('#l-from'))===await kit('--font-body2'));
+    ok('table cells use the kit body type', (await fs('#list-body td'))===await kit('--font-body2'));
+    ok('table headers use the kit caption size (12px)', (await fs('#screen-list thead th'))==='12px');
+    ok('table dividers use the kit border token', await p.evaluate(async()=>{
+      const want=getComputedStyle(document.documentElement).getPropertyValue('--border-default').trim();
+      const probe=document.createElement('span'); probe.style.color=want; document.body.appendChild(probe);
+      const rgb=getComputedStyle(probe).color; probe.remove();
+      return getComputedStyle(document.querySelector('#list-body td')).borderBottomColor===rgb;}));
+
     /* ---- deleted reconciliations ---- */
     ok('no deleted rows under Active', await p.evaluate(()=>
       ![...document.querySelectorAll('#list-body tr')].some(r=>/Aug 1, 2024|Jul 1, 2024/.test(r.textContent))));
@@ -173,9 +191,10 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
       await p.locator('#rowmenu .mi-wrap').hover(); await p.waitForTimeout(250);
       return await p.locator('#rowmenu .mi-tip').isVisible();})());
     ok('hover reason names the cause', (await txt('#rowmenu .mi-tip')).includes('primary and secondary IDs are missing'));
-    ok('tooltip stays inside the viewport', await p.evaluate(()=>{
-      const t=document.querySelector('#rowmenu .mi-tip'); const r=t.getBoundingClientRect();
-      return r.left>=0 && r.top>=0 && r.right<=window.innerWidth && r.bottom<=window.innerHeight;}));
+    ok('tooltip sits clear of every viewport edge', await p.evaluate(()=>{
+      const r=document.querySelector('#rowmenu .mi-tip').getBoundingClientRect();
+      const m=4;
+      return r.left>=m && r.top>=m && r.right<=window.innerWidth-m && r.bottom<=window.innerHeight-m;}));
     ok('reason hides again when the pointer leaves', await (async()=>{
       await p.mouse.move(5,5); await p.waitForTimeout(250);
       return !(await p.locator('#rowmenu .mi-tip').isVisible());})());
@@ -271,10 +290,10 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
       return await p.locator('#matched-body .detail-row .dtl:first-child .info-tip').first().isVisible();})());
     ok('tooltip carries the journal entry number', (await txt('#matched-body .detail-row .dtl:first-child .info-tip')).includes('SYN-TXNRECON-12345678'));
     ok('tooltip carries the memo', (await txt('#matched-body .detail-row .dtl:first-child .info-tip')).includes("Balancing journal entry created from Synder's Transaction Reconciliation"));
-    ok('tooltip stays inside the viewport', await p.evaluate(()=>{
-      const t=document.querySelector('#matched-body .detail-row .dtl:first-child .info-tip');
-      const r=t.getBoundingClientRect();
-      return r.left>=0 && r.top>=0 && r.right<=window.innerWidth && r.bottom<=window.innerHeight;}));
+    ok('description tooltip sits clear of every viewport edge', await p.evaluate(()=>{
+      const r=document.querySelector('#matched-body .detail-row .dtl:first-child .info-tip').getBoundingClientRect();
+      const m=4;
+      return r.left>=m && r.top>=m && r.right<=window.innerWidth-m && r.bottom<=window.innerHeight-m;}));
     ok('tooltip reachable by keyboard', await (async()=>{
       await p.mouse.move(2,2); await p.waitForTimeout(200);
       await p.locator('#matched-body .detail-row .dtl:first-child .info-btn').first().focus(); await p.waitForTimeout(250);
