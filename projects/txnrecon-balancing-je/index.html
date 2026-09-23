@@ -144,8 +144,10 @@
   .hintbar .sp{flex:1}
   .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
   .col h2{font-size:15px;font-weight:500;margin:0 0 10px}
-  .bulk{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--color-primary-5);
-        border:1px solid var(--color-primary-20);border-radius:4px;margin-bottom:8px;font-size:var(--font-body2)}
+  /* Bulk actions replace the header row rather than sitting above the table,
+     which is how the rest of the app behaves. */
+  tr.bulk-row th{height:auto;padding:6px 12px;font-weight:400}
+  .bulk-inner{display:flex;align-items:center;gap:10px}
   .tokhelp{font-size:11.5px;color:var(--color-grey-50);margin-top:6px;line-height:1.5}
 
   /* row menu */
@@ -420,16 +422,22 @@
                   <button class="btn primary sm" type="button">Apply</button>
                   <button class="btn sm" type="button">Reset filters</button>
                 </div>
-                <div class="bulk hidden" id="bulk">
-                  <span id="bulk-count">0 selected</span>
-                  <button class="btn sm" type="button" id="bulk-create">Create journal entry</button>
-                  <button class="btn sm" type="button" id="bulk-ignore">Ignore</button>
-                </div>
                 <table class="table table--sm tx">
-                  <thead><tr>
-                    <th style="width:28px"><input type="checkbox" id="sel-all" aria-label="Select all rows"></th>
-                    <th>Date</th><th>Primary ID</th><th>Secondary ID</th><th>Transaction type</th>
-                    <th class="num">Amount</th><th style="width:34px"></th></tr></thead>
+                  <thead>
+                    <tr id="miss-head">
+                      <th style="width:28px"><input type="checkbox" class="sel-all" data-selall="acc" aria-label="Select all rows"></th>
+                      <th>Date</th><th>Primary ID</th><th>Secondary ID</th><th>Transaction type</th>
+                      <th class="num">Amount</th><th style="width:34px"></th>
+                    </tr>
+                    <tr class="bulk-row hidden" id="bulk">
+                      <th style="width:28px"><input type="checkbox" class="sel-all" data-selall="acc" aria-label="Clear selection"></th>
+                      <th colspan="6"><div class="bulk-inner">
+                        <span id="bulk-count">0 selected</span>
+                        <button class="btn sm" type="button" id="bulk-create">Create journal entry</button>
+                        <button class="btn sm" type="button" id="bulk-ignore">Ignore</button>
+                      </div></th>
+                    </tr>
+                  </thead>
                   <tbody id="miss-body"></tbody>
                 </table>
                 <p class="empty-note hidden" id="miss-empty">Nothing missing in accounting for this period.</p>
@@ -443,14 +451,21 @@
                   <button class="btn primary sm" type="button">Apply</button>
                   <button class="btn sm" type="button">Reset filters</button>
                 </div>
-                <div class="bulk hidden" id="int-bulk">
-                  <span id="int-bulk-count">0 selected</span>
-                  <button class="btn sm" type="button" id="int-bulk-ignore">Ignore</button>
-                </div>
                 <table class="table table--sm tx">
-                  <thead><tr><th style="width:28px"><input type="checkbox" id="int-sel-all" aria-label="Select all rows missing in integration"></th>
-                    <th>Date</th><th>Primary ID</th><th>Transaction type</th>
-                    <th class="num">Amount</th><th style="width:60px"></th></tr></thead>
+                  <thead>
+                    <tr id="int-head">
+                      <th style="width:28px"><input type="checkbox" class="sel-all" data-selall="int" aria-label="Select all rows missing in integration"></th>
+                      <th>Date</th><th>Primary ID</th><th>Transaction type</th>
+                      <th class="num">Amount</th><th style="width:60px"></th>
+                    </tr>
+                    <tr class="bulk-row hidden" id="int-bulk">
+                      <th style="width:28px"><input type="checkbox" class="sel-all" data-selall="int" aria-label="Clear selection"></th>
+                      <th colspan="5"><div class="bulk-inner">
+                        <span id="int-bulk-count">0 selected</span>
+                        <button class="btn sm" type="button" id="int-bulk-ignore">Ignore</button>
+                      </div></th>
+                    </tr>
+                  </thead>
                   <tbody id="int-body"></tbody>
                 </table>
                 <p class="empty-note hidden" id="int-empty">Nothing missing in the integration for this period.</p>
@@ -787,8 +802,14 @@
   }
   function syncAccountingSelection() {
     var n = selectedAccounting().length;
+    var open = ROWS.filter(isOpen).length;
     $('bulk').classList.toggle('hidden', n === 0);
+    $('miss-head').classList.toggle('hidden', n > 0);
     $('bulk-count').textContent = n + ' selected';
+    document.querySelectorAll('[data-selall="acc"]').forEach(function (cb) {
+      cb.checked = n > 0 && n === open;
+      cb.indeterminate = n > 0 && n < open;
+    });
   }
 
   var intOpen = function (r) { return state.intIgnored.indexOf(r.id) === -1; };
@@ -806,8 +827,14 @@
   }
   function syncIntSelection() {
     var n = Object.keys(state.intSel).filter(function (k) { return state.intSel[k]; }).length;
+    var open = INT_ROWS.filter(intOpen).length;
     $('int-bulk').classList.toggle('hidden', n === 0);
+    $('int-head').classList.toggle('hidden', n > 0);
     $('int-bulk-count').textContent = n + ' selected';
+    document.querySelectorAll('[data-selall="int"]').forEach(function (cb) {
+      cb.checked = n > 0 && n === open;
+      cb.indeterminate = n > 0 && n < open;
+    });
   }
   function matchedGroups() {
     // Rows matched through the balancing entry join the ordinary matches. On the
@@ -895,20 +922,24 @@
     state.sel[cb.getAttribute('data-sel')] = cb.checked;
     syncAccountingSelection();
   });
-  $('sel-all').addEventListener('change', function () {
-    var on = this.checked;
-    ROWS.filter(isOpen).forEach(function (r) { state.sel[r.id] = on; });
-    renderMiss();
+  document.querySelectorAll('[data-selall="acc"]').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      var on = this.checked;
+      ROWS.filter(isOpen).forEach(function (r) { state.sel[r.id] = on; });
+      renderMiss();
+    });
   });
   $('int-body').addEventListener('change', function (e) {
     var cb = e.target.closest('[data-intsel]'); if (!cb) return;
     state.intSel[cb.getAttribute('data-intsel')] = cb.checked;
     syncIntSelection();
   });
-  $('int-sel-all').addEventListener('change', function () {
-    var on = this.checked;
-    INT_ROWS.filter(intOpen).forEach(function (r) { state.intSel[r.id] = on; });
-    renderInt();
+  document.querySelectorAll('[data-selall="int"]').forEach(function (cb) {
+    cb.addEventListener('change', function () {
+      var on = this.checked;
+      INT_ROWS.filter(intOpen).forEach(function (r) { state.intSel[r.id] = on; });
+      renderInt();
+    });
   });
   $('int-body').addEventListener('click', function (e) {
     var b = e.target.closest('[data-intignore]'); if (!b) return;
@@ -919,7 +950,6 @@
       if (state.intIgnored.indexOf(id) === -1) state.intIgnored.push(id);
       state.intSel[id] = false;
     });
-    $('int-sel-all').checked = false;
     renderInt(); renderMiss();
     toast('ok', ids.length + (ids.length === 1 ? ' transaction' : ' transactions') + ' moved to Ignored.');
   }
@@ -932,7 +962,6 @@
       if (state.accIgnored.indexOf(id) === -1) state.accIgnored.push(id);
       state.sel[id] = false;
     });
-    $('sel-all').checked = false;
     renderMiss();
     toast('ok', ids.length + (ids.length === 1 ? ' transaction' : ' transactions') + ' moved to Ignored.');
   });

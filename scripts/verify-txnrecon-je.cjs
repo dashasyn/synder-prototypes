@@ -133,7 +133,7 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
       [...document.querySelectorAll('.hintbar button')].map(b=>b.textContent.trim()).join('/')==='Match manually'));
     ok('no Create journal entry in the top block', await p.evaluate(()=>
       ![...document.querySelectorAll('.hintbar button')].some(b=>/journal entry/i.test(b.textContent))));
-    ok('integration bulk bar never offers Create journal entry', await p.evaluate(()=>
+    ok('integration bulk row never offers Create journal entry', await p.evaluate(()=>
       ![...document.querySelectorAll('#int-bulk button')].some(b=>/journal entry/i.test(b.textContent))));
     ok('close returns to the list', await (async()=>{await p.locator('#back-to-list').click();await p.waitForTimeout(200);return await vis('#screen-list')})());
     ok('focus returns to the row that was opened', (await active()).includes('rowlink'), await active());
@@ -231,20 +231,23 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     await p.keyboard.press('Escape'); await p.waitForTimeout(150);
     ok('focus returns to kebab', (await active()).includes('kebab'));
 
-    await p.locator('#sel-all').check(); await p.waitForTimeout(200);
-    ok('accounting bulk bar is Create journal entry + Ignore', (await p.locator('#bulk button').allInnerTexts()).map(t=>t.trim()).join('/')==='Create journal entry/Ignore');
+    await p.locator('#miss-head [data-selall="acc"]').check(); await p.waitForTimeout(200);
+    ok('accounting bulk row is Create journal entry + Ignore', (await p.locator('#bulk button').allInnerTexts()).map(t=>t.trim()).join('/')==='Create journal entry/Ignore');
     ok('Create journal entry sits next to Ignore', await p.evaluate(()=>{
       const b=[...document.querySelectorAll('#bulk button')];
       return b.length===2 && /journal entry/i.test(b[0].textContent) && /ignore/i.test(b[1].textContent);}));
     ok('Create journal entry is hittable in the bulk bar', await hittable('#bulk-create'));
-    ok('integration column has a select-all', await p.locator('#int-sel-all').isVisible());
-    await p.locator('#int-sel-all').check(); await p.waitForTimeout(200);
-    ok('integration bulk bar appears', await p.locator('#int-bulk').isVisible());
-    ok('integration bulk bar shows only Ignore', (await p.locator('#int-bulk button').allInnerTexts()).map(t=>t.trim()).join('/')==='Ignore');
+    ok('integration column has a select-all', await p.locator('#int-head [data-selall="int"]').isVisible());
+    await p.locator('#int-head [data-selall="int"]').check(); await p.waitForTimeout(200);
+    ok('integration bulk row appears', await p.locator('#int-bulk').isVisible());
+    ok('integration bulk row replaces its header row', !(await p.locator('#int-head').isVisible()));
+    ok('integration bulk row is in its thead', await p.evaluate(()=>
+      document.getElementById('int-bulk').closest('thead')!==null));
+    ok('integration bulk row shows only Ignore', (await p.locator('#int-bulk button').allInnerTexts()).map(t=>t.trim()).join('/')==='Ignore');
     ok('integration bulk count', (await txt('#int-bulk-count'))==='4 selected');
     await p.locator('#int-bulk-ignore').click(); await p.waitForTimeout(300);
     ok('bulk ignore empties the integration column', await p.locator('#int-empty').isVisible());
-    ok('integration bulk bar goes away', !(await p.locator('#int-bulk').isVisible()));
+    ok('integration bulk row goes away and the header comes back', !(await p.locator('#int-bulk').isVisible()) && await vis('#int-head'));
     await p.locator('#bulk-create').click(); await p.waitForTimeout(250);
     ok('partial-block modal', (await txt('#modal-title')).includes("Some transactions can"));
     ok('names the remaining count', (await txt('#modal-body')).includes('Proceed with the remaining 5 transactions?'));
