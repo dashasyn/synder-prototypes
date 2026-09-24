@@ -870,14 +870,19 @@ const fs = require('fs');
     /rgba\(0, 0, 0, 0\)|transparent/.test(card3.schedBg), card3.schedBg);
 
   ok('the notification block is there', !!(await page.$('#notify-section')));
-  ok('it offers an e-mail address', !!(await page.$('#notify-email')));
-  const emailOn = await page.$eval('#notify-email', e => e.disabled);
+  /* Ignat, 2026-09-24: "same logic as for schedules: if checked show input,
+     if unchecked hide input". Visibility, not disabled-state. */
+  ok('notification starts ticked and shows its address',
+    await page.isVisible('#notify-email'));
+  await page.fill('#notify-email', 'me@etc.ch');
   await page.click('#notify-checkbox');
   await page.waitForTimeout(350);
-  ok('turning notification off disables the address field',
-    emailOn === false && (await page.$eval('#notify-email', e => e.disabled)) === true);
+  ok('unticking notification hides the address field', !(await page.$('#notify-email')));
   await page.click('#notify-checkbox');
   await page.waitForTimeout(350);
+  ok('ticking it again shows the field with the address kept',
+    await page.isVisible('#notify-email')
+      && (await page.$eval('#notify-email', e => e.value)) === 'me@etc.ch');
 
   ok('the scheduled-report block is there', !!(await page.$('#schedule-checkbox')));
   ok('the frequency fields stay hidden until it is switched on',
@@ -902,6 +907,22 @@ const fs = require('fs');
     !!(await page.$('#daily-time-select')) && !(await page.$('#sched-days-row')));
   ok('each frequency explains when the data is available',
     (await page.textContent('#freq-hint')).length > 10);
+
+  /* Ignat, 2026-09-24: "the smallest font size 14px (body2)". Every visible
+     text node in the card, fields open. Chips and buttons are MUI's own 13px
+     and are not prose, so they are left out — and listed if that changes. */
+  const tiny = await page.evaluate(() => {
+    const out = [];
+    const w = document.createTreeWalker(document.getElementById('run-card'), NodeFilter.SHOW_TEXT);
+    let n;
+    while ((n = w.nextNode())) {
+      const el = n.parentElement, txt = n.textContent.replace(/\u200b/g, '').trim();
+      if (!txt || !el.offsetParent || el.closest('.MuiChip-root, .MuiButton-root, .material-icons')) continue;
+      if (parseFloat(getComputedStyle(el).fontSize) < 14) out.push(txt.slice(0, 30) + ' @' + getComputedStyle(el).fontSize);
+    }
+    return out;
+  });
+  ok('nothing in Schedule & notification is smaller than 14px', tiny.length === 0, tiny);
 
   /* Ignat, 2026-09-22: "Time Period. Last week (previous full week Mon - Sun)"
      and "move the blocks to the center". */

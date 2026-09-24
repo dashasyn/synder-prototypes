@@ -662,7 +662,7 @@ function TypeDialog({ open, onClose, onPick }) {
             <${Icon} sx=${{ fontSize: 22, color: 'primary.main' }}>${x.icon}<//>
             <${Box}>
               <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${t('type_' + x.key)}<//>
-              <${Typography} variant="caption" color="text.secondary" display="block">
+              <${Typography} variant="body2" color="text.secondary">
                 ${t('type_' + x.key + '_desc')}<//>
             <//>
           <//>`)}
@@ -964,9 +964,12 @@ function NewEvaluation({ go, initialType }) {
                     disabled=${period === 'custom'}
                     onChange=${e => setScheduled(e.target.checked)} />`}
                   label=${html`
+                    ${/* Ignat, 2026-09-24: "These texts are very small. Please make
+                          the smallest font size 14px (body2)." The label steps up to
+                          body1 so it still reads above its note. */''}
                     <${Box} sx=${{ pt: 1 }}>
-                      <${Typography} variant="subtitle2">${t('schedule_label')}<//>
-                      <${Typography} variant="caption" color="text.secondary" display="block">
+                      <${Typography} variant="body1" sx=${{ fontWeight: 500 }}>${t('schedule_label')}<//>
+                      <${Typography} variant="body2" color="text.secondary">
                         ${t('schedule_note')}<//>
                     <//>`} />
 
@@ -994,7 +997,7 @@ function NewEvaluation({ go, initialType }) {
 
                     ${freq === 'weekly' && html`
                       <${Box} id="freq-options-weekly">
-                        <${Typography} variant="caption" color="text.secondary" display="block"
+                        <${Typography} variant="body2" color="text.secondary"
                           sx=${{ mb: .5 }}>${t('schedule_run_on')}<//>
                         <${Stack} direction="row" spacing=${1} id="sched-days-row"
                                   flexWrap="wrap" useFlexGap>
@@ -1055,8 +1058,8 @@ function NewEvaluation({ go, initialType }) {
 
                   <${Stack} direction="row" spacing=${.75} alignItems="center" sx=${{ mt: 1.5 }}
                             id="freq-hint">
-                    <${Icon} sx=${{ fontSize: 14, color: 'text.secondary' }}>info<//>
-                    <${Typography} variant="caption" color="text.secondary">
+                    <${Icon} sx=${{ fontSize: 18, color: 'text.secondary' }}>info<//>
+                    <${Typography} variant="body2" color="text.secondary">
                       ${t('hint_' + freq)}<//>
                   <//>
                 <//>`}
@@ -1064,17 +1067,24 @@ function NewEvaluation({ go, initialType }) {
 
               <${Divider} sx=${{ my: 2 }} />
 
-              <${Stack} direction="row" spacing=${2} alignItems="flex-start" id="notify-section">
-                <${FormControlLabel} sx=${{ alignItems: 'flex-start', m: 0, flex: 1 }}
+              ${/* Ignat, 2026-09-24: "Let's make the same logic as for
+                    schedules: if checked show input, if unchecked hide input."
+                    It used to stay on screen, disabled. The address is kept in
+                    state, so unticking and ticking again brings it back. */''}
+              <${Box} id="notify-section">
+                <${FormControlLabel} sx=${{ alignItems: 'flex-start', m: 0 }}
                   control=${html`<${Checkbox} id="notify-checkbox" checked=${notify}
                     onChange=${e => setNotify(e.target.checked)} />`}
                   label=${html`
                     <${Box} sx=${{ pt: 1 }}>
-                      <${Typography} variant="subtitle2">${t('notify_label')}<//>
-                      <${TextField} id="notify-email" type="email" size="small"
-                        sx=${{ minWidth: 280, mt: 1 }} value=${email} disabled=${!notify}
-                        onChange=${e => setEmail(e.target.value)} />
+                      <${Typography} variant="body1" sx=${{ fontWeight: 500 }}>${t('notify_label')}<//>
                     <//>`} />
+                ${notify && html`
+                  <${Box} id="notify-fields" sx=${{ mt: 2 }}>
+                    <${TextField} id="notify-email" type="email"
+                      sx=${{ minWidth: 280 }} value=${email}
+                      onChange=${e => setEmail(e.target.value)} />
+                  <//>`}
               <//>
             <//>
           <//>
