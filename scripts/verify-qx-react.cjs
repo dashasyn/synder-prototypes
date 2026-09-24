@@ -684,21 +684,52 @@ const fs = require('fs');
   ok('the generated name names the type and the period',
     /nktlich|unctual/i.test(gen) && /month|Monat/i.test(gen), gen);
 
-  // the five scope filters carry real, distinct option sets
-  const scope = await page.evaluate(() => {
-    const ids = ['f-modes', 'f-tu', 'f-cantons', 'f-lines', 'f-stops'];
-    return ids.map(id => !!document.getElementById(id));
-  });
-  ok('all five scope filters are there', scope.every(Boolean), scope);
+  /* ── scope filters: the vanilla's six, as autocompletes, cascading ──
+     Ignat, 2026-09-24: "Filters depend on each other. If you select something
+     in the first, the possible options in the second will change" and
+     "Filters should have autocomplete". The cascade is updateCascade(); the
+     expected option sets below are computed from DATA in the page, never typed
+     here, so they cannot drift from the vanilla's data. */
+  const SCOPE = ['f-rpv', 'f-modes', 'f-cantons', 'f-tu', 'f-lines', 'f-stops'];
+  const scope = await page.evaluate(ids => ids.map(id => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { top: Math.round(r.top), left: Math.round(r.left),
+             auto: !!el.closest('.MuiAutocomplete-root') };
+  }), SCOPE);
+  ok('all six scope filters are there, Transport Association included',
+    scope.every(Boolean), scope);
+  ok('every scope filter is an autocomplete', scope.every(x => x && x.auto), scope);
+  ok('they sit in the vanilla\'s order, which is the order of the cascade',
+    scope.every((x, i) => i === 0 || x.top > scope[i - 1].top
+      || (x.top === scope[i - 1].top && x.left > scope[i - 1].left)), scope);
 
-  const optionsOf = async id => {
-    await page.click(`#${id} .MuiSelect-select`);
-    await page.waitForTimeout(300);
-    const opts = await page.$$eval('.MuiMenu-list li', e => e.map(x => x.textContent.trim()));
-    await page.keyboard.press('Escape');
+  const optionsOf = async (id, q = '') => {
+    await page.click('#' + id);
+    if (q) await page.fill('#' + id, q);
     await page.waitForTimeout(250);
+    // MUI renders "no options" outside the listbox, in its own div
+    const opts = await page.$$eval(`#${id}-listbox li, .MuiAutocomplete-noOptions`,
+      e => e.map(x => x.textContent.trim()));
+    if (q) await page.fill('#' + id, '');
+    await page.keyboard.press('Escape');
+    await page.click('#page-header');
+    await page.waitForTimeout(200);
     return opts;
   };
+  const pick = async (id, text) => {
+    await page.click('#' + id);
+    await page.fill('#' + id, text);
+    await page.waitForTimeout(250);
+    await page.click(`#${id}-listbox li >> nth=0`);
+    await page.keyboard.press('Escape');
+    await page.click('#page-header');
+    await page.waitForTimeout(250);
+  };
+  const chipsOf = id => page.$eval('#' + id, el =>
+    [...el.closest('.MuiAutocomplete-root').querySelectorAll('.MuiChip-label')].map(c => c.textContent));
+
   const tuOpts = await optionsOf('f-tu');
   const cantonOpts = await optionsOf('f-cantons');
   const lineOpts = await optionsOf('f-lines');
@@ -709,31 +740,68 @@ const fs = require('fs');
   ok('lines are line numbers, not company names',
     lineOpts.length > 10 && !lineOpts.some(c => /^SBB|^BLS/.test(c)), lineOpts.slice(0, 3));
 
-  // picking a TU cascades into the lines on offer, as renderLinesOptions does
-  await page.click('#f-tu .MuiSelect-select');
-  await page.waitForTimeout(300);
-  await page.click('.MuiMenu-list li:first-child');
-  await page.waitForTimeout(300);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  // autocomplete: typing narrows, and matches the canton's name as well as its code
+  const byName = await optionsOf('f-cantons', 'zür');
+  const byCode = await optionsOf('f-cantons', 'TI');
+  ok('typing narrows a filter — by canton name', byName.length === 1 && /^ZH/.test(byName[0]), byName);
+  ok('typing narrows a filter — by canton code', byCode.some(o => /^TI/.test(o)) && byCode.length < 26, byCode);
+  const noHit = await optionsOf('f-lines', 'zzzz');
+  ok('no match says so rather than showing an empty list',
+    noHit.length === 1 && /no matches|keine treffer/i.test(noHit[0]), noHit);
+
+  // TU → lines, as renderLinesOptions does
+  await pick('f-tu', 'BLS');
   const linesAfterTu = await optionsOf('f-lines');
   ok('choosing a transport company narrows the lines on offer',
-    linesAfterTu.length < lineOpts.length && linesAfterTu.length > 0,
+    linesAfterTu.length === (await page.evaluate(() => DATA.tuLines.BLS.length)),
     { before: lineOpts.length, after: linesAfterTu.length });
+  ok('a choice shows as a short chip', (await chipsOf('f-tu')).join() === 'BLS', await chipsOf('f-tu'));
 
   // and the generated name follows the filters
   const nameAfter = await nameAt();
   ok('the generated name follows the filters', nameAfter !== gen, { gen, nameAfter });
 
+  // RPV → cantons and RPV → TU; BLS is not in Tarifverbund A, so it is dropped
+  await pick('f-rpv', 'Tarifverbund A');
+  const expA = await page.evaluate(() => DATA.rpv['Tarifverbund A']);
+  const cantonsA = await optionsOf('f-cantons');
+  const tuA = await optionsOf('f-tu');
+  ok('an RPV narrows the cantons to its own',
+    cantonsA.length === expA.cantons.length
+      && cantonsA.every(c => expA.cantons.includes(c.slice(0, 2))), cantonsA);
+  ok('an RPV narrows the transport companies to its own',
+    tuA.length === expA.tu.length, { got: tuA, want: expA.tu });
+  ok('a transport company outside the RPV is dropped, not left filtering',
+    (await chipsOf('f-tu')).length === 0, await chipsOf('f-tu'));
+  ok('and its lines come back with it',
+    (await optionsOf('f-lines')).length === lineOpts.length);
+
+  // mode → TU: the intersection updateCascade() computes
+  await pick('f-modes', 'Tram');
+  const wantTram = await page.evaluate(() => DATA.rpv['Tarifverbund A'].tu
+    .filter(x => DATA.modes['vm-tram'].includes(x)));
+  const tuTram = await optionsOf('f-tu');
+  ok('a transport mode narrows the transport companies further',
+    tuTram.length === wantTram.length && tuTram.length < tuA.length, { got: tuTram, want: wantTram });
+
+  // a canton that falls out of the RPV is dropped too — the vanilla only hid it
+  await page.click('#f-rpv');
+  await page.keyboard.press('Backspace');       // remove Tarifverbund A
+  await page.keyboard.press('Escape');
+  await page.click('#page-header');
+  await page.waitForTimeout(200);
+  await pick('f-cantons', 'Bern');
+  await pick('f-rpv', 'Tarifverbund A');
+  // Read the summary, not the chips: a canton missing from the options has no
+  // chip either way, so chips pass whether or not it is still filtering.
+  const sumAfterRpv = await page.textContent('#summary-filters');
+  ok('a canton outside the chosen RPV is dropped, not hidden and still filtering',
+    (await chipsOf('f-cantons')).length === 0 && !/\bBE\b/.test(sumAfterRpv), sumAfterRpv);
+
   // typing in the name stops it following, as nameManuallyEdited does
   await page.fill('#eval-name', 'My own name');
   await page.waitForTimeout(200);
-  await page.click('#f-cantons .MuiSelect-select');
-  await page.waitForTimeout(300);
-  await page.click('.MuiMenu-list li:first-child');
-  await page.waitForTimeout(300);
-  await page.keyboard.press('Escape');
-  await page.waitForTimeout(300);
+  await pick('f-cantons', 'ZH');
   ok('editing the name stops it being regenerated',
     (await nameAt()) === 'My own name', await nameAt());
 
@@ -770,6 +838,7 @@ const fs = require('fs');
       notiIsSwitch: !!noti.closest('.MuiSwitch-root'),
       schedFirst: box(sched).top < box(noti).top,
       schedHighlighted: !!document.getElementById('schedule-block'),
+      schedBg: getComputedStyle(document.getElementById('schedule-block')).backgroundColor,
     };
   });
   ok('the card is no longer called "Run"', !/^run$/i.test(card3.title), card3.title);
@@ -779,7 +848,10 @@ const fs = require('fs');
     card3.notiIsCheckbox && !card3.notiIsSwitch, card3);
   ok('the schedule is a checkbox too', card3.schedIsCheckbox);
   ok('the schedule comes first, where the weight belongs', card3.schedFirst, card3);
-  ok('and it sits in its own highlighted block', card3.schedHighlighted);
+  ok('schedule has its own block', card3.schedHighlighted);
+  // Ignat, 2026-09-24: "Remove grey background from Setup schedule."
+  ok('the schedule block carries no background tint',
+    /rgba\(0, 0, 0, 0\)|transparent/.test(card3.schedBg), card3.schedBg);
 
   ok('the notification block is there', !!(await page.$('#notify-section')));
   ok('it offers an e-mail address', !!(await page.$('#notify-email')));

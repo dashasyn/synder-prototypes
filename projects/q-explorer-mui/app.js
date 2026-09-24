@@ -19,7 +19,7 @@ const {
   Stack, FormControl, InputLabel, Select, InputAdornment, Alert, Tooltip,
   Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
   Snackbar, Checkbox, ListItemText, OutlinedInput, ToggleButton, ToggleButtonGroup,
-  FormControlLabel, Divider,
+  FormControlLabel, Divider, Autocomplete, createFilterOptions,
 } = M;
 const Fragment = React.Fragment;
 
@@ -605,26 +605,36 @@ const fmtSwiss = v => {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : v;
 };
 
-function ScopeSelect({ id, label, values, options, onChange, minWidth = 210 }) {
+/* Ignat, 2026-09-24: "Filters should have autocomplete." Type to narrow,
+   tick several, each choice a chip. Search matches the code and the name, as
+   the vanilla's canton search does (code.includes(q) || name.includes(q)).
+   `chip` is the short form shown once chosen — "SBB", "ZH" — so two choices
+   still fit the field. */
+const scopeFilter = createFilterOptions({ stringify: o => o.id + ' ' + o.label });
+
+function ScopeSelect({ id, label, values, options, onChange, renderLabel }) {
   const { t } = useT();
-  const labelId = id + '-label';
+  const byId = useMemo(() => new Map(options.map(o => [o.id, o])), [options]);
+  const value = values.map(v => byId.get(v)).filter(Boolean);
   return html`
-    <${FormControl} sx=${{ minWidth }} id=${id}>
-      <${InputLabel} id=${labelId}>${label}<//>
-      <${Select} multiple labelId=${labelId} label=${label} value=${values}
-        onChange=${e => onChange(typeof e.target.value === 'string'
-                                  ? e.target.value.split(',') : e.target.value)}
-        renderValue=${v => v.length > 2 ? `${v.length} ${t('selected_word')}` : v.join(', ')}
-        MenuProps=${{ PaperProps: { sx: { maxHeight: 320 } } }}>
-        ${options.length === 0 && html`
-          <${MenuItem} disabled value="">${t('no_options')}<//>`}
-        ${options.map(o => html`
-          <${MenuItem} key=${o.id} value=${o.id}>
-            <${Checkbox} size="small" checked=${values.indexOf(o.id) > -1} />
-            <${ListItemText} primary=${o.label} />
-          <//>`)}
-      <//>
-    <//>`;
+    <${Autocomplete} multiple disableCloseOnSelect id=${id} size="small"
+      options=${options} value=${value} limitTags=${2}
+      filterOptions=${scopeFilter}
+      isOptionEqualToValue=${(o, v) => o.id === v.id}
+      getOptionLabel=${o => o.chip || o.label}
+      noOptionsText=${options.length ? t('no_matches') : t('no_options')}
+      onChange=${(e, v) => onChange(v.map(o => o.id))}
+      ListboxProps=${{ style: { maxHeight: 320 } }}
+      renderOption=${(props, o, { selected }) => {
+        const { key, ...rest } = props;
+        return html`
+          <li key=${o.id} ...${rest}>
+            <${Checkbox} size="small" checked=${selected} sx=${{ mr: 1, ml: -1 }} />
+            ${renderLabel ? renderLabel(o) : o.label}
+          </li>`;
+      }}
+      renderInput=${params => html`
+        <${TextField} ...${params} variant="filled" label=${label} />`} />`;
 }
 
 /**
@@ -700,6 +710,7 @@ function NewEvaluation({ go, initialType }) {
   const [to, setTo] = useState('');
   // The vanilla's day buttons all start .active — every weekday included.
   const [days, setDays] = useState([...ALL_DAYS]);
+  const [rpv, setRpv] = useState([]);
   const [modes, setModes] = useState([]);
   const [tu, setTu] = useState([]);
   const [cantons, setCantons] = useState([]);
@@ -722,18 +733,46 @@ function NewEvaluation({ go, initialType }) {
   // validateCustomRange(): the end date must not precede the start.
   const rangeReversed = period === 'custom' && !!from && !!to && from > to;
 
-  /* Lines and stops cascade off the chosen transport companies, as
-     renderLinesOptions() does — with no TU picked it offers every line. */
+  /* The cascade — Ignat, 2026-09-24: "Filters depend on each other. If you
+     select something in the first, the possible options in the second will
+     change." That is the vanilla's updateCascade(), and the port had only its
+     last link (TU → lines). It also never had the first filter at all: the
+     Transport Association (RPV), which is what the rest of the chain hangs off.
+
+       RPV            → cantons        (renderCantonOptions: DATA.rpv[r].cantons)
+       RPV · mode · canton → TU        (updateCascade: intersection of all three)
+       TU             → lines          (renderLinesOptions: DATA.tuLines)
+
+     Stops depend on nothing, because the vanilla has no line→stop data — only
+     a flat DATA.allStops. Narrowing them would mean inventing that mapping. */
+  const rpvOptions = Object.keys(DATA.rpv).map(x => ({ id: x, label: x }));
+  const modeOptions = FLAT_MODES.map(m => ({ id: m.id, label: m.label }));
+  const cantonOptions = useMemo(() => {
+    const allowed = rpv.length ? new Set(rpv.flatMap(r => (DATA.rpv[r] || { cantons: [] }).cantons)) : null;
+    return ALL_CANTONS.filter(c => !allowed || allowed.has(c))
+      .map(c => ({ id: c, label: CANTON_NAMES[c] || c, chip: c }));
+  }, [rpv]);
+  const tuOptions = useMemo(() => {
+    let allowed = new Set(ALL_TU.map(x => x.id));
+    const keep = ids => { allowed = new Set([...allowed].filter(id => ids.has(id))); };
+    if (rpv.length) keep(new Set(rpv.flatMap(r => (DATA.rpv[r] || { tu: [] }).tu)));
+    if (modes.length) {
+      const casc = new Set(FLAT_MODES.filter(m => modes.includes(m.id)).map(m => m.cascade));
+      keep(new Set([...casc].flatMap(m => DATA.modes[m] || [])));
+    }
+    if (cantons.length) {
+      const ids = new Set(cantons.flatMap(c => DATA.cantonTU[c] || []));
+      if (ids.size) keep(ids);   // a canton with no TU data narrows nothing, as there
+    }
+    return ALL_TU.filter(x => allowed.has(x.id)).map(x => ({ id: x.id, label: x.label, chip: x.id }));
+  }, [rpv, modes, cantons]);
   const lineOptions = useMemo(() => {
     const src = tu.length ? tu.flatMap(id => DATA.tuLines[id] || [])
                           : Object.values(DATA.tuLines).flat();
     return [...new Set(src)].sort().map(x => ({ id: x, label: x }));
   }, [tu]);
   const stopOptions = useMemo(() =>
-    (DATA.allStops || []).map(x => ({ id: x, label: x })), []);
-  const tuOptions = ALL_TU.map(x => ({ id: x.id, label: x.label }));
-  const cantonOptions = ALL_CANTONS.map(c => ({ id: c, label: (CANTON_NAMES[c] || c) }));
-  const modeOptions = FLAT_MODES.map(m => ({ id: m.id, label: m.label }));
+    [...(DATA.allStops || [])].sort().map(x => ({ id: x, label: x })), []);
 
   /* updateAutoName(): "<type> – <period>, <filters>", and it stops following
      the form the moment the name is edited by hand. */
@@ -756,10 +795,18 @@ function NewEvaluation({ go, initialType }) {
   // The generated name lands in the field; typing in it takes over.
   React.useEffect(() => { if (!nameEdited) setName(autoName); }, [autoName, nameEdited]);
 
-  // Dropping a TU drops the lines that belonged only to it.
-  React.useEffect(() => {
-    setLines(l => l.filter(x => lineOptions.some(o => o.id === x)));
-  }, [lineOptions]);
+  /* A choice that falls out of its list is dropped, all the way down: pick
+     an RPV and a canton outside it goes, then the TUs that only served it,
+     then their lines. The vanilla does this for TUs ("auto-uncheck TUs that
+     became disallowed") and lines; for cantons it only hid them and kept them
+     selected, so a hidden canton went on filtering. Dropped here too. */
+  const prune = (set, opts) => set(v => {
+    const next = v.filter(x => opts.some(o => o.id === x));
+    return next.length === v.length ? v : next;
+  });
+  React.useEffect(() => prune(setCantons, cantonOptions), [cantonOptions]);
+  React.useEffect(() => prune(setTu, tuOptions), [tuOptions]);
+  React.useEffect(() => prune(setLines, lineOptions), [lineOptions]);
 
 
   return html`
@@ -842,13 +889,21 @@ function NewEvaluation({ go, initialType }) {
               <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
                 ${t('step2_subtitle')}
               <//>
-              <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+              ${/* The vanilla's order, which is also the order of the cascade:
+                    each filter narrows the ones after it. */''}
+              <${Box} id="scope-filters" sx=${{ display: 'grid', gap: 2,
+                        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+                <${ScopeSelect} id="f-rpv" label=${t('filter_transport_assoc')}
+                  values=${rpv} options=${rpvOptions} onChange=${setRpv} />
                 <${ScopeSelect} id="f-modes" label=${t('filter_transport_mode')}
                   values=${modes} options=${modeOptions} onChange=${setModes} />
+                <${ScopeSelect} id="f-cantons" label=${t('filter_cantons')}
+                  values=${cantons} options=${cantonOptions} onChange=${setCantons}
+                  renderLabel=${o => html`
+                    <${Box} component="span" sx=${{ fontWeight: 500, minWidth: 32 }}>${o.id}<//>
+                    <${Box} component="span" sx=${{ color: 'text.secondary' }}>${o.label}<//>`} />
                 <${ScopeSelect} id="f-tu" label=${t('filter_tu')}
                   values=${tu} options=${tuOptions} onChange=${setTu} />
-                <${ScopeSelect} id="f-cantons" label=${t('filter_cantons')}
-                  values=${cantons} options=${cantonOptions} onChange=${setCantons} />
                 <${ScopeSelect} id="f-lines" label=${t('filter_lines')}
                   values=${lines} options=${lineOptions} onChange=${setLines} />
                 <${ScopeSelect} id="f-stops" label=${t('filter_stops')}
@@ -858,11 +913,13 @@ function NewEvaluation({ go, initialType }) {
               ${/* the vanilla's summary-filters row: what the run will cover */''}
               <${Divider} sx=${{ my: 2 }} />
               <${Typography} variant="body2" color="text.secondary" id="summary-filters">
-                ${periodLabel}${tu.length ? ' · ' + tu.join(', ') : ''}
+                ${periodLabel}${rpv.length ? ' · RPV: ' + rpv.join(', ') : ''}
+                ${modes.length ? ' · ' + FLAT_MODES.filter(m => modes.includes(m.id)).map(m => m.label).join(', ') : ''}
+                ${tu.length ? ' · ' + tu.join(', ') : ''}
                 ${cantons.length ? ' · ' + t('canton_label') + ' ' + cantons.join(', ') : ''}
                 ${lines.length ? ' · ' + lines.length + ' ' + t('filter_lines') : ''}
                 ${stops.length ? ' · ' + stops.length + ' ' + t('filter_stops') : ''}
-                ${!tu.length && !cantons.length && !lines.length && !stops.length
+                ${!rpv.length && !modes.length && !tu.length && !cantons.length && !lines.length && !stops.length
                   ? ' · ' + t('all_lines') : ''}
               <//>
             <//>
@@ -884,8 +941,10 @@ function NewEvaluation({ go, initialType }) {
             <${CardContent}>
               <${Typography} variant="h6" gutterBottom>${t('step_schedule_notify')}<//>
 
-              <${Box} id="schedule-block"
-                sx=${{ p: 2, mb: 2, borderRadius: 1, bgcolor: 'action.hover' }}>
+              ${/* Ignat, 2026-09-24: "Remove grey background from Setup
+                    schedule." Schedule still leads the card; it is the order
+                    and the heading that carry it, not a tint. */''}
+              <${Box} id="schedule-block" sx=${{ mb: 2 }}>
                 <${FormControlLabel} sx=${{ alignItems: 'flex-start', m: 0 }}
                   control=${html`<${Checkbox} id="schedule-checkbox" checked=${scheduled}
                     disabled=${period === 'custom'}
