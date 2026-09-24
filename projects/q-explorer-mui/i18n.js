@@ -163,6 +163,7 @@ var translations = {
       selected_word: 'selected',
       no_options: 'Pick a transport company first',
       no_matches: 'No matches',
+      name_reset: 'Reset to generated name',
       /* The vanilla's login card is hardcoded German and ignores the language
          toggle entirely — a real defect in it, not a decision. Carried here as
          keys so the port's login follows the chosen language. */
@@ -658,6 +659,7 @@ var translations = {
       selected_word: 'ausgewählt',
       no_options: 'Zuerst ein Transportunternehmen wählen',
       no_matches: 'Keine Treffer',
+      name_reset: 'Auf generierten Namen zurücksetzen',
       login_title: 'Anmelden',
       login_subtitle: 'QMS RPV CH · Q-Explorer',
       login_email: 'E-Mail',

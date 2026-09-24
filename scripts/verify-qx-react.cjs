@@ -805,6 +805,22 @@ const fs = require('fs');
   ok('editing the name stops it being regenerated',
     (await nameAt()) === 'My own name', await nameAt());
 
+  /* Ignat, 2026-09-24: a way back to the generated name once it is edited. */
+  await page.fill('#eval-name', '');
+  await page.fill('#eval-name', 'My own name');
+  await page.waitForTimeout(150);
+  ok('an edited name offers a reset', await page.isVisible('#name-reset'));
+  await page.click('#name-reset');
+  await page.waitForTimeout(200);
+  const resetTo = await nameAt();
+  ok('reset brings back the generated name', resetTo !== 'My own name'
+    && /nktlich|unctual/i.test(resetTo) && /\bZH\b/.test(resetTo), resetTo);
+  ok('and the reset hides itself once the name is generated again',
+    !(await page.$('#name-reset')));
+  await pick('f-cantons', 'Aargau');   // inside Tarifverbund A, still selected
+  ok('after a reset the name follows the filters again',
+    /\bAG\b/.test(await nameAt()), await nameAt());
+
   /* ── the Run card: notification and scheduling ────────────────────
      Ignat, 2026-09-17: "You lost notification block", "you lost Setup
      scheduled report part". Both were never ported — the page stopped after

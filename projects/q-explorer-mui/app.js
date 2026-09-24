@@ -834,7 +834,21 @@ function NewEvaluation({ go, initialType }) {
                       stops overwriting it. I had the flag and the effect but
                       nothing ever set it, so a hand-written name was wiped by
                       the next filter change. */''}
-                onChange=${e => { setNameEdited(true); setName(e.target.value); }} />
+                onChange=${e => { setNameEdited(true); setName(e.target.value); }}
+                ${/* Ignat, 2026-09-24: "If the user manually changes the name, we
+                      should show reset... a button which will return the default
+                      name." Shown only once the name has left the generated one;
+                      clicking hands the field back to the generator, which then
+                      follows the filters again. */''}
+                InputProps=${{ endAdornment: nameEdited && name !== autoName ? html`
+                  <${InputAdornment} position="end">
+                    <${Tooltip} title=${t('name_reset')}>
+                      <${IconButton} id="name-reset" aria-label=${t('name_reset')} edge="end"
+                        onClick=${() => { setNameEdited(false); setName(autoName); }}>
+                        <${Icon}>restart_alt<//>
+                      <//>
+                    <//>
+                  <//>` : null }} />
             <//>
           <//>
         <//>
