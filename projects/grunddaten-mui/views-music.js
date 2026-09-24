@@ -59,9 +59,34 @@ function MusStateChip({ cls, label }) {
    a segmented kind switch, a pair of date fields, the weekly grid — still
    needs the name the vanilla gave it. */
 function MusFieldLabel({ text, required, sx }) {
+  // Ignat, 2026-09-23: "subheaders (ie Kind of source *) look very small and
+  // pale. Make them Subheader1 (16px) and black." caption/text.secondary was
+  // 12px at 60% black; subtitle1 is 16px and this takes the full text colour.
   return html`
-    <${Typography} variant="caption" color="text.secondary"
-      sx=${{ display: 'block', mb: .75, ...(sx || {}) }}>${text}${required ? ' *' : ''}<//>`;
+    <${Typography} variant="subtitle1" color="text.primary"
+      sx=${{ display: 'block', fontWeight: 500, mb: 1, ...(sx || {}) }}>${text}${required ? ' *' : ''}<//>`;
+}
+
+/**
+ * A date field that can be emptied again. Ignat, 2026-09-23: "add clear option
+ * (cross) for date picker. At the moment it is not clear how to clear the end
+ * date." A native date input gives no way back to blank once a date is set —
+ * the only route was selecting the text and deleting it.
+ *
+ * The ✕ sits before Chrome's own calendar button and only renders when there
+ * is something to clear, which is the same rule FilterSelect uses.
+ */
+function MusDateField({ id, label, value, required, onChange }) {
+  return html`
+    <${TextField} id=${id} type="date" label=${label} required=${!!required} value=${value || ''}
+      InputLabelProps=${{ shrink: true }}
+      InputProps=${{ endAdornment: value ? html`
+        <${InputAdornment} position="end" sx=${{ mr: .5 }}>
+          <${IconButton} aria-label=${'Clear ' + label} onClick=${() => onChange('')}>
+            <${Icon} sx=${{ fontSize: 18 }}>close<//>
+          <//>
+        <//>` : null }}
+      onChange=${e => onChange(e.target.value)} />`;
 }
 
 function MusHint({ text, sx }) {
@@ -203,15 +228,35 @@ function musEvValidate(d) {
   return null;
 }
 
+/**
+ * Ignat, 2026-09-23: "search should work only per station, not per line. The
+ * user sees the line." The extracted evMatches() also matches a line id, so
+ * typing "U2" returned every event touching U2 — a different question from the
+ * one the field asks. This is the port's own rule rather than an edit to
+ * data.js, which is generated and would lose it on the next resync.
+ */
+function evMatchesStation(ev, q) {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  if (ev.name.toLowerCase().includes(needle)) return true;
+  return ev.stationIds.some(id => {
+    const st = getStation(id);
+    return st && st.name.toLowerCase().includes(needle);
+  });
+}
+
 function MusicEventsView() {
   const { s, set, nav, t, bump } = useApp();
   const [delEv, setDelEv] = useState(null);
 
   const q = s.evSearch || '';
-  const list = musicEvents.filter(ev => evMatches(ev, q));
+  const list = musicEvents.filter(ev => evMatchesStation(ev, q));
 
-  const newEvent = () => set({ view: 'musicEvent', evId: null,
-                               evDraft: blankEvent(), evPickSearch: '' });
+  const newEvent = () => {
+    const draft = blankEvent();
+    set({ view: 'musicEvent', evId: null, evDraft: draft,
+          evPristine: JSON.stringify(draft), evPickSearch: '' });
+  };
 
   const doDelete = () => {
     const ev = delEv && getEvent(delEv.id);
@@ -303,7 +348,9 @@ function MusicEventEditView() {
     set({ evDraft: next });
   };
 
-  const cancel = () => { set({ evDraft: null }); nav('music'); };
+  // Exits go through nav(), never straight to set({ evDraft: null }) — the
+  // unsaved-changes guard lives in nav() and a direct reset walks past it.
+  const cancel = () => nav('music');
 
   /* The draft is only written back on save — Cancel discards it. */
   const commit = () => {
@@ -357,11 +404,10 @@ function MusicEventEditView() {
       <${PageHeader}
         crumbs=${[{ label: t('evrMusic'), onClick: cancel }, { label: title }]}
         title=${title}
-        action=${html`
-          <${Stack} direction="row" spacing=${1}>
-            <${Button} variant="outlined" onClick=${cancel}>${t('cancel')}<//>
-            <${Button} variant="contained" id="ev-save" onClick=${save}>${t('evSave')}<//>
-          <//>`} />
+        ${/* Ignat, 2026-09-23: no cancel button. Leaving is the breadcrumb or
+              the top bar, and an unsaved draft is caught by the confirm in
+              app.js rather than by a button that throws work away. */ ''}
+        action=${html`<${Button} variant="contained" id="ev-save" onClick=${save}>${t('evSave')}<//>`} />
 
       <${PageBody}>
         ${err ? html`<${Alert} severity="error" sx=${{ mb: 2 }}>${err}<//>` : null}
@@ -374,20 +420,21 @@ function MusicEventEditView() {
             <${Typography} variant="caption" sx=${{ display: 'block', mt: .5 }}>${t('evOverlapNote')}<//>
           <//>` : null}
 
+        ${/* Ignat, 2026-09-23: name and period on one row, to save vertical
+              space. The group label "Zeitraum von – bis" goes with it — each
+              date field already carries its own floating label, so the only
+              thing it added was a line. */ ''}
         <${SectionCard} title=${t('evBasics')}>
-          <${TextField} id="ev-name" label=${t('evName')} required value=${d.name}
-            sx=${{ minWidth: 320, mb: 2 }}
-            placeholder=${state.lang === 'de' ? 'z.B. Klassik-Radio Vormittag' : 'e.g. Classical radio mornings'}
-            onChange=${e => edit(n => { n.name = e.target.value; })} />
-          <${MusFieldLabel} text=${t('evDateRange')} required />
           <${Stack} direction="row" spacing=${2} alignItems="center" flexWrap="wrap" useFlexGap>
-            <${TextField} id="ev-from" type="date" label=${t('dateFrom')} required value=${d.dateFrom}
-              InputLabelProps=${{ shrink: true }}
-              onChange=${e => edit(n => { n.dateFrom = e.target.value; })} />
+            <${TextField} id="ev-name" label=${t('evName')} required value=${d.name}
+              sx=${{ minWidth: 320 }}
+              placeholder=${state.lang === 'de' ? 'z.B. Klassik-Radio Vormittag' : 'e.g. Classical radio mornings'}
+              onChange=${e => edit(n => { n.name = e.target.value; })} />
+            <${MusDateField} id="ev-from" label=${t('dateFrom')} required value=${d.dateFrom}
+              onChange=${v => edit(n => { n.dateFrom = v; })} />
             <${Typography} color="text.secondary">–<//>
-            <${TextField} id="ev-to" type="date" label=${t('dateTo')} value=${d.dateTo}
-              InputLabelProps=${{ shrink: true }}
-              onChange=${e => edit(n => { n.dateTo = e.target.value; })} />
+            <${MusDateField} id="ev-to" label=${t('dateTo')} value=${d.dateTo}
+              onChange=${v => edit(n => { n.dateTo = v; })} />
           <//>
           <${MusHint} text=${t('evOpenEndHint')} />
         <//>

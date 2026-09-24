@@ -139,6 +139,16 @@ function Shell() {
           <${PageBody}><${Alert} severity="error">Unknown view: ${s.view}<//><//>`}
       <//>
 
+      ${/* Unsaved changes. Reached from the breadcrumb and from the top bar,
+            because both are ways out of a draft that only Save writes back. */ ''}
+      <${ConfirmDialog} open=${!!s.pendingNav}
+        title=${state.lang === 'de' ? 'Änderungen verwerfen?' : 'Discard changes?'}
+        body=${state.lang === 'de'
+          ? 'Das Event wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
+          : 'This event has unsaved changes. Leaving the page will discard them.'}
+        confirmLabel=${state.lang === 'de' ? 'Verwerfen' : 'Discard'}
+        onConfirm=${app.confirmLeave} onClose=${app.cancelLeave} />
+
       <${Snackbar} open=${!!app.toastMsg} autoHideDuration=${2400} onClose=${app.clearToast}
         message=${app.toastMsg} anchorOrigin=${{ vertical: 'bottom', horizontal: 'center' }} />
     <//>`;
@@ -156,18 +166,52 @@ function Root() {
 
   const set = useCallback(patch => setS(prev => ({ ...prev, ...patch })), []);
 
+  /**
+   * Ignat, 2026-09-23: "add a confirmation modal if the user wants to leave
+   * without saving." The draft lives in memory until Save writes it back, so
+   * every exit from the editor — the breadcrumb, the top-bar menus — has to
+   * pass this. The navigation is held in pendingNav and replayed if the user
+   * confirms, so the guard cannot silently swallow where they were going.
+   */
+  const isDirty = useCallback(st =>
+    st.view === 'musicEvent' && st.evDraft && st.evPristine !== null
+      && JSON.stringify(st.evDraft) !== st.evPristine, []);
+
   /** The vanilla's navigate(), with the same per-view argument handling. */
   const nav = useCallback((view, id, line) => {
     setS(prev => {
+      if (view !== 'musicEvent' && isDirty(prev)) return { ...prev, pendingNav: { view, id, line } };
       const next = { ...prev, view };
       if (view === 'lineDetail') next.selectedLineId = id || null;
       else if (view === 'playlistDetail') next.plId = id || prev.plId;
       else if (view === 'musicEvent') {
-        if (id !== undefined && id !== null) { next.evId = id; next.evDraft = cloneEvent(getEvent(id)); }
+        if (id !== undefined && id !== null) {
+          next.evId = id;
+          next.evDraft = cloneEvent(getEvent(id));
+          next.evPristine = JSON.stringify(next.evDraft);
+        }
       } else { next.selectedId = id || null; next.selectedLine = line || null; }
+      // leaving the editor clears the draft as well as the guard's snapshot —
+      // by this point either it was clean or the confirm has been accepted
+      if (view !== 'musicEvent') { next.evDraft = null; next.evPristine = null; next.pendingNav = null; }
+      return next;
+    });
+  }, [isDirty]);
+
+  /** Leave anyway: drop the draft, then take the navigation that was held. */
+  const confirmLeave = useCallback(() => {
+    setS(prev => {
+      const go = prev.pendingNav;
+      const next = { ...prev, evDraft: null, evPristine: null, pendingNav: null };
+      if (!go) return next;
+      next.view = go.view;
+      if (go.view === 'lineDetail') next.selectedLineId = go.id || null;
+      else if (go.view === 'playlistDetail') next.plId = go.id || prev.plId;
+      else { next.selectedId = go.id || null; next.selectedLine = go.line || null; }
       return next;
     });
   }, []);
+  const cancelLeave = useCallback(() => setS(prev => ({ ...prev, pendingNav: null })), []);
 
   const setLang = useCallback(l => {
     setLangState(l);
@@ -176,11 +220,11 @@ function Root() {
   }, []);
 
   const value = useMemo(() => ({
-    s, set, nav, t, lang, setLang, rev,
+    s, set, nav, t, lang, setLang, rev, confirmLeave, cancelLeave,
     bump: () => setRev(r => r + 1),
     toast: m => setToastMsg(m),
     toastMsg, clearToast: () => setToastMsg(''),
-  }), [s, lang, rev, toastMsg, set, nav, t, setLang]);
+  }), [s, lang, rev, toastMsg, set, nav, t, setLang, confirmLeave, cancelLeave]);
 
   return html`
     <${ThemeProvider} theme=${theme}>

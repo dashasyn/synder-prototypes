@@ -110,6 +110,8 @@ const INITIAL = {
   plId: null,
   evId: null,
   evDraft: null,
+  evPristine: null,     // JSON of the draft as opened — the dirty check reads this
+  pendingNav: null,     // a navigation held back by the unsaved-changes confirm
   evSearch: '',
   evPickSearch: '',
   txtSel: [],            // display-text ids, survives paging
