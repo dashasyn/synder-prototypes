@@ -1,0 +1,121 @@
+{
+  "validator": "domain",
+  "round": 2,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/txnrecon-setup/finalist-1-sketch.html",
+  "checked": [
+    {
+      "zone": "period",
+      "item": "\"Date range *\" select with presets Last week / Last month / Last quarter / Custom"
+    },
+    {
+      "zone": "period",
+      "item": "Helper \"Last full month — the usual close period\""
+    },
+    {
+      "zone": "period",
+      "item": "Date range tooltip \"Compares transactions dated in this range in QuickBooks and on the platform.\""
+    },
+    {
+      "zone": "period",
+      "item": "Custom range validation: reversed, future-only, and ending-today ranges"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "\"Integration *\" select, \"Select...\" placeholder, clears Account on change"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "\"Account to reconcile *\" optgroups \"Synder accounts (automated data retrieval)\" / \"Synder accounts (manual file upload required)\""
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "Account list includes P&L accounts (Stripe fees, Stripe sales) and bank account (Business Checking)"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "Account tooltip \"Prefer the clearing account tied to this integration connection. P&L accounts (fees, sales) usually aren’t reconcilable here.\""
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "\"Timezone:\" and \"Currency:\" hints"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "PayPal and Shopify clearing accounts placed in the manual group"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "\"Automatic file retrieval Recommended\" card copy \"Synder pulls QuickBooks and Stripe for this period.\""
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Accounting side \"Import method *\" Automated (recommended) / Manual; \"General ledger export from QuickBooks Online\" upload"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Integration side Import method options per integration (Stripe Automated/Assisted/Manual, PayPal Assisted/Manual, Shopify Assisted/Manual)"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Non-clearing account forces both sides to Manual"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Matching rules modal \"Default profile — Primary ID, Amount, Date\" and \"Fuzzy amount ±0.01 · same calendar day\""
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Confirm before clearing uploads \"Switch to automatic retrieval? Uploaded files on this screen will be cleared.\""
+    },
+    {
+      "zone": "states",
+      "item": "Run started status \"Reconciliation started\" and form disabled"
+    }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "Matching rules modal (link in How we get the data)",
+      "finding": "The modal says Date is a match key and requires \"same calendar day\", but the sourced spec says matching is a 3-pass ID cascade on ID + amount and never compares dates.",
+      "user_impact": "An accountant who trusts this modal will expect settlement-lag items (for example a charge on Aug 31 and a QuickBooks entry on Sep 1) to come back unmatched, and may post manual adjusting entries or split the period to work around a rule that doesn't exist.",
+      "suggested_fix": "Make the modal match the engine: list the ID-cascade passes on ID + amount and say outright that dates are not compared; if \"Fuzzy amount ±0.01\" isn't in the spec, remove it or get a source for it.",
+      "evidence": {
+        "quote": "Fuzzy amount ±0.01 · same calendar day",
+        "source": "context.md Domain facts (SET spec Confluence 3701506049): \"Matching is a 3-pass ID cascade on ID + amount. Dates are never compared when matching.\""
+      }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "High",
+      "confidence": 85,
+      "element": "Period > Custom start/end date inputs",
+      "finding": "A custom range that ends today was accepted and the run started, even though the spec says today's date can't be selected; the inputs also have no min or max.",
+      "user_impact": "Running on a day that isn't finished captures a partial set of integration and QuickBooks transactions, so items still in flight show up as false unmatched differences, and that period then blocks any later non-overlapping rerun on the same clearing account.",
+      "suggested_fix": "Set the end-date max to yesterday (today minus 1) and refuse ranges that include today or later, using an inline message that names the rule.",
+      "evidence": {
+        "quote": "range ending today (Sep 1–25)",
+        "source": "context.md Domain facts: \"Today's date cannot be selected.\" (SET spec Confluence 3701506049); statemap controls[] Custom start/end date inputs: started=true, input min=\"\" max=\"\""
+      }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "Medium",
+      "confidence": 75,
+      "element": "Account to reconcile > Shopify optgroup, and Integration Import method for Shopify",
+      "finding": "For Shopify the prototype offers only Assisted and Manual and puts \"Shopify clearing (Synder)\" in the manual-upload group, but the spec gives Shopify Automated and Manual only: no Assisted, and the clearing account should be in the automated group.",
+      "user_impact": "A bookkeeper reconciling the Shopify clearing account is made to export and upload payout files by hand for a source that the spec says can be imported automatically. The Assisted payouts-only path also isn't a spec mode, so what gets compared may differ from production.",
+      "suggested_fix": "Get Ignat's decision on the spec-vs-prototype question, then either give Shopify Automated/Manual with its clearing accounts in the automated group, or record why the spec doesn't apply.",
+      "evidence": {
+        "quote": "Shopify clearing (Synder)",
+        "source": "context.md Domain facts, Modes per spec: \"Shopify: Automated / Manual. The prototype shows Assisted/Manual\"; statemap observations: Shopify accounts all under \"Synder accounts (manual file upload required)\""
+      }
+    }
+  ],
+  "gaps": [
+    "Overlapping periods: no run was tried on the same clearing account with a period that overlaps an existing reconciliation, so the spec rule that same-account periods can't overlap is unverified.",
+    "Retrieval failure states are in not_exercised: nobody checked whether a failed automatic retrieval names the failed precondition (lost QBO authorization, closed period, multi-currency off, missing mapping), as KF-9 asks.",
+    "Vocabulary deviations below the 3-finding cap: the date tooltip says \"on the platform\" (vocabulary.md: Integration, not platform), and the automatic card says \"Synder pulls QuickBooks and Stripe\" (vocabulary.md: Import, not fetch/pull)."
+  ]
+}

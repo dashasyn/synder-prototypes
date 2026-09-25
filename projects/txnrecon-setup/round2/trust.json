@@ -1,0 +1,147 @@
+{
+  "validator": "trust",
+  "round": 2,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/txnrecon-setup/finalist-1-sketch.html (commit 18913e7)",
+  "checked": [
+    {
+      "zone": "header",
+      "item": "Run reconciliation button: before / after the click / after later edits (Running... stays disabled)"
+    },
+    {
+      "zone": "run status",
+      "item": "'Reconciliation started' role=status block vs. the live form values in the other zones"
+    },
+    {
+      "zone": "run status",
+      "item": "Phantom progress: 'We'll update the status when it's ready' has no completion or failure path (retrieval failure is not_exercised)"
+    },
+    {
+      "zone": "period",
+      "item": "Date range select vs. already-uploaded files in 'how we get the data' (the same period dimension)"
+    },
+    {
+      "zone": "period",
+      "item": "Custom start/end inputs: reversed range refused; future-only and ending-today ranges accepted; min/max empty"
+    },
+    {
+      "zone": "period",
+      "item": "Hidden default: Last month preselected and visible in the select, so not hidden"
+    },
+    {
+      "zone": "period",
+      "item": "Date range tooltip 'Compares transactions dated in this range' vs. the matching rules modal"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "Integration change clears the account, files and mode (by design, per the delta)"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "Account change silently clears uploaded files with no confirm or notice, while the toggle path confirms (Theme 3)"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "Account optgroup 'manual file upload required' vs. the Accounting import method showing 'Automated (recommended)' for PayPal/Shopify clearing"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "Account tooltip 'P&L accounts usually aren't reconcilable here' vs. P&L accounts being listed and runnable with no warning"
+    },
+    {
+      "zone": "what to reconcile",
+      "item": "Currency and Timezone hints update on every account/integration change"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Set import methods / Use automatic retrieval toggle vs. the per-side Import method selects (Theme 2 resolved)"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Import method selects, Browse/Remove chips and how-to accordions: disabled state after Run"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "'Automated (recommended)' and 'Automatic file retrieval Recommended': the recommendation is unsourced"
+    },
+    {
+      "zone": "how we get the data",
+      "item": "Auto card promise 'we'll email you when it's ready' vs. the run status promise 'We'll update the status'"
+    },
+    {
+      "zone": "matching rules modal",
+      "item": "'Active profile for this connection' claims (Date, same calendar day) vs. the domain fact that dates are never compared"
+    },
+    {
+      "zone": "matching rules modal",
+      "item": "Two per-side 'Matching rules' links vs. 'Applies once to both sides': both open the same modal"
+    }
+  ],
+  "findings": [
+    {
+      "id": "TRU-1",
+      "severity": "Critical",
+      "confidence": 92,
+      "element": "'Reconciliation started' status + Import method selects and file Remove buttons in 'How we get the data'",
+      "claims": "The status says a reconciliation has started for the configuration on screen, and the form looks locked (Period, Integration, Account and the mode toggle are disabled).",
+      "actual": "Only #f-per, #f-int, #f-acc, #d-from, #d-to and #mode-toggle are disabled. The per-side Import method selects, Remove buttons and Browse stay live after Run. The user can remove a file the run depends on, or switch Integration from Assisted to Manual, which wipes both chips. The status keeps saying 'Reconciliation started' and never names what was submitted.",
+      "finding": "After Run, the 'how we get the data' zone can still be edited, so the form drifts away from the run the status claims is in progress, and nothing records what was actually submitted.",
+      "user_impact": "The user reads the edited screen, for example one file removed or the method now Manual, as the setup of the running reconciliation and misattributes the results to inputs that were never submitted.",
+      "suggested_fix": "Disable every control inside #sources when the run starts, and make the status echo what was submitted: integration, account, period, method per side and file names.",
+      "evidence": {
+        "action": "Stripe > Stripe fees > Browse both files > Run > click Remove on the QuickBooks chip. Separately: Stripe > clearing > Set import methods > Browse both Stripe files > Run > set Integration Import method to Manual.",
+        "observed": "After Run, the sources select and Remove buttons report disabled=false. The chip is removed and a drop zone reappears while #running still reads 'Reconciliation started'. In the second run, the Integration select changes to Manual and the chip count drops from 2 to 0 while the button stays 'Running...'. The status never lists the submitted inputs."
+      }
+    },
+    {
+      "id": "TRU-2",
+      "severity": "High",
+      "confidence": 82,
+      "element": "Matching rules modal ('Active profile for this connection')",
+      "claims": "'Default profile — Primary ID, Amount, Date' and 'Fuzzy amount ±0.01 · same calendar day', meaning the active profile matches on date and requires the same day.",
+      "actual": "Per the sourced domain facts (SET spec 3701506049, TxnRecon FDDs), matching is a 3-pass ID cascade on ID + amount, and dates are never compared. The state map carries no source for 'same calendar day' or a ±0.01 tolerance.",
+      "finding": "The modal states product logic about how records are matched that contradicts the spec and has no source.",
+      "user_impact": "A user with unmatched items will look for date-shift causes that the engine never checks, or trust matches they believe were date-checked.",
+      "suggested_fix": "Replace the modal copy with the real ID + amount cascade from the spec and remove Date and 'same calendar day'. Until the real profile is wired in, label the copy as unverified.",
+      "evidence": {
+        "action": "Open 'Matching rules' from the auto card (or from either side in manual mode).",
+        "observed": "The modal lists 'Primary ID, Amount, Date' and 'same calendar day' as the active profile, while the domain facts say dates are never compared. The date tooltip ('Compares transactions dated in this range') correctly uses dates only for scope, so the two zones disagree about the role of dates."
+      }
+    },
+    {
+      "id": "TRU-3",
+      "severity": "High",
+      "confidence": 76,
+      "element": "Date range select vs. uploaded file chips",
+      "claims": "The period select reads 'Last quarter (Jun 1–Aug 31)', and the file chips beneath appear to be valid inputs for 'this period' (the how-to steps say 'Set the date range to match this period').",
+      "actual": "Changing the period leaves already-uploaded files in place, with no notice, confirm or re-validation. Changing the account wipes the files silently. The two changes behave in opposite ways and neither is acknowledged.",
+      "finding": "The period indicator and the uploaded files go out of sync without warning, so Run submits files exported for one period against a different selected period.",
+      "user_impact": "The user runs a quarter reconciliation with month-only exports and reads the missing Jun–Jul activity as unmatched discrepancies in their books.",
+      "suggested_fix": "When the period changes and files are present, confirm and flag the chips as 'exported for the previous period — re-upload'. When the account changes, show the same 'Uploaded files cleared' notice the toggle path uses.",
+      "evidence": {
+        "action": "Stripe > Stripe fees > Browse both files > change Date range to Last quarter. Then change Account to Business Checking.",
+        "observed": "After the period change, chips=2 and auto-notice stays hidden. After the account change, chips=0, auto-notice stays hidden and the role=alert is empty. There is no acknowledgement either way."
+      }
+    },
+    {
+      "id": "TRU-4",
+      "severity": "High",
+      "confidence": 78,
+      "element": "Custom date inputs + 'Reconciliation started' status",
+      "claims": "'Reconciliation started. Synder is gathering and processing your transactions.'",
+      "actual": "The run starts for a future-only range (2026-11-01 – 2026-11-30) and for a range ending today (Sep 1–25). Per the spec, today's date cannot be selected, so there are no transactions to gather. The inputs have min=\"\" and max=\"\", and there is no failure path because retrieval failure is not implemented.",
+      "finding": "The UI reports success for runs the product cannot legitimately perform, and shows no rollback or failure state.",
+      "user_impact": "The user believes a reconciliation of a period that has not happened, or of a still-open day, is underway and may rely on a result that will be empty or partial.",
+      "suggested_fix": "Set max on the date inputs to yesterday, and refuse future or today-inclusive ranges in validateRun with a named error, as reversed ranges already are.",
+      "evidence": {
+        "action": "Stripe > clearing > Date range Custom > set Nov 1–30 (and separately Sep 1–25) > Run.",
+        "observed": "The state map records error \"\" and started=true for both ranges, and the status shows 'Reconciliation started' with the hint '2026-11-01 – 2026-11-30'."
+      }
+    }
+  ],
+  "gaps": [
+    "Retrieval failure, empty-result and completion states are not_exercised or not implemented, so it is unknown whether 'Reconciliation started' / 'Running...' ever resolves or reports a failed precondition (KF-9). As built, it is phantom progress with no end state.",
+    "Account tooltip vs. listed P&L accounts: the tooltip says P&L accounts usually aren't reconcilable, yet choosing Stripe fees gives a normal runnable manual flow with no warning. The claim has no source in the map, so it is reported here as unverified rather than as a finding.",
+    "The 'manual file upload required' optgroup for PayPal/Shopify clearing, next to an Accounting side defaulting to 'Automated (recommended)' with no QuickBooks upload, is inconsistent with the delta's 'both sides forced to Manual'. It is recorded in checked, but the spec source for which QuickBooks mode applies is not in the map.",
+    "The 'Automated (recommended)' and 'Recommended' labels are product recommendations with no source in the state map, so they are unverified."
+  ]
+}
