@@ -1587,6 +1587,12 @@ body{
   .match-modal ul{margin:0 0 20px;padding-left:18px;font-size:14px;line-height:22px}
   .match-modal .match-actions{display:flex;justify-content:flex-end;gap:8px}
 
+  .sel select.is-empty{color:var(--text-placeholder,#8C97B1)}
+  .sel select.is-empty option{color:var(--text-primary,#1A1B24)}
+  .sel select:disabled{background:var(--color-grey-5,#F7F8FA);cursor:not-allowed}
+  #grp-data.reveal{animation:grpReveal .18s ease-out}
+  @keyframes grpReveal{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){#grp-data.reveal{animation:none}}
 </style>
 </head>
 <body>
@@ -1653,7 +1659,7 @@ body{
       </div>
     </div>
 
-    <div class="grp">
+    <div class="grp hidden" id="grp-data">
       <div class="grp-head">
         <h3>How we get the data</h3>
         <button type="button" class="lnk" id="mode-toggle">Set import methods</button>
@@ -1802,7 +1808,7 @@ body{
   };
 
   var state = {
-    integration: 'stripe',
+    integration: '',   // nothing preselected — the user picks both
     account: '',
     period: 'last_month',
     mode: 'auto', // auto | manual
@@ -1817,17 +1823,22 @@ body{
     return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
   function current(){ return INTEGRATIONS[state.integration]; }
+  // Import methods only make sense once we know what is being reconciled.
+  function ready(){ return !!state.integration && !!state.account; }
   function intMethod(){
     var i = current();
+    if (!i) return null;
     if (state.intMode && i.methods.indexOf(state.intMode) > -1) return state.intMode;
     return i.methods.indexOf('Automated') > -1 ? 'Automated' : i.methods[0];
   }
   function canBothAuto(){
+    if (!current()) return false;
     return current().methods.indexOf('Automated') > -1;
   }
   function filesFor(side){
     if (side === 'books') return BOOKS.files[state.booksMode] || [];
-    return current().files[intMethod()] || [];
+    var i = current(); if (!i) return [];
+    return i.files[intMethod()] || [];
   }
   function missingCount(){
     var n = 0;
@@ -1873,33 +1884,38 @@ body{
 
   function fillIntegrations(){
     var sel = document.getElementById('f-int');
-    sel.innerHTML = '';
+    sel.innerHTML = '<option value="">Select...</option>';
     Object.keys(INTEGRATIONS).forEach(function(k){
       var o = document.createElement('option');
       o.value = k; o.textContent = INTEGRATIONS[k].label;
       if (k === state.integration) o.selected = true;
       sel.appendChild(o);
     });
+    sel.classList.toggle('is-empty', !state.integration);
   }
   function fillAccounts(){
     var sel = document.getElementById('f-acc');
     var i = current();
-    var keep = state.account;
-    sel.innerHTML = '';
-    i.accounts.forEach(function(a, idx){
-      var o = document.createElement('option');
-      o.value = a.id; o.textContent = a.label;
-      if ((keep && keep === a.id) || (!keep && idx === 0)) o.selected = true;
-      sel.appendChild(o);
-    });
-    state.account = sel.value;
+    sel.innerHTML = '<option value="">Select...</option>';
+    // Accounts belong to an integration, so the list waits for one.
+    sel.disabled = !i;
+    if (i) {
+      var valid = i.accounts.some(function(a){ return a.id === state.account; });
+      if (!valid) state.account = '';
+      i.accounts.forEach(function(a){
+        var o = document.createElement('option');
+        o.value = a.id; o.textContent = a.label;
+        if (a.id === state.account) o.selected = true;
+        sel.appendChild(o);
+      });
+    } else {
+      state.account = '';
+    }
+    sel.classList.toggle('is-empty', !state.account);
   }
 
   function render(){
     var i = current();
-    state.intMode = intMethod();
-    if (!canBothAuto() && state.mode === 'auto') state.mode = 'manual';
-
     document.getElementById('dates').classList.toggle('on', state.period === 'custom');
     var hPer = document.getElementById('h-per');
     if (hPer) {
@@ -1913,12 +1929,22 @@ body{
         hPer.textContent = pMeta.hint || '';
       }
     }
-    document.getElementById('h-int').textContent = 'Timezone: ' + i.tz;
+    document.getElementById('h-int').textContent = i ? 'Timezone: ' + i.tz : '';
 
-    var a = i.accounts.filter(function(x){ return x.id === state.account; })[0] || i.accounts[0];
     var hAcc = document.getElementById('h-acc');
     hAcc.className = 'hint';
-    hAcc.textContent = 'Currency: ' + a.currency;
+    var a = i ? i.accounts.filter(function(x){ return x.id === state.account; })[0] : null;
+    hAcc.textContent = !i ? 'Select an integration first' : (a ? 'Currency: ' + a.currency : '');
+
+    // "How we get the data" appears only once integration and account are both chosen.
+    var dataGrp = document.getElementById('grp-data');
+    var wasHidden = dataGrp.classList.contains('hidden');
+    dataGrp.classList.toggle('hidden', !ready());
+    if (!ready()) return;
+    if (wasHidden) { dataGrp.classList.remove('reveal'); void dataGrp.offsetWidth; dataGrp.classList.add('reveal'); }
+
+    state.intMode = intMethod();
+    if (!canBothAuto() && state.mode === 'auto') state.mode = 'manual';
 
     document.getElementById('aa-body').textContent =
       'Synder pulls QuickBooks and ' + i.short + ' for this period. Large pulls can take a few hours — we’ll email you when it’s ready.';
@@ -2052,6 +2078,8 @@ body{
 
   document.getElementById('f-int').addEventListener('change', function(){
     state.integration = this.value;
+    state.account = '';
+    this.classList.toggle('is-empty', !this.value);
     state.booksMode = 'Automated';
     state.provided = {};
     state.openHowto = {};
@@ -2067,7 +2095,9 @@ body{
     render();
   });
   document.getElementById('f-acc').addEventListener('change', function(){
-    state.account = this.value; render();
+    state.account = this.value;
+    this.classList.toggle('is-empty', !this.value);
+    render();
   });
   document.getElementById('f-per').addEventListener('change', function(){
     state.period = this.value;
@@ -2156,7 +2186,7 @@ body{
       }
     }
     var showAuto = state.mode === 'auto' && canBothAuto();
-    if (!showAuto) {
+    if (ready() && !showAuto) {
       var n = missingCount();
       if (n > 0) {
         document.querySelectorAll('.drop').forEach(function(dz){ dz.classList.add('field-invalid'); });
