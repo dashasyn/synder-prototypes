@@ -35,10 +35,11 @@ const ok = (n, c, x) => { if (c) { pass++; console.log('  ok   ' + n); } else { 
     ok('…goes straight to uploads', await vis('#manual-panel'));
     ok('…and there is no toggle back to automatic', !(await vis('#mode-toggle')));
     ok('integration side offers Manual only', JSON.stringify(await methods('integration')) === '["Manual"]', JSON.stringify(await methods('integration')));
-    ok('accounting side offers Manual only', JSON.stringify(await methods('books')) === '["Manual"]', JSON.stringify(await methods('books')));
-    ok('an upload is asked for on both sides', (await p.locator('#manual-panel .drop').count()) >= 2, await p.locator('#manual-panel .drop').count());
+    // 2026-09-25: as in production, QuickBooks stays Automated|Manual for every account
+    ok('accounting side stays Automated with Manual available', JSON.stringify(await methods('books')) === '["Automated","Manual"]', JSON.stringify(await methods('books')));
+    ok('only the integration upload is asked for', (await p.locator('#manual-panel .drop').count()) === 1, await p.locator('#manual-panel .drop').count());
     await p.locator('#run').click(); await p.waitForTimeout(250);
-    ok('Run names the missing uploads', /Upload the required files/.test(await p.locator('#run-error').innerText()), await p.locator('#run-error').innerText());
+    ok('Run names the missing upload', /Upload the required file/.test(await p.locator('#run-error').innerText()), await p.locator('#run-error').innerText());
 
     // back to clearing restores automated and forgets files
     await p.locator('#manual-panel [data-pick]').first().click(); await p.waitForTimeout(200);

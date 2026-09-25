@@ -1675,6 +1675,7 @@ body{
       </div>
 
       <div id="manual-panel" class="hidden">
+        <p class="auto-notice hidden" id="manual-note"></p>
         <div class="src-grid" id="sources"></div>
       </div>
     </div>
@@ -1829,16 +1830,28 @@ body{
     var i = current(); if (!i) return null;
     return i.accounts.filter(function(a){ return a.id === state.account; })[0] || null;
   }
-  // Per the TxnRecon spec, automated retrieval is only for the integration's clearing
-  // account(s); every other configured account is manual reconciliation — files on
-  // both sides. Mirrors production's two groups in the account list.
+  // Per the TxnRecon spec, automated retrieval of the integration's data is only for
+  // its clearing account(s); for every other account the integration file is uploaded.
+  // QuickBooks is retrieved automatically either way (Manual stays available), as in
+  // production. Mirrors production's two groups in the account list.
   function intMethods(){
     var i = current(), a = acct(); if (!i) return [];
     return (a && !a.clearing) ? ['Manual'] : i.methods;
   }
   function booksMethods(){
-    var a = acct();
-    return (a && !a.clearing) ? ['Manual'] : BOOKS.methods;
+    return BOOKS.methods;
+  }
+  // Why automatic retrieval isn't on offer for this integration + account, or ''.
+  function manualReason(){
+    var i = current(), a = acct(); if (!i || !a) return '';
+    if (i.methods.indexOf('Automated') === -1)
+      return 'Automatic retrieval isn\u2019t available for ' + i.short + ' \u2014 upload its files below.';
+    if (!a.clearing) {
+      var c = i.accounts.filter(function(x){ return x.clearing; })[0];
+      return 'Automatic retrieval is only available for the ' + i.short + ' clearing account. Upload the ' +
+        i.short + ' file for this account' + (c ? ', or pick \u201c' + c.label + '\u201d instead.' : '.');
+    }
+    return '';
   }
   function intMethod(){
     var i = current();
@@ -2006,6 +2019,11 @@ body{
       manPanel.classList.remove('hidden');
     }
 
+    var mNote = document.getElementById('manual-note');
+    var reason = manualReason();
+    mNote.textContent = reason;
+    mNote.classList.toggle('hidden', !reason);
+
     // sources
     var im = intMethod();
     if (state.mode === 'manual' || !canBothAuto()){
@@ -2088,9 +2106,10 @@ body{
 
   document.getElementById('mode-toggle').addEventListener('click', function(){
     if (state.mode === 'auto'){
+      // Opening the details changes nothing: both sides stay on Automated until the
+      // user picks another method.
       state.mode = 'manual';
-      if (intMethods().indexOf('Assisted') > -1) state.intMode = 'Assisted';
-      // Hybrid OK: leave books on Automated unless user changes it
+      state.intMode = 'Automated';
     } else {
       var hadUploads = Object.keys(state.provided).length > 0;
       if (hadUploads) {
@@ -2189,6 +2208,13 @@ body{
     if (err) { err.textContent = ''; err.classList.add('hidden'); }
   }
 
+  // Local calendar day, offset by n days, as YYYY-MM-DD.
+  function isoDay(n){
+    var d = new Date(); d.setDate(d.getDate() + n);
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  ['d-from','d-to'].forEach(function(id){ document.getElementById(id).max = isoDay(-1); });
+
   function markInvalid(selectId, labelFor){
     var sel = document.getElementById(selectId);
     if (sel) sel.classList.add('field-invalid');
@@ -2220,6 +2246,12 @@ body{
         document.getElementById('d-from').classList.add('field-invalid');
         document.getElementById('d-to').classList.add('field-invalid');
         msgs.push('End date must be on or after the start date');
+      } else if (to >= isoDay(0)) {
+        // Today's transactions aren't complete, so today can't be in the period (spec).
+        markInvalid('f-per', 'f-per');
+        document.getElementById('d-to').classList.add('field-invalid');
+        if (f >= isoDay(0)) document.getElementById('d-from').classList.add('field-invalid');
+        msgs.push('The period must end before today');
       }
     }
     var showAuto = state.mode === 'auto' && canBothAuto();
