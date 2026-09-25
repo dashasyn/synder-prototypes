@@ -386,6 +386,24 @@ function ok(name, cond) {
   ok('the sample says it is one of the groupings, not the only one',
     /can also group/i.test((await pairSum.locator('.pv-note').textContent()).replace(/\s+/g, ' ')));
 
+  // ── 9b. Width and truncation (Ignat, 2026-09-25: 1040px, min supported viewport 1280) ──
+  const mGeo = await modal.boundingBox();
+  ok('preview modal is 1040px wide at the 1280 minimum', Math.round(mGeo.width) === 1040);
+  ok('it is centred with room either side', Math.round(mGeo.x) === 120);
+  ok('no cell in either register is truncated', await page.evaluate(() =>
+    [...document.querySelectorAll('#pv-modal-body td, #pv-modal-body th')]
+      .every(td => td.scrollWidth <= td.clientWidth + 1)));
+  ok('no ellipsis anywhere in the preview', await page.evaluate(() =>
+    [...document.querySelectorAll('#pv-modal-body td')]
+      .every(td => getComputedStyle(td).textOverflow !== 'ellipsis')));
+  ok('figures and dates are never broken across lines', await page.evaluate(() =>
+    [...document.querySelectorAll('#pv-modal-body .c-amt, #pv-modal-body .c-dr, #pv-modal-body .c-cr, #pv-modal-body .c-date')]
+      .every(td => getComputedStyle(td).whiteSpace === 'nowrap')));
+  ok('neither register scrolls sideways', await page.evaluate(() =>
+    [...document.querySelectorAll('#pv-modal-body .pv-wrap')].every(w => w.scrollWidth <= w.clientWidth + 1)));
+  ok('the whole modal fits the 1280×900 window',
+    mGeo.y >= 0 && mGeo.y + mGeo.height <= 900 && mGeo.x + mGeo.width <= 1280);
+
   // opening from either card gives the same pair
   await page.keyboard.press('Escape');
   ok('Escape closes', !(await modalBg.isVisible()));
@@ -445,6 +463,25 @@ function ok(name, cond) {
   ok('copy: the integration name appears only inside the sample, not on the step',
     !/shopify/i.test(text));
   await page.keyboard.press('Escape');
+
+  // ── 14. Short-window check: 1280×720 must still show the modal's header and footer ──
+  const short = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  await short.goto(target, { waitUntil: 'networkidle' });
+  await short.locator('.pv-link').click();
+  const sGeo = await short.locator('#pv-modal').boundingBox();
+  ok('at 1280×720 the modal stays inside the window', sGeo.y >= 0 && sGeo.y + sGeo.height <= 720);
+  ok('at 1280×720 the close button is on screen',
+    await short.locator('#pv-modal .close-x').isVisible() &&
+    (await short.locator('#pv-modal .close-x').boundingBox()).y >= 0);
+  ok('at 1280×720 the footer Close is on screen', await short.evaluate(() => {
+    const r = document.querySelector('#pv-modal .modal-footer').getBoundingClientRect();
+    return r.bottom <= window.innerHeight;
+  }));
+  ok('at 1280×720 the body scrolls instead of overflowing', await short.evaluate(() => {
+    const b = document.querySelector('#pv-modal .modal-body');
+    return b.scrollHeight > b.clientHeight && getComputedStyle(b).overflowY === 'auto';
+  }));
+  await short.close();
 
   await browser.close();
 
