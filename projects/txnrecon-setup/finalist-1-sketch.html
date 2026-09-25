@@ -1722,8 +1722,8 @@ body{
       key:'stripe', brand:'stripe', label:'mzkt.by (Stripe)', short:'Stripe', tz:'Europe/Minsk',
       methods:['Automated','Assisted','Manual'],
       accounts:[
-        {id:'clearing', label:'Stripe mzkt.by (required for Synder)', currency:'USD', shared:false},
-        {id:'clearing_eur', label:'Stripe mzkt.by · EUR', currency:'EUR', shared:false},
+        {id:'clearing', label:'Stripe mzkt.by (required for Synder)', currency:'USD', shared:false, clearing:true},
+        {id:'clearing_eur', label:'Stripe mzkt.by · EUR', currency:'EUR', shared:false, clearing:true},
         {id:'fees', label:'Stripe fees', currency:'USD', shared:true},
         {id:'sales', label:'Stripe sales', currency:'USD', shared:true},
         {id:'payouts', label:'Stripe payouts', currency:'USD', shared:true},
@@ -1754,8 +1754,8 @@ body{
       key:'paypal', brand:'paypal', label:'Great payments for every one (PayPal)', short:'PayPal', tz:'UTC +3:00, Vilnius',
       methods:['Assisted','Manual'],
       accounts:[
-        {id:'pp', label:'PayPal clearing', currency:'EUR', shared:false},
-        {id:'pp_usd', label:'PayPal · USD', currency:'USD', shared:false},
+        {id:'pp', label:'PayPal clearing', currency:'EUR', shared:false, clearing:true},
+        {id:'pp_usd', label:'PayPal · USD', currency:'USD', shared:false, clearing:true},
         {id:'pp_fees', label:'PayPal fees', currency:'EUR', shared:true},
         {id:'pp_sales', label:'PayPal sales', currency:'EUR', shared:true},
         {id:'checking_eu', label:'Business Checking · EUR', currency:'EUR', shared:false}
@@ -1782,8 +1782,8 @@ body{
       key:'shopify', brand:'shopify', label:'My store (Shopify)', short:'Shopify', tz:'Europe/Vilnius',
       methods:['Assisted','Manual'],
       accounts:[
-        {id:'sh', label:'Shopify clearing (Synder)', currency:'USD', shared:false},
-        {id:'sh_cad', label:'Shopify clearing · CAD', currency:'CAD', shared:false},
+        {id:'sh', label:'Shopify clearing (Synder)', currency:'USD', shared:false, clearing:true},
+        {id:'sh_cad', label:'Shopify clearing · CAD', currency:'CAD', shared:false, clearing:true},
         {id:'sh_fees', label:'Shopify fees', currency:'USD', shared:true},
         {id:'sh_sales', label:'Shopify sales', currency:'USD', shared:true},
         {id:'sh_payouts', label:'Shopify payouts', currency:'USD', shared:true}
@@ -1825,18 +1825,37 @@ body{
   function current(){ return INTEGRATIONS[state.integration]; }
   // Import methods only make sense once we know what is being reconciled.
   function ready(){ return !!state.integration && !!state.account; }
+  function acct(){
+    var i = current(); if (!i) return null;
+    return i.accounts.filter(function(a){ return a.id === state.account; })[0] || null;
+  }
+  // Per the TxnRecon spec, automated retrieval is only for the integration's clearing
+  // account(s); every other configured account is manual reconciliation — files on
+  // both sides. Mirrors production's two groups in the account list.
+  function intMethods(){
+    var i = current(), a = acct(); if (!i) return [];
+    return (a && !a.clearing) ? ['Manual'] : i.methods;
+  }
+  function booksMethods(){
+    var a = acct();
+    return (a && !a.clearing) ? ['Manual'] : BOOKS.methods;
+  }
   function intMethod(){
     var i = current();
     if (!i) return null;
-    if (state.intMode && i.methods.indexOf(state.intMode) > -1) return state.intMode;
-    return i.methods.indexOf('Automated') > -1 ? 'Automated' : i.methods[0];
+    var ms = intMethods();
+    if (state.intMode && ms.indexOf(state.intMode) > -1) return state.intMode;
+    return ms.indexOf('Automated') > -1 ? 'Automated' : ms[0];
   }
   function canBothAuto(){
     if (!current()) return false;
-    return current().methods.indexOf('Automated') > -1;
+    return intMethods().indexOf('Automated') > -1;
   }
   function filesFor(side){
-    if (side === 'books') return BOOKS.files[state.booksMode] || [];
+    if (side === 'books') {
+      var bm = booksMethods().indexOf(state.booksMode) > -1 ? state.booksMode : booksMethods()[0];
+      return BOOKS.files[bm] || [];
+    }
     var i = current(); if (!i) return [];
     return i.files[intMethod()] || [];
   }
@@ -1902,11 +1921,22 @@ body{
     if (i) {
       var valid = i.accounts.some(function(a){ return a.id === state.account; });
       if (!valid) state.account = '';
-      i.accounts.forEach(function(a){
-        var o = document.createElement('option');
-        o.value = a.id; o.textContent = a.label;
-        if (a.id === state.account) o.selected = true;
-        sel.appendChild(o);
+      var hasAuto = i.methods.indexOf('Automated') > -1;
+      var groups = [
+        { label: 'Synder accounts (automated data retrieval)', list: i.accounts.filter(function(a){ return hasAuto && a.clearing; }) },
+        { label: 'Synder accounts (manual file upload required)', list: i.accounts.filter(function(a){ return !(hasAuto && a.clearing); }) }
+      ];
+      groups.forEach(function(g){
+        if (!g.list.length) return;          // e.g. no automated group for PayPal
+        var og = document.createElement('optgroup');
+        og.label = g.label;
+        g.list.forEach(function(a){
+          var o = document.createElement('option');
+          o.value = a.id; o.textContent = a.label;
+          if (a.id === state.account) o.selected = true;
+          og.appendChild(o);
+        });
+        sel.appendChild(og);
       });
     } else {
       state.account = '';
@@ -1989,7 +2019,8 @@ body{
       html += '<div class="src">' +
         '<div class="side-title">Accounting</div>' +
         '<div class="who">'+booksLogo+'<span>'+esc(BOOKS.name)+'</span></div>';
-      html += methodSelect('books', BOOKS.methods, state.booksMode);
+      if (booksMethods().indexOf(state.booksMode) === -1) state.booksMode = booksMethods()[0];
+      html += methodSelect('books', booksMethods(), state.booksMode);
       if (state.booksMode !== 'Automated'){
         bFiles.forEach(function(f,ix){ html += fileBlock('books', f, ix, 'QuickBooks Online'); });
       }
@@ -2006,7 +2037,7 @@ body{
       html += '<div class="src">' +
         '<div class="side-title">Integration</div>' +
         '<div class="who">'+intLogo+'<span>'+esc(i.label)+'</span></div>';
-      html += methodSelect('integration', i.methods, im);
+      html += methodSelect('integration', intMethods(), im);
       if (im !== 'Automated'){
         iFiles.forEach(function(f,ix){ html += fileBlock('integration', f, ix, i.short); });
       }
@@ -2058,7 +2089,7 @@ body{
   document.getElementById('mode-toggle').addEventListener('click', function(){
     if (state.mode === 'auto'){
       state.mode = 'manual';
-      if (current().methods.indexOf('Assisted') > -1) state.intMode = 'Assisted';
+      if (intMethods().indexOf('Assisted') > -1) state.intMode = 'Assisted';
       // Hybrid OK: leave books on Automated unless user changes it
     } else {
       var hadUploads = Object.keys(state.provided).length > 0;
@@ -2097,6 +2128,12 @@ body{
   document.getElementById('f-acc').addEventListener('change', function(){
     state.account = this.value;
     this.classList.toggle('is-empty', !this.value);
+    // The account decides what's possible: land on automated retrieval when it's
+    // available, otherwise on the upload path. Files picked for another account go.
+    state.provided = {}; state.openHowto = {};
+    state.booksMode = booksMethods()[0];
+    state.intMode = null;
+    state.mode = canBothAuto() ? 'auto' : 'manual';
     render();
   });
   document.getElementById('f-per').addEventListener('change', function(){
