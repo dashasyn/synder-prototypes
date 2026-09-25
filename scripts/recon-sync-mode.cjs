@@ -57,29 +57,10 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
     commit_path: { picked: true, reached_apply: true, second_interaction: true,
       still_visible: true, still_clickable: true } });
 
-  // ── Recommended chip tooltip: hover, leave, focus, blur ──
-  const chip = page.locator('#mode-pt .why-chip');
-  const tipOpacity = async () => await page.locator('#why-pt')
-    .evaluate(el => parseFloat(getComputedStyle(el).opacity));
-  const atRest = await tipOpacity();
-  await chip.hover(); await settle();
-  const onHover = await tipOpacity();
-  const tipText = await txt('#why-pt');
-  await page.locator('.ob-sub').hover(); await settle();
-  const afterLeave = await tipOpacity();
-  await chip.focus(); await settle();
-  const onFocus = await tipOpacity();
-  await page.locator('#r-sum').focus(); await settle();
-  const onBlur = await tipOpacity();
-  controls.push({ zone: 'card: Per transaction', label: 'Recommended chip with "?" and tooltip',
-    type: 'chip with tooltip', text: 'Recommended ?  →  ' + tipText,
-    after_interaction: {
-      opacity_at_rest: atRest, on_hover: onHover, after_pointer_leave: afterLeave,
-      on_keyboard_focus: onFocus, on_blur: onBlur,
-      note: 'reveal only; there is no commit action behind it'
-    },
-    commit_path: { picked: true, reached_apply: true, second_interaction: true,
-      still_visible: true, still_clickable: true } });
+  // ── Recommended chip: a plain label since 2026-09-25 (no "?", no tooltip) ──
+  controls.push({ zone: 'card: Per transaction', label: 'Recommended chip', type: 'status label',
+    text: await txt('#mode-pt .status'),
+    after_interaction: 'not interactive — no reveal, no rationale shown' });
 
   // ── preview modal: open, read, close, reopen from the other card ──
   // The preview always renders both registers; read each column separately.
@@ -94,7 +75,7 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
       columns: headers.map(h => h.trim()),
       rows,
       footer: await txt(`${root} .pv-foot`),
-      note: await txt(`${root} .pv-note`)
+      note: (await page.locator(`${root} .pv-note`).count()) ? await txt(`${root} .pv-note`) : null
     };
   }
 
@@ -152,7 +133,8 @@ const outDir = path.resolve(__dirname, '../reports/onboarding-sync-mode/round-1'
       { control: 'What happens after the choice is saved', reason: 'no backend in the prototype; the confirmation and first-sync behaviour cannot be observed here' },
       { control: 'Real QuickBooks output', reason: 'the register shown is authored sample data, not a live sync; its accuracy against production is unverified' },
     { control: 'Single-mode preview', reason: 'removed 2026-09-16 — the preview now always shows both modes side by side, so there is no per-mode variant to exercise' },
-    { control: 'Per-card preview buttons', reason: 'removed 2026-09-16 — replaced by one text link below the cards' }
+    { control: 'Per-card preview buttons', reason: 'removed 2026-09-16 — replaced by one text link below the cards' },
+    { control: 'Recommended tooltip', reason: 'removed 2026-09-25 — the chip is a plain label; Synder will not explain the recommendation' }
     ],
     controls
   };
