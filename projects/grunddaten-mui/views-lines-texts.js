@@ -177,17 +177,10 @@
                   <${Typography} variant="caption" color="text.secondary" sx=${{ fontStyle: 'italic' }}>
                     ${sch.reason}
                   <//>` : null}
-                <${Tooltip} title=${lang === 'de' ? 'Bearbeiten' : 'Edit'}>
-                  <${IconButton} aria-label=${`edit schedule ${i}`} onClick=${() => openEdit(i)}>
-                    <${Icon} sx=${{ fontSize: 18 }}>edit<//>
-                  <//>
-                <//>
-                <${Tooltip} title=${lang === 'de' ? 'Löschen' : 'Delete'}>
-                  <${IconButton} color="error" aria-label=${`delete schedule ${i}`}
-                    onClick=${() => remove(i)}>
-                    <${Icon} sx=${{ fontSize: 18 }}>delete<//>
-                  <//>
-                <//>
+                <${EditAction} name=${`${lang === 'de' ? 'Zeitraum' : 'period'} ${i + 1}`}
+                  onClick=${() => openEdit(i)} />
+                <${DeleteAction} name=${`${lang === 'de' ? 'Zeitraum' : 'period'} ${i + 1}`}
+                  onClick=${() => remove(i)} />
               <//>`)}
           <//>` : null}
 
@@ -516,15 +509,8 @@
                       <//>
                       <${TableCell} sx=${{ fontWeight: 500 }}>${tx.text}<//>
                       <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                        <${Button} onClick=${() => openEdit(gi)}>
-                          ${lang === 'de' ? 'Bearbeiten' : 'Edit'}
-                        <//>
-                        <${Tooltip} title=${lang === 'de' ? 'Löschen' : 'Delete'}>
-                          <${IconButton} color="error" aria-label=${`delete ${tx.id}`}
-                            onClick=${() => setDel({ kind: 'one', idx: gi })}>
-                            <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
-                          <//>
-                        <//>
+                        <${EditAction} name=${tx.text} onClick=${() => openEdit(gi)} />
+                        <${DeleteAction} name=${tx.text} onClick=${() => setDel({ kind: 'one', idx: gi })} />
                       <//>
                     <//>`;
                 }) : html`<${EmptyRow} colSpan=${5} />`}
@@ -648,15 +634,8 @@
                         <${PosInput} value=${i + 1} max=${total}
                           ariaLabel=${lang === 'de' ? 'Position eingeben' : 'Enter position'}
                           onCommit=${v => { if (moveToPos(specialAnnouncements, i, v)) bump(); }} />
-                        <${Button} onClick=${() => open(i)}>
-                          ${lang === 'de' ? 'Bearbeiten' : 'Edit'}
-                        <//>
-                        <${Tooltip} title=${lang === 'de' ? 'Löschen' : 'Delete'}>
-                          <${IconButton} color="error" aria-label=${`delete ${sp.id}`}
-                            onClick=${() => setDel(i)}>
-                            <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
-                          <//>
-                        <//>
+                        <${EditAction} name=${sp.label} onClick=${() => open(i)} />
+                        <${DeleteAction} name=${sp.label} onClick=${() => setDel(i)} />
                       <//>
                     <//>
                   <//>`) : html`<${EmptyRow} colSpan=${4} />`}

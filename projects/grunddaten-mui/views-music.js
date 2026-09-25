@@ -307,19 +307,8 @@ function MusicEventsView() {
                           both read as quiet row actions rather than one blue text
                           button and one red icon competing with the data. */ ''}
                     <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                      <${Tooltip} title=${t('msEdit')}>
-                        <${IconButton} aria-label=${t('msEdit') + ': ' + ev.name}
-                          onClick=${() => nav('musicEvent', ev.id)}>
-                          <${Icon} sx=${{ fontSize: 20 }}>edit<//>
-                        <//>
-                      <//>
-                      <${Tooltip} title=${state.lang === 'de' ? 'Löschen' : 'Delete'}>
-                        <${IconButton}
-                          aria-label=${(state.lang === 'de' ? 'Löschen: ' : 'Delete: ') + ev.name}
-                          onClick=${() => setDelEv(ev)}>
-                          <${Icon} sx=${{ fontSize: 20 }}>delete<//>
-                        <//>
-                      <//>
+                      <${EditAction} name=${ev.name} onClick=${() => nav('musicEvent', ev.id)} />
+                      <${DeleteAction} name=${ev.name} onClick=${() => setDelEv(ev)} />
                     <//>
                   <//>`;
               }) : html`<${EmptyRow} colSpan=${6} label=${q ? t('evNoMatch') : t('noEvents')} />`}

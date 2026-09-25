@@ -131,10 +131,7 @@ function AudioTracksTab() {
                         prototype cannot play audio, and a button that does
                         nothing is a UI that lies about what it can do. */ ''}
                   <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                    <${IconButton} color="error" aria-label=${'delete ' + sf.id}
-                      onClick=${() => askDelete(sf)}>
-                      <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
-                    <//>
+                    <${DeleteAction} name=${sf.name} onClick=${() => askDelete(sf)} />
                   <//>
                 <//>`;
             }) : html`<${EmptyRow} colSpan=${9} label="—" />`}
@@ -289,11 +286,8 @@ function AudioPlaylistsTab() {
                   <${TableCell} sx=${{ color: 'text.secondary' }}>
                     ${used ? t('usedInEvents', used) : t('notUsed')}<//>
                   <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                    <${Button} onClick=${() => nav('playlistDetail', pl.id)}>${t('msEdit')}<//>
-                    <${IconButton} color="error" aria-label=${'delete ' + pl.id}
-                      onClick=${() => setDel(pl)}>
-                      <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
-                    <//>
+                    <${EditAction} name=${pl.name} onClick=${() => nav('playlistDetail', pl.id)} />
+                    <${DeleteAction} name=${pl.name} onClick=${() => setDel(pl)} />
                   <//>
                 <//>`;
             }) : html`<${EmptyRow} colSpan=${6} label=${t('noPlaylists')} />`}
@@ -398,10 +392,7 @@ function PlaylistDetailView() {
                       ${f.filename}<//>
                     <${TableCell} sx=${{ color: 'text.secondary' }}>${f.duration || '—'}<//>
                     <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                      <${IconButton} color="error" aria-label=${'remove ' + tid}
-                        onClick=${() => removeTrack(i)}>
-                        <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
-                      <//>
+                      <${DeleteAction} remove name=${f.name} onClick=${() => removeTrack(i)} />
                     <//>
                   <//>`;
               }) : html`<${EmptyRow} colSpan=${6} label=${t('plEmpty')} />`}
@@ -491,11 +482,8 @@ function AudioRadioTab({ onEdit }) {
                   <${TableCell} sx=${{ color: 'text.secondary' }}>
                     ${used ? t('usedInEvents', used) : t('notUsed')}<//>
                   <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                    <${Button} onClick=${() => onEdit(rs.id)}>${t('msEdit')}<//>
-                    <${IconButton} color="error" aria-label=${'delete ' + rs.id}
-                      onClick=${() => setDel(rs)}>
-                      <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//>
-                    <//>
+                    <${EditAction} name=${rs.name} onClick=${() => onEdit(rs.id)} />
+                    <${DeleteAction} name=${rs.name} onClick=${() => setDel(rs)} />
                   <//>
                 <//>`;
             }) : html`<${EmptyRow} colSpan=${5} label=${t('noRadio')} />`}

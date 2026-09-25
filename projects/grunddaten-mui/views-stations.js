@@ -210,9 +210,8 @@ function StationDetailView() {
                       options=${nameFileOptions} minWidth=${240}
                       onChange=${v => patch(n => { n.nameChanges[i].fileId = v; })} />
                     <${Box} sx=${{ flexGrow: 1 }} />
-                    <${IconButton} color="error" aria-label=${`remove name change ${i}`}
-                      onClick=${() => patch(n => { n.nameChanges.splice(i, 1); })}>
-                      <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//><//>
+                    <${DeleteAction} remove name=${`${state.lang === 'de' ? 'Namensänderung' : 'name change'} ${i + 1}`}
+                      onClick=${() => patch(n => { n.nameChanges.splice(i, 1); })} />
                   <//>
                 <//>
               <//>`)}
@@ -280,9 +279,8 @@ function StationDetailView() {
                   ${ann.isMain ? null : html`
                     <${Button} onClick=${() => setMain(i)}>${t('setAsMain')}<//>`}
                   <${Button} onClick=${() => openSchedule(i)}>${t('editSchedule')}<//>
-                  <${IconButton} color="error" aria-label=${`remove transfer ${i}`}
-                    onClick=${() => patch(n => { n.transferAnnouncements.splice(i, 1); })}>
-                    <${Icon} sx=${{ fontSize: 18 }}>delete_outline<//><//>
+                  <${DeleteAction} remove name=${`${state.lang === 'de' ? 'Umstiegsansage' : 'transfer announcement'} ${i + 1}`}
+                    onClick=${() => patch(n => { n.transferAnnouncements.splice(i, 1); })} />
                 <//>`)}
             <//>` : html`
             <${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>

@@ -391,3 +391,32 @@ function useRowDrag(onDrop) {
   });
   return { rowProps, rowSx };
 }
+
+/* ── Row actions: classic grey MUI icons ────────────────────────────
+   Ignat, 2026-09-25: "We should use classic grey MUI icons" — first for the
+   Musik rows, then for Display Texts "and all other pages". One pair, used by
+   every table, so a row action cannot come out blue in one place and red in
+   another again: default IconButton colour (action.active), a pen for edit, a
+   bin for delete, a tooltip naming the action, and an accessible name that
+   names the row as well, because five identical "delete" buttons name nothing. */
+function EditAction({ onClick, name, id }) {
+  const label = state.lang === 'de' ? 'Bearbeiten' : 'Edit';
+  return html`
+    <${Tooltip} title=${label}>
+      <${IconButton} id=${id} aria-label=${name ? label + ': ' + name : label} onClick=${onClick}>
+        <${Icon} sx=${{ fontSize: 20 }}>edit<//>
+      <//>
+    <//>`;
+}
+
+/** remove=true for taking an item out of a list rather than deleting it. */
+function DeleteAction({ onClick, name, remove, id }) {
+  const label = remove ? (state.lang === 'de' ? 'Entfernen' : 'Remove')
+                       : (state.lang === 'de' ? 'Löschen' : 'Delete');
+  return html`
+    <${Tooltip} title=${label}>
+      <${IconButton} id=${id} aria-label=${name ? label + ': ' + name : label} onClick=${onClick}>
+        <${Icon} sx=${{ fontSize: 20 }}>delete<//>
+      <//>
+    <//>`;
+}
