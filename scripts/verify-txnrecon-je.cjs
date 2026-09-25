@@ -63,6 +63,23 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
     ok('inactive tabs are kit text-primary, not grey', await (async()=>{
       const t=await style('#screen-list .tab[data-ltab="deleted"]');
       return t.color===await toRGB(await kit('--text-primary'));})());
+    /* Tabs are <button>s: the colour checks above passed while every tab was a grey
+       native button with outset borders. Assert the chrome, not just the text. */
+    const tabChrome=s2=>p.evaluate(sel=>[...document.querySelectorAll(sel)].map(e=>{const c=getComputedStyle(e);
+      return {bg:c.backgroundColor,t:c.borderTopWidth,l:c.borderLeftWidth,r:c.borderRightWidth,
+              b:c.borderBottomColor,active:e.classList.contains('active')};}), s2);
+    ok('tabs have no native button fill', (await tabChrome('#screen-list .tab')).every(t=>t.bg==='rgba(0, 0, 0, 0)'));
+    ok('tabs have no top/left/right borders', (await tabChrome('#screen-list .tab')).every(t=>t.t==='0px'&&t.l==='0px'&&t.r==='0px'));
+    ok('only the active tab carries a coloured underline', (await tabChrome('#screen-list .tab')).every(t=>
+      t.active ? t.b!=='rgba(0, 0, 0, 0)' : t.b==='rgba(0, 0, 0, 0)'));
+    ok('tab row is flush with the content edge', await p.evaluate(()=>
+      Math.abs(document.querySelector('#screen-list .tab').getBoundingClientRect().left -
+               document.querySelector('#screen-list .filters').getBoundingClientRect().left) <= 2));
+    ok('hover still uses the kit hover tint (reset did not kill it)', await (async()=>{
+      await p.locator('#screen-list .tab[data-ltab="deleted"]').hover(); await p.waitForTimeout(250);
+      const got=await p.locator('#screen-list .tab[data-ltab="deleted"]').evaluate(e=>getComputedStyle(e).backgroundColor);
+      await p.mouse.move(2,2); await p.waitForTimeout(150);
+      return got===await toRGB(await kit('--color-primary-5'));})());
     ok('the selected tab is kit primary', await (async()=>{
       const t=await style('#screen-list .tab.active');
       return t.color===await toRGB(await kit('--color-primary'));})());
@@ -115,6 +132,12 @@ const ok=(n,c,x)=>{c?(pass++,console.log('  ok   '+n)):(fail++,console.log('  FA
         return !!hit && (ov===hit || ov.contains(hit));});}));
     ok('preview header reflects the clicked row', (await txt('#r-sub')).includes('Mar 20, 2025 – Mar 23, 2025'));
     ok('Missing source tab selected', (await p.locator('.tab[data-tab="miss"]').getAttribute('aria-selected'))==='true');
+    ok('result tabs have no native button chrome', (await p.evaluate(()=>[...document.querySelectorAll('#screen-results .tab')]
+      .filter(e=>e.offsetParent!==null).every(e=>{const c=getComputedStyle(e);
+        return c.backgroundColor==='rgba(0, 0, 0, 0)'&&c.borderTopWidth==='0px'&&c.borderLeftWidth==='0px';}))));
+    ok('result tab row is flush with the title', await p.evaluate(()=>
+      Math.abs(document.querySelector('#screen-results .tab').getBoundingClientRect().left -
+               document.querySelector('#screen-results h1').getBoundingClientRect().left) <= 2));
     ok('results overlay paints over the sidebar (occlusion, not visibility)', await p.evaluate(()=>{
       const sb=document.querySelector('.sidebar'), ov=document.getElementById('screen-results');
       const r=sb.getBoundingClientRect();
