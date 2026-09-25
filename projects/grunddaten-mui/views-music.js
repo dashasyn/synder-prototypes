@@ -302,13 +302,23 @@ function MusicEventsView() {
                     <${TableCell}><${MusLineChips} ev=${ev} /><//>
                     <${TableCell} sx=${{ color: 'text.secondary', whiteSpace: 'nowrap' }}>${evPeriod(ev)}<//>
                     <${TableCell}><${MusStateChip} cls=${st.cls} label=${st.label} /><//>
+                    ${/* Ignat, 2026-09-25: classic grey MUI icons at the end of the row —
+                          edit (pen) and delete (trash). Default IconButton colour, so
+                          both read as quiet row actions rather than one blue text
+                          button and one red icon competing with the data. */ ''}
                     <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                      <${Button} onClick=${() => nav('musicEvent', ev.id)}>${t('msEdit')}<//>
-                      ${/* the tooltip names the action; the question belongs to the confirm */ ''}
+                      <${Tooltip} title=${t('msEdit')}>
+                        <${IconButton} aria-label=${t('msEdit') + ': ' + ev.name}
+                          onClick=${() => nav('musicEvent', ev.id)}>
+                          <${Icon} sx=${{ fontSize: 20 }}>edit<//>
+                        <//>
+                      <//>
                       <${Tooltip} title=${state.lang === 'de' ? 'Löschen' : 'Delete'}>
-                        <${IconButton} color="error"
+                        <${IconButton}
                           aria-label=${(state.lang === 'de' ? 'Löschen: ' : 'Delete: ') + ev.name}
-                          onClick=${() => setDelEv(ev)}><${Icon} sx=${{ fontSize: 18 }}>delete_outline<//><//>
+                          onClick=${() => setDelEv(ev)}>
+                          <${Icon} sx=${{ fontSize: 20 }}>delete<//>
+                        <//>
                       <//>
                     <//>
                   <//>`;
