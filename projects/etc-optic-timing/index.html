@@ -108,6 +108,9 @@
   .tf.disabled input, .tf.disabled select { color: var(--ink-3); cursor: not-allowed; }
   .tf.disabled > label { color: var(--ink-3); }
   .helper { font-size: 12px; color: var(--ink-2); padding: 4px 12px 0; line-height: 1.45; }
+  .tf.error, .tf.error.focused { border-bottom: 2px solid #d32f2f; padding-bottom: 4px; }
+  .tf.error > label { color: #d32f2f; }
+  .helper.error { color: #d32f2f; }
   .helper .mono { font-size: 12px; }
   .field { margin-bottom: 18px; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 16px; }
@@ -954,7 +957,7 @@ function openRow(idx, presetStation) {
     </div>
 
     <div class="field" style="margin-top:20px;max-width:50%">
-      ${tfText({ id: 'r-offset', label: 'Offset', value: r.offset, placeholder: '±mm:ss', helperId: 'r-offset-help',
+      ${tfText({ id: 'r-offset', label: 'Offset', value: r.offset, placeholder: 'mm:ss', helperId: 'r-offset-help',
                  helper: 'Negative announces before the reference moment, positive after.' })}
     </div>
 
@@ -1005,11 +1008,27 @@ function openRow(idx, presetStation) {
     $('r-type-note').innerHTML = note ? esc(note) : '';
   }
 
+  /* Ignat, 2026-09-28: "Negative offset is impossible" for an optic trigger —
+     the announcement fires on the actual train movement, so it cannot come
+     before it. Estimated-time triggers keep negative offsets (668's own
+     example row is -2:00). Shown as an inline MD2 error, Save disabled. */
+  function validateOffset() {
+    const neg = currentBasis() === 'optic' && $('r-offset').value.trim().startsWith('-');
+    const tf = $('r-offset').closest('.tf');
+    tf.classList.toggle('error', neg);
+    $('r-offset-help').classList.toggle('error', neg);
+    $('r-offset-help').textContent = neg
+      ? 'Can\'t be negative — an optic trigger fires on the actual train movement, so the message can only come at or after it.'
+      : currentBasis() === 'optic'
+        ? 'Counted from the moment the train actually triggers the optic. Positive shows the message later.'
+        : 'Counted from the estimated time. Negative announces before it, positive after.';
+    $('dt-save').disabled = neg;
+    return !neg;
+  }
+
   function syncBasis() {
     $('r-optic-block').classList.toggle('hide', currentBasis() !== 'optic');
-    $('r-offset-help').textContent = currentBasis() === 'optic'
-      ? 'Counted from the moment the train actually triggers the optic. Positive shows the message later.'
-      : 'Counted from the estimated time. Negative announces before it, positive after.';
+    validateOffset();
     updatePreview();
   }
 
@@ -1023,9 +1042,10 @@ function openRow(idx, presetStation) {
   $('r-station').addEventListener('change', () => { r.platform = ''; fillPlatforms(); fillOptics(); updatePreview(); });
   $('r-plat').addEventListener('change', () => { fillOptics(); updatePreview(); });
   ['r-type', 'r-optic'].forEach(id => $(id).addEventListener('change', updatePreview));
-  $('r-offset').addEventListener('input', updatePreview);
+  $('r-offset').addEventListener('input', () => { validateOffset(); updatePreview(); });
 
   $('dt-save').onclick = () => {
+    if (!validateOffset()) return;
     const basis = currentBasis();
     const out = {
       station: $('r-station').value,
