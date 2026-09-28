@@ -73,6 +73,26 @@ const theme = createTheme({
 
 const LAST_IMPORT = '27 Aug 2026, 03:00';
 
+/* Position correction — Ignat, 2026-09-28, option C: the delay lives in two
+   places. The optic carries a correction for where it physically sits ("too
+   far out, show after 4 min, not 3"), shared by every trigger at that optic;
+   each trigger keeps its own offset. The announcement fires at the sum.
+   data.js is generated and never edited, so the field is added here. The
+   +1:00 on HA2 24T45 is illustrative — the tickets give no numbers. */
+OPTICS.forEach(o => { if (o.corr == null) o.corr = o.id === 'HA2 24T45' ? '+1:00' : '0:00'; });
+
+/** ±m:ss → seconds; null when it doesn't parse. */
+function toSec(s) {
+  const m = String(s || '').trim().match(/^([+-])?(\d{1,3}):([0-5]\d)$/);
+  if (!m) return null;
+  const v = Number(m[2]) * 60 + Number(m[3]);
+  return m[1] === '-' ? -v : v;
+}
+const fmtSec = v => `${v < 0 ? '-' : ''}${Math.floor(Math.abs(v) / 60)}:${String(Math.abs(v) % 60).padStart(2, '0')}`;
+const corrOf = id => { const o = OPTICS.find(x => x.id === id); return o ? (toSec(o.corr) || 0) : 0; };
+/** Offset + the optic's correction, or null when the offset doesn't parse. */
+const firesAfter = (offset, opticId) => { const s = toSec(offset); return s == null ? null : s + corrOf(opticId); };
+
 /* offsetPhrase() in the vanilla returns HTML (<b>…</b>); this is its logic,
    returning parts React can render. Same rules, same outputs. */
 function offsetWords(off) {
@@ -256,7 +276,7 @@ function Presenter() {
 
 /* ══ Screen: Aramis optics list (233) ═══════════════════════════════ */
 function OpticsList() {
-  const { go, rev, askDelete } = useApp();
+  const { go, rev, askDelete, openUpload } = useApp();
   const [q, setQ] = useState('');
   const [st, setSt] = useState('');
   const [pl, setPl] = useState('');
@@ -286,6 +306,7 @@ function OpticsList() {
         <${FilterSelect} id="o-plat" label="Platform" value=${pl} minWidth=${160} onChange=${reset(setPl)}
           options=${plats.map(p => ({ value: p, label: 'Platform ' + p }))} />
         <${Box} sx=${{ flex: 1 }} />
+        <${Button} variant="outlined" id="o-upload" startIcon=${html`<${Icon}>upload<//>`} onClick=${openUpload}>Upload<//>
         <${Button} variant="contained" id="o-add" startIcon=${html`<${Icon}>add<//>`} onClick=${() => go('optic', null)}>Add optic<//>
       <//>
       <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
@@ -338,15 +359,24 @@ function OpticsList() {
 function OpticDetail() {
   const { go, opticId, toast, bump, askDelete, openRow } = useApp();
   const existing = opticId ? OPTICS.find(x => x.id === opticId) : null;
-  const blank = { id: '', station: '', platform: '', track: '', loc: '', dir: '', props: '' };
+  const blank = { id: '', station: '', platform: '', track: '', loc: '', dir: '', props: '', corr: '0:00' };
   const [d, setD] = useState(() => ({ ...(existing || blank) }));
   const [errs, setErrs] = useState({});
   const set = patch => { setD(prev => ({ ...prev, ...patch })); setErrs({}); };
   const used = existing ? opticsUsedBy(existing.id) : [];
 
+  // Same rule as the trigger offset: the optic fires on the actual movement,
+  // so nothing can be shown before it.
+  const corrSec = toSec(d.corr);
+  const corrErr = String(d.corr).trim().startsWith('-')
+    ? "Can't be negative — the message can only come at or after the train triggers the optic."
+    : corrSec == null ? 'Use m:ss, e.g. +1:00.' : '';
+  const corrOut = corrSec ? '+' + fmtSec(corrSec) : '0:00';
+
   const save = () => {
+    if (corrErr) return;
     if (existing) {
-      Object.assign(existing, { loc: d.loc.trim(), dir: d.dir, props: d.props.trim() });
+      Object.assign(existing, { loc: d.loc.trim(), dir: d.dir, props: d.props.trim(), corr: corrOut });
       bump(); go('optics'); toast('Optic saved'); return;
     }
     // MUI's own error + helperText on the field that is wrong, not a toast
@@ -358,7 +388,7 @@ function OpticDetail() {
     if (!d.platform.trim()) e.platform = 'Platform is required';
     if (Object.keys(e).length) { setErrs(e); return; }
     OPTICS.push({ id, station: d.station, platform: d.platform.trim(), track: d.track.trim(),
-                  loc: d.loc.trim(), dir: d.dir, props: d.props.trim() });
+                  loc: d.loc.trim(), dir: d.dir, props: d.props.trim(), corr: corrOut });
     bump(); go('optics'); toast(`Optic ${id} created`);
   };
 
@@ -369,9 +399,13 @@ function OpticDetail() {
     <${Box}>
       <${PageHeader} crumbs=${crumbs} title=${existing ? existing.id : 'New optic'} titleId="od-title"
         action=${html`
-          ${existing ? html`<${Button} variant="outlined" id="od-copy" startIcon=${html`<${Icon}>content_copy<//>`}
-                                onClick=${() => toast('Optic URL copied to clipboard')}>Copy optic URL<//>` : null}
-          <${Button} variant="contained" id="od-save" onClick=${save}>Save<//>`} />
+          ${/* Every functional button sits top right (Ignat, 2026-09-28). */ ''}
+          ${existing ? html`
+            <${Button} variant="outlined" color="error" id="od-del" startIcon=${html`<${Icon}>delete<//>`}
+              onClick=${() => askDelete(existing.id, () => go('optics'))}>Delete optic<//>
+            <${Button} variant="outlined" id="od-copy" startIcon=${html`<${Icon}>content_copy<//>`}
+              onClick=${() => toast('Optic URL copied to clipboard')}>Copy optic URL<//>` : null}
+          <${Button} variant="contained" id="od-save" disabled=${!!corrErr} onClick=${save}>Save<//>`} />
 
       <${SectionCard} title="Identity">
         <${FieldGrid}>
@@ -400,12 +434,16 @@ function OpticDetail() {
             onChange=${e => set({ track: e.target.value })} />
         <//>
         <${Box} sx=${{ mt: 2 }}>
-          <${FieldGrid} cols=${2}>
+          <${FieldGrid} cols=${3}>
             <${TextField} id="od-loc" label="Location on the network" value=${d.loc}
               placeholder="e.g. Approach, 420 m before platform" onChange=${e => set({ loc: e.target.value })} />
             <${FilterSelect} id="od-dir" label="Travel direction" value=${d.dir} onChange=${v => set({ dir: v })}
               options=${[{ value: 'Westbound', label: 'Westbound' }, { value: 'Eastbound', label: 'Eastbound' }]}
               helperText="Ticket 233 describes a track schematic — upper track westbound, lower eastbound. Until the image arrives this is a plain two-value choice." />
+            <${TextField} id="od-corr" label="Position correction" value=${d.corr} placeholder="m:ss"
+              error=${!!corrErr}
+              helperText=${corrErr || `Added to every trigger at this optic${used.length ? ` (${used.length} now)` : ''}. Use it when the optic sits too far out — e.g. +1:00 shows every message a minute later.`}
+              onChange=${e => set({ corr: e.target.value })} />
           <//>
         <//>
       <//>
@@ -428,7 +466,7 @@ function OpticDetail() {
               <${Table}>
                 <${TableHead}><${TableRow}>
                   <${TableCell}>Station<//><${TableCell}>Business rule<//><${TableCell}>Platform<//>
-                  <${TableCell}>2806 type<//><${TableCell}>Offset<//>
+                  <${TableCell}>2806 type<//><${TableCell}>Offset<//><${TableCell}>Fires after<//>
                 <//><//>
                 <${TableBody}>
                   ${used.map((r, k) => html`
@@ -439,14 +477,15 @@ function OpticDetail() {
                       <${TableCell}>${r.platform ? 'Platform ' + r.platform : 'All platforms'}<//>
                       <${TableCell}>${typeLabel(r.type)}<//>
                       <${TableCell} sx=${{ fontFamily: 'Roboto Mono, monospace' }}>${r.offset}<//>
+                      <${TableCell} sx=${{ fontFamily: 'Roboto Mono, monospace' }} data-fires>${(() => {
+                        // live: follows the correction being typed, before Save
+                        const s = toSec(r.offset);
+                        return s == null || corrSec == null ? '–' : fmtSec(s + corrSec);
+                      })()}<//>
                     <//>`)}
                 <//>
               <//>
             <//>` : html`<${Typography} variant="body2" color="text.secondary">Not used by any timing row yet.<//>`}
-        <//>
-        <${Box}>
-          <${Button} color="error" id="od-del" startIcon=${html`<${Icon}>delete<//>`}
-            onClick=${() => askDelete(existing.id, () => go('optics'))}>Delete optic<//>
         <//>` : null}
     <//>`;
 }
@@ -504,7 +543,10 @@ function StationRows({ st }) {
                             <${Link} component="button" underline="hover" data-goto-optic=${r.optic} sx=${{ fontFamily: 'Roboto Mono, monospace' }}
                               onClick=${e => { e.stopPropagation(); go('optic', r.optic); }}>${r.optic}<//>
                             <${Typography} component="span" variant="body2" color="text.secondary"> · type ${r.type}<//>` : '–'}<//>
-                          <${TableCell} sx=${{ fontFamily: 'Roboto Mono, monospace' }}>${r.offset}<//>
+                          <${TableCell} sx=${{ fontFamily: 'Roboto Mono, monospace' }}>${r.offset}${
+                            r.basis === 'optic' && corrOf(r.optic) && firesAfter(r.offset, r.optic) != null ? html`
+                              <${Typography} component="span" variant="body2" color="text.secondary" data-corr-note
+                                sx=${{ fontFamily: 'Roboto, sans-serif' }}> + ${fmtSec(corrOf(r.optic))} optic = <b>${fmtSec(firesAfter(r.offset, r.optic))}</b><//>` : null}<//>
                           <${TableCell} align="right" sx=${{ py: 0 }}>
                             <${RowIcon} icon="edit" label=${'Edit trigger ' + ruleLabel(r.rule)} onClick=${() => openRow(i)} />
                           <//>
@@ -559,15 +601,16 @@ function Timing() {
 
       <${Assume}>
         <b>Decided (Ignat, 2026-09-28):</b> lead time and repeat interval are set <b>per station</b>; an optic trigger counts from the <b>actual</b> train movement,
-        never has a negative offset, and <b>always falls back</b> to the estimated time if the optic event never arrives.
-        <b> Still open:</b> A4 (can type 50 trigger?), A5 (repeat interval per station or per announcement type), and whether the optic delay lives on the optic, on the trigger, or both.
+        never has a negative offset, and <b>always falls back</b> to the estimated time if the optic event never arrives. The delay lives in <b>both</b> places:
+        a position correction on the optic, shared by all its triggers, plus each trigger's own offset — the announcement fires at the sum.
+        <b> Still open:</b> A4 (can type 50 trigger?) and A5 (repeat interval per station or per announcement type).
       <//>
     <//>`;
 }
 
 /* ══ Side sheet: trigger editor — the shared "Based on" control ═══════ */
 function TriggerDrawer({ idx, presetStation, onClose }) {
-  const { bump, toast, expand } = useApp();
+  const { bump, toast, expand, go } = useApp();
   const isNew = idx == null;
   const [r, setR] = useState(() => isNew
     ? { station: presetStation || '1500', rule: 'BR12', platform: '', basis: 'est', optic: '', type: '80', offset: '0:00' }
@@ -588,6 +631,13 @@ function TriggerDrawer({ idx, presetStation, onClose }) {
     : r.basis === 'optic'
       ? 'Counted from the moment the train actually triggers the optic. Positive shows the message later.'
       : 'Counted from the estimated time. Negative announces before it, positive after.';
+
+  // What the admin reads in the preview is the total the engine will use.
+  const corr = r.basis === 'optic' ? corrOf(opticValue) : 0;
+  const total = corr ? firesAfter(r.offset, opticValue) : null;
+  const totalOff = total != null ? fmtSec(total) : r.offset;
+  const corrNote = total != null
+    ? ` — ${fmtSec(toSec(r.offset))} offset + ${fmtSec(corr)} position correction` : '';
 
   const save = () => {
     if (negative) return;
@@ -655,6 +705,12 @@ function TriggerDrawer({ idx, presetStation, onClose }) {
               <//>
               ${type.note ? html`<${M.FormHelperText} id="r-type-note">${type.note}<//>` : null}
             <//>
+            ${corrOf(opticValue) ? html`
+              <${Alert} severity="info" id="r-corr-note" sx=${{ py: 0 }}>
+                Optic ${opticValue} has a position correction of <b>+${fmtSec(corrOf(opticValue))}</b>. It is added to this offset and to every other trigger at the optic.
+                <${Link} component="button" underline="hover" sx=${{ ml: .5, verticalAlign: 'baseline' }}
+                  onClick=${() => go('optic', opticValue)}>Edit on the optic<//>
+              <//>` : null}
             <${Typography} variant="body2" color="text.secondary" id="r-fallback-note">
               If this optic event never arrives, the announcement falls back to the estimated time.
             <//>
@@ -669,7 +725,7 @@ function TriggerDrawer({ idx, presetStation, onClose }) {
           <${Typography} variant="caption" sx=${{ display: 'block', fontWeight: 500, mb: .5 }}>What this row does<//>
           <span id="r-preview-txt">${r.basis === 'est'
             ? html`Announce <${OffsetPhrase} off=${r.offset} /> the estimated <b>${ruleKind(r.rule)}</b> time at ${where}.`
-            : html`At ${where}, announce <${OffsetPhrase} off=${r.offset} /> the train actually triggers the <b>${type.label || r.type}</b> (type ${r.type}) event at optic <b>${opticValue || '—'}</b>. If that event never arrives, fall back to the estimated <b>${ruleKind(r.rule)}</b> time.`}</span>
+            : html`At ${where}, announce <${OffsetPhrase} off=${totalOff} /> the train actually triggers the <b>${type.label || r.type}</b> (type ${r.type}) event at optic <b>${opticValue || '—'}</b>${corrNote}. If that event never arrives, fall back to the estimated <b>${ruleKind(r.rule)}</b> time.`}</span>
         <//>
         ${r.basis === 'optic' && r.type === '50' ? html`<${Assume}><b>A4 —</b> ticket 233 calls type 50 "informational only", while 668's example rows use it as the trigger. Unresolved.<//>` : null}
       <//>
@@ -727,6 +783,70 @@ function StationDrawer({ sid, onClose }) {
     <//>`;
 }
 
+/* ══ Dialog: upload optics (233) ══════════════════════════════════════
+   Ignat, 2026-09-28: "Don't add a real upload logic. Just a popup, which
+   will be closed by click upload. I just need to show the logic." So the file
+   is a stand-in, the preview is a fixed sample, and UPLOAD changes nothing
+   in the list. What it shows: FMSILA.XML only, a preview before anything is
+   written, imported fields updated, maintained fields never touched, nothing
+   deleted, bad rows skipped with a reason. */
+const UPLOAD_SAMPLE = [
+  { kind: 'new',       icon: 'add_circle_outline', color: 'success.main', title: '1 new optic',
+    lines: ['HA6 131130 — station 1220, platform 3, track 31'] },
+  { kind: 'changed',   icon: 'sync',               color: 'primary.main', title: '1 optic changed',
+    lines: ['HA6 131121 — Aramis track 21 → 22'] },
+  { kind: 'unchanged', icon: 'check_circle_outline', color: 'text.secondary', title: '3 optics unchanged', lines: [] },
+  { kind: 'missing',   icon: 'help_outline',       color: 'text.secondary', title: '2 optics not in the file',
+    lines: ['HA2 14T87, HA2 24T45 — kept and marked "Not in last upload". Nothing is deleted.'] },
+  { kind: 'skipped',   icon: 'error_outline',      color: 'error.main',   title: '1 row skipped',
+    lines: ['Line 42 — unknown station 9999'] },
+];
+
+function UploadDialog({ onClose }) {
+  const { toast } = useApp();
+  const [file, setFile] = useState(null);
+  const upload = () => { onClose(); toast(`${file} uploaded`); };
+  return html`
+    <${Dialog} open=${true} onClose=${onClose} maxWidth="sm" fullWidth PaperProps=${{ id: 'up-dialog' }}>
+      <${DialogTitle}>Upload optics<//>
+      <${DialogContent}>
+        <${DialogContentText} sx=${{ mb: 2, fontSize: 14 }}>
+          Upload FMSILA.XML to update station, platform and Aramis track. Location, direction, position correction and properties are maintained here and never overwritten.
+        <//>
+        ${file ? html`
+          <${Paper} variant="outlined" id="up-file" sx=${{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1, mb: 2, borderColor: '#E7E7E7' }}>
+            <${Icon} sx=${{ color: 'text.secondary' }}>description<//>
+            <${Box} sx=${{ flex: 1 }}>
+              <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${file}<//>
+              <${Typography} variant="caption" color="text.secondary">5 optics read · 1 row skipped<//>
+            <//>
+            <${IconButton} aria-label="Remove file" onClick=${() => setFile(null)}><${Icon}>close<//><//>
+          <//>
+          <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>What will change<//>
+          <${Stack} spacing=${1.25} id="up-preview">
+            ${UPLOAD_SAMPLE.map(g => html`
+              <${Box} key=${g.kind} data-up=${g.kind} sx=${{ display: 'flex', gap: 1.5 }}>
+                <${Icon} sx=${{ color: g.color }}>${g.icon}<//>
+                <${Box}>
+                  <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${g.title}<//>
+                  ${g.lines.map((l, k) => html`<${Typography} key=${k} variant="body2" color="text.secondary">${l}<//>`)}
+                <//>
+              <//>`)}
+          <//>` : html`
+          <${Box} id="up-drop" sx=${{ border: '1px dashed rgba(0,0,0,.23)', borderRadius: 1, py: 4, px: 2, textAlign: 'center', bgcolor: '#FAFAFA' }}>
+            <${Icon} sx=${{ fontSize: 36, color: 'text.secondary' }}>upload_file<//>
+            <${Typography} variant="body2" sx=${{ mt: 1, mb: 1.5 }}>Drag FMSILA.XML here, or<//>
+            <${Button} variant="outlined" id="up-choose" onClick=${() => setFile('FMSILA.XML')}>Choose file<//>
+            <${Typography} variant="caption" color="text.secondary" sx=${{ display: 'block', mt: 1.5 }}>XML only. The periodic import keeps running as well — last import ${LAST_IMPORT}.<//>
+          <//>`}
+      <//>
+      <${DialogActions} sx=${{ px: 3, pb: 2 }}>
+        <${Button} onClick=${onClose}>Cancel<//>
+        <${Button} variant="contained" id="up-go" disabled=${!file} startIcon=${html`<${Icon}>upload<//>`} onClick=${upload}>Upload<//>
+      <//>
+    <//>`;
+}
+
 /* ══ Root ═════════════════════════════════════════════════════════════ */
 function Root() {
   const [screen, setScreen] = useState('optics');
@@ -737,6 +857,7 @@ function Root() {
   const [drawer, setDrawer] = useState(null);
   const [toastMsg, setToastMsg] = useState('');
   const [del, setDel] = useState(null);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const bump = useCallback(() => setRev(x => x + 1), []);
   const go = useCallback((s, id) => { setDrawer(null); setScreen(s); if (s === 'optic') setOpticId(id === undefined ? null : id); window.scrollTo(0, 0); }, []);
@@ -757,7 +878,7 @@ function Root() {
 
   const value = {
     screen, opticId, go, rev, bump, assume, setAssume, expanded, toggle, expand,
-    toast: setToastMsg, askDelete,
+    toast: setToastMsg, askDelete, openUpload: () => setUploadOpen(true),
     openRow: (idx, preset) => { if (idx != null) { const r = ROWS[idx]; if (r) expand(r.station); } setDrawer({ kind: 'row', idx, preset }); },
     openStation: sid => setDrawer({ kind: 'station', sid }),
     openDefaults: () => setDrawer({ kind: 'station', sid: null }),
@@ -780,6 +901,7 @@ function Root() {
         <//>
         ${drawer && drawer.kind === 'row' ? html`<${TriggerDrawer} key=${'r' + drawer.idx + drawer.preset} idx=${drawer.idx} presetStation=${drawer.preset} onClose=${() => setDrawer(null)} />` : null}
         ${drawer && drawer.kind === 'station' ? html`<${StationDrawer} key=${'s' + drawer.sid} sid=${drawer.sid} onClose=${() => setDrawer(null)} />` : null}
+        ${uploadOpen ? html`<${UploadDialog} onClose=${() => setUploadOpen(false)} />` : null}
         <${Dialog} open=${!!del} onClose=${() => setDel(null)}>
           <${DialogTitle}>Delete optic ${del ? del.id : ''}?<//>
           <${DialogContent}><${DialogContentText}>It is not used by any timing row. This cannot be undone.<//><//>

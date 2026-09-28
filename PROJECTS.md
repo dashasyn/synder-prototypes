@@ -125,7 +125,9 @@
 - **Registered on the hub:** Synder Prototypes → Settings & Billing.
 
 ### ETC PIS Config — Optics & Station Announcements Timing (2026-08-27)
-- **Status:** 🚧 v1 prototype live, awaiting Ignat feedback
+- **Status:** 🚧 **MUI version is the only one we work on now** (Ignat, 2026-09-28): https://dashasyn.github.io/synder-prototypes/projects/etc-optic-timing-mui/ — `projects/etc-optic-timing-mui/app.js`, verified by `scripts/verify-eo-mui.cjs` (95 checks). The MD2 page below is frozen.
+- **Decided 2026-09-28:** offset counts from the actual train movement (no Planned/Forecast/Actual) · a missing optic event always falls back to estimated time · lead time + repeat per station · no negative offsets on optic triggers · Properties stays free text · nav stays under Systems ▾ · **delay lives in both places** — a *position correction* on the optic (shared by all its triggers, ≥0) plus each trigger's offset, fired at the sum · **Upload** (FMSILA.XML) is a popup only: file → preview (new/changed/unchanged/not in file/skipped) → UPLOAD closes it, no real logic · Delete optic sits top right with the other functional buttons.
+- **Still open:** type 50 as a trigger (A4, Ignat doesn't know — needs ETC/ISR) · repeat interval per station vs per announcement type (A5) · the track schematic image (Ignat will send).
 - **Client:** ETC Solutions GmbH — ISR (Israel Railways), PIS Configuration module
 - **Jira:** DATNETISR-233 (Feature 132, Aramis Optic settings) + DATNETISR-668 (Station Announcements Timing). Built as **one prototype** at Ignat's request — "they are connected".
 - **Prototype:** https://dashasyn.github.io/synder-prototypes/projects/etc-optic-timing/ — `projects/etc-optic-timing/index.html`
