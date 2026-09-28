@@ -690,18 +690,32 @@ const fs = require('fs');
      "Filters should have autocomplete". The cascade is updateCascade(); the
      expected option sets below are computed from DATA in the page, never typed
      here, so they cannot drift from the vanilla's data. */
-  const SCOPE = ['f-rpv', 'f-modes', 'f-cantons', 'f-tu', 'f-lines', 'f-stops'];
+  /* 2026-09-28: production's Pünktlichkeit mask (reference/production-
+     2026-09-28/create-punctuality.jpg), section by section, in its order.
+     Typed from the screenshot on purpose — reading SCOPE_BY_TYPE here would
+     check my table against itself. */
+  const SCOPE = ['f-rpv', 'f-modes', 'f-konz', 'f-tu', 'f-regions', 'f-cantons', 'f-lines',
+                 'f-stops', 'f-directions', 'f-threshold', 'f-rpv-category', 'f-bundles'];
   const scope = await page.evaluate(ids => ids.map(id => {
     const el = document.getElementById(id);
     if (!el) return null;
-    const r = el.getBoundingClientRect();
+    // the field's box, not the input: inputs sit at different depths inside it
+    const r = (el.closest('.MuiFormControl-root') || el).getBoundingClientRect();
     return { top: Math.round(r.top), left: Math.round(r.left),
              auto: !!el.closest('.MuiAutocomplete-root') };
   }), SCOPE);
-  ok('all six scope filters are there, Transport Association included',
+  ok('punctuality carries all twelve of production\'s filter sections',
     scope.every(Boolean), scope);
-  ok('every scope filter is an autocomplete', scope.every(x => x && x.auto), scope);
-  ok('they sit in the vanilla\'s order, which is the order of the cascade',
+  ok('and Verkehrszeiten sits with the time period, as in production',
+    !!(await page.$('#f-traffic-times')));
+  // every filter whose options we have is an autocomplete
+  const withOpts = SCOPE.filter(id => id !== 'f-rpv-category');
+  ok('every filter with known options is an autocomplete',
+    withOpts.every(id => scope[SCOPE.indexOf(id)].auto), scope);
+  ok('a section whose options were never captured says so, instead of inventing them',
+    /not captured|nicht erfasst/i.test(await page.evaluate(() =>
+      document.getElementById('f-rpv-category').closest('.MuiFormControl-root').textContent)));
+  ok('they sit in production\'s order, which is the order of the cascade',
     scope.every((x, i) => i === 0 || x.top > scope[i - 1].top
       || (x.top === scope[i - 1].top && x.left > scope[i - 1].left)), scope);
 
@@ -756,6 +770,15 @@ const fs = require('fs');
     linesAfterTu.length === (await page.evaluate(() => DATA.tuLines.BLS.length)),
     { before: lineOpts.length, after: linesAfterTu.length });
   ok('a choice shows as a short chip', (await chipsOf('f-tu')).join() === 'BLS', await chipsOf('f-tu'));
+  // production order puts TU before cantons: a TU narrows the cantons it serves
+  const wantBls = await page.evaluate(() =>
+    ALL_CANTONS.filter(c => (DATA.cantonTU[c] || []).includes('BLS')));
+  const cantonsBls = await optionsOf('f-cantons');
+  ok('choosing a transport company narrows the cantons to the ones it serves',
+    cantonsBls.length === wantBls.length && cantonsBls.every(c => wantBls.includes(c.slice(0, 2))),
+    { got: cantonsBls, want: wantBls });
+  ok('regions switch off when neither SBB nor PostAuto is chosen ("nur PAG und SBB")',
+    await page.$eval('#f-regions', e => e.disabled));
 
   // and the generated name follows the filters
   const nameAfter = await nameAt();
@@ -990,6 +1013,43 @@ const fs = require('fs');
   await page.waitForTimeout(600);
   ok('Raw Data Export goes straight to its own config, as in the vanilla',
     (await page.$$('#rd-run-btn')).length === 1 && !(await page.$('#type-dialog')));
+
+  /* Ignat, 2026-09-28: "The filters are still the same for all 'New
+     evaluation'." Each type's set, typed from its production mask. */
+  const COMMON8 = ['f-rpv', 'f-modes', 'f-konz', 'f-tu', 'f-regions', 'f-cantons', 'f-lines', 'f-stops'];
+  const WANT = { connection: COMMON8, trip_failures: COMMON8, data_quality: COMMON8,
+                 line_analysis: ['f-la-tu', 'f-base-line', 'f-quantiles'] };
+  for (const [type, want] of Object.entries(WANT)) {
+    await page.click('.MuiBreadcrumbs-root a');
+    await page.waitForTimeout(400);
+    await page.click('#new-eval-btn');
+    await page.waitForTimeout(500);
+    await page.click('#type-option-' + type);
+    await page.waitForTimeout(500);
+    const got = await page.$$eval('#scope-filters input[id^="f-"]', e => e.map(x => x.id));
+    ok(`${type} offers production's filters, in production's order`,
+      JSON.stringify(got) === JSON.stringify(want), got);
+    ok(`${type} has no traffic-times field (punctuality only)`, !(await page.$('#f-traffic-times')));
+  }
+  // Line Analysis: one TU, and the base line is one of that TU's lines
+  const la = await page.evaluate(() => ({
+    tu: document.getElementById('f-la-tu').value,
+    line: document.getElementById('f-base-line').value,
+  }));
+  ok('Line Analysis opens on AAGL and its first base line, as production\'s mask does',
+    la.tu === 'AAGL' && la.line === '50.070', la);
+  await page.click('#f-la-tu');
+  await page.fill('#f-la-tu', 'AB');
+  await page.waitForTimeout(250);
+  await page.click('#f-la-tu-listbox li >> nth=0');
+  await page.waitForTimeout(300);
+  ok('a different TU moves the base line to one of its own lines',
+    (await page.$eval('#f-base-line', e => e.value)).startsWith('8.'),
+    await page.$eval('#f-base-line', e => e.value));
+  ok('Line Analysis does not claim its filters are optional',
+    !(await page.$('#scope-subtitle')));
+  ok('the generated name names the TU and base line',
+    /AB 8\./.test(await page.$eval('#eval-name', e => e.value)), await page.$eval('#eval-name', e => e.value));
   await page.click('.MuiBreadcrumbs-root a');
   await page.waitForTimeout(400);
   await page.click('#new-eval-btn');
@@ -1399,6 +1459,19 @@ const fs = require('fs');
   await page.waitForTimeout(400);
   ok('running without a threshold shows the error',
     (await page.$$('#rd-threshold-error')).length === 1);
+  /* production's Rohdaten mask: threshold · TU · directions · lines · stops */
+  const rdIds = await page.$$eval('#rd-filters [id^="rd-"]:is(input, .MuiFormControl-root)',
+    e => e.map(x => x.id).filter(Boolean));
+  ok('raw data carries production\'s five filters in order',
+    JSON.stringify(rdIds) === JSON.stringify(['rd-threshold', 'rd-tu', 'rd-dir', 'rd-lines', 'rd-stops']), rdIds);
+  ok('the TU reads as its code, not "AAGL,Autobus AG…"',
+    (await page.$eval('#rd-tu', e => e.value)) === 'AAGL', await page.$eval('#rd-tu', e => e.value));
+  await page.click('#rd-lines');
+  await page.waitForTimeout(250);
+  const rdLines = await page.$$eval('#rd-lines-listbox li', e => e.map(x => x.textContent));
+  await page.keyboard.press('Escape');
+  ok('raw-data lines are the chosen TU\'s own',
+    rdLines.length === 4 && rdLines.every(l => l.startsWith('50.')), rdLines);
   ok('the config has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
 
   ok('no console errors', errors.length === 0, errors.slice(0, 4));

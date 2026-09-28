@@ -637,6 +637,61 @@ function ScopeSelect({ id, label, values, options, onChange, renderLabel }) {
         <${TextField} ...${params} variant="filled" label=${label} />`} />`;
 }
 
+/* A single-choice filter — production's TU on Line Analysis and Raw Data,
+   and the base line, take one value, never several. Same autocomplete. */
+function SingleScope({ id, label, value, options, onChange, required }) {
+  const byId = useMemo(() => new Map(options.map(o => [o.id, o])), [options]);
+  return html`
+    <${Autocomplete} id=${id} size="small" disableClearable=${!!required}
+      options=${options} value=${byId.get(value) || null}
+      filterOptions=${scopeFilter}
+      isOptionEqualToValue=${(o, v) => o.id === v.id}
+      getOptionLabel=${o => o.chip || o.label}
+      renderOption=${(props, o) => {
+        const { key, ...rest } = props;
+        return html`<li key=${o.id} ...${rest}>${o.label}</li>`;
+      }}
+      onChange=${(e, v) => onChange(v ? v.id : '')}
+      renderInput=${params => html`
+        <${TextField} ...${params} variant="filled" label=${label} required=${!!required} />`} />`;
+}
+
+/* A section production has and whose options we have never seen (its
+   dropdown was closed in every screenshot). It is shown so the structure is
+   right, and says plainly that it is empty rather than offering made-up
+   values that would read as real ones. */
+function NotCaptured({ id, label }) {
+  const { t } = useT();
+  return html`
+    <${TextField} id=${id} label=${label} disabled
+      helperText=${t('opts_not_captured')} />`;
+}
+
+/* ── Per-type filter sets ─────────────────────────────────────────────
+   Ignat, 2026-09-28: "The filters are still the same for all 'New
+   evaluation'. Please update them to repeat the real structure." The
+   vanilla had one set for every type; these come from six production
+   creation masks (reference/production-2026-09-28/create-*.jpg), each in
+   production's own section order. */
+const SCOPE_BY_TYPE = {
+  punctuality:   ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops',
+                  'directions', 'threshold', 'rpvCat', 'bundles'],
+  connection:    ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops'],
+  trip_failures: ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops'],
+  data_quality:  ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops'],
+  line_analysis: ['laTu', 'baseLine', 'quantiles'],
+};
+// Punctuality alone carries "Verkehrszeiten", right after Zeitraum.
+const TIME_EXTRAS = { punctuality: ['trafficTimes'] };
+const THRESHOLD_KEYS = ['rd_thr_1', 'rd_thr_2', 'rd_thr_3', 'rd_thr_4', 'rd_thr_5'];
+// "Regionen (nur PAG und SBB)": regions exist only for these two operators.
+const REGION_TUS = ['SBB', 'PostAuto'];
+// Line Analysis and Raw Data pick from the operator list their masks show
+// (AAGL first); the base lines are that operator's lines from its bundles.
+const tuLinesFromBundles = code => RD_LINE_GROUPS
+  .filter(g => g.bundle.split(' ')[0] === code)
+  .flatMap(g => g.lines.map(([id, name]) => ({ id, label: id + ' · ' + name, chip: id, bundle: g.bundle })));
+
 /**
  * The evaluation-type popup.
  *
@@ -716,6 +771,14 @@ function NewEvaluation({ go, initialType }) {
   const [cantons, setCantons] = useState([]);
   const [lines, setLines] = useState([]);
   const [stops, setStops] = useState([]);
+  const [konz, setKonz] = useState('konz');   // production's default reads "konzessioniert"
+  const [regions, setRegions] = useState([]);
+  const [directions, setDirections] = useState([]);
+  const [threshold, setThreshold] = useState('');
+  const [bundles, setBundles] = useState([]);
+  const [laTu, setLaTu] = useState(RD_TU[0][0]);
+  const [baseLine, setBaseLine] = useState('');
+  const [quantiles, setQuantiles] = useState([]);
   const [name, setName] = useState('');
   const [nameEdited, setNameEdited] = useState(false);
   const [notify, setNotify] = useState(true);
@@ -739,19 +802,18 @@ function NewEvaluation({ go, initialType }) {
      last link (TU → lines). It also never had the first filter at all: the
      Transport Association (RPV), which is what the rest of the chain hangs off.
 
-       RPV            → cantons        (renderCantonOptions: DATA.rpv[r].cantons)
-       RPV · mode · canton → TU        (updateCascade: intersection of all three)
+       RPV · mode     → TU             (updateCascade: intersection)
+       RPV · TU       → cantons        (DATA.rpv[r].cantons, DATA.cantonTU)
+       TU             → regions        (only SBB / PostAuto have any)
        TU             → lines          (renderLinesOptions: DATA.tuLines)
 
      Stops depend on nothing, because the vanilla has no line→stop data — only
      a flat DATA.allStops. Narrowing them would mean inventing that mapping. */
   const rpvOptions = Object.keys(DATA.rpv).map(x => ({ id: x, label: x }));
   const modeOptions = FLAT_MODES.map(m => ({ id: m.id, label: m.label }));
-  const cantonOptions = useMemo(() => {
-    const allowed = rpv.length ? new Set(rpv.flatMap(r => (DATA.rpv[r] || { cantons: [] }).cantons)) : null;
-    return ALL_CANTONS.filter(c => !allowed || allowed.has(c))
-      .map(c => ({ id: c, label: CANTON_NAMES[c] || c, chip: c }));
-  }, [rpv]);
+  /* Production puts Transportunternehmen BEFORE Kantone, so the arrow the
+     vanilla had (canton → TU) now points the other way: a TU narrows the
+     cantons to the ones it serves, read from the same DATA.cantonTU table. */
   const tuOptions = useMemo(() => {
     let allowed = new Set(ALL_TU.map(x => x.id));
     const keep = ids => { allowed = new Set([...allowed].filter(id => ids.has(id))); };
@@ -760,12 +822,27 @@ function NewEvaluation({ go, initialType }) {
       const casc = new Set(FLAT_MODES.filter(m => modes.includes(m.id)).map(m => m.cascade));
       keep(new Set([...casc].flatMap(m => DATA.modes[m] || [])));
     }
-    if (cantons.length) {
-      const ids = new Set(cantons.flatMap(c => DATA.cantonTU[c] || []));
-      if (ids.size) keep(ids);   // a canton with no TU data narrows nothing, as there
-    }
     return ALL_TU.filter(x => allowed.has(x.id)).map(x => ({ id: x.id, label: x.label, chip: x.id }));
-  }, [rpv, modes, cantons]);
+  }, [rpv, modes]);
+  const cantonOptions = useMemo(() => {
+    const byRpv = rpv.length ? new Set(rpv.flatMap(r => (DATA.rpv[r] || { cantons: [] }).cantons)) : null;
+    const byTu = tu.length
+      ? new Set(ALL_CANTONS.filter(c => (DATA.cantonTU[c] || []).some(x => tu.includes(x))))
+      : null;
+    return ALL_CANTONS.filter(c => (!byRpv || byRpv.has(c)) && (!byTu || byTu.has(c)))
+      .map(c => ({ id: c, label: CANTON_NAMES[c] || c, chip: c }));
+  }, [rpv, tu]);
+  // "nur PAG und SBB": with TUs chosen and neither of those among them, there are no regions
+  const regionsOff = tu.length > 0 && !tu.some(x => REGION_TUS.includes(x));
+  const regionOptions = PUNCT_REGIONS.map(x => ({ id: x, label: x }));
+  const konzOptions = [{ id: 'konz', label: t('fa_mask_licensed') },
+                       { id: 'fahr', label: t('concession_operating') }];
+  const dirOptions = [{ id: 'hin', label: t('rd_dir_hin') }, { id: 'rueck', label: t('rd_dir_rueck') }];
+  const thresholdOptions = THRESHOLD_KEYS.map(k => ({ id: k, label: t(k) }));
+  const bundleOptions = useMemo(() =>
+    [...new Set(PUNCT_RECORDS.map(r => r.linienbuendel))].map(x => ({ id: x, label: x })), []);
+  const laTuOptions = RD_TU.map(([id, n]) => ({ id, label: id + ' · ' + n, chip: id }));
+  const baseLineOptions = useMemo(() => tuLinesFromBundles(laTu), [laTu]);
   const lineOptions = useMemo(() => {
     const src = tu.length ? tu.flatMap(id => DATA.tuLines[id] || [])
                           : Object.values(DATA.tuLines).flat();
@@ -783,6 +860,10 @@ function NewEvaluation({ go, initialType }) {
   const autoName = useMemo(() => {
     if (!type) return '';
     const parts = [];
+    if (type === 'line_analysis') {
+      const dayPart = days.length && days.length < 7 ? ', ' + days.join('/') : '';
+      return `${t('type_' + type)} – ${periodLabel}, ${[laTu, baseLine].filter(Boolean).join(' ')}${dayPart}`;
+    }
     if (tu.length) parts.push(tu.join(', '));
     if (cantons.length) parts.push(t('canton_label') + ' ' + cantons.join(', '));
     if (lines.length) parts.push(t('filter_lines') + ': ' + lines.join(', '));
@@ -790,7 +871,7 @@ function NewEvaluation({ go, initialType }) {
     const base = parts.length ? ', ' + parts.join(', ') : ', ' + t('all_lines');
     const dayPart = days.length && days.length < 7 ? ', ' + days.join('/') : '';
     return `${t('type_' + type)} – ${periodLabel}${base}${dayPart}`;
-  }, [type, tu, cantons, lines, stops, days, periodLabel, t]);
+  }, [type, tu, cantons, lines, stops, days, periodLabel, laTu, baseLine, t]);
 
   // The generated name lands in the field; typing in it takes over.
   React.useEffect(() => { if (!nameEdited) setName(autoName); }, [autoName, nameEdited]);
@@ -807,6 +888,51 @@ function NewEvaluation({ go, initialType }) {
   React.useEffect(() => prune(setCantons, cantonOptions), [cantonOptions]);
   React.useEffect(() => prune(setTu, tuOptions), [tuOptions]);
   React.useEffect(() => prune(setLines, lineOptions), [lineOptions]);
+  React.useEffect(() => { if (regionsOff) setRegions(v => v.length ? [] : v); }, [regionsOff]);
+  // the base line belongs to the TU: a new TU starts on its first line, as the mask shows
+  React.useEffect(() => {
+    if (!baseLineOptions.some(o => o.id === baseLine))
+      setBaseLine(baseLineOptions.length ? baseLineOptions[0].id : '');
+  }, [baseLineOptions]);
+
+  const scopeKeys = SCOPE_BY_TYPE[type] || SCOPE_BY_TYPE.connection;
+  const cantonLabel = o => html`
+    <${Box} component="span" sx=${{ fontWeight: 500, minWidth: 32 }}>${o.id}<//>
+    <${Box} component="span" sx=${{ color: 'text.secondary' }}>${o.label}<//>`;
+  const FILTERS = {
+    rpv:        () => html`<${ScopeSelect} id="f-rpv" label=${t('filter_transport_assoc')}
+                  values=${rpv} options=${rpvOptions} onChange=${setRpv} />`,
+    modes:      () => html`<${ScopeSelect} id="f-modes" label=${t('filter_transport_mode')}
+                  values=${modes} options=${modeOptions} onChange=${setModes} />`,
+    konz:       () => html`<${SingleScope} id="f-konz" label=${t('fa_mask_konz')} required
+                  value=${konz} options=${konzOptions} onChange=${setKonz} />`,
+    tu:         () => html`<${ScopeSelect} id="f-tu" label=${t('filter_tu')}
+                  values=${tu} options=${tuOptions} onChange=${setTu} />`,
+    regions:    () => regionsOff
+                  ? html`<${TextField} id="f-regions" label=${t('filter_regions')} disabled
+                      helperText=${t('regions_only_pag_sbb')} />`
+                  : html`<${ScopeSelect} id="f-regions" label=${t('filter_regions')}
+                      values=${regions} options=${regionOptions} onChange=${setRegions} />`,
+    cantons:    () => html`<${ScopeSelect} id="f-cantons" label=${t('filter_cantons')}
+                  values=${cantons} options=${cantonOptions} onChange=${setCantons}
+                  renderLabel=${cantonLabel} />`,
+    lines:      () => html`<${ScopeSelect} id="f-lines" label=${t('filter_lines')}
+                  values=${lines} options=${lineOptions} onChange=${setLines} />`,
+    stops:      () => html`<${ScopeSelect} id="f-stops" label=${t('filter_stops')}
+                  values=${stops} options=${stopOptions} onChange=${setStops} />`,
+    directions: () => html`<${ScopeSelect} id="f-directions" label=${t('rd_step_directions')}
+                  values=${directions} options=${dirOptions} onChange=${setDirections} />`,
+    threshold:  () => html`<${SingleScope} id="f-threshold" label=${t('rd_step_threshold')}
+                  value=${threshold} options=${thresholdOptions} onChange=${setThreshold} />`,
+    rpvCat:     () => html`<${NotCaptured} id="f-rpv-category" label=${t('filter_rpv_category')} />`,
+    bundles:    () => html`<${ScopeSelect} id="f-bundles" label=${t('filter_line_bundles')}
+                  values=${bundles} options=${bundleOptions} onChange=${setBundles} />`,
+    laTu:       () => html`<${SingleScope} id="f-la-tu" label=${t('filter_tu')} required
+                  value=${laTu} options=${laTuOptions} onChange=${setLaTu} />`,
+    baseLine:   () => html`<${SingleScope} id="f-base-line" label=${t('filter_base_line')} required
+                  value=${baseLine} options=${baseLineOptions} onChange=${setBaseLine} />`,
+    quantiles:  () => html`<${NotCaptured} id="f-quantiles" label=${t('filter_quantiles')} />`,
+  };
 
 
   return html`
@@ -894,46 +1020,41 @@ function NewEvaluation({ go, initialType }) {
                     variant=${days.includes(d) ? 'filled' : 'outlined'}
                     onClick=${() => setDays(x => x.includes(d) ? x.filter(y => y !== d) : [...x, d])} />`)}
               <//>
+              ${(TIME_EXTRAS[type] || []).includes('trafficTimes') && html`
+                <${Box} sx=${{ mt: 2, maxWidth: 340 }}>
+                  <${NotCaptured} id="f-traffic-times" label=${t('filter_traffic_times')} />
+                <//>`}
             <//>
           <//>
 
           <${Card}>
             <${CardContent}>
               <${Typography} variant="h6" gutterBottom>${t('step_scope')}<//>
-              <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
-                ${t('step2_subtitle')}
-              <//>
-              ${/* The vanilla's order, which is also the order of the cascade:
-                    each filter narrows the ones after it. */''}
-              <${Box} id="scope-filters" sx=${{ display: 'grid', gap: 2,
+              ${/* "All filters are optional" is false for Line Analysis, whose
+                    TU and base line are required — so it is not said there. */''}
+              ${type !== 'line_analysis' && html`
+                <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }} id="scope-subtitle">
+                  ${t('step2_subtitle')}
+                <//>`}
+              ${type === 'line_analysis' && html`<${Box} sx=${{ mb: 2 }} />`}
+              ${/* Production's order for this type, which is also the order of
+                    the cascade: each filter narrows the ones after it. */''}
+              <${Box} id="scope-filters" data-type=${type} sx=${{ display: 'grid', gap: 2,
                         gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
-                <${ScopeSelect} id="f-rpv" label=${t('filter_transport_assoc')}
-                  values=${rpv} options=${rpvOptions} onChange=${setRpv} />
-                <${ScopeSelect} id="f-modes" label=${t('filter_transport_mode')}
-                  values=${modes} options=${modeOptions} onChange=${setModes} />
-                <${ScopeSelect} id="f-cantons" label=${t('filter_cantons')}
-                  values=${cantons} options=${cantonOptions} onChange=${setCantons}
-                  renderLabel=${o => html`
-                    <${Box} component="span" sx=${{ fontWeight: 500, minWidth: 32 }}>${o.id}<//>
-                    <${Box} component="span" sx=${{ color: 'text.secondary' }}>${o.label}<//>`} />
-                <${ScopeSelect} id="f-tu" label=${t('filter_tu')}
-                  values=${tu} options=${tuOptions} onChange=${setTu} />
-                <${ScopeSelect} id="f-lines" label=${t('filter_lines')}
-                  values=${lines} options=${lineOptions} onChange=${setLines} />
-                <${ScopeSelect} id="f-stops" label=${t('filter_stops')}
-                  values=${stops} options=${stopOptions} onChange=${setStops} />
+                ${scopeKeys.map(k => html`<${Fragment} key=${k}>${FILTERS[k]()}<//>`)}
               <//>
 
               ${/* the vanilla's summary-filters row: what the run will cover */''}
               <${Divider} sx=${{ my: 2 }} />
               <${Typography} variant="body2" color="text.secondary" id="summary-filters">
-                ${periodLabel}${rpv.length ? ' · RPV: ' + rpv.join(', ') : ''}
+                ${periodLabel}${type === 'line_analysis' ? ' · ' + laTu + (baseLine ? ' · ' + baseLine : '') : ''}
+                ${rpv.length ? ' · RPV: ' + rpv.join(', ') : ''}
                 ${modes.length ? ' · ' + FLAT_MODES.filter(m => modes.includes(m.id)).map(m => m.label).join(', ') : ''}
                 ${tu.length ? ' · ' + tu.join(', ') : ''}
                 ${cantons.length ? ' · ' + t('canton_label') + ' ' + cantons.join(', ') : ''}
                 ${lines.length ? ' · ' + lines.length + ' ' + t('filter_lines') : ''}
                 ${stops.length ? ' · ' + stops.length + ' ' + t('filter_stops') : ''}
-                ${!rpv.length && !modes.length && !tu.length && !cantons.length && !lines.length && !stops.length
+                ${type !== 'line_analysis' && !rpv.length && !modes.length && !tu.length && !cantons.length && !lines.length && !stops.length
                   ? ' · ' + t('all_lines') : ''}
               <//>
             <//>
@@ -2260,13 +2381,28 @@ function ChartView({ go, row, title, items, format, backLabel, onBack }) {
    form has, so it is reproduced rather than left as decoration. */
 function RohdatenConfig({ go, row }) {
   const { t } = useT();
-  const [tu, setTu] = useState('');
+  /* Production's Rohdaten Export DPM mask (reference/production-2026-09-28/
+     create-raw-data.jpg): Zeitraum · Pünktlichkeitsgrenzwert · Transport-
+     unternehmen · Richtungen · Linien · Haltestellen, in that order. The TU is
+     one value, and the mask opens on the first one (AAGL). This form used to
+     print each TU as "AAGL,Autobus AG Liestal…" — String() of the [code,
+     name] pair — and had no Lines or Stops at all. */
+  const [tu, setTu] = useState(RD_TU[0][0]);
   const [threshold, setThreshold] = useState('');
-  const [dir, setDir] = useState('');
+  const [dirs, setDirs] = useState([]);
+  const [lines, setLines] = useState([]);
+  const [stops, setStops] = useState([]);
   const [touched, setTouched] = useState(false);
   const missing = touched && !threshold;
 
-  const THRESHOLDS = ['rd_thr_1', 'rd_thr_2', 'rd_thr_3', 'rd_thr_4', 'rd_thr_5'];
+  const tuOptions = RD_TU.map(([id, n]) => ({ id, label: id + ' · ' + n, chip: id }));
+  // Lines come grouped by bundle in the mask; the TU picks the bundles.
+  const lineOptions = useMemo(() => tuLinesFromBundles(tu), [tu]);
+  React.useEffect(() => {
+    setLines(v => { const n = v.filter(x => lineOptions.some(o => o.id === x)); return n.length === v.length ? v : n; });
+  }, [lineOptions]);
+  const stopOptions = RD_STOPS.map(([id, n]) => ({ id, label: id + ' · ' + n, chip: n }));
+  const dirOptions = [{ id: 'hin', label: t('rd_dir_hin') }, { id: 'rueck', label: t('rd_dir_rueck') }];
 
   return html`
     <${Box}>
@@ -2279,36 +2415,38 @@ function RohdatenConfig({ go, row }) {
                         onClick=${() => setTouched(true)}>${t('rd_run')}<//>`} />
       <${Box} sx=${{ p: 3, maxWidth: 1100, mx: 'auto' }}>
         <${Card} sx=${{ mb: 3 }}><${CardContent}>
-          <${Typography} variant="h6" gutterBottom>${t('rd_section_title')}<//>
-          <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
-            ${t('rd_section_subtitle')}
-          <//>
-          <${Stack} direction="row" spacing=${2} sx=${{ mb: 2 }}>
+          <${Typography} variant="h6" gutterBottom>${t('rd_step_period')}<//>
+          <${Stack} direction="row" spacing=${2}>
             <${TextField} label=${t('label_from')} type="date" InputLabelProps=${{ shrink: true }} />
             <${TextField} label=${t('label_to')} type="date" InputLabelProps=${{ shrink: true }} />
-          <//>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-            <${FilterSelect} id="rd-tu" label=${t('filter_tu')} value=${tu}
-              onChange=${setTu} minWidth=${220}
-              options=${RD_TU.map(x => ({ value: String(x), label: String(x) }))} />
-            <${FilterSelect} id="rd-dir" label=${t('rd_step_directions')} value=${dir}
-              onChange=${setDir} minWidth=${220}
-              options=${[{ value: 'hin', label: t('rd_dir_hin') },
-                         { value: 'rueck', label: t('rd_dir_rueck') }]} />
           <//>
         <//><//>
 
         <${Card}><${CardContent}>
-          <${Typography} variant="h6" gutterBottom>${t('rd_step_threshold')}<//>
-          <${FormControl} required error=${missing} sx=${{ minWidth: 320 }} id="rd-threshold">
-            <${InputLabel}>${t('rd_step_threshold')}<//>
-            <${Select} value=${threshold} label=${t('rd_step_threshold')}
-                       onChange=${e => setThreshold(e.target.value)}>
-              ${THRESHOLDS.map(k => html`<${MenuItem} key=${k} value=${k}>${t(k)}<//>`)}
+          <${Typography} variant="h6" gutterBottom>${t('step_scope')}<//>
+          <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 2 }}>
+            ${t('rd_section_subtitle')}
+          <//>
+          <${Box} id="rd-filters" sx=${{ display: 'grid', gap: 2,
+                    gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
+            <${FormControl} required error=${missing} id="rd-threshold">
+              <${InputLabel}>${t('rd_step_threshold')}<//>
+              <${Select} value=${threshold} label=${t('rd_step_threshold')}
+                         onChange=${e => setThreshold(e.target.value)}>
+                ${THRESHOLD_KEYS.map(k => html`<${MenuItem} key=${k} value=${k}>${t(k)}<//>`)}
+              <//>
+              ${missing && html`
+                <${Typography} variant="body2" color="error" id="rd-threshold-error"
+                               sx=${{ mt: .5, ml: 1.75 }}>${t('err_threshold_required')}<//>`}
             <//>
-            ${missing && html`
-              <${Typography} variant="caption" color="error" id="rd-threshold-error"
-                             sx=${{ mt: .5, ml: 1.75 }}>${t('err_threshold_required')}<//>`}
+            <${SingleScope} id="rd-tu" label=${t('rd_step_tu')} required
+              value=${tu} options=${tuOptions} onChange=${setTu} />
+            <${ScopeSelect} id="rd-dir" label=${t('rd_step_directions')}
+              values=${dirs} options=${dirOptions} onChange=${setDirs} />
+            <${ScopeSelect} id="rd-lines" label=${t('rd_step_lines')}
+              values=${lines} options=${lineOptions} onChange=${setLines} />
+            <${ScopeSelect} id="rd-stops" label=${t('rd_step_stops')}
+              values=${stops} options=${stopOptions} onChange=${setStops} />
           <//>
         <//><//>
       <//>

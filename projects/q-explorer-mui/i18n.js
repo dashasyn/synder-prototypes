@@ -164,6 +164,16 @@ var translations = {
       no_options: 'Pick a transport company first',
       no_matches: 'No matches',
       name_reset: 'Reset to generated name',
+      // Production creation masks, 2026-09-28 — section names as the product writes them
+      filter_regions: 'Regions (PostAuto and SBB only)',
+      regions_only_pag_sbb: 'Only for PostAuto and SBB',
+      concession_operating: 'operating',
+      filter_traffic_times: 'Traffic times',
+      filter_rpv_category: 'RPV category',
+      filter_line_bundles: 'Line bundles',
+      filter_base_line: 'Base line',
+      filter_quantiles: 'Quantiles',
+      opts_not_captured: '[options not captured]',
       /* The vanilla's login card is hardcoded German and ignores the language
          toggle entirely — a real defect in it, not a decision. Carried here as
          keys so the port's login follows the chosen language. */
@@ -660,6 +670,15 @@ var translations = {
       no_options: 'Zuerst ein Transportunternehmen wählen',
       no_matches: 'Keine Treffer',
       name_reset: 'Auf generierten Namen zurücksetzen',
+      filter_regions: 'Regionen (nur PAG und SBB)',
+      regions_only_pag_sbb: 'Nur für PostAuto und SBB',
+      concession_operating: 'fahrend',
+      filter_traffic_times: 'Verkehrszeiten',
+      filter_rpv_category: 'RPV Kategorie',
+      filter_line_bundles: 'Linienbündel',
+      filter_base_line: 'Basislinie',
+      filter_quantiles: 'Quantil',
+      opts_not_captured: '[Optionen nicht erfasst]',
       login_title: 'Anmelden',
       login_subtitle: 'QMS RPV CH · Q-Explorer',
       login_email: 'E-Mail',
