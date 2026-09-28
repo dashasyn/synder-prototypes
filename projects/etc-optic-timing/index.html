@@ -393,10 +393,10 @@
         </table>
       </div>
       <div class="assume">
-        <b>Assumption A1 —</b> lead time and repeat interval are set <b>per station</b>, and the trigger source is set per
-        <b>Business rule + Platform</b> underneath it. That is why the station row carries three values and the nested rows carry the rest.
-        Open question 3 in DATNETISR-668. If overrides turn out to be per Station + Business rule + Platform too, the three
-        values move down into the nested rows and the station row becomes a plain group header.
+        <b>Decided (Ignat, 2026-09-28):</b> lead time and repeat interval are set <b>per station</b> — open question 3 in
+        DATNETISR-668 is closed, so the station row keeps its three values and the triggers stay nested underneath.
+        An optic trigger always counts from the <b>actual</b> train movement, and <b>always falls back</b> to the estimated time
+        if the optic event never arrives. <b>Still open:</b> A4 (can type 50 trigger?) and A5 (repeat interval per station or per announcement type).
       </div>
     </div>
 
@@ -474,7 +474,6 @@ const TYPES = [
 ];
 const typeLabel = v => { const t = TYPES.find(x => x.v === v); return t ? `${t.v} — ${t.label}` : v; };
 
-const SOURCES = ['Planned', 'Forecast', 'Actual'];
 
 /* Optics. HA2 pair from ticket 668's example rows; HA6 four from ticket 233's FMSILA example. */
 let OPTICS = [
@@ -497,10 +496,10 @@ let STATION_TIMING = {
 
 /* The four example rows, verbatim from ticket 668. */
 let ROWS = [
-  { station: '1500', rule: 'BR12', platform: '2', basis: 'optic', optic: 'HA2 14T87',  type: '50', offset: '0:00',  source: 'Actual',   fallback: true },
-  { station: '1820', rule: 'BR12', platform: '1', basis: 'est',   optic: '',           type: '',   offset: '-2:00', source: '',         fallback: false },
-  { station: '1820', rule: 'BR12', platform: '2', basis: 'optic', optic: 'HA2 24T45',  type: '50', offset: '+2:00', source: 'Forecast', fallback: true },
-  { station: '5900', rule: 'BR99', platform: '',  basis: 'est',   optic: '',           type: '',   offset: '0:30',  source: '',         fallback: false },
+  { station: '1500', rule: 'BR12', platform: '2', basis: 'optic', optic: 'HA2 14T87',  type: '50', offset: '0:00' },
+  { station: '1820', rule: 'BR12', platform: '1', basis: 'est',   optic: '',           type: '',   offset: '-2:00' },
+  { station: '1820', rule: 'BR12', platform: '2', basis: 'optic', optic: 'HA2 24T45',  type: '50', offset: '+2:00' },
+  { station: '5900', rule: 'BR99', platform: '',  basis: 'est',   optic: '',           type: '',   offset: '0:30' },
 ];
 
 /* ═════════ Helpers ═════════ */
@@ -511,11 +510,11 @@ const dash = v => (v === '' || v == null) ? '<span class="dim">–</span>' : esc
 const LOCK_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" style="opacity:.55"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
 
 /* MD2 filled fields, built here so the markup stays readable */
-function tfText({ id = '', label = '', value = '', placeholder = '', disabled = false, req = false, chip = '', lock = false, helper = '' }) {
+function tfText({ id = '', label = '', value = '', placeholder = '', disabled = false, req = false, chip = '', lock = false, helper = '', helperId = '' }) {
   return `<div class="tf${disabled ? ' disabled' : ''}">
       <label>${lock ? LOCK_ICON : ''}${esc(label)}${req ? ' <span class="req">*</span>' : ''}${chip ? ' ' + chip : ''}</label>
       <input ${id ? `id="${id}"` : ''} value="${esc(value)}" placeholder="${esc(placeholder)}" ${disabled ? 'disabled' : ''}>
-    </div>${helper ? `<div class="helper">${helper}</div>` : ''}`;
+    </div>${helper ? `<div class="helper"${helperId ? ` id="${helperId}"` : ''}>${helper}</div>` : ''}`;
 }
 function tfSelect({ id = '', label = '', options = '', disabled = false, req = false, chip = '', lock = false, helper = '', helperId = '' }) {
   return `<div class="tf sel${disabled ? ' disabled' : ''}">
@@ -659,7 +658,7 @@ function openOptic(id) {
   const usedHtml = used.length
     ? used.map(r => `<div style="padding:10px 0;border-bottom:1px solid rgba(0,0,0,.08)">
          <span class="link" data-goto-row="${esc(r.station)}|${esc(r.rule)}|${esc(r.platform)}">${esc(stationLabel(r.station))} · ${esc(ruleLabel(r.rule))}${r.platform ? ' · Platform ' + esc(r.platform) : ''}</span>
-         <div class="helper" style="padding:2px 0 0">Triggers on type ${esc(r.type)} at offset ${esc(r.offset)}, ${esc(r.source)} time.</div>
+         <div class="helper" style="padding:2px 0 0">Triggers on type ${esc(r.type)}, offset ${esc(r.offset)} from the actual train movement.</div>
        </div>`).join('')
     : '<div class="helper" style="padding:0">Not used by any timing row yet.</div>';
 
@@ -818,7 +817,7 @@ function triggerSubRow(r, i) {
     <td>${r.basis === 'optic'
         ? `<span class="link mono" data-goto-optic="${esc(r.optic)}">${esc(r.optic)}</span> <span class="dim">· type ${esc(r.type)}</span>`
         : '<span class="dim">–</span>'}</td>
-    <td class="mono">${esc(r.offset)}${r.source ? ` <span class="dim">· ${esc(r.source)}</span>` : ''}</td>
+    <td class="mono">${esc(r.offset)}</td>
     <td class="acts"><button class="icon-btn" data-row="${i}" title="Edit trigger">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg>
     </button></td>
@@ -844,7 +843,7 @@ function renderTiming() {
     </tr>`;
 
     if (open) {
-      out += `<tr class="sub sub-head"><td></td><td class="sub-first">Business rule</td><td>Platform</td><td>Based on</td><td>Optic</td><td>Offset · time source</td><td></td></tr>`;
+      out += `<tr class="sub sub-head"><td></td><td class="sub-first">Business rule</td><td>Platform</td><td>Based on</td><td>Optic</td><td>Offset</td><td></td></tr>`;
       out += trig.length
         ? trig.map(x => triggerSubRow(x.r, x.i)).join('')
         : `<tr class="sub"><td></td><td class="sub-first" colspan="6"><span class="dim">No trigger configured — announcements use the estimated time with this station's lead times.</span></td></tr>`;
@@ -897,7 +896,7 @@ function openStation(sid) {
     ${rowFor('repeat', 'Repeat interval')}
     <div class="helper" style="padding-left:0">Applies to ongoing announcement types such as delay messages.</div>
     <div class="assume">
-      <b>Assumption A1 —</b> one repeat interval per station. Ticket 668 says “allowing different repetition cadences”, which could also mean one interval per announcement type. If so, this becomes a small table rather than a field.
+      <b>Assumption A5 —</b> one repeat interval per station. Ticket 668 says “allowing different repetition cadences”, which could also mean one interval per announcement type. If so, this becomes a small table rather than a field.
     </div>`;
   $('ds-body').querySelectorAll('[data-reset]').forEach(b => b.addEventListener('click', () => {
     STATION_TIMING[sid][b.dataset.reset] = null;
@@ -920,7 +919,7 @@ $('t-add').addEventListener('click', () => openRow(null));
 function openRow(idx, presetStation) {
   const isNew = idx == null;
   const r = isNew
-    ? { station: presetStation || '1500', rule: 'BR12', platform: '', basis: 'est', optic: '', type: '80', offset: '0:00', source: 'Actual', fallback: true }
+    ? { station: presetStation || '1500', rule: 'BR12', platform: '', basis: 'est', optic: '', type: '80', offset: '0:00' }
     : JSON.parse(JSON.stringify(ROWS[idx]));
 
   $('dt-title').textContent = isNew ? 'Add trigger' : 'Edit trigger';
@@ -943,28 +942,20 @@ function openRow(idx, presetStation) {
 
     <div class="reveal ${r.basis === 'optic' ? '' : 'hide'}" id="r-optic-block">
       <div class="field">${tfSelect({ id: 'r-optic', label: 'Optic', options: '', helperId: 'r-optic-hint' })}</div>
-      <div class="grid2">
-        <div class="field">${tfSelect({ id: 'r-type', label: '2806 sub-message type',
-          options: TYPES.map(t => `<option value="${t.v}" ${t.v === r.type ? 'selected' : ''}>${esc(typeLabel(t.v))}</option>`).join('') })}</div>
-        <div class="field">${tfSelect({ id: 'r-source', label: 'Time source',
-          options: SOURCES.map(s => `<option ${s === r.source ? 'selected' : ''}>${s}</option>`).join('') })}</div>
-      </div>
+      <div class="field" style="max-width:50%">${tfSelect({ id: 'r-type', label: '2806 sub-message type',
+        options: TYPES.map(t => `<option value="${t.v}" ${t.v === r.type ? 'selected' : ''}>${esc(typeLabel(t.v))}</option>`).join('') })}</div>
       <div class="helper" id="r-type-note" style="padding-left:0"></div>
-      <div class="cbrow" style="margin-top:14px">
-        <input type="checkbox" id="r-fallback" ${r.fallback ? 'checked' : ''}>
-        <label for="r-fallback">Fall back to the estimated time if this event never arrives</label>
-      </div>
-      <div class="assume">
-        <b>Assumption A2 —</b> the fallback checkbox is my invention. Open question 2 in both tickets asks what happens when the configured 2806 event never arrives. If the answer is “always fall back”, this control disappears and becomes fixed behaviour. If it is “announce nothing”, it disappears too.
+      ${/* Ignat, 2026-09-28: optics fire on actual train movement, so there is no
+            Planned/Forecast/Actual choice; and a missing optic event always falls
+            back to the estimated time, so that is behaviour, not a checkbox. */ ''}
+      <div class="helper" id="r-fallback-note" style="padding-left:0;margin-top:10px">
+        If this optic event never arrives, the announcement falls back to the estimated time.
       </div>
     </div>
 
     <div class="field" style="margin-top:20px;max-width:50%">
-      ${tfText({ id: 'r-offset', label: 'Offset', value: r.offset, placeholder: '±mm:ss',
+      ${tfText({ id: 'r-offset', label: 'Offset', value: r.offset, placeholder: '±mm:ss', helperId: 'r-offset-help',
                  helper: 'Negative announces before the reference moment, positive after.' })}
-    </div>
-    <div class="assume">
-      <b>Assumption A3 —</b> the offset counts from the selected <b>time source</b>. Ticket 668 says “offset from message reception”, but it also asks you to choose Planned / Forecast / Actual — both cannot be the anchor. I picked the time source, because otherwise that selector has no effect.
     </div>
 
     <div class="preview" id="r-preview"><span class="lbl">What this row does</span><span id="r-preview-txt"></span></div>
@@ -1004,12 +995,10 @@ function openRow(idx, presetStation) {
     if (basis === 'est') {
       txt = `Announce ${offsetPhrase(off)} the estimated <b>${ruleKind(rid)}</b> time at ${esc(where)}.`;
     } else {
-      const oid = $('r-optic').value, ty = $('r-type').value, src = $('r-source').value;
+      const oid = $('r-optic').value, ty = $('r-type').value;
       const tl = (TYPES.find(t => t.v === ty) || {}).label || ty;
-      txt = `At ${esc(where)}, announce ${offsetPhrase(off)} the <b>${esc(tl)}</b> (type ${esc(ty)}) event at optic <b>${esc(oid || '—')}</b>, using the <b>${esc(src)}</b> time from Aramis.`;
-      txt += $('r-fallback').checked
-        ? ' If that event never arrives, fall back to the estimated time.'
-        : ' If that event never arrives, no announcement is made.';
+      txt = `At ${esc(where)}, announce ${offsetPhrase(off)} the train actually triggers the <b>${esc(tl)}</b> (type ${esc(ty)}) event at optic <b>${esc(oid || '—')}</b>.`
+          + ` If that event never arrives, fall back to the estimated <b>${ruleKind(rid)}</b> time.`;
     }
     $('r-preview-txt').innerHTML = txt;
     const note = (TYPES.find(t => t.v === $('r-type').value) || {}).note || '';
@@ -1018,6 +1007,9 @@ function openRow(idx, presetStation) {
 
   function syncBasis() {
     $('r-optic-block').classList.toggle('hide', currentBasis() !== 'optic');
+    $('r-offset-help').textContent = currentBasis() === 'optic'
+      ? 'Counted from the moment the train actually triggers the optic. Positive shows the message later.'
+      : 'Counted from the estimated time. Negative announces before it, positive after.';
     updatePreview();
   }
 
@@ -1030,9 +1022,8 @@ function openRow(idx, presetStation) {
   }));
   $('r-station').addEventListener('change', () => { r.platform = ''; fillPlatforms(); fillOptics(); updatePreview(); });
   $('r-plat').addEventListener('change', () => { fillOptics(); updatePreview(); });
-  ['r-type', 'r-source', 'r-optic'].forEach(id => $(id).addEventListener('change', updatePreview));
+  ['r-type', 'r-optic'].forEach(id => $(id).addEventListener('change', updatePreview));
   $('r-offset').addEventListener('input', updatePreview);
-  $('r-fallback').addEventListener('change', updatePreview);
 
   $('dt-save').onclick = () => {
     const basis = currentBasis();
@@ -1043,9 +1034,7 @@ function openRow(idx, presetStation) {
       basis,
       optic:  basis === 'optic' ? $('r-optic').value  : '',
       type:   basis === 'optic' ? $('r-type').value   : '',
-      source: basis === 'optic' ? $('r-source').value : '',
       offset: $('r-offset').value.trim() || '0:00',
-      fallback: basis === 'optic' ? $('r-fallback').checked : false,
     };
     if (isNew) ROWS.push(out); else ROWS[idx] = out;
     EXPANDED.add(out.station);
