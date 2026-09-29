@@ -110,13 +110,17 @@ const OPTIC = 'Optic';   // proposed: the new device type in option 2
 /* Optics: HA2 pair from ticket 668, HA6 four from ticket 233's FMSILA
    example. Offsets are illustrative — the tickets give no numbers. */
 var OPTICS = [
-  ['HA2 14T87', 'AKO', '2', '14', '0:00'],
-  ['HA2 24T45', 'AHI', '2', '24', '1:00'],
-  ['HA6 131113', '1220', '1', '13', '0:00'],
-  ['HA6 131111', '1220', '1', '13', '0:30'],
-  ['HA6 131121', '1220', '2', '21', '0:00'],
-  ['HA6 131124', '1220', '2', '21', '0:00'],
-].map(([id, station, platform, track, offset]) => ({ id, station, platform, track, offset, status: 'Active' }));
+  ['HA2 14T87', 'AKO', '2', '14', '0:00', 'Approach, 420 m before platform', 'Westbound'],
+  ['HA2 24T45', 'AHI', '2', '24', '1:00', 'Approach, 380 m before platform', 'Eastbound'],
+  ['HA6 131113', '1220', '1', '13', '0:00', '', ''],
+  ['HA6 131111', '1220', '1', '13', '0:30', '', ''],
+  ['HA6 131121', '1220', '2', '21', '0:00', '', ''],
+  ['HA6 131124', '1220', '2', '21', '0:00', '', ''],
+].map(([id, station, platform, track, offset, loc, dir]) => ({ id, station, platform, track, offset, loc, dir, status: 'Active' }));
+/* Location on the network + travel direction: back at Ignat's request,
+   2026-09-29 ("I liked them"). Maintained here, never overwritten by the
+   import. Values carried over from the MUI prototype; illustrative. */
+const locText = o => o.loc ? `${o.loc}${o.dir ? ' · ' + o.dir : ''}` : (o.dir || '');
 
 /** m:ss → seconds; null if it doesn't parse. A leading minus parses, so it can be refused by name. */
 function toSec(s) {
@@ -351,7 +355,7 @@ function OpticsList() {
   const n = q.trim().toLowerCase();
   const rows = OPTICS.filter(o =>
     (!st || o.station === st) && (!pl || o.platform === pl) &&
-    (!n || `${o.id} ${stationLabel(o.station)} ${o.track}`.toLowerCase().includes(n)));
+    (!n || `${o.id} ${stationLabel(o.station)} ${o.track} ${locText(o)}`.toLowerCase().includes(n)));
   const open = id => go('detail', { kind: 'optic', id });
   return html`
     <${ListPage} title="Optics list" tableId="o-table" empty="No optics match."
@@ -365,7 +369,7 @@ function OpticsList() {
       actions=${html`
         <${Button} variant="outlined" id="upload-btn" startIcon=${html`<${Icon}>upload<//>`} onClick=${openUpload}>Upload<//>
         <${Button} variant="contained" id="add-btn" startIcon=${html`<${Icon}>add<//>`} onClick=${() => go('detail', { kind: 'optic', id: null })}>Add optic<//>`}
-      columns=${['Optic ID', 'Station', 'Platform', 'Aramis track', 'Offset', 'Status']}
+      columns=${['Optic ID', 'Station', 'Platform', 'Aramis track', 'Location / direction', 'Offset', 'Status']}
       rows=${rows}
       renderRow=${o => html`
         <${TableRow} key=${o.id} hover data-optic=${o.id} sx=${{ cursor: 'pointer' }} onClick=${() => open(o.id)}>
@@ -373,6 +377,7 @@ function OpticsList() {
           <${TableCell}>${o.station}<//>
           <${TableCell}>${o.platform}<//>
           <${TableCell}>${o.track || '-'}<//>
+          <${TableCell} data-loc>${locText(o) || html`<${Typography} variant="body2" color="text.disabled">Not set<//>`}<//>
           <${TableCell} data-offset>${o.offset}<//>
           <${TableCell}><${StatusChip} status=${o.status} /><//>
           ${rowActions(o.id, () => toast('Optic URL copied'), () => open(o.id), () => askDelete('optic', o.id))}
@@ -446,7 +451,7 @@ function Detail() {
   const [d, setD] = useState(() => src
     ? (target.kind === 'optic' ? { ...src, type: OPTIC } : { ...src })
     : { type: target.kind === 'optic' ? OPTIC : '', name: '', id: '', version: '', net: '', net2: '',
-        station: '', platform: '', track: '', offset: '0:00' });
+        station: '', platform: '', track: '', offset: '0:00', loc: '', dir: '' });
   const [errs, setErrs] = useState({});
   const set = patch => { setD(p => ({ ...p, ...patch })); setErrs({}); };
   const isOptic = d.type === OPTIC;
@@ -476,8 +481,9 @@ function Detail() {
     if (Object.keys(e).length) { setErrs(e); return; }
     const offset = isOptic ? fmtSec(toSec(d.offset)) : '';
     if (isOptic) {
-      if (src) src.offset = offset;
-      else OPTICS.push({ id, station: d.station, platform: String(d.platform).trim(), track: d.track.trim(), offset, status: 'Active' });
+      if (src) Object.assign(src, { offset, loc: d.loc.trim(), dir: d.dir });
+      else OPTICS.push({ id, station: d.station, platform: String(d.platform).trim(), track: d.track.trim(), offset,
+                         loc: d.loc.trim(), dir: d.dir, status: 'Active' });
     } else {
       const out = { name: d.name.trim(), type: d.type, version: d.version.trim() || '-', net: d.net.trim(), net2: d.net2.trim() };
       if (src) Object.assign(src, out);
@@ -528,8 +534,8 @@ function Detail() {
 
       ${isOptic ? html`
         <${SectionCard} title="Location" id="card-location"
-          note=${isNew ? 'Enter it by hand for a new optic. The FMSILA.XML import keeps it up to date from then on.'
-                       : `View only. Imported from FMSILA.XML — last import ${LAST_IMPORT}.`}>
+          note=${isNew ? 'Station, platform and Aramis track are entered by hand for a new optic; the FMSILA.XML import keeps them up to date from then on. Location and direction are maintained here.'
+                       : `Station, platform and Aramis track are view only — imported from FMSILA.XML, last import ${LAST_IMPORT}. Location and direction are maintained here and never overwritten.`}>
           <${FieldGrid}>
             <${FilterSelect} id="dd-station" label="Station" required value=${d.station} minWidth=${0} disabled=${!isNew}
               error=${errs.station} helperText=${errs.station}
@@ -538,6 +544,15 @@ function Detail() {
               error=${!!errs.platform} helperText=${errs.platform || ''} onChange=${e => set({ platform: e.target.value })} />
             <${TextField} id="dd-track" label="Aramis track" value=${d.track} disabled=${!isNew}
               onChange=${e => set({ track: e.target.value })} />
+          <//>
+          <${Box} sx=${{ mt: 2 }}>
+            <${FieldGrid} cols=${2}>
+              <${TextField} id="dd-loc" label="Location on the network" value=${d.loc}
+                placeholder="e.g. Approach, 420 m before platform" onChange=${e => set({ loc: e.target.value })} />
+              <${FilterSelect} id="dd-dir" label="Travel direction" value=${d.dir} minWidth=${0} onChange=${v => set({ dir: v })}
+                options=${[{ value: 'Westbound', label: 'Westbound' }, { value: 'Eastbound', label: 'Eastbound' }]}
+                helperText="Ticket 233 describes a track schematic — upper track westbound, lower eastbound. Until the image arrives this is a plain two-value choice." />
+            <//>
           <//>
         <//>
         <${SectionCard} title="Offset" id="card-offset">
@@ -588,7 +603,7 @@ function UploadDialog({ onClose }) {
       <${DialogTitle}>Upload optics<//>
       <${DialogContent}>
         <${DialogContentText} sx=${{ mb: 2, fontSize: 14 }}>
-          Upload FMSILA.XML to update each optic's station, platform and Aramis track. Offsets are set here and never overwritten.
+          Upload FMSILA.XML to update each optic's station, platform and Aramis track. Location, direction and offsets are set here and never overwritten.
         <//>
         ${file ? html`
           <${Paper} variant="outlined" id="up-file" sx=${{ display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1, mb: 2, borderColor: '#E7E7E7' }}>

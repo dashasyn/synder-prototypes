@@ -94,7 +94,7 @@ async function run() {
   const nOptics = await page.evaluate(() => OPTICS.length);
   ok(await count('#o-table tbody tr[data-optic]') === nOptics, `every optic is a row (${nOptics}, from the data)`);
   const heads = await page.$$eval('#o-table thead th', t => t.map(x => x.textContent.trim()).filter(Boolean));
-  ok(JSON.stringify(heads) === JSON.stringify(['Optic ID', 'Station', 'Platform', 'Aramis track', 'Offset', 'Status']), 'simple columns: ID, station, platform, track, offset, status', heads);
+  ok(JSON.stringify(heads) === JSON.stringify(['Optic ID', 'Station', 'Platform', 'Aramis track', 'Location / direction', 'Offset', 'Status']), 'columns: ID, station, platform, track, location / direction, offset, status', heads);
   ok(await txt('#o-table tr[data-optic="HA2 24T45"] [data-offset]') === '1:00', 'the offset shows in the list');
   const up = await page.locator('#upload-btn').boundingBox(), add = await page.locator('#add-btn').boundingBox();
   ok(up && add && up.x < add.x && Math.abs(up.y - add.y) < 2 && add.x + add.width > 1440 - 60, 'UPLOAD then ADD OPTIC, top right');
@@ -118,6 +118,9 @@ async function run() {
   ok(await vis('#card-general') && await vis('#card-location') && await vis('#card-offset') && !(await vis('#card-hardware')), 'cards: General · Location · Offset — no Hardware');
   ok(await page.locator('#dd-id').isDisabled() && await page.locator('#dd-platform').isDisabled(), 'ID and imported location are view only');
   ok(await page.locator('#dd-offset').isEditable(), 'the offset is editable');
+  ok(await page.locator('#dd-loc').isEditable() && (await page.inputValue('#dd-loc')) === 'Approach, 420 m before platform', 'Location on the network is back, editable, with its value');
+  ok(await vis('#dd-dir') && (await txt('#dd-dir')) === 'Westbound', 'Travel direction is back with its value');
+  await page.fill('#dd-loc', 'Approach, 500 m before platform'); await pick('dd-dir', 'Eastbound');
   await page.fill('#dd-offset', '-0:30'); await wait(200);
   ok(await errorOn('dd-offset') && /Can't be negative/.test(await txt('#dd-offset-helper-text')) && await page.locator('#dd-save').isDisabled(), 'a negative offset is refused in place and SAVE is off');
   await page.fill('#dd-offset', '2:5'); await wait(200);
@@ -125,6 +128,7 @@ async function run() {
   await page.fill('#dd-offset', '2:15'); await wait(200);
   await page.click('#dd-save'); await wait(400);
   ok(await page.getAttribute('main', 'data-screen') === 'optics' && await txt('#o-table tr[data-optic="HA2 14T87"] [data-offset]') === '2:15', 'save returns to the list with the new offset');
+  ok(/500 m before platform · Eastbound/.test(await txt('#o-table tr[data-optic="HA2 14T87"] [data-loc]')), 'location and direction are saved and shown in the list');
 
   section('option 1 · add + delete');
   await page.click('#add-btn'); await wait(400);
@@ -149,7 +153,7 @@ async function run() {
   ok(await vis('#up-dialog') && await page.locator('#up-go').isDisabled(), 'UPLOAD opens the popup; its Upload waits for a file');
   await page.click('#up-choose'); await wait(250);
   ok(await count('#up-preview [data-up]') === 5, 'preview: new · changed · unchanged · not in file · skipped');
-  ok(/Offsets are set here and never overwritten/.test(await txt('#up-dialog')), 'it says offsets are protected');
+  ok(/Location, direction and offsets are set here and never overwritten/.test(await txt('#up-dialog')), 'it says offsets are protected');
   await page.click('#up-go'); await wait(500);
   ok(!(await vis('#up-dialog')) && /uploaded/.test(await txt('.MuiSnackbar-root')), 'Upload closes it and confirms');
   ok(await count('#o-table tbody tr[data-optic]') === nOptics, 'no real upload logic — the list is untouched');
@@ -189,6 +193,7 @@ async function run() {
   ok(/Devices/.test(await txt('.MuiBreadcrumbs-root')) && /Device details/.test(await txt('.MuiBreadcrumbs-root')), 'an optic opens Device details');
   ok(/Delete device/i.test(await txt('#dd-del')) && /Copy device URL/i.test(await txt('#dd-copy')), 'device wording on the corner buttons');
   ok(await vis('#card-offset') && !(await vis('#card-hardware')) && !(await vis('#dd-name')), 'optic details: Offset card, no Hardware, no separate name');
+  ok(await vis('#dd-loc') && await vis('#dd-dir'), 'option 2 optic details carry location + direction too');
   ok((await txt('#dd-type')) === 'Optic' && await page.locator('#dd-type').getAttribute('aria-disabled') === 'true', 'type is Optic and locked');
   await page.fill('#dd-offset', '1:30'); await page.click('#dd-save'); await wait(400);
   ok(await txt('#d-table tr[data-device="HA2 24T45"] [data-offset]') === '1:30', 'saved offset shows in the Device list');
