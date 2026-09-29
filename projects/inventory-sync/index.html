@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventory sync — setup flow</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+  body{margin:0;background:var(--color-grey-5);font-family:var(--font-family)}
+  .content{max-width:1080px}
+
+  /* topbar org block — production shape */
+  .org{display:flex;align-items:center;gap:10px}
+  .org-av{width:32px;height:32px;border-radius:var(--radius-full);background:var(--color-primary-10);
+    color:var(--color-primary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500}
+  .org-name{font-size:14px;font-weight:500;color:var(--text-primary)}
+  .org-sub{font-size:12px;color:var(--text-secondary)}
+  .sidebar .material-icons{font-size:20px;color:var(--color-grey-50)}
+  .sb-beta{margin-left:auto;font-size:12px;height:18px;padding:0 5px;border-radius:var(--radius-sm);
+    background:var(--color-status-purple-bg);color:var(--color-purple);display:inline-flex;align-items:center}
+  .sidebar-item.active .sb-beta{background:rgba(255,255,255,.2);color:var(--color-white)}
+
+  .tabs{padding:0;margin-bottom:20px}
+
+  /* ---- setup checklist ---- */
+  .setup-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:4px}
+  .setup-head h2{font-size:var(--font-h6);font-weight:500;margin:0;color:var(--text-primary)}
+  .setup-count{font-size:14px;color:var(--text-secondary)}
+  .setup-bar{margin:12px 0 4px}
+  .step{border-top:1px solid var(--border-default);padding:16px 0;display:flex;gap:14px}
+  .step:first-of-type{border-top:none}
+  .step-mark{width:24px;height:24px;flex-shrink:0;border-radius:var(--radius-full);display:flex;
+    align-items:center;justify-content:center;font-size:12px;font-weight:700;
+    border:1.5px solid var(--color-grey-30);color:var(--color-grey-50);background:var(--color-white)}
+  .step.is-open .step-mark{border-color:var(--color-primary);color:var(--color-primary)}
+  .step.is-done .step-mark{background:var(--color-green);border-color:var(--color-green);color:var(--color-white)}
+  .step.is-warn .step-mark{background:var(--color-yellow);border-color:var(--color-yellow);color:var(--color-white)}
+  .step.is-done .step-mark .material-icons,.step.is-warn .step-mark .material-icons{font-size:16px}
+  .step-main{flex:1;min-width:0}
+  .step-title{font-size:14px;font-weight:500;color:var(--text-primary);line-height:24px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .step.is-locked .step-title{color:var(--text-secondary);font-weight:400}
+  .step-sum{font-size:14px;color:var(--text-secondary);line-height:20px}
+  .step-body{margin-top:8px;font-size:14px;line-height:20px;color:var(--text-primary)}
+  .step-body p{margin:0 0 12px}
+  .step-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .step-side{flex-shrink:0;padding-top:0}
+  .muted{color:var(--text-secondary)}
+  .working{display:flex;align-items:center;gap:8px;color:var(--text-secondary);font-size:14px}
+  .spin{width:16px;height:16px;border:2px solid var(--color-grey-20);border-top-color:var(--color-primary);
+    border-radius:50%;animation:synder-spin .8s linear infinite}
+  .store-line{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border-default);
+    border-radius:var(--radius-md);margin-bottom:12px;max-width:560px}
+  .store-line .material-icons{color:var(--color-grey-50)}
+  .store-line b{font-weight:500}
+  .inline-alert{margin:0 0 12px;max-width:640px}
+  .alert .material-icons{font-size:20px}
+
+  /* compare table in step 4 */
+  .cmp{max-width:720px;margin-bottom:12px}
+  .cmp td.num,.cmp th.num{text-align:right}
+  .diff-pos{color:var(--color-green)} .diff-neg{color:var(--color-red)}
+  .nc{font-size:12px;color:var(--color-yellow);background:var(--color-yellow-light);padding:1px 5px;border-radius:var(--radius-sm)}
+
+  /* running status */
+  .run-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .kpi{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:12px 16px}
+  .kpi-v{font-size:24px;font-weight:500;color:var(--text-primary);line-height:32px}
+  .kpi-l{font-size:12px;color:var(--text-secondary)}
+  .attn{list-style:none;margin:0;padding:0}
+  .attn li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--border-default);font-size:14px}
+  .attn li .material-icons{font-size:20px;color:var(--color-yellow)}
+  .attn li a{margin-left:auto}
+  .card + .card{margin-top:16px}
+  .card-row{display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .facts{display:flex;gap:24px;flex-wrap:wrap;font-size:14px;color:var(--text-primary)}
+  .facts span.muted{margin-right:4px}
+
+  /* tables in tabs */
+  .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .toolbar .grow{flex:1}
+  .toolbar .input-search{width:240px}
+  td select.select{height:32px;min-width:220px}
+  .back-link{display:inline-flex;align-items:center;gap:4px;font-size:14px;margin-bottom:12px}
+  .back-link .material-icons{font-size:18px}
+  .dup{margin-left:6px}
+  .empty{padding:32px;text-align:center;color:var(--text-secondary);font-size:14px}
+  .modal .form-field{margin:12px 0 0}
+  .crumb{font-size:12px;color:var(--text-secondary);margin-bottom:4px}
+  .sentence{font-size:14px;color:var(--text-primary);line-height:32px}
+  .sentence select{display:inline-block;width:auto;margin:0 4px}
+  a.text-link{color:var(--text-link);text-decoration:none;cursor:pointer}
+  a.text-link:hover{text-decoration:underline}
+  .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--color-grey);
+    color:var(--color-white);font-size:14px;padding:10px 16px;border-radius:var(--radius-sm);display:none;z-index:2000}
+  .toast.show{display:block}
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="org">
+      <div class="org-av">Pe</div>
+      <div><div class="org-name">Per transaction test</div><div class="org-sub">Syncs left: 1000</div></div>
+    </div>
+    <div class="topbar-actions"><a class="text-link" href="#" style="font-size:14px">How it works?</a></div>
+  </header>
+  <div class="app-main">
+    <nav class="sidebar" aria-label="Main">
+      <a class="sidebar-item"><span class="material-icons">dashboard</span>Dashboard</a>
+      <a class="sidebar-item"><span class="material-icons">receipt_long</span>Transactions<span class="sidebar-badge">New</span></a>
+      <a class="sidebar-item active" aria-current="page"><span class="material-icons">inventory_2</span>Inventory sync<span class="sb-beta">Beta</span></a>
+      <a class="sidebar-item"><span class="material-icons">bolt</span>Smart rules</a>
+      <a class="sidebar-item"><span class="material-icons">description</span>Invoicing</a>
+      <a class="sidebar-item"><span class="material-icons">bar_chart</span>Analytics</a>
+      <a class="sidebar-item"><span class="material-icons">settings</span>Settings</a>
+      <a class="sidebar-item"><span class="material-icons">smart_toy</span>AI Agents</a>
+      <a class="sidebar-item"><span class="material-icons">campaign</span>What's New</a>
+      <a class="sidebar-item"><span class="material-icons">code</span>Custom development</a>
+    </nav>
+
+    <main class="content">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1 class="page-title">Inventory sync</h1>
+          <p class="page-subtitle" id="page-sub">Keep Shopify stock equal to QuickBooks. Synder sends every quantity change from QuickBooks to your Shopify store.</p>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button class="tab active" role="tab" id="tab-overview" aria-selected="true" onclick="go('overview')">Overview</button>
+        <button class="tab" role="tab" id="tab-mappings" aria-selected="false" onclick="go('mappings')">Mappings <span class="tab-count" id="tc-map">1/17</span></button>
+        <button class="tab" role="tab" id="tab-events" aria-selected="false" onclick="go('events')">Events</button>
+        <button class="tab" role="tab" id="tab-compare" aria-selected="false" onclick="go('compare')">Compare stock</button>
+      </div>
+
+      <section id="view-overview"></section>
+      <section id="view-mappings" hidden></section>
+      <section id="view-events" hidden></section>
+      <section id="view-compare" hidden></section>
+    </main>
+  </div>
+</div>
+
+<!-- step 1 stand-in for Settings → Products/Services -->
+<div class="modal-bg" id="m-settings">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-settings-t">
+    <div class="modal-header">
+      <div class="crumb">Settings › andrewshitsko (Shopify) › Default › Products/Services</div>
+      <span id="m-settings-t">Product settings</span>
+    </div>
+    <div class="modal-body">
+      <div class="sentence">If the matching product is NOT found in accounting
+        <select class="select" disabled><option>Create new product</option></select>.
+      </div>
+      <div class="sentence">Created product should be
+        <select class="select" id="item-type" aria-label="Created product should be">
+          <option>Non-inventory</option><option>Service</option><option>Inventory</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-text" onclick="closeM('m-settings')">Cancel</button>
+      <button class="btn" id="m-settings-ok" onclick="saveItemType()">Update</button>
+    </div>
+  </div>
+</div>
+
+<!-- step 4 bulk confirm -->
+<div class="modal-bg" id="m-bulk">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-bulk-t">
+    <div class="modal-header" id="m-bulk-t">Set Shopify stock to QuickBooks?</div>
+    <div class="modal-body" id="m-bulk-b"></div>
+    <div class="modal-footer">
+      <button class="btn btn-text" onclick="closeM('m-bulk')">Cancel</button>
+      <button class="btn" id="m-bulk-ok" onclick="applyBulk()">Set Shopify stock</button>
+    </div>
+  </div>
+</div>
+
+<!-- revert confirm (captured copy + one proposed line) -->
+<div class="modal-bg" id="m-revert">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-revert-t">
+    <div class="modal-header" id="m-revert-t">Revert event</div>
+    <div class="modal-body" id="m-revert-b"></div>
+    <div class="modal-footer">
+      <button class="btn btn-text" onclick="closeM('m-revert')">Cancel</button>
+      <button class="btn" id="m-revert-ok" onclick="doRevert()">Revert</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   COPY PROVENANCE
+   captured  = live strings from demo.synderapp.com/ui/inventorySync, org
+               "Per transaction test", 2026-09-29 (NOTES.md in the workspace):
+               tab names Overview/Mappings/Events, column headers, counters
+               (Pending, Held, Failed, Applied (24h)), store facts, sidebar,
+               Settings sentence "If the matching product is NOT found in
+               accounting … Created product should be …", Revert dialog copy,
+               event sources "InventoryAdjustment #NN".
+   proposed  = the setup checklist, step copy, status card, "Compare stock",
+               "Set Shopify to QuickBooks", "View in Shopify", duplicate
+               warning, "Shopify product" column in Events.
+   uncaptured= Shopify stock for variants that were never compared → shown as
+               the "not captured" marker, never as a number.
+   DATA: QuickBooks qty from api/mappings/qbo-items (16:53); Shopify stock
+   from the 16:30 comparison; events are the 8 real events of the session.
+--------------------------------------------------------------------------- */
+
+var QBO = [ // id, name, sku, qty
+  ['23','2-Seater Couch','COUCH2',-10],['37','31231212','S58473453',-3],['29','321',null,137],
+  ['31','3-Seater Couch','COUCH3',-56],['27','Appollo','sku-apl',-22],['28','Bread','16655745',-9],
+  ['36','Bundle 1.1','S93703399',-2],['25','Butter','5862544114200025',-10],['24','Coffee',null,-10],
+  ['11','Pump',null,63],['5','Rock Fountain',null,2],['16','Sprinkler Heads',null,25],
+  ['17','Sprinkler Pipes',null,31],['261','Stone 10',null,210],['35','T-shirt - M / Red','sku-tsrt-1',-1]
+].map(function(r){return {id:r[0],name:r[1],sku:r[2],qty:r[3]}});
+function qbo(id){return QBO.filter(function(q){return q.id===id})[0]}
+
+// Shopify variants, production order. shop = on hand at Suite 600 (null = not captured)
+var PRODUCTS = ['Stone 1','Stone 10','Stone 11','Stone 12','Stone 13','Stone 14','Stone 15','Stone 2',
+  'Stone 3','Stone 4','Stone 5','Stone 6','Stone 7','Stone 8','Stone 9','test product','Test service'];
+var SHOP = {'Stone 1':138,'Stone 10':97,'Stone 11':86,'Stone 12':240,'Stone 13':100};
+
+var REAL_MAP = {'Stone 1':['11','MANUAL'],'Stone 10':['261','NAME'],'Stone 11':['11','MANUAL'],
+  'Stone 12':['29','MANUAL'],'Stone 13':['27','MANUAL']};
+
+var REAL_EVENTS = [ // created, source, qbo item, shopify product, delta, reverted
+  ['16:28','InventoryAdjustment #34','321','Stone 12',+40,false],
+  ['16:28','InventoryAdjustment #33','321','Stone 12',+100,false],
+  ['16:27','Revert of Reconcile','Stone 10','Stone 10',-113,false],
+  ['16:27','InventoryAdjustment #32','Pump','Stone 1',+40,false],
+  ['16:27','Reconcile','Stone 10','Stone 10',+113,true],
+  ['16:26','InventoryAdjustment #31','Stone 10','Stone 10',+20,false],
+  ['16:26','Revert of InventoryAdjustment #30','Stone 10','Stone 10',+10,false],
+  ['16:18','InventoryAdjustment #30','Stone 10','Stone 10',-10,true]
+];
+
+var S; // state
+function fresh(){
+  var map={}; PRODUCTS.forEach(function(p){map[p]=null});
+  map['Stone 10']={q:'261',src:'Name'};           // what "Refresh mappings" produced on its own
+  return {tab:'overview', itemType:'Non-inventory', store:false, matching:false, matched:false,
+    comparing:false, compared:false, cmpRows:[], aligned:null, running:false, paused:false,
+    starting:false, map:map, fromSetup:false, events:[], unmappedOnly:false, q:'',
+    lastCheck:null, reviewSetup:false, sel:{}};
+}
+function runningDemo(){
+  var s=fresh();
+  s.itemType='Inventory'; s.store=true; s.matched=true; s.compared=true; s.running=true;
+  Object.keys(REAL_MAP).forEach(function(p){s.map[p]={q:REAL_MAP[p][0],src:REAL_MAP[p][1]==='NAME'?'Name':'Manual'}});
+  s.cmpRows=buildRows(s); s.cmpAt='Sep 29, 2026 16:30'; s.aligned='skipped'; s.lastCheck='Sep 29, 2026 16:49';
+  s.events=REAL_EVENTS.map(function(e){return {t:'Sep 29, 2026 '+e[0],src:e[1],item:e[2],prod:e[3],d:e[4],rev:e[5],status:'Applied'}});
+  return s;
+}
+
+/* ---- helpers ---- */
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function signed(n){return (n>0?'+':'')+n}
+function toast(msg){var t=$('toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show')},2600)}
+function openM(id){$(id).classList.add('show');var b=$(id).querySelector('.modal-footer .btn:not(.btn-text)');if(b)b.focus()}
+function closeM(id){$(id).classList.remove('show')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')document.querySelectorAll('.modal-bg.show').forEach(function(m){m.classList.remove('show')})});
+
+function mappedList(s){s=s||S;return PRODUCTS.filter(function(p){return s.map[p]})}
+function dupItems(s){s=s||S;var by={};mappedList(s).forEach(function(p){var q=s.map[p].q;(by[q]=by[q]||[]).push(p)});
+  return Object.keys(by).filter(function(q){return by[q].length>1}).map(function(q){return {q:q,prods:by[q]}})}
+function buildRows(s){s=s||S;return mappedList(s).map(function(p){var item=qbo(s.map[p].q);var sh=SHOP.hasOwnProperty(p)?SHOP[p]:null;
+  return {prod:p,item:item.name,qq:item.qty,sq:sh,diff:sh===null?null:item.qty-sh,res:'Unresolved'}})}
+function diffRows(){return S.cmpRows.filter(function(r){return r.diff!==null&&r.diff!==0&&r.res==='Unresolved'})}
+
+function doneCount(){return [S.itemType==='Inventory',S.store,S.matched,S.aligned!==null,S.running].filter(Boolean).length}
+
+/* ---- navigation ---- */
+function go(tab){S.tab=tab;['overview','mappings','events','compare'].forEach(function(t){
+  $('view-'+t).hidden=(t!==tab);var b=$('tab-'+t);b.classList.toggle('active',t===tab);b.setAttribute('aria-selected',t===tab)});
+  render()}
+
+/* ---- OVERVIEW ---- */
+function stepHTML(n,cls,title,sum,body,side){
+  var mark=cls==='is-done'?'<span class="material-icons">check</span>':cls==='is-warn'?'<span class="material-icons">priority_high</span>':n;
+  return '<div class="step '+cls+'" id="step-'+n+'" data-state="'+cls+'"><div class="step-mark">'+mark+'</div><div class="step-main">'
+    +'<div class="step-title">'+title+'</div>'+(sum?'<div class="step-sum">'+sum+'</div>':'')+(body?'<div class="step-body">'+body+'</div>':'')
+    +'</div>'+(side?'<div class="step-side">'+side+'</div>':'')+'</div>';
+}
+function renderSetup(){
+  var h='', done=doneCount();
+  // 1 — track inventory
+  if(S.itemType==='Inventory') h+=stepHTML(1,'is-done','Track inventory in QuickBooks','Products are created as Inventory items','', '<button class="btn btn-text" onclick="openSettings()">Change</button>');
+  else h+=stepHTML(1,'is-open','Track inventory in QuickBooks','',
+    '<p>Synder creates your Shopify products in QuickBooks as <b>'+esc(S.itemType)+'</b> items. Inventory sync needs <b>Inventory</b> items.</p>'
+    +'<div class="step-actions"><button class="btn" id="btn-open-setting" onclick="openSettings()">Open setting</button>'
+    +'<span class="muted">Settings › Products/Services › Created product should be</span></div>');
+  // 2 — store
+  if(S.store) h+=stepHTML(2,'is-done','Choose the Shopify store','andrewshitsko.myshopify.com · Suite 600','','<button class="btn btn-text" onclick="S.store=false;S.matched=false;S.matching=false;render()">Change</button>');
+  else h+=stepHTML(2,'is-open','Choose the Shopify store','',
+    '<div class="store-line"><span class="material-icons">storefront</span><div><b>andrewshitsko.myshopify.com</b><div class="muted">Location: Suite 600 · the only location in this store</div></div></div>'
+    +'<div class="step-actions"><button class="btn" id="btn-use-store" onclick="useStore()">Use this store</button></div>');
+  // 3 — match
+  var ready3=S.itemType==='Inventory'&&S.store, m=mappedList().length, dups=dupItems();
+  if(!ready3) h+=stepHTML(3,'is-locked','Match products','Available after steps 1 and 2');
+  else if(S.matching) h+=stepHTML(3,'is-open','Match products','','<div class="working"><span class="spin"></span>Matching Shopify products with QuickBooks items…</div>');
+  else if(S.matched) h+=stepHTML(3,'is-done','Match products',m+' of '+PRODUCTS.length+' matched'+(dups.length?' · '+dups.length+' warning':''),'','<button class="btn btn-text" onclick="go(\'mappings\')">Edit</button>');
+  else {
+    var b='<p><b>'+m+' of '+PRODUCTS.length+'</b> Shopify products are matched to QuickBooks items. Unmatched products won\'t sync.</p>';
+    if(m===1&&S.map['Stone 10']&&S.map['Stone 10'].src==='Name') b+='<p class="muted">Synder matched products with the same name.</p>';
+    dups.forEach(function(d){b+=dupAlert(d)});
+    b+='<div class="step-actions"><button class="btn btn-outlined" id="btn-match-rest" onclick="S.fromSetup=true;S.unmappedOnly=true;go(\'mappings\')">Match the rest</button>'
+      +'<button class="btn" id="btn-continue-3" onclick="continueMatch()">Continue with '+m+' matched</button></div>';
+    h+=stepHTML(3,'is-open','Match products','',b);
+  }
+  // 4 — align
+  if(!S.matched) h+=stepHTML(4,'is-locked','Line up starting quantities','Available after step 3');
+  else if(S.comparing) h+=stepHTML(4,'is-open','Line up starting quantities','','<div class="working"><span class="spin"></span>Comparing QuickBooks and Shopify stock…</div>');
+  else if(S.aligned==='done') h+=stepHTML(4,'is-done','Line up starting quantities',S._alignedN+' products updated in Shopify','','<button class="btn btn-text" onclick="go(\'compare\')">View</button>');
+  else if(S.aligned==='skipped') h+=stepHTML(4,'is-warn','Line up starting quantities','Skipped. '+diffRows().length+' products still differ from QuickBooks','','<button class="btn btn-text" onclick="S.aligned=null;render()">Review</button>');
+  else h+=stepHTML(4,'is-open','Line up starting quantities','',align4());
+  // 5 — turn on
+  if(S.aligned===null) h+=stepHTML(5,'is-locked','Turn on sync','Available after step 4');
+  else if(S.starting) h+=stepHTML(5,'is-open','Turn on sync','','<div class="working"><span class="spin"></span>Turning on and running the first check…</div>');
+  else if(S.running) h+=stepHTML(5,'is-done','Turn on sync','On since your first check','');
+  else h+=stepHTML(5,'is-open','Turn on sync','',
+    '<p>Synder checks QuickBooks every minute and sends new changes to Shopify. Changes made before you turn it on are not sent.</p>'
+    +'<div class="step-actions"><button class="btn" id="btn-turn-on" onclick="turnOn()">Turn on sync</button></div>');
+
+  var pct=Math.round(done/5*100);
+  return '<div class="card" id="setup-card"><div class="setup-head"><h2>Set up inventory sync</h2><span class="setup-count" id="setup-count">'+done+' of 5 done</span></div>'
+    +'<div class="progress setup-bar"><div class="progress-fill" style="width:'+pct+'%"></div></div>'+h+'</div>';
+}
+function dupAlert(d){var item=qbo(d.q);return '<div class="alert alert-warning inline-alert dup-alert"><span class="material-icons">warning</span><div><b>'+esc(item.name)
+  +'</b> is matched to '+d.prods.length+' Shopify products ('+d.prods.map(esc).join(', ')+'). Only one of them receives changes.</div></div>'}
+function align4(){
+  var rows=S.cmpRows, diff=rows.filter(function(r){return r.diff!==null&&r.diff!==0});
+  var b='<p>'+(diff.length?'<b>'+diff.length+' of '+rows.length+'</b> matched products show different stock in Shopify. ':'Stock is the same in QuickBooks and Shopify. ')
+    +'Inventory sync sends only new changes, so these differences stay unless you fix them now.</p>';
+  b+='<div class="table-wrap cmp"><table class="table table--sm" id="cmp-table"><thead><tr><th class="col-check"></th><th>Shopify product</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">Difference</th></tr></thead><tbody>';
+  rows.forEach(function(r,i){
+    var can=r.diff!==null&&r.diff!==0; if(S.sel[r.prod]===undefined)S.sel[r.prod]=can;
+    b+='<tr data-prod="'+esc(r.prod)+'"><td class="col-check"><input type="checkbox" class="checkbox" aria-label="Include '+esc(r.prod)+'" '+(can?'':'disabled ')+(can&&S.sel[r.prod]?'checked ':'')+'onchange="S.sel[\''+r.prod+'\']=this.checked;render()"></td>'
+      +'<td>'+esc(r.prod)+'</td><td>'+esc(r.item)+(r.qq<0?' <span class="status status-yellow">Negative in QuickBooks</span>':'')+'</td>'
+      +'<td class="num">'+r.qq+'</td><td class="num">'+(r.sq===null?'<span class="nc" data-uncaptured>not captured</span>':r.sq)+'</td>'
+      +'<td class="num '+(r.diff>0?'diff-pos':r.diff<0?'diff-neg':'')+'">'+(r.diff===null?'–':signed(r.diff))+'</td></tr>';
+  });
+  b+='</tbody></table></div>';
+  var n=rows.filter(function(r){return S.sel[r.prod]&&r.diff}).length;
+  b+='<div class="step-actions"><button class="btn" id="btn-bulk" '+(n?'':'disabled ')+'onclick="askBulk()">Set Shopify to QuickBooks numbers ('+n+')</button>'
+    +'<button class="btn btn-outlined" onclick="go(\'compare\')">Review one by one</button><button class="btn btn-text" id="btn-skip-4" onclick="S.aligned=\'skipped\';render()">Skip</button></div>';
+  return b;
+}
+function renderRunning(){
+  var ev=S.events, pend=0, held=0, failed=0, applied=ev.filter(function(e){return e.status==='Applied'}).length;
+  var unm=PRODUCTS.length-mappedList().length, diffs=diffRows().length, dups=dupItems();
+  var st=S.paused?'<span class="status status-grey" id="run-chip">Paused</span>':'<span class="status status-green" id="run-chip">On</span>';
+  var h='<div class="card" id="status-card"><div class="card-row"><div><div class="setup-head" style="justify-content:flex-start;gap:8px"><h2 id="run-title">'
+    +(S.paused?'Inventory sync is paused':'Inventory sync is on')+'</h2>'+st+'</div>'
+    +'<div class="step-sum" id="last-check">Last check: '+esc(S.lastCheck)+(S.paused?' · checks stopped':' · checks every minute')+'</div></div>'
+    +'<div class="btn-group">'+(S.paused?'<button class="btn" id="btn-resume" onclick="S.paused=false;toast(\'Inventory sync resumed.\');render()">Resume</button>'
+      :'<button class="btn btn-outlined" id="btn-pause" onclick="S.paused=true;toast(\'Inventory sync paused.\');render()">Pause</button>')
+    +'<button class="btn btn-outlined" id="btn-run" '+(S.paused?'disabled ':'')+'onclick="runNow()">Run now</button></div></div>'
+    +'<div class="run-grid"><div class="kpi"><div class="kpi-v">'+pend+'</div><div class="kpi-l">Pending</div></div><div class="kpi"><div class="kpi-v">'+held+'</div><div class="kpi-l">Held</div></div>'
+    +'<div class="kpi"><div class="kpi-v">'+failed+'</div><div class="kpi-l">Failed</div></div><div class="kpi"><div class="kpi-v" id="kpi-applied">'+applied+'</div><div class="kpi-l">Applied (24h)</div></div></div>';
+  var items=[];
+  if(unm) items.push('<li id="attn-unmatched"><span class="material-icons">link_off</span>'+unm+' Shopify products are not matched and won\'t sync<a class="text-link" onclick="S.unmappedOnly=true;go(\'mappings\')">Match products</a></li>');
+  if(diffs) items.push('<li id="attn-diff"><span class="material-icons">compare_arrows</span>'+diffs+' products differ from QuickBooks<a class="text-link" onclick="go(\'compare\')">Compare stock</a></li>');
+  dups.forEach(function(d){items.push('<li class="attn-dup"><span class="material-icons">warning</span>'+esc(qbo(d.q).name)+' is matched to '+d.prods.length+' Shopify products; only one receives changes<a class="text-link" onclick="go(\'mappings\')">Mappings</a></li>')});
+  h+=items.length?'<ul class="attn" id="attn">'+items.join('')+'</ul>':'<div class="step-sum" id="attn-none">Nothing needs your attention.</div>';
+  h+='</div>';
+  h+='<div class="card" id="store-card"><div class="card-row"><div><div class="card-head"><b style="font-weight:500">andrewshitsko.myshopify.com</b> <span class="status status-green">Ready</span></div>'
+    +'<div class="facts"><span><span class="muted">Location:</span>Suite 600</span><span><span class="muted">Connected:</span>Sep 29, 2026 15:56</span></div></div>'
+    +'<div class="btn-group"><button class="btn btn-text">Change location</button><button class="btn btn-text">Disconnect</button></div></div></div>';
+  h+='<div class="card"><div class="card-row"><div><b style="font-weight:500">Setup</b> <span class="muted">· 5 of 5 done</span></div><button class="btn btn-text" id="btn-review-setup" onclick="S.reviewSetup=!S.reviewSetup;render()">'+(S.reviewSetup?'Hide steps':'Review steps')+'</button></div></div>';
+  if(S.reviewSetup) h+='<div style="margin-top:16px">'+renderSetup()+'</div>';
+  return h;
+}
+
+/* ---- actions ---- */
+function openSettings(){$('item-type').value=S.itemType;openM('m-settings')}
+function saveItemType(){S.itemType=$('item-type').value;closeM('m-settings');maybeMatch();render()}
+function useStore(){S.store=true;toast('andrewshitsko.myshopify.com connected · Suite 600');maybeMatch();render()}
+function maybeMatch(){if(S.itemType==='Inventory'&&S.store&&!S.matched&&!S.matching&&!S._autoMatched){S.matching=true;S._autoMatched=true;
+  setTimeout(function(){S.matching=false;render()},900)}}
+function continueMatch(){S.matched=true;S.comparing=true;S.sel={};render();setTimeout(function(){S.comparing=false;S.cmpRows=buildRows();S.compared=true;render()},900)}
+function askBulk(){var n=S.cmpRows.filter(function(r){return S.sel[r.prod]&&r.diff}).length;
+  $('m-bulk-b').innerHTML='Shopify on hand at Suite 600 will be set to the QuickBooks quantity for <b>'+n+'</b> product'+(n>1?'s':'')+'. Synder creates one sync event per product.';openM('m-bulk')}
+function applyBulk(){var n=0;S.cmpRows.forEach(function(r){if(S.sel[r.prod]&&r.diff){SHOP[r.prod]=r.qq;r.res='Set to QuickBooks';n++}});
+  S.cmpRows=S.cmpRows.map(function(r){var sh=SHOP.hasOwnProperty(r.prod)?SHOP[r.prod]:null;return {prod:r.prod,item:r.item,qq:r.qq,sq:sh,diff:sh===null?null:r.qq-sh,res:r.res}});
+  S.aligned='done';S._alignedN=n;closeM('m-bulk');toast(n+' products will be updated in Shopify.');render()}
+function turnOn(){S.starting=true;render();setTimeout(function(){S.starting=false;S.running=true;S.lastCheck='just now';render();toast('Inventory sync is on.')},1100)}
+function runNow(){S.lastCheck='just now';toast('Run finished: 0 new, 0 applied, 0 held, 0 failed.');render()}
+function setMap(p,q){var had=!!S.map[p];S.map[p]=q?{q:q,src:'Manual'}:null;
+  if(S.compared){var keep={};S.cmpRows.forEach(function(r){keep[r.prod]=r.res});S.cmpRows=buildRows().map(function(r){if(keep[r.prod]&&keep[r.prod]!=='Unresolved'&&S.map[r.prod])r.res=keep[r.prod];return r})}
+  toast(q?'QuickBooks item mapped.':'Mapping removed.');render()}
+
+/* ---- MAPPINGS ---- */
+function renderMappings(){
+  var list=PRODUCTS.filter(function(p){return (!S.unmappedOnly||!S.map[p])&&(!S.q||p.toLowerCase().indexOf(S.q.toLowerCase())>-1)});
+  var dups=dupItems(), dupSet={}; dups.forEach(function(d){d.prods.forEach(function(p){dupSet[p]=d.q})});
+  var h='';
+  if(S.fromSetup&&!S.running) h+='<a class="text-link back-link" id="back-setup" onclick="S.fromSetup=false;go(\'overview\')"><span class="material-icons">arrow_back</span>Back to setup · '+mappedList().length+' of '+PRODUCTS.length+' matched</a>';
+  dups.forEach(function(d){h+=dupAlert(d)});
+  h+='<div class="toolbar"><input class="input input-search" placeholder="Search" aria-label="Search" value="'+esc(S.q)+'" oninput="S.q=this.value;renderMapTable()">'
+    +'<label class="checkbox-wrap"><input type="checkbox" id="unmapped-only" '+(S.unmappedOnly?'checked':'')+' onchange="S.unmappedOnly=this.checked;render()">Unmapped only</label>'
+    +'<span class="grow"></span><span class="muted" style="font-size:13px">Products refreshed less than a minute ago</span><button class="btn btn-outlined" onclick="toast(\'Products refreshed. '+mappedList().length+' of '+PRODUCTS.length+' matched.\')">Refresh</button></div>';
+  h+='<div class="table-wrap"><table class="table table--sm" id="map-table"><thead><tr><th>Product</th><th>SKU</th><th>QuickBooks item</th><th>Match source</th><th>Actions</th></tr></thead><tbody id="map-body"></tbody></table></div>';
+  $('view-mappings').innerHTML=h; renderMapTable();
+}
+function renderMapTable(){
+  var dups=dupItems(), dupSet={}; dups.forEach(function(d){d.prods.forEach(function(p){dupSet[p]=1})});
+  var list=PRODUCTS.filter(function(p){return (!S.unmappedOnly||!S.map[p])&&(!S.q||p.toLowerCase().indexOf(S.q.toLowerCase())>-1)});
+  var h=list.map(function(p){var m=S.map[p];
+    var opts='<option value="">Not mapped</option>'+QBO.map(function(q){return '<option value="'+q.id+'" '+(m&&m.q===q.id?'selected':'')+'>'+esc(q.name)+(q.sku?' · '+esc(q.sku):'')+'</option>'}).join('');
+    return '<tr data-prod="'+esc(p)+'"><td>'+esc(p)+(dupSet[p]?'<span class="status status-yellow dup">Same item twice</span>':'')+'</td><td>–</td>'
+      +'<td><select class="select map-sel" aria-label="QuickBooks item for '+esc(p)+'" onchange="setMap(\''+p+'\',this.value)">'+opts+'</select></td>'
+      +'<td>'+(m?m.src:'<span class="muted">Not mapped</span>')+'</td><td>'+(m?'<button class="btn btn-text btn-sm" onclick="setMap(\''+p+'\',\'\')">Remove</button>':'–')+'</td></tr>'}).join('');
+  $('map-body').innerHTML=h||'<tr><td colspan="5" class="empty">No products match.</td></tr>';
+}
+
+/* ---- EVENTS ---- */
+function renderEvents(){
+  if(!S.events.length){$('view-events').innerHTML='<div class="table-wrap"><div class="empty" id="events-empty">'+(S.running?'No changes yet. Synder sends a change here each time stock moves in QuickBooks.':'No sync events. Events appear after you turn on sync.')+'</div></div>';return}
+  var h='<div class="table-wrap"><table class="table table--sm" id="ev-table"><thead><tr><th>Created</th><th>Source</th><th>QuickBooks item</th><th>Shopify product</th><th class="num">Delta</th><th>Status</th><th>Shopify</th><th>Actions</th></tr></thead><tbody>';
+  S.events.forEach(function(e,i){
+    h+='<tr><td>'+esc(e.t)+'</td><td>'+esc(e.src)+'</td><td>'+esc(e.item)+'</td><td>'+esc(e.prod)+'</td><td class="num">'+signed(e.d)+'</td>'
+      +'<td><span class="status status-green">'+e.status+'</span>'+(e.rev?' <span class="status status-grey">Reverted</span>':'')+'</td>'
+      +'<td><a class="text-link view-shopify">View in Shopify</a></td><td>'+(e.rev?'–':'<button class="btn btn-text btn-sm" onclick="askRevert('+i+')">Revert</button>')+'</td></tr>'});
+  $('view-events').innerHTML=h+'</tbody></table></div>';
+}
+var revIdx=null;
+function askRevert(i){revIdx=i;var e=S.events[i];
+  $('m-revert-b').innerHTML='Push '+signed(-e.d)+' back to the store? This writes the opposite adjustment in Shopify.'
+    +'<div class="alert alert-warning" style="margin:12px 0 0"><span class="material-icons">warning</span><div>QuickBooks is not changed, so '+esc(e.prod)+' will differ from QuickBooks by '+Math.abs(e.d)+'.</div></div>';openM('m-revert')}
+function doRevert(){var e=S.events[revIdx];e.rev=true;S.events.unshift({t:'just now',src:'Revert of '+e.src,item:e.item,prod:e.prod,d:-e.d,rev:false,status:'Applied'});closeM('m-revert');toast('Event reverted.');render()}
+
+/* ---- COMPARE ---- */
+function renderCompare(){
+  if(!S.compared){$('view-compare').innerHTML='<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';return}
+  var rows=S.cmpRows, d=rows.filter(function(r){return r.diff});
+  var h='<div class="toolbar"><div><b style="font-weight:500">Compares QuickBooks quantity with Shopify stock for every matched product.</b><div class="muted" style="font-size:13px">Last comparison: '+esc(S.cmpAt||'just now')+' · '+rows.length+' compared · '+d.length+' '+(d.length===1?'difference':'differences')+'</div></div><span class="grow"></span>'
+    +'<button class="btn btn-outlined" onclick="S.cmpRows=buildRows();S.cmpAt=\'just now\';toast(\'Comparison finished.\');render()">Compare now</button></div>';
+  h+='<div class="table-wrap"><table class="table table--sm" id="cmp-full"><thead><tr><th>Shopify product</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">Difference</th><th>Resolution</th><th>Actions</th></tr></thead><tbody>';
+  rows.forEach(function(r){var can=r.diff!==null&&r.diff!==0&&r.res==='Unresolved';
+    h+='<tr data-prod="'+esc(r.prod)+'"><td>'+esc(r.prod)+'</td><td>'+esc(r.item)+'</td><td class="num">'+r.qq+'</td><td class="num">'+(r.sq===null?'<span class="nc" data-uncaptured>not captured</span>':r.sq)+'</td>'
+      +'<td class="num '+(r.diff>0?'diff-pos':r.diff<0?'diff-neg':'')+'">'+(r.diff===null?'–':signed(r.diff))+'</td><td>'+esc(r.diff===0&&r.res==='Unresolved'?'Same':r.res)+'</td>'
+      +'<td>'+(can?'<button class="btn btn-text btn-sm set-one" onclick="setOne(\''+r.prod+'\')">Set Shopify to QuickBooks</button><button class="btn btn-text btn-sm" onclick="ignoreOne(\''+r.prod+'\')">Ignore</button>':'–')+'</td></tr>'});
+  $('view-compare').innerHTML=h+'</tbody></table></div>';
+}
+function setOne(p){S.cmpRows.forEach(function(r){if(r.prod===p){SHOP[p]=r.qq;r.res='Set to QuickBooks';r.sq=r.qq;r.diff=0}});toast('Shopify will be updated.');render()}
+function ignoreOne(p){S.cmpRows.forEach(function(r){if(r.prod===p)r.res='Ignored'});toast('Mismatch ignored.');render()}
+
+/* ---- render ---- */
+function render(){
+  var m=mappedList().length; $('tc-map').textContent=m+'/'+PRODUCTS.length;
+  if(S.tab==='overview') $('view-overview').innerHTML=S.running?renderRunning():renderSetup();
+  if(S.tab==='mappings') renderMappings();
+  if(S.tab==='events') renderEvents();
+  if(S.tab==='compare') renderCompare();
+}
+
+S = /[?&]state=running/.test(location.search) ? runningDemo() : fresh();
+render();
+</script>
+</body>
+</html>
