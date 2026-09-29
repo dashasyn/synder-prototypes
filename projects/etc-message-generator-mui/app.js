@@ -221,7 +221,6 @@ function saveWarnings() {
   if (!S.msg.de.text && !S.msg.en.text) w.push(t('saveEmpty'));
   else if (st === 'none' || st === 'error') w.push(t('saveNoAudio'));
   if (S.daisy.length > 160) w.push(t('saveDaisy'));
-  if (st === 'ready' && !a.listened) w.push(t('saveUnheard'));
   return w;
 }
 function save() {
@@ -360,8 +359,14 @@ function AudioRow() {
 
 function Sheet() {
   const code = s => (s.match(/\(([^)]+)\)/) || [, ''])[1];
-  const grund = S.typ === 'erst' ? (S.ui === 'de' ? 'Störung' : 'Disruption') : (S.ui === 'de' ? 'Notarzteinsatz' : 'Emergency medical services');
-  const meta = [['mitteil', t('ortspunkt')], ['typ', t(S.typ)], ['linie', 'U2'], ['grund', grund], ['stationen', code(S.von) + ' - ' + code(S.bis)]];
+  /* Ignat, 2026-09-29: the points follow the production "Edit message" header —
+     Location · Type · Stations · Date from · Date to, names bold. EN names and
+     "Approaching" are captured from that screenshot; the DE strings and the dates
+     are proposed sample data. Line and reason are no longer listed here. */
+  const L = (de, en) => S.ui === 'de' ? de : en;
+  const meta = [[L('Ortspunkt', 'Location'), L('Einfahrt', 'Approaching')], [t('typ'), t(S.typ)],
+                [t('stationen'), code(S.von) + ' - ' + code(S.bis)],
+                [L('Datum von', 'Date from'), '29.09.2026'], [L('Datum bis', 'Date to'), '06.10.2026']];
   const over = S.daisy.length > 160;
   const warns = saveWarnings();
   const srcHint = S.source === 'standard' ? t('srcStd') : S.source === 'library' ? t('srcLib') : S.source === 'empathetic' ? t('srcEmp') : t('srcRec');
@@ -382,8 +387,8 @@ function Sheet() {
           <${IconButton} aria-label=${S.ui === 'de' ? 'Schließen' : 'Close'} onClick=${() => toast(t('closeStub'))}><${Icon}>close<//><//>
         <//>
 
-        <${Box} id="metaRow" sx=${{ display: 'flex', flexWrap: 'wrap', gap: '6px 28px', fontSize: 13, color: 'text.secondary' }}>
-          ${meta.map(([k, v]) => html`<span key=${k}><b style=${{ fontWeight: 500 }}>${t(k)}:</b> <${Box} component="span" sx=${{ color: 'text.primary' }}>${v}<//></span>`)}
+        <${Box} id="metaRow" sx=${{ display: 'flex', flexWrap: 'wrap', gap: '6px 28px', fontSize: 13, color: 'text.primary' }}>
+          ${meta.map(([k, v]) => html`<span key=${k}><b style=${{ fontWeight: 700 }}>${k}:</b> ${v}</span>`)}
         <//>
 
         ${/* ── Daisy ── */ ''}
@@ -406,9 +411,9 @@ function Sheet() {
               choice is a value — exactly one source per message, and switching it
               changes the text — so a toggle group, not tabs. All options stay in
               view, and the ELA header above says what the choice is for. */ ''}
-        <${M.FormLabel} id="source-label" sx=${{ display: 'block', fontSize: 12, mb: .75, color: 'text.secondary' }}>${t('source')}<//>
+        ${/* no visible "Quelle" label (Ignat: the workers know it) — the group keeps its name for screen readers */ ''}
         <${ToggleButtonGroup} id="source" exclusive fullWidth size="small" color="primary" value=${S.source}
-          aria-labelledby="source-label" onChange=${(e, v) => v && onSource(v)}
+          aria-label=${t('source')} onChange=${(e, v) => v && onSource(v)}
           sx=${{ '& .MuiToggleButton-root': { gap: 1, py: .75 },
                  '& .MuiToggleButton-root.Mui-selected': { bgcolor: 'rgba(33,150,243,0.12)', fontWeight: 500 } }}>
           ${SOURCES.map(x => html`
@@ -426,7 +431,6 @@ function Sheet() {
               sx=${{ mt: 2, '& .MuiFilledInput-root:before, & .MuiFilledInput-root:hover:not(.Mui-disabled):before': { borderBottomStyle: 'dotted' },
                      '& .MuiFilledInput-root:after': { display: 'none' }, '& textarea': { color: 'text.secondary', cursor: 'default' },
                      '& .MuiInputLabel-root.Mui-focused': { color: 'text.secondary' } }} />
-            <${Hint} id="tPromptHint">${t('promptHint')}<//>
             <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
               placeholder=${KNOWN[0][S.ui]} sx=${{ mt: 2 }} onChange=${e => onZusatz(e.target.value)} />
             <${Hint} id="tZusatzHint">${t('zusatzHint')}<//>
