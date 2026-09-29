@@ -313,9 +313,10 @@ function MessageBox({ l }) {
         sx=${{ flex: 1, '& .MuiFilledInput-root': { height: '100%', alignItems: 'flex-start', lineHeight: 1.55,
                  ...(s.warned ? { boxShadow: 'inset 0 0 0 1px #f5b400' } : null) } }}
         inputProps=${{ 'data-warn': s.warned ? 'true' : 'false' }} />
-      <${StateLine} id=${'state-' + l} cls=${s.cls} icon=${s.icon}>
+      ${/* Ignat, 2026-09-29: no green "all fine" lines under the inputs — only states that need attention */ ''}
+      ${s.cls === 'g' ? null : html`<${StateLine} id=${'state-' + l} cls=${s.cls} icon=${s.icon}>
         ${s.txt}${s.extra}${s.retry ? html` <${Link} component="button" variant="caption" onClick=${generate}>${t('retry')}<//>` : null}
-      <//>
+      <//>`}
     <//>`;
 }
 
@@ -337,8 +338,9 @@ function AudioRow() {
   const bars = Array.from({ length: 28 }, (_, i) => 20 + Math.round(Math.sin(i * 1.6) * 13 + Math.cos(i * .7) * 6));
   return html`
     <${Stack} direction="row" spacing=${1} alignItems="center" useFlexGap flexWrap="wrap" sx=${{ mt: 2 }} id="audioActs">
-      <${Button} variant="outlined" id="btnGen" disabled=${busy || S.source !== 'empathetic'} onClick=${generate}>
-        ${busy ? t('genBusy') : t('genEla')}<//>
+      ${/* ELA GENERIEREN exists only for Empathisch — the other sources never generate */ ''}
+      ${S.source === 'empathetic' ? html`<${Button} variant="outlined" id="btnGen" disabled=${busy} onClick=${generate}>
+        ${busy ? t('genBusy') : t('genEla')}<//>` : null}
       <${Button} variant="outlined" id="btnAudio" disabled=${!hasText || st === 'rendering' || S.source === 'record'} onClick=${makeAudio}>
         ${t('genAudio')}<//>
       <${Button} id="btnPlay" disabled=${st !== 'ready' && st !== 'stale'}
@@ -354,7 +356,7 @@ function AudioRow() {
                                      bgcolor: S.playing ? 'primary.main' : 'rgba(33,150,243,.3)' }} />`)}
         <//>` : null}
     <//>
-    <${StateLine} id="state-audio" cls=${cls} icon=${icon}>${txt}<//>`;
+    ${cls === 'g' ? null : html`<${StateLine} id="state-audio" cls=${cls} icon=${icon}>${txt}<//>`}`;
 }
 
 function Sheet() {
