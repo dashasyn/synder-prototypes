@@ -45,6 +45,9 @@ const theme = createTheme({
 /* The vanilla's own state-line colours (--ok / --warn / --err), carried over. */
 const TONE = { g: '#1e7b34', b: 'primary.main', a: '#8a5a00', r: '#c62828', '': 'text.secondary' };
 const TONE_ICON = { ok: 'check', pen: 'edit', warn: 'error_outline', dot: 'radio_button_unchecked' };
+/* Icons as in production's source buttons (document · mic · library); the AI
+   source takes MUI's usual sparkle. */
+const SOURCE_ICON = { standard: 'description', library: 'library_music', record: 'mic', empathetic: 'auto_awesome' };
 
 /* ══ State — the vanilla's S, same shape. Plus the four values it kept in
    <select>s and read back out of the DOM (stations, intervals). ═════════ */
@@ -399,8 +402,20 @@ function Sheet() {
 
         ${/* ── ELA ── */ ''}
         <${SecTitle}>ELA<//>
-        <${Pick} id="source" label=${t('source')} width=${330} value=${S.source} onChange=${onSource}
-          options=${SOURCES.map(x => ({ value: x.id, label: x[S.ui] }))} />
+        ${/* Ignat, 2026-09-29: one connected group instead of the dropdown. The
+              choice is a value — exactly one source per message, and switching it
+              changes the text — so a toggle group, not tabs. All options stay in
+              view, and the ELA header above says what the choice is for. */ ''}
+        <${M.FormLabel} id="source-label" sx=${{ display: 'block', fontSize: 12, mb: .75, color: 'text.secondary' }}>${t('source')}<//>
+        <${ToggleButtonGroup} id="source" exclusive fullWidth size="small" color="primary" value=${S.source}
+          aria-labelledby="source-label" onChange=${(e, v) => v && onSource(v)}
+          sx=${{ '& .MuiToggleButton-root': { gap: 1, py: .75 },
+                 '& .MuiToggleButton-root.Mui-selected': { bgcolor: 'rgba(33,150,243,0.12)', fontWeight: 500 } }}>
+          ${SOURCES.map(x => html`
+            <${ToggleButton} key=${x.id} value=${x.id}>
+              <${Icon} sx=${{ fontSize: 18 }}>${SOURCE_ICON[x.id]}<//>${x[S.ui]}
+            <//>`)}
+        <//>
         <${Hint} id="sourceHint">${srcHint}<//>
 
         ${S.source === 'empathetic' ? html`
