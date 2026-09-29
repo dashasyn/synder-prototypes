@@ -674,15 +674,16 @@ function NotCaptured({ id, label }) {
    creation masks (reference/production-2026-09-28/create-*.jpg), each in
    production's own section order. */
 const SCOPE_BY_TYPE = {
-  punctuality:   ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops',
+  punctuality:   ['trafficTimes', 'rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops',
                   'directions', 'threshold', 'rpvCat', 'bundles'],
   connection:    ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops'],
   trip_failures: ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops'],
   data_quality:  ['rpv', 'modes', 'konz', 'tu', 'regions', 'cantons', 'lines', 'stops'],
   line_analysis: ['laTu', 'baseLine', 'quantiles'],
 };
-// Punctuality alone carries "Verkehrszeiten", right after Zeitraum.
-const TIME_EXTRAS = { punctuality: ['trafficTimes'] };
+// Punctuality alone carries "Verkehrszeiten". Production has one strip of
+// sections, and it sits right after Zeitraum — so it leads the Filters card.
+// (It was in the Time Period card; Ignat, 2026-09-29: "Not part of the filters?")
 const THRESHOLD_KEYS = ['rd_thr_1', 'rd_thr_2', 'rd_thr_3', 'rd_thr_4', 'rd_thr_5'];
 // "Regionen (nur PAG und SBB)": regions exist only for these two operators.
 const REGION_TUS = ['SBB', 'PostAuto'];
@@ -932,6 +933,7 @@ function NewEvaluation({ go, initialType }) {
     baseLine:   () => html`<${SingleScope} id="f-base-line" label=${t('filter_base_line')} required
                   value=${baseLine} options=${baseLineOptions} onChange=${setBaseLine} />`,
     quantiles:  () => html`<${NotCaptured} id="f-quantiles" label=${t('filter_quantiles')} />`,
+    trafficTimes: () => html`<${NotCaptured} id="f-traffic-times" label=${t('filter_traffic_times')} />`,
   };
 
 
@@ -1020,10 +1022,6 @@ function NewEvaluation({ go, initialType }) {
                     variant=${days.includes(d) ? 'filled' : 'outlined'}
                     onClick=${() => setDays(x => x.includes(d) ? x.filter(y => y !== d) : [...x, d])} />`)}
               <//>
-              ${(TIME_EXTRAS[type] || []).includes('trafficTimes') && html`
-                <${Box} sx=${{ mt: 2, maxWidth: 340 }}>
-                  <${NotCaptured} id="f-traffic-times" label=${t('filter_traffic_times')} />
-                <//>`}
             <//>
           <//>
 

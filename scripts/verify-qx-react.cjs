@@ -694,7 +694,7 @@ const fs = require('fs');
      2026-09-28/create-punctuality.jpg), section by section, in its order.
      Typed from the screenshot on purpose — reading SCOPE_BY_TYPE here would
      check my table against itself. */
-  const SCOPE = ['f-rpv', 'f-modes', 'f-konz', 'f-tu', 'f-regions', 'f-cantons', 'f-lines',
+  const SCOPE = ['f-traffic-times', 'f-rpv', 'f-modes', 'f-konz', 'f-tu', 'f-regions', 'f-cantons', 'f-lines',
                  'f-stops', 'f-directions', 'f-threshold', 'f-rpv-category', 'f-bundles'];
   const scope = await page.evaluate(ids => ids.map(id => {
     const el = document.getElementById(id);
@@ -706,10 +706,11 @@ const fs = require('fs');
   }), SCOPE);
   ok('punctuality carries all twelve of production\'s filter sections',
     scope.every(Boolean), scope);
-  ok('and Verkehrszeiten sits with the time period, as in production',
-    !!(await page.$('#f-traffic-times')));
+  // 2026-09-29: it is a filter, the first one, as production's strip has it
+  ok('Verkehrszeiten is the first filter, not part of the time period',
+    !!(await page.$('#scope-filters #f-traffic-times')));
   // every filter whose options we have is an autocomplete
-  const withOpts = SCOPE.filter(id => id !== 'f-rpv-category');
+  const withOpts = SCOPE.filter(id => !['f-rpv-category', 'f-traffic-times'].includes(id));
   ok('every filter with known options is an autocomplete',
     withOpts.every(id => scope[SCOPE.indexOf(id)].auto), scope);
   ok('a section whose options were never captured says so, instead of inventing them',
