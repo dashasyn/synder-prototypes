@@ -369,7 +369,6 @@ function Sheet() {
                 [L('Datum von', 'Date from'), '29.09.2026'], [L('Datum bis', 'Date to'), '06.10.2026']];
   const over = S.daisy.length > 160;
   const warns = saveWarnings();
-  const srcHint = S.source === 'standard' ? t('srcStd') : S.source === 'library' ? t('srcLib') : S.source === 'empathetic' ? t('srcEmp') : t('srcRec');
   const ints = list => list.map(v => ({ value: v, label: v }));
 
   return html`
@@ -421,7 +420,7 @@ function Sheet() {
               <${Icon} sx=${{ fontSize: 18 }}>${SOURCE_ICON[x.id]}<//>${x[S.ui]}
             <//>`)}
         <//>
-        <${Hint} id="sourceHint">${srcHint}<//>
+        ${/* no per-source description, no "Meldungen" header, no Zusätzliche-Angaben hint (Ignat, 2026-09-29) */ ''}
 
         ${S.source === 'empathetic' ? html`
           <${Box} id="blkEmpathetic">
@@ -433,7 +432,6 @@ function Sheet() {
                      '& .MuiInputLabel-root.Mui-focused': { color: 'text.secondary' } }} />
             <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
               placeholder=${KNOWN[0][S.ui]} sx=${{ mt: 2 }} onChange=${e => onZusatz(e.target.value)} />
-            <${Hint} id="tZusatzHint">${t('zusatzHint')}<//>
           <//>` : null}
 
         ${S.source === 'library' ? html`
@@ -455,9 +453,8 @@ function Sheet() {
             <${Hint} id="tRecHint">${t('recHint')}<//>
           <//>` : null}
 
-        ${/* ── Meldungen ── */ ''}
-        <${SubTitle} id="tMeldungen">${t('meldungen')}<//>
-        <${Stack} direction="row" spacing=${2} alignItems="stretch">
+        ${/* ── Meldungen (header removed on request) ── */ ''}
+        <${Stack} id="msgRow" direction="row" spacing=${2} alignItems="stretch" sx=${{ mt: 2.5 }}>
           <${Stack} direction="row" spacing=${2} alignItems="stretch" sx=${{ flex: 1, minWidth: 0 }}>
             <${MessageBox} l="de" />
             <${MessageBox} l="en" />
