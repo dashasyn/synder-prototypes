@@ -167,13 +167,14 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id, req
    header and the body; the white band itself still runs full width. */
 const CONTENT_MAX = 960;
 
-/** sticky — keeps the title and its Save in view on long forms (station detail).
+/** sticky — on by default since 2026-09-30 ("All top elements" fixed): the header
+    stays under the fixed top bar; sticky={false} opts out.
     narrow — the centred 960px column (station detail only). */
 /** dense — a thinner header with the action (e.g. filters) centred on the title's row (stations list). */
 function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narrow, dense }) {
   return html`
     <${Box} data-page-header="" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
-                   ...(sticky ? { position: 'sticky', top: 0, zIndex: 10 } : null) }}>
+                   ...(sticky === false ? null : { position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }) }}>
     <${Box} sx=${{ display: 'flex', alignItems: dense ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 2,
                    maxWidth: narrow ? CONTENT_MAX : 'none', mx: 'auto', py: dense ? 1.5 : 3 }}>
       <${Box}>

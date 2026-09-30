@@ -53,6 +53,12 @@ function NavMenu({ label, active, id, children }) {
 }
 
 function Shell() {
+  const topRef = useRef(null);
+  useEffect(() => {
+    const el = topRef.current; if (!el) return;
+    const pub = () => document.documentElement.style.setProperty('--app-top', el.getBoundingClientRect().height + 'px');
+    pub(); const ro = new ResizeObserver(pub); ro.observe(el); return () => ro.disconnect();
+  }, []);
   const app = useApp();
   const { t, s, nav } = app;
   const View = VIEWS[s.view];
@@ -64,6 +70,10 @@ function Shell() {
   return html`
     <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
 
+      ${/* Ignat, 2026-09-30: "Top bar and staging should also be fixed. All top elements."
+            Banner + bar stick together; their height is published as --app-top so the
+            page header can stick right under them. */ ''}
+      <${Box} id="appTop" ref=${topRef} sx=${{ position: 'sticky', top: 0, zIndex: 1100, flexShrink: 0 }}>
       ${/* Staging banner — MUI Alert, default styling. */ ''}
       <${Alert} severity="warning" square icon=${false}
         sx=${{ justifyContent: 'center', py: .25, flexShrink: 0 }}>
@@ -128,6 +138,8 @@ function Shell() {
             <${Typography} variant="body2" color="text.secondary">BVG BVG<//>
           <//>
         <//>
+      <//>
+
       <//>
 
       ${/* Content. Full width, 24px gutters — brief §3. */ ''}
