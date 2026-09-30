@@ -189,6 +189,20 @@
   </div>
 </div>
 
+<!-- turn off confirm — Pause vs Off semantics from the CSM Guide -->
+<div class="modal-bg" id="m-off">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-off-t">
+    <div class="modal-header" id="m-off-t">Turn off inventory sync?</div>
+    <div class="modal-body">Synder stops reading QuickBooks. Stock changes made while sync is off are never sent to Shopify, only changes after you turn it on again.
+      <div class="alert alert-info" style="margin:12px 0 0"><div>To stop for a while without losing changes, use <b>Pause</b>. Changes are queued and sent when you resume.</div></div></div>
+    <div class="modal-footer">
+      <button class="btn btn-text" onclick="closeM('m-off')">Cancel</button>
+      <button class="btn btn-outlined" id="m-off-pause" onclick="closeM('m-off');S.paused=true;toast('Inventory sync paused. Changes are queued.');render()">Pause instead</button>
+      <button class="btn btn-danger" id="m-off-ok" onclick="closeM('m-off');S.off=true;S.paused=false;toast('Inventory sync is off.');render()">Turn off</button>
+    </div>
+  </div>
+</div>
+
 <!-- revert confirm (captured copy + one proposed line) -->
 <div class="modal-bg" id="m-revert">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-revert-t">
@@ -218,6 +232,10 @@
                duplicate warning, "Shopify product" column in Events.
    uncaptured= Shopify stock for variants that were never compared → shown as
                the "not captured" marker, never as a number.
+   SEMANTICS from the CSM Guide (Confluence SET/4297555974, 2026-09-23): only
+   Shopify integrations already in Synder can be connected; each needs its own
+   approval in Shopify; checks every 5 minutes; Pause queues, Off drops; SKU then
+   name matching; nightly comparison 02:30 UTC; held reasons and fixes.
    DATA: store 1 is real (QuickBooks qty from api/mappings/qbo-items 16:53,
    Shopify stock from the 16:30 comparison, the session's 8 events). Any
    store added with "Connect another store" is SAMPLE data and is labelled.
@@ -257,7 +275,7 @@ function realStore(){
   map['Stone 10']={q:'261',src:'Name'};   // what "Refresh mappings" produced on its own
   return {id:'s1', domain:'andrewshitsko.myshopify.com', integ:'andrewshitsko (Shopify)', sample:false,
     locations:['Suite 600'], loc:null, inv:'Non-inventory', products:REAL_PRODUCTS.slice(),
-    shop:Object.assign({},REAL_SHOP), map:map, connected:null, fresh:false};
+    shop:Object.assign({},REAL_SHOP), map:map, connected:null, fresh:false, approved:false};
 }
 var sampleN=0;
 function sampleStore(domain){
@@ -265,7 +283,7 @@ function sampleStore(domain){
   SAMPLE_PRODUCTS.forEach(function(p){var q=qboByName(p);map[p]=q?{q:q.id,src:'Name'}:null});
   return {id:'x'+sampleN, domain:domain, integ:domain.replace('.myshopify.com','')+' (Shopify)', sample:true,
     locations:['Warehouse','Main street shop'], loc:null, inv:'Non-inventory', products:SAMPLE_PRODUCTS.slice(),
-    shop:Object.assign({},SAMPLE_SHOP), map:map, connected:null, fresh:true};
+    shop:Object.assign({},SAMPLE_SHOP), map:map, connected:null, fresh:true, approved:false};
 }
 
 var S;
@@ -275,15 +293,18 @@ function fresh(){
     matching:false, matched:false, comparing:false, compared:false, cmpRows:[], cmpAt:null,
     aligned:null, alignedN:0, running:false, paused:false, starting:false, edit:null,
     showConnect:false, connectErr:'', fromSetup:false, events:[], unmappedOnly:false, q:'',
-    mapStore:null, lastCheck:null, reviewSetup:false, sel:{}, ignored:{}, pending:null};
+    mapStore:null, lastCheck:null, reviewSetup:false, sel:{}, ignored:{}, pending:null, off:false, addingChannel:false, channelFound:false};
 }
 function runningDemo(){
   var s=fresh(), a=s.avail.pop();
-  a.loc='Suite 600'; a.inv='Inventory'; a.connected='Sep 29, 2026 15:56'; a.fresh=false;
+  a.loc='Suite 600'; a.inv='Inventory'; a.connected='Sep 29, 2026 15:56'; a.fresh=false; a.approved=true;
   Object.keys(REAL_MAP).forEach(function(p){a.map[p]={q:REAL_MAP[p][0],src:REAL_MAP[p][1]}});
   s.stores=[a]; s.storesDone=true; s.matched=true; s.compared=true; s.running=true;
   s.cmpRows=buildRows(s); s.cmpAt='Sep 29, 2026 16:30'; s.aligned='skipped'; s.lastCheck='Sep 29, 2026 16:49';
   s.events=REAL_EVENTS.map(function(e){return {t:'Sep 29, 2026 '+e[0],store:a.domain,src:e[1],item:e[2],prod:e[3],d:e[4],rev:e[5],status:'Applied'}});
+  // SAMPLE held events — the demo session produced none; reasons and fixes are from the CSM Guide (SET/4297555974)
+  s.events.unshift({t:'Sep 30, 2026 09:05',store:a.domain,src:'Bill #1042',item:'Coffee',prod:'—',d:+24,rev:false,status:'Held',reason:'Item not matched',fix:'mappings',sample:true},
+                   {t:'Sep 30, 2026 09:05',store:a.domain,src:'InventoryAdjustment #35',item:'Pump',prod:'Stone 1',d:-150,rev:false,status:'Held',reason:'Would go below zero',fix:'shopify',sample:true});
   return s;
 }
 
@@ -311,7 +332,7 @@ function buildRows(s){s=s||S;var rows=[];s.stores.forEach(function(st){mapped(st
   var res=(ig&&ig.qq===item.qty&&ig.sq===sh)?'Ignored':'Unresolved'; if(ig&&res!=='Ignored')delete s.ignored[k];
   rows.push({st:st.id,domain:st.domain,prod:p,item:item.name,qq:item.qty,sq:sh,diff:sh===null?null:item.qty-sh,res:res})})});return rows}
 function diffRows(){return S.cmpRows.filter(function(r){return r.diff!==null&&r.diff!==0&&r.res==='Unresolved'})}
-function storesReady(){return S.stores.length>0&&S.stores.every(function(st){return st.loc})}
+function storesReady(){return S.stores.length>0&&S.stores.every(function(st){return st.approved&&st.loc})}
 function invReady(){return S.stores.length>0&&S.stores.every(function(st){return st.inv==='Inventory'})}
 
 /* strict step order: exactly one step is open at a time */
@@ -360,12 +381,15 @@ function openBody(n){
   if(n===3) return matchBody();
   if(n===4) return alignBody();
   if(n===5) return S.starting?'<div class="working"><span class="spin"></span>Turning on and running the first check…</div>'
-    :'<p>Synder checks QuickBooks every minute and sends new changes to '+(S.stores.length>1?'your '+S.stores.length+' Shopify stores':esc(S.stores[0].domain))+'. Changes made before you turn it on are not sent.</p>'
+    :'<p>Synder checks QuickBooks every 5 minutes and sends new changes to '+(S.stores.length>1?'your '+S.stores.length+' Shopify stores':esc(S.stores[0].domain))+'. Changes made before you turn it on are not sent.</p>'
     +'<div class="step-actions"><button class="btn" id="btn-turn-on" onclick="turnOn()">Turn on sync</button></div>';
 }
 
 /* step 1 — stores (also reused in the running view) */
 function storeRow(st,inSetup){
+  if(!st.approved) return '<div class="srow" data-store="'+st.id+'"><span class="material-icons">storefront</span><div class="grow"><b>'+esc(st.domain)+'</b>'+sampleTag(st)
+    +' <span class="status status-yellow">Approval needed</span><div class="muted" style="font-size:13px">Shopify asks you to allow Inventory Sync to change stock. This is separate from Synder\'s main Shopify connection.</div></div>'
+    +'<button class="btn btn-sm approve-btn" onclick="approve(\''+st.id+'\')">Approve in Shopify</button><button class="btn btn-text btn-sm" onclick="disconnect(\''+st.id+'\')">Cancel</button></div>';
   var locCtl;
   if(st.locations.length===1) locCtl='<span class="muted">Location: '+esc(st.locations[0])+'</span>';
   else if(st.loc&&!st._editLoc) locCtl='<span class="muted">Location: '+esc(st.loc)+'</span> <a class="text-link" onclick="store(\''+st.id+'\')._editLoc=true;render()">Change</a>';
@@ -381,33 +405,34 @@ function storesBody(inSetup){
   var h='';
   if(inSetup) h+='<p>Choose the stores that should receive stock changes from QuickBooks. You can add more stores later.</p>';
   S.stores.forEach(function(st){h+=storeRow(st,inSetup)});
-  S.avail.forEach(function(st){h+='<div class="srow is-new" data-avail="'+st.id+'"><span class="material-icons">storefront</span><div class="grow"><b>'+esc(st.domain)+'</b>'
-    +'<div class="muted">Connected to Synder · '+plural(st.locations.length,'location')+'</div></div><button class="btn btn-outlined btn-sm connect-avail" onclick="connectAvail(\''+st.id+'\')">Connect</button></div>'});
-  if(S.showConnect){
-    h+='<div class="connect-form" id="connect-form"><div class="form-field"><label class="form-label" for="store-domain">Store domain</label>'
-      +'<input class="input'+(S.connectErr?' error':'')+'" id="store-domain" placeholder="your-store.myshopify.com">'
-      +(S.connectErr?'<div class="form-error-msg">'+esc(S.connectErr)+'</div>':'')+'</div>'
-      +'<button class="btn" id="btn-connect-store" onclick="connectDomain()">Connect store</button><button class="btn btn-text" onclick="S.showConnect=false;S.connectErr=\'\';render()">Cancel</button></div>';
-  } else h+='<div style="margin:4px 0 12px"><a class="text-link" id="link-connect-another" onclick="S.showConnect=true;render();$(\'store-domain\').focus()">+ Connect '+(S.stores.length?'another':'a')+' Shopify store</a></div>';
+  S.avail.forEach(function(st){h+='<div class="srow is-new" data-avail="'+st.id+'"><span class="material-icons">storefront</span><div class="grow"><b>'+esc(st.domain)+'</b>'+sampleTag(st)
+    +'<div class="muted">Shopify integration in Synder · '+plural(st.locations.length,'location')+'</div></div><button class="btn btn-outlined btn-sm connect-avail" onclick="connectAvail(\''+st.id+'\')">Connect</button></div>'});
+  if(S.addingChannel){
+    h+='<div class="srow is-new" id="add-channel"><span class="material-icons">add_business</span><div class="grow"><b>Add the store to Synder first</b>'
+      +'<div class="muted" style="font-size:13px">Inventory Sync can only use stores that are Shopify integrations in Synder. Open Settings › Add integration › Shopify, connect the store, then come back and click Check again.</div></div>'
+      +'<button class="btn btn-outlined btn-sm" id="btn-add-integration" onclick="toast(\'Add integration opened in a new tab.\')">Add integration <span class="material-icons" style="font-size:16px">open_in_new</span></button>'
+      +'<button class="btn btn-sm" id="btn-check-channels" onclick="checkChannels()">Check again</button><button class="btn btn-text btn-sm" onclick="S.addingChannel=false;render()">Cancel</button></div>';
+  } else h+='<div style="margin:4px 0 12px"><a class="text-link" id="link-connect-another" onclick="S.addingChannel=true;render()">+ Connect '+(S.stores.length?'another':'a')+' Shopify store</a></div>';
   if(inSetup){
     var ok=storesReady(), n=S.stores.length;
     h+='<div class="step-actions"><button class="btn" id="btn-continue-1" '+(ok?'':'disabled ')+'onclick="S.storesDone=true;S.edit=null;render()">'
       +(n?'Continue with '+plural(n,'store'):'Continue')+'</button>'
-      +(!n?'<span class="muted">Connect at least one store</span>':!ok?'<span class="muted">Choose a location for every store</span>':'')+'</div>';
+      +(!n?'<span class="muted">Connect at least one store</span>':!ok?'<span class="muted">'+(S.stores.some(function(x){return !x.approved})?'Approve every store in Shopify':'Choose a location for every store')+'</span>':'')+'</div>';
   }
   return h;
 }
 function connectAvail(id){var st=S.avail.filter(function(x){return x.id===id})[0];S.avail=S.avail.filter(function(x){return x.id!==id});
-  if(st.locations.length===1)st.loc=st.locations[0];st.connected='just now';S.stores.push(st);toast(st.domain+' connected.');render()}
-function connectDomain(){var v=($('store-domain').value||'').trim().toLowerCase();
-  if(!v){S.connectErr='Enter the store domain, for example your-store.myshopify.com';render();return}
-  if(v.indexOf('.')<0)v+='.myshopify.com';
-  if(S.stores.concat(S.avail).some(function(x){return x.domain===v})){S.connectErr='This store is already listed.';render();return}
-  var st=sampleStore(v);st.connected='just now';S.stores.push(st);S.showConnect=false;S.connectErr='';
+  st.approved=false;st.connected='just now';S.stores.push(st);render()}
+function approve(id){var st=store(id);st.approved=true;if(st.locations.length===1)st.loc=st.locations[0];
   if(S.matched){S.cmpRows=buildRows()}  // a store added after setup joins the comparison
-  toast(v+' connected.');render()}
+  toast('Approved in Shopify. '+st.domain+' connected.');render()}
+var SAMPLE_CHANNELS=['garden-outlet.myshopify.com','third-shop.myshopify.com'];
+function checkChannels(){   // each Check again finds the next SAMPLE channel the user "added" in Synder
+  var next=SAMPLE_CHANNELS.filter(function(d){return !S.stores.concat(S.avail).some(function(x){return x.domain===d})})[0];
+  if(next){S.addingChannel=false;S.avail.push(sampleStore(next));toast('1 new Shopify store found in Synder.')}
+  else toast('No new Shopify stores found in Synder.');render()}
 function setLoc(id,v){var st=store(id);st.loc=v||null;st._editLoc=false;if(v)toast('Inventory location updated.');render()}
-function disconnect(id){var st=store(id);S.stores=S.stores.filter(function(x){return x.id!==id});if(!st.sample){st.loc=null;S.avail.push(st)}
+function disconnect(id){var st=store(id);S.stores=S.stores.filter(function(x){return x.id!==id});st.loc=null;st.approved=false;S.avail.push(st)
   S.cmpRows=S.cmpRows.filter(function(r){return r.st!==id});if(!S.stores.length){S.storesDone=false}toast(st.domain+' disconnected.');render()}
 
 /* step 2 — inventory setting, per Shopify integration */
@@ -428,7 +453,7 @@ function maybeMatch(){if(!S.matched&&!S._autoMatched){S.matching=true;S._autoMat
 /* step 3 — match */
 function matchBody(){
   if(S.matching) return '<div class="working"><span class="spin"></span>Matching Shopify products with QuickBooks items…</div>';
-  var h='<p>Synder matched products with the same name. Unmatched products won\'t sync.</p>';
+  var h='<p>Synder matched products by SKU, then by name. Only active Shopify products that track inventory and active QuickBooks items of type Inventory are listed. Unmatched products won\'t sync.</p>';
   S.stores.forEach(function(st){var m=mapped(st).length;
     h+='<div class="srow" data-match="'+st.id+'"><span class="material-icons">link</span><div class="grow"><b>'+esc(st.domain)+'</b>'+sampleTag(st)
       +'<div class="muted"><span class="match-count">'+m+' of '+st.products.length+'</span> products matched</div></div>'
@@ -447,7 +472,7 @@ function alignBody(){
   if(S.comparing) return '<div class="working"><span class="spin"></span>Comparing QuickBooks and Shopify stock…</div>';
   var rows=S.cmpRows, diff=rows.filter(function(r){return r.diff!==null&&r.diff!==0}), multi=S.stores.length>1;
   var b='<p>'+(diff.length?'<b>'+diff.length+' of '+rows.length+'</b> matched products show different stock in Shopify. ':'Stock is the same in QuickBooks and Shopify. ')
-    +'Inventory sync sends only new changes, so these differences stay unless you fix them now.</p>';
+    +'Inventory sync sends only new changes, so these differences stay unless you fix them now. After setup, Synder also compares stock every night and lists new differences in Compare stock.</p>';
   b+='<div class="table-wrap cmp"><table class="table table--sm" id="cmp-table"><thead><tr><th class="col-check"></th>'+(multi?'<th>Store</th>':'')+'<th>Shopify product</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">Difference</th></tr></thead><tbody>';
   rows.forEach(function(r){var k=r.st+'|'+r.prod, can=r.diff!==null&&r.diff!==0; if(S.sel[k]===undefined)S.sel[k]=can;
     b+='<tr data-prod="'+esc(r.prod)+'" data-st="'+r.st+'"><td class="col-check"><input type="checkbox" class="checkbox" aria-label="Include '+esc(r.prod)+'" '+(can?'':'disabled ')+(can&&S.sel[k]?'checked ':'')+'onchange="S.sel[\''+k+'\']=this.checked;render()"></td>'
@@ -468,19 +493,25 @@ function turnOn(){S.starting=true;render();setTimeout(function(){S.starting=fals
 
 /* ---- OVERVIEW: running ---- */
 function renderRunning(){
-  var applied=S.events.filter(function(e){return e.status==='Applied'}).length;
+  var applied=S.events.filter(function(e){return e.status==='Applied'}).length, held=S.events.filter(function(e){return e.status==='Held'}).length;
   var unm=totalProducts()-totalMapped(), diffs=diffRows().length, dups=allDups();
-  var st=S.paused?'<span class="status status-grey" id="run-chip">Paused</span>':'<span class="status status-green" id="run-chip">On</span>';
-  var h='<div class="card" id="status-card"><div class="card-row"><div><div class="setup-head" style="justify-content:flex-start;gap:8px"><h2 id="run-title">'
-    +(S.paused?'Inventory sync is paused':'Inventory sync is on')+'</h2>'+st+'</div>'
-    +'<div class="step-sum" id="last-check">Last check: '+esc(S.lastCheck)+(S.paused?' · checks stopped':' · checks every minute')+' · sends to '+plural(S.stores.filter(function(x){return x.loc}).length,'store')+'</div></div>'
-    +'<div class="btn-group">'+(S.paused?'<button class="btn" id="btn-resume" onclick="S.paused=false;toast(\'Inventory sync resumed.\');render()">Resume</button>'
-      :'<button class="btn btn-outlined" id="btn-pause" onclick="S.paused=true;toast(\'Inventory sync paused.\');render()">Pause</button>')
-    +'<button class="btn btn-outlined" id="btn-run" '+(S.paused?'disabled ':'')+'onclick="S.lastCheck=\'just now\';toast(\'Run finished: 0 new, 0 applied, 0 held, 0 failed.\');render()">Run now</button></div></div>'
-    +'<div class="run-grid"><div class="kpi"><div class="kpi-v">0</div><div class="kpi-l">Pending</div></div><div class="kpi"><div class="kpi-v">0</div><div class="kpi-l">Held</div></div>'
+  var mode=S.off?'off':S.paused?'paused':'on';
+  var chip={on:'<span class="status status-green" id="run-chip">On</span>',paused:'<span class="status status-yellow" id="run-chip">Paused</span>',off:'<span class="status status-grey" id="run-chip">Off</span>'}[mode];
+  var title={on:'Inventory sync is on',paused:'Inventory sync is paused',off:'Inventory sync is off'}[mode];
+  var sub={on:'Last check: '+esc(S.lastCheck)+' · checks every 5 minutes · sends to '+plural(S.stores.filter(function(x){return x.approved&&x.loc}).length,'store'),
+    paused:'Changes are still read from QuickBooks and queued. They are sent when you resume.',
+    off:'Nothing is read or sent. Changes made in QuickBooks while sync is off will not be sent later.'}[mode];
+  var btns={on:'<button class="btn btn-outlined" id="btn-pause" onclick="S.paused=true;toast(\'Inventory sync paused. Changes are queued.\');render()">Pause</button><button class="btn btn-outlined" id="btn-run" onclick="S.lastCheck=\'just now\';toast(\'Run finished: 0 new, 0 applied, 0 held, 0 failed.\');render()">Run now</button><button class="btn btn-text" id="btn-off" onclick="openM(\'m-off\')">Turn off</button>',
+    paused:'<button class="btn" id="btn-resume" onclick="S.paused=false;toast(\'Inventory sync resumed. Queued changes are being sent.\');render()">Resume</button><button class="btn btn-outlined" id="btn-run" disabled>Run now</button><button class="btn btn-text" id="btn-off" onclick="openM(\'m-off\')">Turn off</button>',
+    off:'<button class="btn" id="btn-on" onclick="S.off=false;S.paused=false;S.lastCheck=\'just now\';toast(\'Inventory sync is on. Compare stock to catch changes made while it was off.\');render()">Turn on</button>'}[mode];
+  var h='<div class="card" id="status-card"><div class="card-row"><div><div class="setup-head" style="justify-content:flex-start;gap:8px"><h2 id="run-title">'+title+'</h2>'+chip+'</div>'
+    +'<div class="step-sum" id="last-check">'+sub+'</div></div><div class="btn-group">'+btns+'</div></div>'
+    +'<div class="run-grid"><div class="kpi"><div class="kpi-v">0</div><div class="kpi-l">Pending</div></div><div class="kpi"><div class="kpi-v" id="kpi-held">'+held+'</div><div class="kpi-l">Held</div></div>'
     +'<div class="kpi"><div class="kpi-v">0</div><div class="kpi-l">Failed</div></div><div class="kpi"><div class="kpi-v" id="kpi-applied">'+applied+'</div><div class="kpi-l">Applied (24h)</div></div></div>';
   var items=[];
-  S.stores.filter(function(x){return !x.loc}).forEach(function(x){items.push('<li class="attn-loc"><span class="material-icons">place</span>'+esc(x.domain)+' needs a location before it receives changes<a class="text-link" onclick="$(\'stores-card\').scrollIntoView()">Choose location</a></li>')});
+  if(held) items.push('<li id="attn-held"><span class="material-icons">pause_circle</span>'+plural(held,'change')+' '+(held===1?'is':'are')+' held and need you<a class="text-link" onclick="go(\'events\')">Events</a></li>');
+  S.stores.filter(function(x){return !x.approved}).forEach(function(x){items.push('<li class="attn-approve"><span class="material-icons">verified_user</span>'+esc(x.domain)+' needs approval in Shopify<a class="text-link" onclick="$(\'stores-card\').scrollIntoView()">Approve</a></li>')});
+  S.stores.filter(function(x){return x.approved&&!x.loc}).forEach(function(x){items.push('<li class="attn-loc"><span class="material-icons">place</span>'+esc(x.domain)+' needs a location before it receives changes<a class="text-link" onclick="$(\'stores-card\').scrollIntoView()">Choose location</a></li>')});
   S.stores.filter(function(x){return x.inv!=='Inventory'}).forEach(function(x){items.push('<li class="attn-inv"><span class="material-icons">tune</span>'+esc(x.integ)+' creates Non-inventory items, so its stock can\'t sync<a class="text-link fix-in-setup" onclick="openSetupAt()">Fix in setup</a></li>')});
   if(unm) items.push('<li id="attn-unmatched"><span class="material-icons">link_off</span>'+plural(unm,'Shopify product')+' '+(unm===1?'is':'are')+' not matched and won\'t sync<a class="text-link" onclick="S.unmappedOnly=true;go(\'mappings\')">Match products</a></li>');
   if(diffs) items.push('<li id="attn-diff"><span class="material-icons">compare_arrows</span>'+plural(diffs,'product')+' differ from QuickBooks<a class="text-link" onclick="go(\'compare\')">Compare stock</a></li>');
@@ -528,13 +559,24 @@ function setMap(sid,p,q){var st=store(sid);st.map[p]=q?{q:q,src:'Manual'}:null;
 /* ---- EVENTS ---- */
 function renderEvents(){
   if(!S.events.length){$('view-events').innerHTML='<div class="table-wrap"><div class="empty" id="events-empty">'+(S.running?'No changes yet. Synder lists a change here each time stock moves in QuickBooks.':'No sync events. Events appear after you turn on sync.')+'</div></div>';return}
-  var h='<div class="table-wrap"><table class="table table--sm" id="ev-table"><thead><tr><th>Created</th><th>Store</th><th>Source</th><th>QuickBooks item</th><th>Shopify product</th><th class="num">Delta</th><th>Status</th><th>Shopify</th><th>Actions</th></tr></thead><tbody>';
+  var held=S.events.filter(function(e){return e.status==='Held'}).length;
+  var h='<div class="toolbar"><span class="muted" style="font-size:13px">'+plural(held,'held change')+'. Held changes are never sent until you fix the reason and retry.</span><span class="grow"></span>'
+    +'<button class="btn btn-outlined" id="btn-retry" '+(held?'':'disabled ')+'onclick="retryHeld()">Retry held and failed</button></div>';
+  h+='<div class="table-wrap"><table class="table table--sm" id="ev-table"><thead><tr><th>Created</th><th>Store</th><th>Source</th><th>QuickBooks item</th><th>Shopify product</th><th class="num">Delta</th><th>Status</th><th>Hold reason / what to do</th><th>Actions</th></tr></thead><tbody>';
   S.events.forEach(function(e,i){
-    h+='<tr><td>'+esc(e.t)+'</td><td>'+esc(e.store)+'</td><td>'+esc(e.src)+'</td><td>'+esc(e.item)+'</td><td>'+esc(e.prod)+'</td><td class="num">'+signed(e.d)+'</td>'
-      +'<td><span class="status status-green">'+e.status+'</span>'+(e.rev?' <span class="status status-grey">Reverted</span>':'')+'</td>'
-      +'<td><a class="text-link view-shopify">View in Shopify</a></td><td>'+(e.rev?'–':'<button class="btn btn-text btn-sm" onclick="askRevert('+i+')">Revert</button>')+'</td></tr>'});
+    var st=e.status==='Held'?'<span class="status status-yellow">Held</span>':'<span class="status status-green">'+e.status+'</span>';
+    var why=e.status==='Held'?(e.reason==='Item not matched'?'Item not matched · <a class="text-link fix-link" onclick="S.unmappedOnly=true;go(\'mappings\')">Match it</a>, then retry'
+        :'Would go below zero in Shopify · check stock in Shopify, then retry'):'–';
+    h+='<tr class="'+(e.status==='Held'?'ev-held':'')+'"><td>'+esc(e.t)+(e.sample?'<span class="sample">Sample</span>':'')+'</td><td>'+esc(e.store)+'</td><td>'+esc(e.src)+'</td><td>'+esc(e.item)+'</td><td>'+esc(e.prod)+'</td><td class="num">'+signed(e.d)+'</td>'
+      +'<td>'+st+(e.rev?' <span class="status status-grey">Reverted</span>':'')+'</td><td>'+why+'</td>'
+      +'<td>'+(e.status!=='Applied'?'–':e.rev?'<a class="text-link view-shopify">View in Shopify</a>':'<a class="text-link view-shopify">View in Shopify</a> · <button class="btn btn-text btn-sm" onclick="askRevert('+i+')">Revert</button>')+'</td></tr>'});
   $('view-events').innerHTML=h+'</tbody></table></div>';
 }
+function retryHeld(){var n=0,left=0;S.events.forEach(function(e){if(e.status!=='Held')return;
+    var ok=false; if(e.reason==='Item not matched'){var st=S.stores.filter(function(x){return x.domain===e.store})[0];var q=qboByName(e.item);
+      var prod=st&&q&&st.products.filter(function(p){return st.map[p]&&st.map[p].q===q.id})[0]; if(prod){ok=true;e.prod=prod}}
+    if(ok){e.status='Applied';e.reason=null;n++}else left++});
+  toast(n+' '+(n===1?'event':'events')+' sent. '+(left?left+' still held: the reason is not fixed yet.':''));render()}
 var revIdx=null;
 function askRevert(i){revIdx=i;var e=S.events[i];
   $('m-revert-b').innerHTML='Push '+signed(-e.d)+' back to the store? This writes the opposite adjustment in Shopify.'
@@ -545,7 +587,7 @@ function doRevert(){var e=S.events[revIdx];e.rev=true;S.events.unshift({t:'just 
 function renderCompare(){
   if(!S.compared){$('view-compare').innerHTML='<div class="table-wrap"><div class="empty" id="compare-setup-empty">Stock is compared in step 4 of the setup. After that you can compare again here at any time.<br><a class="text-link" onclick="go(\'overview\')">Go to setup</a></div></div>';return}
   var rows=S.cmpRows, d=rows.filter(function(r){return r.diff}), multi=S.stores.length>1;
-  var h='<div class="toolbar"><div><b style="font-weight:500">Compares QuickBooks quantity with Shopify stock for every matched product.</b><div class="muted" style="font-size:13px">Last comparison: '+esc(S.cmpAt||'just now')+' · '+rows.length+' compared · '+plural(d.length,'difference')+'</div></div><span class="grow"></span>'
+  var h='<div class="toolbar"><div><b style="font-weight:500">Compares QuickBooks quantity with Shopify stock for every matched product.</b><div class="muted" style="font-size:13px">Last comparison: '+esc(S.cmpAt||'just now')+' · '+rows.length+' compared · '+plural(d.length,'difference')+(S.running?' · next automatic comparison tonight at 02:30 UTC':'')+'</div></div><span class="grow"></span>'
     +'<button class="btn btn-outlined" id="btn-compare-now" onclick="S.cmpRows=buildRows();S.cmpAt=\'just now\';toast(\'Comparison finished.\');render()">Compare now</button></div>';
   h+='<div class="table-wrap"><table class="table table--sm" id="cmp-full"><thead><tr>'+(multi?'<th>Store</th>':'')+'<th>Shopify product</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">Difference</th><th>Resolution</th><th>Actions</th></tr></thead><tbody>';
   rows.forEach(function(r){var can=r.diff!==null&&r.diff!==0&&r.res==='Unresolved';
