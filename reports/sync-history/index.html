@@ -73,6 +73,11 @@
   .chev:focus-visible{outline:2px solid var(--border-focus);outline-offset:1px}
   .chev-sp{display:inline-block;width:28px}
 
+  .result-line{margin:0 0 12px;font-size:var(--font-body2);line-height:var(--font-body2-line-height);color:var(--text-secondary)}
+  .empty-state{display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 0}
+  .empty-title{font-size:var(--font-subtitle2);font-weight:var(--font-subtitle2-weight)}
+  .synder-table tr.empty td{height:auto}
+  .others{padding:0;height:auto}
   .pager{display:flex;justify-content:flex-end;align-items:center;gap:24px;padding:0 16px}
   .pager .page-info{white-space:nowrap}
 </style>
@@ -130,17 +135,18 @@
         <p class="page-subtitle" data-copy="proposed" title="Production: “History of changes per transaction.”">Every sync of each transaction to your accounting, including re-syncs, deletions and rollbacks.</p>
       </div></div>
 
-      <div class="filters">
+      <form class="filters" id="filters" onsubmit="applyFilters(); return false">
         <div class="form-field" style="width:260px"><label class="form-label" for="f-q">Search</label>
-          <input id="f-q" class="input input-search" data-copy="proposed" placeholder="Transaction, sync or webhook ID" title="Ignat's draft: “Search by IDs”"></div>
+          <input id="f-q" class="input input-search" type="search" autocomplete="off" data-copy="proposed" placeholder="Transaction, sync or webhook ID" title="Ignat's draft: “Search by IDs”. Enter applies."></div>
         <div class="form-field"><span class="form-label">Sync date</span>
-          <span class="dates"><input class="input" placeholder="MM/DD/YYYY" aria-label="From">–<input class="input" placeholder="MM/DD/YYYY" aria-label="To"></span></div>
-        <div class="form-field" style="width:200px"><label class="form-label" for="f-i">Integration</label><select id="f-i" class="select"><option>All</option></select></div>
-        <div class="form-field" style="width:200px"><label class="form-label" for="f-a" data-copy="proposed" title="Working name — Ignat: “call it Accounting for now”">Accounting</label><select id="f-a" class="select"><option>All</option></select></div>
-        <div class="form-field" style="width:180px"><label class="form-label" for="f-s">Status</label><select id="f-s" class="select"><option>All</option></select></div>
-        <button class="btn btn-primary" type="button">Apply</button>
-        <button class="btn btn-outline" type="button">Reset filters</button>
-      </div>
+          <span class="dates"><input id="f-from" class="input" type="date" aria-label="Sync date from">–<input id="f-to" class="input" type="date" aria-label="Sync date to"></span></div>
+        <div class="form-field" style="width:200px"><label class="form-label" for="f-i">Integration</label><select id="f-i" class="select"></select></div>
+        <div class="form-field" style="width:200px"><label class="form-label" for="f-a" data-copy="proposed" title="Working name — Ignat: “call it Accounting for now”">Accounting</label><select id="f-a" class="select"></select></div>
+        <div class="form-field" style="width:180px"><label class="form-label" for="f-s">Status</label><select id="f-s" class="select"></select></div>
+        <button class="btn btn-primary" type="submit" id="f-apply">Apply</button>
+        <button class="btn btn-outline" type="button" id="f-reset" onclick="resetFilters()">Reset filters</button>
+      </form>
+      <p class="result-line" id="result-line" data-copy="proposed" hidden></p>
 
       <div class="table-wrap">
         <table class="synder-table table--sm" id="tbl"></table>
@@ -272,18 +278,79 @@ const syncLink = id => `<a href="#" onclick="return false" title="Opens sync det
 const PAGE = 25;
 let variant = 1, parentMode = 'a';
 
+/* ---------- filters ----------
+   Transaction-level: Integration.  Sync-level: Search (transaction id hits every sync of that
+   transaction; sync id / webhook hit that sync), Sync date, Accounting, Status.
+   Grouped view: a transaction is listed if at least one of its syncs matches — "had a Failed sync",
+   not "is Failed now". The parent row still summarises ALL syncs, so it shows the latest status. */
+// captured: production Status filter options, production order (demo.synderapp.com/sync/list, 2026-09-30)
+const STATUS_OPTIONS = ['Canceled','Synced','Synced with warnings','Failed','In progress','Rollback canceled','Rollback failed',
+  'Rollback in progress','Rollback scheduled','Synced with rule failed','Scheduled','Skipped','Excluded from sync','Deleted',
+  'Deleted with warnings','Pending','Not parsed','Ready to sync'];
+const opt = (v, label) => `<option value="${esc(v)}">${esc(label)}</option>`;
+document.getElementById('f-i').innerHTML = opt('', 'All') + Object.entries(INT).map(([k, o]) => opt(k, o.n)).join('');
+document.getElementById('f-a').innerHTML = opt('', 'All') + Object.entries(ACC).map(([k, o]) => opt(k, o.n)).join('');
+document.getElementById('f-s').innerHTML = opt('', 'All') + STATUS_OPTIONS.map(s => opt(s, s)).join('');
+
+let F = {q:'', from:'', to:'', i:'', a:'', s:''};
+const syncFilterOn = () => !!(F.q || F.from || F.to || F.a || F.s);
+const anyFilterOn = () => syncFilterOn() || !!F.i;
+const dayStart = v => Date.parse(v + 'T00:00:00'), dayEnd = v => Date.parse(v + 'T23:59:59');
+function syncMatch(t, s) {
+  if (F.a && s[2] !== F.a) return false;
+  if (F.s && s[4] !== F.s) return false;
+  if (F.from || F.to) {
+    if (!s[3]) return false;                                   // never started: has no sync date to match
+    const d = Date.parse(s[3]);
+    if (F.from && d < dayStart(F.from)) return false;
+    if (F.to && d > dayEnd(F.to)) return false;
+  }
+  if (F.q) {
+    const q = F.q.toLowerCase();
+    if (!(t.id.toLowerCase().includes(q) || String(s[0]).includes(q) || String(s[1]).includes(q))) return false;
+  }
+  return true;
+}
+const txnMatch = t => !F.i || t.i === F.i;
+
+function applyFilters() {
+  F = { q: document.getElementById('f-q').value.trim(), from: document.getElementById('f-from').value,
+        to: document.getElementById('f-to').value, i: document.getElementById('f-i').value,
+        a: document.getElementById('f-a').value, s: document.getElementById('f-s').value };
+  render();
+}
+function resetFilters() {
+  document.getElementById('filters').reset();
+  applyFilters();
+}
+
 const COLS = {
   1: ['Sync ID','Webhook','Transaction ID','Integration','Accounting','Sync date','Sync status'],
   2: ['Transaction ID','Sync ID','Webhook','Integration','Accounting','Sync date','Sync status'],
 };
 const head = v => `<thead><tr>${COLS[v].map((c,k) => `<th${v===2&&k===0?' style="padding-left:44px"':''}>${c}</th>`).join('')}</tr></thead>`;
+const empty = `<tr class="empty"><td colspan="7"><div class="empty-state">
+  <div class="empty-title" data-copy="proposed">No syncs match these filters</div>
+  <button class="btn btn-outline" type="button" onclick="resetFilters()">Reset filters</button></div></td></tr>`;
+
+function resultLine(nTx, nSync) {
+  const el = document.getElementById('result-line');
+  el.hidden = !anyFilterOn();
+  if (el.hidden) return;
+  const tx = `${nTx} transaction${nTx === 1 ? '' : 's'}`, sy = `${nSync} sync${nSync === 1 ? '' : 's'}`;
+  el.textContent = variant === 1
+    ? `${sy} match${nSync === 1 ? 'es' : ''} (${tx})`
+    : F.s ? `${tx} with a ${F.s} sync (${sy})` : `${tx} with a matching sync (${sy})`;
+}
 
 function renderFlat() {
-  const rows = FLAT.slice(0, PAGE).map(({t, s}) => `<tr>
+  const list = FLAT.filter(({t, s}) => txnMatch(t) && syncMatch(t, s));
+  const rows = list.slice(0, PAGE).map(({t, s}) => `<tr>
     <td>${syncLink(s[0])}</td><td>${s[1]}</td><td>${txLink(t)}</td>
     <td>${co(INT[t.i])}</td><td class="acc">${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
-  document.getElementById('tbl').innerHTML = head(1) + `<tbody>${rows}</tbody>`;
-  setRange(FLAT.length, 'syncs');
+  document.getElementById('tbl').innerHTML = head(1) + `<tbody>${rows || empty}</tbody>`;
+  setRange(list.length, 'syncs');
+  resultLine(new Set(list.map(x => x.t)).size, list.length);
 }
 
 // parent "Sync status" cell — the three options Ignat is choosing between
@@ -294,8 +361,12 @@ function parentStatus(t) {
   return `<span class="muted" data-copy="proposed">${n} statuses</span>`;
 }
 
+let GROUPS = [];
 function renderGrouped() {
-  const rows = T.slice(0, PAGE).map((t, gi) => {
+  GROUPS = T.filter(txnMatch).map(t => ({t, m: t.syncs.map(s => syncMatch(t, s))})).filter(g => g.m.some(Boolean));
+  // status or search = "find a specific sync": open those groups so the matching syncs are on screen
+  const autoOpen = !!(F.s || F.q);
+  const rows = GROUPS.slice(0, PAGE).map(({t, m}, gi) => {
     if (t.syncs.length === 1) {
       const s = t.syncs[0];
       return `<tr><td><span class="chev-sp"></span>${txLink(t)}</td><td>${syncLink(s[0])}</td><td>${s[1]}</td>
@@ -304,21 +375,26 @@ function renderGrouped() {
     const whs = [...new Set(t.syncs.map(s => s[1]))];
     const accs = [...new Set(t.syncs.map(s => s[2]))];
     const lastDate = t.syncs.find(s => s[3])?.[3];
+    const others = m.filter(x => !x).length;
     const parent = `<tr class="grp row-clickable" data-g="${gi}" onclick="toggle(${gi}, event)">
-      <td><button class="chev" type="button" aria-expanded="false" aria-label="Show ${t.syncs.length} syncs"><span class="material-icons">chevron_right</span></button>${txLink(t)}</td>
+      <td><button class="chev" type="button" aria-expanded="false" aria-label="Show syncs"><span class="material-icons">chevron_right</span></button>${txLink(t)}</td>
       <td class="muted" data-copy="proposed">${t.syncs.length} syncs</td>
       <td class="${whs.length > 1 ? 'muted' : ''}">${whs.length > 1 ? whs.length + ' webhooks' : whs[0]}</td>
       <td>${co(INT[t.i])}</td>
       <td class="acc">${accs.length > 1 ? `<span class="muted" data-copy="proposed">${accs.length} companies</span>` : co(ACC[accs[0]])}</td>
       <td>${lastDate ? esc(lastDate) : date(null)}</td>
       <td class="pstat">${parentStatus(t)}</td></tr>`;
-    const kids = t.syncs.map(s => `<tr class="child" data-of="${gi}" hidden>
+    const kids = t.syncs.map((s, k) => `<tr class="child${m[k] ? ' match' : ' other'}" data-of="${gi}" hidden>
       <td></td><td>${syncLink(s[0])}</td><td>${s[1]}</td><td></td>
       <td class="acc">${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
-    return parent + kids;
+    const more = others ? `<tr class="child others-row" data-of="${gi}" hidden><td></td><td colspan="6">
+      <button class="btn-text others" type="button" aria-expanded="false" onclick="toggleOthers(${gi}, this)" data-n="${others}" data-copy="proposed">Show ${others} other sync${others === 1 ? '' : 's'}</button></td></tr>` : '';
+    return parent + kids + more;
   }).join('');
-  document.getElementById('tbl').innerHTML = head(2) + `<tbody>${rows}</tbody>`;
-  setRange(T.length, 'transactions');
+  document.getElementById('tbl').innerHTML = head(2) + `<tbody>${rows || empty}</tbody>`;
+  if (autoOpen) GROUPS.slice(0, PAGE).forEach((g, gi) => { if (g.t.syncs.length > 1) toggle(gi); });
+  setRange(GROUPS.length, 'transactions');
+  resultLine(GROUPS.length, GROUPS.reduce((n, g) => n + g.m.filter(Boolean).length, 0));
 }
 
 function toggle(gi, e) {
@@ -326,15 +402,26 @@ function toggle(gi, e) {
   const btn = document.querySelector(`tr.grp[data-g="${gi}"] .chev`);
   const open = btn.getAttribute('aria-expanded') !== 'true';
   btn.setAttribute('aria-expanded', open);
-  document.querySelectorAll(`tr.child[data-of="${gi}"]`).forEach(r => r.hidden = !open);
+  const othersBtn = document.querySelector(`tr.others-row[data-of="${gi}"] .others`);
+  const showOthers = othersBtn && othersBtn.getAttribute('aria-expanded') === 'true';
+  document.querySelectorAll(`tr.child[data-of="${gi}"]`).forEach(r =>
+    r.hidden = !open || (r.classList.contains('other') && !showOthers));
+}
+function toggleOthers(gi, btn) {
+  const show = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', show);
+  const n = btn.dataset.n;
+  btn.textContent = `${show ? 'Hide' : 'Show'} ${n} other sync${n === '1' ? '' : 's'}`;
+  document.querySelectorAll(`tr.child.other[data-of="${gi}"]`).forEach(r => r.hidden = !show);
 }
 
 function setRange(total, unit) {
   const pages = Math.ceil(total / PAGE);
-  document.getElementById('range').textContent = `1–${Math.min(PAGE, total)} of ${total} ${unit}`;
+  document.getElementById('range').textContent = total ? `1–${Math.min(PAGE, total)} of ${total} ${unit}` : `0 ${unit}`;
   ['p2','p3','p4'].forEach((id, k) => document.getElementById(id).style.display = k + 2 <= pages ? '' : 'none');
 }
 
+const render = () => variant === 1 ? renderFlat() : renderGrouped();
 const NOTES = {
   1: 'One row per sync, newest first',
   2: 'One row per transaction, collapsed · click a row to see every sync',
@@ -345,14 +432,14 @@ function setVariant(v) {
   document.getElementById('vs-2').classList.toggle('on', v === 2);
   ['ps-sep','ps-label','ps-opts'].forEach(id => document.getElementById(id).hidden = v !== 2);
   document.getElementById('vs-note').textContent = NOTES[v];
-  v === 1 ? renderFlat() : renderGrouped();
+  render();
   history.replaceState(null, '', '#v' + v + (v === 2 ? parentMode : ''));
 }
 // swaps only the parent status cells, so open groups stay open
 function setParent(m) {
   parentMode = m;
   ['a','b','c'].forEach(k => document.getElementById('ps-' + k).classList.toggle('on', k === m));
-  document.querySelectorAll('tr.grp').forEach(r => r.querySelector('.pstat').innerHTML = parentStatus(T[+r.dataset.g]));
+  document.querySelectorAll('tr.grp').forEach(r => r.querySelector('.pstat').innerHTML = parentStatus(GROUPS[+r.dataset.g].t));
   history.replaceState(null, '', '#v2' + m);
 }
 const h = location.hash.match(/^#v([12])([abc])?$/);
