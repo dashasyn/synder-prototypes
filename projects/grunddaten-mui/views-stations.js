@@ -475,19 +475,25 @@ function StationDetailView() {
         <//>
       <//>
 
-      ${/* ── Transfer announcement schedule — the shared weekly grid ── */ ''}
-      <${Dialog} open=${schedIdx !== null} onClose=${() => setSchedIdx(null)} maxWidth="sm" fullWidth>
-        <${DialogTitle}>
-          ${t('scheduleTitle')}
-          <${Typography} variant="body2" color="text.secondary">
-            ${schedIdx !== null && d.transferAnnouncements[schedIdx] ? sndName(d.transferAnnouncements[schedIdx].fileId) : ''}<//>
+      ${/* ── Transfer announcement schedule — a side sheet (Ignat, 2026-09-30:
+            "should be a side sheet instead of popup"), the shared weekly grid inside;
+            header and footer stay put, only the week scrolls ── */ ''}
+      <${Drawer} anchor="right" open=${schedIdx !== null} onClose=${() => setSchedIdx(null)} id="schedSheet"
+        PaperProps=${{ sx: { width: 560, maxWidth: '100vw', display: 'flex', flexDirection: 'column' } }}>
+        <${Box} sx=${{ display: 'flex', alignItems: 'flex-start', gap: 1, px: 3, py: 2, borderBottom: '1px solid #E7E7E7' }}>
+          <${Box} sx=${{ flex: 1, minWidth: 0 }}>
+            <${Typography} variant="h6" sx=${{ fontWeight: 500 }}>${t('scheduleTitle')}<//>
+            <${Typography} variant="body2" color="text.secondary" sx=${{ fontFamily: 'monospace' }}>
+              ${schedIdx !== null && d.transferAnnouncements[schedIdx] ? sndName(d.transferAnnouncements[schedIdx].fileId) : ''}<//>
+          <//>
+          <${IconButton} aria-label=${de ? 'Schließen' : 'Close'} onClick=${() => setSchedIdx(null)}><${Icon}>close<//><//>
         <//>
-        <${DialogContent}>
+        <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
           ${schedDays ? html`<${WeekGrid} days=${schedDays} onChange=${setSchedDays} idPrefix="sc" />` : null}
         <//>
-        <${DialogActions}>
+        <${Box} sx=${{ display: 'flex', justifyContent: 'flex-end', gap: 1, px: 3, py: 1.5, borderTop: '1px solid #E7E7E7' }}>
           <${Button} onClick=${() => setSchedIdx(null)}>${t('cancel')}<//>
-          <${Button} variant="contained" onClick=${() => {
+          <${Button} variant="contained" id="schedSave" onClick=${() => {
             const i = schedIdx;
             patch(n => { n.transferAnnouncements[i].scheduleSlots =
               schedDays.map(dd => ({ day: dd.day, slots: dd.slots.map(sl => ({ ...sl })) })); });

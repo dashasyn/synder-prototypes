@@ -24,7 +24,7 @@ const {
   TableRow, Paper, Chip, Stack, FormControl, InputLabel, Select, InputAdornment, Alert,
   Tooltip, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText,
   Snackbar, Checkbox, Radio, RadioGroup, FormControlLabel, FormLabel, Switch, Avatar,
-  LinearProgress, ToggleButton, ToggleButtonGroup, FormHelperText, TablePagination,
+  LinearProgress, ToggleButton, ToggleButtonGroup, FormHelperText, TablePagination, Drawer,
 } = M;
 
 /* Material Icons render as ligature TEXT, so without aria-hidden the glyph name
