@@ -85,10 +85,6 @@ function StationsView() {
    The vanilla keeps edits in the DOM until Save reads them back out. The
    React port keeps them in a draft and writes the same fields back in
    place on Save — same semantics, so leaving the page still discards. */
-/* Read by app.js's leave guard. The draft is local to the view, so the view
-   reports whether it differs from what was last seeded — the event editor's
-   guard, extended here (validator round 2: leaving silently lost edits). */
-const DETAIL_GUARD = { dirty: false };
 
 /* Ignat, 2026-09-30 — the staging build's cards and fields, brought in:
    Auslösepunkte is its own card with the four radii, and the station name
@@ -99,19 +95,6 @@ const RADII = [
   ['depInner', { de: 'Abfahrt – innerer Radius', en: 'Departure – inner radius' }],
   ['station',  { de: 'Stationsradius',           en: 'Station radius' }],
 ];
-
-/* Ignat, 2026-09-30: staging's form rows — the label on the left, the input on
-   the right with no label inside it. The label is a real <label> for the
-   input, so the field keeps its accessible name. */
-function FormRow({ label, htmlFor, children, top, right }) {
-  return html`
-    <${Box} className="form-row" sx=${{ display: 'flex', alignItems: top ? 'flex-start' : 'center', gap: 3, py: 1.5,
-                   borderBottom: '1px solid #E7E7E7', '&:first-of-type': { pt: 0 }, '&:last-of-type': { borderBottom: 0, pb: 0 } }}>
-      <${Typography} component="label" htmlFor=${htmlFor} variant="body2"
-        sx=${{ width: 220, flexShrink: 0, color: 'text.primary', ...(top ? { pt: 1.25 } : null) }}>${label}<//>
-      <${Box} sx=${{ flex: 1, minWidth: 0, display: 'flex', justifyContent: right ? 'flex-end' : 'flex-start' }}>${children}<//>
-    <//>`;
-}
 
 /* The transfer-announcement priority (Ignat, 2026-09-30): row order IS the
    priority, 1 = highest, to settle overlapping schedules. The main one is

@@ -155,7 +155,11 @@ function Shell() {
             because both are ways out of a draft that only Save writes back. */ ''}
       <${ConfirmDialog} open=${!!s.pendingNav}
         title=${state.lang === 'de' ? 'Änderungen verwerfen?' : 'Discard changes?'}
-        body=${s.view === 'detail'
+        body=${s.view === 'lineDetail'
+          ? (state.lang === 'de'
+            ? 'Die Linie wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
+            : 'This line has unsaved changes. Leaving the page will discard them.')
+          : s.view === 'detail'
           ? (state.lang === 'de'
             ? 'Die Station wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
             : 'This station has unsaved changes. Leaving the page will discard them.')
@@ -194,7 +198,7 @@ function Root() {
       && JSON.stringify(st.evDraft) !== st.evPristine)
     // the station detail keeps its draft locally and reports it (2026-09-30)
     // typeof: a cached older views-stations.js without DETAIL_GUARD must not take the app down
-    || (st.view === 'detail' && typeof DETAIL_GUARD !== 'undefined' && DETAIL_GUARD.dirty), []);
+    || ((st.view === 'detail' || st.view === 'lineDetail') && typeof DETAIL_GUARD !== 'undefined' && DETAIL_GUARD.dirty), []);
 
   /** The vanilla's navigate(), with the same per-view argument handling. */
   const nav = useCallback((view, id, line) => {

@@ -176,7 +176,8 @@ function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narro
     <${Box} data-page-header="" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
                    ...(sticky === false ? null : { position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }) }}>
     <${Box} sx=${{ display: 'flex', alignItems: dense ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 2,
-                   maxWidth: narrow ? CONTENT_MAX : 'none', mx: 'auto', py: dense ? 1.5 : 3 }}>
+                   // Ignat, 2026-09-30: "Make top block for all pages thinner. 16px padding top/bottom"
+                   maxWidth: narrow ? CONTENT_MAX : 'none', mx: 'auto', py: 2 }}>
       <${Box}>
         ${crumbs && crumbs.length ? html`
           <${Breadcrumbs} separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`} sx=${{ mb: .5 }}>
@@ -193,6 +194,25 @@ function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narro
       <//>
       ${action ? html`<${Box} sx=${{ pt: dense ? 0 : .5 }}>${action}<//>` : null}
     <//>
+    <//>`;
+}
+
+/* Read by app.js's leave guard. The draft is local to the detail view (station
+   or line), so the view
+   reports whether it differs from what was last seeded — the event editor's
+   guard, extended here (validator round 2: leaving silently lost edits). */
+const DETAIL_GUARD = { dirty: false };
+
+/* Ignat, 2026-09-30: staging's form rows — the label on the left, the input on
+   the right with no label inside it. The label is a real <label> for the
+   input, so the field keeps its accessible name. */
+function FormRow({ label, htmlFor, children, top, right }) {
+  return html`
+    <${Box} className="form-row" sx=${{ display: 'flex', alignItems: top ? 'flex-start' : 'center', gap: 3, py: 1.5,
+                   borderBottom: '1px solid #E7E7E7', '&:first-of-type': { pt: 0 }, '&:last-of-type': { borderBottom: 0, pb: 0 } }}>
+      <${Typography} component="label" htmlFor=${htmlFor} variant="body2"
+        sx=${{ width: 220, flexShrink: 0, color: 'text.primary', ...(top ? { pt: 1.25 } : null) }}>${label}<//>
+      <${Box} sx=${{ flex: 1, minWidth: 0, display: 'flex', justifyContent: right ? 'flex-end' : 'flex-start' }}>${children}<//>
     <//>`;
 }
 

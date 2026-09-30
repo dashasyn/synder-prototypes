@@ -19,52 +19,10 @@
 (function () {
   'use strict';
 
-  /* ── Ported list helpers ────────────────────────────────────────────
-     Vanilla: listFor() / moveToPos() / dragCtx, index.html 2846-2897.
-     The playlist branch of listFor('pl') is not carried here — no view in
-     this file owns a playlist — so the list is passed in directly. */
-
-  /** Moves list[currentIdx] to the 1-based position rawVal. In place. */
-  function moveToPos(list, currentIdx, rawVal) {
-    // same order of operations as the vanilla: NaN survives the clamp and
-    // is caught by the isNaN test, so a blank input is a no-op
-    const newIdx = Math.max(0, Math.min(list.length - 1, parseInt(rawVal, 10) - 1));
-    if (isNaN(newIdx) || newIdx === currentIdx) return false;
-    const [item] = list.splice(currentIdx, 1);
-    list.splice(newIdx, 0, item);
-    return true;
-  }
-
-  /** Extracts the selected rows and re-inserts them at targetIdx as one
-      block, keeping their relative order. Returns the landing index. */
-  function txtMoveBlock(selIds, targetIdx) {
-    const picked = displayTexts.filter(tx => selIds.includes(tx.id));
-    if (!picked.length) return 0;
-    const rest = displayTexts.filter(tx => !selIds.includes(tx.id));
-    const at = Math.max(0, Math.min(rest.length, targetIdx));
-    displayTexts.length = 0;
-    displayTexts.push(...rest.slice(0, at), ...picked, ...rest.slice(at));
-    return at;
-  }
-
-  /* ── Small shared pieces ────────────────────────────────────────── */
-
-  /**
-   * The position box. The vanilla commits on `change` (blur / Enter), not
-   * on every keystroke, so this keeps its own value and commits the same
-   * way — otherwise typing "12" would first move the row to position 1.
-   */
-  function PosInput({ value, max, onCommit, ariaLabel }) {
-    const [v, setV] = useState(String(value));
-    useEffect(() => { setV(String(value)); }, [value]);
-    return html`
-      <${TextField} type="number" value=${v} hiddenLabel
-        inputProps=${{ min: 1, max, 'aria-label': ariaLabel }}
-        onChange=${e => setV(e.target.value)}
-        onBlur=${() => { if (v !== String(value)) onCommit(v); }}
-        onKeyDown=${e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } }}
-        sx=${{ width: 72, '& input': { textAlign: 'center', py: .75 } }} />`;
-  }
+  /* The vanilla's position box (moveToPos / PosInput) and the multi-row block
+     move (txtMoveBlock) are gone: Ignat, 2026-09-30 — "Remove input for the row
+     number, just show number" and "remove bulk actions". Drag is the one way
+     to reorder, as it already was on the playlist tracks. */
 
   /* ════════════════════════════════════════════════════════════════
      Lines list — vanilla renderLines(), index.html 1721-1750
@@ -73,8 +31,8 @@
     const { t, nav, lang } = useApp();
     return html`
       <${Box}>
-        <${PageHeader} title=${t('lines')}
-          subtitle=${`${t('linesSuffix', lineData.length)} · BVG J/JK`} />
+        ${/* Ignat, 2026-09-30: no "10 Linien · BVG J/JK" line */ ''}
+        <${PageHeader} dense title=${t('lines')} />
         <${PageBody}>
           <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
             <${Table} id="lines-table">
@@ -83,7 +41,7 @@
                   <${TableCell} sx=${{ width: 60 }}>${t('colLine')}<//>
                   <${TableCell}>${t('colName')}<//>
                   <${TableCell}>${t('lineNameFile')}<//>
-                  <${TableCell} sx=${{ width: 32 }} />
+                  <${TableCell} sx=${{ width: 56 }} />
                 <//>
               <//>
               <${TableBody}>
@@ -92,8 +50,8 @@
                     onClick=${() => nav('lineDetail', l.id)}>
                     <${TableCell}><${LineBadge} line=${l.id} /><//>
                     <${TableCell}>
+                      ${/* no grey "U-Bahn Linie n" under the name (Ignat, 2026-09-30) */ ''}
                       <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${l.fullName}<//>
-                      <${Typography} variant="caption" color="text.secondary">${l.longName}<//>
                     <//>
                     <${TableCell}>
                       ${l.nameFile ? html`
@@ -107,8 +65,8 @@
                           ${lang === 'de' ? '— keine Audiodatei' : '— no audio file'}
                         <//>`}
                     <//>
-                    <${TableCell} sx=${{ color: 'text.disabled' }}>
-                      <${Icon} sx=${{ fontSize: 18, display: 'block' }}>chevron_right<//>
+                    <${TableCell} align="right">
+                      <${EditAction} name=${l.fullName} onClick=${e => { e.stopPropagation(); nav('lineDetail', l.id); }} />
                     <//>
                   <//>`)}
               <//>
@@ -223,23 +181,29 @@
     const { t, s, nav, lang, bump, toast } = useApp();
     const line = getLine(s.selectedLineId);
     const [d, setD] = useState(() => draftOf(line));
+    const [pristine, setPristine] = useState(() => JSON.stringify(draftOf(line)));
 
     // the router keeps one instance across lines, so resync on the id
-    useEffect(() => { setD(draftOf(getLine(s.selectedLineId))); }, [s.selectedLineId]);
+    useEffect(() => { const n = draftOf(getLine(s.selectedLineId)); setD(n); setPristine(JSON.stringify(n)); }, [s.selectedLineId]);
 
     if (!line) return html`<${PageHeader} title="—" />`;
     if (!d) return null;
 
+    // Ignat, 2026-09-30: "similar to station details" — the same leave guard,
+    // the same required-name rule, the same rows
+    DETAIL_GUARD.dirty = JSON.stringify(d) !== pristine;
+    const de = lang === 'de';
     const put = (k, v) => setD(prev => ({ ...prev, [k]: v }));
+    const nameErr = !d.fullName.trim();
 
-    // saveLineData(): trims, and an emptied full name falls back to the old one
     const save = () => {
-      line.fullName  = d.fullName.trim() || line.fullName;
+      if (nameErr) { toast(de ? 'Bitte die markierten Felder korrigieren.' : 'Please correct the marked fields.'); return; }
+      line.fullName  = d.fullName.trim();
       line.shortName = d.shortName.trim();
       line.longName  = d.longName.trim();
       line.nameFile  = d.nameFile;
       line.ttsText   = d.ttsText.trim();
-      setD(draftOf(line));
+      const n = draftOf(line); setD(n); setPristine(JSON.stringify(n));
       bump();
       toast(t('savedMsg'));
     };
@@ -247,46 +211,42 @@
     const nameFileOpts = soundFiles
       .filter(f => f.type === 'station-name')
       .map(f => ({ value: f.id, label: f.filename }));
+    const text = (id, k, extra) => html`
+      <${TextField} id=${id} hiddenLabel fullWidth value=${d[k]} onChange=${e => put(k, e.target.value)} ...${extra || {}} />`;
 
     return html`
       <${Box}>
         <${PageHeader}
           crumbs=${[{ label: t('lines'), onClick: () => nav('lines') }, { label: line.fullName }]}
-          title=${line.fullName}
+          title=${d.fullName.trim() || line.fullName}
           titleAfter=${html`<${LineBadge} line=${line.id} />`}
-          subtitle=${t('identifier')}
           action=${html`<${Button} variant="contained" id="line-save" onClick=${save}>${t('saveBtn')}<//>`} />
 
-        <${PageBody}>
+        <${PageBody} narrow>
           <${SectionCard} title=${t('lineName')}>
-            <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-              <${TextField} id="line-full-input" label=${t('fullName')} sx=${{ width: 340 }}
-                value=${d.fullName} onChange=${e => put('fullName', e.target.value)} />
-              <${TextField} id="line-short-input" label=${t('shortName')} sx=${{ width: 120 }}
-                value=${d.shortName} onChange=${e => put('shortName', e.target.value)} />
-              <${TextField} id="line-long-input" label=${t('longName')} sx=${{ width: 340 }}
-                value=${d.longName} onChange=${e => put('longName', e.target.value)} />
+            <${FormRow} label=${t('fullName') + ' *'} htmlFor="line-full-input">
+              ${text('line-full-input', 'fullName', { required: true, error: nameErr, helperText: nameErr ? (de ? 'Pflichtfeld' : 'Required') : '' })}
             <//>
+            <${FormRow} label=${t('shortName')} htmlFor="line-short-input">${text('line-short-input', 'shortName')}<//>
+            <${FormRow} label=${t('longName')} htmlFor="line-long-input">${text('line-long-input', 'longName')}<//>
           <//>
 
           <${SectionCard} title=${t('announcements')}>
-            <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
-              ${/* the vanilla's "— nicht zugewiesen —" option is gone: empty IS
-                    unassigned and the ✕ clears it — brief §3 */ ''}
-              <${FilterSelect} id="line-name-file" label=${t('lineNameFile')}
+            ${/* the vanilla's "— nicht zugewiesen —" option is gone: empty IS
+                  unassigned and the ✕ clears it — brief §3 */ ''}
+            <${FormRow} label=${t('lineNameFile')}>
+              <${FilterSelect} id="line-name-file" label=${t('lineNameFile')} hideLabel fullWidth
                 value=${d.nameFile} onChange=${v => put('nameFile', v)}
                 options=${nameFileOpts} minWidth=${280} />
-              <${TextField} id="line-tts-input" label=${t('ttsText')} sx=${{ width: 280 }}
-                placeholder=${lang === 'de' ? 'z.B. U eins' : 'e.g. U one'}
-                helperText=${t('ttsHint')}
-                value=${d.ttsText} onChange=${e => put('ttsText', e.target.value)} />
+            <//>
+            <${FormRow} label=${t('ttsText')} htmlFor="line-tts-input" top>
+              ${text('line-tts-input', 'ttsText', { placeholder: de ? 'z.B. U eins' : 'e.g. U one', helperText: t('ttsHint') })}
             <//>
           <//>
 
           ${/* The activation-schedule card belongs to Line management, not
                 here: the vanilla's line detail has exactly two cards, Linienname
-                and Ansagen. It was added during the port and taken back out —
-                porting the components is the job, adding a feature area is not. */ ''}
+                and Ansagen. */ ''}
         <//>
       <//>`;
   }
@@ -334,9 +294,8 @@
      ════════════════════════════════════════════════════════════════ */
   function DisplayTextsView() {
     const { t, s, set, lang, bump } = useApp();
-    const [bulkPos, setBulkPos] = useState('');
     const [dlg, setDlg] = useState(null);      // { idx, value, err } — idx null = new
-    const [del, setDel] = useState(null);      // { kind:'one', idx } | { kind:'bulk' }
+    const [del, setDel] = useState(null);      // { kind:'one', idx }
 
     const total = displayTexts.length;
     const per = s.txtPerPage;
@@ -347,80 +306,18 @@
     const start = page * per;
     const pageRows = displayTexts.slice(start, start + per);
 
-    const sel = s.txtSel;
-    const isSel = id => sel.includes(id);
-    const selCount = sel.length;
-    const pageAllSel = pageRows.length > 0 && pageRows.every(tx => isSel(tx.id));
-    const pageSomeSel = pageRows.some(tx => isSel(tx.id));
-
-    /* txtToggle() — shift-click selects the whole range between the two clicks */
-    const toggle = (id, shift) => {
-      const ids = displayTexts.map(tx => tx.id);
-      let next = sel.slice();
-      if (shift && s.txtLastSel && s.txtLastSel !== id) {
-        const a = ids.indexOf(s.txtLastSel), b = ids.indexOf(id);
-        for (let i = Math.min(a, b); i <= Math.max(a, b); i++) {
-          if (!next.includes(ids[i])) next.push(ids[i]);
-        }
-      } else if (next.includes(id)) {
-        next = next.filter(x => x !== id);
-      } else {
-        next.push(id);
-      }
-      set({ txtSel: next, txtLastSel: id });
-    };
-
-    /* txtTogglePage() */
-    const togglePage = () => {
-      const allSel = pageRows.length > 0 && pageRows.every(tx => isSel(tx.id));
-      const ids = pageRows.map(tx => tx.id);
-      const next = allSel ? sel.filter(id => !ids.includes(id))
-                          : sel.concat(ids.filter(id => !sel.includes(id)));
-      set({ txtSel: next });
-    };
-
-    const clearSel = () => set({ txtSel: [], txtLastSel: null });
-
-    /* txtBulkMove() — the block lands on the page it moved to */
-    const bulkMove = () => {
-      const target = parseInt(bulkPos, 10);
-      if (!selCount || isNaN(target)) return;
-      const moved = txtMoveBlock(sel, target - 1);
-      set({ txtPage: Math.floor(moved / per) });
-      setBulkPos('');
-      bump();
-    };
-
-    /* txtBulkDelete() */
-    const bulkDelete = () => {
-      for (let i = displayTexts.length - 1; i >= 0; i--) {
-        if (sel.includes(displayTexts[i].id)) displayTexts.splice(i, 1);
-      }
-      set({ txtSel: [], txtLastSel: null });
-      setDel(null);
-      bump();
-    };
-
+    /* Ignat, 2026-09-30: "remove bulk actions" — no selection, no bulk bar */
     /* deleteText(i) */
     const deleteOne = i => {
-      const id = displayTexts[i].id;
       displayTexts.splice(i, 1);
-      set({ txtSel: sel.filter(x => x !== id) });
       setDel(null);
       bump();
     };
 
-    /* listDrop('txt', …) — dragging one row of a multi-selection moves
-       the whole block, keeping its relative order */
+    /* listDrop('txt', …) — one row at a time now that there is no selection */
     const { rowProps, rowSx } = useRowDrag((from, to) => {
-      if (selCount > 1 && isSel(displayTexts[from].id)) {
-        const before = displayTexts.slice(0, to + 1)
-          .filter(tx => isSel(tx.id) && displayTexts.indexOf(tx) < to).length;
-        txtMoveBlock(sel, to - before);
-      } else {
-        const [item] = displayTexts.splice(from, 1);
-        displayTexts.splice(to, 0, item);
-      }
+      const [item] = displayTexts.splice(from, 1);
+      displayTexts.splice(to, 0, item);
       bump();
     });
 
@@ -452,40 +349,12 @@
           action=${html`<${Button} variant="contained" id="txt-add" onClick=${openNew}>${t('addText')}<//>`} />
 
         <${PageBody}>
-          ${selCount ? html`
-            <${Paper} variant="outlined" sx=${{ mb: 2, p: 1.25, borderColor: '#E7E7E7' }}>
-              <${Stack} direction="row" spacing=${1.5} alignItems="center" flexWrap="wrap" useFlexGap>
-                <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>
-                  ${selCount} ${t('selected')}
-                <//>
-                <${Divider} orientation="vertical" flexItem />
-                <${Typography} variant="body2" color="text.secondary">${t('moveToPosLbl')}<//>
-                <${TextField} id="bulk-pos" type="number" hiddenLabel value=${bulkPos}
-                  inputProps=${{ min: 1, max: total, 'aria-label': t('moveToPosLbl') }}
-                  onChange=${e => setBulkPos(e.target.value)}
-                  onKeyDown=${e => { if (e.key === 'Enter') { e.preventDefault(); bulkMove(); } }}
-                  sx=${{ width: 90, '& input': { py: .75 } }} />
-                <${Button} variant="contained" onClick=${bulkMove}>${t('moveBtn')}<//>
-                <${Divider} orientation="vertical" flexItem />
-                <${Button} color="error" onClick=${() => setDel({ kind: 'bulk' })}>${t('deleteSelBtn')}<//>
-                <${Button} onClick=${clearSel}>${t('clearSelBtn')}<//>
-                <${Box} sx=${{ flexGrow: 1 }} />
-                <${Typography} variant="caption" color="text.secondary">${t('blockDragHint')}<//>
-              <//>
-            <//>` : null}
-
           <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
             <${Table} id="texts-table">
               <${TableHead}>
                 <${TableRow}>
                   <${TableCell} sx=${{ width: 32, pr: 0 }} />
-                  <${TableCell} padding="checkbox">
-                    <${Checkbox} checked=${pageAllSel} indeterminate=${!pageAllSel && pageSomeSel}
-                      onChange=${togglePage}
-                      inputProps=${{ 'aria-label': lang === 'de'
-                        ? 'Alle auf dieser Seite auswählen' : 'Select all on this page' }} />
-                  <//>
-                  <${TableCell} sx=${{ width: 96 }}>${t('colPos')}<//>
+                  <${TableCell} sx=${{ width: 64 }}>${t('colPos')}<//>
                   <${TableCell}>${textLabel}<//>
                   <${TableCell} />
                 <//>
@@ -493,27 +362,18 @@
               <${TableBody}>
                 ${pageRows.length ? pageRows.map((tx, pi) => {
                   const gi = start + pi;   // global index — position and actions use this
-                  const rowSel = isSel(tx.id);
                   return html`
-                    <${TableRow} key=${tx.id} selected=${rowSel} sx=${rowSx(gi)} ...${rowProps(gi)}>
+                    <${TableRow} key=${tx.id} sx=${rowSx(gi)} ...${rowProps(gi)}>
                       <${TableCell} sx=${{ width: 32, pr: 0 }}><${DragHandle} /><//>
-                      <${TableCell} padding="checkbox">
-                        <${Checkbox} checked=${rowSel} onChange=${() => {}}
-                          onClick=${e => toggle(tx.id, e.shiftKey)}
-                          inputProps=${{ 'aria-label': `${lang === 'de' ? 'Zeile auswählen' : 'Select row'}: ${tx.text}` }} />
-                      <//>
-                      <${TableCell}>
-                        <${PosInput} value=${gi + 1} max=${total}
-                          ariaLabel=${lang === 'de' ? 'Position eingeben' : 'Enter position'}
-                          onCommit=${v => { if (moveToPos(displayTexts, gi, v)) bump(); }} />
-                      <//>
+                      ${/* the position is shown, not typed — drag changes it (Ignat, 2026-09-30) */ ''}
+                      <${TableCell} className="pos" sx=${{ color: 'text.secondary' }}>${gi + 1}<//>
                       <${TableCell} sx=${{ fontWeight: 500 }}>${tx.text}<//>
                       <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
                         <${EditAction} name=${tx.text} onClick=${() => openEdit(gi)} />
                         <${DeleteAction} name=${tx.text} onClick=${() => setDel({ kind: 'one', idx: gi })} />
                       <//>
                     <//>`;
-                }) : html`<${EmptyRow} colSpan=${5} />`}
+                }) : html`<${EmptyRow} colSpan=${4} />`}
               <//>
             <//>
             <${TablePagination} component="div" count=${total} page=${page} rowsPerPage=${per}
@@ -548,16 +408,12 @@
             <//>` : null}
         <//>
 
-        ${/* deleteText() / txtBulkDelete() — confirm() becomes a Dialog */ ''}
+        ${/* deleteText() — confirm() becomes a Dialog */ ''}
         <${ConfirmDialog} open=${!!del}
-          title=${del && del.kind === 'bulk'
-            ? (lang === 'de'
-                ? `${selCount} ${selCount === 1 ? 'Anzeigetext' : 'Anzeigetexte'} löschen?`
-                : `Delete ${selCount} display text${selCount === 1 ? '' : 's'}?`)
-            : `${lang === 'de' ? 'Löschen' : 'Delete'}: "${delOne ? delOne.text : ''}"?`}
+          title=${`${lang === 'de' ? 'Löschen' : 'Delete'}: "${delOne ? delOne.text : ''}"?`}
           confirmLabel=${lang === 'de' ? 'Löschen' : 'Delete'}
           onClose=${() => setDel(null)}
-          onConfirm=${() => { if (del.kind === 'bulk') bulkDelete(); else deleteOne(del.idx); }} />
+          onConfirm=${() => deleteOne(del.idx)} />
       <//>`;
   }
 
@@ -616,6 +472,7 @@
               <${TableHead}>
                 <${TableRow}>
                   <${TableCell} sx=${{ width: 32, pr: 0 }} />
+                  <${TableCell} sx=${{ width: 64 }}>${t('colPos')}<//>
                   <${TableCell}>${t('colLabel')}<//>
                   <${TableCell}>${t('colFilename')}<//>
                   <${TableCell} />
@@ -625,20 +482,19 @@
                 ${total ? specialAnnouncements.map((sp, i) => html`
                   <${TableRow} key=${sp.id} sx=${rowSx(i)} ...${rowProps(i)}>
                     <${TableCell} sx=${{ width: 32, pr: 0 }}><${DragHandle} /><//>
+                    ${/* the number sits right after the grip, shown not typed (Ignat, 2026-09-30) */ ''}
+                    <${TableCell} className="pos" sx=${{ color: 'text.secondary' }}>${i + 1}<//>
                     <${TableCell} sx=${{ fontWeight: 500 }}>${sp.label}<//>
                     <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
                       ${sndName(sp.fileId)}
                     <//>
                     <${TableCell} align="right">
                       <${Stack} direction="row" spacing=${.75} alignItems="center" justifyContent="flex-end">
-                        <${PosInput} value=${i + 1} max=${total}
-                          ariaLabel=${lang === 'de' ? 'Position eingeben' : 'Enter position'}
-                          onCommit=${v => { if (moveToPos(specialAnnouncements, i, v)) bump(); }} />
                         <${EditAction} name=${sp.label} onClick=${() => open(i)} />
                         <${DeleteAction} name=${sp.label} onClick=${() => setDel(i)} />
                       <//>
                     <//>
-                  <//>`) : html`<${EmptyRow} colSpan=${4} />`}
+                  <//>`) : html`<${EmptyRow} colSpan=${5} />`}
               <//>
             <//>
           <//>
