@@ -446,15 +446,13 @@ function Sheet() {
               sx=${{ mt: 2, '& .MuiFilledInput-root:before, & .MuiFilledInput-root:hover:not(.Mui-disabled):before': { borderBottomStyle: 'dotted' },
                      '& .MuiFilledInput-root:after': { display: 'none' }, '& textarea': { color: 'text.secondary', cursor: 'default' },
                      '& .MuiInputLabel-root.Mui-focused': { color: 'text.secondary' } }} />
-            ${/* ELA GENERIEREN sits to the right of Zusätzliche Angaben (Ignat, 2026-09-30) */ ''}
-            <${Stack} direction="row" spacing=${2} alignItems="flex-start" sx=${{ mt: 2 }} id="genRow">
-              <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
-                placeholder=${KNOWN[0][S.ui]} onChange=${e => onZusatz(e.target.value)} />
-              <${Box} sx=${{ flexShrink: 0, pt: 1.25, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 1 }}>
-                <${Button} variant="outlined" id="btnGen" disabled=${S.msg.de.state === 'loading' || S.msg.en.state === 'loading'} onClick=${generate}>
-                  ${S.msg.de.state === 'loading' ? t('genBusy') : t('genEla')}<//>
-                ${S.msg.de.state === 'loading' ? html`<${LinearProgress} id="genBar" variant="determinate" value=${S.genPct || 0} />` : null}
-              <//>
+            ${/* ELA GENERIEREN sits below Zusätzliche Angaben (Ignat, 2026-09-30, second pass) */ ''}
+            <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
+              placeholder=${KNOWN[0][S.ui]} sx=${{ mt: 2 }} onChange=${e => onZusatz(e.target.value)} />
+            <${Stack} direction="row" spacing=${1.5} alignItems="center" sx=${{ mt: 1.5 }} id="genRow">
+              <${Button} variant="outlined" id="btnGen" disabled=${S.msg.de.state === 'loading' || S.msg.en.state === 'loading'} onClick=${generate}>
+                ${S.msg.de.state === 'loading' ? t('genBusy') : t('genEla')}<//>
+              ${S.msg.de.state === 'loading' ? html`<${LinearProgress} id="genBar" variant="determinate" value=${S.genPct || 0} sx=${{ width: 180 }} />` : null}
             <//>
           <//>` : null}
 
