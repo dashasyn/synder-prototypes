@@ -181,7 +181,8 @@ function Root() {
     (st.view === 'musicEvent' && st.evDraft && st.evPristine !== null
       && JSON.stringify(st.evDraft) !== st.evPristine)
     // the station detail keeps its draft locally and reports it (2026-09-30)
-    || (st.view === 'detail' && DETAIL_GUARD.dirty), []);
+    // typeof: a cached older views-stations.js without DETAIL_GUARD must not take the app down
+    || (st.view === 'detail' && typeof DETAIL_GUARD !== 'undefined' && DETAIL_GUARD.dirty), []);
 
   /** The vanilla's navigate(), with the same per-view argument handling. */
   const nav = useCallback((view, id, line) => {
@@ -209,7 +210,7 @@ function Root() {
     setS(prev => {
       const go = prev.pendingNav;
       const next = { ...prev, evDraft: null, evPristine: null, pendingNav: null };
-      DETAIL_GUARD.dirty = false;
+      if (typeof DETAIL_GUARD !== 'undefined') DETAIL_GUARD.dirty = false;
       if (!go) return next;
       next.view = go.view;
       if (go.view === 'lineDetail') next.selectedLineId = go.id || null;
