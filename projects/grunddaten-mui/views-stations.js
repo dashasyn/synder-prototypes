@@ -59,9 +59,10 @@ function StationsView() {
               ${rows.length ? rows.map(r => {
                 const st = r.station;
                 const nc = st.nameChanges[0];
-                // the row itself does not open the station; the pen does (Ignat, 2026-09-30)
+                // the whole row opens the station, with hover; the pen at the end says so (Ignat, 2026-09-30)
                 return html`
-                  <${TableRow} key=${st.id + r.line}>
+                  <${TableRow} hover key=${st.id + r.line} sx=${{ cursor: 'pointer' }}
+                    onClick=${() => nav('detail', st.id, r.line)}>
                     <${TableCell}><${Chip} size="small" label=${st.id} variant="outlined" /><//>
                     <${TableCell}>
                       ${st.name}
@@ -70,7 +71,7 @@ function StationsView() {
                     <//>
                     <${TableCell}><${LineBadge} line=${r.line} /><//>
                     <${TableCell} align="right">
-                      <${EditAction} name=${st.name + ' ' + r.line} onClick=${() => nav('detail', st.id, r.line)} /><//>
+                      <${EditAction} name=${st.name + ' ' + r.line} onClick=${e => { e.stopPropagation(); nav('detail', st.id, r.line); }} /><//>
                   <//>`;
               }) : html`<${EmptyRow} colSpan=${4} />`}
             <//>
