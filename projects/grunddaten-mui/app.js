@@ -143,9 +143,13 @@ function Shell() {
             because both are ways out of a draft that only Save writes back. */ ''}
       <${ConfirmDialog} open=${!!s.pendingNav}
         title=${state.lang === 'de' ? 'Änderungen verwerfen?' : 'Discard changes?'}
-        body=${state.lang === 'de'
-          ? 'Das Event wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
-          : 'This event has unsaved changes. Leaving the page will discard them.'}
+        body=${s.view === 'detail'
+          ? (state.lang === 'de'
+            ? 'Die Station wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
+            : 'This station has unsaved changes. Leaving the page will discard them.')
+          : (state.lang === 'de'
+            ? 'Das Event wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
+            : 'This event has unsaved changes. Leaving the page will discard them.')}
         confirmLabel=${state.lang === 'de' ? 'Verwerfen' : 'Discard'}
         onConfirm=${app.confirmLeave} onClose=${app.cancelLeave} />
 
@@ -174,13 +178,15 @@ function Root() {
    * confirms, so the guard cannot silently swallow where they were going.
    */
   const isDirty = useCallback(st =>
-    st.view === 'musicEvent' && st.evDraft && st.evPristine !== null
-      && JSON.stringify(st.evDraft) !== st.evPristine, []);
+    (st.view === 'musicEvent' && st.evDraft && st.evPristine !== null
+      && JSON.stringify(st.evDraft) !== st.evPristine)
+    // the station detail keeps its draft locally and reports it (2026-09-30)
+    || (st.view === 'detail' && DETAIL_GUARD.dirty), []);
 
   /** The vanilla's navigate(), with the same per-view argument handling. */
   const nav = useCallback((view, id, line) => {
     setS(prev => {
-      if (view !== 'musicEvent' && isDirty(prev)) return { ...prev, pendingNav: { view, id, line } };
+      if (view !== prev.view && isDirty(prev)) return { ...prev, pendingNav: { view, id, line } };
       const next = { ...prev, view };
       if (view === 'lineDetail') next.selectedLineId = id || null;
       else if (view === 'playlistDetail') next.plId = id || prev.plId;
@@ -203,6 +209,7 @@ function Root() {
     setS(prev => {
       const go = prev.pendingNav;
       const next = { ...prev, evDraft: null, evPristine: null, pendingNav: null };
+      DETAIL_GUARD.dirty = false;
       if (!go) return next;
       next.view = go.view;
       if (go.view === 'lineDetail') next.selectedLineId = go.id || null;

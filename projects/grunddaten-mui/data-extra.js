@@ -102,4 +102,14 @@
   // Append, never replace: data.js owns the extracted twelve.
   const have = new Set(stations.map(s => s.id));
   for (const s of EXTRA) if (!have.has(s.id)) stations.push(s);
+
+  /* Ignat, 2026-09-30: staging's four trigger radii and the TTS fallback text.
+     The vanilla has neither, so every station is seeded here: arrival outer
+     radius from the old arrival trigger, the rest plausible values around
+     staging's own example (100 / 160 / 10 / 50 m). */
+  for (const s of stations) {
+    if (!s.radii) s.radii = { arrOuter: s.triggerArrival || 100, depOuter: (s.triggerDeparture || 80) + 80,
+                              depInner: 10, station: 50 };
+    if (s.ttsText === undefined) s.ttsText = s.name;
+  }
 })();

@@ -157,10 +157,18 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id, req
  * Page header: breadcrumb, title, subtitle, and the action in the corner.
  * Brief §3 — breadcrumbs plus a corner action button, no back buttons.
  */
-function PageHeader({ crumbs, title, titleAfter, subtitle, action }) {
+/* Ignat, 2026-09-30: "I like that the content is 960px and centered … It is
+   easier to read." — the staging build's measure. Header band and body share
+   one centred 960px column; the white band itself still runs full width. */
+const CONTENT_MAX = 960;
+
+/** sticky — keeps the title and its Save in view on long forms (station detail). */
+function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky }) {
   return html`
+    <${Box} data-page-header="" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
+                   ...(sticky ? { position: 'sticky', top: 0, zIndex: 10 } : null) }}>
     <${Box} sx=${{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-                   px: 3, py: 3, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>
+                   maxWidth: CONTENT_MAX, mx: 'auto', py: 3 }}>
       <${Box}>
         ${crumbs && crumbs.length ? html`
           <${Breadcrumbs} separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`} sx=${{ mb: .5 }}>
@@ -176,6 +184,7 @@ function PageHeader({ crumbs, title, titleAfter, subtitle, action }) {
         ${subtitle ? html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: .75 }}>${subtitle}<//>` : null}
       <//>
       ${action ? html`<${Box} sx=${{ pt: .5 }}>${action}<//>` : null}
+    <//>
     <//>`;
 }
 
@@ -210,7 +219,7 @@ function PageBody({ children, sx }) {
   // data-page-body is a stable hook for the spacing gate. Without it the gate
   // matched the PageHeader first — which carries the same px — and a squeezed
   // body passed the assertion.
-  return html`<${Box} data-page-body="" sx=${{ px: 3, py: 3, ...(sx || {}) }}>${children}<//>`;
+  return html`<${Box} sx=${{ px: 3 }}><${Box} data-page-body="" sx=${{ maxWidth: CONTENT_MAX, mx: 'auto', py: 3, ...(sx || {}) }}>${children}<//><//>`;
 }
 
 /**

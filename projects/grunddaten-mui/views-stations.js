@@ -83,43 +83,85 @@ function StationsView() {
    The vanilla keeps edits in the DOM until Save reads them back out. The
    React port keeps them in a draft and writes the same fields back in
    place on Save — same semantics, so leaving the page still discards. */
+/* Read by app.js's leave guard. The draft is local to the view, so the view
+   reports whether it differs from what was last seeded — the event editor's
+   guard, extended here (validator round 2: leaving silently lost edits). */
+const DETAIL_GUARD = { dirty: false };
+
+/* Ignat, 2026-09-30 — the staging build's cards and fields, brought in:
+   Auslösepunkte is its own card with the four radii, and the station name
+   gets a TTS fallback text. Radii and TTS text are seeded in data-extra.js. */
+const RADII = [
+  ['arrOuter', { de: 'Ankunft – äußerer Radius', en: 'Arrival – outer radius' }],
+  ['depOuter', { de: 'Abfahrt – äußerer Radius', en: 'Departure – outer radius' }],
+  ['depInner', { de: 'Abfahrt – innerer Radius', en: 'Departure – inner radius' }],
+  ['station',  { de: 'Stationsradius',           en: 'Station radius' }],
+];
+
 function StationDetailView() {
   const { s, set, nav, t, bump, toast } = useApp();
   const st = getStation(s.selectedId);
-  const [draft, setDraft] = useState(() => JSON.parse(JSON.stringify(st)));
+  const seed = () => JSON.parse(JSON.stringify(getStation(s.selectedId)));
+  const [draft, setDraft] = useState(seed);
+  const [pristine, setPristine] = useState(() => JSON.stringify(seed()));
   const [addXfer, setAddXfer] = useState(null);   // pending file id, or null when closed
   const [addXferErr, setAddXferErr] = useState(false);
   const [schedIdx, setSchedIdx] = useState(null); // transfer announcement being scheduled
   const [schedDays, setSchedDays] = useState(null);
 
   // re-seed when the route changes to a different station
-  useEffect(() => { setDraft(JSON.parse(JSON.stringify(getStation(s.selectedId)))); },
+  useEffect(() => { const n = seed(); setDraft(n); setPristine(JSON.stringify(n)); },
     [s.selectedId, s.selectedLine]);
 
   if (!st) return html`<${PageBody}><${Alert} severity="error">${s.selectedId}<//><//>`;
 
   const d = draft;
+  DETAIL_GUARD.dirty = JSON.stringify(d) !== pristine;
   const patch = fn => setDraft(prev => { const n = JSON.parse(JSON.stringify(prev)); fn(n); return n; });
+  const de = state.lang === 'de';
+
+  /* Range checks, live on the field, and Save refuses while any fails
+     (validator round 2: 5000 m, −20 m and latitude 152.5 saved as success). */
+  const outOf = (v, min, max, optional) => {
+    if (v === '' || v === null || v === undefined) return !optional;
+    const n = Number(v); return isNaN(n) || n < min || n > max;
+  };
+  const rangeMsg = (min, max, unit) => (de ? 'Erlaubt: ' : 'Allowed: ') + min + '–' + max + (unit ? ' ' + unit : '');
+  const err = {
+    name: !(d.name || '').trim(),
+    lat: outOf(d.coords && d.coords.lat, -90, 90, true),
+    lon: outOf(d.coords && d.coords.lon, -180, 180, true),
+    nc: d.nameChanges.map(nc => !!nc.date && !(nc.fullName || '').trim()),
+    radii: Object.fromEntries(RADII.map(([k]) => [k, outOf(d.radii && d.radii[k], 0, 999)])),
+    prev: outOf(d.neighborDist.prev.dist, 0, 9999),
+    next: outOf(d.neighborDist.next.dist, 0, 9999),
+  };
+  const hasErr = err.name || err.lat || err.lon || err.nc.some(Boolean) || err.prev || err.next
+    || Object.values(err.radii).some(Boolean);
 
   const nameFileOptions = soundFiles.filter(f => f.type === 'station-name')
     .map(f => ({ value: f.id, label: f.filename }));
 
   const save = () => {
+    if (hasErr) { toast(de ? 'Bitte die markierten Felder korrigieren.' : 'Please correct the marked fields.'); return; }
     // write the draft back onto the real record, in place, like the vanilla
-    st.name = (d.name || '').trim() || st.name;
+    st.name = d.name.trim();
     st.shortName = (d.shortName || '').trim();
     st.longName = (d.longName || '').trim();
-    st.coords = { lat: d.coords && d.coords.lat !== '' ? parseFloat(d.coords.lat) : null,
-                  lon: d.coords && d.coords.lon !== '' ? parseFloat(d.coords.lon) : null };
+    st.coords = { lat: d.coords && d.coords.lat !== '' && d.coords.lat !== null ? parseFloat(d.coords.lat) : null,
+                  lon: d.coords && d.coords.lon !== '' && d.coords.lon !== null ? parseFloat(d.coords.lon) : null };
     st.nameChanges = d.nameChanges.filter(nc => nc.date || nc.fullName)
       .map(nc => ({ date: nc.date, fullName: nc.fullName, shortName: nc.shortName, fileId: nc.fileId }));
     st.stationNameFile = d.stationNameFile;
+    st.ttsText = (d.ttsText || '').trim();
     st.tracks.forEach((tr, ti) => { tr.exits = d.tracks[ti].exits.slice(); });
-    st.triggerArrival = parseInt(d.triggerArrival, 10) || 0;
-    st.triggerDeparture = parseInt(d.triggerDeparture, 10) || 0;
-    st.neighborDist.prev.dist = parseInt(d.neighborDist.prev.dist, 10) || 0;
-    st.neighborDist.next.dist = parseInt(d.neighborDist.next.dist, 10) || 0;
+    st.radii = Object.fromEntries(RADII.map(([k]) => [k, parseInt(d.radii[k], 10)]));
+    st.neighborDist.prev.dist = parseInt(d.neighborDist.prev.dist, 10);
+    st.neighborDist.next.dist = parseInt(d.neighborDist.next.dist, 10);
     st.transferAnnouncements = d.transferAnnouncements.map(a => ({ ...a }));
+    // re-seed from the record, so the page shows exactly what was stored —
+    // a fully empty name-change card is dropped, not left on screen
+    const n = seed(); setDraft(n); setPristine(JSON.stringify(n));
     bump();
     toast(t('savedMsg'));
   };
@@ -135,6 +177,13 @@ function StationDetailView() {
       : html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`;
 
   const setMain = i => patch(n => n.transferAnnouncements.forEach((a, j) => { a.isMain = j === i; }));
+  // removing the main one hands "main" to the first that is left — a station
+  // with announcements but no main was saveable before (validator round 2)
+  const removeXfer = i => patch(n => {
+    const wasMain = n.transferAnnouncements[i].isMain;
+    n.transferAnnouncements.splice(i, 1);
+    if (wasMain && n.transferAnnouncements.length) n.transferAnnouncements[0].isMain = true;
+  });
 
   const openSchedule = i => {
     const ann = d.transferAnnouncements[i];
@@ -146,42 +195,51 @@ function StationDetailView() {
     setSchedIdx(i);
   };
 
-  const transferOptions = soundFiles.filter(f => f.type === 'transfer')
+  // a file already on the station is not offered again
+  const assigned = new Set(d.transferAnnouncements.map(a => a.fileId));
+  const transferOptions = soundFiles.filter(f => f.type === 'transfer' && !assigned.has(f.id))
     .map(f => ({ value: f.id, label: f.filename }));
+
+  const num = (label, value, onChange, bad, min, max, id) => html`
+    <${TextField} type="number" label=${label} sx=${{ width: 210 }} value=${value ?? ''} id=${id}
+      inputProps=${{ min, max }} error=${bad} helperText=${bad ? rangeMsg(min, max, 'm') : ''}
+      InputProps=${{ endAdornment: html`<${InputAdornment} position="end">m<//>` }}
+      onChange=${e => onChange(e.target.value)} />`;
 
   return html`
     <${React.Fragment}>
-      <${PageHeader}
+      <${PageHeader} sticky
         crumbs=${[{ label: t('stations'), onClick: () => nav('stations') }, { label: st.name }]}
         title=${d.name}
         titleAfter=${html`<${LineBadge} line=${s.selectedLine} />`}
         subtitle=${`${st.id} · ${t('identifier')}`}
-        action=${html`<${Button} variant="contained" onClick=${save}>${t('saveBtn')}<//>`} />
+        action=${html`<${Button} variant="contained" id="stSave" onClick=${save}>${t('saveBtn')}<//>`} />
 
       <${PageBody}>
-        ${/* ── Station name ── */ ''}
         ${/* Ignat, 2026-09-30: the card carries the coordinates too, so it is "Name and location" */ ''}
-        <${SectionCard} title=${state.lang === 'de' ? 'Name und Standort' : 'Name and location'}>
+        <${SectionCard} title=${de ? 'Name und Standort' : 'Name and location'}>
           <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-            <${TextField} label=${t('fullName')} required value=${d.name} sx=${{ width: 280 }}
+            <${TextField} label=${t('fullName')} required value=${d.name} sx=${{ width: 280 }} id="stName"
+              error=${err.name} helperText=${err.name ? (de ? 'Pflichtfeld' : 'Required') : ''}
               onChange=${e => patch(n => { n.name = e.target.value; })} />
             <${TextField} label=${t('shortName')} value=${d.shortName || ''} sx=${{ width: 180 }}
-              placeholder=${state.lang === 'de' ? 'z.B. Alex' : 'e.g. Alex'}
+              placeholder=${de ? 'z.B. Alex' : 'e.g. Alex'}
               onChange=${e => patch(n => { n.shortName = e.target.value; })} />
             <${TextField} label=${t('longName')} value=${d.longName || ''} sx=${{ width: 340 }}
-              placeholder=${state.lang === 'de' ? 'z.B. Bahnhof Berlin Alexanderplatz'
-                                                : 'e.g. Berlin Alexanderplatz station'}
+              placeholder=${de ? 'z.B. Bahnhof Berlin Alexanderplatz' : 'e.g. Berlin Alexanderplatz station'}
               onChange=${e => patch(n => { n.longName = e.target.value; })} />
           <//>
 
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
             ${t('coordinates')}<//>
-          <${Stack} direction="row" spacing=${2} alignItems="center" flexWrap="wrap" useFlexGap>
-            <${TextField} type="number" label=${t('coordLat')} sx=${{ width: 170 }} placeholder="52.521992"
-              inputProps=${{ step: 0.000001 }} value=${d.coords ? (d.coords.lat ?? '') : ''}
+          <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+            <${TextField} type="number" label=${t('coordLat')} sx=${{ width: 170 }} placeholder="52.521992" id="stLat"
+              inputProps=${{ step: 0.000001, min: -90, max: 90 }} value=${d.coords ? (d.coords.lat ?? '') : ''}
+              error=${err.lat} helperText=${err.lat ? rangeMsg(-90, 90) : ''}
               onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lat: e.target.value }; })} />
-            <${TextField} type="number" label=${t('coordLon')} sx=${{ width: 170 }} placeholder="13.413244"
-              inputProps=${{ step: 0.000001 }} value=${d.coords ? (d.coords.lon ?? '') : ''}
+            <${TextField} type="number" label=${t('coordLon')} sx=${{ width: 170 }} placeholder="13.413244" id="stLon"
+              inputProps=${{ step: 0.000001, min: -180, max: 180 }} value=${d.coords ? (d.coords.lon ?? '') : ''}
+              error=${err.lon} helperText=${err.lon ? rangeMsg(-180, 180) : ''}
               onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lon: e.target.value }; })} />
             ${/* no "Karte öffnen" link to a real map (Ignat, 2026-09-30) */ ''}
           <//>
@@ -192,25 +250,28 @@ function StationDetailView() {
             ${d.nameChanges.map((nc, i) => html`
               <${Card} key=${i} sx=${{ bgcolor: '#FAFAFA' }}>
                 <${Box} sx=${{ p: 1.5 }}>
-                  <${Stack} direction="row" spacing=${2} alignItems="center" flexWrap="wrap" useFlexGap>
-                    <${TextField} type="date" label=${state.lang === 'de' ? 'Datum' : 'Date'}
+                  <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+                    <${TextField} type="date" label=${de ? 'Datum' : 'Date'}
                       InputLabelProps=${{ shrink: true }} value=${nc.date || ''} sx=${{ width: 190 }}
                       onChange=${e => patch(n => { n.nameChanges[i].date = e.target.value; })} />
-                    <${TextField} label=${t('fullName')} value=${nc.fullName || ''} sx=${{ width: 240 }}
+                    ${/* the future name, labelled as such — the same labels as the current name read as the current name */ ''}
+                    <${TextField} label=${de ? 'Neuer Standardname' : 'New default name'} value=${nc.fullName || ''} sx=${{ width: 240 }}
+                      id=${'ncName-' + i} error=${err.nc[i]} helperText=${err.nc[i] ? (de ? 'Pflichtfeld, wenn ein Datum gesetzt ist' : 'Required once a date is set') : ''}
                       onChange=${e => patch(n => { n.nameChanges[i].fullName = e.target.value; })} />
-                    <${TextField} label=${t('shortName')} value=${nc.shortName || ''} sx=${{ width: 170 }}
+                    <${TextField} label=${de ? 'Neuer kurzer Name' : 'New short name'} value=${nc.shortName || ''} sx=${{ width: 170 }}
                       onChange=${e => patch(n => { n.nameChanges[i].shortName = e.target.value; })} />
                     <${FilterSelect} label=${t('stationNameFile')} value=${nc.fileId || ''}
                       options=${nameFileOptions} minWidth=${240}
                       onChange=${v => patch(n => { n.nameChanges[i].fileId = v; })} />
                     <${Box} sx=${{ flexGrow: 1 }} />
-                    <${DeleteAction} remove name=${`${state.lang === 'de' ? 'Namensänderung' : 'name change'} ${i + 1}`}
+                    <${DeleteAction} remove name=${`${de ? 'Namensänderung' : 'name change'} ${i + 1}`}
                       onClick=${() => patch(n => { n.nameChanges.splice(i, 1); })} />
                   <//>
                 <//>
               <//>`)}
             <${Box}>
-              <${Button} startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
+              ${/* the string already starts with "+", so no add icon in front of it */ ''}
+              <${Button} id="btnAddNc"
                 onClick=${() => patch(n => n.nameChanges.push({ date: '', fullName: '', shortName: '', fileId: '' }))}>
                 ${t('scheduleChange')}<//>
             <//>
@@ -225,7 +286,7 @@ function StationDetailView() {
                 <${TableCell} sx=${{ width: 120 }}>${t('track')}<//>
                 ${d.directions.map((dir, di) => html`
                   <${TableCell} key=${di}>
-                    <${Typography} variant="overline" color="text.disabled" sx=${{ display: 'block', lineHeight: 1.2 }}>
+                    <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', lineHeight: 1.2 }}>
                       ${t('direction')} ${di + 1}<//>
                     ${dir.name}
                   <//>`)}
@@ -233,13 +294,15 @@ function StationDetailView() {
               <${TableBody}>
                 ${d.tracks.map((tr, ti) => html`
                   <${TableRow} key=${ti}>
-                    <${TableCell} sx=${{ fontWeight: 500 }}>${state.lang === 'de' ? 'Gleis' : 'Track'} ${tr.num}<//>
+                    <${TableCell} sx=${{ fontWeight: 500 }}>${de ? 'Gleis' : 'Track'} ${tr.num}<//>
                     ${d.directions.map((dir, di) => html`
                       <${TableCell} key=${di}>
+                        ${/* the direction is named once, in the column header — staging's layout */ ''}
                         <${FormControl} sx=${{ minWidth: 150 }}>
-                          <${InputLabel}>${dir.name}<//>
-                          <${Select} label=${dir.name} value=${tr.exits[di]}
-                            inputProps=${{ id: `te-${ti}-${di}` }}
+                          <${Select} value=${tr.exits[di]} hiddenLabel
+                            inputProps=${{ id: `te-${ti}-${di}`, 'aria-label': `${de ? 'Gleis' : 'Track'} ${tr.num}, ${dir.name}` }}
+                            SelectDisplayProps=${{ 'aria-label': `${de ? 'Gleis' : 'Track'} ${tr.num}, ${dir.name}` }}
+                            sx=${{ '& .MuiSelect-select': { py: 1.25 } }}
                             onChange=${e => patch(n => { n.tracks[ti].exits[di] = e.target.value; })}>
                             ${['left', 'right', 'both'].map(v => html`
                               <${MenuItem} key=${v} value=${v}>${t(v)}<//>`)}
@@ -254,9 +317,17 @@ function StationDetailView() {
 
         ${/* ── Announcements ── */ ''}
         <${SectionCard} title=${t('announcements')}>
-          <${FilterSelect} label=${t('stationNameFile')} value=${d.stationNameFile || ''}
-            options=${nameFileOptions} minWidth=${300}
-            onChange=${v => patch(n => { n.stationNameFile = v; })} />
+          <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+            <${FilterSelect} label=${t('stationNameFile')} value=${d.stationNameFile || ''}
+              options=${nameFileOptions} minWidth=${300}
+              onChange=${v => patch(n => { n.stationNameFile = v; })} />
+            ${/* staging's wording, verbatim (DE); the EN is mine */ ''}
+            <${TextField} id="stTts" label=${de ? 'TTS-Text (Fallback)' : 'TTS text (fallback)'} value=${d.ttsText || ''}
+              sx=${{ width: 300 }}
+              helperText=${de ? 'Wird als Text-to-Speech verwendet, wenn keine Audiodatei verfügbar ist.'
+                              : 'Used as text-to-speech when no audio file is available.'}
+              onChange=${e => patch(n => { n.ttsText = e.target.value; })} />
+          <//>
 
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
             ${t('transferFiles')}<//>
@@ -285,9 +356,10 @@ function StationDetailView() {
                         <//>
                       <//>
                       <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                        <${Button} onClick=${() => openSchedule(i)}>${t('editSchedule')}<//>
-                        <${DeleteAction} remove name=${`${state.lang === 'de' ? 'Umstiegsansage' : 'transfer announcement'} ${i + 1}`}
-                          onClick=${() => patch(n => { n.transferAnnouncements.splice(i, 1); })} />
+                        ${/* the main one always plays, so it has no schedule to edit */ ''}
+                        ${ann.isMain ? null : html`<${Button} onClick=${() => openSchedule(i)}>${t('editSchedule')}<//>`}
+                        <${DeleteAction} remove name=${`${de ? 'Umstiegsansage' : 'transfer announcement'} ${i + 1}`}
+                          onClick=${() => removeXfer(i)} />
                       <//>
                     <//>`)}
                 <//>
@@ -295,21 +367,15 @@ function StationDetailView() {
             <//>` : html`
             <${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>
               ${t('noneAssigned')}<//>`}
-          <${Button} startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
+          <${Button} id="btnAddXfer" disabled=${!transferOptions.length}
             onClick=${() => { setAddXfer(''); setAddXferErr(false); }}>${t('addTransfer')}<//>
+        <//>
 
-          <${Divider} sx=${{ my: 2.5 }} />
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mb: 1 }}>
-            ${t('triggerPoints')}<//>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-            <${TextField} type="number" label=${t('departureFromPrev')} sx=${{ width: 320 }}
-              inputProps=${{ min: 0, max: 999 }} value=${d.triggerDeparture}
-              InputProps=${{ endAdornment: html`<${InputAdornment} position="end">m<//>` }}
-              onChange=${e => patch(n => { n.triggerDeparture = e.target.value; })} />
-            <${TextField} type="number" label=${t('arrivalToCurrent')} sx=${{ width: 320 }}
-              inputProps=${{ min: 0, max: 999 }} value=${d.triggerArrival}
-              InputProps=${{ endAdornment: html`<${InputAdornment} position="end">m<//>` }}
-              onChange=${e => patch(n => { n.triggerArrival = e.target.value; })} />
+        ${/* ── Trigger points — their own card, as on staging ── */ ''}
+        <${SectionCard} title=${t('triggerPoints')}>
+          <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap id="radii">
+            ${RADII.map(([k, lbl]) => html`<${Box} key=${k}>${num(lbl[state.lang], d.radii[k],
+              v => patch(n => { n.radii[k] = v; }), err.radii[k], 0, 999, 'rad-' + k)}<//>`)}
           <//>
         <//>
 
@@ -317,13 +383,11 @@ function StationDetailView() {
         <${SectionCard} title=${t('neighbors')} subtitle=${t('neighborsSubtitle')}>
           <${Stack} spacing=${2}>
             ${[['prev', '←'], ['next', '→']].map(([k, arrow]) => html`
-              <${Stack} key=${k} direction="row" spacing=${2} alignItems="center">
-                <${Typography} sx=${{ color: 'text.disabled', width: 20 }}>${arrow}<//>
-                <${Typography} variant="body2" sx=${{ width: 220 }}>${d.neighborDist[k].name}<//>
-                <${TextField} type="number" label=${state.lang === 'de' ? 'Abstand' : 'Distance'}
-                  sx=${{ width: 170 }} inputProps=${{ min: 0, max: 9999 }} value=${d.neighborDist[k].dist}
-                  InputProps=${{ endAdornment: html`<${InputAdornment} position="end">m<//>` }}
-                  onChange=${e => patch(n => { n.neighborDist[k].dist = e.target.value; })} />
+              <${Stack} key=${k} direction="row" spacing=${2} alignItems="flex-start">
+                <${Typography} sx=${{ color: 'text.secondary', width: 20, pt: 2 }}>${arrow}<//>
+                <${Typography} variant="body2" sx=${{ width: 220, pt: 2 }}>${d.neighborDist[k].name}<//>
+                ${num(de ? 'Abstand' : 'Distance', d.neighborDist[k].dist,
+                  v => patch(n => { n.neighborDist[k].dist = v; }), err[k], 0, 9999, 'nb-' + k)}
               <//>`)}
           <//>
         <//>
@@ -335,7 +399,7 @@ function StationDetailView() {
         <${DialogContent}>
           <${FormControl} fullWidth required error=${addXferErr} sx=${{ mt: 1 }}>
             <${InputLabel}>${t('selectFile')}<//>
-            <${Select} label=${t('selectFile')} value=${addXfer || ''}
+            <${Select} label=${t('selectFile')} value=${addXfer || ''} id="addXferFile"
               onChange=${e => { setAddXfer(e.target.value); setAddXferErr(false); }}>
               ${transferOptions.map(o => html`<${MenuItem} key=${o.value} value=${o.value}>${o.label}<//>`)}
             <//>
@@ -348,7 +412,9 @@ function StationDetailView() {
             if (!addXfer) { setAddXferErr(true); return; }
             patch(n => {
               const hasMain = n.transferAnnouncements.some(a => a.isMain);
-              n.transferAnnouncements.push({ fileId: addXfer, label: sndName(addXfer),
+              // the type is the file's own name ("Umstieg Regional"), not its filename again
+              const f = snd(addXfer);
+              n.transferAnnouncements.push({ fileId: addXfer, label: f ? f.name : sndName(addXfer),
                                              isMain: !hasMain, scheduleSlots: null });
             });
             setAddXfer(null);
