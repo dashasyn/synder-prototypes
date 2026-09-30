@@ -111,5 +111,8 @@
     if (!s.radii) s.radii = { arrOuter: s.triggerArrival || 100, depOuter: (s.triggerDeparture || 80) + 80,
                               depInner: 10, station: 50 };
     if (s.ttsText === undefined) s.ttsText = s.name;
+    // priority = row order, and the main one is always last (Ignat, 2026-09-30)
+    if (s.transferAnnouncements.length)
+      s.transferAnnouncements = [...s.transferAnnouncements.filter(a => !a.isMain), ...s.transferAnnouncements.filter(a => a.isMain)];
   }
 })();

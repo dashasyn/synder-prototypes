@@ -32,10 +32,11 @@ function StationsView() {
 
   return html`
     <${React.Fragment}>
-      <${PageHeader} title=${t('stations')} subtitle=${`${t('stationsSuffix', rows.length)} · BVG J/JK`} />
-      <${PageBody}>
-        <${Stack} direction="row" spacing=${2} sx=${{ mb: 2 }}>
-          <${TextField} label=${t('searchPlaceholder')} value=${s.search} sx=${{ width: 320 }}
+      ${/* Ignat, 2026-09-30: no "50 Haltestellen · BVG J/JK" line, a thinner top,
+            and the filters on the title's row */ ''}
+      <${PageHeader} dense title=${t('stations')} action=${html`
+        <${Stack} direction="row" spacing=${2} alignItems="center">
+          <${TextField} label=${t('searchPlaceholder')} value=${s.search} sx=${{ width: 280 }} id="stSearch"
             onChange=${e => set({ search: e.target.value })}
             InputProps=${{ endAdornment: s.search ? html`
               <${InputAdornment} position="end">
@@ -44,23 +45,23 @@ function StationsView() {
               <//>` : null }} />
           <${FilterSelect} id="line-filter" label=${t('colLine')} value=${s.lineFilter}
             onChange=${v => set({ lineFilter: v })} options=${lineOptions} minWidth=${160} />
-        <//>
-
+        <//>`} />
+      <${PageBody}>
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
           <${Table}>
             <${TableHead}><${TableRow}>
               <${TableCell} sx=${{ width: 90 }}>${t('colId')}<//>
               <${TableCell}>${t('colName')}<//>
               <${TableCell} sx=${{ width: 120 }}>${t('colLine')}<//>
-              <${TableCell} sx=${{ width: 48 }} />
+              <${TableCell} sx=${{ width: 56 }} />
             <//><//>
             <${TableBody}>
               ${rows.length ? rows.map(r => {
                 const st = r.station;
                 const nc = st.nameChanges[0];
+                // the row itself does not open the station; the pen does (Ignat, 2026-09-30)
                 return html`
-                  <${TableRow} hover key=${st.id + r.line} sx=${{ cursor: 'pointer' }}
-                    onClick=${() => nav('detail', st.id, r.line)}>
+                  <${TableRow} key=${st.id + r.line}>
                     <${TableCell}><${Chip} size="small" label=${st.id} variant="outlined" /><//>
                     <${TableCell}>
                       ${st.name}
@@ -68,8 +69,8 @@ function StationsView() {
                         sx=${{ ml: 1 }}>→ ${nc.fullName} ${nc.date}<//>` : null}
                     <//>
                     <${TableCell}><${LineBadge} line=${r.line} /><//>
-                    <${TableCell} sx=${{ color: 'text.disabled' }}>
-                      <${Icon} sx=${{ fontSize: 18 }}>chevron_right<//><//>
+                    <${TableCell} align="right">
+                      <${EditAction} name=${st.name + ' ' + r.line} onClick=${() => nav('detail', st.id, r.line)} /><//>
                   <//>`;
               }) : html`<${EmptyRow} colSpan=${4} />`}
             <//>
@@ -98,6 +99,43 @@ const RADII = [
   ['station',  { de: 'Stationsradius',           en: 'Station radius' }],
 ];
 
+/* Ignat, 2026-09-30: staging's form rows — the label on the left, the input on
+   the right with no label inside it. The label is a real <label> for the
+   input, so the field keeps its accessible name. */
+function FormRow({ label, htmlFor, children, top, right }) {
+  return html`
+    <${Box} className="form-row" sx=${{ display: 'flex', alignItems: top ? 'flex-start' : 'center', gap: 3, py: 1.5,
+                   borderBottom: '1px solid #E7E7E7', '&:first-of-type': { pt: 0 }, '&:last-of-type': { borderBottom: 0, pb: 0 } }}>
+      <${Typography} component="label" htmlFor=${htmlFor} variant="body2"
+        sx=${{ width: 220, flexShrink: 0, color: 'text.primary', ...(top ? { pt: 1.25 } : null) }}>${label}<//>
+      <${Box} sx=${{ flex: 1, minWidth: 0, display: 'flex', justifyContent: right ? 'flex-end' : 'flex-start' }}>${children}<//>
+    <//>`;
+}
+
+/* The transfer-announcement priority (Ignat, 2026-09-30): row order IS the
+   priority, 1 = highest, to settle overlapping schedules. The main one is
+   always last — the lowest — and plays whenever nothing else does. */
+const mainLast = list => [...list.filter(a => !a.isMain), ...list.filter(a => a.isMain)];
+
+/* "Mo–Do 22:00–01:00; Fr 22:00–03:00" — consecutive days with the same
+   periods are grouped, so a full week stays one short line. */
+function schedPreview(slots) {
+  if (!slots) return '';
+  const days = DAYS.map(dd => {
+    const x = slots.find(y => y.day === dd);
+    return { day: dd, txt: x && x.slots.length ? x.slots.map(sl => sl.start + '–' + sl.end).join(', ') : '' };
+  });
+  const out = [];
+  for (let k = 0; k < days.length; k++) {
+    if (!days[k].txt) continue;
+    let e = k;
+    while (e + 1 < days.length && days[e + 1].txt === days[k].txt) e++;
+    out.push((k === e ? dayLabel(days[k].day) : dayLabel(days[k].day) + '–' + dayLabel(days[e].day)) + ' ' + days[k].txt);
+    k = e;
+  }
+  return out.join('; ');
+}
+
 function StationDetailView() {
   const { s, set, nav, t, bump, toast } = useApp();
   const st = getStation(s.selectedId);
@@ -106,6 +144,7 @@ function StationDetailView() {
   const [pristine, setPristine] = useState(() => JSON.stringify(seed()));
   const [addXfer, setAddXfer] = useState(null);   // pending file id, or null when closed
   const [addXferErr, setAddXferErr] = useState(false);
+  const [addMain, setAddMain] = useState(false);
   const [schedIdx, setSchedIdx] = useState(null); // transfer announcement being scheduled
   const [schedDays, setSchedDays] = useState(null);
 
@@ -113,11 +152,18 @@ function StationDetailView() {
   useEffect(() => { const n = seed(); setDraft(n); setPristine(JSON.stringify(n)); },
     [s.selectedId, s.selectedLine]);
 
+  const d = draft;
+  const patch = fn => setDraft(prev => { const n = JSON.parse(JSON.stringify(prev)); fn(n); return n; });
+  // HTML5 drag between the non-main rows; the main one stays last
+  const { rowProps, rowSx } = useRowDrag((from, to) => patch(n => {
+    const L = n.transferAnnouncements;
+    if (L[from].isMain || L[to].isMain) return;
+    const [m] = L.splice(from, 1); L.splice(to, 0, m);
+  }));
+
   if (!st) return html`<${PageBody}><${Alert} severity="error">${s.selectedId}<//><//>`;
 
-  const d = draft;
   DETAIL_GUARD.dirty = JSON.stringify(d) !== pristine;
-  const patch = fn => setDraft(prev => { const n = JSON.parse(JSON.stringify(prev)); fn(n); return n; });
   const de = state.lang === 'de';
 
   /* Range checks, live on the field, and Save refuses while any fails
@@ -166,23 +212,18 @@ function StationDetailView() {
     toast(t('savedMsg'));
   };
 
-  /* schedSummary() in the vanilla returns an HTML string, so the rule is
-     ported rather than called — the three states and their strings are the
-     vanilla's own. Shown next to the Main radio: the main one is always
-     active, every other one runs on its schedule. */
-  const schedState = ann => ann.isMain
-    ? html`<${Typography} variant="body2" color="text.secondary">${t('alwaysActive')}<//>`
-    : ann.scheduleSlots
-      ? html`<${Typography} variant="body2" color="text.secondary">${t('scheduleSet')}<//>`
-      : html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`;
-
-  const setMain = i => patch(n => n.transferAnnouncements.forEach((a, j) => { a.isMain = j === i; }));
-  // removing the main one hands "main" to the first that is left — a station
+  // setting a main one moves it to the bottom; the old main keeps its place above it
+  const setMain = i => patch(n => {
+    n.transferAnnouncements.forEach((a, j) => { a.isMain = j === i; });
+    n.transferAnnouncements = mainLast(n.transferAnnouncements);
+  });
+  // removing the main one hands "main" to the lowest one left — a station
   // with announcements but no main was saveable before (validator round 2)
   const removeXfer = i => patch(n => {
-    const wasMain = n.transferAnnouncements[i].isMain;
-    n.transferAnnouncements.splice(i, 1);
-    if (wasMain && n.transferAnnouncements.length) n.transferAnnouncements[0].isMain = true;
+    const L = n.transferAnnouncements;
+    const wasMain = L[i].isMain;
+    L.splice(i, 1);
+    if (wasMain && L.length) L[L.length - 1].isMain = true;
   });
 
   const openSchedule = i => {
@@ -199,81 +240,85 @@ function StationDetailView() {
   const assigned = new Set(d.transferAnnouncements.map(a => a.fileId));
   const transferOptions = soundFiles.filter(f => f.type === 'transfer' && !assigned.has(f.id))
     .map(f => ({ value: f.id, label: f.filename }));
+  const firstXfer = !d.transferAnnouncements.length;   // the first one is main, necessarily
 
+  // a number field for a form row: no label inside, the unit after it
   const num = (label, value, onChange, bad, min, max, id) => html`
-    <${TextField} type="number" label=${label} sx=${{ width: 210 }} value=${value ?? ''} id=${id}
-      inputProps=${{ min, max }} error=${bad} helperText=${bad ? rangeMsg(min, max, 'm') : ''}
+    <${TextField} type="number" hiddenLabel sx=${{ width: 160 }} value=${value ?? ''} id=${id}
+      inputProps=${{ min, max, 'aria-label': label, style: { textAlign: 'right' } }}
+      error=${bad} helperText=${bad ? rangeMsg(min, max, 'm') : ''}
       InputProps=${{ endAdornment: html`<${InputAdornment} position="end">m<//>` }}
       onChange=${e => onChange(e.target.value)} />`;
+  const text = (id, value, onChange, extra) => html`
+    <${TextField} id=${id} hiddenLabel fullWidth value=${value || ''} onChange=${e => onChange(e.target.value)} ...${extra || {}} />`;
 
   return html`
     <${React.Fragment}>
-      <${PageHeader} sticky narrow
+      ${/* Ignat, 2026-09-30: full-width header, fixed (sticky), with the station code
+            next to the name; no "AL · Kennung · schreibgeschützt" line */ ''}
+      <${PageHeader} sticky
         crumbs=${[{ label: t('stations'), onClick: () => nav('stations') }, { label: st.name }]}
-        title=${d.name}
+        title=${`${d.name || st.name} (${st.id})`}
         titleAfter=${html`<${LineBadge} line=${s.selectedLine} />`}
-        subtitle=${`${st.id} · ${t('identifier')}`}
         action=${html`<${Button} variant="contained" id="stSave" onClick=${save}>${t('saveBtn')}<//>`} />
 
       <${PageBody} narrow>
         ${/* Ignat, 2026-09-30: the card carries the coordinates too, so it is "Name and location" */ ''}
         <${SectionCard} title=${de ? 'Name und Standort' : 'Name and location'}>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-            <${TextField} label=${t('fullName')} required value=${d.name} sx=${{ width: 280 }} id="stName"
-              error=${err.name} helperText=${err.name ? (de ? 'Pflichtfeld' : 'Required') : ''}
-              onChange=${e => patch(n => { n.name = e.target.value; })} />
-            <${TextField} label=${t('shortName')} value=${d.shortName || ''} sx=${{ width: 180 }}
-              placeholder=${de ? 'z.B. Alex' : 'e.g. Alex'}
-              onChange=${e => patch(n => { n.shortName = e.target.value; })} />
-            <${TextField} label=${t('longName')} value=${d.longName || ''} sx=${{ width: 340 }}
-              placeholder=${de ? 'z.B. Bahnhof Berlin Alexanderplatz' : 'e.g. Berlin Alexanderplatz station'}
-              onChange=${e => patch(n => { n.longName = e.target.value; })} />
+          <${FormRow} label=${t('fullName') + ' *'} htmlFor="stName">
+            ${text('stName', d.name, v => patch(n => { n.name = v; }),
+              { required: true, error: err.name, helperText: err.name ? (de ? 'Pflichtfeld' : 'Required') : '' })}
           <//>
-
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
-            ${t('coordinates')}<//>
-          <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
-            <${TextField} type="number" label=${t('coordLat')} sx=${{ width: 170 }} placeholder="52.521992" id="stLat"
-              inputProps=${{ step: 0.000001, min: -90, max: 90 }} value=${d.coords ? (d.coords.lat ?? '') : ''}
-              error=${err.lat} helperText=${err.lat ? rangeMsg(-90, 90) : ''}
-              onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lat: e.target.value }; })} />
-            <${TextField} type="number" label=${t('coordLon')} sx=${{ width: 170 }} placeholder="13.413244" id="stLon"
-              inputProps=${{ step: 0.000001, min: -180, max: 180 }} value=${d.coords ? (d.coords.lon ?? '') : ''}
-              error=${err.lon} helperText=${err.lon ? rangeMsg(-180, 180) : ''}
-              onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lon: e.target.value }; })} />
-            ${/* no "Karte öffnen" link to a real map (Ignat, 2026-09-30) */ ''}
+          <${FormRow} label=${t('shortName')} htmlFor="stShort">
+            ${text('stShort', d.shortName, v => patch(n => { n.shortName = v; }), { placeholder: de ? 'z.B. Alex' : 'e.g. Alex' })}
           <//>
-
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
-            ${t('scheduledChanges')}<//>
-          <${Stack} spacing=${1.5}>
-            ${d.nameChanges.map((nc, i) => html`
-              <${Card} key=${i} sx=${{ bgcolor: '#FAFAFA' }}>
-                <${Box} sx=${{ p: 1.5 }}>
-                  <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
-                    <${TextField} type="date" label=${de ? 'Datum' : 'Date'}
-                      InputLabelProps=${{ shrink: true }} value=${nc.date || ''} sx=${{ width: 190 }}
-                      onChange=${e => patch(n => { n.nameChanges[i].date = e.target.value; })} />
-                    ${/* the future name, labelled as such — the same labels as the current name read as the current name */ ''}
-                    <${TextField} label=${de ? 'Neuer Standardname' : 'New default name'} value=${nc.fullName || ''} sx=${{ width: 240 }}
-                      id=${'ncName-' + i} error=${err.nc[i]} helperText=${err.nc[i] ? (de ? 'Pflichtfeld, wenn ein Datum gesetzt ist' : 'Required once a date is set') : ''}
-                      onChange=${e => patch(n => { n.nameChanges[i].fullName = e.target.value; })} />
-                    <${TextField} label=${de ? 'Neuer kurzer Name' : 'New short name'} value=${nc.shortName || ''} sx=${{ width: 170 }}
-                      onChange=${e => patch(n => { n.nameChanges[i].shortName = e.target.value; })} />
-                    <${FilterSelect} label=${t('stationNameFile')} value=${nc.fileId || ''}
-                      options=${nameFileOptions} minWidth=${240}
-                      onChange=${v => patch(n => { n.nameChanges[i].fileId = v; })} />
-                    <${Box} sx=${{ flexGrow: 1 }} />
-                    <${DeleteAction} remove name=${`${de ? 'Namensänderung' : 'name change'} ${i + 1}`}
-                      onClick=${() => patch(n => { n.nameChanges.splice(i, 1); })} />
+          <${FormRow} label=${t('longName')} htmlFor="stLong">
+            ${text('stLong', d.longName, v => patch(n => { n.longName = v; }),
+              { placeholder: de ? 'z.B. Bahnhof Berlin Alexanderplatz' : 'e.g. Berlin Alexanderplatz station' })}
+          <//>
+          ${/* two inputs share the row, so each keeps its small label inside — as on staging */ ''}
+          <${FormRow} label=${t('coordinates')} htmlFor="stLat" top>
+            <${Stack} direction="row" spacing=${2} alignItems="flex-start">
+              <${TextField} type="number" label=${t('coordLat')} sx=${{ width: 170 }} placeholder="52.521992" id="stLat"
+                inputProps=${{ step: 0.000001, min: -90, max: 90 }} value=${d.coords ? (d.coords.lat ?? '') : ''}
+                error=${err.lat} helperText=${err.lat ? rangeMsg(-90, 90) : ''}
+                onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lat: e.target.value }; })} />
+              <${TextField} type="number" label=${t('coordLon')} sx=${{ width: 170 }} placeholder="13.413244" id="stLon"
+                inputProps=${{ step: 0.000001, min: -180, max: 180 }} value=${d.coords ? (d.coords.lon ?? '') : ''}
+                error=${err.lon} helperText=${err.lon ? rangeMsg(-180, 180) : ''}
+                onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lon: e.target.value }; })} />
+            <//>
+          <//>
+          <${FormRow} label=${t('scheduledChanges')} htmlFor="btnAddNc" top>
+            <${Stack} spacing=${1.5} sx=${{ width: '100%' }}>
+              ${d.nameChanges.map((nc, i) => html`
+                <${Card} key=${i} sx=${{ bgcolor: '#FAFAFA' }}>
+                  <${Box} sx=${{ p: 1.5 }}>
+                    <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
+                      <${TextField} type="date" label=${de ? 'Datum' : 'Date'}
+                        InputLabelProps=${{ shrink: true }} value=${nc.date || ''} sx=${{ width: 170 }}
+                        onChange=${e => patch(n => { n.nameChanges[i].date = e.target.value; })} />
+                      ${/* the future name, labelled as such */ ''}
+                      <${TextField} label=${de ? 'Neuer Standardname' : 'New default name'} value=${nc.fullName || ''} sx=${{ width: 210 }}
+                        id=${'ncName-' + i} error=${err.nc[i]} helperText=${err.nc[i] ? (de ? 'Pflichtfeld, wenn ein Datum gesetzt ist' : 'Required once a date is set') : ''}
+                        onChange=${e => patch(n => { n.nameChanges[i].fullName = e.target.value; })} />
+                      <${TextField} label=${de ? 'Neuer kurzer Name' : 'New short name'} value=${nc.shortName || ''} sx=${{ width: 150 }}
+                        onChange=${e => patch(n => { n.nameChanges[i].shortName = e.target.value; })} />
+                      <${FilterSelect} label=${t('stationNameFile')} value=${nc.fileId || ''}
+                        options=${nameFileOptions} minWidth=${200}
+                        onChange=${v => patch(n => { n.nameChanges[i].fileId = v; })} />
+                      <${Box} sx=${{ flexGrow: 1 }} />
+                      <${DeleteAction} remove name=${`${de ? 'Namensänderung' : 'name change'} ${i + 1}`}
+                        onClick=${() => patch(n => { n.nameChanges.splice(i, 1); })} />
+                    <//>
                   <//>
-                <//>
-              <//>`)}
-            <${Box}>
-              ${/* the string already starts with "+", so no add icon in front of it */ ''}
-              <${Button} id="btnAddNc"
-                onClick=${() => patch(n => n.nameChanges.push({ date: '', fullName: '', shortName: '', fileId: '' }))}>
-                ${t('scheduleChange')}<//>
+                <//>`)}
+              <${Box} sx=${{ pt: d.nameChanges.length ? 0 : 0.5 }}>
+                ${/* the string already starts with "+", so no add icon in front of it */ ''}
+                <${Button} id="btnAddNc"
+                  onClick=${() => patch(n => n.nameChanges.push({ date: '', fullName: '', shortName: '', fileId: '' }))}>
+                  ${t('scheduleChange')}<//>
+              <//>
             <//>
           <//>
         <//>
@@ -317,79 +362,94 @@ function StationDetailView() {
 
         ${/* ── Announcements ── */ ''}
         <${SectionCard} title=${t('announcements')}>
-          <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap>
-            <${FilterSelect} label=${t('stationNameFile')} value=${d.stationNameFile || ''}
+          <${FormRow} label=${t('stationNameFile')}>
+            <${FilterSelect} label=${t('stationNameFile')} hideLabel fullWidth value=${d.stationNameFile || ''}
               options=${nameFileOptions} minWidth=${300}
               onChange=${v => patch(n => { n.stationNameFile = v; })} />
-            ${/* staging's wording, verbatim (DE); the EN is mine */ ''}
-            <${TextField} id="stTts" label=${de ? 'TTS-Text (Fallback)' : 'TTS text (fallback)'} value=${d.ttsText || ''}
-              sx=${{ width: 300 }}
-              helperText=${de ? 'Wird als Text-to-Speech verwendet, wenn keine Audiodatei verfügbar ist.'
-                              : 'Used as text-to-speech when no audio file is available.'}
-              onChange=${e => patch(n => { n.ttsText = e.target.value; })} />
+          <//>
+          ${/* staging's wording, verbatim (DE); the EN is mine */ ''}
+          <${FormRow} label=${de ? 'TTS-Text (Fallback)' : 'TTS text (fallback)'} htmlFor="stTts" top>
+            ${text('stTts', d.ttsText, v => patch(n => { n.ttsText = v; }), {
+              helperText: de ? 'Wird als Text-to-Speech verwendet, wenn keine Audiodatei verfügbar ist.'
+                             : 'Used as text-to-speech when no audio file is available.' })}
           <//>
 
-          <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
-            ${t('transferFiles')}<//>
-          ${/* Ignat, 2026-09-30: a table — Name / Type / Main / actions — instead of rows led by a "Haupt"
-                chip. Main is a radio: exactly one is main, and picking another one replaces
-                "Als Haupt festlegen". */ ''}
+          <${Typography} variant="subtitle2" sx=${{ fontWeight: 500, mt: 3, mb: 1 }}>${t('transferFiles')}<//>
+          ${/* Ignat, 2026-09-30: priority by row order (drag), the main one last; active time
+                previewed in the row; schedule and "main" as grey icons; no Typ column. */ ''}
           ${d.transferAnnouncements.length ? html`
             <${TableContainer} id="xferTable" sx=${{ border: '1px solid #E7E7E7', borderRadius: 1, mb: 1.5 }}>
               <${Table}>
                 <${TableHead}><${TableRow}>
+                  <${TableCell} sx=${{ width: 96, whiteSpace: 'nowrap' }}>${de ? 'Priorität' : 'Priority'}<//>
                   <${TableCell}>${t('colName')}<//>
-                  <${TableCell}>${t('colType')}<//>
-                  <${TableCell}>${t('mainAnn')}<//>
+                  <${TableCell}>${de ? 'Aktivzeit' : 'Active time'}<//>
                   <${TableCell} align="right" sx=${{ width: 1, whiteSpace: 'nowrap' }} />
                 <//><//>
                 <${TableBody}>
-                  ${d.transferAnnouncements.map((ann, i) => html`
-                    <${TableRow} key=${i}>
-                      <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 13 }}>${sndName(ann.fileId)}<//>
-                      <${TableCell}>${ann.label || '—'}<//>
+                  ${d.transferAnnouncements.map((ann, i) => {
+                    const drag = ann.isMain ? {} : rowProps(i);
+                    const nm = sndName(ann.fileId);
+                    return html`
+                    <${TableRow} key=${ann.fileId} data-main=${ann.isMain ? 'true' : 'false'}
+                      sx=${ann.isMain ? { bgcolor: '#FAFAFA' } : rowSx(i)} ...${drag}>
                       <${TableCell}>
-                        <${Stack} direction="row" spacing=${.5} alignItems="center">
-                          <${Radio} size="small" checked=${!!ann.isMain} onChange=${() => setMain(i)}
-                            inputProps=${{ 'aria-label': `${t('setAsMain')}: ${ann.label || sndName(ann.fileId)}` }} sx=${{ ml: -1 }} />
-                          ${schedState(ann)}
+                        <${Stack} direction="row" spacing=${1} alignItems="center">
+                          ${ann.isMain ? html`<${Box} sx=${{ width: 18 }} />` : html`<${DragHandle} />`}
+                          <span className="prio">${i + 1}</span>
                         <//>
                       <//>
+                      <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 13 }}>${nm}<//>
+                      <${TableCell} className="active-time" sx=${{ fontSize: 13 }}>
+                        ${ann.isMain ? (de ? 'Immer' : 'Always')
+                          : ann.scheduleSlots ? schedPreview(ann.scheduleSlots)
+                          : html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`}
+                      <//>
                       <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
+                        ${/* star = main (material "star" / "star_border") */ ''}
+                        ${ann.isMain ? html`
+                          <${Tooltip} title=${de ? 'Hauptansage – läuft immer, niedrigste Priorität' : 'Main announcement – always on, lowest priority'}>
+                            <span><${IconButton} disabled aria-label=${(de ? 'Hauptansage' : 'Main announcement') + ': ' + nm}
+                              sx=${{ '&.Mui-disabled': { color: 'text.secondary' } }}><${Icon} sx=${{ fontSize: 20 }}>star<//><//></span>
+                          <//>` : html`
+                          <${Tooltip} title=${t('setAsMain')}>
+                            <${IconButton} aria-label=${t('setAsMain') + ': ' + nm} onClick=${() => setMain(i)}>
+                              <${Icon} sx=${{ fontSize: 20 }}>star_border<//><//>
+                          <//>`}
                         ${/* the main one always plays, so it has no schedule to edit */ ''}
-                        ${ann.isMain ? null : html`<${Button} onClick=${() => openSchedule(i)}>${t('editSchedule')}<//>`}
-                        <${DeleteAction} remove name=${`${de ? 'Umstiegsansage' : 'transfer announcement'} ${i + 1}`}
+                        ${ann.isMain ? html`<${Box} component="span" sx=${{ display: 'inline-block', width: 40 }} />` : html`
+                          <${Tooltip} title=${t('editSchedule')}>
+                            <${IconButton} aria-label=${t('editSchedule') + ': ' + nm} onClick=${() => openSchedule(i)}>
+                              <${Icon} sx=${{ fontSize: 20 }}>edit<//><//>
+                          <//>`}
+                        <${DeleteAction} remove name=${`${de ? 'Umstiegsansage' : 'transfer announcement'} ${nm}`}
                           onClick=${() => removeXfer(i)} />
                       <//>
-                    <//>`)}
+                    <//>`; })}
                 <//>
               <//>
             <//>` : html`
             <${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>
               ${t('noneAssigned')}<//>`}
           <${Button} id="btnAddXfer" disabled=${!transferOptions.length}
-            onClick=${() => { setAddXfer(''); setAddXferErr(false); }}>${t('addTransfer')}<//>
+            onClick=${() => { setAddXfer(''); setAddXferErr(false); setAddMain(false); }}>${t('addTransfer')}<//>
         <//>
 
         ${/* ── Trigger points — their own card, as on staging ── */ ''}
         <${SectionCard} title=${t('triggerPoints')}>
-          <${Stack} direction="row" spacing=${2} alignItems="flex-start" flexWrap="wrap" useFlexGap id="radii">
-            ${RADII.map(([k, lbl]) => html`<${Box} key=${k}>${num(lbl[state.lang], d.radii[k],
-              v => patch(n => { n.radii[k] = v; }), err.radii[k], 0, 999, 'rad-' + k)}<//>`)}
+          <${Box} id="radii">
+            ${RADII.map(([k, lbl]) => html`<${FormRow} key=${k} label=${lbl[state.lang]} htmlFor=${'rad-' + k} right>
+              ${num(lbl[state.lang], d.radii[k], v => patch(n => { n.radii[k] = v; }), err.radii[k], 0, 999, 'rad-' + k)}<//>`)}
           <//>
         <//>
 
-        ${/* ── Neighbours ── */ ''}
+        ${/* ── Neighbours — the same rows as the trigger points ── */ ''}
         <${SectionCard} title=${t('neighbors')} subtitle=${t('neighborsSubtitle')}>
-          <${Stack} spacing=${2}>
-            ${[['prev', '←'], ['next', '→']].map(([k, arrow]) => html`
-              <${Stack} key=${k} direction="row" spacing=${2} alignItems="flex-start">
-                <${Typography} sx=${{ color: 'text.secondary', width: 20, pt: 2 }}>${arrow}<//>
-                <${Typography} variant="body2" sx=${{ width: 220, pt: 2 }}>${d.neighborDist[k].name}<//>
-                ${num(de ? 'Abstand' : 'Distance', d.neighborDist[k].dist,
-                  v => patch(n => { n.neighborDist[k].dist = v; }), err[k], 0, 9999, 'nb-' + k)}
-              <//>`)}
-          <//>
+          ${[['prev', '←'], ['next', '→']].map(([k, arrow]) => html`
+            <${FormRow} key=${k} label=${arrow + ' ' + d.neighborDist[k].name} htmlFor=${'nb-' + k} right>
+              ${num((de ? 'Abstand zu ' : 'Distance to ') + d.neighborDist[k].name, d.neighborDist[k].dist,
+                v => patch(n => { n.neighborDist[k].dist = v; }), err[k], 0, 9999, 'nb-' + k)}
+            <//>`)}
         <//>
       <//>
 
@@ -405,17 +465,26 @@ function StationDetailView() {
             <//>
             ${addXferErr ? html`<${FormHelperText}>${t('selectFile')}<//>` : null}
           <//>
+          ${/* Ignat, 2026-09-30: "Mark as main" in the add dialog; the first one is main anyway */ ''}
+          <${FormControlLabel} sx=${{ mt: 1 }} label=${de ? 'Als Haupt markieren' : 'Mark as main'}
+            control=${html`<${Checkbox} id="addXferMain" checked=${firstXfer || addMain} disabled=${firstXfer}
+              onChange=${e => setAddMain(e.target.checked)} />`} />
         <//>
         <${DialogActions}>
           <${Button} onClick=${() => setAddXfer(null)}>${t('cancel')}<//>
-          <${Button} variant="contained" onClick=${() => {
+          <${Button} variant="contained" id="addXferSave" onClick=${() => {
             if (!addXfer) { setAddXferErr(true); return; }
             patch(n => {
-              const hasMain = n.transferAnnouncements.some(a => a.isMain);
-              // the type is the file's own name ("Umstieg Regional"), not its filename again
+              const L = n.transferAnnouncements;
+              const asMain = !L.length || addMain;
               const f = snd(addXfer);
-              n.transferAnnouncements.push({ fileId: addXfer, label: f ? f.name : sndName(addXfer),
-                                             isMain: !hasMain, scheduleSlots: null });
+              const item = { fileId: addXfer, label: f ? f.name : sndName(addXfer), isMain: asMain, scheduleSlots: null };
+              if (asMain) { L.forEach(a => { a.isMain = false; }); L.push(item); }
+              else {
+                // a new one joins as the lowest of the scheduled ones, just above the main
+                const at = L.findIndex(a => a.isMain);
+                L.splice(at < 0 ? L.length : at, 0, item);
+              }
             });
             setAddXfer(null);
           }}>${t('saveEntry')}<//>
@@ -427,9 +496,7 @@ function StationDetailView() {
         <${DialogTitle}>
           ${t('scheduleTitle')}
           <${Typography} variant="body2" color="text.secondary">
-            ${schedIdx !== null && d.transferAnnouncements[schedIdx]
-              ? (d.transferAnnouncements[schedIdx].label || sndName(d.transferAnnouncements[schedIdx].fileId))
-              : ''}<//>
+            ${schedIdx !== null && d.transferAnnouncements[schedIdx] ? sndName(d.transferAnnouncements[schedIdx].fileId) : ''}<//>
         <//>
         <${DialogContent}>
           ${schedDays ? html`<${WeekGrid} days=${schedDays} onChange=${setSchedDays} idPrefix="sc" />` : null}

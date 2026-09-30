@@ -130,17 +130,21 @@ const INITIAL = {
  * vanilla ("Alle Linien", "Alle Typen"), which is why the label is required
  * rather than optional.
  */
-function FilterSelect({ label, value, onChange, options, minWidth = 180, id, required }) {
+/** hideLabel — for a form row whose label sits to the left (station detail,
+    2026-09-30): no floating label; the combobox is named by aria-label. */
+function FilterSelect({ label, value, onChange, options, minWidth = 180, id, required, hideLabel, fullWidth }) {
   // The label has to be wired to the Select by id, not just rendered above it:
   // an InputLabel with no `id` and a Select with no `labelId` leaves the
   // combobox with no accessible name at all, and `required` on the FormControl
   // only reaches the aria-hidden native input behind it.
   const labelId = id ? id + '-label' : undefined;
   return html`
-    <${FormControl} sx=${{ minWidth }} id=${id} required=${!!required}>
-      <${InputLabel} id=${labelId}>${label}<//>
-      <${Select} value=${value || ''} label=${label} labelId=${labelId}
+    <${FormControl} sx=${{ minWidth }} id=${id} required=${!!required} fullWidth=${!!fullWidth}>
+      ${hideLabel ? null : html`<${InputLabel} id=${labelId}>${label}<//>`}
+      <${Select} value=${value || ''} label=${hideLabel ? undefined : label} labelId=${hideLabel ? undefined : labelId}
         inputProps=${{ 'aria-required': !!required }}
+        SelectDisplayProps=${hideLabel ? { 'aria-label': label } : undefined}
+        sx=${hideLabel ? { '& .MuiSelect-select': { py: 1.25 } } : undefined}
         onChange=${e => onChange(e.target.value)}
         endAdornment=${value ? html`
           <${InputAdornment} position="end" sx=${{ mr: 3 }}>
@@ -165,12 +169,13 @@ const CONTENT_MAX = 960;
 
 /** sticky — keeps the title and its Save in view on long forms (station detail).
     narrow — the centred 960px column (station detail only). */
-function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narrow }) {
+/** dense — a thinner header with the action (e.g. filters) centred on the title's row (stations list). */
+function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narrow, dense }) {
   return html`
     <${Box} data-page-header="" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
                    ...(sticky ? { position: 'sticky', top: 0, zIndex: 10 } : null) }}>
-    <${Box} sx=${{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-                   maxWidth: narrow ? CONTENT_MAX : 'none', mx: 'auto', py: 3 }}>
+    <${Box} sx=${{ display: 'flex', alignItems: dense ? 'center' : 'flex-start', justifyContent: 'space-between', gap: 2,
+                   maxWidth: narrow ? CONTENT_MAX : 'none', mx: 'auto', py: dense ? 1.5 : 3 }}>
       <${Box}>
         ${crumbs && crumbs.length ? html`
           <${Breadcrumbs} separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`} sx=${{ mb: .5 }}>
@@ -185,7 +190,7 @@ function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narro
         <//>
         ${subtitle ? html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: .75 }}>${subtitle}<//>` : null}
       <//>
-      ${action ? html`<${Box} sx=${{ pt: .5 }}>${action}<//>` : null}
+      ${action ? html`<${Box} sx=${{ pt: dense ? 0 : .5 }}>${action}<//>` : null}
     <//>
     <//>`;
 }
