@@ -144,6 +144,14 @@ function onSource(v) {
   if (v !== 'library') S.libId = '';
   if (v !== 'record') S.recId = '';
   if (v === 'standard' && prev !== 'standard') loadStandard();
+  // Ignat, 2026-09-30: Empathisch starts with both ELA boxes empty — the
+  // messages only appear after ELA GENERIEREN
+  if (v === 'empathetic' && prev !== 'empathetic') {
+    stopPlay();
+    ['de', 'en'].forEach(l => { S.msg[l].text = ''; S.msg[l].state = 'none'; S.msg[l].variant = null; });
+    S.enOutdated = false; S.pairOff = false; S.zusatzTranslated = true;
+    S.audio = { state: 'none', forKey: null, dur: 0, listened: false, at: null, pct: 0 };
+  }
   rerender();
 }
 function onLibrary(id) {
@@ -170,7 +178,7 @@ function onRec(id) {
 }
 
 /* ── Audio — ONE file containing DE + EN ─────────────────────────── */
-function makeAudio() {
+function makeAudio(then) {
   if (!S.msg.de.text && !S.msg.en.text) return;
   S.audio.state = 'rendering'; S.audio.pct = 0; rerender();
   const iv = setInterval(() => {
@@ -182,10 +190,21 @@ function makeAudio() {
         S.audio.state = 'ready'; S.audio.forKey = audioKey();
         S.audio.dur = estDur(S.msg.de.text) + estDur(S.msg.en.text) + 0.8;
         S.audio.at = stamp(); S.audio.listened = false;
+        if (then) { then(); return; }
       }
     }
     rerender();
   }, 120);
+}
+/* Ignat, 2026-09-30: one button. ANHÖREN makes the audio when there is none
+   (or it no longer matches the text), shows the progress, then plays; while
+   playing it is STOP. */
+function listen() {
+  if (S.playing) { stopPlay(); rerender(); return; }
+  const st = audioStateNow();
+  if (st === 'rendering') return;
+  if (st === 'ready') { play(); return; }
+  makeAudio(play);
 }
 /* Playback is simulated, as in the vanilla. `endPlay` is exposed so the checks
    can reach the end state without sitting out a 20-second announcement. */
@@ -338,16 +357,11 @@ function AudioRow() {
   const bars = Array.from({ length: 28 }, (_, i) => 20 + Math.round(Math.sin(i * 1.6) * 13 + Math.cos(i * .7) * 6));
   return html`
     <${Stack} direction="row" spacing=${1} alignItems="center" useFlexGap flexWrap="wrap" sx=${{ mt: 2 }} id="audioActs">
-      ${/* ELA GENERIEREN exists only for Empathisch — the other sources never generate */ ''}
-      ${S.source === 'empathetic' ? html`<${Button} variant="outlined" id="btnGen" disabled=${busy} onClick=${generate}>
-        ${busy ? t('genBusy') : t('genEla')}<//>` : null}
-      <${Button} variant="outlined" id="btnAudio" disabled=${!hasText || st === 'rendering' || S.source === 'record'} onClick=${makeAudio}>
-        ${t('genAudio')}<//>
-      <${Button} id="btnPlay" disabled=${st !== 'ready' && st !== 'stale'}
+      ${/* no AUDIO ERZEUGEN any more — ANHÖREN makes the audio itself (Ignat, 2026-09-30) */ ''}
+      <${Button} variant="outlined" id="btnPlay" disabled=${st === 'rendering' || busy || (!hasText && st !== 'ready')}
         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>${S.playing ? 'stop' : 'play_arrow'}<//>`}
-        onClick=${() => { if (S.playing) { stopPlay(); rerender(); } else play(); }}>
-        ${S.playing ? t('stop') : t('listen')}<//>
-      ${busy ? html`<${LinearProgress} id="genBar" variant="determinate" value=${S.genPct || 0} sx=${{ width: 180 }} />` : null}
+        onClick=${listen}>
+        ${S.playing ? t('stop') : (S.ui === 'de' ? 'ANHÖREN' : 'LISTEN')}<//>
       ${st === 'rendering' ? html`<${LinearProgress} id="abar" variant="determinate" value=${a.pct} sx=${{ width: 180 }} />` : null}
       ${st === 'ready' || st === 'stale' ? html`
         <${Box} className="wave" aria-hidden="true" sx=${{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: 18, width: 180,
@@ -432,8 +446,16 @@ function Sheet() {
               sx=${{ mt: 2, '& .MuiFilledInput-root:before, & .MuiFilledInput-root:hover:not(.Mui-disabled):before': { borderBottomStyle: 'dotted' },
                      '& .MuiFilledInput-root:after': { display: 'none' }, '& textarea': { color: 'text.secondary', cursor: 'default' },
                      '& .MuiInputLabel-root.Mui-focused': { color: 'text.secondary' } }} />
-            <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
-              placeholder=${KNOWN[0][S.ui]} sx=${{ mt: 2 }} onChange=${e => onZusatz(e.target.value)} />
+            ${/* ELA GENERIEREN sits to the right of Zusätzliche Angaben (Ignat, 2026-09-30) */ ''}
+            <${Stack} direction="row" spacing=${2} alignItems="flex-start" sx=${{ mt: 2 }} id="genRow">
+              <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
+                placeholder=${KNOWN[0][S.ui]} onChange=${e => onZusatz(e.target.value)} />
+              <${Box} sx=${{ flexShrink: 0, pt: 1.25, display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 1 }}>
+                <${Button} variant="outlined" id="btnGen" disabled=${S.msg.de.state === 'loading' || S.msg.en.state === 'loading'} onClick=${generate}>
+                  ${S.msg.de.state === 'loading' ? t('genBusy') : t('genEla')}<//>
+                ${S.msg.de.state === 'loading' ? html`<${LinearProgress} id="genBar" variant="determinate" value=${S.genPct || 0} />` : null}
+              <//>
+            <//>
           <//>` : null}
 
         ${S.source === 'library' ? html`
