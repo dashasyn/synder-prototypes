@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sync history</title>
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--color-grey-5);font-family:var(--font-family);color:var(--color-grey)}
+  .mi{font-family:'Material Icons';font-weight:normal;font-style:normal;line-height:1;display:inline-block;
+      text-transform:none;letter-spacing:normal;white-space:nowrap;-webkit-font-smoothing:antialiased}
+
+  /* ---------- variant switcher: prototype chrome, not product (canonical, AGENTS.md) ---------- */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:13px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:12px;text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);font-family:inherit;
+    font-size:13px;padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary, var(--color-grey));font-weight:500}
+  .variant-switch .vs-note{margin-left:auto;opacity:.6;font-size:12px}
+
+  /* ---------- app shell (own namespace; production chrome as captured 2026-09-30) ---------- */
+  .shell{display:grid;grid-template-columns:200px minmax(0,1fr);min-height:calc(100vh - 42px)}
+  .nav{background:var(--color-white);border-right:1px solid var(--color-grey-20);padding:8px 0;font-size:13px}
+  .nav-org{display:flex;align-items:center;gap:8px;padding:8px 12px 12px;border-bottom:1px solid var(--color-grey-20);margin-bottom:4px}
+  .nav-org .av{width:28px;height:28px;border-radius:50%;background:var(--color-status-red-bg);color:var(--color-grey);
+      display:grid;place-items:center;font-size:11px;font-weight:500}
+  .nav-row{display:flex;align-items:center;gap:8px;padding:8px 12px;color:var(--color-grey)}
+  .nav-row .mi{font-size:18px;color:var(--color-primary)}
+  .nav-row .caret{margin-left:auto;font-size:18px;color:var(--color-grey-50)}
+  .nav-sub{padding:6px 12px 6px 38px;color:var(--color-grey)}
+  .nav-sub.on{background:var(--color-primary);color:var(--color-white);font-weight:500}
+  .nav-tag{font-size:11px;padding:0 6px;border-radius:var(--radius-sm);background:var(--color-status-green-bg);color:var(--color-green);margin-left:6px}
+  .nav-tag.beta{background:var(--color-status-blue-bg);color:var(--color-blue)}
+  .nav-gap{height:24px;border-bottom:1px solid var(--color-grey-20);margin-bottom:4px}
+
+  .top{display:flex;justify-content:flex-end;align-items:center;gap:24px;height:48px;padding:0 24px;
+       background:var(--color-white);border-bottom:1px solid var(--color-grey-20);font-size:14px}
+  .top b{color:var(--color-primary);font-weight:500}
+  .top a{color:var(--color-primary);text-decoration:none}
+  .main{padding:24px 24px 64px;min-width:0}
+
+  /* ---------- page ---------- */
+  h1{font-size:var(--font-h2);font-weight:400;margin:0;line-height:1.2}
+  .sub{font-size:13px;color:var(--color-grey-50);margin:4px 0 16px}
+  .filters{background:var(--color-grey-10);border-radius:var(--radius-md);padding:16px;display:flex;flex-wrap:wrap;
+           gap:12px 16px;align-items:flex-end;margin-bottom:16px}
+  .f{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500}
+  .inp{height:32px;border:1px solid var(--color-grey-20);border-radius:var(--radius-sm);background:var(--color-white);
+       display:flex;align-items:center;padding:0 8px;font-size:13px;font-weight:400;color:var(--color-grey)}
+  .inp.ph{color:var(--color-grey-50)}
+  .inp .mi{font-size:18px;color:var(--color-grey-50);margin-left:auto}
+  .dates{display:flex;align-items:center;gap:6px;font-weight:400}
+  .b{height:32px;padding:0 16px;border-radius:var(--radius-sm);font-family:inherit;font-size:13px;cursor:default}
+  .b-pri{background:var(--color-primary);color:var(--color-white);border:1px solid var(--color-primary)}
+  .b-out{background:var(--color-white);color:var(--color-primary);border:1px solid var(--color-primary)}
+
+  .card{background:var(--color-white);border:1px solid var(--color-grey-20);border-radius:var(--radius-md);overflow:hidden}
+  .sh{width:100%;border-collapse:collapse;font-size:13px}
+  .sh th{text-align:left;font-weight:500;padding:12px 10px;border-bottom:1px solid var(--color-grey-20);white-space:nowrap}
+  .sh td{padding:8px 10px;border-bottom:1px solid var(--color-grey-10);vertical-align:middle;
+         overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sh tr:last-child td{border-bottom:none}
+  .sh a{color:var(--color-primary);text-decoration:none}
+  .ext{font-size:13px;vertical-align:-2px;margin-left:3px;color:var(--color-grey-50)}
+  .txid{font-variant-numeric:tabular-nums}
+  .co{display:flex;align-items:center;gap:6px;min-width:0}
+  .co span.n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:var(--co-max,13vw)}
+  td.acc{--co-max:20vw}
+  .lg{flex:none;width:16px;height:16px;border-radius:3px;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:700}
+  .lg.stripe{background:#635BFF}
+  .lg.shopify{background:#5E8E3E}
+  .lg.qbo{background:#2CA01C;border-radius:50%;font-size:8px}
+  .lg.synder{background:#1F7A8C;clip-path:polygon(25% 0,75% 0,100% 50%,75% 100%,25% 100%,0 50%);border-radius:0}
+  .stack{display:flex;flex-direction:column;gap:6px}
+  .muted{color:var(--color-grey-50)}
+  .nodate{color:var(--color-grey-50);font-style:italic}
+
+  /* grouped */
+  tr.grp{cursor:pointer}
+  tr.grp:hover td{background:var(--color-primary-5)}
+  tr.grp td{background:var(--color-white)}
+  tr.grp.open td{border-bottom-color:var(--color-grey-20)}
+  tr.child td{background:var(--color-grey-5)}
+  tr.child[hidden]{display:none}
+  .chev{background:none;border:none;padding:0;width:24px;height:24px;display:inline-grid;place-items:center;
+        cursor:pointer;color:var(--color-grey-50);vertical-align:middle;border-radius:var(--radius-sm)}
+  .chev .mi{font-size:20px;transition:transform .12s}
+  .chev[aria-expanded="true"] .mi{transform:rotate(90deg)}
+  .chev:focus-visible{outline:2px solid var(--color-primary);outline-offset:1px}
+  .chev-sp{display:inline-block;width:24px}
+  .count{color:var(--color-grey-50)}
+
+  .pager{display:flex;justify-content:flex-end;align-items:center;gap:24px;padding:12px 16px;font-size:13px;
+         border-top:1px solid var(--color-grey-20)}
+  .pager .pg{display:flex;gap:4px;align-items:center}
+  .pager .pg span{min-width:28px;height:28px;display:grid;place-items:center;border-radius:var(--radius-sm)}
+  .pager .pg span.on{background:var(--color-primary-10);color:var(--color-primary);font-weight:500}
+  .pager .mi{font-size:20px;color:var(--color-grey-50)}
+</style>
+</head>
+<body>
+
+<div class="variant-switch">
+  <span class="vs-label">Table</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Flat</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Grouped by transaction</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+
+<div class="shell">
+  <nav class="nav" aria-label="Main">
+    <div class="nav-org"><span class="av">PE</span><span>Per transaction test</span><span class="mi" style="margin-left:auto;font-size:18px">expand_more</span></div>
+    <div class="nav-row"><span class="mi">dashboard</span>Dashboard</div>
+    <div class="nav-row"><span class="mi">swap_horiz</span>Transactions<span class="nav-tag">New</span><span class="mi caret">expand_less</span></div>
+    <div class="nav-sub">Transactions list</div>
+    <div class="nav-sub">Import activity log</div>
+    <div class="nav-sub on" aria-current="page" data-copy="proposed" title="Proposed: new sidebar item. Today the page is only reachable from the Transactions list ⋯ menu (“Syncs history”).">Sync history</div>
+    <div class="nav-sub">Transaction reconciliation<span class="nav-tag">New</span></div>
+    <div class="nav-row"><span class="mi">inventory_2</span>Inventory sync<span class="nav-tag beta">Beta</span></div>
+    <div class="nav-row"><span class="mi">account_tree</span>Smart rules<span class="mi caret">expand_more</span></div>
+    <div class="nav-row"><span class="mi">shopping_cart</span>Invoicing<span class="mi caret">expand_more</span></div>
+    <div class="nav-row"><span class="mi">trending_up</span>Analytics<span class="mi caret">expand_more</span></div>
+    <div class="nav-gap"></div>
+    <div class="nav-row"><span class="mi">settings</span>Settings</div>
+    <div class="nav-row"><span class="mi">smart_toy</span>AI Agents</div>
+    <div class="nav-row"><span class="mi">stars</span>What's New</div>
+    <div class="nav-row"><span class="mi">developer_board</span>Custom development</div>
+  </nav>
+
+  <div>
+    <div class="top">
+      <span>Syncs left : <b>1000</b></span>
+      <a>How it works?</a>
+      <span class="mi" style="color:var(--color-primary)">notifications</span>
+      <span class="mi" style="color:var(--color-primary)">help_outline</span>
+      <span class="mi" style="color:var(--color-primary)">person</span>
+    </div>
+
+    <main class="main">
+      <h1 data-copy="proposed" title="Production: “Syncs History”">Sync history</h1>
+      <p class="sub" data-copy="proposed" title="Production: “History of changes per transaction.”">Every sync of each transaction to your accounting, including re-syncs, deletions and rollbacks.</p>
+
+      <div class="filters">
+        <label class="f" style="width:240px">Search
+          <span class="inp ph" data-copy="proposed" title="Ignat's draft: “Search by IDs”">Transaction, sync or webhook ID</span></label>
+        <div class="f">Sync date
+          <span class="dates"><span class="inp" style="width:130px"><span class="mi">calendar_today</span></span>–<span class="inp" style="width:130px"><span class="mi">calendar_today</span></span></span></div>
+        <label class="f" style="width:200px">Integration<span class="inp">All<span class="mi">expand_more</span></span></label>
+        <label class="f" style="width:200px" data-copy="proposed" title="Working name — Ignat: “call it Accounting for now”">Accounting<span class="inp">All<span class="mi">expand_more</span></span></label>
+        <label class="f" style="width:170px">Status<span class="inp">All<span class="mi">expand_more</span></span></label>
+        <button class="b b-pri" type="button">Apply</button>
+        <button class="b b-out" type="button">Reset filters</button>
+      </div>
+
+      <div class="card">
+        <table class="sh" id="tbl"></table>
+        <div class="pager">
+          <span>Rows per page: 25 <span class="mi" style="vertical-align:-5px">arrow_drop_down</span></span>
+          <span id="range"></span>
+          <span class="pg"><span class="mi">first_page</span><span class="mi">chevron_left</span><span class="on">1</span><span id="p2">2</span><span id="p3">3</span><span id="p4">4</span><span class="mi">chevron_right</span><span class="mi">last_page</span></span>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   Data. Every story below is lifted from Ignat's production screenshots
+   (2026-09-30); the companies of several orgs are combined into one org so all
+   patterns fit on one page. Filler single-sync rows follow screenshot "Stripe
+   Test (sandbox)": one webhook per transaction, synced once, same minute.
+--------------------------------------------------------------------------- */
+const INT = {
+  shop:   {n:'lilys-shop-test (Shopify)', lg:'shopify', t:'S'},
+  stripe: {n:'mzkt.by (Stripe)',          lg:'stripe',  t:'S'},
+};
+const ACC = {
+  qbo:    {n:'Sandbox Company US 62ce (QuickBooks Online)', lg:'qbo',    t:'qb'},
+  syn:    {n:'QB PT Demo - Shopify (Synder)',              lg:'synder', t:''},
+};
+const STATUS = {
+  'Synced':'green', 'Synced with warnings':'yellow', 'Skipped':'yellow', 'Canceled':'yellow',
+  'Deleted with warnings':'yellow', 'Deleted':'black', 'Failed':'red', 'Rollback in progress':'blue',
+  'Synced with rule failed':'yellow',
+};
+
+// seeded random so the page is stable between loads
+let seed = 20260930;
+const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+const AB = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const rs = n => Array.from({length:n}, () => AB[Math.floor(rnd()*AB.length)]).join('');
+// Stripe ids carry the account chunk mid-string (…E4pygkgelb…) — the unique part is the tail
+const stripeId = (p, root) => `${p}_${root || ('3T' + rs(4))}E4pygkgelb${rs(8)}`;
+const shopId = () => '189147' + String(Math.floor(10000000 + rnd()*89999999));
+
+// transaction stories: [integration, txnId, [[syncId, webhook, target, 'Sep 29 10:25' | null, status], ...]]
+const T = [];
+const add = (i, id, syncs) => T.push({i, id, syncs});
+
+// captured: lilys-shop-test, deleted then re-synced to both targets
+add('shop','18914723922149',[[773920,1178185,'syn','Sep 29, 2026 10:25','Synced'],[773919,1178185,'qbo','Sep 29, 2026 10:25','Synced'],
+                              [773917,1178185,'syn','Sep 29, 2026 10:07','Deleted'],[773916,1178185,'qbo','Sep 29, 2026 10:07','Deleted']]);
+add('shop','18914703376613',[[773893,1178128,'syn','Sep 29, 2026 09:44','Synced'],[773892,1178128,'qbo','Sep 29, 2026 09:44','Synced'],
+                              [773889,1178128,'syn','Sep 29, 2026 09:29','Deleted with warnings'],[773888,1178128,'qbo','Sep 29, 2026 09:30','Deleted']]);
+
+// fill in with a timeline of stories, newest first
+const stories = [];
+const P = (fn) => stories.push(fn);
+let sid = 774420, wh = 1189500;
+const nextSid = () => (sid -= 1 + Math.floor(rnd()*3));
+const nextWh  = () => (wh  -= 1 + Math.floor(rnd()*4));
+
+// captured shape: charge + refund of the same payment, each to both targets (webhooks differ)
+P(() => { const wc = nextWh(), wr = nextWh();
+  add('stripe', stripeId('re','3UE8nf'), [[nextSid(),wr,'syn','Sep 30, 2026 10:34','Synced'],[nextSid(),wr,'qbo','Sep 30, 2026 10:34','Synced']]);
+  add('stripe', stripeId('ch','3UE8nf'), [[nextSid(),wc,'syn','Sep 30, 2026 10:34','Synced'],[nextSid(),wc,'qbo','Sep 30, 2026 10:34','Synced']]); });
+
+// rollback running right now
+P(() => { const w = nextWh(); const a = nextSid(), b = nextSid();
+  add('shop', shopId(), [[a,w,'qbo','Sep 30, 2026 09:12','Rollback in progress'],[b,w,'syn','Sep 30, 2026 09:12','Synced']]); });
+
+// captured shape: canceled on Synder, synced on QBO
+P(() => { const w = nextWh(); const a = nextSid(), b = nextSid();
+  add('stripe', stripeId('re'), [[a,w,'syn','Sep 30, 2026 03:35','Canceled'],[b,w,'qbo','Sep 30, 2026 03:35','Synced']]); });
+
+// failed (connection lost) then synced after reconnect
+P(() => { const w = nextWh(); const a = nextSid(), b = nextSid(), c = nextSid();
+  add('stripe', stripeId('ch'), [[a,w,'qbo','Sep 29, 2026 16:02','Synced'],[b,w,'syn','Sep 29, 2026 16:02','Synced'],[c,w,'qbo','Sep 29, 2026 08:41','Failed']]); });
+
+// "webhook can be different": the order was edited in Shopify and re-imported
+P(() => { const w1 = nextWh(), w2 = w1 - 211; const a = nextSid(), b = nextSid(), c = nextSid(), d = nextSid();
+  add('shop', shopId(), [[a,w1,'qbo','Sep 29, 2026 14:20','Synced'],[b,w1,'syn','Sep 29, 2026 14:20','Synced'],
+                         [c,w2,'qbo','Sep 28, 2026 11:03','Synced with warnings'],[d,w2,'syn','Sep 28, 2026 11:03','Synced']]); });
+
+// captured shape: Deleted (Synder) + Skipped (QBO), then both synced
+P(() => { const w = nextWh(); const a = nextSid(), b = nextSid(), c = nextSid(), d = nextSid();
+  add('stripe', stripeId('ch'), [[a,w,'syn','Sep 28, 2026 08:11','Synced'],[b,w,'qbo','Sep 28, 2026 08:11','Synced'],
+                                 [c,w,'syn','Sep 28, 2026 08:01','Deleted'],[d,w,'qbo','Sep 28, 2026 08:01','Skipped']]); });
+
+// captured shape: payout skipped three times, weeks apart (720820 → 736478 → 744054)
+P(() => { const w = 786478; add('stripe', stripeId('po','1TFOFU'), [[nextSid(),w,'qbo','Sep 27, 2026 16:24','Skipped'],[nextSid()-9000,w,'qbo','Sep 12, 2026 18:05','Skipped'],[nextSid()-24000,w,'qbo','Aug 30, 2026 12:53','Skipped']]); });
+
+// captured shape: deleted with warnings, then synced again (744057 → 747498)
+P(() => { const w = 1072215; add('stripe', stripeId('po','1Ttdc0'), [[nextSid(),w,'qbo','Sep 27, 2026 21:48','Synced'],[nextSid()-3400,w,'qbo','Sep 17, 2026 16:24','Deleted with warnings']]); });
+
+// captured shape: canceled before it ever ran — no sync date (720805)
+P(() => { const w = 758122; add('stripe', stripeId('po','1TCr6B'), [[nextSid(),w,'qbo','Sep 26, 2026 12:52','Skipped'],[nextSid()-5000,w,'qbo',null,'Canceled','Sep 12, 2026 09:00']]); });
+
+// rule failed on one target
+P(() => { const w = nextWh(); add('shop', shopId(), [[nextSid(),w,'qbo','Sep 26, 2026 09:30','Synced with rule failed'],[nextSid(),w,'syn','Sep 26, 2026 09:30','Synced']]); });
+
+// run the stories, interleaving single-sync filler (screenshot "Stripe Test (sandbox)")
+const fillerDays = ['Sep 30, 2026 08:00','Sep 30, 2026 07:40','Sep 29, 2026 18:11','Sep 29, 2026 11:52','Sep 28, 2026 15:05','Sep 28, 2026 10:04','Sep 27, 2026 09:26','Sep 26, 2026 17:48','Sep 26, 2026 10:12','Sep 25, 2026 10:12'];
+const filler = (d) => {
+    const both = rnd() < .45, w = nextWh(), i = rnd() < .6 ? 'stripe' : 'shop';
+    const id = i === 'stripe' ? stripeId(rnd() < .8 ? 'ch' : 'in') : shopId();
+    add(i, id, both ? [[nextSid(),w,'syn',d,'Synced'],[nextSid(),w,'qbo',d,'Synced']] : [[nextSid(),w,'qbo',d,'Synced']]);
+};
+// one filler between stories keeps every story on page 1 of the grouped view; older filler makes page 2
+stories.forEach((fn, k) => { fn(); filler(fillerDays[Math.min(k, fillerDays.length-1)]); });
+['Sep 25, 2026 10:12','Sep 25, 2026 09:58','Sep 24, 2026 17:31','Sep 24, 2026 12:06','Sep 24, 2026 08:44','Sep 23, 2026 19:20','Sep 23, 2026 11:15','Sep 22, 2026 16:40','Sep 22, 2026 09:03','Sep 21, 2026 14:27','Sep 21, 2026 10:10','Sep 20, 2026 18:55','Sep 20, 2026 08:31','Sep 19, 2026 15:02','Sep 19, 2026 09:47','Sep 18, 2026 13:36','Sep 18, 2026 07:59','Sep 17, 2026 20:14']
+  .forEach(d => { filler(d); filler(d); });
+
+// newest first by sync date (a sync that never started sorts by when it was queued), then by id
+const key = s => Date.parse(s[3] || s[5]) * 1e6 + s[0];
+T.forEach(t => t.syncs.sort((a,b) => key(b) - key(a)));
+T.sort((a,b) => key(b.syncs[0]) - key(a.syncs[0]));
+const FLAT = T.flatMap(t => t.syncs.map(s => ({t, s}))).sort((a,b) => key(b.s) - key(a.s));
+
+/* ---------- rendering ---------- */
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const co = o => `<span class="co" title="${esc(o.n)}"><span class="lg ${o.lg}">${o.t}</span><span class="n">${esc(o.n)}</span></span>`;
+const pill = s => `<span class="status status-${STATUS[s] || 'grey'}">${esc(s)}</span>`;
+const date = d => d ? esc(d) : `<span class="nodate" data-copy="proposed" title="Production leaves this cell empty">Not started</span>`;
+const txLink = t => `<a class="txid" href="#" onclick="return false" title="${esc(t.id)} — opens in ${t.i==='stripe'?'Stripe':'Shopify'}">${esc(t.id)}<span class="mi ext">open_in_new</span></a>`;
+const syncLink = id => `<a href="#" onclick="return false" title="Opens sync details">${id}</a>`;
+const PAGE = 25;
+
+const COLS = {
+  1: [['Sync ID',7],['Webhook',7.5],['Transaction ID',20],['Integration',15.5],['Accounting',26],['Sync date',11.5],['Sync status',12.5]],
+  2: [['Transaction ID',22.5],['Sync ID',7],['Webhook',8],['Integration',15],['Accounting',25],['Sync date',11],['Sync status',11.5]],
+};
+const head = v => `<thead><tr>${COLS[v].map((c,k) => `<th${v===2&&k===0?' style="padding-left:44px"':''}>${c[0]}</th>`).join('')}</tr></thead>`;
+
+function renderFlat() {
+  const rows = FLAT.slice(0, PAGE).map(({t, s}) => `<tr>
+    <td>${syncLink(s[0])}</td><td>${s[1]}</td><td>${txLink(t)}</td>
+    <td>${co(INT[t.i])}</td><td class="acc">${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
+  document.getElementById('tbl').innerHTML = head(1) + `<tbody>${rows}</tbody>`;
+  setRange(FLAT.length, 'syncs');
+}
+
+// latest status per accounting company, in a stable order (QBO first)
+function latestPerTarget(t) {
+  const seen = {};
+  t.syncs.forEach(s => { if (!seen[s[2]]) seen[s[2]] = s; });
+  return ['qbo','syn'].filter(k => seen[k]).map(k => seen[k]);
+}
+
+function renderGrouped() {
+  const rows = T.slice(0, PAGE).map((t, gi) => {
+    if (t.syncs.length === 1) {
+      const s = t.syncs[0];
+      return `<tr><td><span class="chev-sp"></span>${txLink(t)}</td><td>${syncLink(s[0])}</td><td>${s[1]}</td>
+        <td>${co(INT[t.i])}</td><td class="acc">${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`;
+    }
+    const lt = latestPerTarget(t);
+    const whs = [...new Set(t.syncs.map(s => s[1]))];
+    const lastDate = t.syncs.find(s => s[3])?.[3];
+    const parent = `<tr class="grp" data-g="${gi}" onclick="toggle(${gi}, event)">
+      <td><button class="chev" type="button" aria-expanded="false" aria-controls="g${gi}" aria-label="Show ${t.syncs.length} syncs"><span class="mi">chevron_right</span></button>${txLink(t)}</td>
+      <td class="count" data-copy="proposed">${t.syncs.length} syncs</td>
+      <td class="${whs.length > 1 ? 'count' : ''}">${whs.length > 1 ? whs.length + ' webhooks' : whs[0]}</td>
+      <td>${co(INT[t.i])}</td>
+      <td class="acc"><div class="stack">${lt.map(s => co(ACC[s[2]])).join('')}</div></td>
+      <td>${lastDate ? esc(lastDate) : date(null)}</td>
+      <td><div class="stack">${lt.map(s => `<span>${pill(s[4])}</span>`).join('')}</div></td></tr>`;
+    const kids = t.syncs.map(s => `<tr class="child" data-of="${gi}" hidden>
+      <td></td><td>${syncLink(s[0])}</td><td>${s[1]}</td><td></td>
+      <td class="acc">${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
+    return parent + kids;
+  }).join('');
+  document.getElementById('tbl').innerHTML = head(2) + `<tbody>${rows}</tbody>`;
+  setRange(T.length, 'transactions');
+}
+
+function toggle(gi, e) {
+  if (e && e.target.closest('a')) return;              // links keep working inside the row
+  const btn = document.querySelector(`tr.grp[data-g="${gi}"] .chev`);
+  const open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', open);
+  btn.closest('tr').classList.toggle('open', open);
+  document.querySelectorAll(`tr.child[data-of="${gi}"]`).forEach(r => r.hidden = !open);
+}
+
+function setRange(total, unit) {
+  const pages = Math.ceil(total / PAGE);
+  document.getElementById('range').textContent = `1–${Math.min(PAGE, total)} of ${total} ${unit}`;
+  ['p2','p3','p4'].forEach((id, k) => document.getElementById(id).style.display = k + 2 <= pages ? '' : 'none');
+}
+
+const NOTES = {
+  1: 'One row per sync, newest first',
+  2: 'One row per transaction · parent shows the latest status per accounting company · click to expand',
+};
+function setVariant(v) {
+  document.getElementById('vs-1').classList.toggle('on', v === 1);
+  document.getElementById('vs-2').classList.toggle('on', v === 2);
+  document.getElementById('vs-note').textContent = NOTES[v];
+  v === 1 ? renderFlat() : renderGrouped();
+  history.replaceState(null, '', '#v' + v);
+}
+setVariant(location.hash === '#v2' ? 2 : 1);
+</script>
+</body>
+</html>
