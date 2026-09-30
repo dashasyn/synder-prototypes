@@ -118,7 +118,8 @@ function AudioTracksTab() {
                   <${TableCell} sx=${{ fontWeight: 500 }}>${sf.name || sf.filename}<//>
                   <${TableCell}><${AudioTypeChip} type=${sf.type} /><//>
                   <${TableCell} sx=${{ color: 'text.secondary' }}>${langLabel[sf.lang] || sf.lang || '—'}<//>
-                  <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary' }}>
+                  ${/* may wrap: nine columns in the 960px column otherwise scroll sideways by a few px */ ''}
+                  <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 12, color: 'text.secondary', overflowWrap: 'anywhere' }}>
                     ${sf.filename}<//>
                   <${TableCell} sx=${{ color: 'text.secondary' }}>${sf.size}<//>
                   <${TableCell} sx=${{ color: 'text.secondary' }}>${sf.duration || '—'}<//>
