@@ -124,19 +124,14 @@ function StationDetailView() {
     toast(t('savedMsg'));
   };
 
-  const openMap = () => {
-    const { lat, lon } = d.coords || {};
-    if (!lat || !lon) return;
-    window.open(`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}&zoom=17`, '_blank');
-  };
-
   /* schedSummary() in the vanilla returns an HTML string, so the rule is
      ported rather than called — the three states and their strings are the
-     vanilla's own. */
-  const schedChip = ann => ann.isMain
-    ? html`<${Chip} size="small" color="success" variant="outlined" label=${t('alwaysActive')} />`
+     vanilla's own. Shown next to the Main radio: the main one is always
+     active, every other one runs on its schedule. */
+  const schedState = ann => ann.isMain
+    ? html`<${Typography} variant="body2" color="text.secondary">${t('alwaysActive')}<//>`
     : ann.scheduleSlots
-      ? html`<${Chip} size="small" variant="outlined" label=${t('scheduleSet')} />`
+      ? html`<${Typography} variant="body2" color="text.secondary">${t('scheduleSet')}<//>`
       : html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`;
 
   const setMain = i => patch(n => n.transferAnnouncements.forEach((a, j) => { a.isMain = j === i; }));
@@ -165,7 +160,8 @@ function StationDetailView() {
 
       <${PageBody}>
         ${/* ── Station name ── */ ''}
-        <${SectionCard} title=${t('stationName')}>
+        ${/* Ignat, 2026-09-30: the card carries the coordinates too, so it is "Name and location" */ ''}
+        <${SectionCard} title=${state.lang === 'de' ? 'Name und Standort' : 'Name and location'}>
           <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
             <${TextField} label=${t('fullName')} required value=${d.name} sx=${{ width: 280 }}
               onChange=${e => patch(n => { n.name = e.target.value; })} />
@@ -187,9 +183,7 @@ function StationDetailView() {
             <${TextField} type="number" label=${t('coordLon')} sx=${{ width: 170 }} placeholder="13.413244"
               inputProps=${{ step: 0.000001 }} value=${d.coords ? (d.coords.lon ?? '') : ''}
               onChange=${e => patch(n => { n.coords = { ...(n.coords || {}), lon: e.target.value }; })} />
-            ${/* the prerequisite disables what depends on it — brief §3 */ ''}
-            <${Button} onClick=${openMap} disabled=${!(d.coords && d.coords.lat && d.coords.lon)}
-              startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>place<//>`}>${t('coordPreview')}<//>
+            ${/* no "Karte öffnen" link to a real map (Ignat, 2026-09-30) */ ''}
           <//>
 
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
@@ -266,22 +260,38 @@ function StationDetailView() {
 
           <${Typography} variant="overline" color="text.secondary" sx=${{ display: 'block', mt: 3, mb: 1 }}>
             ${t('transferFiles')}<//>
+          ${/* Ignat, 2026-09-30: a table — Name / Type / Main / actions — instead of rows led by a "Haupt"
+                chip. Main is a radio: exactly one is main, and picking another one replaces
+                "Als Haupt festlegen". */ ''}
           ${d.transferAnnouncements.length ? html`
-            <${Stack} spacing=${1} sx=${{ mb: 1.5 }}>
-              ${d.transferAnnouncements.map((ann, i) => html`
-                <${Stack} key=${i} direction="row" spacing=${1.5} alignItems="center" flexWrap="wrap" useFlexGap
-                  sx=${{ border: '1px solid #E7E7E7', borderRadius: 1, px: 1.5, py: 1 }}>
-                  ${ann.isMain ? html`<${Chip} size="small" color="primary" label=${t('mainAnn')} />` : null}
-                  <${Typography} variant="body2" sx=${{ fontFamily: 'monospace' }}>${sndName(ann.fileId)}<//>
-                  <${Typography} variant="body2" color="text.secondary">${ann.label || '—'}<//>
-                  ${schedChip(ann)}
-                  <${Box} sx=${{ flexGrow: 1 }} />
-                  ${ann.isMain ? null : html`
-                    <${Button} onClick=${() => setMain(i)}>${t('setAsMain')}<//>`}
-                  <${Button} onClick=${() => openSchedule(i)}>${t('editSchedule')}<//>
-                  <${DeleteAction} remove name=${`${state.lang === 'de' ? 'Umstiegsansage' : 'transfer announcement'} ${i + 1}`}
-                    onClick=${() => patch(n => { n.transferAnnouncements.splice(i, 1); })} />
-                <//>`)}
+            <${TableContainer} id="xferTable" sx=${{ border: '1px solid #E7E7E7', borderRadius: 1, mb: 1.5 }}>
+              <${Table}>
+                <${TableHead}><${TableRow}>
+                  <${TableCell}>${t('colName')}<//>
+                  <${TableCell}>${t('colType')}<//>
+                  <${TableCell}>${t('mainAnn')}<//>
+                  <${TableCell} align="right" sx=${{ width: 1, whiteSpace: 'nowrap' }} />
+                <//><//>
+                <${TableBody}>
+                  ${d.transferAnnouncements.map((ann, i) => html`
+                    <${TableRow} key=${i}>
+                      <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 13 }}>${sndName(ann.fileId)}<//>
+                      <${TableCell}>${ann.label || '—'}<//>
+                      <${TableCell}>
+                        <${Stack} direction="row" spacing=${.5} alignItems="center">
+                          <${Radio} size="small" checked=${!!ann.isMain} onChange=${() => setMain(i)}
+                            inputProps=${{ 'aria-label': `${t('setAsMain')}: ${ann.label || sndName(ann.fileId)}` }} sx=${{ ml: -1 }} />
+                          ${schedState(ann)}
+                        <//>
+                      <//>
+                      <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
+                        <${Button} onClick=${() => openSchedule(i)}>${t('editSchedule')}<//>
+                        <${DeleteAction} remove name=${`${state.lang === 'de' ? 'Umstiegsansage' : 'transfer announcement'} ${i + 1}`}
+                          onClick=${() => patch(n => { n.transferAnnouncements.splice(i, 1); })} />
+                      <//>
+                    <//>`)}
+                <//>
+              <//>
             <//>` : html`
             <${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>
               ${t('noneAssigned')}<//>`}
