@@ -382,9 +382,9 @@ function StationDetailView() {
               <${Table}>
                 <${TableHead}><${TableRow}>
                   <${TableCell} sx=${{ width: 96, whiteSpace: 'nowrap' }}>${de ? 'Priorität' : 'Priority'}<//>
-                  <${TableCell}>${t('colName')}<//>
+                  <${TableCell} sx=${{ width: 220 }}>${t('colName')}<//>
                   <${TableCell}>${de ? 'Aktivzeit' : 'Active time'}<//>
-                  <${TableCell} align="right" sx=${{ width: 1, whiteSpace: 'nowrap' }} />
+                  <${TableCell} align="right" sx=${{ width: 136, whiteSpace: 'nowrap' }} />
                 <//><//>
                 <${TableBody}>
                   ${d.transferAnnouncements.map((ann, i) => {
