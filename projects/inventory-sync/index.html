@@ -184,7 +184,7 @@
     <div class="modal-body" id="m-bulk-b"></div>
     <div class="modal-footer">
       <button class="btn btn-text" onclick="closeM('m-bulk')">Cancel</button>
-      <button class="btn" id="m-bulk-ok" onclick="applyBulk()">Set Shopify stock</button>
+      <button class="btn" id="m-bulk-ok" onclick="confirmSet()">Set Shopify stock</button>
     </div>
   </div>
 </div>
@@ -275,7 +275,7 @@ function fresh(){
     matching:false, matched:false, comparing:false, compared:false, cmpRows:[], cmpAt:null,
     aligned:null, alignedN:0, running:false, paused:false, starting:false, edit:null,
     showConnect:false, connectErr:'', fromSetup:false, events:[], unmappedOnly:false, q:'',
-    mapStore:null, lastCheck:null, reviewSetup:false, sel:{}};
+    mapStore:null, lastCheck:null, reviewSetup:false, sel:{}, ignored:{}, pending:null};
 }
 function runningDemo(){
   var s=fresh(), a=s.avail.pop();
@@ -306,15 +306,21 @@ function dupItems(st){var by={};mapped(st).forEach(function(p){var q=st.map[p].q
   return Object.keys(by).filter(function(q){return by[q].length>1}).map(function(q){return {st:st,q:q,prods:by[q]}})}
 function allDups(){return S.stores.reduce(function(a,st){return a.concat(dupItems(st))},[])}
 function buildRows(s){s=s||S;var rows=[];s.stores.forEach(function(st){mapped(st).forEach(function(p){var item=qbo(st.map[p].q);
-  var sh=st.shop.hasOwnProperty(p)?st.shop[p]:null;rows.push({st:st.id,domain:st.domain,prod:p,item:item.name,qq:item.qty,sq:sh,diff:sh===null?null:item.qty-sh,res:'Unresolved'})})});return rows}
+  var sh=st.shop.hasOwnProperty(p)?st.shop[p]:null, k=st.id+'|'+p, ig=s.ignored&&s.ignored[k];
+  // an Ignore holds until either quantity changes
+  var res=(ig&&ig.qq===item.qty&&ig.sq===sh)?'Ignored':'Unresolved'; if(ig&&res!=='Ignored')delete s.ignored[k];
+  rows.push({st:st.id,domain:st.domain,prod:p,item:item.name,qq:item.qty,sq:sh,diff:sh===null?null:item.qty-sh,res:res})})});return rows}
 function diffRows(){return S.cmpRows.filter(function(r){return r.diff!==null&&r.diff!==0&&r.res==='Unresolved'})}
 function storesReady(){return S.stores.length>0&&S.stores.every(function(st){return st.loc})}
 function invReady(){return S.stores.length>0&&S.stores.every(function(st){return st.inv==='Inventory'})}
 
 /* strict step order: exactly one step is open at a time */
-function doneFlags(){return [null,S.storesDone,S.storesDone&&invReady(),S.matched,S.aligned!==null,S.running]}
+function doneFlags(){return [null,S.storesDone&&storesReady(),S.storesDone&&invReady(),S.matched,S.aligned!==null,S.running]}
 function activeStep(){if(S.edit)return S.edit;var d=doneFlags();for(var i=1;i<=5;i++)if(!d[i])return i;return null}
-function doneCount(){return doneFlags().filter(Boolean).length}
+function doneCount(){return doneFlags().filter(Boolean).length-(S.aligned==='skipped'?1:0)}   // a skipped step is not done
+function setupIssues(){var d=doneFlags(),out=[];for(var i=1;i<=5;i++){if(!d[i])out.push('Step '+i+' needs attention')}
+  if(S.aligned==='skipped')out.push('Step 4 skipped');return out}
+function openSetupAt(){S.reviewSetup=true;render();var e=document.querySelector('#setup-card .step.is-open')||document.querySelector('#setup-card .step.is-warn');if(e)e.scrollIntoView({block:'center'})}
 
 /* ---- navigation ---- */
 function go(tab){S.tab=tab;['overview','mappings','events','compare'].forEach(function(t){
@@ -411,8 +417,8 @@ function invBody(){
     +'<div class="muted">Created product should be: '+esc(st.inv)+'</div></div>'+(st.inv==='Inventory'?'<span class="status status-green">Inventory</span>':'<span class="status status-yellow">Needs change</span>')+'</div>'});
   h+='<ol class="how" id="how-inv"><li>Open Settings and choose the Shopify integration</li><li>Open the <b>Products/Services</b> tab</li>'
     +'<li>Set <b>Created product should be</b> to <b>Inventory</b></li><li>Click <b>Update</b>, then come back here</li></ol>';
-  h+='<div class="step-actions"><button class="btn'+(S.openedSettings?' btn-outlined':'')+'" id="btn-open-settings" onclick="openSettings()">Open Settings <span class="material-icons" style="font-size:16px">open_in_new</span></button>'
-    +(S.openedSettings?'<button class="btn" id="btn-check-again" onclick="checkInv()">Check again</button>':'')+'</div>';
+  h+='<div class="step-actions"><button class="btn" id="btn-open-settings" onclick="openSettings()">Open Settings <span class="material-icons" style="font-size:16px">open_in_new</span></button>'
+    +'<button class="btn btn-outlined" id="btn-check-again" onclick="checkInv()">Check again</button><span class="muted">Already changed it? Click Check again.</span></div>';
   return h;
 }
 function openSettings(){S.openedSettings=true;toast('Settings opened in a new tab.');render()}
@@ -454,7 +460,7 @@ function alignBody(){
     +'<button class="btn btn-text" id="btn-skip-4" onclick="S.aligned=\'skipped\';S.edit=null;render()">Skip</button></div>';
   return b;
 }
-function askBulk(){var n=S.cmpRows.filter(function(r){return S.sel[r.st+'|'+r.prod]&&r.diff}).length;
+function askBulk(){S.pending=null;var n=S.cmpRows.filter(function(r){return S.sel[r.st+'|'+r.prod]&&r.diff}).length;
   $('m-bulk-b').innerHTML='Shopify on hand will be set to the QuickBooks quantity for <b>'+n+'</b> '+(n>1?'products':'product')+'. Synder creates one sync event per product.';openM('m-bulk')}
 function applyBulk(){var n=0;S.cmpRows.forEach(function(r){if(S.sel[r.st+'|'+r.prod]&&r.diff){store(r.st).shop[r.prod]=r.qq;r.res='Set to QuickBooks';r.sq=r.qq;r.diff=0;n++}});
   S.aligned='done';S.alignedN=n;S.edit=null;closeM('m-bulk');toast(plural(n,'product')+' will be updated in Shopify.');render()}
@@ -475,14 +481,17 @@ function renderRunning(){
     +'<div class="kpi"><div class="kpi-v">0</div><div class="kpi-l">Failed</div></div><div class="kpi"><div class="kpi-v" id="kpi-applied">'+applied+'</div><div class="kpi-l">Applied (24h)</div></div></div>';
   var items=[];
   S.stores.filter(function(x){return !x.loc}).forEach(function(x){items.push('<li class="attn-loc"><span class="material-icons">place</span>'+esc(x.domain)+' needs a location before it receives changes<a class="text-link" onclick="$(\'stores-card\').scrollIntoView()">Choose location</a></li>')});
-  S.stores.filter(function(x){return x.inv!=='Inventory'}).forEach(function(x){items.push('<li class="attn-inv"><span class="material-icons">tune</span>'+esc(x.integ)+' creates Non-inventory items<a class="text-link" onclick="toast(\'Settings opened in a new tab.\')">Open Settings</a></li>')});
+  S.stores.filter(function(x){return x.inv!=='Inventory'}).forEach(function(x){items.push('<li class="attn-inv"><span class="material-icons">tune</span>'+esc(x.integ)+' creates Non-inventory items, so its stock can\'t sync<a class="text-link fix-in-setup" onclick="openSetupAt()">Fix in setup</a></li>')});
   if(unm) items.push('<li id="attn-unmatched"><span class="material-icons">link_off</span>'+plural(unm,'Shopify product')+' '+(unm===1?'is':'are')+' not matched and won\'t sync<a class="text-link" onclick="S.unmappedOnly=true;go(\'mappings\')">Match products</a></li>');
   if(diffs) items.push('<li id="attn-diff"><span class="material-icons">compare_arrows</span>'+plural(diffs,'product')+' differ from QuickBooks<a class="text-link" onclick="go(\'compare\')">Compare stock</a></li>');
   dups.forEach(function(d){items.push('<li class="attn-dup"><span class="material-icons">warning</span>'+esc(qbo(d.q).name)+' is matched to '+d.prods.length+' Shopify products; only one receives changes<a class="text-link" onclick="S.mapStore=\''+d.st.id+'\';go(\'mappings\')">Mappings</a></li>')});
   h+=items.length?'<ul class="attn" id="attn">'+items.join('')+'</ul>':'<div class="step-sum" id="attn-none">Nothing needs your attention.</div>';
   h+='</div>';
   h+='<div class="card" id="stores-card"><h3>Shopify stores</h3>'+storesBody(false)+'</div>';
-  h+='<div class="card"><div class="card-row"><div><b style="font-weight:500">Setup</b> <span class="muted">· 5 of 5 done</span></div><button class="btn btn-text" id="btn-review-setup" onclick="S.reviewSetup=!S.reviewSetup;render()">'+(S.reviewSetup?'Hide steps':'Review steps')+'</button></div></div>';
+  var iss=setupIssues();
+  h+='<div class="card" id="setup-summary"><div class="card-row"><div><b style="font-weight:500">Setup</b> <span class="muted" id="setup-summary-text">· '+doneCount()+' of 5 done'+(iss.length?' · '+iss.join(' · '):'')+'</span>'
+    +(iss.length?' <span class="status status-yellow">Needs attention</span>':'')+'</div>'
+    +'<button class="btn btn-text" id="btn-review-setup" onclick="'+(S.reviewSetup?'S.reviewSetup=false;render()':'openSetupAt()')+'">'+(S.reviewSetup?'Hide steps':iss.length?'Finish setup':'Review steps')+'</button></div></div>';
   if(S.reviewSetup) h+='<div style="margin-top:16px">'+renderSetup()+'</div>';
   return h;
 }
@@ -534,7 +543,7 @@ function doRevert(){var e=S.events[revIdx];e.rev=true;S.events.unshift({t:'just 
 
 /* ---- COMPARE ---- */
 function renderCompare(){
-  if(!S.compared){$('view-compare').innerHTML='<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';return}
+  if(!S.compared){$('view-compare').innerHTML='<div class="table-wrap"><div class="empty" id="compare-setup-empty">Stock is compared in step 4 of the setup. After that you can compare again here at any time.<br><a class="text-link" onclick="go(\'overview\')">Go to setup</a></div></div>';return}
   var rows=S.cmpRows, d=rows.filter(function(r){return r.diff}), multi=S.stores.length>1;
   var h='<div class="toolbar"><div><b style="font-weight:500">Compares QuickBooks quantity with Shopify stock for every matched product.</b><div class="muted" style="font-size:13px">Last comparison: '+esc(S.cmpAt||'just now')+' · '+rows.length+' compared · '+plural(d.length,'difference')+'</div></div><span class="grow"></span>'
     +'<button class="btn btn-outlined" id="btn-compare-now" onclick="S.cmpRows=buildRows();S.cmpAt=\'just now\';toast(\'Comparison finished.\');render()">Compare now</button></div>';
@@ -542,11 +551,17 @@ function renderCompare(){
   rows.forEach(function(r){var can=r.diff!==null&&r.diff!==0&&r.res==='Unresolved';
     h+='<tr data-prod="'+esc(r.prod)+'" data-st="'+r.st+'">'+(multi?'<td>'+esc(r.domain.replace('.myshopify.com',''))+'</td>':'')+'<td>'+esc(r.prod)+'</td><td>'+esc(r.item)+'</td><td class="num">'+r.qq+'</td><td class="num">'+(r.sq===null?'<span class="nc" data-uncaptured>not captured</span>':r.sq)+'</td>'
       +'<td class="num '+(r.diff>0?'diff-pos':r.diff<0?'diff-neg':'')+'">'+(r.diff===null?'–':signed(r.diff))+'</td><td>'+esc(r.diff===0&&r.res==='Unresolved'?'Same':r.res)+'</td>'
-      +'<td>'+(can?'<button class="btn btn-text btn-sm set-one" onclick="setOne(\''+r.st+'\',\''+r.prod+'\')">Set Shopify to QuickBooks</button><button class="btn btn-text btn-sm" onclick="ignoreOne(\''+r.st+'\',\''+r.prod+'\')">Ignore</button>':'–')+'</td></tr>'});
+      +'<td>'+(can?'<button class="btn btn-text btn-sm set-one" onclick="askOne(\''+r.st+'\',\''+r.prod+'\')">Set Shopify to QuickBooks</button><button class="btn btn-text btn-sm ignore-one" onclick="ignoreOne(\''+r.st+'\',\''+r.prod+'\')">Ignore</button>'
+        :r.res==='Ignored'?'<button class="btn btn-text btn-sm undo-ignore" onclick="unignore(\''+r.st+'\',\''+r.prod+'\')">Undo</button>':'–')+'</td></tr>'});
   $('view-compare').innerHTML=h+'</tbody></table></div>';
 }
-function setOne(sid,p){S.cmpRows.forEach(function(r){if(r.st===sid&&r.prod===p){store(sid).shop[p]=r.qq;r.res='Set to QuickBooks';r.sq=r.qq;r.diff=0}});toast('Shopify will be updated.');render()}
-function ignoreOne(sid,p){S.cmpRows.forEach(function(r){if(r.st===sid&&r.prod===p)r.res='Ignored'});toast('Mismatch ignored.');render()}
+function rowOf(sid,p){return S.cmpRows.filter(function(r){return r.st===sid&&r.prod===p})[0]}
+function askOne(sid,p){var r=rowOf(sid,p);S.pending={sid:sid,p:p};
+  $('m-bulk-b').innerHTML='Shopify on hand for "'+esc(p)+'" will be set to '+r.qq+' (change '+signed(r.diff)+'). A sync event will be created to apply it.';openM('m-bulk')}
+function setOne(sid,p){var r=rowOf(sid,p);store(sid).shop[p]=r.qq;r.res='Set to QuickBooks';r.sq=r.qq;r.diff=0;toast('Shopify will be updated.');render()}
+function confirmSet(){if(S.pending){var x=S.pending;S.pending=null;closeM('m-bulk');setOne(x.sid,x.p)}else applyBulk()}
+function ignoreOne(sid,p){var r=rowOf(sid,p);S.ignored[sid+'|'+p]={qq:r.qq,sq:r.sq};r.res='Ignored';toast('Mismatch ignored. It stays ignored until a quantity changes.');render()}
+function unignore(sid,p){delete S.ignored[sid+'|'+p];rowOf(sid,p).res='Unresolved';toast('Mismatch is unresolved again.');render()}
 
 /* ---- render ---- */
 function render(){
