@@ -208,14 +208,14 @@ function StationDetailView() {
 
   return html`
     <${React.Fragment}>
-      <${PageHeader} sticky
+      <${PageHeader} sticky narrow
         crumbs=${[{ label: t('stations'), onClick: () => nav('stations') }, { label: st.name }]}
         title=${d.name}
         titleAfter=${html`<${LineBadge} line=${s.selectedLine} />`}
         subtitle=${`${st.id} · ${t('identifier')}`}
         action=${html`<${Button} variant="contained" id="stSave" onClick=${save}>${t('saveBtn')}<//>`} />
 
-      <${PageBody}>
+      <${PageBody} narrow>
         ${/* Ignat, 2026-09-30: the card carries the coordinates too, so it is "Name and location" */ ''}
         <${SectionCard} title=${de ? 'Name und Standort' : 'Name and location'}>
           <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>

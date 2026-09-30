@@ -157,18 +157,20 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id, req
  * Page header: breadcrumb, title, subtitle, and the action in the corner.
  * Brief §3 — breadcrumbs plus a corner action button, no back buttons.
  */
-/* Ignat, 2026-09-30: "I like that the content is 960px and centered … It is
-   easier to read." — the staging build's measure. Header band and body share
-   one centred 960px column; the white band itself still runs full width. */
+/* Ignat, 2026-09-30: the staging build's 960px centred column — "easier to
+   read" — but for the station detail only ("Keep only station details 960.
+   Other pages should stay full width"). Opt-in via `narrow` on both the
+   header and the body; the white band itself still runs full width. */
 const CONTENT_MAX = 960;
 
-/** sticky — keeps the title and its Save in view on long forms (station detail). */
-function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky }) {
+/** sticky — keeps the title and its Save in view on long forms (station detail).
+    narrow — the centred 960px column (station detail only). */
+function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narrow }) {
   return html`
     <${Box} data-page-header="" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
                    ...(sticky ? { position: 'sticky', top: 0, zIndex: 10 } : null) }}>
     <${Box} sx=${{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-                   maxWidth: CONTENT_MAX, mx: 'auto', py: 3 }}>
+                   maxWidth: narrow ? CONTENT_MAX : 'none', mx: 'auto', py: 3 }}>
       <${Box}>
         ${crumbs && crumbs.length ? html`
           <${Breadcrumbs} separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`} sx=${{ mb: .5 }}>
@@ -215,11 +217,11 @@ function LineBadge({ line, size = 'small' }) {
 }
 
 /** Full-width page body with the 24px gutters the brief asks for. */
-function PageBody({ children, sx }) {
+function PageBody({ children, sx, narrow }) {
   // data-page-body is a stable hook for the spacing gate. Without it the gate
   // matched the PageHeader first — which carries the same px — and a squeezed
   // body passed the assertion.
-  return html`<${Box} sx=${{ px: 3 }}><${Box} data-page-body="" sx=${{ maxWidth: CONTENT_MAX, mx: 'auto', py: 3, ...(sx || {}) }}>${children}<//><//>`;
+  return html`<${Box} sx=${{ px: 3 }}><${Box} data-page-body="" sx=${{ maxWidth: narrow ? CONTENT_MAX : 'none', mx: 'auto', py: 3, ...(sx || {}) }}>${children}<//><//>`;
 }
 
 /**
