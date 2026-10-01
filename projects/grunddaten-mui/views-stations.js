@@ -105,9 +105,10 @@ const mainLast = list => [...list.filter(a => !a.isMain), ...list.filter(a => a.
 
 /* "Mo–Do 22:00–01:00; Fr 22:00–03:00" — consecutive days with the same
    periods are grouped, so a full week stays one short line. */
-function schedPreview(slots, from, to) {
+function schedPreview(slots, periods) {
   if (!slots) return '';
-  const range = from || to ? (from ? fmtIsoDate(from) : '…') + '–' + (to ? fmtIsoDate(to) : '…') + ' · ' : '';
+  const ps = (periods || []).filter(p => p.from || p.to);
+  const range = ps.length ? ps.map(p => (p.from ? fmtIsoDate(p.from) : '…') + '–' + (p.to ? fmtIsoDate(p.to) : '…')).join(', ') + ' · ' : '';
   const days = DAYS.map(dd => {
     const x = slots.find(y => y.day === dd);
     return { day: dd, txt: x && x.slots.length ? x.slots.map(sl => sl.start + '–' + sl.end).join(', ') : '' };
@@ -134,7 +135,7 @@ function StationDetailView() {
   const [addMain, setAddMain] = useState(false);
   const [schedIdx, setSchedIdx] = useState(null); // transfer announcement being scheduled
   const [schedDays, setSchedDays] = useState(null);
-  const [schedDates, setSchedDates] = useState({ from: '', to: '' });
+  const [schedPeriods, setSchedPeriods] = useState([{ from: '', to: '' }]);
 
   // re-seed when the route changes to a different station
   useEffect(() => { const n = seed(); setDraft(n); setPristine(JSON.stringify(n)); },
@@ -222,11 +223,17 @@ function StationDetailView() {
       // a new schedule is the whole day, every day (Ignat, 2026-10-01); a day saved empty stays empty
       return { day, slots: ex ? ex.slots.map(sl => ({ ...sl })) : (ann.scheduleSlots ? [] : [{ ...WHOLE_DAY }]) };
     }));
-    setSchedDates({ from: ann.dateFrom || '', to: ann.dateTo || '' });
+    // several date periods (Ignat, 2026-10-01); always at least one row on screen
+    setSchedPeriods(ann.periods && ann.periods.length ? ann.periods.map(p => ({ ...p })) : [{ from: '', to: '' }]);
     setSchedIdx(i);
   };
 
-  const schedBadRange = !!(schedDates.from && schedDates.to && schedDates.to < schedDates.from);
+  const badPeriod = p => !!(p.from && p.to && p.to < p.from);
+  const schedBadRange = schedPeriods.some(badPeriod);
+  const setPeriod = (k, f, v) => setSchedPeriods(L => L.map((p, j) => j === k ? { ...p, [f]: v } : p));
+  // "−" deletes a period; on the only one left it clears it — the same rule as the week grid
+  const removePeriod = k => setSchedPeriods(L => L.length > 1 ? L.filter((_, j) => j !== k) : [{ from: '', to: '' }]);
+  const addPeriod = () => setSchedPeriods(L => [...L, { from: '', to: '' }]);
 
   // a file already on the station is not offered again
   const assigned = new Set(d.transferAnnouncements.map(a => a.fileId));
@@ -394,7 +401,7 @@ function StationDetailView() {
                       <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 13 }}>${nm}<//>
                       <${TableCell} className="active-time" sx=${{ fontSize: 13 }}>
                         ${ann.isMain ? (de ? 'Immer' : 'Always')
-                          : schedPreview(ann.scheduleSlots, ann.dateFrom, ann.dateTo)
+                          : schedPreview(ann.scheduleSlots, ann.periods)
                           || html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`}
                       <//>
                       <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
@@ -498,14 +505,26 @@ function StationDetailView() {
         <//>
         <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
           ${/* the date period comes first: from when to when the weekly times apply (Ignat, 2026-10-01) */ ''}
-          <${Stack} direction="row" spacing=${2} sx=${{ mb: 2.5 }} id="schedDates">
-            <${MusDateField} id="sc-from" label=${t('dateFrom')} value=${schedDates.from}
-              onChange=${v => setSchedDates(x => ({ ...x, from: v }))} />
-            <${MusDateField} id="sc-to" label=${t('dateTo')} value=${schedDates.to}
-              onChange=${v => setSchedDates(x => ({ ...x, to: v }))} />
+          <${Stack} spacing=${1.5} sx=${{ mb: 2.5 }} id="schedDates">
+            ${schedPeriods.map((p, k) => html`
+              <${Box} key=${k} className="period-row">
+                <${Stack} direction="row" spacing=${1.5} alignItems="center">
+                  <${MusDateField} id=${'sc-from-' + k} label=${t('dateFrom')} value=${p.from} onChange=${v => setPeriod(k, 'from', v)} />
+                  <${MusDateField} id=${'sc-to-' + k} label=${t('dateTo')} value=${p.to} onChange=${v => setPeriod(k, 'to', v)} />
+                  <${Box} sx=${{ whiteSpace: 'nowrap' }}>
+                    <${Tooltip} title=${de ? 'Entfernen' : 'Remove'}>
+                      <${IconButton} aria-label=${`sc remove date period ${k}`} onClick=${() => removePeriod(k)}><${Icon} sx=${{ fontSize: 18 }}>remove<//><//>
+                    <//>
+                    ${k === schedPeriods.length - 1 ? html`
+                      <${Tooltip} title=${de ? 'Zeitraum hinzufügen' : 'Add period'}>
+                        <${IconButton} aria-label="sc add date period" onClick=${addPeriod}><${Icon} sx=${{ fontSize: 18 }}>add<//><//>
+                      <//>` : null}
+                  <//>
+                <//>
+                ${badPeriod(p) ? html`<${Typography} variant="caption" color="error" sx=${{ display: 'block', mt: .5 }} className="sc-range-err">
+                  ${de ? '„Datum bis“ liegt vor „Datum von“.' : '"Date to" is before "Date from".'}<//>` : null}
+              <//>`)}
           <//>
-          ${schedBadRange ? html`<${Typography} variant="caption" color="error" sx=${{ display: 'block', mt: -1.5, mb: 2 }} id="sc-range-err">
-            ${de ? '„Datum bis“ liegt vor „Datum von“.' : '"Date to" is before "Date from".'}<//>` : null}
           ${schedDays ? html`<${WeekGrid} days=${schedDays} onChange=${setSchedDays} idPrefix="sc" allowEmpty=${true}
             emptyLabel=${de ? 'Kein Zeitplan' : 'No schedule'} slotDefault=${WHOLE_DAY} />` : null}
         <//>
@@ -515,7 +534,7 @@ function StationDetailView() {
             const i = schedIdx;
             patch(n => { const a = n.transferAnnouncements[i];
               a.scheduleSlots = schedDays.map(dd => ({ day: dd.day, slots: dd.slots.map(sl => ({ ...sl })) }));
-              a.dateFrom = schedDates.from; a.dateTo = schedDates.to; });
+              a.periods = schedPeriods.filter(p => p.from || p.to).map(p => ({ ...p })); });
             setSchedIdx(null);
           }}>${t('saveSchedule')}<//>
         <//>
