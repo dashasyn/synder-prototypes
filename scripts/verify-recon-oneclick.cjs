@@ -51,6 +51,15 @@ const ok = (c, n, info) => { c ? pass++ : fail++; console.log((c ? '  ok   ' : '
     const v1 = await p.$eval('#v1 .v1-card', e => getComputedStyle(e).display);
     ok(v1 === 'flex', 'variant 1 layout intact (card still two columns)', v1);
     ok(await hit('#go'), 'variant 1 Run hittable');
+    // Spacing must match variant 1 as built on 27 Aug (7046cee) — the kit merge once zeroed it all.
+    const sp = await p.evaluate(() => { const g = (s, k) => getComputedStyle(document.querySelector(s))[k];
+      return { page: g('#v1 .v1-page', 'paddingTop') + ' ' + g('#v1 .v1-page', 'paddingBottom'), card: g('#v1 .v1-card', 'marginTop'),
+        form: g('#v1 .v1-form', 'padding'), aside: g('#v1 .aside', 'padding'), h2: g('#v1 .h2', 'marginBottom'), lab: g('#v1 .fld label', 'marginBottom'),
+        sel: g('#v1 .sel select', 'paddingLeft') + ' ' + g('#v1 .sel select', 'paddingRight'), hint: g('#v1 .hint', 'marginTop'), btn: g('#go', 'padding') + ' ' + g('#go', 'height'),
+        li: g('#v1 .adv li', 'marginBottom'), faq: g('#v1 .faq div', 'padding') + ' ' + g('#v1 .faq div', 'marginBottom'),
+        centred: Math.round(document.querySelector('#v1 .v1-page').getBoundingClientRect().left) === Math.round((innerWidth - document.querySelector('#v1 .v1-page').getBoundingClientRect().width) / 2) }; });
+    const want = { page: '32px 64px', card: '24px', form: '28px 32px 26px', aside: '28px 26px', h2: '6px', lab: '6px', sel: '12px 34px', hint: '5px', btn: '12px 24px 42px', li: '13px', faq: '13px 16px 8px', centred: true };
+    for (const k of Object.keys(want)) ok(sp[k] === want[k], `variant 1 spacing intact: ${k}`, `got ${sp[k]}, want ${want[k]}`);
     await p.click('#vs-2'); await p.waitForTimeout(80);
     ok(await vis('#v2'), 'back to variant 2');
 
