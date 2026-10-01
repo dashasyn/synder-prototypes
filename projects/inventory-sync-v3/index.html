@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
 <style>
   body{margin:0;background:var(--color-white);font-family:var(--font-family)}
-  .content{max-width:1180px}
+  .content{max-width:none}   /* Ignat 2026-10-01: all tabs full width */
 
   /* switcher — canonical, deliberately not product chrome */
   .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
@@ -24,7 +24,7 @@
   .variant-switch .vs-sep{width:1px;height:22px;background:rgba(255,255,255,.2)}
 
   /* layout 2: activity as a top line with big numbers (Ignat's sketch 3) */
-  .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;background:var(--color-grey-5);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px}
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;background:var(--color-grey-5);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px}
   .tile{border-radius:var(--radius-sm);padding:12px 16px;background:var(--color-white);border:1px solid var(--border-default)}
   .tile .tl{font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:6px}
   .tile .tv{font-size:24px;line-height:32px;font-weight:400;margin:4px 0 0}
@@ -267,11 +267,22 @@ function vOverview(){
   if(notReady.length) h+='<div class="banner" id="banner"><span class="material-icons">build</span><div style="flex:1">'+(notReady.length===1?esc(notReady[0].name)+' needs setup before it receives changes.':plural(notReady.length,'store')+' need setup before they receive changes.')+'</div><a class="text-link" onclick="document.getElementById(\'store-'+notReady[0].id+'\').scrollIntoView({block:\'center\'})">Show</a></div>';
   if(L===2) h+=tilesLine()+'<div class="cols2">'+bSync()+bStores()+'</div>';
   else h+='<div class="cols">'+bActivity()+bSync()+bStores()+'</div>';
-  return h}
+  return h+bDiffs()}      // stock differences are not activity: their own block, below
+function bDiffs(){
+  var rows=[];conn().filter(function(i){return i.loc}).forEach(function(i){diffsOf(i).forEach(function(r){rows.push([i,r])})});
+  var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock differences <span class="material-icons help" title="Products where QuickBooks and Shopify show different stock. Sync sends only changes, so a difference stays until you fix it.">help</span>'
+   +(rows.length?'<span class="status status-yellow" style="margin-left:4px">'+rows.length+'</span>':'')+'</div>'
+   +'<div class="line muted small" style="margin-top:-8px">QuickBooks and Shopify are compared every night at 02:30 UTC. Sync sends only changes, so a difference stays until you accept the QuickBooks number or ignore it.</div>';
+  if(!rows.length) return h+'<div class="box" id="diff-none"><span class="material-icons i16" style="color:var(--color-green)">check_circle</span> No differences. Shopify stock matches QuickBooks for every matched product.</div></div>';
+  h+='<div class="table-wrap" style="box-shadow:none;border:1px solid var(--border-default)"><table class="synder-table" id="diff-table"><thead><tr><th>Store</th><th>Product</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">Difference</th><th>Actions</th></tr></thead><tbody>'
+   +rows.map(function(x){var i=x[0],r=x[1],d=r.qq-r.sq;return '<tr data-prod="'+esc(r.prod)+'" data-st="'+i.id+'"><td>'+esc(i.name)+'</td><td>'+esc(r.prod)+'</td><td class="num">'+r.qq+'</td><td class="num">'+r.sq+'</td><td class="num '+(d>0?'diff-pos':'diff-neg')+'">'+signed(d)+'</td>'
+     +'<td><button class="btn btn-text btn-sm accept" onclick="askAccept(\''+i.id+'\',\''+r.prod+'\')">Accept QuickBooks</button><button class="btn btn-text btn-sm ignore" onclick="ignoreRow(\''+i.id+'\',\''+r.prod+'\')">Ignore</button></td></tr>'}).join('')
+   +'</tbody></table></div><div class="row-actions"><a class="text-link small" onclick="go(\'reconcile\')">All comparisons in Reconcile</a></div>';
+  return h+'</div>'}
 function tilesLine(){ // the numbers that need the user are coloured only when they are above 0
   var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, d=allDiffs();
   var t=[['Held',c('Held'),'Not sent: needs you','t-held',"go('events',{evFilter:'Held'})"],['Failed',c('Failed'),'Shopify rejected it','t-failed',"go('events',{evFilter:'Failed'})"],
-    ['Stock differences',d,'QuickBooks ≠ Shopify','t-diff',"go('reconcile')"],['Pending',c('Pending'),'Waiting for the next check','',"go('events',{evFilter:'Pending'})"],
+    ['Pending',c('Pending'),'Waiting for the next check','',"go('events',{evFilter:'Pending'})"],
     ['Applied in 24h',c('Applied'),'Stock updated in Shopify','',"go('events',{evFilter:'Applied'})"]];
   return '<div class="tiles" id="tiles">'+t.map(function(x){return '<div class="tile '+(x[1]>0?x[3]:'')+'" data-tile="'+x[0]+'"><div class="tl">'+x[0]+'</div><div class="tv"><a class="text-link" onclick="'+x[4]+'">'+x[1]+'<span class="material-icons i16">chevron_right</span></a></div><div class="td">'+x[2]+'</div></div>'}).join('')+'</div>'}
 function bActivity(){
@@ -280,9 +291,7 @@ function bActivity(){
   var h='<div class="block" id="b-activity"><div class="block-t">Activity <span class="material-icons help" title="Stock changes from QuickBooks and what happened to them.">help</span></div>'
    +'<div class="headline" id="act-headline">'+(S.sync==='off'&&!S.enabledOn?'Nothing sent yet':plural(applied,'stock change')+' sent in the last 24 hours')+'</div><div class="box">';
   rows.forEach(function(r){h+='<div class="act" data-act="'+r[0]+'"><span><span class="status '+r[1]+'">'+r[0]+'</span><span class="muted small" style="margin-left:8px">'+r[3]+'</span></span><a class="text-link" onclick="go(\'events\',{evFilter:\''+(r[0]==='Applied in 24h'?'Applied':r[0])+'\'})">'+r[2]+'<span class="material-icons i16">chevron_right</span></a></div>'});
-  h+='</div><div class="box"><div class="act" data-act="diff"><span><span class="status status-purple">Stock differences</span><span class="muted small" style="margin-left:8px">QuickBooks ≠ Shopify</span></span><a class="text-link" id="act-diff" onclick="go(\'reconcile\')">'+d+'<span class="material-icons i16">chevron_right</span></a></div>'
-   +'<div class="muted small">Compared every night at 02:30 UTC. Accept QuickBooks or ignore each one.</div></div>';
-  return h+'</div>'}
+  return h+'</div></div>'}
 function bSync(){
   var cs=conn(), rd=cs.filter(ready), mode=S.sync;
   var chip={off:'<span class="status status-grey">Disabled</span>',on:'<span class="status status-green">Enabled</span>',paused:'<span class="status status-yellow">Paused</span>'}[mode];
@@ -319,7 +328,7 @@ function bStores(){
     rows.push(!i.loc?['stock',null,'<span class="k">Stock check:</span><span class="muted">after a location is chosen</span>']
       :!d?['stock',true,'<span class="k">Stock check:</span>no differences']
       :['stock',false,'Stock check: '+plural(d,'difference'),'Sync sends only changes, so '+(d===1?'it stays until you fix it.':'these stay until you fix them.'),
-        '<button class="btn btn-outlined btn-sm" onclick="go(\'reconcile\')">Review</button>']);
+        '<button class="btn btn-outlined btn-sm" onclick="document.getElementById(\'b-diff\').scrollIntoView({block:\'start\'})">Review below</button>']);
     h+='<div class="box" id="store-'+i.id+'" data-store="'+i.id+'"><div class="store-h"><span class="shop-ic">S</span><b>'+esc(i.name)+' (Shopify)</b>'+storeBadge(i)+'</div>'
       +'<div class="line small muted">Connected on: '+esc(i.connectedOn)+'</div>';
     rows.forEach(function(r,ix){
