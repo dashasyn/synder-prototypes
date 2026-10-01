@@ -99,12 +99,15 @@ const RADII = [
 /* The transfer-announcement priority (Ignat, 2026-09-30): row order IS the
    priority, 1 = highest, to settle overlapping schedules. The main one is
    always last — the lowest — and plays whenever nothing else does. */
+const WHOLE_DAY = { start: '00:00', end: '23:59' };
+const fmtIsoDate = iso => iso ? iso.split('-').reverse().join('.') : '';
 const mainLast = list => [...list.filter(a => !a.isMain), ...list.filter(a => a.isMain)];
 
 /* "Mo–Do 22:00–01:00; Fr 22:00–03:00" — consecutive days with the same
    periods are grouped, so a full week stays one short line. */
-function schedPreview(slots) {
+function schedPreview(slots, from, to) {
   if (!slots) return '';
+  const range = from || to ? (from ? fmtIsoDate(from) : '…') + '–' + (to ? fmtIsoDate(to) : '…') + ' · ' : '';
   const days = DAYS.map(dd => {
     const x = slots.find(y => y.day === dd);
     return { day: dd, txt: x && x.slots.length ? x.slots.map(sl => sl.start + '–' + sl.end).join(', ') : '' };
@@ -117,7 +120,7 @@ function schedPreview(slots) {
     out.push((k === e ? dayLabel(days[k].day) : dayLabel(days[k].day) + '–' + dayLabel(days[e].day)) + ' ' + days[k].txt);
     k = e;
   }
-  return out.join('; ');
+  return out.length ? range + out.join('; ') : '';
 }
 
 function StationDetailView() {
@@ -131,6 +134,7 @@ function StationDetailView() {
   const [addMain, setAddMain] = useState(false);
   const [schedIdx, setSchedIdx] = useState(null); // transfer announcement being scheduled
   const [schedDays, setSchedDays] = useState(null);
+  const [schedDates, setSchedDates] = useState({ from: '', to: '' });
 
   // re-seed when the route changes to a different station
   useEffect(() => { const n = seed(); setDraft(n); setPristine(JSON.stringify(n)); },
@@ -215,10 +219,14 @@ function StationDetailView() {
     // all seven days, each with at least one period — the vanilla's own seeding
     setSchedDays(DAYS.map(day => {
       const ex = ann.scheduleSlots && ann.scheduleSlots.find(x => x.day === day);
-      return { day, slots: ex ? ex.slots.map(sl => ({ ...sl })) : [{ start: '09:00', end: '23:00' }] };
+      // a new schedule is the whole day, every day (Ignat, 2026-10-01); a day saved empty stays empty
+      return { day, slots: ex ? ex.slots.map(sl => ({ ...sl })) : (ann.scheduleSlots ? [] : [{ ...WHOLE_DAY }]) };
     }));
+    setSchedDates({ from: ann.dateFrom || '', to: ann.dateTo || '' });
     setSchedIdx(i);
   };
+
+  const schedBadRange = !!(schedDates.from && schedDates.to && schedDates.to < schedDates.from);
 
   // a file already on the station is not offered again
   const assigned = new Set(d.transferAnnouncements.map(a => a.fileId));
@@ -386,8 +394,8 @@ function StationDetailView() {
                       <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 13 }}>${nm}<//>
                       <${TableCell} className="active-time" sx=${{ fontSize: 13 }}>
                         ${ann.isMain ? (de ? 'Immer' : 'Always')
-                          : ann.scheduleSlots ? schedPreview(ann.scheduleSlots)
-                          : html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`}
+                          : schedPreview(ann.scheduleSlots, ann.dateFrom, ann.dateTo)
+                          || html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`}
                       <//>
                       <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
                         ${/* star = main (material "star" / "star_border") */ ''}
@@ -489,14 +497,25 @@ function StationDetailView() {
           <${IconButton} aria-label=${de ? 'Schließen' : 'Close'} onClick=${() => setSchedIdx(null)}><${Icon}>close<//><//>
         <//>
         <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
-          ${schedDays ? html`<${WeekGrid} days=${schedDays} onChange=${setSchedDays} idPrefix="sc" />` : null}
+          ${/* the date period comes first: from when to when the weekly times apply (Ignat, 2026-10-01) */ ''}
+          <${Stack} direction="row" spacing=${2} sx=${{ mb: 2.5 }} id="schedDates">
+            <${MusDateField} id="sc-from" label=${t('dateFrom')} value=${schedDates.from}
+              onChange=${v => setSchedDates(x => ({ ...x, from: v }))} />
+            <${MusDateField} id="sc-to" label=${t('dateTo')} value=${schedDates.to}
+              onChange=${v => setSchedDates(x => ({ ...x, to: v }))} />
+          <//>
+          ${schedBadRange ? html`<${Typography} variant="caption" color="error" sx=${{ display: 'block', mt: -1.5, mb: 2 }} id="sc-range-err">
+            ${de ? '„Datum bis“ liegt vor „Datum von“.' : '"Date to" is before "Date from".'}<//>` : null}
+          ${schedDays ? html`<${WeekGrid} days=${schedDays} onChange=${setSchedDays} idPrefix="sc" allowEmpty=${true}
+            emptyLabel=${de ? 'Kein Zeitplan' : 'No schedule'} slotDefault=${WHOLE_DAY} />` : null}
         <//>
         <${Box} sx=${{ display: 'flex', justifyContent: 'flex-end', gap: 1, px: 3, py: 1.5, borderTop: '1px solid #E7E7E7' }}>
           <${Button} onClick=${() => setSchedIdx(null)}>${t('cancel')}<//>
-          <${Button} variant="contained" id="schedSave" onClick=${() => {
+          <${Button} variant="contained" id="schedSave" disabled=${schedBadRange} onClick=${() => {
             const i = schedIdx;
-            patch(n => { n.transferAnnouncements[i].scheduleSlots =
-              schedDays.map(dd => ({ day: dd.day, slots: dd.slots.map(sl => ({ ...sl })) })); });
+            patch(n => { const a = n.transferAnnouncements[i];
+              a.scheduleSlots = schedDays.map(dd => ({ day: dd.day, slots: dd.slots.map(sl => ({ ...sl })) }));
+              a.dateFrom = schedDates.from; a.dateTo = schedDates.to; });
             setSchedIdx(null);
           }}>${t('saveSchedule')}<//>
         <//>

@@ -260,11 +260,14 @@ function PageBody({ children, sx, narrow }) {
  *   allowEmpty a day may hold no periods and reads "keine Wiedergabe"
  *              (music); false keeps at least one period (transfer schedules)
  */
-function WeekGrid({ days, onChange, allowEmpty = false, idPrefix = 'wk' }) {
+/*   emptyLabel / slotDefault — the transfer-schedule sheet (Ignat, 2026-10-01):
+ *              an emptied day reads "Kein Zeitplan", a new period is the whole day */
+function WeekGrid({ days, onChange, allowEmpty = false, idPrefix = 'wk', emptyLabel, slotDefault }) {
   const { t } = useApp();
+  const fresh = slotDefault || { start: '09:00', end: '23:00' };
   const edit = fn => { const next = days.map(d => ({ day: d.day, slots: d.slots.map(s => ({ ...s })) })); fn(next); onChange(next); };
   const setSlot = (di, si, field, val) => edit(n => { n[di].slots[si][field] = val; });
-  const addSlot = di => edit(n => { n[di].slots.push({ start: '09:00', end: '23:00' }); });
+  const addSlot = di => edit(n => { n[di].slots.push({ ...fresh }); });
   const removeSlot = (di, si) => edit(n => { if (!allowEmpty && n[di].slots.length <= 1) return; n[di].slots.splice(si, 1); });
   const copyDay = di => edit(n => { if (di >= n.length - 1) return; n[di + 1].slots = n[di].slots.map(s => ({ ...s })); });
 
@@ -274,7 +277,10 @@ function WeekGrid({ days, onChange, allowEmpty = false, idPrefix = 'wk' }) {
             show several grids at once, and "add period 0" in three of them
             names nothing. */ ''}
       inputProps=${{ 'aria-label': `${idPrefix} ${dayLabel(days[di].day)} ${field}` }}
-      onChange=${e => setSlot(di, si, field, e.target.value)} sx=${{ width: 132 }} />`;
+      ${/* hiddenLabel: no label, so no empty label band on top — the same 40px height as
+            the label-less fields in the station form rows (Ignat, 2026-10-01) */ ''}
+      hiddenLabel size="small"
+      onChange=${e => setSlot(di, si, field, e.target.value)} sx=${{ width: 120 }} />`;
 
   // Tag / Beginn / Ende — the vanilla heads all three of its week grids this
   // way and inlines the literals; the shared component dropped them in the
@@ -335,7 +341,7 @@ function WeekGrid({ days, onChange, allowEmpty = false, idPrefix = 'wk' }) {
               : [html`
                   <${TableRow} key=${`${di}-empty`}>
                     <${TableCell} sx=${{ width: 48, fontWeight: 500 }}>${dayLabel(dayObj.day)}<//>
-                    <${TableCell} colSpan=${3} sx=${{ color: 'text.disabled', fontStyle: 'italic' }}>${t('msNoPlayback')}<//>
+                    <${TableCell} colSpan=${3} className="day-empty" sx=${{ color: 'text.disabled', fontStyle: 'italic', height: 40 }}>${emptyLabel || t('msNoPlayback')}<//>
                     <${TableCell} align="right">
                       <${Tooltip} title=${t('addSlot')}>
                         <${IconButton} aria-label=${`${idPrefix} add period ${di}`} onClick=${() => addSlot(di)}>
