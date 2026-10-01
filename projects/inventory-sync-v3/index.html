@@ -187,12 +187,12 @@ var S,V=1,L=1;
 function base(){var ints=INTEGRATIONS().map(function(i){return Object.assign(i,{connected:false,loc:null,inv:'Non-inventory',map:null,shop:{},cmp:null,opened:false,connectedOn:null})});
   ints.forEach(function(i){i.products.forEach(function(p){i.shop[p[0]]=p[2]})});
   return {tab:'overview',ints:ints,sync:'off',enabledOn:null,lastSync:null,pauseReason:null,events:[],ignored:{},evFilter:'All',mapStore:null,unmappedOnly:false,connecting:false,sel:''}}
-function connectInt(s,id,when){var i=s.ints.filter(function(x){return x.id===id})[0];i.connected=true;i.connectedOn=when||'just now';if(i.locations.length===1)i.loc=i.locations[0];i.map=autoMatch(i);compareStore(i,s);return i}
+function connectInt(s,id,when){var i=s.ints.filter(function(x){return x.id===id})[0];i.connected=true;i.connectedOn=when||'just now';i.map=autoMatch(i);/* location stays unset until the user chooses (Ignat 2026-10-01) */compareStore(i,s);return i}
 function stateFirst(){return base()}
-function stateFixes(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');
+function stateFixes(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
   p.inv='Inventory';s.sync='paused';s.enabledOn='Sep 24, 2026 14:20';s.lastSync='Oct 1, 2026 17:00';s.pauseReason='Paused on Oct 1, 2026 17:00. New changes are queued and sent when you resume.';
   s.events=sampleEvents(p,true);return s}
-function stateAll(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');
+function stateAll(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
   p.map['Plate seconds']={q:'9',src:'Manual'};f.map['Gift wrap']={q:'10',src:'Manual'};
   [p,f].forEach(function(i){i.inv='Inventory';
     i.products.forEach(function(x){var q=qbo(i.map[x[0]].q);i.shop[x[0]]=q.qty});compareStore(i,s)});
@@ -235,7 +235,7 @@ function askConnect(){var av=avail();
   dialog('Connect store','<div class="form-field"><label class="form-label" for="dlg-store">Shopify store</label><select class="select" id="dlg-store">'+(av.length>1?'<option value="">Select…</option>':'')+av.map(function(x){return '<option value="'+x.id+'">'+esc(x.name)+' (Shopify)</option>'}).join('')+'</select></div>'
     +'<p class="muted small" style="margin-top:8px">Don\'t see your store here? Add it first in Settings › Add integration.</p>',[{label:'Connect store',fn:function(){doConnect($('dlg-store').value,true)}}])}
 function askLoc(id){var i=int(id);dialog('Inventory location','<p>'+esc(i.name)+' receives stock adjustments at this location.</p><div class="form-field"><label class="form-label" for="dlg-loc">Location</label><select class="select" id="dlg-loc">'
-  +i.locations.map(function(l){return '<option '+(i.loc===l?'selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select></div>',[{label:'Save',fn:function(){i.loc=$('dlg-loc').value;closeM();toast('Inventory location updated.');render()}}])}
+  +(i.loc?'':'<option value="">Choose location</option>')+i.locations.map(function(l){return '<option '+(i.loc===l?'selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select></div>',[{label:'Save',fn:function(){var v=$('dlg-loc').value;if(!v){toast('Choose a location first.');return}i.loc=v;closeM();toast('Inventory location updated.');render()}}])}
 function openSettings(id){var i=int(id);i.opened=true;i.inv='Inventory';   // prototype: real product detects the change automatically
   toast('Settings opened in a new tab. '+i.name+': Created product should be = Inventory.');render()}
 function checkInv(id){var i=int(id);if(!i.opened){toast('Created product should be is still Non-inventory for '+i.name+'.');return}i.inv='Inventory';toast(i.name+': Created product should be = Inventory.');render()}
@@ -311,20 +311,16 @@ function bStores(){
   var h='<div class="block" id="stores-card"><div class="block-t">Shopify stores <span class="material-icons help" title="Each store receives stock changes at one location once its setup is done.">help</span></div>';
   // stores that still need setup come first
   conn().slice().sort(function(a,b){return ready(a)===ready(b)?0:ready(a)?1:-1}).forEach(function(i){
-    var m=mappedN(i), un=i.products.length-m, d=diffsOf(i).length, rows=[], q="'"+i.id+"'";
-    // the same four rows for every store, always in setup order; an open row has one action
-    rows.push(i.loc?['loc',true,'<span class="k">Location:</span>'+esc(i.loc)+(i.locations.length>1?' <a class="text-link small" onclick="askLoc('+q+')">Change</a>':'')]
+    var m=mappedN(i), un=i.products.length-m, rows=[], q="'"+i.id+"'";
+    // the same three rows for every store, always in setup order; an open row has one action
+    rows.push(i.loc?['loc',true,'<span class="k">Location:</span>'+esc(i.loc)+' <a class="text-link small" onclick="askLoc('+q+')">Change</a>']
       :['loc',false,'Location: not chosen','This store receives nothing until a location is chosen.','<button class="btn btn-outlined btn-sm" onclick="askLoc('+q+')">Choose location</button>']);
     rows.push(i.inv==='Inventory'?['inv',true,'<span class="k">Created product should be:</span>Inventory']
-      :['inv',false,'Created product should be: Non-inventory','Change it to Inventory in Settings › '+esc(i.name)+' (Shopify) › Products/Services and click Update. This page updates by itself.',
+      :['inv',false,'Created product should be: Inventory','Now it is Non-inventory. Change it in Settings › '+esc(i.name)+' (Shopify) › Products/Services and click Update. This page updates by itself.',
         '<button class="btn btn-outlined btn-sm" onclick="openSettings('+q+')">Open Settings <span class="material-icons i16">open_in_new</span></button>']);
     rows.push(!un?['map',true,'<span class="k">Mappings:</span>'+m+'/'+i.products.length]
       :['map',false,'Mappings: '+m+'/'+i.products.length,plural(un,'product')+' '+(un===1?'has':'have')+' no QuickBooks item and won\'t sync.',
         '<button class="btn btn-outlined btn-sm" onclick="go(\'mappings\',{mapStore:'+q+',unmappedOnly:true})">Match products</button>']);
-    rows.push(!i.loc?['stock',null,'<span class="k">Stock check:</span><span class="muted">after a location is chosen</span>']
-      :!d?['stock',true,'<span class="k">Stock check:</span>no differences']
-      :['stock',false,'Stock check: '+plural(d,'difference'),'Sync sends only changes, so '+(d===1?'it stays until you fix it.':'these stay until you fix them.'),
-        '<button class="btn btn-outlined btn-sm" onclick="go(\'reconcile\')">Review</button>']);
     h+='<div class="box" id="store-'+i.id+'" data-store="'+i.id+'"><div class="store-h"><span class="shop-ic">S</span><b>'+esc(i.name)+' (Shopify)</b>'+storeBadge(i)+'</div>'
       +'<div class="line small muted">Connected on: '+esc(i.connectedOn)+'</div>';
     rows.forEach(function(r,ix){
