@@ -115,6 +115,9 @@
   .diff-row{display:flex;justify-content:space-between;gap:16px;padding:4px 0;color:var(--text-primary);cursor:pointer;text-decoration:none}
   .diff-row:hover{color:var(--color-primary)}.diff-n{font-variant-numeric:tabular-nums;font-weight:500}
   .diff-more{margin-top:4px}
+  .diff-age{margin-left:8px;color:var(--color-yellow)}
+  .diff-fail{display:flex;align-items:center;gap:8px;color:var(--color-red);margin:4px 0 8px}.diff-fail .grow{flex:1}
+  .diff-fail-t{color:var(--color-red)}
   .prev-toggle{display:inline-flex;align-items:center;gap:4px;margin:16px 0 8px;padding-left:0}
   .run-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
   .cell-sub{display:block}
@@ -250,7 +253,7 @@ function stateAll(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=conn
   [p,f].forEach(function(i){i.inv='Inventory';
     i.products.forEach(function(x){var q=qbo(i.map[x[0]].q);i.shop[x[0]]=q.qty});compareStore(i,s)});
   f.loc='Flower stall, Oakland';s.sync='on';s.enabledOn='Sep 24, 2026 14:20';s.lastSync='Oct 1, 2026 17:12';
-  s.events=sampleEvents(p,false).concat([{t:'Oct 1, 2026 14:40',store:f.name,src:'Bill #1047',item:'Tulip bouquet',d:+30,status:'Applied'},{t:'Oct 1, 2026 12:15',store:f.name,src:'Invoice #2236',item:'Rose bouquet',d:-2,status:'Applied'}]);nightly(s,[p,f]);return s}
+  s.events=sampleEvents(p,false).concat([{t:'Oct 1, 2026 14:40',store:f.name,src:'Bill #1047',item:'Tulip bouquet',d:+30,status:'Applied'},{t:'Oct 1, 2026 12:15',store:f.name,src:'Invoice #2236',item:'Rose bouquet',d:-2,status:'Applied'}]);nightly(s,[p,f]);var fr=s.runs.filter(function(r){return r.store==='f'})[0];fr.status='Failed';fr.rows=[];fr.mismatches=0;return s}
 function sampleEvents(st,withHeld){var e=[
   {t:'Oct 1, 2026 16:58',store:st.name,src:'Bill #1042',item:st.products[0][0],d:+24,status:'Applied'},
   {t:'Oct 1, 2026 15:20',store:st.name,src:'Invoice #2231',item:st.products[1][0],d:-2,status:'Applied'},
@@ -297,7 +300,10 @@ function askDisable(){dialog('Disable inventory sync?','<p>Synder stops reading 
   [{label:'Pause instead',cls:'btn-outlined',fn:function(){closeM();pause()}},{label:'Disable',cls:'btn-danger',fn:function(){closeM();S.sync='off';toast('Inventory sync disabled.');render()}}])}
 function pause(){S.sync='paused';S.pauseReason='Paused just now. Changes are queued and sent when you resume.';toast('Paused. Changes are queued.');render()}
 /* a difference row lives in the latest run of its store and in i.cmp (the Overview count); keep both in step */
-function latestRun(i){return S.runs.filter(function(x){return x.store===i.id})[0]}
+function latestRun(i){return S.runs.filter(function(x){return x.store===i.id&&x.status!=='Failed'})[0]}   // latest finished comparison
+function lastRunAny(i){return S.runs.filter(function(x){return x.store===i.id})[0]}
+function openNights(i,prod){var n=0,rs=S.runs.filter(function(x){return x.store===i.id&&x.trigger==='Scheduled'&&x.status!=='Failed'});
+  for(var k=0;k<rs.length;k++){var x=rs[k].rows.filter(function(y){return y.prod===prod})[0];if(x&&x.mis&&x.res!=='Updated')n++;else break}return n}
 function rowOf(i,prod){var r=latestRun(i);return (r?r.rows:i.cmp).filter(function(x){return x.prod===prod})[0]}
 function both(i,prod,fn){var seen=[];[(latestRun(i)||{}).rows,i.cmp].forEach(function(arr){(arr||[]).forEach(function(x){if(x.prod===prod&&seen.indexOf(x)<0){seen.push(x);fn(x)}})})}
 function applyAccept(i,r){var d=r.qq-r.sq,item=r.item;i.shop[r.prod]=r.qq;both(i,r.prod,function(x){x.sq=x.qq;x.avail=x.qq;x.res='Updated';x.by='owner@acmehome.com · just now'});
@@ -351,21 +357,28 @@ function vOverview(){
   if(L===2) h+=tilesLine()+'<div class="cols2"><div>'+bSync()+bDiffs()+'</div>'+bStores()+'</div>';
   else h+='<div class="cols"><div>'+bActivity()+bDiffs()+'</div>'+bSync()+bStores()+'</div>';
   return h}
-function bDiffs(){   // its own small block: a summary of the last check + the biggest differences (Ignat 2026-10-02)
-  var st=conn().filter(function(i){return i.loc}),runs=st.map(function(i){return latestRun(i)}).filter(Boolean),n=allDiffs();
+function bDiffs(){   // its own small block: last check summary, biggest differences, failed checks (Ignat 2026-10-02)
+  var st=conn().filter(function(i){return i.loc}),runs=st.map(function(i){return latestRun(i)}).filter(Boolean),n=allDiffs(),multi=st.length>1;
+  var failed=st.filter(function(i){var a=lastRunAny(i);return a&&a.status==='Failed'});
   var rows=[];st.forEach(function(i){diffsOf(i).forEach(function(x){rows.push({i:i,x:x,d:x.qq-x.sq})})});rows.sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d)});
   var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock check <span class="material-icons help" title="Products where QuickBooks and Shopify show different stock. Sync sends only changes, so a difference stays until you fix it.">help</span></div>'
    +'<div class="box"><div class="act" data-act="diff"><span><span class="status status-purple">Stock differences</span><span class="muted small" style="margin-left:8px">QuickBooks ≠ Shopify</span></span>'
    +'<a class="text-link" id="act-diff" onclick="go(\'reconcile\')">'+n+'<span class="material-icons i16">chevron_right</span></a></div>';
-  if(!runs.length)return h+'<div class="muted" id="diff-msg">No comparison yet. Connected stores are compared every night at 02:30 UTC.</div></div></div>';
+  failed.forEach(function(i){var a=lastRunAny(i);
+    h+='<div class="diff-fail" data-fail="'+i.id+'"><span class="material-icons i16">error</span><span class="grow">The last check'+(multi?' of '+esc(i.name):'')+' failed ('+esc(a.started)+'). The numbers below may be out of date.</span>'
+      +tip('Compare every store that has a location now.','<button class="btn btn-outlined btn-sm" id="diff-compare" onclick="compareNow()">Compare now</button>')+'</div>'});
+  if(!runs.length)return h+(failed.length?'':'<div class="muted" id="diff-msg">No comparison yet. Connected stores are compared every night at 02:30 UTC.</div>')+'</div></div>';
   var compared=runs.reduce(function(t,r){return t+r.rows.length},0),when=runs[0].started;
   h+='<div class="muted" id="diff-msg">Last check: '+esc(when)+' · '+plural(compared,'product')+' compared · '+(n?n+(n===1?' differs':' differ'):'all match')+'</div>';
-  if(n){var multi=st.length>1;
-    h+='<div class="diff-list" id="diff-list">'+rows.slice(0,3).map(function(r){var a=Math.abs(r.d),t='Shopify has '+a+(r.d>0?' fewer':' more')+' than QuickBooks.';
+  if(n){
+    h+='<div class="diff-list" id="diff-list">'+rows.slice(0,3).map(function(r){var a=Math.abs(r.d),age=openNights(r.i,r.x.prod);
       var open=L===1?"go('reconcile',{runView:'"+latestRun(r.i).id+"',unresolvedOnly:true})":"go('reconcile',{runView:null,recFilter:'all',unresolvedOnly:true})";
-      return '<a class="diff-row" onclick="'+open+'"><span>'+esc(r.x.prod)+(multi?'<span class="muted"> · '+esc(r.i.name)+'</span>':'')+'</span><span class="stip diff-n" tabindex="0" data-stip="'+t+'">'+signed(r.d)+'</span></a>'}).join('')
-      +(n>3?'<a class="text-link diff-more" onclick="go(\'reconcile\')">and '+(n-3)+' more</a>':'')+'</div>'}
+      return '<a class="diff-row" onclick="'+open+'"><span>'+esc(r.x.prod)+(multi?'<span class="muted"> · '+esc(r.i.name)+'</span>':'')+(age>1?' <span class="diff-age">open '+age+' nights</span>':'')+'</span>'
+        +'<span class="stip diff-n" tabindex="0" data-stip="QuickBooks '+r.x.qq+' · Shopify '+r.x.sq+'">Shopify '+a+(r.d>0?' fewer':' more')+'</span></a>'}).join('')
+      +(n>3?'<a class="text-link diff-more" onclick="go(\'reconcile\')">and '+(n-3)+' more</a>':'')+'</div>';
+    if(n<=10)h+='<div class="row-actions" style="margin-top:8px">'+tip('Send every difference to Shopify so it matches QuickBooks. You confirm the list first.','<button class="btn btn-outlined btn-sm" id="diff-update-all" onclick="updateAll()">Update all</button>')+'</div>'}
   return h+'</div></div>'}
+function updateAll(){S.recSel={};conn().filter(function(i){return i.loc}).forEach(function(i){diffsOf(i).forEach(function(x){S.recSel[i.id+'|'+x.prod]=true})});bulkAccept()}
 function tilesLine(){ // the numbers that need the user are coloured only when they are above 0
   var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, d=allDiffs();
   var t=[['Held',c('Held'),'Not sent: needs you','t-held',"go('events',{evFilter:'Held'})"],['Failed',c('Failed'),'Shopify rejected it','t-failed',"go('events',{evFilter:'Failed'})"],
@@ -541,8 +554,8 @@ function qs(x){return "'"+String(x).replace(/'/g,"\\'")+"'"}
 function compareBtn(){var cs=conn().filter(function(i){return i.loc});
   return tip(cs.length?'Compare every store that has a location now, instead of waiting for the night.':'Choose a location for a store first.','<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button>')}
 function runsTable(list,pg){return '<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Differences</th><th class="num"></th></tr></thead><tbody>'
-   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).name)+'</td><td>'+(r.trigger==='Scheduled'?'Nightly':r.trigger)+'</td><td>'+chip(RUN_TIP,'Finished','status-green')+'</td><td class="num">'+r.rows.length+'</td><td class="num">'+r.mismatches+'</td>'
-     +'<td class="num"><button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=true;S.recSel={};render()">View rows</button></td></tr>'}).join('')+'</tbody></table></div>'+pg.html}
+   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).name)+'</td><td>'+(r.trigger==='Scheduled'?'Nightly':r.trigger)+'</td><td>'+(r.status==='Failed'?chip(RUN_TIP,'Failed','status-red'):chip(RUN_TIP,'Finished','status-green'))+'</td><td class="num">'+(r.status==='Failed'?'–':r.rows.length)+'</td><td class="num">'+(r.status==='Failed'?'–':r.mismatches)+'</td>'
+     +'<td class="num">'+(r.status==='Failed'?'–':'<button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=true;S.recSel={};render()">View rows</button>')+'</td></tr>'}).join('')+'</tbody></table></div>'+pg.html}
 /* the difference table, shared by both variants. items: [{i, x, run}] */
 function diffTable(items,withStore){var sel=S.recSel||{},key=function(t){return t.i.id+'|'+t.x.prod};
   var open=items.filter(function(t){return t.latest&&t.x.res==='Unresolved'}),nSel=open.filter(function(t){return sel[key(t)]}).length,cols=withStore?10:9;
@@ -571,7 +584,7 @@ function vRuns(){var list=runsOf(),pg=pager('rec',list.length);
   return h+runsTable(list,pg)}
 function vDiffs(){var sf=S.recFilter||'all',stores=conn().filter(function(i){return i.loc&&(sf==='all'||i.id===sf)}),items=[],last=[];
   if(S.unresolvedOnly==null)S.unresolvedOnly=true;
-  stores.forEach(function(i){var r=latestRun(i);if(!r)return;last.push(esc(i.name)+': '+esc(r.started));
+  stores.forEach(function(i){var a=lastRunAny(i);if(a&&a.status==='Failed')last.push(esc(i.name)+': <span class="diff-fail-t">failed '+esc(a.started)+'</span>');var r=latestRun(i);if(!r)return;if(!(a&&a.status==='Failed'))last.push(esc(i.name)+': '+esc(r.started));
     r.rows.forEach(function(x){if(x.mis&&(!S.unresolvedOnly||x.res==='Unresolved'))items.push({i:i,x:x,latest:true})})});
   var h='<p class="muted" style="margin:0 0 12px">'+REC_DESC+' Only products that differ are listed.</p>'
    +'<div class="toolbar">'+storeSelect('rec-filter','Store',sf,true,"S.recFilter=this.value;S.recSel={};S.page.rec=1;render()")
