@@ -446,26 +446,28 @@ var SRC_TIP={SKU:'Matched automatically: the same SKU in Shopify and QuickBooks.
 function srcChip(src){return '<span class="stip" tabindex="0" data-stip="'+esc(SRC_TIP[src])+'"><span class="status '+(src==='Not mapped'?'status-yellow':'status-grey')+'">'+src+'</span></span>'}
 function usedBy(i,qid,except){return i.products.filter(function(p){var m=i.map[p[0]];return p[0]!==except&&m&&m.q===qid}).map(function(p){return p[0]})}
 function vMappings(){var cs=conn();if(!cs.length)return '<div class="table-wrap"><div class="empty">Connect a store on the Overview to see its products here.</div></div>';
-  var i=int(S.mapStore);if(!i||!i.connected){i=cs[0];S.mapStore=i.id}
-  var q=(S.q||'').toLowerCase(), list=i.products.filter(function(p){return (!S.unmappedOnly||!i.map[p[0]])&&(!q||p[0].toLowerCase().indexOf(q)>-1||(p[1]||'').toLowerCase().indexOf(q)>-1)});
-  var pg=pager('map',list.length);
-  var h='<div class="toolbar">'+storeSelect('map-store','Store',i.id,false,"S.mapStore=this.value;S.page.map=1;render()")
+  if(S.mapStore&&S.mapStore!=='all'&&!(int(S.mapStore)||{}).connected)S.mapStore='all';
+  var sf=S.mapStore||'all',all=sf==='all',scope=all?cs:[int(sf)],q=(S.q||'').toLowerCase(),list=[];
+  scope.forEach(function(i){i.products.forEach(function(p){if((!S.unmappedOnly||!i.map[p[0]])&&(!q||p[0].toLowerCase().indexOf(q)>-1||(p[1]||'').toLowerCase().indexOf(q)>-1))list.push({i:i,p:p})})});
+  var pg=pager('map',list.length),last=scope.map(function(i){return i.mapRefreshed||'3 days ago'})[0];
+  var h='<div class="toolbar">'+storeSelect('map-store','Store',sf,true,"S.mapStore=this.value;S.page.map=1;render()")
    +'<div class="form-field tb-field"><label class="form-label" for="map-search">Search</label><input class="input" id="map-search" style="width:320px" value="'+esc(S.q||'')+'" oninput="S.q=this.value;S.page.map=1;render();var x=document.getElementById(\'map-search\');x.focus();x.setSelectionRange(x.value.length,x.value.length)"></div>'
    +'<label class="checkbox-wrap tb-check"><input type="checkbox" class="checkbox" id="unmapped-only" '+(S.unmappedOnly?'checked':'')+' onchange="S.unmappedOnly=this.checked;S.page.map=1;render()">Unmapped only</label>'
    +'<span class="stip tb-check muted listed-help" tabindex="0" data-stip="Only active Shopify products with inventory tracking on, and QuickBooks items of type Inventory, are listed.">Which products are listed? <span class="material-icons i16" style="margin-left:4px">help_outline</span></span><span class="grow"></span>'
-   +tip('Reload the QuickBooks items and match the products again. Last updated '+(i.mapRefreshed||'3 days ago')+'.','<button class="btn btn-outlined" id="btn-refresh" onclick="refreshMappings(\''+i.id+'\')">Refresh</button>')+'</div>';
-  h+='<div class="table-wrap"><table class="synder-table" id="map-table"><thead><tr><th>Product</th><th>Variant</th><th>SKU</th><th style="width:320px">QuickBooks item</th><th>Match source</th><th>Actions</th></tr></thead><tbody>'
-   +(pg.slice(list).map(function(p){var m=i.map[p[0]],dup=m?usedBy(i,m.q,p[0]):[];
-     return '<tr data-prod="'+esc(p[0])+'"><td>'+esc(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
+   +tip('Reload the QuickBooks items and match the products again'+(all?' in every store':'')+'. Last updated '+last+'.','<button class="btn btn-outlined" id="btn-refresh" onclick="refreshMappings(\''+sf+'\')">Refresh</button>')+'</div>';
+  h+='<div class="table-wrap"><table class="synder-table" id="map-table"><thead><tr>'+(all?'<th>Store</th>':'')+'<th>Product</th><th>Variant</th><th>SKU</th><th style="width:320px">QuickBooks item</th><th>Match source</th><th>Actions</th></tr></thead><tbody>'
+   +(pg.slice(list).map(function(t){var i=t.i,p=t.p,m=i.map[p[0]],dup=m?usedBy(i,m.q,p[0]):[];
+     return '<tr data-prod="'+esc(p[0])+'" data-st="'+i.id+'">'+(all?'<td>'+esc(i.name)+'</td>':'')+'<td>'+esc(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
      +'<td><select class="select map-sel" style="width:300px" aria-label="QuickBooks item for '+esc(p[0])+'" onchange="setMap(\''+i.id+'\',\''+p[0]+'\',this.value)"><option value="">Search by name or SKU</option>'
      +QBO.map(function(x){var u=usedBy(i,x.id,p[0]);return '<option value="'+x.id+'" '+(m&&m.q===x.id?'selected':'')+'>'+esc(x.name)+(x.sku?' · '+esc(x.sku):'')+(u.length?' · used by '+esc(u.join(', ')):'')+'</option>'}).join('')+'</select>'
      +(dup.length?'<div class="map-dup"><span class="material-icons i16">warning</span>'+esc(qbo(m.q).name)+' is also mapped to '+esc(dup.join(', '))+'. Only one of them gets stock changes.</div>':'')+'</td>'
      +'<td>'+srcChip(m?m.src:'Not mapped')+'</td><td>'+(m?'<button class="btn btn-text btn-sm remove-map" onclick="setMap(\''+i.id+'\',\''+p[0]+'\',\'\',true)">Remove</button>':'–')+'</td></tr>'}).join('')
-     ||'<tr><td colspan="6" class="empty">No variants match.</td></tr>')+'</tbody></table></div>'+pg.html;
+     ||'<tr><td colspan="'+(all?7:6)+'" class="empty">No variants match.</td></tr>')+'</tbody></table></div>'+pg.html;
   return h}
-function refreshMappings(id){var i=int(id),fresh=autoMatch(i);i.products.forEach(function(p){if(!(i.map[p[0]]&&i.map[p[0]].src==='Manual'))i.map[p[0]]=fresh[p[0]]});
-  i.mapRefreshed='less than a minute ago';compareStore(i);var n=mappedN(i);
-  toast(plural(i.products.length,'product')+' checked: '+n+' mapped, '+(i.products.length-n)+' not mapped.');render()}
+function refreshMappings(id){var scope=id==='all'?conn():[int(id)],n=0,tot=0;
+  scope.forEach(function(i){var fresh=autoMatch(i);i.products.forEach(function(p){if(!(i.map[p[0]]&&i.map[p[0]].src==='Manual'))i.map[p[0]]=fresh[p[0]]});
+    i.mapRefreshed='less than a minute ago';compareStore(i);n+=mappedN(i);tot+=i.products.length});
+  toast(plural(tot,'product')+' checked: '+n+' mapped, '+(tot-n)+' not mapped.');render()}
 
 /* ---- Activity (was Events) ---- */
 var STATUS_TIP={Pending:'Waiting to be sent to Shopify with the next update.',Applied:'Sent. The stock in Shopify was updated.',
