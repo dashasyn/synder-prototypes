@@ -134,6 +134,12 @@
   .empty-card{background:var(--color-grey-5);border-radius:var(--radius-sm);padding:24px;width:640px}
   .empty-card h2{font-size:28px;font-weight:400;margin:0 0 8px;color:var(--text-primary)}
   .empty-card .select{max-width:420px}
+  .ob-head{display:flex;align-items:center;gap:8px}
+  .ob-step{display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:var(--radius-sm);margin:8px 0;background:var(--color-white);line-height:20px}
+  .ob-step .grow{flex:1;min-width:0}.ob-step .grow .muted{display:block}
+  .ob-n{width:24px;height:24px;flex-shrink:0;border-radius:var(--radius-full);display:inline-flex;align-items:center;justify-content:center;font-weight:700;background:var(--color-primary);color:var(--color-white)}
+  .ob-step.locked{opacity:.6}.ob-step.locked .ob-n{background:var(--color-grey-40,#9AA3B2)}
+  .ob-step.done .ob-ic{color:var(--color-green);font-size:24px}
   .steps-hint{font-size:14px;color:var(--text-secondary);line-height:18px;margin:12px 0 0}
   .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:synder-spin .8s linear infinite;display:inline-block;vertical-align:-3px;margin-right:6px}
 
@@ -228,7 +234,7 @@ function base(){var ints=INTEGRATIONS().map(function(i){return Object.assign(i,{
   ints.forEach(function(i){i.products.forEach(function(p){i.shop[p[0]]=p[2]})});
   return {tab:'overview',ints:ints,sync:'off',enabledOn:null,lastSync:null,pauseReason:null,events:[],ignored:{},evFilter:'All',mapStore:null,unmappedOnly:false,connecting:false,sel:'',per:{},page:{},runs:[],qboRefreshed:'about 7 hours ago',evStore:'all',recFilter:'all',runView:null,unresolvedOnly:true,q:''}}
 function connectInt(s,id,when){var i=s.ints.filter(function(x){return x.id===id})[0];i.connected=true;i.connectedOn=when||'just now';i.map=autoMatch(i);/* location stays unset until the user chooses (Ignat 2026-10-01) */compareStore(i,s);return i}
-function stateFirst(){return base()}
+function stateFirst(){var s=base();s.onb=true;return s}
 function stateFixes(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
   p.inv='Inventory';s.sync='paused';s.enabledOn='Sep 24, 2026 14:20';s.lastSync='Oct 1, 2026 17:00';s.pauseReason='Paused on Oct 1, 2026 17:00. New changes are queued and sent when you resume.';
   s.events=sampleEvents(p,true);nightly(s,[p]);return s}
@@ -272,7 +278,7 @@ function allDiffs(){return conn().filter(function(i){return i.loc}).reduce(funct
 
 /* ---- actions ---- */
 function doConnect(id,fromDialog){if(!id){toast('Choose a store first.');return}if(fromDialog)closeM();S.connecting=id;render();
-  setTimeout(function(){var i=connectInt(S,id);S.connecting=false;toast(i.name+' connected.');S.tab='overview';render()},1200)}
+  setTimeout(function(){var i=connectInt(S,id);S.onbId=id;S.connecting=false;toast(i.name+' connected.');S.tab='overview';render()},1200)}
 function askConnect(){var av=avail();
   if(!av.length){dialog('Connect store','<p>All your Shopify integrations are connected to Inventory Sync.</p><p class="muted">To connect another store, add it first in Settings › Add integration › Shopify.</p>',[]);return}
   dialog('Connect store','<div class="form-field"><label class="form-label" for="dlg-store">Shopify store</label><select class="select" id="dlg-store">'+(av.length>1?'<option value="">Select…</option>':'')+av.map(function(x){return '<option value="'+x.id+'">'+esc(x.name)+' (Shopify)</option>'}).join('')+'</select></div>'
@@ -309,14 +315,31 @@ function bulkIgnore(){var sel=bulkSel();sel.forEach(function(x){setIgnored(x.i,x
 function setMap(id,prod,q,silent){var i=int(id);i.map[prod]=q?{q:q,src:'Manual'}:null;compareStore(i);if(q)toast('QuickBooks item mapped.');render()}
 function go(t,opts){if(S.tab!==t)S.runView=null;S.tab=t;Object.assign(S,opts||{});render()}
 
-/* ---- empty state (sketch 1) ---- */
+/* ---- variant 2 onboarding: empty state → 2 steps for the first store → full product ---- */
 function vFirst(){var av=avail(),one=av.length===1;
-  return '<div class="empty-wrap"><div class="empty-card" id="first"><h2>Inventory sync</h2><p class="muted">Pushes QuickBooks Online stock movements into your Shopify store.</p>'
+  return '<div class="empty-wrap"><div class="empty-card" id="first"><p class="muted" style="margin:0 0 16px">Send stock changes from QuickBooks to your Shopify stores. Start with one store.</p>'
    +'<div class="form-field"><label class="form-label" for="first-store" style="font-weight:700">Shopify store</label><select class="select" id="first-store" onchange="S.sel=this.value">'
    +(one?'':'<option value="">Select…</option>')+av.map(function(x){return '<option value="'+x.id+'" '+((one||S.sel===x.id)?'selected':'')+'>'+esc(x.name)+' (Shopify)</option>'}).join('')+'</select></div>'
-   +'<p style="margin:8px 0 12px">Don\'t see your store here? Add it first in <a class="text-link">Settings › Add integration</a>.</p>'
+   +'<p style="margin:8px 0 16px">Don\'t see your store here? Connect it first in <a class="text-link" onclick="toast(\'Organization settings opened in a new tab.\')">Organization settings</a></p>'
    +'<button class="btn" id="btn-first-connect" '+(S.connecting?'disabled ':'')+'onclick="doConnect(document.getElementById(\'first-store\').value)">'+(S.connecting?'<span class="spin"></span>Connecting…':'Connect store')+'</button>'
-   +'<p class="steps-hint">Next you\'ll see what the store still needs: a location, one setting in Synder and matched products. About 10 minutes.</p></div></div>'}
+   +'<p class="steps-hint">After connecting, 2 short steps get the store ready.</p></div></div>'}
+function onbStore(){var i=S.onbId&&int(S.onbId);return i&&i.connected?i:conn()[0]}
+function vOnboard(i){var q="'"+i.id+"'",d1=i.inv==='Inventory',d2=!!i.loc,cur=!d1?1:2;
+  var step=function(n,done,active,title,doneText,desc,btn){
+    if(done)return '<div class="ob-step done" data-step="'+n+'"><span class="material-icons ob-ic">check_circle</span><div class="grow"><b>'+title+'</b><span class="muted">'+doneText+'</span></div></div>';
+    if(!active)return '<div class="ob-step locked" data-step="'+n+'"><span class="ob-n">'+n+'</span><div class="grow"><b>'+title+'</b></div></div>';
+    return '<div class="ob-step active" data-step="'+n+'"><span class="ob-n">'+n+'</span><div class="grow"><b>'+title+'</b><span class="muted">'+desc+'</span><div class="row-actions" style="margin-top:12px">'+btn+'</div></div></div>'};
+  return '<div class="empty-wrap"><div class="empty-card" id="onb"><div class="ob-head"><span class="shop-ic">S</span><b>'+esc(i.name)+' (Shopify)</b><span class="status status-blue">Connected</span><span class="grow"></span><span class="muted" id="onb-count">Step '+cur+' of 2</span></div>'
+   +'<p class="muted" style="margin:4px 0 16px">2 steps before this store can receive stock changes from QuickBooks.</p>'
+   +step(1,d1,!d1,'Enable inventory tracking','Created product should be: Inventory','In Settings › Products/Services, set Created product should be to Inventory and click Update. This page updates by itself.',
+     '<button class="btn" id="onb-settings" onclick="openSettings('+q+')">Open Settings <span class="material-icons i16">open_in_new</span></button>')
+   +step(2,d2,d1&&!d2,'Choose location','Location: '+esc(i.loc||''),'Pick the Shopify location that receives stock changes.','<button class="btn" id="onb-loc" onclick="askLoc('+q+')">Choose location</button>')
+   +'<p style="margin:16px 0 0">Connected the wrong store? <a class="text-link" id="onb-other" onclick="onbOther('+q+')">Use a different store</a></p></div></div>'}
+function onbOther(id){var i=int(id);i.connected=false;i.loc=null;i.cmp=null;S.onbId=null;S.sel='';render()}
+/* called by render: variant 2, state 1 shows the onboarding until the first store is ready */
+function onboarding(){if(L!==2||!S.onb)return null;var i=onbStore();if(!i)return vFirst();
+  if(ready(i)){S.onb=false;S.tab='overview';setTimeout(function(){toast(i.name+' is ready. Click Enable to start sending stock changes.')},0);return null}
+  return vOnboard(i)}
 
 /* ---- overview (sketches 2 + 3) ---- */
 function vOverview(){
@@ -559,6 +582,8 @@ function addRun(s,i,when,trigger){var rows=i.cmp;s.runs.unshift({id:'r'+(s.runs.
 function render(){
   var m=$('main');
   var tabs=['overview','events','mappings','reconcile'],names={overview:'Overview',mappings:'Mappings',events:'Activity',reconcile:'Stock check'};
+  var ob=onboarding();
+  if(ob!==null){m.innerHTML='<div class="page-header"><div class="page-header-text"><h1 class="page-title">Inventory sync</h1><p class="page-subtitle">Pushes QuickBooks Online stock movements into your Shopify store.</p></div></div>'+ob;return}
   var v=S.tab==='overview'?vOverview():S.tab==='mappings'?vMappings():S.tab==='events'?vEvents():vReconcile();
   m.innerHTML='<div class="page-header"><div class="page-header-text"><h1 class="page-title">Inventory sync</h1><p class="page-subtitle">Pushes QuickBooks Online stock movements into your Shopify store.</p></div></div>'
    +'<div class="tabs" role="tablist">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t?' active':'')+'" role="tab" id="tab-'+t+'" aria-selected="'+(S.tab===t)+'" onclick="go(\''+t+'\')">'+names[t]+'</button>'}).join('')+'</div>'+v;
