@@ -84,6 +84,8 @@
   .sel-wrap{position:relative}
   .sel-clear{position:absolute;right:32px;top:50%;transform:translateY(-50%);border:0;background:none;padding:0;cursor:pointer;display:flex;color:inherit;opacity:.6}
   .sel-clear:hover{opacity:1}.sel-clear .material-icons{font-size:18px}
+  .map-dup{display:flex;align-items:flex-start;gap:4px;color:var(--color-yellow);margin-top:4px;max-width:300px;line-height:20px}.map-dup .material-icons{margin-top:2px}
+  .listed-help{display:inline-flex;align-items:center}
   .ev-actions,.ev-time{white-space:nowrap}.ev-actions .revert{margin-left:8px}
   /* ⋯ menu on a connected store */
   .kebab{position:relative;margin-left:4px}
@@ -363,7 +365,7 @@ function bStores(){
     if(!i.loc) fixes.push(['loc','Choose location','Pick the Shopify location that receives stock changes.','<button class="btn btn-outlined btn-sm" onclick="askLoc('+q+')">Choose location</button>']);
     if(i.inv!=='Inventory') fixes.push(['inv','Set Created product to Inventory','Go to Settings › Products/Services and change Created product should be from Non-inventory to Inventory.',
       '<button class="btn btn-outlined btn-sm" onclick="openSettings('+q+')">Open Settings <span class="material-icons i16">open_in_new</span></button>']);
-    if(un) fixes.push(['map',un+' of '+i.products.length+' products '+(un===1?'isn\'t':'aren\'t')+' mapped','Products without a QuickBooks item don\'t get stock changes. Map them on the Mappings tab.',
+    if(un) fixes.push(['map',plural(un,'item')+(un===1?' needs':' need')+' mapping','Products without a QuickBooks item don\'t get stock changes. Map them on the Mappings tab.',
       '<button class="btn btn-outlined btn-sm" onclick="go(\'mappings\',{mapStore:'+q+',unmappedOnly:true})">Map products</button>']);
     h+='<div class="line" data-ok="connected"><span class="k">Connected on:</span>'+esc(i.connectedOn)+'</div>';
     if(i.loc) h+='<div class="line" data-ok="loc"><span class="k">Location:</span>'+esc(i.loc)+'</div>';
@@ -392,25 +394,31 @@ function storeSelect(id,label,value,withAll,onchange,only){var cs=only||conn();r
   +(withAll?'<option value="all" '+(value==='all'?'selected':'')+'>All stores</option>':'')+cs.map(function(x){return '<option value="'+x.id+'" '+(x.id===value?'selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select></div>'}
 
 /* ---- Mappings ---- */
-function vMappings(){var cs=conn();if(!cs.length)return '<div class="table-wrap"><div class="empty">No variants yet. Click "Refresh mappings" to load them.</div></div>';
+var SRC_TIP={SKU:'Matched automatically: the same SKU in Shopify and QuickBooks.',Name:'Matched automatically: the same name in Shopify and QuickBooks.',
+  Manual:'You picked this item. Automatic matching never changes it.','Not mapped':'This product doesn\'t get stock changes. Pick a QuickBooks item.'};
+function srcChip(src){return '<span class="stip" tabindex="0" data-stip="'+esc(SRC_TIP[src])+'"><span class="status '+(src==='Not mapped'?'status-yellow':'status-grey')+'">'+src+'</span></span>'}
+function usedBy(i,qid,except){return i.products.filter(function(p){var m=i.map[p[0]];return p[0]!==except&&m&&m.q===qid}).map(function(p){return p[0]})}
+function vMappings(){var cs=conn();if(!cs.length)return '<div class="table-wrap"><div class="empty">Connect a store on the Overview to see its products here.</div></div>';
   var i=int(S.mapStore);if(!i||!i.connected){i=cs[0];S.mapStore=i.id}
   var q=(S.q||'').toLowerCase(), list=i.products.filter(function(p){return (!S.unmappedOnly||!i.map[p[0]])&&(!q||p[0].toLowerCase().indexOf(q)>-1||(p[1]||'').toLowerCase().indexOf(q)>-1)});
   var pg=pager('map',list.length);
   var h='<div class="toolbar">'+storeSelect('map-store','Store',i.id,false,"S.mapStore=this.value;S.page.map=1;render()")
    +'<div class="form-field tb-field"><label class="form-label" for="map-search">Search</label><input class="input" id="map-search" style="width:320px" value="'+esc(S.q||'')+'" oninput="S.q=this.value;S.page.map=1;render();var x=document.getElementById(\'map-search\');x.focus();x.setSelectionRange(x.value.length,x.value.length)"></div>'
-   +'<label class="checkbox-wrap tb-check"><input type="checkbox" class="checkbox" id="unmapped-only" '+(S.unmappedOnly?'checked':'')+' onchange="S.unmappedOnly=this.checked;S.page.map=1;render()">Unmapped only</label><span class="grow"></span>'
-   +'<div class="tb-right"><div class="row-actions" style="margin:0;justify-content:flex-end"><button class="btn btn-outlined" id="btn-refresh-map" onclick="refreshMappings(\''+i.id+'\')">Refresh mappings</button><button class="btn btn-outlined" id="btn-refresh-qbo" onclick="S.qboRefreshed=\'less than a minute ago\';toast(QBO.length+\' QuickBooks items refreshed.\');render()">Refresh QuickBooks items</button></div>'
-   +'<div class="muted tb-status">QuickBooks items refreshed '+esc(S.qboRefreshed)+'</div><div class="muted tb-status">Mappings refreshed '+esc(i.mapRefreshed||'3 days ago')+'</div></div></div>';
+   +'<label class="checkbox-wrap tb-check"><input type="checkbox" class="checkbox" id="unmapped-only" '+(S.unmappedOnly?'checked':'')+' onchange="S.unmappedOnly=this.checked;S.page.map=1;render()">Unmapped only</label>'
+   +'<span class="stip tb-check muted listed-help" tabindex="0" data-stip="Only active Shopify products with inventory tracking on, and QuickBooks items of type Inventory, are listed.">Which products are listed? <span class="material-icons i16" style="margin-left:4px">help_outline</span></span><span class="grow"></span>'
+   +tip('Reload the QuickBooks items and match the products again. Last updated '+(i.mapRefreshed||'3 days ago')+'.','<button class="btn btn-outlined" id="btn-refresh" onclick="refreshMappings(\''+i.id+'\')">Refresh</button>')+'</div>';
   h+='<div class="table-wrap"><table class="synder-table" id="map-table"><thead><tr><th>Product</th><th>Variant</th><th>SKU</th><th style="width:320px">QuickBooks item</th><th>Match source</th><th>Actions</th></tr></thead><tbody>'
-   +(pg.slice(list).map(function(p){var m=i.map[p[0]];return '<tr data-prod="'+esc(p[0])+'"><td>'+esc(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
-     +'<td><select class="select map-sel" style="width:300px" aria-label="QuickBooks item for Default Title" onchange="setMap(\''+i.id+'\',\''+p[0]+'\',this.value)"><option value="">Search by name or SKU</option>'
-     +QBO.map(function(x){return '<option value="'+x.id+'" '+(m&&m.q===x.id?'selected':'')+'>'+esc(x.name)+(x.sku?' · '+esc(x.sku):'')+'</option>'}).join('')+'</select></td>'
-     +'<td>'+(m?m.src:'Not mapped')+'</td><td>'+(m?'<button class="btn btn-text btn-sm remove-map" onclick="setMap(\''+i.id+'\',\''+p[0]+'\',\'\',true)">Remove</button>':'–')+'</td></tr>'}).join('')
+   +(pg.slice(list).map(function(p){var m=i.map[p[0]],dup=m?usedBy(i,m.q,p[0]):[];
+     return '<tr data-prod="'+esc(p[0])+'"><td>'+esc(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
+     +'<td><select class="select map-sel" style="width:300px" aria-label="QuickBooks item for '+esc(p[0])+'" onchange="setMap(\''+i.id+'\',\''+p[0]+'\',this.value)"><option value="">Search by name or SKU</option>'
+     +QBO.map(function(x){var u=usedBy(i,x.id,p[0]);return '<option value="'+x.id+'" '+(m&&m.q===x.id?'selected':'')+'>'+esc(x.name)+(x.sku?' · '+esc(x.sku):'')+(u.length?' · used by '+esc(u.join(', ')):'')+'</option>'}).join('')+'</select>'
+     +(dup.length?'<div class="map-dup"><span class="material-icons i16">warning</span>'+esc(qbo(m.q).name)+' is also mapped to '+esc(dup.join(', '))+'. Only one of them gets stock changes.</div>':'')+'</td>'
+     +'<td>'+srcChip(m?m.src:'Not mapped')+'</td><td>'+(m?'<button class="btn btn-text btn-sm remove-map" onclick="setMap(\''+i.id+'\',\''+p[0]+'\',\'\',true)">Remove</button>':'–')+'</td></tr>'}).join('')
      ||'<tr><td colspan="6" class="empty">No variants match.</td></tr>')+'</tbody></table></div>'+pg.html;
   return h}
 function refreshMappings(id){var i=int(id),fresh=autoMatch(i);i.products.forEach(function(p){if(!(i.map[p[0]]&&i.map[p[0]].src==='Manual'))i.map[p[0]]=fresh[p[0]]});
-  i.mapRefreshed='less than a minute ago';compareStore(i);var auto=i.products.filter(function(p){return fresh[p[0]]}).length;
-  toast('Seeded '+i.products.length+' variants: '+auto+' mapped, '+(i.products.length-auto)+' unmapped.');render()}
+  i.mapRefreshed='less than a minute ago';compareStore(i);var n=mappedN(i);
+  toast(plural(i.products.length,'product')+' checked: '+n+' mapped, '+(i.products.length-n)+' not mapped.');render()}
 
 /* ---- Activity (was Events) ---- */
 var STATUS_TIP={Pending:'Waiting to be sent to Shopify with the next update.',Applied:'Sent. The stock in Shopify was updated.',
