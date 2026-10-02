@@ -389,7 +389,7 @@ function pager(key,total){var per=S.per[key]||10,page=Math.min(S.page[key]||1,Ma
   return {from:from,to:to,slice:function(a){return a.slice(from?from-1:0,to)},html:'<div class="pagination" data-pager="'+key+'"><span class="page-info">Rows per page:</span><select class="select pager-per" aria-label="Rows per page: '+per+'" onchange="S.per[\''+key+'\']=+this.value;S.page[\''+key+'\']=1;render()">'
     +[10,25,50,100].map(function(n){return '<option '+(n===per?'selected':'')+'>'+n+'</option>'}).join('')+'</select><span class="page-info">'+from+'–'+to+' of '+total+'</span>'+btns+'</div>'}}
 function storeSelect(id,label,value,withAll,onchange,only){var cs=only||conn();return '<div class="form-field tb-field"><label class="form-label" for="'+id+'">'+label+'</label><select class="select" id="'+id+'" onchange="'+onchange+'">'
-  +(withAll?'<option value="all" '+(value==='all'?'selected':'')+'>All stores</option>':'')+cs.map(function(x){return '<option value="'+x.id+'" '+(x.id===value?'selected':'')+'>'+esc(x.domain)+'</option>'}).join('')+'</select></div>'}
+  +(withAll?'<option value="all" '+(value==='all'?'selected':'')+'>All stores</option>':'')+cs.map(function(x){return '<option value="'+x.id+'" '+(x.id===value?'selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select></div>'}
 
 /* ---- Mappings ---- */
 function vMappings(){var cs=conn();if(!cs.length)return '<div class="table-wrap"><div class="empty">No variants yet. Click "Refresh mappings" to load them.</div></div>';
@@ -436,7 +436,7 @@ function vEvents(){var f=S.evFilter||'All',sf=S.evStore||'all';
   if(!list.length)return h+'<div class="table-wrap"><div class="empty" id="ev-empty">No sync events</div></div>';
   h+='<div class="table-wrap"><table class="synder-table table--sm" id="ev-table"><thead><tr><th>Time</th><th>Store</th><th>QuickBooks document</th><th>QuickBooks item</th><th>Shopify product</th><th class="num">Change</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead><tbody>'
    +pg.slice(list).map(function(e){var ix=S.events.indexOf(e),chip={Applied:'status-green',Pending:'status-blue',Held:'status-yellow',Failed:'status-red'}[e.status],sp=shopProd(e),rev=/^Revert of /.test(e.src);
-     return '<tr><td class="ev-time">'+esc(e.t)+'</td><td>'+esc(dom(e.store))+'</td>'
+     return '<tr><td class="ev-time">'+esc(e.t)+'</td><td>'+esc(e.store)+'</td>'
      +'<td>'+(rev?esc(docName(e.src)):'<a class="text-link doc-link" onclick="toast(\''+esc(docName(e.src))+' opened in QuickBooks.\')">'+esc(docName(e.src))+'</a>')+'</td>'
      +'<td>'+esc(e.item)+'</td><td class="shop-prod">'+(sp?esc(sp):'–')+'</td><td class="num">'+signed(e.d)+'</td>'
      +'<td>'+stip(e.status,'<span class="status '+chip+'">'+e.status+'</span>')+(e.rev?' '+stip('Reverted','<span class="text-link" style="margin-left:4px">Reverted</span>'):'')+'</td><td>'+(e.reason?esc(e.reason):'–')+'</td>'
@@ -470,11 +470,11 @@ function vReconcile(){
    +'<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button></div>';
   if(!list.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
   h+='<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Mismatches</th><th>Finished</th><th></th></tr></thead><tbody>'
-   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).domain)+'</td><td>'+r.trigger+'</td><td><span class="status status-green">Finished</span></td><td class="num">'+r.rows.length+'</td><td class="num">'+r.mismatches+'</td><td>'+esc(r.started)+'</td>'
+   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).name)+'</td><td>'+r.trigger+'</td><td><span class="status status-green">Finished</span></td><td class="num">'+r.rows.length+'</td><td class="num">'+r.mismatches+'</td><td>'+esc(r.started)+'</td>'
      +'<td><button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=false;render()">View rows</button></td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
   return h}
 function vRun(r){var i=int(r.store),rows=r.rows.filter(function(x){return x.mis&&(!S.unresolvedOnly||x.res==='Unresolved')});
-  var h='<div class="run-head"><div><div class="run-title">'+esc(i.domain)+' <span class="status status-green">Finished</span></div><div class="muted">Comparison from '+esc(r.started)+' · '+r.rows.length+' items compared · '+r.mismatches+' mismatches</div></div>'
+  var h='<div class="run-head"><div><div class="run-title">'+esc(i.name)+' <span class="status status-green">Finished</span></div><div class="muted">Comparison from '+esc(r.started)+' · '+r.rows.length+' items compared · '+r.mismatches+' mismatches</div></div>'
    +'<button class="btn btn-outlined" id="btn-back-runs" onclick="S.runView=null;render()">Back to runs</button></div>'
    +'<label class="checkbox-wrap" style="margin:4px 0 12px"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label>';
   h+='<div class="table-wrap"><table class="synder-table table--sm" id="rec-table"><thead><tr><th>Variant</th><th>SKU</th><th>QuickBooks item</th><th class="num">QBO qty</th><th class="num">Shopify on hand</th><th class="num">Shopify available</th><th class="num">Diff</th><th>Resolution</th><th>Actions</th></tr></thead><tbody>'
