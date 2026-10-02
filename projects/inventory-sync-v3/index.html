@@ -111,6 +111,10 @@
   .bulk-row{display:flex;align-items:center;gap:12px}.bulk-count{font-weight:500;color:var(--color-primary)}
   .rec-actions{white-space:nowrap}
   .dlg-list{margin:8px 0;padding-left:20px}
+  .diff-list{margin-top:8px;display:flex;flex-direction:column}
+  .diff-row{display:flex;justify-content:space-between;gap:16px;padding:4px 0;color:var(--text-primary);cursor:pointer;text-decoration:none}
+  .diff-row:hover{color:var(--color-primary)}.diff-n{font-variant-numeric:tabular-nums;font-weight:500}
+  .diff-more{margin-top:4px}
   .prev-toggle{display:inline-flex;align-items:center;gap:4px;margin:16px 0 8px;padding-left:0}
   .run-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
   .cell-sub{display:block}
@@ -347,12 +351,21 @@ function vOverview(){
   if(L===2) h+=tilesLine()+'<div class="cols2"><div>'+bSync()+bDiffs()+'</div>'+bStores()+'</div>';
   else h+='<div class="cols"><div>'+bActivity()+bDiffs()+'</div>'+bSync()+bStores()+'</div>';
   return h}
-function bDiffs(){   // not activity: its own small block, just a message (Ignat 2026-10-01)
-  var n=allDiffs(), st=conn().filter(function(i){return i.loc&&diffsOf(i).length}).map(function(i){return i.name});
-  return '<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock check <span class="material-icons help" title="Products where QuickBooks and Shopify show different stock. Sync sends only changes, so a difference stays until you fix it.">help</span></div>'
+function bDiffs(){   // its own small block: a summary of the last check + the biggest differences (Ignat 2026-10-02)
+  var st=conn().filter(function(i){return i.loc}),runs=st.map(function(i){return latestRun(i)}).filter(Boolean),n=allDiffs();
+  var rows=[];st.forEach(function(i){diffsOf(i).forEach(function(x){rows.push({i:i,x:x,d:x.qq-x.sq})})});rows.sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d)});
+  var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock check <span class="material-icons help" title="Products where QuickBooks and Shopify show different stock. Sync sends only changes, so a difference stays until you fix it.">help</span></div>'
    +'<div class="box"><div class="act" data-act="diff"><span><span class="status status-purple">Stock differences</span><span class="muted small" style="margin-left:8px">QuickBooks ≠ Shopify</span></span>'
-   +'<a class="text-link" id="act-diff" onclick="go(\'reconcile\')">'+n+'<span class="material-icons i16">chevron_right</span></a></div>'
-   +'<div class="muted" id="diff-msg">'+(n?plural(n,'product')+' in '+st.join(' and ')+' '+(n===1?'differs':'differ')+'. Compared every night at 02:30 UTC.':!conn().some(function(i){return i.loc})?'No comparison yet. Connected stores are compared every night at 02:30 UTC.':'No differences in the last comparison (every night at 02:30 UTC).')+'</div></div></div>'}
+   +'<a class="text-link" id="act-diff" onclick="go(\'reconcile\')">'+n+'<span class="material-icons i16">chevron_right</span></a></div>';
+  if(!runs.length)return h+'<div class="muted" id="diff-msg">No comparison yet. Connected stores are compared every night at 02:30 UTC.</div></div></div>';
+  var compared=runs.reduce(function(t,r){return t+r.rows.length},0),when=runs[0].started;
+  h+='<div class="muted" id="diff-msg">Last check: '+esc(when)+' · '+plural(compared,'product')+' compared · '+(n?n+(n===1?' differs':' differ'):'all match')+'</div>';
+  if(n){var multi=st.length>1;
+    h+='<div class="diff-list" id="diff-list">'+rows.slice(0,3).map(function(r){var a=Math.abs(r.d),t='Shopify has '+a+(r.d>0?' fewer':' more')+' than QuickBooks.';
+      var open=L===1?"go('reconcile',{runView:'"+latestRun(r.i).id+"',unresolvedOnly:true})":"go('reconcile',{runView:null,recFilter:'all',unresolvedOnly:true})";
+      return '<a class="diff-row" onclick="'+open+'"><span>'+esc(r.x.prod)+(multi?'<span class="muted"> · '+esc(r.i.name)+'</span>':'')+'</span><span class="stip diff-n" tabindex="0" data-stip="'+t+'">'+signed(r.d)+'</span></a>'}).join('')
+      +(n>3?'<a class="text-link diff-more" onclick="go(\'reconcile\')">and '+(n-3)+' more</a>':'')+'</div>'}
+  return h+'</div></div>'}
 function tilesLine(){ // the numbers that need the user are coloured only when they are above 0
   var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, d=allDiffs();
   var t=[['Held',c('Held'),'Not sent: needs you','t-held',"go('events',{evFilter:'Held'})"],['Failed',c('Failed'),'Shopify rejected it','t-failed',"go('events',{evFilter:'Failed'})"],
@@ -367,13 +380,15 @@ function bActivity(){
   rows.forEach(function(r){h+='<div class="act" data-act="'+r[0]+'">'+stip(r[0]==='Applied in 24h'?'Applied':r[0],'<span class="status '+r[1]+'">'+r[0]+'</span>')
     +(never?'<span class="muted act-n">–</span>':'<a class="text-link act-n" onclick="go(\'events\',{evFilter:\''+(r[0]==='Applied in 24h'?'Applied':r[0])+'\'})">'+r[2]+'<span class="material-icons i16">chevron_right</span></a>')+'</div>'});
   return h+'</div></div>'}
+function nextSync(){var d=new Date(),m=d.getMinutes(),add=5-m%5;d.setMinutes(m+add);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}  // every 5 min
 function bSync(){
   var cs=conn(), rd=cs.filter(ready), mode=S.sync;
   var chip={off:'<span class="status status-grey">Disabled</span>',on:'<span class="status status-green">Enabled</span>',paused:'<span class="status status-yellow">Paused</span>'}[mode];
   var h='<div class="block" id="b-sync"><div class="block-t">Sync <span class="material-icons help" title="Synder reads stock changes from QuickBooks and sends them to the stores that are ready.">help</span></div><div class="box">'
    +'<div class="line"><span class="k">State:</span><span id="sync-state">'+chip+'</span></div>';
   if(S.enabledOn) h+='<div class="line" id="enabled-on"><span class="k">Enabled on:</span>'+esc(S.enabledOn)+'</div><div class="line"><span class="k">Last sync:</span>'+esc(S.lastSync)+'</div>';
-  h+='<div class="line" id="freq"><span class="k">Update frequency:</span>every 5 min</div>';
+  if(mode==='on') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>'+nextSync()+'</div>';
+  else if(mode==='paused') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>after you resume</div>';
   if(mode==='paused') h+='<div class="line muted" id="pause-reason">'+esc(S.pauseReason)+'</div>';
   var b;
   if(mode==='off') b=tip(rd.length?'Start sending stock changes from QuickBooks to the ready stores. Only changes made from now on are sent.':'Choose a location and set Created product to Inventory for at least one store first.',
@@ -384,8 +399,6 @@ function bSync(){
   else b=tip('Send the saved changes and continue.','<button class="btn" id="btn-resume" onclick="S.sync=\'on\';S.pauseReason=null;toast(\'Resumed. Saved changes are being sent.\');render()">Resume</button>')
       +tip('Stop reading QuickBooks. Changes made while disabled are never sent.','<button class="btn btn-outlined btn-outlined-error" id="btn-disable" onclick="askDisable()">Disable</button>');
   h+='<div class="row-actions">'+b+'</div>';
-  if(mode==='off') rd.filter(function(i){return mappedN(i)<i.products.length}).forEach(function(i){var u=i.products.length-mappedN(i);
-    h+='<div class="line" style="color:var(--color-yellow)" data-warn="'+i.id+'"><span class="material-icons i16">warning</span>'+u+' of '+i.products.length+' products in '+esc(i.name)+(u===1?' isn\'t':' aren\'t')+' mapped and won\'t get stock changes.</div>'});
   return h+'</div></div>'}
 function storeBadge(i){if(!i.connected)return '<span class="status status-grey" data-badge>Not connected</span>';
   if(!ready(i))return '<span class="status status-yellow" data-badge>Setup needed</span>';
