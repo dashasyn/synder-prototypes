@@ -111,6 +111,7 @@
   .bulk-row{display:flex;align-items:center;gap:12px}.bulk-count{font-weight:500;color:var(--color-primary)}
   .rec-actions{white-space:nowrap}
   .dlg-list{margin:8px 0;padding-left:20px}
+  .prev-toggle{display:inline-flex;align-items:center;gap:4px;margin:16px 0 8px;padding-left:0}
   .run-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
   .cell-sub{display:block}
   .spin.dark{border-color:var(--color-grey-20);border-top-color:var(--color-primary)}
@@ -153,10 +154,10 @@
 </head>
 <body>
 <div class="variant-switch">
-  <span class="vs-label">Layout</span>
+  <span class="vs-label">Variant</span>
   <div class="vs-opts">
-    <button id="ly-1" class="on" onclick="setLayout(1)">1 · Activity block</button>
-    <button id="ly-2" onclick="setLayout(2)">2 · Activity top line</button>
+    <button id="ly-1" class="on" onclick="setLayout(1)">1 · Activity block · Comparisons</button>
+    <button id="ly-2" onclick="setLayout(2)">2 · Activity top line · Differences</button>
   </div>
   <span class="vs-sep"></span>
   <span class="vs-label">State</span>
@@ -225,7 +226,7 @@ function autoMatch(st){var m={};st.products.forEach(function(p){var q=QBO.filter
 var S,V=1,L=1;
 function base(){var ints=INTEGRATIONS().map(function(i){return Object.assign(i,{connected:false,loc:null,inv:'Non-inventory',map:null,shop:{},cmp:null,opened:false,connectedOn:null})});
   ints.forEach(function(i){i.products.forEach(function(p){i.shop[p[0]]=p[2]})});
-  return {tab:'overview',ints:ints,sync:'off',enabledOn:null,lastSync:null,pauseReason:null,events:[],ignored:{},evFilter:'All',mapStore:null,unmappedOnly:false,connecting:false,sel:'',per:{},page:{},runs:[],qboRefreshed:'about 7 hours ago',evStore:'all',recFilter:'all',runView:null,unresolvedOnly:false,q:''}}
+  return {tab:'overview',ints:ints,sync:'off',enabledOn:null,lastSync:null,pauseReason:null,events:[],ignored:{},evFilter:'All',mapStore:null,unmappedOnly:false,connecting:false,sel:'',per:{},page:{},runs:[],qboRefreshed:'about 7 hours ago',evStore:'all',recFilter:'all',runView:null,unresolvedOnly:true,q:''}}
 function connectInt(s,id,when){var i=s.ints.filter(function(x){return x.id===id})[0];i.connected=true;i.connectedOn=when||'just now';i.map=autoMatch(i);/* location stays unset until the user chooses (Ignat 2026-10-01) */compareStore(i,s);return i}
 function stateFirst(){return base()}
 function stateFixes(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
@@ -299,12 +300,12 @@ function askAccept(id,prod){var i=int(id),r=rowOf(i,prod);
     [{label:'Update Shopify qty',fn:function(){closeM();applyAccept(i,r);toast('Shopify quantity will be updated.');render()}}])}
 function ignoreRow(id,prod){setIgnored(int(id),prod,true);toast('Difference ignored.');render()}
 function restoreRow(id,prod){setIgnored(int(id),prod,false);toast('Difference restored.');render()}
-function bulkSel(){return Object.keys(S.recSel||{}).filter(function(k){return S.recSel[k]})}
-function bulkAccept(id){var i=int(id),rows=bulkSel().map(function(k){return rowOf(i,k)}).filter(Boolean);
-  dialog('Update Shopify qty for '+plural(rows.length,'product')+'?','<p>Synder will send these differences to '+esc(i.name)+', as found in the comparison on '+esc(cmpWhen(i))+':</p><ul class="dlg-list">'
-    +rows.map(function(r){return '<li>'+esc(r.prod)+': '+signed(r.qq-r.sq)+'</li>'}).join('')+'</ul><p>If the stock changed since then, click Compare now first.</p>',
-    [{label:'Update Shopify qty',fn:function(){closeM();rows.forEach(function(r){applyAccept(i,r)});S.recSel={};toast(rows.length+(rows.length===1?' Shopify quantity':' Shopify quantities')+' will be updated.');render()}}])}
-function bulkIgnore(id){var i=int(id),ks=bulkSel();ks.forEach(function(k){setIgnored(i,k,true)});S.recSel={};toast(plural(ks.length,'difference')+' ignored.');render()}
+function bulkSel(){return Object.keys(S.recSel||{}).filter(function(k){return S.recSel[k]}).map(function(k){var j=k.indexOf('|');return {i:int(k.slice(0,j)),prod:k.slice(j+1)}})}
+function bulkAccept(){var sel=bulkSel().map(function(x){return {i:x.i,r:rowOf(x.i,x.prod)}}).filter(function(x){return x.r}),multi=sel.some(function(x){return x.i!==sel[0].i});
+  dialog('Update Shopify qty for '+plural(sel.length,'product')+'?','<p>Synder will send these differences, as found in the latest comparison'+(multi?'':' of '+esc(sel[0].i.name)+' on '+esc(cmpWhen(sel[0].i)))+':</p><ul class="dlg-list">'
+    +sel.map(function(x){return '<li>'+(multi?esc(x.i.name)+' · ':'')+esc(x.r.prod)+': '+signed(x.r.qq-x.r.sq)+'</li>'}).join('')+'</ul><p>If the stock changed since then, click Compare now first.</p>',
+    [{label:'Update Shopify qty',fn:function(){closeM();sel.forEach(function(x){applyAccept(x.i,x.r)});S.recSel={};toast(sel.length+(sel.length===1?' Shopify quantity':' Shopify quantities')+' will be updated.');render()}}])}
+function bulkIgnore(){var sel=bulkSel();sel.forEach(function(x){setIgnored(x.i,x.prod,true)});S.recSel={};toast(plural(sel.length,'difference')+' ignored.');render()}
 function setMap(id,prod,q,silent){var i=int(id);i.map[prod]=q?{q:q,src:'Manual'}:null;compareStore(i);if(q)toast('QuickBooks item mapped.');render()}
 function go(t,opts){if(S.tab!==t)S.runView=null;S.tab=t;Object.assign(S,opts||{});render()}
 
@@ -489,46 +490,67 @@ function retry(){var n=0;retryable().forEach(function(e){var i=S.ints.filter(fun
   ['mouseover','focusin'].forEach(function(ev){document.addEventListener(ev,function(e){var t=e.target.closest&&e.target.closest('[data-stip]');if(t)show(t);else hide()})});
   document.addEventListener('focusout',hide);document.addEventListener('scroll',hide,true)})();
 
-/* ---- Stock check (was Reconcile) ---- */
+/* ---- Stock check (was Reconcile) ----
+   Variant 1: list of comparisons → open one to see its differences.
+   Variant 2: opens straight on the differences of the latest comparison of each store; history below. */
 var RUN_TIP={Finished:'The comparison is done. Open it to see the products that differ.',Failed:'The comparison didn\'t finish. Click Compare now to try again.'};
 var RES_TIP={Unresolved:'QuickBooks and Shopify differ. Update the Shopify quantity or ignore the difference.',Updated:'The difference was sent to Shopify. You can see it on the Activity tab.',
   Ignored:'Marked as reviewed. Nothing was changed. It comes back if either quantity changes.'};
+var REC_DESC='Every night at 02:30 UTC, Synder compares QuickBooks quantity on hand with Shopify stock for every mapped product in each store.';
 function chip(tips,name,cls){return '<span class="stip" tabindex="0" data-stip="'+esc(tips[name])+'"><span class="status '+cls+'">'+name+'</span></span>'}
 function runsOf(){return S.runs.filter(function(r){return (S.recFilter||'all')==='all'||r.store===S.recFilter})}
-function vReconcile(){
-  if(S.runView){var r=S.runs.filter(function(x){return x.id===S.runView})[0];return vRun(r)}
-  var cs=conn().filter(function(i){return i.loc}),list=runsOf(),pg=pager('rec',list.length);
-  var h='<p class="muted" style="margin:0 0 12px">Every night at 02:30 UTC, Synder compares QuickBooks quantity on hand with Shopify stock for every mapped product in each store. Open a comparison to see the products that differ.</p>'
-   +'<div class="toolbar">'+storeSelect('rec-filter','Store',S.recFilter||'all',true,"S.recFilter=this.value;S.page.rec=1;render()")+'<span class="grow"></span>'
-   +tip(cs.length?'Compare every store that has a location now, instead of waiting for the night.':'Choose a location for a store first.','<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button>')+'</div>';
-  if(!list.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
-  h+='<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Differences</th><th class="num"></th></tr></thead><tbody>'
+function qs(x){return "'"+String(x).replace(/'/g,"\\'")+"'"}
+function compareBtn(){var cs=conn().filter(function(i){return i.loc});
+  return tip(cs.length?'Compare every store that has a location now, instead of waiting for the night.':'Choose a location for a store first.','<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button>')}
+function runsTable(list,pg){return '<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Differences</th><th class="num"></th></tr></thead><tbody>'
    +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).name)+'</td><td>'+(r.trigger==='Scheduled'?'Nightly':r.trigger)+'</td><td>'+chip(RUN_TIP,'Finished','status-green')+'</td><td class="num">'+r.rows.length+'</td><td class="num">'+r.mismatches+'</td>'
-     +'<td class="num"><button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=true;S.recSel={};render()">View rows</button></td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
-  return h}
-function vRun(r){var i=int(r.store),latest=S.runs.filter(function(x){return x.store===r.store})[0]===r,sel=S.recSel||{};
-  var rows=r.rows.filter(function(x){return x.mis&&(!S.unresolvedOnly||x.res==='Unresolved')}),open=latest?rows.filter(function(x){return x.res==='Unresolved'}):[];
-  var nSel=open.filter(function(x){return sel[x.prod]}).length,allOn=open.length&&nSel===open.length;
-  var h='<a class="text-link back-link" id="btn-back-runs" onclick="S.runView=null;S.recSel={};render()"><span class="material-icons i16">arrow_back</span>All comparisons</a>'
-   +'<div class="run-head"><div class="run-title">'+esc(i.name)+' '+chip(RUN_TIP,'Finished','status-green')+'</div>'
-   +'<label class="checkbox-wrap"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label></div>'
-   +'<div class="muted run-sub">Compared on '+esc(r.started)+' · '+plural(r.rows.length,'product')+' compared · '+plural(r.mismatches,'difference')+(latest?'':' · An older comparison: act on the latest one.')+'</div>';
-  var cb=function(on,ix,label,fn){return '<input type="checkbox" class="checkbox" '+(on?'checked ':'')+(ix?'data-ix ':'')+'aria-label="'+esc(label)+'" onchange="'+fn+'">'};
-  var allFn="var o=this.checked;S.recSel={};if(o)["+open.map(function(x){return "'"+x.prod.replace(/'/g,"\\'")+"'"}).join(',')+"].forEach(function(p){S.recSel[p]=true});render()";
-  var head=nSel?'<tr id="head-bulk"><th class="col-cb">'+cb(true,nSel<open.length,'Select all',allFn)+'</th><th colspan="8"><div class="bulk-row"><span class="bulk-count">'+nSel+' selected</span>'
-      +'<button class="btn btn-sm" id="bulk-accept" onclick="bulkAccept(\''+i.id+'\')">Update Shopify qty</button><button class="btn btn-outlined btn-sm" id="bulk-ignore" onclick="bulkIgnore(\''+i.id+'\')">Ignore</button></div></th></tr>'
-    :'<tr><th class="col-cb">'+(open.length?cb(false,false,'Select all',allFn):'')+'</th><th>Product</th><th>SKU</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">'
+     +'<td class="num"><button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=true;S.recSel={};render()">View rows</button></td></tr>'}).join('')+'</tbody></table></div>'+pg.html}
+/* the difference table, shared by both variants. items: [{i, x, run}] */
+function diffTable(items,withStore){var sel=S.recSel||{},key=function(t){return t.i.id+'|'+t.x.prod};
+  var open=items.filter(function(t){return t.latest&&t.x.res==='Unresolved'}),nSel=open.filter(function(t){return sel[key(t)]}).length,cols=withStore?10:9;
+  var cb=function(on,label,fn){return '<input type="checkbox" class="checkbox" '+(on?'checked ':'')+'aria-label="'+esc(label)+'" onchange="'+fn+'">'};
+  var allFn="var o=this.checked;S.recSel={};if(o)["+open.map(function(t){return qs(key(t))}).join(',')+"].forEach(function(k){S.recSel[k]=true});render()";
+  var head=nSel?'<tr id="head-bulk"><th class="col-cb">'+cb(true,'Select all',allFn)+'</th><th colspan="'+(cols-1)+'"><div class="bulk-row"><span class="bulk-count">'+nSel+' selected</span>'
+      +'<button class="btn btn-sm" id="bulk-accept" onclick="bulkAccept()">Update Shopify qty</button><button class="btn btn-outlined btn-sm" id="bulk-ignore" onclick="bulkIgnore()">Ignore</button></div></th></tr>'
+    :'<tr><th class="col-cb">'+(open.length?cb(false,'Select all',allFn):'')+'</th>'+(withStore?'<th>Store</th>':'')+'<th>Product</th><th>SKU</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">'
       +'<span class="stip" tabindex="0" data-stip="QuickBooks minus Shopify. +8 means Shopify has 8 fewer than QuickBooks.">Difference</span></th><th>Status</th><th>Actions</th></tr>';
-  h+='<div class="table-wrap"><table class="synder-table table--sm" id="rec-table"><thead>'+head+'</thead><tbody>'
-   +(rows.map(function(x){var d=x.qq-x.sq,p=i.products.filter(function(y){return y[0]===x.prod})[0],q="'"+i.id+"','"+x.prod.replace(/'/g,"\\'")+"'",canAct=latest&&x.res==='Unresolved';
+  return '<div class="table-wrap"><table class="synder-table table--sm" id="rec-table"><thead>'+head+'</thead><tbody>'
+   +(items.map(function(t){var i=t.i,x=t.x,d=x.qq-x.sq,p=i.products.filter(function(y){return y[0]===x.prod})[0],q=qs(i.id)+','+qs(x.prod),canAct=t.latest&&x.res==='Unresolved';
      var st=x.res==='Unresolved'?chip(RES_TIP,'Unresolved','status-yellow'):x.res==='Ignored'?chip(RES_TIP,'Ignored','status-grey'):chip(RES_TIP,'Updated','status-green');
-     return '<tr data-prod="'+esc(x.prod)+'" data-st="'+i.id+'"><td class="col-cb">'+(canAct?cb(!!sel[x.prod],false,'Select '+x.prod,"S.recSel=S.recSel||{};S.recSel['"+x.prod.replace(/'/g,"\\'")+"']=this.checked;render()"):'')+'</td>'
-     +'<td>'+esc(x.prod)+'</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+signed(d)+'</td>'
+     return '<tr data-prod="'+esc(x.prod)+'" data-st="'+i.id+'"><td class="col-cb">'+(canAct?cb(!!sel[key(t)],'Select '+x.prod,"S.recSel=S.recSel||{};S.recSel["+qs(key(t))+"]=this.checked;render()"):'')+'</td>'
+     +(withStore?'<td>'+esc(i.name)+'</td>':'')+'<td>'+esc(x.prod)+'</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+signed(d)+'</td>'
      +'<td>'+st+(x.by?'<span class="muted cell-sub">by '+esc(x.by)+'</span>':'')+'</td>'
      +'<td class="rec-actions">'+(canAct?'<button class="btn btn-text btn-sm accept" onclick="askAccept('+q+')">Update Shopify qty</button><button class="btn btn-text btn-sm ignore" onclick="ignoreRow('+q+')">Ignore</button>'
-       :latest&&x.res==='Ignored'?'<button class="btn btn-text btn-sm restore" onclick="restoreRow('+q+')">Restore</button>':'–')+'</td></tr>'}).join('')
-     ||'<tr><td colspan="9" class="empty">'+(S.unresolvedOnly?'No unresolved differences.':'No differences.')+'</td></tr>')+'</tbody></table></div>';
+       :t.latest&&x.res==='Ignored'?'<button class="btn btn-text btn-sm restore" onclick="restoreRow('+q+')">Restore</button>':'–')+'</td></tr>'}).join('')
+     ||'<tr><td colspan="'+cols+'" class="empty">'+(S.unresolvedOnly?'No unresolved differences.':'No differences.')+'</td></tr>')+'</tbody></table></div>'}
+function vReconcile(){
+  if(S.runView){var r=S.runs.filter(function(x){return x.id===S.runView})[0];return vRun(r)}
+  return L===2?vDiffs():vRuns()}
+function vRuns(){var list=runsOf(),pg=pager('rec',list.length);
+  var h='<p class="muted" style="margin:0 0 12px">'+REC_DESC+' Open a comparison to see the products that differ.</p>'
+   +'<div class="toolbar">'+storeSelect('rec-filter','Store',S.recFilter||'all',true,"S.recFilter=this.value;S.page.rec=1;render()")+'<span class="grow"></span>'+compareBtn()+'</div>';
+  if(!list.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
+  return h+runsTable(list,pg)}
+function vDiffs(){var sf=S.recFilter||'all',stores=conn().filter(function(i){return i.loc&&(sf==='all'||i.id===sf)}),items=[],last=[];
+  if(S.unresolvedOnly==null)S.unresolvedOnly=true;
+  stores.forEach(function(i){var r=latestRun(i);if(!r)return;last.push(esc(i.name)+': '+esc(r.started));
+    r.rows.forEach(function(x){if(x.mis&&(!S.unresolvedOnly||x.res==='Unresolved'))items.push({i:i,x:x,latest:true})})});
+  var h='<p class="muted" style="margin:0 0 12px">'+REC_DESC+' Only products that differ are listed.</p>'
+   +'<div class="toolbar">'+storeSelect('rec-filter','Store',sf,true,"S.recFilter=this.value;S.recSel={};S.page.rec=1;render()")
+   +'<label class="checkbox-wrap tb-check"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label><span class="grow"></span>'+compareBtn()+'</div>';
+  if(!last.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
+  h+='<div class="muted run-sub" id="last-compared">Latest comparison · '+last.join(' · ')+'</div>'+diffTable(items,true);
+  var list=runsOf(),pg=pager('rec',list.length);
+  h+='<button class="btn btn-text prev-toggle" id="prev-toggle" aria-expanded="'+!!S.prevOpen+'" onclick="S.prevOpen=!S.prevOpen;render()"><span class="material-icons i16">'+(S.prevOpen?'expand_less':'expand_more')+'</span>Previous comparisons ('+list.length+')</button>'
+   +(S.prevOpen?runsTable(list,pg):'');
   return h}
+function vRun(r){var i=int(r.store),latest=latestRun(i)===r;
+  var rows=r.rows.filter(function(x){return x.mis&&(!S.unresolvedOnly||x.res==='Unresolved')}).map(function(x){return {i:i,x:x,latest:latest}});
+  return '<a class="text-link back-link" id="btn-back-runs" onclick="S.runView=null;S.recSel={};render()"><span class="material-icons i16">arrow_back</span>'+(L===2?'Differences':'All comparisons')+'</a>'
+   +'<div class="run-head"><div class="run-title">'+esc(i.name)+' '+chip(RUN_TIP,'Finished','status-green')+'</div>'
+   +'<label class="checkbox-wrap"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label></div>'
+   +'<div class="muted run-sub">Compared on '+esc(r.started)+' · '+plural(r.rows.length,'product')+' compared · '+plural(r.mismatches,'difference')+(latest?'':' · An older comparison: act on the latest one.')+'</div>'
+   +diffTable(rows,false)}
 function compareNow(){var cs=conn().filter(function(i){return i.loc});cs.forEach(function(i){compareStore(i);addRun(S,i,'just now','Manual')});S.page.rec=1;
   toast(plural(cs.length,'store')+' compared.');render()}
 function addRun(s,i,when,trigger){var rows=i.cmp;s.runs.unshift({id:'r'+(s.runs.length+1)+i.id,store:i.id,started:when,trigger:trigger,rows:rows,mismatches:rows.filter(function(x){return x.mis}).length})}
