@@ -85,6 +85,18 @@
   .menu{position:absolute;right:0;top:36px;min-width:200px;background:var(--color-white);border-radius:var(--radius-sm);box-shadow:var(--shadow-modal);padding:8px 0;z-index:40}
   .menu-item{display:block;width:100%;text-align:left;background:none;border:none;font-family:inherit;font-size:14px;line-height:20px;padding:8px 16px;color:var(--text-primary);cursor:pointer}
   .menu-item:hover{background:var(--bg-hover)}
+  .toolbar{align-items:flex-end}
+  .tb-field{margin:0}
+  .tb-field .select{min-width:240px}
+  .tb-check{height:36px}
+  .tb-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+  .tb-status{font-size:14px;line-height:20px}
+  .table-wrap.wide table{min-width:1780px}
+  .pagination{justify-content:flex-end}
+  .pager-per{width:auto;height:32px;min-width:72px}
+  .run-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:8px}
+  .run-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .cell-sub{display:block}
   .spin.dark{border-color:var(--color-grey-20);border-top-color:var(--color-primary)}
   .act a{display:inline-flex;align-items:center;gap:2px}
   .headline{font-size:20px;font-weight:400;line-height:28px;color:var(--text-primary);margin:0 0 12px}
@@ -186,7 +198,7 @@ var QBO=[['1','Ceramic plate 24cm','PL-24',140],['2','Ceramic plate 18cm','PL-18
 function qbo(id){return QBO.filter(function(q){return q.id===id})[0]}
 function INTEGRATIONS(){return [
  {id:'p',name:'My ceramic plates',domain:'my-ceramic-plates.myshopify.com',locations:['Warehouse in California'],
-  products:[['Ceramic plate 24cm','PL-24',132],['Ceramic plate 18cm','PL-18',90],['Serving bowl','BWL-1',35],['Mug set','MUG-4',58],['Plate seconds',null,9]]},
+  products:[['Ceramic plate 24cm','PL-24',132],['Ceramic plate 18cm','PL-18',90],['Serving bowl','BWL-1',35],['Mug set','MUG-4',58],['Plate seconds',null,9]],committed:{'Mug set':4}},
  {id:'f',name:'My good flowers',domain:'my-good-flowers.myshopify.com',locations:['Warehouse in California','Flower stall, Oakland'],
   products:[['Tulip bouquet','FL-TU',25],['Rose bouquet','FL-RO',38],['Vase small','VS-S',30],['Vase large',null,12],['Gift wrap',null,200]]},
  {id:'s',name:'Seasonal pop-up',domain:'seasonal-popup.myshopify.com',locations:['Pop-up van'],
@@ -197,24 +209,27 @@ function autoMatch(st){var m={};st.products.forEach(function(p){var q=QBO.filter
 var S,V=1,L=1;
 function base(){var ints=INTEGRATIONS().map(function(i){return Object.assign(i,{connected:false,loc:null,inv:'Non-inventory',map:null,shop:{},cmp:null,opened:false,connectedOn:null})});
   ints.forEach(function(i){i.products.forEach(function(p){i.shop[p[0]]=p[2]})});
-  return {tab:'overview',ints:ints,sync:'off',enabledOn:null,lastSync:null,pauseReason:null,events:[],ignored:{},evFilter:'All',mapStore:null,unmappedOnly:false,connecting:false,sel:''}}
+  return {tab:'overview',ints:ints,sync:'off',enabledOn:null,lastSync:null,pauseReason:null,events:[],ignored:{},evFilter:'All',mapStore:null,unmappedOnly:false,connecting:false,sel:'',per:{},page:{},runs:[],qboRefreshed:'about 7 hours ago',evStore:'all',recFilter:'all',runView:null,unresolvedOnly:false,q:''}}
 function connectInt(s,id,when){var i=s.ints.filter(function(x){return x.id===id})[0];i.connected=true;i.connectedOn=when||'just now';i.map=autoMatch(i);/* location stays unset until the user chooses (Ignat 2026-10-01) */compareStore(i,s);return i}
 function stateFirst(){return base()}
 function stateFixes(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
   p.inv='Inventory';s.sync='paused';s.enabledOn='Sep 24, 2026 14:20';s.lastSync='Oct 1, 2026 17:00';s.pauseReason='Paused on Oct 1, 2026 17:00. New changes are queued and sent when you resume.';
-  s.events=sampleEvents(p,true);return s}
+  s.events=sampleEvents(p,true);nightly(s,[p]);return s}
+function nightly(s,stores){stores.forEach(function(i){var snap=JSON.parse(JSON.stringify(i.cmp));
+  s.runs.push({id:'r0'+i.id,store:i.id,started:'Oct 1, 2026 02:30',trigger:'Scheduled',rows:snap,mismatches:snap.filter(function(x){return x.mis}).length})});
+  stores.forEach(function(i){addRun(s,i,'Oct 2, 2026 02:30','Scheduled')})}
 function stateAll(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
   p.map['Plate seconds']={q:'9',src:'Manual'};f.map['Gift wrap']={q:'10',src:'Manual'};
   [p,f].forEach(function(i){i.inv='Inventory';
     i.products.forEach(function(x){var q=qbo(i.map[x[0]].q);i.shop[x[0]]=q.qty});compareStore(i,s)});
   f.loc='Flower stall, Oakland';s.sync='on';s.enabledOn='Sep 24, 2026 14:20';s.lastSync='Oct 1, 2026 17:12';
-  s.events=sampleEvents(p,false).concat([{t:'Oct 1, 2026 14:40',store:f.name,src:'Bill #1047',item:'Tulip bouquet',d:+30,status:'Applied'},{t:'Oct 1, 2026 12:15',store:f.name,src:'Invoice #2236',item:'Rose bouquet',d:-2,status:'Applied'}]);return s}
+  s.events=sampleEvents(p,false).concat([{t:'Oct 1, 2026 14:40',store:f.name,src:'Bill #1047',item:'Tulip bouquet',d:+30,status:'Applied'},{t:'Oct 1, 2026 12:15',store:f.name,src:'Invoice #2236',item:'Rose bouquet',d:-2,status:'Applied'}]);nightly(s,[p,f]);return s}
 function sampleEvents(st,withHeld){var e=[
   {t:'Oct 1, 2026 16:58',store:st.name,src:'Bill #1042',item:st.products[0][0],d:+24,status:'Applied'},
   {t:'Oct 1, 2026 15:20',store:st.name,src:'Invoice #2231',item:st.products[1][0],d:-2,status:'Applied'},
-  {t:'Oct 1, 2026 11:05',store:st.name,src:'Inventory qty adjustment #35',item:st.products[2][0],d:-3,status:'Applied'}];
+  {t:'Oct 1, 2026 11:05',store:st.name,src:'InventoryAdjustment #35',item:st.products[2][0],d:-3,status:'Applied'}];
   if(withHeld){e.unshift({t:'Oct 1, 2026 16:59',store:st.name,src:'Bill #1045',item:'Plate seconds (B-grade)',d:+12,status:'Held',reason:'Item not matched'});
-    e.unshift({t:'Oct 1, 2026 17:03',store:st.name,src:'Sales receipt #90',item:st.products[3][0],d:-1,status:'Pending'})}
+    e.unshift({t:'Oct 1, 2026 17:03',store:st.name,src:'SalesReceipt #90',item:st.products[3][0],d:-1,status:'Pending'})}
   return e}
 
 /* ---- helpers ---- */
@@ -234,7 +249,7 @@ function avail(){return S.ints.filter(function(x){return !x.connected})}
 function mappedN(i){return i.products.filter(function(p){return i.map&&i.map[p[0]]}).length}
 function ready(i){return !!(i.loc&&i.inv==='Inventory')}       // Ignat: location + inventory setting
 function compareStore(i,s){s=s||S;i.cmp=[];i.products.forEach(function(p){var m=i.map[p[0]];if(!m)return;var q=qbo(m.q),sq=i.shop[p[0]],k=i.id+'|'+p[0],ig=s.ignored[k];
-  i.cmp.push({prod:p[0],item:q.name,qq:q.qty,sq:sq,res:q.qty===sq?'Same':(ig&&ig.qq===q.qty&&ig.sq===sq)?'Ignored':'Unresolved'})})}
+  i.cmp.push({prod:p[0],item:q.name,qq:q.qty,sq:sq,avail:sq-((i.committed||{})[p[0]]||0),mis:q.qty!==sq,res:q.qty===sq?'Same':(ig&&ig.qq===q.qty&&ig.sq===sq)?'Ignored':'Unresolved'})})}
 function diffsOf(i){return (i.cmp||[]).filter(function(r){return r.res==='Unresolved'})}
 function allDiffs(){return conn().filter(function(i){return i.loc}).reduce(function(n,i){return n+diffsOf(i).length},0)}
 
@@ -256,13 +271,10 @@ function askDisable(){dialog('Disable inventory sync?','<p>Synder stops reading 
 function pause(){S.sync='paused';S.pauseReason='Paused just now. Changes are queued and sent when you resume.';toast('Paused. Changes are queued.');render()}
 function askAccept(id,prod){var i=int(id),r=i.cmp.filter(function(x){return x.prod===prod})[0];
   dialog('Accept QuickBooks quantity','<p>Shopify on hand for "'+esc(prod)+'" in '+esc(i.name)+' will be set to '+r.qq+' (change '+signed(r.qq-r.sq)+'). A sync event will be created to apply it.</p>',[{label:'Accept QuickBooks',fn:function(){closeM();
-    var d=r.qq-r.sq;i.shop[prod]=r.qq;r.sq=r.qq;r.res='Accepted QuickBooks';S.events.unshift({t:'just now',store:i.name,src:'Reconcile',item:prod,d:d,status:'Pending'});toast('QuickBooks quantity accepted. Shopify will be updated.');render()}}])}
-function ignoreRow(id,prod){var i=int(id),r=i.cmp.filter(function(x){return x.prod===prod})[0];S.ignored[id+'|'+prod]={qq:r.qq,sq:r.sq};r.res='Ignored';toast('Ignored until one of the quantities changes.');render()}
-function setMap(id,prod,q){var i=int(id);i.map[prod]=q?{q:q,src:'Manual'}:null;compareStore(i);toast(q?'QuickBooks item mapped.':'Mapping removed.');render()}
-function retry(){var n=0;S.events.forEach(function(e){if(e.status!=='Held')return;var i=S.ints.filter(function(x){return x.name===e.store})[0];
-  if(i.products.some(function(p){return i.map[p[0]]&&qbo(i.map[p[0]].q).name===e.item})){e.status='Applied';delete e.reason;n++}});
-  toast(n?plural(n,'held change')+' sent.':'Nothing sent: fix the hold reason first.');render()}
-function go(t,opts){S.tab=t;Object.assign(S,opts||{});render()}
+    var d=r.qq-r.sq;i.shop[prod]=r.qq;r.sq=r.qq;r.avail=r.qq;r.res='Accepted QuickBooks';r.by='owner@acmehome.com · just now';S.events.unshift({t:'just now',store:i.name,src:'Reconcile',item:prod,d:d,status:'Pending'});toast('QuickBooks quantity accepted. Shopify will be updated.');render()}}])}
+function ignoreRow(id,prod){var i=int(id),r=i.cmp.filter(function(x){return x.prod===prod})[0];S.ignored[id+'|'+prod]={qq:r.qq,sq:r.sq};r.res='Ignored';r.by='owner@acmehome.com · just now';toast('Mismatch ignored.');render()}
+function setMap(id,prod,q,silent){var i=int(id);i.map[prod]=q?{q:q,src:'Manual'}:null;compareStore(i);if(q)toast('QuickBooks item mapped.');render()}
+function go(t,opts){if(S.tab!==t)S.runView=null;S.tab=t;Object.assign(S,opts||{});render()}
 
 /* ---- empty state (sketch 1) ---- */
 function vFirst(){var av=avail(),one=av.length===1;
@@ -358,30 +370,91 @@ document.addEventListener('click',closeMenus);
 function askDisconnect(id){var i=int(id);dialog('Disconnect '+i.name+'?','<p>Synder stops sending stock changes to '+esc(i.name)+'. Its history stays on the Events tab, and its mappings are kept if you connect it again.</p>',
   [{label:'Disconnect',fn:function(){closeM();i.connected=false;i.loc=null;i.cmp=null;toast(i.name+' disconnected.');render()}}])}
 
-/* ---- tabs ---- */
-function vMappings(){var cs=conn();var i=int(S.mapStore);if(!i||!i.connected)i=cs[0];
-  var list=i.products.filter(function(p){return !S.unmappedOnly||!i.map[p[0]]});
-  var h='<div class="toolbar"><select class="select" id="map-store" aria-label="Store" onchange="S.mapStore=this.value;render()">'+cs.map(function(x){return '<option value="'+x.id+'" '+(x.id===i.id?'selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select>'
-   +'<label class="checkbox-wrap"><input type="checkbox" class="checkbox" id="unmapped-only" '+(S.unmappedOnly?'checked':'')+' onchange="S.unmappedOnly=this.checked;render()">Unmapped only</label><span class="grow"></span>'
-   +'<span class="muted small">'+mappedN(i)+' of '+i.products.length+' mapped · by SKU, then by name</span><a class="text-link" onclick="go(\'overview\')">Back to overview</a></div>';
-  h+='<div class="table-wrap"><table class="synder-table" id="map-table"><thead><tr><th>Product</th><th>SKU</th><th>QuickBooks item</th><th>Match source</th></tr></thead><tbody>'
-   +(list.map(function(p){var m=i.map[p[0]];return '<tr data-prod="'+esc(p[0])+'"><td>'+esc(p[0])+'</td><td>'+(p[1]?esc(p[1]):'–')+'</td><td><select class="select" aria-label="QuickBooks item for '+esc(p[0])+'" onchange="setMap(\''+i.id+'\',\''+p[0]+'\',this.value)"><option value="">Not mapped</option>'
-     +QBO.map(function(q){return '<option value="'+q.id+'" '+(m&&m.q===q.id?'selected':'')+'>'+esc(q.name)+(q.sku?' · '+q.sku:'')+'</option>'}).join('')+'</select></td><td>'+(m?m.src:'<span class="muted">Not mapped</span>')+'</td></tr>'}).join('')||'<tr><td colspan="4" class="empty">Every product is mapped.</td></tr>');
-  return h+'</tbody></table></div>'}
-function vEvents(){var f=S.evFilter, list=S.events.filter(function(e){return f==='All'||e.status===f}), held=S.events.filter(function(e){return e.status==='Held'}).length;
-  var h='<div class="toolbar"><select class="select" id="ev-filter" aria-label="Status" onchange="S.evFilter=this.value;render()">'+['All','Held','Failed','Pending','Applied'].map(function(x){return '<option '+(x===f?'selected':'')+'>'+x+'</option>'}).join('')+'</select><span class="grow"></span>'
-   +'<button class="btn btn-outlined" id="btn-retry" '+(held?'':'disabled ')+'onclick="retry()">Retry held and failed</button><a class="text-link" onclick="go(\'overview\')">Back to overview</a></div>';
-  if(!list.length)return h+'<div class="table-wrap"><div class="empty" id="ev-empty">'+(S.events.length?'No '+f.toLowerCase()+' changes.':'No stock changes yet. They appear here after you enable sync.')+'</div></div>';
-  h+='<div class="table-wrap"><table class="synder-table" id="ev-table"><thead><tr><th>Created</th><th>Store</th><th>QuickBooks document</th><th>Product</th><th class="num">Change</th><th>Status</th><th>Reason</th></tr></thead><tbody>'
-   +list.map(function(e){return '<tr><td>'+esc(e.t)+'</td><td>'+esc(e.store)+'</td><td>'+esc(e.src)+'</td><td>'+esc(e.item)+'</td><td class="num">'+(e.d?signed(e.d):'–')+'</td><td><span class="status '+({Applied:'status-green',Held:'status-yellow',Pending:'status-blue',Failed:'status-red'}[e.status])+'">'+e.status+'</span></td><td>'+(e.reason?esc(e.reason)+' · <a class="text-link" onclick="go(\'mappings\',{unmappedOnly:true,mapStore:\''+S.ints.filter(function(x){return x.name===e.store})[0].id+'\'})">Map it</a>':'–')+'</td></tr>'}).join('');
-  return h+'</tbody></table></div>'}
-function vReconcile(){var rows=[];conn().forEach(function(i){(i.cmp||[]).forEach(function(r){rows.push([i,r])})});
-  var h='<p class="muted">Compares QuickBooks quantity with Shopify stock for every matched product. Runs every night at 02:30 UTC.</p><div class="toolbar"><span class="grow"></span><button class="btn" id="btn-compare" onclick="conn().forEach(function(i){compareStore(i)});toast(\'Comparison finished.\');render()">Compare now</button><a class="text-link" onclick="go(\'overview\')">Back to overview</a></div>';
-  if(!rows.length)return h+'<div class="table-wrap"><div class="empty">No comparison yet.</div></div>';
-  h+='<div class="table-wrap"><table class="synder-table" id="rec-table"><thead><tr><th>Store</th><th>Product</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">Difference</th><th>Resolution</th><th>Actions</th></tr></thead><tbody>'
-   +rows.map(function(x){var i=x[0],r=x[1],d=r.qq-r.sq;return '<tr data-prod="'+esc(r.prod)+'" data-st="'+i.id+'"><td>'+esc(i.name)+'</td><td>'+esc(r.prod)+'</td><td class="num">'+r.qq+'</td><td class="num">'+r.sq+'</td><td class="num '+(d>0?'diff-pos':d<0?'diff-neg':'')+'">'+(d?signed(d):'0')+'</td><td>'+esc(r.res)+'</td><td>'
-     +(r.res==='Unresolved'?'<button class="btn btn-text btn-sm accept" onclick="askAccept(\''+i.id+'\',\''+r.prod+'\')">Accept QuickBooks</button><button class="btn btn-text btn-sm" onclick="ignoreRow(\''+i.id+'\',\''+r.prod+'\')">Ignore</button>':'–')+'</td></tr>'}).join('');
-  return h+'</tbody></table></div>'}
+/* ====================================================================== */
+/* TABS — rebuilt from production (demo.synderapp.com/ui/inventorySync,    */
+/* captured 2026-10-02): same filters, columns, buttons, dialogs, toasts   */
+/* and paging, on the prototype's sample data. Kit table component.        */
+/* ====================================================================== */
+function dom(name){var i=S.ints.filter(function(x){return x.name===name})[0];return i?i.domain:name}
+function gid(e){var h=0,s=e.t+e.src+e.item+e.d;for(var k=0;k<s.length;k++)h=(h*31+s.charCodeAt(k))%9000000;return 'gid://shopify/InventoryAdjustmentGroup/7820'+String(7000000000+h).slice(-10)}
+function pager(key,total){var per=S.per[key]||10,page=Math.min(S.page[key]||1,Math.max(1,Math.ceil(total/per))),from=total?(page-1)*per+1:0,to=Math.min(total,page*per),pages=Math.max(1,Math.ceil(total/per)),btns='';
+  for(var p=1;p<=pages;p++)btns+='<button class="page-btn'+(p===page?' active':'')+'" onclick="S.page[\''+key+'\']='+p+';render()">'+p+'</button>';
+  return {from:from,to:to,slice:function(a){return a.slice(from?from-1:0,to)},html:'<div class="pagination" data-pager="'+key+'"><span class="page-info">Rows per page:</span><select class="select pager-per" aria-label="Rows per page: '+per+'" onchange="S.per[\''+key+'\']=+this.value;S.page[\''+key+'\']=1;render()">'
+    +[10,25,50,100].map(function(n){return '<option '+(n===per?'selected':'')+'>'+n+'</option>'}).join('')+'</select><span class="page-info">'+from+'–'+to+' of '+total+'</span>'+btns+'</div>'}}
+function storeSelect(id,label,value,withAll,onchange,only){var cs=only||conn();return '<div class="form-field tb-field"><label class="form-label" for="'+id+'">'+label+'</label><select class="select" id="'+id+'" onchange="'+onchange+'">'
+  +(withAll?'<option value="all" '+(value==='all'?'selected':'')+'>All stores</option>':'')+cs.map(function(x){return '<option value="'+x.id+'" '+(x.id===value?'selected':'')+'>'+esc(x.domain)+'</option>'}).join('')+'</select></div>'}
+
+/* ---- Mappings ---- */
+function vMappings(){var cs=conn();if(!cs.length)return '<div class="table-wrap"><div class="empty">No variants yet. Click "Refresh mappings" to load them.</div></div>';
+  var i=int(S.mapStore);if(!i||!i.connected){i=cs[0];S.mapStore=i.id}
+  var q=(S.q||'').toLowerCase(), list=i.products.filter(function(p){return (!S.unmappedOnly||!i.map[p[0]])&&(!q||p[0].toLowerCase().indexOf(q)>-1||(p[1]||'').toLowerCase().indexOf(q)>-1)});
+  var pg=pager('map',list.length);
+  var h='<div class="toolbar">'+storeSelect('map-store','Store',i.id,false,"S.mapStore=this.value;S.page.map=1;render()")
+   +'<div class="form-field tb-field"><label class="form-label" for="map-search">Search</label><input class="input" id="map-search" style="width:320px" value="'+esc(S.q||'')+'" oninput="S.q=this.value;S.page.map=1;render();var x=document.getElementById(\'map-search\');x.focus();x.setSelectionRange(x.value.length,x.value.length)"></div>'
+   +'<label class="checkbox-wrap tb-check"><input type="checkbox" class="checkbox" id="unmapped-only" '+(S.unmappedOnly?'checked':'')+' onchange="S.unmappedOnly=this.checked;S.page.map=1;render()">Unmapped only</label><span class="grow"></span>'
+   +'<div class="tb-right"><div class="row-actions" style="margin:0;justify-content:flex-end"><button class="btn btn-outlined" id="btn-refresh-map" onclick="refreshMappings(\''+i.id+'\')">Refresh mappings</button><button class="btn btn-outlined" id="btn-refresh-qbo" onclick="S.qboRefreshed=\'less than a minute ago\';toast(QBO.length+\' QuickBooks items refreshed.\');render()">Refresh QuickBooks items</button></div>'
+   +'<div class="muted tb-status">QuickBooks items refreshed '+esc(S.qboRefreshed)+'</div><div class="muted tb-status">Mappings refreshed '+esc(i.mapRefreshed||'3 days ago')+'</div></div></div>';
+  h+='<div class="table-wrap"><table class="synder-table" id="map-table"><thead><tr><th>Product</th><th>Variant</th><th>SKU</th><th style="width:320px">QuickBooks item</th><th>Match source</th><th>Actions</th></tr></thead><tbody>'
+   +(pg.slice(list).map(function(p){var m=i.map[p[0]];return '<tr data-prod="'+esc(p[0])+'"><td>'+esc(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
+     +'<td><select class="select map-sel" style="width:300px" aria-label="QuickBooks item for Default Title" onchange="setMap(\''+i.id+'\',\''+p[0]+'\',this.value)"><option value="">Search by name or SKU</option>'
+     +QBO.map(function(x){return '<option value="'+x.id+'" '+(m&&m.q===x.id?'selected':'')+'>'+esc(x.name)+(x.sku?' · '+esc(x.sku):'')+'</option>'}).join('')+'</select></td>'
+     +'<td>'+(m?m.src:'Not mapped')+'</td><td>'+(m?'<button class="btn btn-text btn-sm remove-map" onclick="setMap(\''+i.id+'\',\''+p[0]+'\',\'\',true)">Remove</button>':'–')+'</td></tr>'}).join('')
+     ||'<tr><td colspan="6" class="empty">No variants match.</td></tr>')+'</tbody></table></div>'+pg.html;
+  return h}
+function refreshMappings(id){var i=int(id),fresh=autoMatch(i);i.products.forEach(function(p){if(!(i.map[p[0]]&&i.map[p[0]].src==='Manual'))i.map[p[0]]=fresh[p[0]]});
+  i.mapRefreshed='less than a minute ago';compareStore(i);var auto=i.products.filter(function(p){return fresh[p[0]]}).length;
+  toast('Seeded '+i.products.length+' variants: '+auto+' mapped, '+(i.products.length-auto)+' unmapped.');render()}
+
+/* ---- Events ---- */
+function vEvents(){var f=S.evFilter||'All',sf=S.evStore||'all';
+  var list=S.events.filter(function(e){return (f==='All'||e.status===f)&&(sf==='all'||dom(e.store)===int(sf).domain)});
+  var pg=pager('ev',list.length);
+  var h='<div class="toolbar">'+storeSelect('ev-store','Store',sf,true,"S.evStore=this.value;S.page.ev=1;render()")
+   +'<div class="form-field tb-field"><label class="form-label" for="ev-filter">Status</label><select class="select" id="ev-filter" onchange="S.evFilter=this.value;S.page.ev=1;render()">'
+   +['All','Pending','Applied','Held','Failed'].map(function(x){return '<option '+(x===f?'selected':'')+'>'+x+'</option>'}).join('')+'</select></div><span class="grow"></span>'
+   +'<button class="btn btn-outlined" id="btn-retry" onclick="retry()">Retry held and failed</button></div>';
+  if(!list.length)return h+'<div class="table-wrap"><div class="empty" id="ev-empty">No sync events</div></div>';
+  h+='<div class="table-wrap wide"><table class="synder-table table--sm" id="ev-table"><thead><tr><th>Created</th><th>Store</th><th>Source</th><th>QuickBooks item</th><th class="num">Delta</th><th>Status</th><th>Hold reason / error</th><th>Applied</th><th>Shopify adjustment group</th><th>Actions</th></tr></thead><tbody>'
+   +pg.slice(list).map(function(e){var ix=S.events.indexOf(e),chip={Applied:'status-green',Pending:'status-blue',Held:'status-yellow',Failed:'status-red'}[e.status];
+     return '<tr><td>'+esc(e.t)+'</td><td>'+esc(dom(e.store))+'</td><td>'+esc(e.src)+'</td><td>'+esc(e.item)+'</td><td class="num">'+signed(e.d)+'</td>'
+     +'<td><span class="status '+chip+'">'+e.status+'</span>'+(e.rev?' <span class="text-link" style="margin-left:4px">Reverted</span>':'')+'</td><td>'+(e.reason?esc(e.reason):'–')+'</td>'
+     +'<td>'+(e.status==='Applied'?esc(e.t):'–')+'</td><td>'+(e.status==='Applied'?'<a class="text-link">'+gid(e)+'</a>':'–')+'</td>'
+     +'<td>'+(e.status==='Applied'&&!e.rev?'<button class="btn btn-text btn-sm revert" onclick="askRevert('+ix+')">Revert</button>':'–')+'</td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
+  return h}
+function askRevert(ix){var e=S.events[ix];dialog('Revert event','<p>Push '+signed(-e.d)+' back to the store? This writes the opposite adjustment in Shopify.</p>',[{label:'Revert',fn:function(){closeM();e.rev=true;
+  S.events.unshift({t:'just now',store:e.store,src:'Revert of '+e.src,item:e.item,d:-e.d,status:'Applied'});toast('Event reverted.');render()}}])}
+function retry(){var n=0;S.events.forEach(function(e){if(e.status!=='Held'&&e.status!=='Failed')return;var i=S.ints.filter(function(x){return x.name===e.store})[0];
+  if(i.products.some(function(p){return i.map[p[0]]&&qbo(i.map[p[0]].q).name===e.item})){e.status='Pending';delete e.reason;n++}});
+  toast(n+' events queued for retry.');render()}
+
+/* ---- Reconcile ---- */
+function runsOf(){return S.runs.filter(function(r){return (S.recFilter||'all')==='all'||r.store===S.recFilter})}
+function vReconcile(){
+  if(S.runView){var r=S.runs.filter(function(x){return x.id===S.runView})[0];return vRun(r)}
+  var cs=conn().filter(function(i){return i.loc});if(!S.recStore||!int(S.recStore)||!int(S.recStore).loc)S.recStore=cs.length?cs[0].id:null;
+  var list=runsOf(),pg=pager('rec',list.length);
+  var h='<p class="muted" style="margin:0 0 12px">Compares QuickBooks quantity on hand with the stock of one Shopify store for every mapped variant.</p>'
+   +'<div class="toolbar">'+storeSelect('rec-filter','Store',S.recFilter||'all',true,"S.recFilter=this.value;S.page.rec=1;render()")+'<span class="grow"></span>'
+   +(cs.length?storeSelect('rec-store','Store to compare',S.recStore,false,"S.recStore=this.value",cs):'')
+   +'<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button></div>';
+  if(!list.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
+  h+='<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Mismatches</th><th>Finished</th><th></th></tr></thead><tbody>'
+   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).domain)+'</td><td>'+r.trigger+'</td><td><span class="status status-green">Finished</span></td><td class="num">'+r.rows.length+'</td><td class="num">'+r.mismatches+'</td><td>'+esc(r.started)+'</td>'
+     +'<td><button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=false;render()">View rows</button></td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
+  return h}
+function vRun(r){var i=int(r.store),rows=r.rows.filter(function(x){return x.mis&&(!S.unresolvedOnly||x.res==='Unresolved')});
+  var h='<div class="run-head"><div><div class="run-title">'+esc(i.domain)+' <span class="status status-green">Finished</span></div><div class="muted">Comparison from '+esc(r.started)+' · '+r.rows.length+' items compared · '+r.mismatches+' mismatches</div></div>'
+   +'<button class="btn btn-outlined" id="btn-back-runs" onclick="S.runView=null;render()">Back to runs</button></div>'
+   +'<label class="checkbox-wrap" style="margin:4px 0 12px"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label>';
+  h+='<div class="table-wrap"><table class="synder-table table--sm" id="rec-table"><thead><tr><th>Variant</th><th>SKU</th><th>QuickBooks item</th><th class="num">QBO qty</th><th class="num">Shopify on hand</th><th class="num">Shopify available</th><th class="num">Diff</th><th>Resolution</th><th>Actions</th></tr></thead><tbody>'
+   +(rows.map(function(x){var d=x.qq-x.sq,p=i.products.filter(function(y){return y[0]===x.prod})[0];
+     return '<tr data-prod="'+esc(x.prod)+'" data-st="'+i.id+'"><td>'+esc(x.prod)+' - Default Title</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+(x.avail!=null?x.avail:x.sq)+'</td><td class="num">'+signed(d)+'</td>'
+     +'<td>'+(x.res==='Unresolved'?'<span class="muted">Unresolved</span>':esc(x.res)+(x.by?'<span class="muted cell-sub">by '+esc(x.by)+'</span>':''))+'</td>'
+     +'<td>'+(x.res==='Unresolved'?'<button class="btn btn-text btn-sm accept" onclick="askAccept(\''+i.id+'\',\''+x.prod+'\')">Accept QuickBooks</button><button class="btn btn-text btn-sm ignore" onclick="ignoreRow(\''+i.id+'\',\''+x.prod+'\')">Ignore</button>':'–')+'</td></tr>'}).join('')
+     ||'<tr><td colspan="9" class="empty">No rows.</td></tr>')+'</tbody></table></div>';
+  return h}
+function compareNow(){var i=int(S.recStore);if(!i)return;compareStore(i);addRun(S,i,'just now','Manual');S.page.rec=1;render()}
+function addRun(s,i,when,trigger){var rows=i.cmp;s.runs.unshift({id:'r'+(s.runs.length+1)+i.id,store:i.id,started:when,trigger:trigger,rows:rows,mismatches:rows.filter(function(x){return x.mis}).length})}
 
 /* ---- render ---- */
 function render(){
