@@ -78,6 +78,13 @@
   .tip::after{content:attr(data-tip);position:absolute;left:0;bottom:calc(100% + 8px);width:260px;background:var(--color-grey);color:var(--color-white);
     font-size:14px;line-height:20px;font-weight:400;padding:8px 12px;border-radius:var(--radius-sm);opacity:0;pointer-events:none;transition:opacity .12s;z-index:30;white-space:normal}
   .tip:hover::after,.tip:focus-within::after{opacity:1}
+  /* status tooltip (fixed, JS-positioned) and select clear button */
+  .stip{display:inline-flex;cursor:default}
+  .stip-box{position:fixed;display:none;max-width:280px;background:var(--color-grey);color:var(--color-white);font-size:14px;line-height:20px;padding:8px 12px;border-radius:var(--radius-sm);z-index:60;pointer-events:none}
+  .sel-wrap{position:relative}
+  .sel-clear{position:absolute;right:32px;top:50%;transform:translateY(-50%);border:0;background:none;padding:0;cursor:pointer;display:flex;color:inherit;opacity:.6}
+  .sel-clear:hover{opacity:1}.sel-clear .material-icons{font-size:18px}
+  .ev-actions,.ev-time{white-space:nowrap}.ev-actions .revert{margin-left:8px}
   /* ⋯ menu on a connected store */
   .kebab{position:relative;margin-left:4px}
   .kebab-btn{width:32px;height:32px;border:none;background:none;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-grey-50);display:flex;align-items:center;justify-content:center}
@@ -308,7 +315,7 @@ function bActivity(){
   var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, never=!S.enabledOn;
   var rows=[['Held','status-yellow',c('Held')],['Failed','status-red',c('Failed')],['Pending','status-blue',c('Pending')],['Applied in 24h','status-green',c('Applied')]];
   var h='<div class="block" id="b-activity"><div class="block-t">Activity <span class="material-icons help" title="Stock changes from QuickBooks and what happened to them.">help</span></div><div class="box">';
-  rows.forEach(function(r){h+='<div class="act" data-act="'+r[0]+'"><span class="status '+r[1]+'">'+r[0]+'</span>'
+  rows.forEach(function(r){h+='<div class="act" data-act="'+r[0]+'">'+stip(r[0]==='Applied in 24h'?'Applied':r[0],'<span class="status '+r[1]+'">'+r[0]+'</span>')
     +(never?'<span class="muted act-n">–</span>':'<a class="text-link act-n" onclick="go(\'events\',{evFilter:\''+(r[0]==='Applied in 24h'?'Applied':r[0])+'\'})">'+r[2]+'<span class="material-icons i16">chevron_right</span></a>')+'</div>'});
   return h+'</div></div>'}
 function bSync(){
@@ -405,27 +412,51 @@ function refreshMappings(id){var i=int(id),fresh=autoMatch(i);i.products.forEach
   i.mapRefreshed='less than a minute ago';compareStore(i);var auto=i.products.filter(function(p){return fresh[p[0]]}).length;
   toast('Seeded '+i.products.length+' variants: '+auto+' mapped, '+(i.products.length-auto)+' unmapped.');render()}
 
-/* ---- Events ---- */
+/* ---- Activity (was Events) ---- */
+var STATUS_TIP={Pending:'Waiting to be sent to Shopify with the next update.',Applied:'Sent. The stock in Shopify was updated.',
+  Held:'Not sent. Fix the reason, then click Retry.',Failed:'Shopify rejected the change. Click Retry. If it fails again, contact Support.',
+  Reverted:'The opposite change was sent to Shopify. QuickBooks didn\'t change.'};
+function stip(name,inner){return '<span class="stip" tabindex="0" data-stip="'+esc(STATUS_TIP[name])+'">'+inner+'</span>'}
+var DOC_NAMES={InventoryAdjustment:'Inventory qty adjustment',SalesReceipt:'Sales receipt',CreditMemo:'Credit memo',VendorCredit:'Vendor credit',RefundReceipt:'Refund receipt'};
+function docName(src){return src.replace(/^(\w+) #/,function(m,t){return (DOC_NAMES[t]||t)+' #'})}
+function shopProd(e){var i=S.ints.filter(function(x){return x.name===e.store})[0];if(!i||!i.map)return null;
+  var p=i.products.filter(function(p){var m=i.map[p[0]];return m&&qbo(m.q).name===e.item})[0];return p?p[0]:null}
+function retryable(){return S.events.filter(function(e){return e.status==='Held'||e.status==='Failed'})}
 function vEvents(){var f=S.evFilter||'All',sf=S.evStore||'all';
   var list=S.events.filter(function(e){return (f==='All'||e.status===f)&&(sf==='all'||dom(e.store)===int(sf).domain)});
-  var pg=pager('ev',list.length);
+  var pg=pager('ev',list.length),rt=retryable(),nh=rt.filter(function(e){return e.status==='Held'}).length,nf=rt.length-nh;
+  var rl=!rt.length?'Retry held and failed':'Retry '+rt.length+' '+(nh&&nf?'held and failed':nh?'held':'failed');
   var h='<div class="toolbar">'+storeSelect('ev-store','Store',sf,true,"S.evStore=this.value;S.page.ev=1;render()")
-   +'<div class="form-field tb-field"><label class="form-label" for="ev-filter">Status</label><select class="select" id="ev-filter" onchange="S.evFilter=this.value;S.page.ev=1;render()">'
-   +['All','Pending','Applied','Held','Failed'].map(function(x){return '<option '+(x===f?'selected':'')+'>'+x+'</option>'}).join('')+'</select></div><span class="grow"></span>'
-   +'<button class="btn btn-outlined" id="btn-retry" onclick="retry()">Retry held and failed</button></div>';
+   +'<div class="form-field tb-field"><label class="form-label" for="ev-filter">Status</label><div class="sel-wrap"><select class="select" id="ev-filter" onchange="S.evFilter=this.value||\'All\';S.page.ev=1;render()">'
+   +'<option value="" hidden '+(f==='All'?'selected':'')+'></option>'
+   +['Pending','Applied','Held','Failed'].map(function(x){return '<option '+(x===f?'selected':'')+'>'+x+'</option>'}).join('')+'</select>'
+   +(f!=='All'?'<button class="sel-clear" id="ev-filter-clear" aria-label="Clear status filter" onclick="S.evFilter=\'All\';S.page.ev=1;render()"><span class="material-icons">close</span></button>':'')+'</div></div><span class="grow"></span>'
+   +tip(rt.length?'Send the held and failed changes again. Only changes whose reason is fixed are sent.':'Nothing is held or failed.',
+     '<button class="btn btn-outlined" id="btn-retry" '+(rt.length?'':'disabled ')+'onclick="retry()">'+rl+'</button>')+'</div>';
   if(!list.length)return h+'<div class="table-wrap"><div class="empty" id="ev-empty">No sync events</div></div>';
-  h+='<div class="table-wrap wide"><table class="synder-table table--sm" id="ev-table"><thead><tr><th>Created</th><th>Store</th><th>Source</th><th>QuickBooks item</th><th class="num">Delta</th><th>Status</th><th>Hold reason / error</th><th>Applied</th><th>Shopify adjustment group</th><th>Actions</th></tr></thead><tbody>'
-   +pg.slice(list).map(function(e){var ix=S.events.indexOf(e),chip={Applied:'status-green',Pending:'status-blue',Held:'status-yellow',Failed:'status-red'}[e.status];
-     return '<tr><td>'+esc(e.t)+'</td><td>'+esc(dom(e.store))+'</td><td>'+esc(e.src)+'</td><td>'+esc(e.item)+'</td><td class="num">'+signed(e.d)+'</td>'
-     +'<td><span class="status '+chip+'">'+e.status+'</span>'+(e.rev?' <span class="text-link" style="margin-left:4px">Reverted</span>':'')+'</td><td>'+(e.reason?esc(e.reason):'–')+'</td>'
-     +'<td>'+(e.status==='Applied'?esc(e.t):'–')+'</td><td>'+(e.status==='Applied'?'<a class="text-link">'+gid(e)+'</a>':'–')+'</td>'
-     +'<td>'+(e.status==='Applied'&&!e.rev?'<button class="btn btn-text btn-sm revert" onclick="askRevert('+ix+')">Revert</button>':'–')+'</td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
+  h+='<div class="table-wrap"><table class="synder-table table--sm" id="ev-table"><thead><tr><th>Time</th><th>Store</th><th>QuickBooks document</th><th>QuickBooks item</th><th>Shopify product</th><th class="num">Change</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead><tbody>'
+   +pg.slice(list).map(function(e){var ix=S.events.indexOf(e),chip={Applied:'status-green',Pending:'status-blue',Held:'status-yellow',Failed:'status-red'}[e.status],sp=shopProd(e),rev=/^Revert of /.test(e.src);
+     return '<tr><td class="ev-time">'+esc(e.t)+'</td><td>'+esc(dom(e.store))+'</td>'
+     +'<td>'+(rev?esc(docName(e.src)):'<a class="text-link doc-link" onclick="toast(\''+esc(docName(e.src))+' opened in QuickBooks.\')">'+esc(docName(e.src))+'</a>')+'</td>'
+     +'<td>'+esc(e.item)+'</td><td class="shop-prod">'+(sp?esc(sp):'–')+'</td><td class="num">'+signed(e.d)+'</td>'
+     +'<td>'+stip(e.status,'<span class="status '+chip+'">'+e.status+'</span>')+(e.rev?' '+stip('Reverted','<span class="text-link" style="margin-left:4px">Reverted</span>'):'')+'</td><td>'+(e.reason?esc(e.reason):'–')+'</td>'
+     +'<td class="ev-actions">'+(e.status==='Applied'?'<a class="text-link view-shopify" onclick="toast(\'Inventory history opened in Shopify.\')">View in Shopify <span class="material-icons i16">open_in_new</span></a>':'')
+     +(e.status==='Applied'&&!e.rev&&!rev?'<button class="btn btn-text btn-sm revert" onclick="askRevert('+ix+')">Revert</button>':'')
+     +(e.status!=='Applied'?'–':'')+'</td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
   return h}
 function askRevert(ix){var e=S.events[ix];dialog('Revert event','<p>Push '+signed(-e.d)+' back to the store? This writes the opposite adjustment in Shopify.</p>',[{label:'Revert',fn:function(){closeM();e.rev=true;
-  S.events.unshift({t:'just now',store:e.store,src:'Revert of '+e.src,item:e.item,d:-e.d,status:'Applied'});toast('Event reverted.');render()}}])}
-function retry(){var n=0;S.events.forEach(function(e){if(e.status!=='Held'&&e.status!=='Failed')return;var i=S.ints.filter(function(x){return x.name===e.store})[0];
+  S.events.unshift({t:'just now',store:e.store,src:'Revert of '+docName(e.src),item:e.item,d:-e.d,status:'Applied'});toast('Event reverted.');render()}}])}
+function retry(){var n=0;retryable().forEach(function(e){var i=S.ints.filter(function(x){return x.name===e.store})[0];
   if(i.products.some(function(p){return i.map[p[0]]&&qbo(i.map[p[0]].q).name===e.item})){e.status='Pending';delete e.reason;n++}});
-  toast(n+' events queued for retry.');render()}
+  toast(n?plural(n,'event')+' queued for retry.':'Nothing was sent: fix the reason first.');render()}
+/* status tooltips: one fixed box, so the table's scroll area doesn't clip it */
+(function(){var box=document.createElement('div');box.className='stip-box';box.setAttribute('role','tooltip');box.id='stip-box';
+  function show(t){var r=t.getBoundingClientRect();box.textContent=t.getAttribute('data-stip');box.style.display='block';
+    var top=r.top-box.offsetHeight-8;if(top<8)top=r.bottom+8;box.style.top=top+'px';box.style.left=Math.max(8,Math.min(r.left,innerWidth-box.offsetWidth-8))+'px'}
+  function hide(){box.style.display='none'}
+  document.addEventListener('DOMContentLoaded',function(){document.body.appendChild(box)});if(document.body)document.body.appendChild(box);
+  ['mouseover','focusin'].forEach(function(ev){document.addEventListener(ev,function(e){var t=e.target.closest&&e.target.closest('[data-stip]');if(t)show(t);else hide()})});
+  document.addEventListener('focusout',hide);document.addEventListener('scroll',hide,true)})();
 
 /* ---- Reconcile ---- */
 function runsOf(){return S.runs.filter(function(r){return (S.recFilter||'all')==='all'||r.store===S.recFilter})}
