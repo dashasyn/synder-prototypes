@@ -14,6 +14,19 @@ schedules are created, edited, switched on/off and deleted. Every other view rea
   links into the editor.
 
 There is no second editor anywhere, so behaviour can't conflict.
+- **Systems › Device types** (new): which schedule actions each device type supports (display
+  action, PA action, persistent base audio settings). It reads from the same capability table the
+  editor uses, so the two can't disagree.
+
+**Two layouts to choose from** (switch "Layout"): **A · Full page**, a list table followed by a
+full-page editor, like N8's Device list and Device details; **B · List + editor**, the list kept
+in view on the left with the same editor beside it. Both use the same editor, validation and
+unsaved-changes guard.
+
+Taken from the DATNETISR-1036 concept (2026-10-02): the Device types page, the device schedule in
+plain words ("Turn display off", "Set volume to 36%", with the API fields only under Show gaps),
+"Leave unchanged" options with a one-line description each, and the list + editor layout as
+option B.
 
 ## 2 · Full target workflow (variant 1)
 - **List**: name, Active switch, targets, days, time, PA action, display action, device rollout

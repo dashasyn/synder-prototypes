@@ -164,8 +164,8 @@ function daysText(s) {
   return t || '–';
 }
 const timeText = s => `${s.start}–${s.end}${overnight(s) ? ' (+1 day)' : ''}`;
-const paText = s => s.pa === 'adjust' ? (s.paPct <= -100 ? 'Mute (−100%)' : `Volume ${s.paPct > 0 ? '+' : s.paPct < 0 ? '−' : ''}${Math.abs(s.paPct)}%`) : 'No action';
-const displayText = s => s.display === 'darken' ? 'Darken all displays' : 'No action';
+const paText = s => s.pa === 'adjust' ? (s.paPct <= -100 ? 'Mute (−100%)' : `Volume ${s.paPct > 0 ? '+' : s.paPct < 0 ? '−' : ''}${Math.abs(s.paPct)}%`) : 'Unchanged';
+const displayText = s => s.display === 'darken' ? 'Darken all displays' : 'Unchanged';
 const targetText = s => s.mode === 'group' ? (s.group ? `Group · ${groupName(s.group)}` : '–')
   : s.stations.length ? (s.stations.length <= 2 ? s.stations.map(stName).join(', ') : `${s.stations.length} stations`) : '–';
 
@@ -229,11 +229,32 @@ function weeklyEntries(d) {
     }
     s.days.forEach(day => {
       const i = DAYS.findIndex(x => x[0] === day);
-      rows.push({ day: i, t: s.start, ...on, from: s.name });
-      rows.push({ day: overnight(s) ? (i + 1) % 7 : i, t: s.end, ...off, from: s.name });
+      rows.push({ day: i, t: s.start, ...on, edge: 'start', from: s.name });
+      rows.push({ day: overnight(s) ? (i + 1) % 7 : i, t: s.end, ...off, edge: 'end', from: s.name });
     });
   });
   return rows.sort((a, b) => a.day - b.day || a.t.localeCompare(b.t));
+}
+
+/** The same entries in operator words, one row per time + action, days merged.
+    `api` keeps the raw PaxLife fields for the gaps view. */
+function plainEntries(d) {
+  const say = e => {
+    const parts = [];
+    if (e.screen_on) parts.push(e.screen_on === 'false' ? 'Turn display off' : 'Turn display on');
+    if (e.muted) parts.push(e.muted === 'true' ? 'Mute' : 'Unmute');
+    if (e.volume) parts.push(e.edge === 'end' ? `Set volume back to ${e.volume} (default)` : `Set volume to ${e.volume}`);
+    return parts.join(' · ');
+  };
+  const api = e => ['screen_on', 'muted', 'volume'].filter(k => e[k]).map(k => `${k}=${String(e[k]).replace('%', '')}`).join(', ');
+  const map = new Map();
+  weeklyEntries(d).forEach(e => {
+    const key = [e.t, say(e), e.from].join('|');
+    if (!map.has(key)) map.set(key, { t: e.t, action: say(e), api: api(e), from: e.from, days: [] });
+    map.get(key).days.push(e.day);
+  });
+  return [...map.values()].map(r => ({ ...r, dayText: daysText({ days: r.days.map(i => DAYS[i][0]), holidays: false }) }))
+    .sort((a, b) => Math.min(...a.days) - Math.min(...b.days) || a.t.localeCompare(b.t));
 }
 
 /* ── App state ─────────────────────────────────────────────────────── */
@@ -276,6 +297,15 @@ const RowIcon = ({ icon, label, onClick }) => html`
   <${Tooltip} title=${label}>
     <${IconButton} aria-label=${label} onClick=${e => { e.stopPropagation(); onClick(); }}><${Icon}>${icon}<//><//>
   <//>`;
+
+/** A radio option with a one-line description under it. */
+const Opt = (value, title, desc, extra) => html`
+  <${FormControlLabel} value=${value} disabled=${value === 'more'} control=${html`<${Radio} />`}
+    sx=${{ alignItems: 'flex-start', mb: .5 }}
+    label=${html`<${Box} sx=${{ pt: '9px' }}>
+      <span>${title}</span>${extra || null}
+      <${Typography} variant="body2" color="text.secondary">${desc}<//>
+    <//>`} />`;
 
 /** A gap, pinned where it bites. Hidden unless "Show gaps" is on. */
 const GAP_TEXT = {
@@ -356,6 +386,7 @@ function TopBar() {
           <${MenuItem} data-nav="stations" selected=${sel('stations', 'station')} onClick=${() => pick('stations')}>Stations${sub}<//>
           <${MenuItem} data-nav="devices" selected=${sel('devices', 'device')} onClick=${() => pick('devices')}>Devices${sub}<//>
           <${MenuItem} data-nav="schedules" selected=${sel('schedules', 'schedule')} onClick=${() => pick('schedules')}>Output device schedules<//>
+          <${MenuItem} data-nav="types" selected=${sel('types')} onClick=${() => pick('types')}>Device types<//>
           <${MenuItem} disabled>Timetables<//>
           <${MenuItem} disabled>Schema editor<//>
           <${MenuItem} disabled>Message templates<//>
@@ -389,12 +420,12 @@ function Rail() {
 /* The prototype frame, not product chrome: first element, full width, dark.
    Variant + demo states + the gaps toggle. */
 function VariantSwitch() {
-  const { phase, setPhase, listState, setListState, saveMode, setSaveMode, gaps, setGaps } = useApp();
+  const { phase, setPhase, listState, setListState, saveMode, setSaveMode, gaps, setGaps, layout, setLayout } = useApp();
   const btn = (id, on, label, onClick) => html`
     <button id=${id} className=${on ? 'on' : ''} onClick=${onClick}
       style=${{ background: on ? '#fff' : 'none', color: on ? 'rgba(0,0,0,.87)' : 'rgba(255,255,255,.75)',
                 border: 'none', fontFamily: 'inherit', fontSize: 14, fontWeight: on ? 500 : 400,
-                padding: '4px 12px', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>${label}</button>`;
+                padding: '4px 10px', borderRadius: 4, cursor: 'pointer', whiteSpace: 'nowrap' }}>${label}</button>`;
   const group = (label, children) => html`
     <span style=${{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <span style=${{ opacity: .7, fontSize: 14 }}>${label}</span>
@@ -402,13 +433,28 @@ function VariantSwitch() {
     </span>`;
   return html`
     <div className="variant-switch" id="variant-switch"
-      style=${{ display: 'flex', alignItems: 'center', gap: 20, background: '#1b1b1b', color: '#fff', flexWrap: 'wrap',
+      style=${{ display: 'flex', alignItems: 'center', gap: 14, background: '#1b1b1b', color: '#fff', flexWrap: 'wrap',
                 padding: '7px 20px', flexShrink: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif' }}>
-      ${group('Variant', html`${btn('vs-1', phase === 1, '1 · Target (DATNETISR-264)', () => setPhase(1))}${btn('vs-2', phase === 2, '2 · Phase 1 — per device', () => setPhase(2))}`)}
+      ${group('Variant', html`${btn('vs-1', phase === 1, '1 · Target (264)', () => setPhase(1))}${btn('vs-2', phase === 2, '2 · Phase 1, per device', () => setPhase(2))}`)}
+      ${group('Layout', html`${btn('lay-full', layout === 'full', 'A · Full page', () => setLayout('full'))}${btn('lay-split', layout === 'split', 'B · List + editor', () => setLayout('split'))}`)}
       ${group('List', ['data', 'empty', 'loading', 'error'].map(k => btn('ls-' + k, listState === k, k[0].toUpperCase() + k.slice(1), () => setListState(k))))}
       ${group('Save', [['ok', 'Succeeds'], ['partial', 'Partial failure'], ['error', 'Fails']].map(([k, l]) => btn('sv-' + k, saveMode === k, l, () => setSaveMode(k))))}
       <span style=${{ marginLeft: 'auto' }}>${btn('p-gaps', gaps, gaps ? 'Hide gaps' : 'Show gaps', () => setGaps(!gaps))}</span>
     </div>`;
+}
+
+/** Active switch + Re-apply, shared by the list table and the split rail. */
+function listActions({ phase, bump, toast }) {
+  return {
+    toggle: s => {
+      s.active = !s.active;
+      const t = applyState(s, phase).total;
+      if (s.active) s.apply = { at: 'just now', failed: [] };
+      bump();
+      toast(s.active ? `"${s.name}" is active — applied to ${t} device${t === 1 ? '' : 's'}` : `"${s.name}" is inactive — removed from ${t} device${t === 1 ? '' : 's'}`);
+    },
+    reapply: s => { s.apply = { at: 'just now', failed: [] }; bump(); toast(`"${s.name}" re-applied to ${applyState(s, phase).total} devices`); },
+  };
 }
 
 /* ══ Screen: schedules list — the one place ════════════════════════════ */
@@ -420,14 +466,7 @@ function ScheduleList() {
 
   const n = q.trim().toLowerCase();
   const rows = listState === 'empty' ? [] : SCHEDULES.filter(s => !n || `${s.name} ${targetText(s)}`.toLowerCase().includes(n));
-  const toggle = s => {
-    s.active = !s.active;
-    const t = applyState(s, phase).total;
-    if (s.active) s.apply = { at: 'just now', failed: [] };
-    bump();
-    toast(s.active ? `"${s.name}" is active — applied to ${t} device${t === 1 ? '' : 's'}` : `"${s.name}" is inactive — removed from ${t} device${t === 1 ? '' : 's'}`);
-  };
-  const reapply = s => { s.apply = { at: 'just now', failed: [] }; bump(); toast(`"${s.name}" re-applied to ${applyState(s, phase).total} devices`); };
+  const { toggle, reapply } = listActions(useApp());
 
   const add = html`<${Button} variant="contained" id="add-btn" startIcon=${html`<${Icon}>add<//>`} onClick=${() => go('schedule', { id: null })}>Add schedule<//>`;
   const cols = ['Name', 'Active', 'Targets', 'Days', 'Time', 'PA action', 'Display action', 'Devices'];
@@ -503,6 +542,87 @@ function ScheduleList() {
     <//>`;
 }
 
+/* ══ Layout B: list + editor on one page ════════════════════════════════
+   From the manager's DATNETISR-1036 concept: the list stays in view while
+   editing. Same editor, same guard — picking another schedule with unsaved
+   changes asks first. */
+function SplitSchedules() {
+  const app = useApp();
+  const { go, target, screen, phase, listState, setListState } = app;
+  const { toggle, reapply } = listActions(app);
+  const [q, setQ] = useState('');
+  const [savedId, setSavedId] = useState(null);
+  const all = listState === 'empty' ? [] : SCHEDULES;
+  const n = q.trim().toLowerCase();
+  const rows = all.filter(s => !n || `${s.name} ${targetText(s)}`.toLowerCase().includes(n));
+  const sel = screen === 'schedule' && target ? target : (all[0] ? { id: all[0].id } : null);
+  const selKey = sel ? (sel.id || 'new:' + JSON.stringify(sel.preset || {})) : 'none';
+  useEffect(() => setSavedId(null), [selKey]);
+  const current = (sel && sel.id) || savedId;
+  const loading = listState === 'loading';
+  const add = html`<${Button} variant="contained" id="add-btn" startIcon=${html`<${Icon}>add<//>`} onClick=${() => go('schedule', { id: null })}>Add schedule<//>`;
+
+  return html`
+    <${Box}>
+      <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+        <${Typography} variant="h6" id="page-title">Output device schedules<//>
+        <${Box} sx=${{ flex: 1 }} />${add}
+      <//>
+      ${listState === 'error' ? html`
+        <${Alert} severity="error" id="list-error" action=${html`<${Button} color="inherit" onClick=${() => setListState('data')}>Retry<//>`}>
+          Couldn't load schedules. ETC didn't respond — nothing has changed on the devices.
+        <//>` : html`
+      <${Box} id="split" sx=${{ display: 'grid', gridTemplateColumns: '360px minmax(0, 1fr)', gap: 2, alignItems: 'start' }}>
+        <${Paper} variant="outlined" id="rail" sx=${{ borderColor: '#E7E7E7', position: 'sticky', top: 16 }}>
+          <${Box} sx=${{ p: 1.5, borderBottom: '1px solid #E7E7E7' }}>
+            <${TextField} id="q" hiddenLabel placeholder="Search" value=${q} fullWidth
+              inputProps=${{ 'aria-label': 'Search schedules' }} onChange=${e => setQ(e.target.value)}
+              InputProps=${{ endAdornment: html`<${InputAdornment} position="end"><${Icon} sx=${{ color: 'text.secondary' }}>search<//><//>` }} />
+          <//>
+          ${loading ? html`<${Box} id="list-loading" aria-busy="true">${[0, 1, 2, 3].map(i => html`
+              <${Box} key=${i} sx=${{ px: 2, py: 1.5, borderBottom: '1px solid #E7E7E7' }}><${Skeleton} width="70%" /><${Skeleton} width="90%" /><${Skeleton} width="40%" /><//>`)}<//>`
+          : !all.length ? html`
+            <${Box} id="list-empty" sx=${{ px: 2, py: 5, textAlign: 'center' }}>
+              <${Icon} sx=${{ fontSize: 40, color: 'rgba(0,0,0,.38)' }}>event_repeat<//>
+              <${Typography} variant="subtitle1" sx=${{ mt: 1, fontWeight: 500 }}>No schedules yet<//>
+              <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>A schedule darkens displays or changes PA volume at set times, for a station group or for the stations you choose.<//>
+            <//>`
+          : rows.length ? rows.map(s => {
+            const st = applyState(s, phase);
+            const on = s.id === current;
+            return html`
+              <${Box} key=${s.id} data-rail=${s.id} role="button" tabIndex=${0} aria-current=${on ? 'true' : undefined}
+                onClick=${() => go('schedule', { id: s.id })}
+                onKeyDown=${e => { if (e.key === 'Enter') go('schedule', { id: s.id }); }}
+                sx=${{ px: 2, py: 1.5, borderBottom: '1px solid #E7E7E7', cursor: 'pointer',
+                       bgcolor: on ? '#E3F2FD' : '#fff', boxShadow: on ? 'inset 3px 0 #2196F3' : 'none',
+                       '&:hover': { bgcolor: on ? '#E3F2FD' : '#F7F9FC' } }}>
+                <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <${Typography} variant="body2" sx=${{ fontWeight: 500, flex: 1, fontSize: 15 }}>${s.name}<//>
+                  <${Box} onClick=${e => e.stopPropagation()}>
+                    <${Switch} size="small" checked=${s.active} inputProps=${{ 'aria-label': `Active: ${s.name}` }} data-toggle=${s.id} onChange=${() => toggle(s)} />
+                  <//>
+                <//>
+                <${Typography} variant="body2" color="text.secondary">${targetText(s)} · ${daysText(s)} · ${timeText(s)}<//>
+                <${Typography} variant="body2" color="text.secondary">PA: ${paText(s)} · Displays: ${displayText(s)}<//>
+                <${Box} sx=${{ mt: .75, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <${StateChip} st=${st} />
+                  ${st.kind === 'stale' ? html`<${Button} size="small" data-reapply=${s.id} onClick=${e => { e.stopPropagation(); reapply(s); }}>Re-apply<//>` : null}
+                <//>
+              <//>`;
+          }) : html`<${Typography} variant="body2" color="text.secondary" sx=${{ p: 2 }}>No schedules match "${q}".<//>`}
+        <//>
+        <${Box} id="split-editor" sx=${{ minWidth: 0 }}>
+          ${loading ? null : sel
+            ? html`<${ScheduleEditor} key=${selKey} tgt=${sel} embedded=${true} onSaved=${setSavedId} />`
+            : html`<${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', p: 4, textAlign: 'center' }}>
+                <${Typography} variant="body2" color="text.secondary">Add a schedule to start.<//><//>`}
+        <//>
+      <//>`}
+      <${Gap} id="G1" />
+    <//>`;
+}
+
 /* ══ Screen: schedule editor — the only editor ═════════════════════════ */
 const blank = preset => ({ id: null, name: '', active: true, mode: preset && preset.station ? 'stations' : 'group', group: '',
   stations: preset && preset.station ? [preset.station] : [], days: [], holidays: false, start: '', end: '',
@@ -518,13 +638,15 @@ function validate(d) {
   if (toMin(d.start) == null) e.start = d.start.trim() ? 'Use 24-hour hh:mm, e.g. 23:30' : 'Start time is required';
   if (toMin(d.end) == null) e.end = d.end.trim() ? 'Use 24-hour hh:mm, e.g. 05:00' : 'End time is required';
   if (!e.start && !e.end && toMin(d.start) === toMin(d.end)) e.end = 'End time must differ from start time';
-  if (d.pa === 'none' && d.display === 'none') e.action = 'Choose a PA or a display action — a schedule with no action does nothing.';
+  if (d.pa === 'none' && d.display === 'none') e.action = 'Choose a PA or a display action — with both left unchanged, the schedule does nothing.';
   if (d.pa === 'adjust' && (d.paPct === '' || !Number.isFinite(Number(d.paPct)) || d.paPct < -100 || d.paPct > 100)) e.pa = 'Enter a value from −100 to +100';
   return e;
 }
 
-function ScheduleEditor() {
-  const { go, target, phase, saveMode, toast, bump, askDelete, setDirty } = useApp();
+function ScheduleEditor({ tgt, embedded, onSaved }) {
+  const ctx = useApp();
+  const { go, phase, saveMode, toast, bump, askDelete, setDirty } = ctx;
+  const target = tgt || ctx.target;
   const src = target.id ? SCHEDULES.find(s => s.id === target.id) : null;
   const [d, setD] = useState(() => src ? JSON.parse(JSON.stringify(src)) : blank(target.preset));
   const [saved, setSaved] = useState(() => JSON.stringify(src || blank(target.preset)));
@@ -577,7 +699,7 @@ function ScheduleEditor() {
       return;
     }
     const out = JSON.parse(JSON.stringify(d));
-    if (!out.id) { out.id = 's' + Date.now(); SCHEDULES.push(out); }
+    if (!out.id) { out.id = 's' + Date.now(); SCHEDULES.push(out); if (onSaved) onSaved(out.id); }
     else Object.assign(SCHEDULES.find(s => s.id === out.id), out);
     ddRef.current = out;
     setD(out); setSaved(JSON.stringify(out)); setDirty(false);
@@ -593,8 +715,8 @@ function ScheduleEditor() {
   const ex = DEVICES.find(x => x.kind === 'barix' && targetStations(d).includes(x.station)) || DEVICES.find(x => x.kind === 'barix');
 
   return html`
-    <${Box} sx=${{ maxWidth: 1180 }}>
-      <${PageHeader} crumbs=${crumbs} title=${title} titleId="ed-title"
+    <${Box} sx=${{ maxWidth: embedded ? 'none' : 1180, minWidth: 0 }}>
+      <${PageHeader} crumbs=${embedded ? null : crumbs} title=${title} titleId="ed-title"
         action=${html`
           ${!isNew ? html`<${Button} variant="outlined" color="error" id="ed-del" startIcon=${html`<${Icon}>delete<//>`}
             onClick=${() => askDelete(SCHEDULES.find(s => s.id === d.id), () => go('schedules'))}>Delete schedule<//>` : null}
@@ -691,7 +813,7 @@ function ScheduleEditor() {
                         <${TableCell}>${stName(x.d.station)}<//>
                         <${TableCell}>${phase === 2 && x.d.kind === 'ela' && x.useful
                           ? html`<${PhaseChip} label="Skipped — ELA not confirmed" />`
-                          : x.useful ? onDevice(d, x.d) : html`<${Typography} variant="body2" color="text.secondary">Nothing — ${CAN[x.d.kind].display ? 'no display action chosen' : 'no PA action chosen'}<//>`}
+                          : x.useful ? onDevice(d, x.d) : html`<${Typography} variant="body2" color="text.secondary">Nothing — ${CAN[x.d.kind].display ? 'displays left unchanged' : 'audio left unchanged'}<//>`}
                           ${phase === 1 && x.d.kind === 'ela' && x.useful ? html` <${Chip} size="small" label="To confirm with PaxLife" variant="outlined" />` : null}<//>
                       <//>`)}
                   <//>
@@ -757,8 +879,8 @@ function ScheduleEditor() {
           <${Box} id="pa-block">
             <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>PA action <${Typography} component="span" variant="body2" color="text.secondary">· Barix, ELA<//><//>
             <${RadioGroup} value=${d.pa} onChange=${e => set({ pa: e.target.value })} id="ed-pa">
-              <${FormControlLabel} value="none" control=${html`<${Radio} />`} label="No action" />
-              <${FormControlLabel} value="adjust" control=${html`<${Radio} />`} label="Adjust volume" />
+              ${Opt('none', 'Leave unchanged', "Audio stays at each device's base settings.")}
+              ${Opt('adjust', 'Adjust volume', "Relative to each device's default volume, only during this period.")}
             <//>
             ${d.pa === 'adjust' ? html`
               <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 4, pl: 4, pr: 1 }}>
@@ -777,12 +899,12 @@ function ScheduleEditor() {
           <${Box} id="display-block">
             <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>Display action <${Typography} component="span" variant="body2" color="text.secondary">· displays only<//><//>
             <${RadioGroup} value=${d.display} onChange=${e => set({ display: e.target.value })} id="ed-display">
-              <${FormControlLabel} value="none" control=${html`<${Radio} />`} label="No action" />
-              <${FormControlLabel} value="darken" control=${html`<${Radio} />`} label="Darken all displays" />
-              <${FormControlLabel} value="more" disabled control=${html`<${Radio} />`}
-                label=${html`<span>More display actions <${Chip} size="small" label="To confirm with Tuan" variant="outlined" sx=${{ ml: 1 }} /></span>`} />
+              ${Opt('none', 'Leave unchanged', 'Displays keep running as usual.')}
+              ${Opt('darken', 'Darken all displays', 'Screens switch off for this period, then back on.')}
+              ${Opt('more', 'More display actions', 'Not defined yet.', html` <${Chip} size="small" label="To confirm with Tuan" variant="outlined" sx=${{ ml: 1 }} />`)}
             <//>
-            <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>ELA speakers and Barix have no display, so they never get a display action.<//>
+            <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>ELA speakers and Barix have no display, so they never get a display action.
+              ${' '}<${Link} component="button" underline="hover" id="types-link" onClick=${() => go('types')} sx=${{ verticalAlign: 'baseline' }}>What each device type supports<//><//>
             <${Gap} id="G7" />
           <//>
         <//>
@@ -841,8 +963,8 @@ function DeviceDetail() {
   const dirty = !!base && (String(base.volume) !== String(d.base.volume) || base.eq !== d.base.eq);
   useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
   const scheds = SCHEDULES.filter(s => reach(s).some(x => x.d.id === d.id && x.useful));
-  const entries = weeklyEntries(d);
-  const fields = d.kind === 'display' ? ['screen_on'] : ['muted', 'volume'];
+  const entries = plainEntries(d);
+  const { gaps } = useApp();
   const save = () => { if (base) { d.base = { volume: Number(base.volume), eq: base.eq }; } bump(); setDirty(false); toast('Device saved'); go('devices'); };
   const via = s => s.mode === 'group' ? `Group · ${groupName(s.group)}` : `Station · ${stName(d.station)}`;
 
@@ -911,18 +1033,19 @@ function DeviceDetail() {
           <//>` : html`<${Typography} variant="body2" color="text.secondary" id="dv-none">No schedule reaches this device.<//>`}
 
         ${entries.length && !(phase === 2 && d.kind === 'ela') ? html`
-          <${Typography} variant="subtitle2" sx=${{ mt: 2.5, mb: .5 }}>Weekly entries on the device<//>
+          <${Typography} variant="subtitle2" sx=${{ mt: 2.5, mb: .5 }}>Schedule on this device<//>
           <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 1 }}>
-            What ETC wrote through the PaxLife API — read back from the device. Replaced on every apply; don't edit it on the device.
+            The changes this device makes, as ETC wrote them through the PaxLife API and read them back. Replaced on every apply.
           <//>
           <${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
             <${Table} id="dv-entries">
-              <${TableHead}><${TableRow}><${TableCell}>Weekday<//><${TableCell}>Time<//>${fields.map(f => html`<${TableCell} key=${f} sx=${{ fontFamily: 'Roboto Mono, monospace' }}>${f}<//>`)}<${TableCell}>From schedule<//><//><//>
+              <${TableHead}><${TableRow}><${TableCell}>Days<//><${TableCell}>Time<//><${TableCell}>Action<//><${TableCell}>From schedule<//><//><//>
               <${TableBody}>
                 ${entries.map((e, i) => html`
-                  <${TableRow} key=${i}>
-                    <${TableCell}>${DAYS[e.day][1]}<//><${TableCell}>${e.t}<//>
-                    ${fields.map(f => html`<${TableCell} key=${f} sx=${{ fontFamily: 'Roboto Mono, monospace' }}>${e[f] || '–'}<//>`)}
+                  <${TableRow} key=${i} data-entry>
+                    <${TableCell}>${e.dayText}<//><${TableCell}>${e.t}<//>
+                    <${TableCell}>${e.action}${gaps ? html`<${Typography} variant="body2" color="text.secondary" className="api-fields"
+                      sx=${{ fontFamily: 'Roboto Mono, monospace' }}>API: ${e.api}<//>` : null}<//>
                     <${TableCell}>${e.from}<//>
                   <//>`)}
               <//>
@@ -930,6 +1053,48 @@ function DeviceDetail() {
           <//>
           <${Gap} id="G3" />` : null}
       <//>
+    <//>`;
+}
+
+/* ══ Screen: Device types — what each type can do in a schedule ═════════
+   From the manager's DATNETISR-1036 concept (2026-10-02). Read from the same
+   CAN table the editor uses, so the two can't disagree. */
+function DeviceTypes() {
+  const { phase } = useApp();
+  const types = [...new Set(DEVICES.map(d => d.type))].map(t => {
+    const d = DEVICES.find(x => x.type === t);
+    return { t, kind: d.kind, n: DEVICES.filter(x => x.type === t).length };
+  }).sort((a, b) => a.kind.localeCompare(b.kind) || a.t.localeCompare(b.t));
+  const no = html`<${Typography} variant="body2" color="text.disabled">–<//>`;
+  return html`
+    <${Box} sx=${{ maxWidth: 1180 }}>
+      <${Typography} variant="h6" id="page-title">Device types<//>
+      <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5, mb: 2 }}>
+        What each device type can do in a schedule. A schedule applies only these actions — anything else is skipped for that device.
+      <//>
+      <${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+        <${Table} id="types-table">
+          <${TableHead}><${TableRow}>
+            ${['Device type', 'Category', 'Display action', 'PA action', 'Base audio settings', 'Devices', 'Notes'].map(c => html`<${TableCell} key=${c}>${c}<//>`)}
+          <//><//>
+          <${TableBody}>
+            ${types.map(x => html`
+              <${TableRow} key=${x.t} data-type=${x.t}>
+                <${TableCell} sx=${{ fontWeight: 500 }}>${x.t}<//>
+                <${TableCell}>${x.kind === 'display' ? 'Display' : 'Audio'}<//>
+                <${TableCell} data-cap="display">${CAN[x.kind].display ? 'Darken all displays' : no}<//>
+                <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Adjust volume' : no}<//>
+                <${TableCell}>${x.kind === 'barix' ? 'Default volume, equalizer' : x.kind === 'ela' ? 'Default volume' : no}<//>
+                <${TableCell}>${x.n}<//>
+                <${TableCell}>${x.kind === 'ela'
+                  ? (phase === 2 ? html`<${PhaseChip} label="Skipped in phase 1" />` : html`<${Chip} size="small" label="To confirm with PaxLife" variant="outlined" />`)
+                  : x.kind === 'barix' ? 'Base settings are persistent — set on the device, never by a schedule.' : ''}<//>
+              <//>`)}
+          <//>
+        <//>
+      <//>
+      <${Gap} id="G7" />
+      <${Gap} id="G8" />
     <//>`;
 }
 
@@ -1015,6 +1180,7 @@ function Root() {
   const [listState, setListState] = useState('data');
   const [saveMode, setSaveMode] = useState('ok');
   const [gaps, setGaps] = useState(false);
+  const [layout, setLayout] = useState('full');
   const [screen, setScreen] = useState('schedules');
   const [target, setTarget] = useState(null);
   const [rev, setRev] = useState(0);
@@ -1044,9 +1210,12 @@ function Root() {
     if (after) { dirtyRef.current = false; after(); }
   };
 
-  const value = { phase, setPhase, listState, setListState: pickList, saveMode, setSaveMode, gaps, setGaps,
+  // Switching layout swaps in place; with unsaved edits it asks first, as any navigation does.
+  const pickLayout = k => { if (k === layout) return; if (dirtyRef.current) { setLeave({ layout: k }); return; } setLayout(k); };
+  const value = { phase, setPhase, listState, setListState: pickList, saveMode, setSaveMode, gaps, setGaps, layout, setLayout: pickLayout,
                   screen, target, go, rev, bump, toast: setToastMsg, askDelete, setDirty };
-  const View = { schedules: ScheduleList, schedule: ScheduleEditor, devices: DeviceList, device: DeviceDetail,
+  const split = layout === 'split' && (screen === 'schedules' || screen === 'schedule');
+  const View = split ? SplitSchedules : { schedules: ScheduleList, schedule: ScheduleEditor, devices: DeviceList, device: DeviceDetail, types: DeviceTypes,
                  stations: StationList, station: StationDetail }[screen];
 
   return html`
@@ -1059,7 +1228,7 @@ function Root() {
           <${Box} sx=${{ display: 'flex', flex: 1, minHeight: 0 }}>
             <${Rail} />
             <${Box} component="main" data-screen=${screen} data-phase=${phase} sx=${{ flex: 1, minWidth: 0, px: 3, py: 2.5, bgcolor: '#fff' }}>
-              <${View} key=${screen + ':' + JSON.stringify(target)} />
+              <${View} key=${split ? 'split' : screen + ':' + JSON.stringify(target)} />
             <//>
           <//>
         <//>
@@ -1078,7 +1247,7 @@ function Root() {
           <${DialogContent}><${DialogContentText}>Your changes haven't been saved or sent to any device. If you leave, they're lost.<//><//>
           <${DialogActions}>
             <${Button} id="leave-stay" onClick=${() => setLeave(null)}>Keep editing<//>
-            <${Button} color="error" id="leave-discard" onClick=${() => { const l = leave; setLeave(null); doGo(l.s, l.t); }}>Discard changes<//>
+            <${Button} color="error" id="leave-discard" onClick=${() => { const l = leave; setLeave(null); if (l.layout) { dirtyRef.current = false; setLayout(l.layout); } else doGo(l.s, l.t); }}>Discard changes<//>
           <//>
         <//>
         <${Snackbar} open=${!!toastMsg} autoHideDuration=${3200} onClose=${() => setToastMsg('')}

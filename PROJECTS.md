@@ -131,6 +131,7 @@
 - **Variants:** 1 · Target (full 264) / 2 · Phase 1 — per device (ETC resolves targets, replaces each device's weekly schedule via PaxLife; Holidays + ELA shown disabled/skipped). Presenter bar also drives List (data/empty/loading/error) and Save (ok/partial/error) states and "Show gaps" (G1–G11).
 - **Open for others:** display actions beyond Darken (Tuan), ELA schedule support (PaxLife), overlap precedence, holiday calendar owner, membership re-apply policy.
 - **Captured vs sample:** chrome, Stations rows, Device list columns, Device details cards from N8 screenshots; groups, schedules, Barix/ELA devices are sample.
+- **2026-10-02 (after comparing with the manager's DATNETISR-1036 concept, Ignat: "Let's follow your suggestion"):** adopted from it a Systems › Device types capability page, plain-language device entries (API fields only under Show gaps), "Leave unchanged" + one-line descriptions; added **Layout A · Full page / B · List + editor** switch. Missing from the manager's version and kept in ours: phase 1, gaps, partial failure, membership rule, states, ELA/Barix, station context.
 
 ### ETC Optics — one offset per device, two options (2026-09-29)
 - **Status:** 🚧 v1 live, awaiting Ignat's pick between the options

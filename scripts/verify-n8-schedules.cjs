@@ -142,6 +142,7 @@ async function run() {
   await page.click('#ed-display input[value="darken"]'); await wait(150);
   ok(await page.locator('#ed-display input[value="more"]').isDisabled() && /Tuan/.test(await txt('#ed-display')), 'further display actions are shown as "to confirm with Tuan", not selectable');
   ok(await vis('#base-audio-note') && /aren't part of a schedule/.test(await txt('#base-audio-note')), 'base audio settings are set apart from scheduled actions');
+  ok((await count('#card-actions label:has-text("Leave unchanged")')) === 2 && /Displays keep running as usual/.test(await txt('#ed-display')), '"Leave unchanged" with a one-line description on both actions');
   await page.click('#toggle-devices'); await wait(300);
   const elaRow = await txt('#reach-table tr[data-reach="ako-ela-1"]');
   ok(/To confirm with PaxLife/.test(elaRow) && !/Darken/.test(elaRow), 'ELA gets PA only — no display action — flagged for PaxLife', elaRow);
@@ -211,17 +212,23 @@ async function run() {
   await page.click('#d-table tr[data-device="ako-barix-1"] td:first-child'); await wait(400);
   ok(await vis('#card-base') && /Persistent — not scheduled/.test(await txt('#card-base')), 'Barix: base audio settings in their own, marked card');
   ok(await count('#dv-scheds tr[data-sched]') >= 1, 'the schedules reaching the device are listed');
-  ok(await vis('#dv-entries') && /volume|muted/.test(await txt('#dv-entries thead')) && !/screen_on/.test(await txt('#dv-entries thead')), 'per-device weekly entries as the API holds them — audio fields only');
+  ok(await vis('#dv-entries') && /Set volume to 36%/.test(await txt('#dv-entries')) && /Mute/.test(await txt('#dv-entries')) && !/Turn display|screen_on/.test(await txt('#dv-entries')),
+     'device schedule in plain words — audio actions only');
+  ok(/Sun–Thu/.test(await txt('#dv-entries')), 'entries with the same time and action merge their days');
+  ok(await count('.api-fields') === 0, 'raw API fields are hidden by default');
+  await page.click('#p-gaps'); await wait(250);
+  ok(/API: volume=36/.test(await txt('#dv-entries')), 'Show gaps reveals the PaxLife fields behind each action');
+  await page.click('#p-gaps'); await wait(200);
   ok(!(await count('#card-schedules input, #card-schedules [role="combobox"]')), 'no second schedule editor on the device');
   await page.click('#dv-scheds tr[data-sched] button'); await wait(400);
   ok(await screen() === 'schedule', 'a schedule link opens the one editor');
   await nav('devices');
   await page.click('#d-table tr[data-device="ako-ela-1"] td:first-child'); await wait(400);
-  ok(await vis('#ela-note') && !/screen_on/.test(await txt('main')), 'ELA: no display power anywhere on the page');
+  ok(await vis('#ela-note') && !/screen_on|Turn display/.test(await txt('main')), 'ELA: no display power anywhere on the page');
   ok(!/screen_on|Darken/.test(await txt('#card-schedules')), 'ELA schedules card shows no display action');
   await nav('devices');
   await page.click('#d-table tr[data-device="ako-plat-1"] td:first-child'); await wait(400);
-  ok(!(await vis('#card-base')) && /screen_on/.test(await txt('#dv-entries thead')) && !/volume/.test(await txt('#dv-entries thead')), 'a display: no base audio card, screen_on only');
+  ok(!(await vis('#card-base')) && /Turn display off/.test(await txt('#dv-entries')) && /Turn display on/.test(await txt('#dv-entries')) && !/volume|Mute/i.test(await txt('#dv-entries')), 'a display: no base audio card, display on/off only');
 
   /* ── contextual: station ────────────────────────────────────────── */
   section('station context');
@@ -232,6 +239,62 @@ async function run() {
   ok(/Group · North line/.test(await txt('#station-schedules')) && /This station/.test(await txt('#station-schedules')), 'says how each one reaches the station');
   await page.click('#add-for-station'); await wait(400);
   ok(await screen() === 'schedule' && /AKO - Akko/.test(await txt('#card-targets')), 'Add schedule for Akko opens the one editor, prefilled');
+
+  /* ── device types ────────────────────────────────────────────────── */
+  section('device types');
+  await nav('types');
+  const nTypes = await page.evaluate(() => new Set(DEVICES.map(d => d.type)).size);
+  ok(await screen() === 'types' && await count('#types-table tr[data-type]') === nTypes, `one row per device type (${nTypes})`);
+  const ela = await txt('#types-table tr[data-type="ELA speaker"]');
+  ok(/Adjust volume/.test(ela) && !/Darken/.test(ela) && /PaxLife/.test(ela), 'ELA: volume only, no display action, flagged for PaxLife', ela);
+  const tft = await txt('#types-table tr[data-type="Platform TFT"]');
+  ok(/Darken all displays/.test(tft) && !/Adjust volume/.test(tft), 'a display type: Darken only');
+  ok(/Default volume, equalizer/.test(await txt('#types-table tr[data-type="Barix audio"]')), 'Barix base settings named as persistent');
+  await nav('schedules');
+  await page.click('#s-table tr[data-schedule="s1"] td:first-child'); await wait(400);
+  await page.click('#types-link'); await wait(350);
+  ok(await screen() === 'types', 'the editor links to Device types');
+
+  /* ── layout B: list + editor ─────────────────────────────────────── */
+  section('layout B — list + editor');
+  await nav('schedules');
+  await page.click('#lay-split'); await wait(400);
+  const nS2 = await page.evaluate(() => SCHEDULES.length);
+  ok(await vis('#split') && await count('#rail [data-rail]') === nS2, `list on the left, every schedule (${nS2})`);
+  const rb = await page.locator('#rail').boundingBox(), eb = await page.locator('#split-editor').boundingBox();
+  ok(rb.x + rb.width < eb.x && Math.abs(rb.y - eb.y) < 4, 'editor sits beside the list, same row');
+  ok(await page.locator('#rail [data-rail]').first().getAttribute('aria-current') === 'true' && await vis('#ed-name'), 'the first schedule opens straight away');
+  ok(!(await vis('.MuiBreadcrumbs-root')), 'no breadcrumbs in the split editor');
+  const second = await page.locator('#rail [data-rail]').nth(2).getAttribute('data-rail');
+  await page.fill('#ed-name', 'Edited, not saved');
+  await page.click(`#rail [data-rail="${second}"]`); await wait(300);
+  ok(await vis('#leave-dialog'), 'picking another schedule with unsaved changes asks first');
+  await page.click('#leave-stay'); await wait(250);
+  ok((await page.inputValue('#ed-name')) === 'Edited, not saved', 'Keep editing keeps the edit');
+  await page.click('#lay-full'); await wait(300);
+  ok(await vis('#leave-dialog'), 'switching layout with unsaved changes asks too');
+  await page.click('#leave-stay'); await wait(250);
+  await page.click(`#rail [data-rail="${second}"]`); await wait(300);
+  await page.click('#leave-discard'); await wait(400);
+  ok(await page.getAttribute(`#rail [data-rail="${second}"]`, 'aria-current') === 'true'
+     && (await page.inputValue('#ed-name')) === await page.evaluate(id => SCHEDULES.find(s => s.id === id).name, second), 'Discard opens the picked schedule and highlights it');
+  await page.click(`#rail [data-toggle="${second}"] input`); await wait(300);
+  ok(/is (in)?active/.test(await txt('.MuiSnackbar-root')), 'the Active switch works from the list');
+  await page.click('#add-btn'); await wait(400);
+  ok(await txt('#ed-title') === 'New schedule' && await count('#rail [aria-current="true"]') === 0, 'Add schedule opens a blank editor beside the list');
+  await page.fill('#ed-name', 'Split test'); await pickMenu('#ed-group', 'Airport');
+  await page.click('[data-day="mon"]'); await page.fill('#ed-start', '02:00'); await page.fill('#ed-end', '03:00');
+  await page.click('#ed-display input[value="darken"]'); await page.click('#ed-save');
+  await page.waitForSelector('#save-result', { timeout: 6000 });
+  ok(await count('#rail [data-rail]') === nS2 + 1 && await count('#rail [aria-current="true"]') === 1 && /Split test/.test(await txt('#rail [aria-current="true"]')),
+     'after saving, the new schedule is in the list and highlighted — result still on screen');
+  await page.click('#ls-empty'); await wait(300);
+  ok(await vis('#rail #list-empty'), 'empty state in the list column');
+  await page.click('#ls-loading'); await wait(300);
+  ok(await count('#rail .MuiSkeleton-root') > 4, 'loading state in the list column');
+  await page.click('#ls-data'); await wait(300);
+  await page.click('#lay-full'); await wait(300);
+  ok(await vis('#s-table'), 'layout A is back in place');
 
   section('runtime');
   ok(errors.length === 0, 'no JS errors or failed requests', errors.slice(0, 4));
