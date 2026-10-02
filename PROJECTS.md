@@ -124,6 +124,14 @@
 - **Verified:** headless Chromium, **86 DOM assertions** passing, 0 JS errors, no page-level horizontal overflow at 1440, no raw hex in the prototype's own CSS (`scripts/verify-payapp.cjs`; screenshots `scripts/shots-payapp.cjs`). Asserts visibility/clickability rather than element state, and covers the typed-metadata-key case that a blur re-render would have broken.
 - **Registered on the hub:** Synder Prototypes → Settings & Billing.
 
+### N8 · Output device schedules — DATNETISR-264 (2026-10-02)
+- **Status:** 🚧 v1 live, built "as I see it" at Ignat's request — awaiting his review
+- **Live URL:** https://dashasyn.github.io/synder-prototypes/projects/n8-device-schedules/ — `projects/n8-device-schedules/app.js`, design note `NOTE.md`, verified by `scripts/verify-n8-schedules.cjs`
+- **Placement:** Systems › *Output device schedules* (below Devices) is the only editor. Station details › Schedules tab and Device details › Schedules card are read-only context linking into it.
+- **Variants:** 1 · Target (full 264) / 2 · Phase 1 — per device (ETC resolves targets, replaces each device's weekly schedule via PaxLife; Holidays + ELA shown disabled/skipped). Presenter bar also drives List (data/empty/loading/error) and Save (ok/partial/error) states and "Show gaps" (G1–G11).
+- **Open for others:** display actions beyond Darken (Tuan), ELA schedule support (PaxLife), overlap precedence, holiday calendar owner, membership re-apply policy.
+- **Captured vs sample:** chrome, Stations rows, Device list columns, Device details cards from N8 screenshots; groups, schedules, Barix/ELA devices are sample.
+
 ### ETC Optics — one offset per device, two options (2026-09-29)
 - **Status:** 🚧 v1 live, awaiting Ignat's pick between the options
 - **Live URL:** https://dashasyn.github.io/synder-prototypes/projects/etc-optics-devices-mui/ — `projects/etc-optics-devices-mui/app.js`, verified by `scripts/verify-eod-mui.cjs`
