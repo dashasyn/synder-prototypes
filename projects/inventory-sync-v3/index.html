@@ -103,8 +103,15 @@
   .table-wrap.wide table{min-width:1780px}
   .pagination{justify-content:flex-end}
   .pager-per{width:auto;height:32px;min-width:72px}
-  .run-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:8px}
-  .run-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .run-head{display:flex;align-items:center;gap:24px;margin-bottom:4px}
+  .back-link{display:inline-flex;align-items:center;gap:4px;margin-bottom:12px}
+  .run-sub{margin-bottom:12px}
+  .col-cb{width:40px}
+  #head-bulk th{background:var(--color-primary-5)}
+  .bulk-row{display:flex;align-items:center;gap:12px}.bulk-count{font-weight:500;color:var(--color-primary)}
+  .rec-actions{white-space:nowrap}
+  .dlg-list{margin:8px 0;padding-left:20px}
+  .run-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
   .cell-sub{display:block}
   .spin.dark{border-color:var(--color-grey-20);border-top-color:var(--color-primary)}
   .act a{display:inline-flex;align-items:center;gap:2px}
@@ -139,7 +146,7 @@
   .toolbar .grow{flex:1}
   .toolbar .select{height:36px;min-width:240px}
   td select.select{height:32px;min-width:220px}
-  td.num,th.num{text-align:right}
+  td.num,th.num,.synder-table th.num,.synder-table td.num{text-align:right}
   .diff-pos{color:var(--color-green)} .diff-neg{color:var(--color-red)}
   .empty{padding:32px;text-align:center;color:var(--text-secondary);font-size:14px}
 </style>
@@ -278,10 +285,26 @@ function enable(){S.sync='on';S.enabledOn='just now';S.lastSync='just now';S.pau
 function askDisable(){dialog('Disable inventory sync?','<p>Synder stops reading QuickBooks. Changes made while sync is disabled are never sent to Shopify, only changes after you enable it again.</p><div class="alert alert-info" style="margin:0"><div>To stop for a while without losing changes, use <b>Pause</b>: changes are queued and sent when you resume.</div></div>',
   [{label:'Pause instead',cls:'btn-outlined',fn:function(){closeM();pause()}},{label:'Disable',cls:'btn-danger',fn:function(){closeM();S.sync='off';toast('Inventory sync disabled.');render()}}])}
 function pause(){S.sync='paused';S.pauseReason='Paused just now. Changes are queued and sent when you resume.';toast('Paused. Changes are queued.');render()}
-function askAccept(id,prod){var i=int(id),r=i.cmp.filter(function(x){return x.prod===prod})[0];
-  dialog('Accept QuickBooks quantity','<p>Shopify on hand for "'+esc(prod)+'" in '+esc(i.name)+' will be set to '+r.qq+' (change '+signed(r.qq-r.sq)+'). A sync event will be created to apply it.</p>',[{label:'Accept QuickBooks',fn:function(){closeM();
-    var d=r.qq-r.sq;i.shop[prod]=r.qq;r.sq=r.qq;r.avail=r.qq;r.res='Accepted QuickBooks';r.by='owner@acmehome.com · just now';S.events.unshift({t:'just now',store:i.name,src:'Reconcile',item:prod,d:d,status:'Pending'});toast('QuickBooks quantity accepted. Shopify will be updated.');render()}}])}
-function ignoreRow(id,prod){var i=int(id),r=i.cmp.filter(function(x){return x.prod===prod})[0];S.ignored[id+'|'+prod]={qq:r.qq,sq:r.sq};r.res='Ignored';r.by='owner@acmehome.com · just now';toast('Mismatch ignored.');render()}
+/* a difference row lives in the latest run of its store and in i.cmp (the Overview count); keep both in step */
+function latestRun(i){return S.runs.filter(function(x){return x.store===i.id})[0]}
+function rowOf(i,prod){var r=latestRun(i);return (r?r.rows:i.cmp).filter(function(x){return x.prod===prod})[0]}
+function both(i,prod,fn){var seen=[];[(latestRun(i)||{}).rows,i.cmp].forEach(function(arr){(arr||[]).forEach(function(x){if(x.prod===prod&&seen.indexOf(x)<0){seen.push(x);fn(x)}})})}
+function applyAccept(i,r){var d=r.qq-r.sq,item=r.item;i.shop[r.prod]=r.qq;both(i,r.prod,function(x){x.sq=x.qq;x.avail=x.qq;x.res='Updated';x.by='owner@acmehome.com · just now'});
+  S.events.unshift({t:'just now',store:i.name,src:'Stock check',item:item,d:d,status:'Pending'})}
+function setIgnored(i,prod,on){var r=rowOf(i,prod);if(on)S.ignored[i.id+'|'+prod]={qq:r.qq,sq:r.sq};else delete S.ignored[i.id+'|'+prod];
+  both(i,prod,function(x){x.res=on?'Ignored':'Unresolved';if(on)x.by='owner@acmehome.com · just now';else delete x.by})}
+function cmpWhen(i){var r=latestRun(i);return r?r.started:''}
+function askAccept(id,prod){var i=int(id),r=rowOf(i,prod);
+  dialog('Update Shopify qty','<p>Synder will send '+signed(r.qq-r.sq)+' to "'+esc(prod)+'" in '+esc(i.name)+'. That is the difference found in the comparison on '+esc(cmpWhen(i))+'.</p><p>If the stock changed since then, click Compare now first.</p>',
+    [{label:'Update Shopify qty',fn:function(){closeM();applyAccept(i,r);toast('Shopify quantity will be updated.');render()}}])}
+function ignoreRow(id,prod){setIgnored(int(id),prod,true);toast('Difference ignored.');render()}
+function restoreRow(id,prod){setIgnored(int(id),prod,false);toast('Difference restored.');render()}
+function bulkSel(){return Object.keys(S.recSel||{}).filter(function(k){return S.recSel[k]})}
+function bulkAccept(id){var i=int(id),rows=bulkSel().map(function(k){return rowOf(i,k)}).filter(Boolean);
+  dialog('Update Shopify qty for '+plural(rows.length,'product')+'?','<p>Synder will send these differences to '+esc(i.name)+', as found in the comparison on '+esc(cmpWhen(i))+':</p><ul class="dlg-list">'
+    +rows.map(function(r){return '<li>'+esc(r.prod)+': '+signed(r.qq-r.sq)+'</li>'}).join('')+'</ul><p>If the stock changed since then, click Compare now first.</p>',
+    [{label:'Update Shopify qty',fn:function(){closeM();rows.forEach(function(r){applyAccept(i,r)});S.recSel={};toast(rows.length+(rows.length===1?' Shopify quantity':' Shopify quantities')+' will be updated.');render()}}])}
+function bulkIgnore(id){var i=int(id),ks=bulkSel();ks.forEach(function(k){setIgnored(i,k,true)});S.recSel={};toast(plural(ks.length,'difference')+' ignored.');render()}
 function setMap(id,prod,q,silent){var i=int(id);i.map[prod]=q?{q:q,src:'Manual'}:null;compareStore(i);if(q)toast('QuickBooks item mapped.');render()}
 function go(t,opts){if(S.tab!==t)S.runView=null;S.tab=t;Object.assign(S,opts||{});render()}
 
@@ -443,7 +466,7 @@ function vEvents(){var f=S.evFilter||'All',sf=S.evStore||'all';
      '<button class="btn btn-outlined" id="btn-retry" '+(rt.length?'':'disabled ')+'onclick="retry()">'+rl+'</button>')+'</div>';
   if(!list.length)return h+'<div class="table-wrap"><div class="empty" id="ev-empty">No sync events</div></div>';
   h+='<div class="table-wrap"><table class="synder-table table--sm" id="ev-table"><thead><tr><th>Time</th><th>Store</th><th>QuickBooks document</th><th>QuickBooks item</th><th>Shopify product</th><th class="num">Change</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead><tbody>'
-   +pg.slice(list).map(function(e){var ix=S.events.indexOf(e),chip={Applied:'status-green',Pending:'status-blue',Held:'status-yellow',Failed:'status-red'}[e.status],sp=shopProd(e),rev=/^Revert of /.test(e.src);
+   +pg.slice(list).map(function(e){var ix=S.events.indexOf(e),chip={Applied:'status-green',Pending:'status-blue',Held:'status-yellow',Failed:'status-red'}[e.status],sp=shopProd(e),rev=/^Revert of /.test(e.src)||e.src==='Stock check';
      return '<tr><td class="ev-time">'+esc(e.t)+'</td><td>'+esc(e.store)+'</td>'
      +'<td>'+(rev?esc(docName(e.src)):'<a class="text-link doc-link" onclick="toast(\''+esc(docName(e.src))+' opened in QuickBooks.\')">'+esc(docName(e.src))+'</a>')+'</td>'
      +'<td>'+esc(e.item)+'</td><td class="shop-prod">'+(sp?esc(sp):'–')+'</td><td class="num">'+signed(e.d)+'</td>'
@@ -466,39 +489,54 @@ function retry(){var n=0;retryable().forEach(function(e){var i=S.ints.filter(fun
   ['mouseover','focusin'].forEach(function(ev){document.addEventListener(ev,function(e){var t=e.target.closest&&e.target.closest('[data-stip]');if(t)show(t);else hide()})});
   document.addEventListener('focusout',hide);document.addEventListener('scroll',hide,true)})();
 
-/* ---- Reconcile ---- */
+/* ---- Stock check (was Reconcile) ---- */
+var RUN_TIP={Finished:'The comparison is done. Open it to see the products that differ.',Failed:'The comparison didn\'t finish. Click Compare now to try again.'};
+var RES_TIP={Unresolved:'QuickBooks and Shopify differ. Update the Shopify quantity or ignore the difference.',Updated:'The difference was sent to Shopify. You can see it on the Activity tab.',
+  Ignored:'Marked as reviewed. Nothing was changed. It comes back if either quantity changes.'};
+function chip(tips,name,cls){return '<span class="stip" tabindex="0" data-stip="'+esc(tips[name])+'"><span class="status '+cls+'">'+name+'</span></span>'}
 function runsOf(){return S.runs.filter(function(r){return (S.recFilter||'all')==='all'||r.store===S.recFilter})}
 function vReconcile(){
   if(S.runView){var r=S.runs.filter(function(x){return x.id===S.runView})[0];return vRun(r)}
-  var cs=conn().filter(function(i){return i.loc});if(!S.recStore||!int(S.recStore)||!int(S.recStore).loc)S.recStore=cs.length?cs[0].id:null;
-  var list=runsOf(),pg=pager('rec',list.length);
-  var h='<p class="muted" style="margin:0 0 12px">Compares QuickBooks quantity on hand with the stock of one Shopify store for every mapped variant.</p>'
+  var cs=conn().filter(function(i){return i.loc}),list=runsOf(),pg=pager('rec',list.length);
+  var h='<p class="muted" style="margin:0 0 12px">Every night at 02:30 UTC, Synder compares QuickBooks quantity on hand with Shopify stock for every mapped product in each store. Open a comparison to see the products that differ.</p>'
    +'<div class="toolbar">'+storeSelect('rec-filter','Store',S.recFilter||'all',true,"S.recFilter=this.value;S.page.rec=1;render()")+'<span class="grow"></span>'
-   +(cs.length?storeSelect('rec-store','Store to compare',S.recStore,false,"S.recStore=this.value",cs):'')
-   +'<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button></div>';
+   +tip(cs.length?'Compare every store that has a location now, instead of waiting for the night.':'Choose a location for a store first.','<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button>')+'</div>';
   if(!list.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
-  h+='<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Mismatches</th><th>Finished</th><th></th></tr></thead><tbody>'
-   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).name)+'</td><td>'+r.trigger+'</td><td><span class="status status-green">Finished</span></td><td class="num">'+r.rows.length+'</td><td class="num">'+r.mismatches+'</td><td>'+esc(r.started)+'</td>'
-     +'<td><button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=false;render()">View rows</button></td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
+  h+='<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Differences</th><th class="num"></th></tr></thead><tbody>'
+   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).name)+'</td><td>'+(r.trigger==='Scheduled'?'Nightly':r.trigger)+'</td><td>'+chip(RUN_TIP,'Finished','status-green')+'</td><td class="num">'+r.rows.length+'</td><td class="num">'+r.mismatches+'</td>'
+     +'<td class="num"><button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=true;S.recSel={};render()">View rows</button></td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
   return h}
-function vRun(r){var i=int(r.store),rows=r.rows.filter(function(x){return x.mis&&(!S.unresolvedOnly||x.res==='Unresolved')});
-  var h='<div class="run-head"><div><div class="run-title">'+esc(i.name)+' <span class="status status-green">Finished</span></div><div class="muted">Comparison from '+esc(r.started)+' · '+r.rows.length+' items compared · '+r.mismatches+' mismatches</div></div>'
-   +'<button class="btn btn-outlined" id="btn-back-runs" onclick="S.runView=null;render()">Back to runs</button></div>'
-   +'<label class="checkbox-wrap" style="margin:4px 0 12px"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label>';
-  h+='<div class="table-wrap"><table class="synder-table table--sm" id="rec-table"><thead><tr><th>Variant</th><th>SKU</th><th>QuickBooks item</th><th class="num">QBO qty</th><th class="num">Shopify on hand</th><th class="num">Shopify available</th><th class="num">Diff</th><th>Resolution</th><th>Actions</th></tr></thead><tbody>'
-   +(rows.map(function(x){var d=x.qq-x.sq,p=i.products.filter(function(y){return y[0]===x.prod})[0];
-     return '<tr data-prod="'+esc(x.prod)+'" data-st="'+i.id+'"><td>'+esc(x.prod)+' - Default Title</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+(x.avail!=null?x.avail:x.sq)+'</td><td class="num">'+signed(d)+'</td>'
-     +'<td>'+(x.res==='Unresolved'?'<span class="muted">Unresolved</span>':esc(x.res)+(x.by?'<span class="muted cell-sub">by '+esc(x.by)+'</span>':''))+'</td>'
-     +'<td>'+(x.res==='Unresolved'?'<button class="btn btn-text btn-sm accept" onclick="askAccept(\''+i.id+'\',\''+x.prod+'\')">Accept QuickBooks</button><button class="btn btn-text btn-sm ignore" onclick="ignoreRow(\''+i.id+'\',\''+x.prod+'\')">Ignore</button>':'–')+'</td></tr>'}).join('')
-     ||'<tr><td colspan="9" class="empty">No rows.</td></tr>')+'</tbody></table></div>';
+function vRun(r){var i=int(r.store),latest=S.runs.filter(function(x){return x.store===r.store})[0]===r,sel=S.recSel||{};
+  var rows=r.rows.filter(function(x){return x.mis&&(!S.unresolvedOnly||x.res==='Unresolved')}),open=latest?rows.filter(function(x){return x.res==='Unresolved'}):[];
+  var nSel=open.filter(function(x){return sel[x.prod]}).length,allOn=open.length&&nSel===open.length;
+  var h='<a class="text-link back-link" id="btn-back-runs" onclick="S.runView=null;S.recSel={};render()"><span class="material-icons i16">arrow_back</span>All comparisons</a>'
+   +'<div class="run-head"><div class="run-title">'+esc(i.name)+' '+chip(RUN_TIP,'Finished','status-green')+'</div>'
+   +'<label class="checkbox-wrap"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label></div>'
+   +'<div class="muted run-sub">Compared on '+esc(r.started)+' · '+plural(r.rows.length,'product')+' compared · '+plural(r.mismatches,'difference')+(latest?'':' · An older comparison: act on the latest one.')+'</div>';
+  var cb=function(on,ix,label,fn){return '<input type="checkbox" class="checkbox" '+(on?'checked ':'')+(ix?'data-ix ':'')+'aria-label="'+esc(label)+'" onchange="'+fn+'">'};
+  var allFn="var o=this.checked;S.recSel={};if(o)["+open.map(function(x){return "'"+x.prod.replace(/'/g,"\\'")+"'"}).join(',')+"].forEach(function(p){S.recSel[p]=true});render()";
+  var head=nSel?'<tr id="head-bulk"><th class="col-cb">'+cb(true,nSel<open.length,'Select all',allFn)+'</th><th colspan="8"><div class="bulk-row"><span class="bulk-count">'+nSel+' selected</span>'
+      +'<button class="btn btn-sm" id="bulk-accept" onclick="bulkAccept(\''+i.id+'\')">Update Shopify qty</button><button class="btn btn-outlined btn-sm" id="bulk-ignore" onclick="bulkIgnore(\''+i.id+'\')">Ignore</button></div></th></tr>'
+    :'<tr><th class="col-cb">'+(open.length?cb(false,false,'Select all',allFn):'')+'</th><th>Product</th><th>SKU</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">'
+      +'<span class="stip" tabindex="0" data-stip="QuickBooks minus Shopify. +8 means Shopify has 8 fewer than QuickBooks.">Difference</span></th><th>Status</th><th>Actions</th></tr>';
+  h+='<div class="table-wrap"><table class="synder-table table--sm" id="rec-table"><thead>'+head+'</thead><tbody>'
+   +(rows.map(function(x){var d=x.qq-x.sq,p=i.products.filter(function(y){return y[0]===x.prod})[0],q="'"+i.id+"','"+x.prod.replace(/'/g,"\\'")+"'",canAct=latest&&x.res==='Unresolved';
+     var st=x.res==='Unresolved'?chip(RES_TIP,'Unresolved','status-yellow'):x.res==='Ignored'?chip(RES_TIP,'Ignored','status-grey'):chip(RES_TIP,'Updated','status-green');
+     return '<tr data-prod="'+esc(x.prod)+'" data-st="'+i.id+'"><td class="col-cb">'+(canAct?cb(!!sel[x.prod],false,'Select '+x.prod,"S.recSel=S.recSel||{};S.recSel['"+x.prod.replace(/'/g,"\\'")+"']=this.checked;render()"):'')+'</td>'
+     +'<td>'+esc(x.prod)+'</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+signed(d)+'</td>'
+     +'<td>'+st+(x.by?'<span class="muted cell-sub">by '+esc(x.by)+'</span>':'')+'</td>'
+     +'<td class="rec-actions">'+(canAct?'<button class="btn btn-text btn-sm accept" onclick="askAccept('+q+')">Update Shopify qty</button><button class="btn btn-text btn-sm ignore" onclick="ignoreRow('+q+')">Ignore</button>'
+       :latest&&x.res==='Ignored'?'<button class="btn btn-text btn-sm restore" onclick="restoreRow('+q+')">Restore</button>':'–')+'</td></tr>'}).join('')
+     ||'<tr><td colspan="9" class="empty">'+(S.unresolvedOnly?'No unresolved differences.':'No differences.')+'</td></tr>')+'</tbody></table></div>';
   return h}
-function compareNow(){var i=int(S.recStore);if(!i)return;compareStore(i);addRun(S,i,'just now','Manual');S.page.rec=1;render()}
+function compareNow(){var cs=conn().filter(function(i){return i.loc});cs.forEach(function(i){compareStore(i);addRun(S,i,'just now','Manual')});S.page.rec=1;
+  toast(plural(cs.length,'store')+' compared.');render()}
 function addRun(s,i,when,trigger){var rows=i.cmp;s.runs.unshift({id:'r'+(s.runs.length+1)+i.id,store:i.id,started:when,trigger:trigger,rows:rows,mismatches:rows.filter(function(x){return x.mis}).length})}
 
 /* ---- render ---- */
 function render(){
   var m=$('main');
-  var tabs=['overview','events','mappings','reconcile'],names={overview:'Overview',mappings:'Mappings',events:'Activity',reconcile:'Reconcile'};
+  var tabs=['overview','events','mappings','reconcile'],names={overview:'Overview',mappings:'Mappings',events:'Activity',reconcile:'Stock check'};
   var v=S.tab==='overview'?vOverview():S.tab==='mappings'?vMappings():S.tab==='events'?vEvents():vReconcile();
   m.innerHTML='<div class="page-header"><div class="page-header-text"><h1 class="page-title">Inventory sync</h1><p class="page-subtitle">Pushes QuickBooks Online stock movements into your Shopify store.</p></div></div>'
    +'<div class="tabs" role="tablist">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t?' active':'')+'" role="tab" id="tab-'+t+'" aria-selected="'+(S.tab===t)+'" onclick="go(\''+t+'\')">'+names[t]+'</button>'}).join('')+'</div>'+v;
