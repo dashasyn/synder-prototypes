@@ -293,7 +293,8 @@ function ready(i){return !!(i.loc&&i.inv==='Inventory')}       // Ignat: locatio
 function compareStore(i,s){s=s||S;i.cmp=[];i.products.forEach(function(p){var m=i.map[p[0]];if(!m)return;var q=qbo(m.q),sq=i.shop[p[0]],k=i.id+'|'+p[0],ig=s.ignored[k];
   i.cmp.push({prod:p[0],item:q.name,qq:q.qty,sq:sq,avail:sq-((i.committed||{})[p[0]]||0),mis:q.qty!==sq,res:q.qty===sq?'Same':(ig&&ig.qq===q.qty&&ig.sq===sq)?'Ignored':'Unresolved'})})}
 function diffsOf(i){return (i.cmp||[]).filter(function(r){return r.res==='Unresolved'})}
-function allDiffs(){return conn().filter(function(i){return i.loc}).reduce(function(n,i){return n+diffsOf(i).length},0)}
+function compared(){return conn().filter(function(i){return i.loc&&latestRun(i)})}   // has a finished comparison
+function allDiffs(){return compared().reduce(function(n,i){return n+diffsOf(i).length},0)}
 
 /* ---- actions ---- */
 function doConnect(id,fromDialog){if(!id){toast('Choose a store first.');return}if(fromDialog)closeM();S.connecting=id;render();
@@ -391,8 +392,8 @@ function vOverview(){
   else h+='<div class="cols"><div>'+bActivity()+bDiffs()+'</div>'+bSync()+bStores()+'</div>';
   return h}
 function bDiffs(){   // informative only: how many differ, the 3 biggest, one way to the details (Ignat 2026-10-05: no "Update all", no status chip, no night count, no summary line)
-  var st=conn().filter(function(i){return i.loc}),runs=st.map(function(i){return latestRun(i)}).filter(Boolean),n=allDiffs(),multi=st.length>1;
-  var failed=st.filter(function(i){var a=lastRunAny(i);return a&&a.status==='Failed'});
+  var st=compared(),runs=st.map(function(i){return latestRun(i)}),n=allDiffs(),multi=conn().filter(function(i){return i.loc}).length>1;
+  var failed=conn().filter(function(i){return i.loc}).filter(function(i){var a=lastRunAny(i);return a&&a.status==='Failed'});
   var rows=[];st.forEach(function(i){diffsOf(i).forEach(function(x){rows.push({i:i,x:x,d:x.qq-x.sq})})});rows.sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d)});
   var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock check '+helpIc('Every night at 02:30 UTC, Synder compares the stock of each product in QuickBooks and Shopify. Products where the two numbers differ are shown here. Sync sends only changes, so a difference stays until you fix it.')+'</div><div class="box">';
   failed.forEach(function(i){var a=lastRunAny(i);
@@ -436,9 +437,6 @@ function bSync(){
   if(mode==='on') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>'+nextSync()+'</div>';
   else if(mode==='paused') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>after you resume</div>';
   if(mode==='paused') h+='<div class="line muted" id="pause-reason">'+esc(S.pauseReason)+'</div>';
-  if(mode==='paused'){var held=S.events.filter(function(e){return e.status==='Held'}).length,nr=cs.filter(function(i){return !ready(i)});
-    if(held||nr.length)h+='<div class="resume-note" id="resume-note">'+(held?'<div><span class="material-icons i16">info</span>'+(held===1?'1 held change won\'t be sent':held+' held changes won\'t be sent')+' until its reason is fixed.</div>':'')
-      +nr.map(function(i){return '<div><span class="material-icons i16">info</span>'+esc(i.name)+' isn\'t ready, so it won\'t receive changes.</div>'}).join('')+'</div>'}
   var b;
   if(mode==='off') b=why(rd.length?'Start sending stock changes from QuickBooks to the ready stores. Only changes made from now on are sent.':'Choose a location and set Created product to Inventory for at least one store first.',
       '<button class="btn" id="btn-enable" '+(rd.length?'':'disabled ')+'onclick="enable()">Enable</button>',!rd.length);
