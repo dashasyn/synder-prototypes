@@ -144,17 +144,17 @@ const CAN = {
 const DAYS = [['sun', 'Sun'], ['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat']];
 
 var SCHEDULES = [
-  { id: 's1', name: 'Night mode — North line', active: true, mode: 'group', group: 'north', stations: [],
+  { id: 's1', name: 'Night mode — North line', active: true, groups: ['north'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu'], holidays: false, start: '23:30', end: '05:00',
     pa: 'adjust', paPct: -40, display: 'darken', apply: { at: '2 Oct 2026, 03:00', failed: [] } },
-  { id: 's2', name: 'Shabbat quiet — Akko, Binyamina', active: true, mode: 'stations', group: '', stations: ['AKO', 'BIN'],
+  { id: 's2', name: 'Shabbat quiet — Akko, Binyamina', active: true, groups: [], stations: ['AKO', 'BIN'],
     days: ['fri', 'sat'], holidays: true, start: '16:00', end: '20:00',
     pa: 'adjust', paPct: -100, display: 'none',
     apply: { at: '2 Oct 2026, 03:00', failed: [{ id: 'bin-ela-1', reason: 'PaxLife rejected the schedule — field "volume" not supported on this device type' }] } },
-  { id: 's3', name: 'Airport late night', active: false, mode: 'group', group: 'airport', stations: [],
+  { id: 's3', name: 'Airport late night', active: false, groups: ['airport'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], holidays: true, start: '01:00', end: '04:30',
     pa: 'none', paPct: 0, display: 'darken', apply: null },
-  { id: 's4', name: 'South line evening', active: true, mode: 'group', group: 'south', stations: [],
+  { id: 's4', name: 'South line evening', active: true, groups: ['south'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu'], holidays: false, start: '21:00', end: '23:00',
     pa: 'adjust', paPct: -20, display: 'none', apply: { at: '30 Sep 2026, 03:00', failed: [], stale: 'Group South line changed on 1 Oct — B. Sheva Uni was added' } },
 ];
@@ -175,10 +175,19 @@ function daysText(s) {
 const timeText = s => `${s.start}–${s.end}${overnight(s) ? ' (+1 day)' : ''}`;
 const paText = s => s.pa === 'adjust' ? (s.paPct <= -100 ? 'Mute (−100%)' : `Volume ${s.paPct > 0 ? '+' : s.paPct < 0 ? '−' : ''}${Math.abs(s.paPct)}%`) : 'Unchanged';
 const displayText = s => s.display === 'darken' ? 'Darken all displays' : 'Unchanged';
-const targetText = s => s.mode === 'group' ? (s.group ? `Group · ${groupName(s.group)}` : '–')
-  : s.stations.length ? (s.stations.length <= 2 ? s.stations.map(stName).join(', ') : `${s.stations.length} stations`) : '–';
-
-const targetStations = s => s.mode === 'group' ? ((GROUPS.find(g => g.id === s.group) || {}).stations || []) : s.stations;
+/* Targets: groups and individual stations together in one field, as on N8's
+   Event details screen (Ignat, 2026-10-05). The schedule reaches the union. */
+const groupSize = id => ((GROUPS.find(g => g.id === id) || {}).stations || []).length;
+const targetText = s => {
+  const parts = [...s.groups.map(g => `${groupName(g)} (${groupSize(g)})`), ...s.stations.map(stName)];
+  return parts.length ? (parts.length <= 2 ? parts.join(', ') : `${parts.slice(0, 2).join(', ')} +${parts.length - 2}`) : '–';
+};
+const targetStations = s => [...new Set([...s.groups.flatMap(g => (GROUPS.find(x => x.id === g) || {}).stations || []), ...s.stations])];
+/** How a schedule reaches one station: through which group(s), or directly. */
+const viaText = (s, code) => {
+  const gs = s.groups.filter(g => ((GROUPS.find(x => x.id === g) || {}).stations || []).includes(code)).map(g => 'Group · ' + groupName(g));
+  return [...gs, ...(s.stations.includes(code) ? ['This station'] : [])].join(', ');
+};
 /** Devices a schedule reaches that can carry at least one of its actions. */
 function reach(s) {
   const st = targetStations(s);
@@ -292,12 +301,13 @@ function PageHeader({ crumbs, title, action, titleId }) {
     <//>`;
 }
 
-function SectionCard({ title, note, children, id, chip }) {
+function SectionCard({ title, note, children, id, chip, action }) {
   return html`
     <${Card} id=${id} sx=${{ mb: 2 }}>
       <${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
         <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <${Typography} variant="h6" sx=${{ fontSize: 18 }}>${title}<//>${chip}
+          ${action ? html`<${Box} sx=${{ ml: 'auto' }}>${action}<//>` : null}
         <//>
         ${note ? html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: -1, mb: 2 }}>${note}<//>` : null}
         ${children}
@@ -557,6 +567,71 @@ function ScheduleList() {
     <//>`;
 }
 
+/* ── Stations field — the visual of N8's Event details picker ──────────
+   Groups first (tri-state checkbox, member count, chevron to see members),
+   then single stations. A picked group is one chip "Name (n)". */
+function StationPicker({ groups, stations, onChange, error }) {
+  const [open, setOpen] = useState({});
+  const value = [...groups.map(g => 'g:' + g), ...stations.map(c => 's:' + c)];
+  const options = [];
+  GROUPS.forEach(g => {
+    options.push('g:' + g.id);
+    if (open[g.id]) g.stations.forEach(c => options.push(`m:${g.id}:${c}`));
+  });
+  [...STATIONS].sort((a, b) => a.name.localeCompare(b.name)).forEach(st => options.push('s:' + st.code));
+  const label = k => {
+    const [t, a, b] = k.split(':');
+    return t === 'g' ? groupName(a) : stName(t === 'm' ? b : a);
+  };
+  const toggle = k => {
+    const [t, a, b] = k.split(':');
+    if (t === 'g') onChange(groups.includes(a) ? groups.filter(x => x !== a) : [...groups, a], stations);
+    else { const c = t === 'm' ? b : a; onChange(groups, stations.includes(c) ? stations.filter(x => x !== c) : [...stations, c]); }
+  };
+  const box = (checked, indeterminate, disabled) => html`<${M.Checkbox} size="small" checked=${checked} indeterminate=${indeterminate}
+    disabled=${disabled} sx=${{ p: .5, mr: 1 }} tabIndex=${-1} />`;
+  return html`
+    <${Autocomplete} multiple id="ed-stations" options=${options} value=${value} disableCloseOnSelect
+      getOptionLabel=${label} isOptionEqualToValue=${(o, v) => o === v}
+      getOptionDisabled=${o => o.startsWith('m:') && groups.includes(o.split(':')[1])}
+      filterOptions=${(opts, st) => { const q = st.inputValue.trim().toLowerCase(); return q ? opts.filter(o => label(o).toLowerCase().includes(q)) : opts; }}
+      onChange=${(e, v, reason, det) => {
+        if (reason === 'clear') { onChange([], []); return; }
+        if (det && det.option) toggle(det.option);
+      }}
+      renderTags=${(v, getTagProps) => v.map((k, i) => {
+        const { key, ...tp } = getTagProps({ index: i });
+        const [t, a] = k.split(':');
+        return html`<${Chip} key=${k} size="small" ...${tp} data-chip=${k} label=${t === 'g' ? `${groupName(a)} (${groupSize(a)})` : stName(a)} />`;
+      })}
+      renderOption=${(props, k) => {
+        const { key, ...rest } = props;
+        const [t, a, b] = k.split(':');
+        if (t === 'g') {
+          const g = GROUPS.find(x => x.id === a);
+          const on = groups.includes(a);
+          const some = !on && g.stations.some(c => stations.includes(c));
+          return html`<li key=${k} ...${rest} data-opt=${k} style=${{ display: 'flex', alignItems: 'center' }}>
+            ${box(on, some)}<b>${g.name}</b><${Typography} component="span" variant="body2" color="text.secondary" sx=${{ ml: .75 }}>(${g.stations.length})<//>
+            <${IconButton} sx=${{ ml: 'auto' }} aria-label=${(open[a] ? 'Hide' : 'Show') + ' stations in ' + g.name} data-expand=${a}
+              onMouseDown=${e => { e.preventDefault(); e.stopPropagation(); }}
+              onClick=${e => { e.stopPropagation(); setOpen(o => ({ ...o, [a]: !o[a] })); }}>
+              <${Icon}>${open[a] ? 'expand_less' : 'expand_more'}<//>
+            <//>
+          </li>`;
+        }
+        if (t === 'm') {
+          const viaGroup = groups.includes(a);
+          return html`<li key=${k} ...${rest} data-opt=${k} style=${{ paddingLeft: 48 }}>
+            ${box(viaGroup || stations.includes(b), false, viaGroup)}${stName(b)}
+          </li>`;
+        }
+        return html`<li key=${k} ...${rest} data-opt=${k}>${box(stations.includes(a), false)}${stName(a)}</li>`;
+      }}
+      renderInput=${p => html`<${TextField} ...${p} label="Stations" required error=${!!error}
+        helperText=${error || 'Station groups and single stations together.'} />`} />`;
+}
+
 /* ══ Layout B: list + editor on one page ════════════════════════════════
    From the manager's DATNETISR-1036 concept: the list stays in view while
    editing. Same editor, same guard — picking another schedule with unsaved
@@ -639,7 +714,7 @@ function SplitSchedules() {
 }
 
 /* ══ Screen: schedule editor — the only editor ═════════════════════════ */
-const blank = preset => ({ id: null, name: '', active: true, mode: preset && preset.station ? 'stations' : 'group', group: '',
+const blank = preset => ({ id: null, name: '', active: true, groups: [],
   stations: preset && preset.station ? [preset.station] : [], days: [], holidays: false, start: '', end: '',
   pa: 'none', paPct: 0, display: 'none', apply: null });
 
@@ -647,8 +722,7 @@ function validate(d) {
   const e = {};
   if (!d.name.trim()) e.name = 'Name is required';
   else if (SCHEDULES.some(s => s.id !== d.id && s.name.trim().toLowerCase() === d.name.trim().toLowerCase())) e.name = 'A schedule with this name already exists';
-  if (d.mode === 'group' && !d.group) e.target = 'Choose a station group';
-  if (d.mode === 'stations' && !d.stations.length) e.target = 'Choose at least one station';
+  if (!d.groups.length && !d.stations.length) e.target = 'Choose at least one station or station group';
   if (!d.days.length && !d.holidays) e.days = 'Choose at least one day';
   if (toMin(d.start) == null) e.start = d.start.trim() ? 'Use 24-hour hh:mm, e.g. 23:30' : 'Start time is required';
   if (toMin(d.end) == null) e.end = d.end.trim() ? 'Use 24-hour hh:mm, e.g. 05:00' : 'End time is required';
@@ -782,27 +856,12 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
         <${Gap} id="G10" />
       <//>
 
-      <${SectionCard} title="Targets" id="card-targets">
-        <${RadioGroup} row value=${d.mode} onChange=${e => set({ mode: e.target.value })} id="ed-mode">
-          <${FormControlLabel} value="group" control=${html`<${Radio} />`} label="Station group" />
-          <${FormControlLabel} value="stations" control=${html`<${Radio} />`} label="Stations" />
-        <//>
-        <${Box} sx=${{ mt: 1, maxWidth: 640 }}>
-          ${d.mode === 'group' ? html`
-            <${FormControl} fullWidth error=${!!errs.target}>
-              <${InputLabel} id="ed-group-label">Station group<//>
-              <${Select} id="ed-group" labelId="ed-group-label" value=${d.group} label="Station group" onChange=${e => set({ group: e.target.value })}>
-                ${GROUPS.map(g => html`<${MenuItem} key=${g.id} value=${g.id}>${g.name} — ${g.stations.length} station${g.stations.length > 1 ? 's' : ''}<//>`)}
-              <//>
-              <${M.FormHelperText}>${errs.target || (d.group ? (GROUPS.find(g => g.id === d.group) || {}).stations.map(stName).join(', ') : 'Predefined groups.')}<//>
-            <//>` : html`
-            <${Autocomplete} multiple id="ed-stations" options=${STATIONS.map(s => s.code)} value=${d.stations}
-              getOptionLabel=${c => stLabel(c)} onChange=${(e, v) => set({ stations: v })} disableCloseOnSelect
-              renderInput=${p => html`<${TextField} ...${p} label="Stations" error=${!!errs.target}
-                helperText=${errs.target || 'One or more stations.'} />`} />`}
-        <//>
-        <${Typography} variant="body2" color="text.secondary" sx=${{ mt: 1 }}>
-          Switching between a group and stations keeps both choices until you save — only the selected one is used.
+      <${SectionCard} title=${`Stations (${targetStations(d).length})`} id="card-targets"
+        action=${html`<${Tooltip} title="Map view — not part of this prototype"><span>
+          <${IconButton} disabled aria-label="Show on map"><${Icon}>map<//><//></span><//>`}>
+        <${Box} sx=${{ maxWidth: 820 }}>
+          <${StationPicker} groups=${d.groups} stations=${d.stations} error=${errs.target}
+            onChange=${(groups, stations) => set({ groups, stations })} />
         <//>
 
         ${useful.length || r.length ? html`
@@ -837,9 +896,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <//>
           <//>` : null}
         <${Typography} variant="body2" color="text.secondary" sx=${{ mt: 1.5 }} id="membership-note">
-          ${d.mode === 'group'
-            ? 'Follows the group: when a station joins or leaves it, or a device is added, moved or removed, ETC re-applies the schedule. If that fails, the list shows "Needs re-apply".'
-            : 'Follows these stations: devices added to or moved off them later are updated automatically. If that fails, the list shows "Needs re-apply".'}
+          Follows its groups and stations: when a station joins or leaves a group, or a device is added, moved or removed, ETC re-applies the schedule. If that fails, the list shows "Needs re-apply".
         <//>
         <${Gap} id="G6" />
         <${Gap} id="G8" />
@@ -984,7 +1041,7 @@ function DeviceDetail() {
   const entries = plainEntries(d);
   const { gaps } = useApp();
   const save = () => { if (base) { d.base = { eq: base.eq }; } bump(); setDirty(false); toast('Device saved'); go('devices'); };
-  const via = s => s.mode === 'group' ? `Group · ${groupName(s.group)}` : `Station · ${stName(d.station)}`;
+  const via = s => viaText(s, d.station).replace('This station', 'Station · ' + stName(d.station));
 
   return html`
     <${Box} sx=${{ maxWidth: 1180 }}>
@@ -1208,7 +1265,7 @@ function StationDetail() {
                     ${list.map(x => html`
                       <${TableRow} key=${x.id} hover data-sched=${x.id} sx=${{ cursor: 'pointer' }} onClick=${() => go('schedule', { id: x.id })}>
                         <${TableCell} sx=${{ fontWeight: 500 }}>${x.name}<//>
-                        <${TableCell}>${x.mode === 'group' ? 'Group · ' + groupName(x.group) : 'This station'}<//>
+                        <${TableCell}>${viaText(x, s.code)}<//>
                         <${TableCell}>${daysText(x)} · ${timeText(x)}<//>
                         <${TableCell}>${[x.pa === 'adjust' ? paText(x) : '', x.display === 'darken' ? 'Darken' : ''].filter(Boolean).join(' · ')}<//>
                         <${TableCell}><${ActiveChip} s=${x} /><//>

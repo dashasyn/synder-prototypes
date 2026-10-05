@@ -103,7 +103,7 @@ async function run() {
   await page.click('#ed-save'); await wait(300);
   ok(await vis('#err-summary') && /nothing has been sent/.test(await txt('#err-summary')), 'save with blanks: summary says nothing was sent');
   ok(/required/.test(await txt('#ed-name-helper-text')), 'name error in place');
-  ok(/station group/.test(await txt('#card-targets')), 'target error in place');
+  ok(/station or station group/.test(await txt('#card-targets')), 'target error in place');
   ok(/at least one day/.test(await txt('#days-help')), 'days error in place');
   ok(await vis('#action-error'), 'no-action error');
   await page.fill('#ed-name', 'night mode — north line'); await page.click('#ed-save'); await wait(250);
@@ -112,17 +112,25 @@ async function run() {
 
   /* ── create: target, timing, actions ────────────────────────────── */
   section('create — targets, timing, actions');
-  await page.click('#ed-mode input[value="group"]');
-  await pickMenu('#ed-group', 'North line');
+  // one Stations field: groups and single stations together (N8 Event details pattern)
+  const openPicker = async () => { await page.click('#ed-stations'); await page.waitForSelector('.MuiAutocomplete-popper'); };
+  await openPicker();
+  const optKeys = await page.$$eval('.MuiAutocomplete-popper [data-opt]', o => o.map(x => x.dataset.opt));
+  const firstStation = optKeys.findIndex(k => k.startsWith('s:'));
+  ok(firstStation > 0 && optKeys.slice(0, firstStation).every(k => k.startsWith('g:')), 'groups first, then single stations, in one list', optKeys.slice(0, 6));
+  ok(/\(5\)/.test(await txt('.MuiAutocomplete-popper [data-opt="g:north"]')), 'each group shows its station count');
+  await page.click('.MuiAutocomplete-popper [data-expand="north"]'); await wait(250);
+  ok(await count('.MuiAutocomplete-popper [data-opt^="m:north:"]') === 5 && await vis('.MuiAutocomplete-popper'), 'the chevron shows the group\'s stations without closing the list');
+  await page.click('.MuiAutocomplete-popper [data-opt="s:AKO"]'); await wait(250);
+  ok(await page.locator('.MuiAutocomplete-popper [data-opt="g:north"] .MuiCheckbox-indeterminate').count() === 1, 'a single station of a group marks the group as partly picked');
+  await page.click('.MuiAutocomplete-popper [data-opt="g:north"]'); await wait(250);
+  ok(await page.locator('.MuiAutocomplete-popper [data-opt="m:north:ATL"]').getAttribute('aria-disabled') === 'true', 'with the group picked, its stations are covered (greyed)');
+  await page.keyboard.press('Escape'); await wait(250);
+  ok(/North line \(5\)/.test(await txt('#card-targets [data-chip="g:north"]')) && /Akko/.test(await txt('#card-targets [data-chip="s:AKO"]')), 'chips: "North line (5)" and "Akko"');
+  ok(/^Stations \(5\)/.test(await txt('#card-targets h6')), 'card title counts the stations reached, without double-counting', await txt('#card-targets h6'));
   ok(/Reaches/.test(await txt('#reach-summary')), 'the target resolves to a device count');
-  await page.click('#ed-mode input[value="stations"]'); await wait(200);
-  await page.click('#ed-stations'); await page.keyboard.type('Akko'); await wait(250);
-  await page.click('.MuiAutocomplete-popper li:has-text("AKO - Akko")'); await page.keyboard.press('Escape'); await wait(250);
-  ok(await count('#card-targets .MuiChip-root') >= 1, 'stations pick as chips');
-  await page.click('#ed-mode input[value="group"]'); await wait(200);
-  ok(/North line/.test(await txt('#ed-group')), 'switching target type keeps the group choice');
-  await page.click('#ed-mode input[value="stations"]'); await wait(200);
-  ok(/AKO - Akko/.test(await txt('#card-targets')), 'and keeps the station choice');
+  await page.click('#card-targets [data-chip="g:north"] .MuiChip-deleteIcon'); await wait(250);
+  ok(await count('#card-targets [data-chip]') === 1 && /^Stations \(1\)/.test(await txt('#card-targets h6')), 'removing the group chip leaves Akko');
   await page.click('[data-day="fri"]'); await page.click('[data-day="sat"]');
   await page.click('#ed-holidays'); await wait(150);
   ok(await page.locator('#ed-holidays').getAttribute('aria-pressed') === 'true', 'Holidays is a day category beside the weekdays');
@@ -259,7 +267,7 @@ async function run() {
   await page.click('#dv-station-audio'); await wait(400);
   ok(await screen() === 'station', 'the device links to its station for volume');
   await page.click('#add-for-station'); await wait(400);
-  ok(await screen() === 'schedule' && /AKO - Akko/.test(await txt('#card-targets')), 'Add schedule for Akko opens the one editor, prefilled');
+  ok(await screen() === 'schedule' && await count('#card-targets [data-chip="s:AKO"]') === 1, 'Add schedule for Akko opens the one editor, prefilled');
 
   /* ── device types ────────────────────────────────────────────────── */
   section('device types');
@@ -303,7 +311,9 @@ async function run() {
   ok(/is (in)?active/.test(await txt('.MuiSnackbar-root')), 'the Active switch works from the list');
   await page.click('#add-btn'); await wait(400);
   ok(await txt('#ed-title') === 'New schedule' && await count('#rail [aria-current="true"]') === 0, 'Add schedule opens a blank editor beside the list');
-  await page.fill('#ed-name', 'Split test'); await pickMenu('#ed-group', 'Airport');
+  await page.fill('#ed-name', 'Split test');
+  await page.click('#ed-stations'); await page.waitForSelector('.MuiAutocomplete-popper');
+  await page.click('.MuiAutocomplete-popper [data-opt="g:airport"]'); await page.keyboard.press('Escape'); await wait(200);
   await page.click('[data-day="mon"]'); await page.fill('#ed-start', '02:00'); await page.fill('#ed-end', '03:00');
   await page.click('#ed-display input[value="darken"]'); await page.click('#ed-save');
   await page.waitForSelector('#save-result', { timeout: 6000 });

@@ -34,9 +34,11 @@ option B.
 ## 2 · Full target workflow (variant 1)
 - **List**: name, Active switch, targets, days, time, PA action, display action, device rollout
   status (applied / partial failure / needs re-apply).
-- **Targets**: a predefined Station group *or* one or more Stations. The editor shows what the
-  target resolves to (devices by type, and what each one gets). Switching between group and
-  stations keeps both choices until Save.
+- **Targets**: one *Stations* field with predefined Station groups and single stations together,
+  the same visual as N8's Event details picker: groups first, each with a tri-state checkbox,
+  its station count and a chevron that lists its stations; a picked group is one chip
+  "North line (5)". The card title counts the stations reached ("Stations (5)"). The editor shows
+  what the target resolves to (devices by type, and what each one gets).
 - **Timing**: weekdays Sun–Sat plus a *Holidays* category, Start/End in 24-hour time. An end time
   earlier than the start runs overnight and is labelled that way. A warning shows when another
   schedule acts on the same devices at the same time.
