@@ -1,0 +1,74 @@
+{
+  "validator": "domain",
+  "round": 2,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/inventory-sync-v3/?l=1 @ e781712 (Variant 1)",
+  "checked": [
+    { "zone": "page header", "item": "\"Inventory sync\" title and subtitle \"Pushes QuickBooks Online stock movements into your Shopify store.\" (kept from production by decision, not judged)" },
+    { "zone": "connect-first alert (all tabs)", "item": "\"Connect a Shopify store first\" + \"Then choose its location and set Created product to Inventory. After that, click Enable.\"" },
+    { "zone": "Overview · Activity block", "item": "Statuses Held / Failed / Pending / Applied in 24h and their tooltips (\"Held: Not sent. Fix the reason, then click Retry.\")" },
+    { "zone": "Overview · Stock check block", "item": "\"2 products have different stock in QuickBooks and Shopify\", \"QuickBooks 140 · Shopify 132\", tooltip \"Sync sends only changes, so a difference stays until you fix it.\"" },
+    { "zone": "Overview · Sync block", "item": "State Enabled/Paused/Disabled, Enable tooltip \"Only changes made from now on are sent.\", Pause text \"New changes are queued and sent when you resume.\", Run now" },
+    { "zone": "Sync · Disable dialog", "item": "\"Changes made while sync is disabled are never sent to Shopify\" + \"Pause instead\" option" },
+    { "zone": "Shopify stores · store card", "item": "Setup step \"Set Created product to Inventory\" with \"change Created product should be from Non-inventory to Inventory\" and Open Settings" },
+    { "zone": "Shopify stores · store card", "item": "\"Choose location\" / \"Inventory location\" dialog: \"receives stock adjustments at this location\"" },
+    { "zone": "Shopify stores · store card", "item": "\"Mappings: 4/5\", \"1 item needs mapping\", \"Products without a QuickBooks item don't get stock changes\"" },
+    { "zone": "Shopify stores · ⋯ menu", "item": "Disconnect dialog: \"Its history stays on the Activity tab, and its mappings are kept\"" },
+    { "zone": "Activity tab", "item": "Column set Time / Store / QuickBooks document / QuickBooks item / Shopify product / Change / Status / Reason / Actions" },
+    { "zone": "Activity tab", "item": "QuickBooks document types: Bill, Invoice, Sales receipt, Inventory qty adjustment, and their sign of Change (+ for Bill, - for Invoice / Sales receipt)" },
+    { "zone": "Activity tab", "item": "Held reason \"Item not matched\", \"Retry held and failed\" and its tooltip" },
+    { "zone": "Activity tab · Revert dialog", "item": "\"Revert event\", \"Push -24 back to the store? This writes the opposite adjustment in Shopify.\", resulting row \"Revert of Bill #1042\"" },
+    { "zone": "Mappings tab", "item": "\"QuickBooks item\", \"Match source\" values SKU / Name / Manual / Not mapped, \"used by\" hints, help \"QuickBooks items of type Inventory\"" },
+    { "zone": "Stock check tab", "item": "Intro \"compares QuickBooks quantity on hand with Shopify stock for every mapped product\", columns Started / Store / Trigger / Status / Items compared / Differences" },
+    { "zone": "Stock check comparison page", "item": "Columns QuickBooks / Shopify / Difference, statuses Unresolved / Updated, \"An older comparison: act on the latest one.\"" },
+    { "zone": "Stock check comparison page", "item": "\"Update Shopify qty\" single and bulk dialogs (\"Synder will send +8 ...\", \"If the stock changed since then, click Compare now first.\"), Ignore / Restore" },
+    { "zone": "toasts", "item": "\"Inventory location updated.\", \"QuickBooks item mapped.\", \"Event reverted.\", \"Shopify quantity will be updated.\", \"Difference ignored.\" against vocabulary.md toast patterns" }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 80,
+      "element": "Activity tab · Revert dialog and the resulting row in the QuickBooks document column",
+      "finding": "Revert writes the opposite adjustment only in Shopify, yet the new row is listed under \"QuickBooks document\" as \"Revert of Bill #1042\". That reads as a reversal of the Bill itself, and the dialog never says the Bill and QuickBooks quantity on hand stay unchanged, so it creates a 24-unit difference from the source of truth.",
+      "user_impact": "A bookkeeper scanning the log will believe Bill #1042 was reversed or voided in the books and may skip correcting it in QuickBooks; meanwhile Shopify now under-reports by 24 against QuickBooks, and the next stock check will flag that and offer to undo the revert.",
+      "suggested_fix": "Have the dialog say \"This changes Shopify only. Bill #1042 and the QuickBooks quantity stay as they are, so the next stock check will show a difference of +24.\" Label the row as a Shopify adjustment (e.g. \"Shopify adjustment (reverts Bill #1042 change)\") rather than as a QuickBooks document, and do not reuse Synder's books term Rollback for it.",
+      "evidence": {
+        "quote": "Push -24 back to the store? This writes the opposite adjustment in Shopify.",
+        "source": "Feature fact (context.md): QuickBooks Online is the source of truth. Document-integrity rule: a log column named for a source document must not show an entry that implies that document was reversed when it wasn't. Resulting row text: \"Revert of Bill #1042\" in the QuickBooks document column."
+      }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "High",
+      "confidence": 75,
+      "element": "Shopify stores · store card · setup step \"Set Created product to Inventory\"",
+      "finding": "The step tells the user to switch Synder's \"Created product should be\" from Non-inventory to Inventory as if it were a simple setup checkbox. It never says that this changes how Synder creates items in the books: new items become Inventory type with an Inventory Asset account and quantity on hand, so every sale synced for them posts COGS.",
+      "user_impact": "An accountant managing a client's file would make a GL-affecting change (new Inventory items, COGS and Inventory Asset postings, possible negative quantity on hand or zero-cost COGS for items created with no opening quantity) without knowing it, and could not explain the new postings at month-end.",
+      "suggested_fix": "Keep the exact setting name, but add helper text plus a Learn more link: \"Products Synder creates in your books will be Inventory items. Their sales post Cost of Goods Sold and reduce Inventory Asset.\"",
+      "evidence": {
+        "quote": "Go to Settings › Products/Services and change Created product should be from Non-inventory to Inventory.",
+        "source": "QuickBooks Online accounting rule: Inventory-type items require an Inventory Asset account and quantity on hand, and their sales post COGS (Non-inventory items don't). Persona rule: data integrity risks and unexplained book-affecting actions."
+      }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "High",
+      "confidence": 72,
+      "element": "Stock check comparison page · Update Shopify qty dialog (single and bulk), reached while sync is Paused",
+      "finding": "\"Update Shopify qty\" sends the difference from the 02:30 comparison while a queued change for the same item (Mug set -1, Sales receipt #90, Pending) is still waiting to be sent. The dialog only warns about stock that changed after the comparison, not about queued or held changes, so the same quantity movement can reach Shopify twice.",
+      "user_impact": "If the comparison's QuickBooks quantity already includes the queued -1, then after the +2 correction and Resume, Shopify ends at 59 against QuickBooks 60. That is a new, self-inflicted difference the accountant has to chase across 40+ stores.",
+      "suggested_fix": "Have the dialog name pending or held changes for the selected products (e.g. \"Mug set has 1 pending change (-1) that will be sent when you resume\"), and either net them out of the amount sent or block the update until the queue is sent.",
+      "evidence": {
+        "quote": "Synder will send these differences, as found in the latest comparison of My ceramic plates on Oct 2, 2026 02:30:\nMug set: +2\nIf the stock changed since then, click Compare now first.",
+        "source": "Feature fact (context.md): Pause keeps reading and queues changes; Update Shopify qty sends the difference. Activity tab, same state: \"Oct 1, 2026 17:03 · My ceramic plates · Sales receipt #90 · Mug set · -1 · Pending\". Persona rule: data integrity risk in a confirmation that leaves out a known conflicting state."
+      }
+    }
+  ],
+  "gaps": [
+    "Stock check: the state map doesn't record whether the comparison leaves out queued (Pending) or Held changes, or which Shopify quantity is compared (Available vs On hand). Committed quantity from unfulfilled orders could cause false differences that Update Shopify qty would then overwrite.",
+    "Revert: only reached on an Applied Bill row; unknown whether Pending, Held or already-reverted rows can be reverted, or what the next stock check shows afterwards.",
+    "Failed Activity events: no sample exists (not_exercised), so the Failed reason wording and Retry behaviour can't be checked.",
+    "Disconnect: the dialog was cancelled, so what happens to queued changes for the disconnected store is unknown.",
+    "Bulk Update Shopify qty: the dialog was cancelled, so the commit result and the bulk comparison date aren't recorded."
+  ]
+}
