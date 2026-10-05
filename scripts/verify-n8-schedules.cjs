@@ -103,6 +103,12 @@ async function run() {
   const tb = await page.locator('#card-targets').boundingBox(), sb = await page.locator('#card-timing').boundingBox();
   ok(tb.x + tb.width < sb.x && Math.abs(tb.y - sb.y) < 4, 'Stations and Schedule sit side by side, like Event details');
   ok(!(await count('#card-general h6')) && await vis('#ed-active'), 'name and Active switch in one untitled row');
+  ok(/Active — runs on the selected stations/.test(await txt('#ed-active-label')), 'the switch says what Active means');
+  await page.click('#ed-active'); await wait(150);
+  ok(/Inactive — paused on all devices/.test(await txt('#ed-active-label')), 'and what Inactive means');
+  await page.click('#ed-active'); await wait(150);
+  const ge = await page.locator('#card-general').boundingBox(), mn = await page.locator('main').boundingBox();
+  ok(ge.width > mn.width - 60, 'details use the full width', [ge.width, mn.width]);
   const helpers = await page.$$eval('main .MuiFormHelperText-root', h => h.map(x => x.textContent.trim()).filter(Boolean));
   ok(helpers.length === 0, 'no explanatory helper text under fields', helpers);
   ok(!/Kept here|Shown in this list|single stations together|24-hour|holiday list|have no display|Barix, ELA/.test(await txt('main')), 'the removed sentences are gone');

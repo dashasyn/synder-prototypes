@@ -796,7 +796,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
   const kinds = k => useful.filter(x => x.d.kind === k).length;
 
   return html`
-    <${Box} sx=${{ maxWidth: embedded ? 'none' : 1180, minWidth: 0 }}>
+    <${Box} sx=${{ minWidth: 0 }}>
       <${PageHeader} crumbs=${embedded ? null : crumbs} title=${title} titleId="ed-title"
         action=${html`
           ${!isNew ? html`<${Button} variant="outlined" color="error" id="ed-del" startIcon=${html`<${Icon}>delete<//>`}
@@ -840,9 +840,11 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             No helper sentences — "highly professional software". */ ''}
       <${SectionCard} id="card-general">
         <${Box} sx=${{ display: 'flex', gap: 3, alignItems: 'center' }}>
-          <${TextField} id="ed-name" label="Schedule name" required value=${d.name} sx=${{ flex: 1, maxWidth: 640 }}
+          <${TextField} id="ed-name" label="Schedule name" required value=${d.name} sx=${{ flex: 1 }}
             error=${!!errs.name} helperText=${errs.name || ''} onChange=${e => set({ name: e.target.value })} />
-          <${FormControlLabel} label="Active" control=${html`<${Switch} id="ed-active" checked=${d.active} onChange=${e => set({ active: e.target.checked })} />`} />
+          <${FormControlLabel} id="ed-active-label" sx=${{ flexShrink: 0, mr: 0 }}
+            label=${d.active ? 'Active — runs on the selected stations' : 'Inactive — paused on all devices'}
+            control=${html`<${Switch} id="ed-active" checked=${d.active} onChange=${e => set({ active: e.target.checked })} />`} />
         <//>
         <${Gap} id="G10" />
       <//>
@@ -1005,7 +1007,7 @@ function DeviceDetail() {
   const via = s => viaText(s, d.station).replace('This station', 'Station · ' + stName(d.station));
 
   return html`
-    <${Box} sx=${{ maxWidth: 1180 }}>
+    <${Box}>
       <${PageHeader} crumbs=${[{ label: 'Devices', onClick: () => go('devices') }, { label: 'Device details' }]} title=${d.name} titleId="dv-title"
         action=${html`
           <${Button} variant="outlined" startIcon=${html`<${Icon}>content_copy<//>`} onClick=${() => toast('Device URL copied')}>Copy device URL<//>
@@ -1102,7 +1104,7 @@ function DeviceTypes() {
   }).sort((a, b) => a.kind.localeCompare(b.kind) || a.t.localeCompare(b.t));
   const no = html`<${Typography} variant="body2" color="text.disabled">–<//>`;
   return html`
-    <${Box} sx=${{ maxWidth: 1180 }}>
+    <${Box}>
       <${Typography} variant="h6" id="page-title">Device types<//>
       <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5, mb: 2 }}>
         What each device type can do in a schedule. A schedule applies only these actions — anything else is skipped for that device.
@@ -1179,7 +1181,7 @@ function StationDetail() {
     setDirty(false); bump(); toast(`${s.name}: base audio saved — schedules re-applied to its audio devices`);
   };
   return html`
-    <${Box} sx=${{ maxWidth: 1180 }}>
+    <${Box}>
       <${PageHeader} crumbs=${[{ label: 'Stations', onClick: () => go('stations') }, { label: 'Station details' }]} title=${s.code} titleId="sd-title"
         action=${html`<${Button} variant="contained" id="sd-save" disabled=${!dirty || !!Object.keys(auErr).length} onClick=${save}>Save<//>`} />
       <${FieldGrid}>
