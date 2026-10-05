@@ -42,14 +42,15 @@ option B.
 - **Timing**: weekdays Sun–Sat plus a *Holidays* category, Start/End in 24-hour time. An end time
   earlier than the start runs overnight and is labelled that way. A warning shows when another
   schedule acts on the same devices at the same time.
-- **PA action**: Leave unchanged, or a volume adjustment from −100 to +100% (default 0%) against
-  the **station's** default volume: below 0 it runs down to silent, above 0 up to the station's
-  maximum configured amplification (−100% = silent, +100% = maximum). Each station has *Base
-  audio settings* in Station details (default volume, maximum amplification); every audio device
-  at the station uses them. The Barix equalizer stays on the device.
-- **Display action**: Leave unchanged, or Darken all displays (the displays are **turned off**,
-  per Ignat 2026-10-05). DATNETISR-264 lists a third option, cut off in the copy we have, so it's
-  shown disabled, *to confirm with Tuan*.
+- **Layout** (Ignat's sketches, 2026-10-05): name + Active switch in one row; **Stations** and
+  **Schedule** cards side by side, like N8's Event details; **Actions** below with two dropdowns.
+  No explanatory helper text.
+- **PA action**: dropdown, No action / Set volume. Set volume shows a slider, **0–100%, 0 = silent**,
+  in steps of 5, with no number input (Ignat). This departs from 264's −100…+100 relative scale (G4).
+  Each station has a default volume (Station details › Base audio settings, 50% in the sample) that
+  every audio device at the station uses outside schedules. The Barix equalizer stays on the device.
+- **Display action**: dropdown, No action / Darken all displays (the displays are turned off). A
+  third, disabled entry is "More actions — to confirm with Tuan".
 - **Holidays**: the dates in N8's central, system-wide holiday list (DATNETISR-264).
 - **Device rules**: each device gets only what its type supports. ELA and Barix never get display
   power. Barix base audio settings (default volume, equalizer) are a separate, persistent card on
@@ -75,7 +76,7 @@ or moved, ETC re-applies automatically. If that fails, the schedule shows *Needs
 | G1 | No named or central schedules in the API: ETC must own them | ETC |
 | G2 | Holidays: N8 owns the system-wide list; the API is weekly only, so ETC must write dated changes around each holiday | ETC |
 | G3 | Ranges → weekday/time on/off entries; overnight splits the off entry onto the next day | ETC |
-| G4 | Relative volume → absolute against the station default / maximum at apply time; re-apply when either changes. Where is the maximum configured? | ETC · ISR |
+| G4 | Volume scale: 264 says −100…+100% relative to the station default; the prototype uses an absolute 0–100% (Ignat). Confirm with ETC | ETC · ISR |
 | G5 | Overlapping schedules on one device: which one wins? | Product |
 | G6 | Re-apply policy when group membership or device assignments change | ETC |
 | G7 | Display actions beyond Darken | Tuan |

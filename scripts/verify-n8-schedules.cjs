@@ -99,7 +99,13 @@ async function run() {
   section('create — validation');
   await page.click('#add-btn'); await wait(400);
   ok(await screen() === 'schedule' && await txt('#ed-title') === 'New schedule', 'ADD SCHEDULE opens the editor');
-  ok(['#card-general', '#card-targets', '#card-timing', '#card-actions'].every(Boolean) && await vis('#card-actions'), 'cards: General · Targets · Timing · Scheduled actions');
+  ok(/^Stations/.test(await txt('#card-targets h6')) && /^Schedule$/.test(await txt('#card-timing h6')) && /^Actions$/.test(await txt('#card-actions h6')), 'cards: Stations · Schedule · Actions');
+  const tb = await page.locator('#card-targets').boundingBox(), sb = await page.locator('#card-timing').boundingBox();
+  ok(tb.x + tb.width < sb.x && Math.abs(tb.y - sb.y) < 4, 'Stations and Schedule sit side by side, like Event details');
+  ok(!(await count('#card-general h6')) && await vis('#ed-active'), 'name and Active switch in one untitled row');
+  const helpers = await page.$$eval('main .MuiFormHelperText-root', h => h.map(x => x.textContent.trim()).filter(Boolean));
+  ok(helpers.length === 0, 'no explanatory helper text under fields', helpers);
+  ok(!/Kept here|Shown in this list|single stations together|24-hour|holiday list|have no display|Barix, ELA/.test(await txt('main')), 'the removed sentences are gone');
   await page.click('#ed-save'); await wait(300);
   ok(await vis('#err-summary') && /nothing has been sent/.test(await txt('#err-summary')), 'save with blanks: summary says nothing was sent');
   ok(/required/.test(await txt('#ed-name-helper-text')), 'name error in place');
@@ -135,33 +141,31 @@ async function run() {
   await page.click('#ed-holidays'); await wait(150);
   ok(await page.locator('#ed-holidays').getAttribute('aria-pressed') === 'true', 'Holidays is a day category beside the weekdays');
   await page.fill('#ed-start', '25:00'); await page.click('#ed-save'); await wait(200);
-  ok(/24-hour/.test(await txt('#ed-start-helper-text')), 'an impossible time asks for 24-hour hh:mm');
+  ok(/hh:mm/.test(await txt('#ed-start-helper-text')), 'an impossible time is refused in place');
   await page.fill('#ed-start', '18:00'); await page.fill('#ed-end', '18:00'); await page.click('#ed-save'); await wait(250);
   ok(/must differ/.test(await txt('#ed-end-helper-text')), 'start = end is refused');
   await page.fill('#ed-end', '06:00'); await wait(200);
-  ok(await vis('#overnight') && /next day at 06:00/.test(await txt('#overnight')), 'an earlier end time is marked overnight');
-  await page.click('#ed-pa input[value="adjust"]'); await wait(200);
-  ok((await page.inputValue('#ed-pct')) === '0', 'the volume adjustment starts at 0% (DATNETISR-264)');
-  await page.fill('#ed-pct', '50'); await wait(200);
-  ok(/default 50%, max 80%/.test(await txt('#pa-help')) && /\+50% → 65%/.test(await txt('#pa-help')), '+50% runs halfway from the station default to its maximum, not ×1.5', await txt('#pa-help'));
-  await page.fill('#ed-pct', '100'); await wait(150);
-  ok(/\+100% → 80%/.test(await txt('#pa-help')), '+100% is the maximum configured amplification');
-  await page.fill('#ed-pct', '-50'); await wait(200);
+  ok(await vis('#overnight') && /next day 06:00/.test(await txt('#overnight')), 'an earlier end time is marked overnight');
+  await pickMenu('#ed-pa', 'Set volume');
+  ok(await vis('#ed-vol') && !(await count('#ed-pct')), 'PA action is a dropdown; Set volume shows a slider, no number input');
+  ok(/Volume 50%/.test(await txt('#vol-value')), 'starts at 50%');
+  await page.focus('#ed-vol input'); await page.keyboard.press('Home'); await wait(150);
+  ok(/Mute \(0%\)/.test(await txt('#vol-value')), '0 is silence');
+  await page.keyboard.press('End'); await wait(150);
+  ok(/Volume 100%/.test(await txt('#vol-value')), 'up to 100%');
+  for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowLeft');
+  await wait(150);
+  ok(/Volume 30%/.test(await txt('#vol-value')), 'steps of 5', await txt('#vol-value'));
   ok(await vis('#overlap') && /Shabbat quiet/.test(await txt('#overlap')), 'overlap with another schedule on the same devices is warned');
-  ok(/−50% → 25%/.test(await txt('#pa-help')), '−50% halves the station default');
-  await page.fill('#ed-pct', '140'); await page.click('#ed-save'); await wait(250);
-  ok(/−100 to \+100/.test(await txt('#pa-help')), 'volume outside −100…+100 is refused');
-  await page.fill('#ed-pct', '-50');
-  await page.click('#ed-display input[value="darken"]'); await wait(150);
-  ok(await page.locator('#ed-display input[value="more"]').isDisabled() && /Tuan/.test(await txt('#ed-display')), 'further display actions are shown as "to confirm with Tuan", not selectable');
-  ok(await vis('#base-audio-note') && /aren't part of a schedule/.test(await txt('#base-audio-note')), 'base audio settings are set apart from scheduled actions');
-  ok((await count('#card-actions label:has-text("Leave unchanged")')) === 2 && /Displays keep running as usual/.test(await txt('#ed-display')), '"Leave unchanged" with a one-line description on both actions');
-  ok(/turned off/.test(await txt('#ed-display')), 'Darken means the displays are turned off');
-  ok(/system-wide holiday list/.test(await txt('#days-help')), 'Holidays = N8\'s system-wide holiday list');
+  await pickMenu('#ed-display', 'Darken all displays');
+  await page.click('#ed-display'); await page.waitForSelector('.MuiMenu-list');
+  ok(await page.getAttribute('.MuiMenu-list li[data-value="more"]', 'aria-disabled') === 'true' && /Tuan/.test(await txt('.MuiMenu-list li[data-value="more"]')), 'further display actions: listed, not selectable, to confirm with Tuan');
+  await page.keyboard.press('Escape'); await wait(250);
   await page.click('#toggle-devices'); await wait(300);
   const elaRow = await txt('#reach-table tr[data-reach="ako-ela-1"]');
   ok(/To confirm with PaxLife/.test(elaRow) && !/Darken/.test(elaRow), 'ELA gets PA only — no display action — flagged for PaxLife', elaRow);
   ok(/Darken/.test(await txt('#reach-table tr[data-reach="ako-plat-1"]')) && !/Volume/.test(await txt('#reach-table tr[data-reach="ako-plat-1"]')), 'a display gets the display action only');
+  ok(/Volume 50% → 30%/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')), 'Barix: station default 50% → 30%');
 
   /* ── unsaved changes ────────────────────────────────────────────── */
   section('unsaved changes');
@@ -255,15 +259,16 @@ async function run() {
   ok(/Group · North line/.test(await txt('#station-schedules')) && /This station/.test(await txt('#station-schedules')), 'says how each one reaches the station');
   ok(await vis('#card-station-audio') && (await page.inputValue('#sd-vol')) === '50', 'Station details: base audio per station — default 50%');
   ok(await page.locator('#sd-save').isDisabled(), 'Save waits for a change');
-  await page.fill('#sd-max', '40'); await wait(150);
-  ok(/at least the default/.test(await txt('#sd-max-helper-text')) && await page.locator('#sd-save').isDisabled(), 'a maximum below the default is refused');
-  await page.fill('#sd-max', '80'); await page.fill('#sd-vol', '60'); await wait(150);
+  await page.fill('#sd-vol', '140'); await wait(150);
+  ok(/0–100/.test(await txt('#sd-vol-helper-text')) && await page.locator('#sd-save').isDisabled(), 'a default outside 0–100 is refused');
+  await page.fill('#sd-vol', '60'); await wait(150);
   await nav('devices');
   ok(await vis('#leave-dialog'), 'unsaved station audio is guarded');
   await page.click('#leave-stay'); await wait(200);
   await page.click('#sd-save'); await wait(300);
   await nav('devices'); await page.click('#d-table tr[data-device="ako-barix-1"] td:first-child'); await wait(400);
-  ok((await page.inputValue('#dv-vol')) === '60%' && /Set volume to 36%/.test(await txt('#dv-entries')), 'the station default reaches every audio device at it: 60% → −40% = 36%');
+  ok((await page.inputValue('#dv-vol')) === '60%' && /Set volume back to 60% \(default\)/.test(await txt('#dv-entries')) && /Set volume to 30%/.test(await txt('#dv-entries')),
+     'the station default reaches every audio device at it; the scheduled level stays 30%');
   await page.click('#dv-station-audio'); await wait(400);
   ok(await screen() === 'station', 'the device links to its station for volume');
   await page.click('#add-for-station'); await wait(400);
@@ -275,14 +280,10 @@ async function run() {
   const nTypes = await page.evaluate(() => new Set(DEVICES.map(d => d.type)).size);
   ok(await screen() === 'types' && await count('#types-table tr[data-type]') === nTypes, `one row per device type (${nTypes})`);
   const ela = await txt('#types-table tr[data-type="ELA speaker"]');
-  ok(/Adjust volume/.test(ela) && !/Darken/.test(ela) && /PaxLife/.test(ela), 'ELA: volume only, no display action, flagged for PaxLife', ela);
+  ok(/Set volume/.test(ela) && !/Darken/.test(ela) && /PaxLife/.test(ela), 'ELA: volume only, no display action, flagged for PaxLife', ela);
   const tft = await txt('#types-table tr[data-type="Platform TFT"]');
-  ok(/Darken all displays/.test(tft) && !/Adjust volume/.test(tft), 'a display type: Darken only');
+  ok(/Darken all displays/.test(tft) && !/Set volume/.test(tft), 'a display type: Darken only');
   ok(/Equalizer \(on the device\) · volume per station/.test(await txt('#types-table tr[data-type="Barix audio"]')), 'Barix: equalizer on the device, volume per station');
-  await nav('schedules');
-  await page.click('#s-table tr[data-schedule="s1"] td:first-child'); await wait(400);
-  await page.click('#types-link'); await wait(350);
-  ok(await screen() === 'types', 'the editor links to Device types');
 
   /* ── layout B: list + editor ─────────────────────────────────────── */
   section('layout B — list + editor');
@@ -315,7 +316,7 @@ async function run() {
   await page.click('#ed-stations'); await page.waitForSelector('.MuiAutocomplete-popper');
   await page.click('.MuiAutocomplete-popper [data-opt="g:airport"]'); await page.keyboard.press('Escape'); await wait(200);
   await page.click('[data-day="mon"]'); await page.fill('#ed-start', '02:00'); await page.fill('#ed-end', '03:00');
-  await page.click('#ed-display input[value="darken"]'); await page.click('#ed-save');
+  await pickMenu('#ed-display', 'Darken all displays'); await page.click('#ed-save');
   await page.waitForSelector('#save-result', { timeout: 6000 });
   ok(await count('#rail [data-rail]') === nS2 + 1 && await count('#rail [aria-current="true"]') === 1 && /Split test/.test(await txt('#rail [aria-current="true"]')),
      'after saving, the new schedule is in the list and highlighted — result still on screen');

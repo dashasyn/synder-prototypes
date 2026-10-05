@@ -125,13 +125,12 @@ var DEVICES = [
 }));
 const devById = id => DEVICES.find(d => d.id === id);
 
-/* Base audio per station — DATNETISR-264: the adjustment is "relative to the
-   station's default configured volume", +100% = "maximum configured
-   amplification". Ignat, 2026-10-05: "it should be per station. so all audio
-   devices have 50 % volume". The 80% maximum is sample, and where the maximum
-   is configured is an open question (G4). */
-var STATION_AUDIO = Object.fromEntries(STATIONS.map(s => [s.code, { volume: 50, max: 80 }]));
-const stAudio = code => STATION_AUDIO[code] || { volume: 50, max: 80 };
+/* Default volume per station (Ignat, 2026-10-05: "it should be per station. so
+   all audio devices have 50 % volume"). A schedule sets a volume level from 0
+   (silent) to 100 (Ignat, same day) instead of 264's −100…+100 relative
+   adjustment — flagged as G4. */
+var STATION_AUDIO = Object.fromEntries(STATIONS.map(s => [s.code, { volume: 50 }]));
+const stAudio = code => STATION_AUDIO[code] || { volume: 50 };
 
 /* What a device type can do. Display power only on displays; PA only on audio.
    ELA support is unconfirmed (G8). */
@@ -146,17 +145,17 @@ const DAYS = [['sun', 'Sun'], ['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['
 var SCHEDULES = [
   { id: 's1', name: 'Night mode — North line', active: true, groups: ['north'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu'], holidays: false, start: '23:30', end: '05:00',
-    pa: 'adjust', paPct: -40, display: 'darken', apply: { at: '2 Oct 2026, 03:00', failed: [] } },
+    pa: 'adjust', paPct: 30, display: 'darken', apply: { at: '2 Oct 2026, 03:00', failed: [] } },
   { id: 's2', name: 'Shabbat quiet — Akko, Binyamina', active: true, groups: [], stations: ['AKO', 'BIN'],
     days: ['fri', 'sat'], holidays: true, start: '16:00', end: '20:00',
-    pa: 'adjust', paPct: -100, display: 'none',
+    pa: 'adjust', paPct: 0, display: 'none',
     apply: { at: '2 Oct 2026, 03:00', failed: [{ id: 'bin-ela-1', reason: 'PaxLife rejected the schedule — field "volume" not supported on this device type' }] } },
   { id: 's3', name: 'Airport late night', active: false, groups: ['airport'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], holidays: true, start: '01:00', end: '04:30',
-    pa: 'none', paPct: 0, display: 'darken', apply: null },
+    pa: 'none', paPct: 50, display: 'darken', apply: null },
   { id: 's4', name: 'South line evening', active: true, groups: ['south'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu'], holidays: false, start: '21:00', end: '23:00',
-    pa: 'adjust', paPct: -20, display: 'none', apply: { at: '30 Sep 2026, 03:00', failed: [], stale: 'Group South line changed on 1 Oct — B. Sheva Uni was added' } },
+    pa: 'adjust', paPct: 40, display: 'none', apply: { at: '30 Sep 2026, 03:00', failed: [], stale: 'Group South line changed on 1 Oct — B. Sheva Uni was added' } },
 ];
 
 /* ── Pure logic ────────────────────────────────────────────────────── */
@@ -173,8 +172,8 @@ function daysText(s) {
   return t || '–';
 }
 const timeText = s => `${s.start}–${s.end}${overnight(s) ? ' (+1 day)' : ''}`;
-const paText = s => s.pa === 'adjust' ? (s.paPct <= -100 ? 'Mute (−100%)' : `Volume ${s.paPct > 0 ? '+' : s.paPct < 0 ? '−' : ''}${Math.abs(s.paPct)}%`) : 'Unchanged';
-const displayText = s => s.display === 'darken' ? 'Darken all displays' : 'Unchanged';
+const paText = s => s.pa === 'adjust' ? (Number(s.paPct) === 0 ? 'Mute' : `Volume ${s.paPct}%`) : 'No action';
+const displayText = s => s.display === 'darken' ? 'Darken all displays' : 'No action';
 /* Targets: groups and individual stations together in one field, as on N8's
    Event details screen (Ignat, 2026-10-05). The schedule reaches the union. */
 const groupSize = id => ((GROUPS.find(g => g.id === id) || {}).stations || []).length;
@@ -199,17 +198,11 @@ function reach(s) {
   });
 }
 /** Absolute volume a relative adjustment gives on one device (G4). */
-/** −100…0 scales the station default down to silent; 0…+100 scales it up to
-    the station's maximum configured amplification. Not symmetric on purpose. */
-function volumeAt(code, pct) {
-  const a = stAudio(code), p = Number(pct) || 0;
-  return Math.round(p < 0 ? a.volume * (1 + p / 100) : a.volume + (a.max - a.volume) * p / 100);
-}
-const absVolume = (d, pct) => volumeAt(d.station, pct);
+const absVolume = (d, level) => Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
 function onDevice(s, d) {
   const parts = [];
   if (CAN[d.kind].display && s.display === 'darken') parts.push('Darken');
-  if (CAN[d.kind].pa && s.pa === 'adjust') parts.push(s.paPct <= -100 ? 'Mute' : `Volume ${stAudio(d.station).volume}% → ${absVolume(d, s.paPct)}%`);
+  if (CAN[d.kind].pa && s.pa === 'adjust') parts.push(Number(s.paPct) === 0 ? 'Mute' : `Volume ${stAudio(d.station).volume}% → ${absVolume(d, s.paPct)}%`);
   return parts.join(' · ') || '–';
 }
 
@@ -248,7 +241,7 @@ function weeklyEntries(d) {
     const on = {}, off = {};
     if (CAN[d.kind].display && s.display === 'darken') { on.screen_on = 'false'; off.screen_on = 'true'; }
     if (CAN[d.kind].pa && s.pa === 'adjust') {
-      if (s.paPct <= -100) { on.muted = 'true'; off.muted = 'false'; }
+      if (Number(s.paPct) === 0) { on.muted = 'true'; off.muted = 'false'; }
       else { on.volume = absVolume(d, s.paPct) + '%'; off.volume = stAudio(d.station).volume + '%'; }
     }
     s.days.forEach(day => {
@@ -305,10 +298,10 @@ function SectionCard({ title, note, children, id, chip, action }) {
   return html`
     <${Card} id=${id} sx=${{ mb: 2 }}>
       <${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
-        <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+        ${title ? html`<${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <${Typography} variant="h6" sx=${{ fontSize: 18 }}>${title}<//>${chip}
           ${action ? html`<${Box} sx=${{ ml: 'auto' }}>${action}<//>` : null}
-        <//>
+        <//>` : null}
         ${note ? html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: -1, mb: 2 }}>${note}<//>` : null}
         ${children}
       <//>
@@ -337,7 +330,7 @@ const GAP_TEXT = {
   G1: 'Named, central schedules don\'t exist in the PaxLife API — it stores one weekly schedule per device. ETC must own the schedule list and push the result to each device.',
   G2: 'Holidays: N8 keeps a central, system-wide list of holiday dates (DATNETISR-264), but the PaxLife API is weekly only, with no dates. ETC has to write dated changes onto each device around every holiday — or holidays can\'t reach the devices.',
   G3: 'Start/End ranges: the API takes weekday/time entries, not ranges. ETC writes an "on" entry at the start and an "off" entry at the end; overnight ranges put the off entry on the next day.',
-  G4: 'Relative volume: the API takes an absolute volume. ETC converts the adjustment against the station\'s default volume (down to silent below 0, up to the station\'s maximum configured amplification above 0) and must re-apply when either value changes. Where is the maximum configured — per station, as shown here?',
+  G4: 'Volume scale: DATNETISR-264 specifies a relative adjustment, −100…+100% against the station\'s default volume (+100% = maximum configured amplification). This prototype sets an absolute level, 0–100% (0 = silent), as Ignat asked on 5 Oct. Confirm with ETC — the API takes an absolute volume, so this version needs no conversion.',
   G5: 'Overlaps: a device holds one weekly schedule. When two schedules act on the same device at the same time, which one wins?',
   G6: 'Membership changes: proposed rule — ETC re-applies automatically when a group gains/loses a station or a device is added/moved, and flags the schedule if that fails. Needs agreement with ETC.',
   G7: 'Display actions beyond "Darken all displays" — confirm the list with Tuan before this control is final.',
@@ -629,7 +622,7 @@ function StationPicker({ groups, stations, onChange, error }) {
         return html`<li key=${k} ...${rest} data-opt=${k}>${box(stations.includes(a), false)}${stName(a)}</li>`;
       }}
       renderInput=${p => html`<${TextField} ...${p} label="Stations" required error=${!!error}
-        helperText=${error || 'Station groups and single stations together.'} />`} />`;
+        helperText=${error || ''} />`} />`;
 }
 
 /* ══ Layout B: list + editor on one page ════════════════════════════════
@@ -716,7 +709,7 @@ function SplitSchedules() {
 /* ══ Screen: schedule editor — the only editor ═════════════════════════ */
 const blank = preset => ({ id: null, name: '', active: true, groups: [],
   stations: preset && preset.station ? [preset.station] : [], days: [], holidays: false, start: '', end: '',
-  pa: 'none', paPct: 0, display: 'none', apply: null });
+  pa: 'none', paPct: 50, display: 'none', apply: null });
 
 function validate(d) {
   const e = {};
@@ -728,7 +721,7 @@ function validate(d) {
   if (toMin(d.end) == null) e.end = d.end.trim() ? 'Use 24-hour hh:mm, e.g. 05:00' : 'End time is required';
   if (!e.start && !e.end && toMin(d.start) === toMin(d.end)) e.end = 'End time must differ from start time';
   if (d.pa === 'none' && d.display === 'none') e.action = 'Choose a PA or a display action — with both left unchanged, the schedule does nothing.';
-  if (d.pa === 'adjust' && (d.paPct === '' || !Number.isFinite(Number(d.paPct)) || d.paPct < -100 || d.paPct > 100)) e.pa = 'Enter a value from −100 to +100';
+  if (d.pa === 'adjust' && !(Number(d.paPct) >= 0 && Number(d.paPct) <= 100)) e.pa = 'Choose a volume from 0 to 100%';
   return e;
 }
 
@@ -801,7 +794,6 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
   const title = isNew ? 'New schedule' : (JSON.parse(saved).name || 'Schedule');
   const crumbs = [{ label: 'Output device schedules', onClick: () => go('schedules') }, { label: isNew ? 'New schedule' : 'Schedule details' }];
   const kinds = k => useful.filter(x => x.d.kind === k).length;
-  const exSt = targetStations(d)[0] || 'AKO';
 
   return html`
     <${Box} sx=${{ maxWidth: embedded ? 'none' : 1180, minWidth: 0 }}>
@@ -843,40 +835,33 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
         <${Gap} id="G9" />
       <//>
 
-      <${SectionCard} title="General" id="card-general">
-        <${Box} sx=${{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
-          <${TextField} id="ed-name" label="Schedule name" required value=${d.name} sx=${{ width: 420 }}
-            error=${!!errs.name} helperText=${errs.name || 'Shown in this list and on every station and device it reaches.'}
-            onChange=${e => set({ name: e.target.value })} />
-          <${Box} sx=${{ pt: .5 }}>
-            <${FormControlLabel} label="Active" control=${html`<${Switch} id="ed-active" checked=${d.active} onChange=${e => set({ active: e.target.checked })} />`} />
-            <${Typography} variant="body2" color="text.secondary">${d.active ? 'Applied to its devices when saved.' : 'Kept here, not applied to any device.'}<//>
-          <//>
+      ${/* Compact, like N8's Event details (Ignat's sketches, 2026-10-05):
+            one field row on top, Stations | Schedule side by side, then Actions.
+            No helper sentences — "highly professional software". */ ''}
+      <${SectionCard} id="card-general">
+        <${Box} sx=${{ display: 'flex', gap: 3, alignItems: 'center' }}>
+          <${TextField} id="ed-name" label="Schedule name" required value=${d.name} sx=${{ flex: 1, maxWidth: 640 }}
+            error=${!!errs.name} helperText=${errs.name || ''} onChange=${e => set({ name: e.target.value })} />
+          <${FormControlLabel} label="Active" control=${html`<${Switch} id="ed-active" checked=${d.active} onChange=${e => set({ active: e.target.checked })} />`} />
         <//>
         <${Gap} id="G10" />
       <//>
 
-      <${SectionCard} title=${`Stations (${targetStations(d).length})`} id="card-targets"
-        action=${html`<${Tooltip} title="Map view — not part of this prototype"><span>
-          <${IconButton} disabled aria-label="Show on map"><${Icon}>map<//><//></span><//>`}>
-        <${Box} sx=${{ maxWidth: 820 }}>
+      <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 7fr) minmax(400px, 5fr)' }, gap: 2, alignItems: 'start' }}>
+        <${SectionCard} title=${`Stations (${targetStations(d).length})`} id="card-targets"
+          action=${html`<${Tooltip} title="Map view — not part of this prototype"><span>
+            <${IconButton} disabled aria-label="Show on map"><${Icon}>map<//><//></span><//>`}>
           <${StationPicker} groups=${d.groups} stations=${d.stations} error=${errs.target}
             onChange=${(groups, stations) => set({ groups, stations })} />
-        <//>
-
-        ${useful.length || r.length ? html`
-          <${Box} sx=${{ mt: 2, p: 1.5, bgcolor: '#F7F9FC', borderRadius: 1 }} id="reach">
-            <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-              <${Icon} sx=${{ color: 'text.secondary' }}>devices<//>
-              <${Typography} variant="body2" id="reach-summary">
-                Reaches <b>${applyTo.length} device${applyTo.length === 1 ? '' : 's'}</b> at ${targetStations(d).length} station${targetStations(d).length === 1 ? '' : 's'}:
-                ${' '}${kinds('display')} display${kinds('display') === 1 ? '' : 's'} · ${kinds('barix')} Barix · ${kinds('ela')} ELA speaker${kinds('ela') === 1 ? '' : 's'}${skipped.length ? ` (${skipped.length} skipped in phase 1)` : ''}.
-                ${r.length > useful.length ? ` ${r.length - useful.length} other device${r.length - useful.length > 1 ? 's' : ''} at these stations can't carry the chosen actions.` : ''}
+          ${r.length ? html`
+            <${Box} id="reach" sx=${{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+              <${Typography} variant="body2" color="text.secondary" id="reach-summary">
+                Reaches <b>${applyTo.length} device${applyTo.length === 1 ? '' : 's'}</b>: ${kinds('display')} display${kinds('display') === 1 ? '' : 's'} · ${kinds('barix')} Barix · ${kinds('ela')} ELA${skipped.length ? ` (${skipped.length} skipped in phase 1)` : ''}
               <//>
               <${Button} size="small" id="toggle-devices" onClick=${() => setShowDev(!showDev)}>${showDev ? 'Hide devices' : 'Show devices'}<//>
             <//>
             <${Collapse} in=${showDev} unmountOnExit>
-              <${Paper} variant="outlined" sx=${{ mt: 1.5, borderColor: '#E7E7E7' }}>
+              <${Paper} variant="outlined" sx=${{ mt: 1, borderColor: '#E7E7E7' }}>
                 <${Table} id="reach-table">
                   <${TableHead}><${TableRow}><${TableCell}>Device<//><${TableCell}>Type<//><${TableCell}>Station<//><${TableCell}>Gets<//><//><//>
                   <${TableBody}>
@@ -887,108 +872,84 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
                         <${TableCell}>${stName(x.d.station)}<//>
                         <${TableCell}>${phase === 2 && x.d.kind === 'ela' && x.useful
                           ? html`<${PhaseChip} label="Skipped — ELA not confirmed" />`
-                          : x.useful ? onDevice(d, x.d) : html`<${Typography} variant="body2" color="text.secondary">Nothing — ${CAN[x.d.kind].display ? 'displays left unchanged' : 'audio left unchanged'}<//>`}
+                          : x.useful ? onDevice(d, x.d) : '–'}
                           ${phase === 1 && x.d.kind === 'ela' && x.useful ? html` <${Chip} size="small" label="To confirm with PaxLife" variant="outlined" />` : null}<//>
                       <//>`)}
                   <//>
                 <//>
               <//>
-            <//>
-          <//>` : null}
-        <${Typography} variant="body2" color="text.secondary" sx=${{ mt: 1.5 }} id="membership-note">
-          Follows its groups and stations: when a station joins or leaves a group, or a device is added, moved or removed, ETC re-applies the schedule. If that fails, the list shows "Needs re-apply".
+            <//>` : null}
+          <${Gap} id="G6" />
+          <${Gap} id="G8" />
         <//>
-        <${Gap} id="G6" />
-        <${Gap} id="G8" />
+
+        <${SectionCard} title="Schedule" id="card-timing">
+          <${Box} id="ed-days" sx=${{ display: 'flex', flexWrap: 'wrap', gap: .75 }} role="group" aria-label="Days">
+            ${DAYS.map(([k, l]) => {
+              const on = d.days.includes(k);
+              return html`<${Chip} key=${k} data-day=${k} label=${l} aria-pressed=${on} clickable
+                color=${on ? 'primary' : 'default'} onClick=${() => set({ days: on ? d.days.filter(x => x !== k) : [...d.days, k] })}
+                sx=${{ borderRadius: 1, fontWeight: 500, minWidth: 46 }} />`;
+            })}
+            <${Chip} id="ed-holidays" label="Holidays" aria-pressed=${d.holidays && phase === 1} aria-disabled=${phase === 2} clickable disabled=${phase === 2}
+              color=${d.holidays && phase === 1 ? 'primary' : 'default'} onClick=${() => set({ holidays: !d.holidays })}
+              sx=${{ borderRadius: 1, fontWeight: 500 }} />
+          <//>
+          ${phase === 2 ? html`<${Box} sx=${{ mt: 1 }}><${PhaseChip} label="Holidays: not in phase 1" /><//>` : null}
+          ${errs.days ? html`<${Typography} variant="body2" color="error" sx=${{ mt: .75 }} id="days-help">${errs.days}<//>` : null}
+          <${Gap} id="G2" />
+          <${Box} sx=${{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2, mt: 2 }}>
+            <${TextField} id="ed-start" label="Start time" required value=${d.start} placeholder="hh:mm"
+              inputProps=${{ inputMode: 'numeric', maxLength: 5 }}
+              InputProps=${{ endAdornment: html`<${InputAdornment} position="end"><${Icon} sx=${{ color: 'text.secondary' }}>schedule<//><//>` }}
+              error=${!!errs.start} helperText=${errs.start || ''} onChange=${e => set({ start: e.target.value })} />
+            <${TextField} id="ed-end" label="End time" required value=${d.end} placeholder="hh:mm"
+              inputProps=${{ inputMode: 'numeric', maxLength: 5 }}
+              InputProps=${{ endAdornment: html`<${InputAdornment} position="end"><${Icon} sx=${{ color: 'text.secondary' }}>schedule<//><//>` }}
+              error=${!!errs.end} helperText=${errs.end || ''} onChange=${e => set({ end: e.target.value })} />
+          <//>
+          ${overnight(d) ? html`<${Chip} id="overnight" size="small" sx=${{ mt: 1.5, bgcolor: '#EDE7F6', color: '#4527A0' }}
+            icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px', color: '#4527A0' }}>bedtime<//>`} label=${`Overnight · ends next day ${d.end}`} />` : null}
+          ${ov.length ? html`
+            <${Alert} severity="warning" id="overlap" sx=${{ mt: 1.5 }}>
+              Overlaps ${ov.map((o, i) => html`<span key=${o.s.id}>${i ? ', ' : ''}<b>${o.s.name}</b> (${o.shared} device${o.shared > 1 ? 's' : ''})</span>`)}
+            <//>` : null}
+          <${Gap} id="G3" />
+          ${ov.length ? html`<${Gap} id="G5" />` : null}
+        <//>
       <//>
 
-      <${SectionCard} title="Timing" id="card-timing">
-        <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-          <${ToggleButtonGroup} id="ed-days" size="small" color="primary" value=${d.days}
-            onChange=${(e, v) => set({ days: v })} aria-label="Weekdays">
-            ${DAYS.map(([k, l]) => html`<${ToggleButton} key=${k} value=${k} data-day=${k} aria-label=${l}>${l}<//>`)}
-          <//>
-          <${ToggleButton} size="small" color="primary" value="hol" id="ed-holidays" selected=${d.holidays && phase === 1}
-            disabled=${phase === 2} onChange=${() => set({ holidays: !d.holidays })}>
-            <${Icon} sx=${{ fontSize: 18, mr: .75 }}>celebration<//>Holidays
-          <//>
-          ${phase === 2 ? html`<${PhaseChip} />` : null}
-        <//>
-        <${Typography} variant="body2" color=${errs.days ? 'error' : 'text.secondary'} sx=${{ mt: .75 }} id="days-help">
-          ${errs.days || (phase === 2 ? 'Holidays need a dated calendar; the per-device API is weekly only.' : "Holidays: the dates in N8's system-wide holiday list, whatever weekday they fall on.")}
-        <//>
-        <${Gap} id="G2" />
-        <${Box} sx=${{ display: 'flex', gap: 2, mt: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          ${/* 24-hour text fields: a native time input follows the browser
-                locale and showed AM/PM, which N8 users in Israel don't use. */ ''}
-          <${TextField} id="ed-start" label="Start Time" value=${d.start} placeholder="hh:mm" sx=${{ width: 180 }}
-            inputProps=${{ inputMode: 'numeric', maxLength: 5 }}
-            InputProps=${{ endAdornment: html`<${InputAdornment} position="end"><${Icon} sx=${{ color: 'text.secondary' }}>schedule<//><//>` }}
-            error=${!!errs.start} helperText=${errs.start || '24-hour, e.g. 23:30'} onChange=${e => set({ start: e.target.value })} />
-          <${TextField} id="ed-end" label="End Time" value=${d.end} placeholder="hh:mm" sx=${{ width: 180 }}
-            inputProps=${{ inputMode: 'numeric', maxLength: 5 }}
-            InputProps=${{ endAdornment: html`<${InputAdornment} position="end"><${Icon} sx=${{ color: 'text.secondary' }}>schedule<//><//>` }}
-            error=${!!errs.end} helperText=${errs.end || '24-hour, e.g. 05:00'} onChange=${e => set({ end: e.target.value })} />
-          <${Box} sx=${{ pt: 1.25 }}>
-            ${overnight(d) ? html`<${Chip} id="overnight" icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px' }}>bedtime<//>`}
-              label=${`Overnight — ends the next day at ${d.end}`} sx=${{ bgcolor: '#EDE7F6', color: '#4527A0' }} />` : null}
-            <${Typography} variant="body2" color="text.secondary" sx=${{ mt: overnight(d) ? .75 : 0 }}>Israel time (Asia/Jerusalem). An end time earlier than the start runs overnight.<//>
-          <//>
-        <//>
-        ${ov.length ? html`
-          <${Alert} severity="warning" id="overlap" sx=${{ mt: 1 }}>
-            Overlaps ${ov.map((o, i) => html`<span key=${o.s.id}>${i ? ', ' : ''}<b>${o.s.name}</b> on ${o.shared} device${o.shared > 1 ? 's' : ''}</span>`)} at the same time.
-            ${' '}A device runs one weekly schedule, so only one action can win — the rule isn't decided yet.
-          <//>` : null}
-        <${Gap} id="G3" />
-        ${ov.length ? html`<${Gap} id="G5" />` : null}
-      <//>
-
-      <${SectionCard} title="Scheduled actions" id="card-actions"
-        note="What changes during the time window. Each device gets only the actions its type supports.">
+      <${SectionCard} title="Actions" id="card-actions">
         ${errs.action ? html`<${Alert} severity="error" id="action-error" sx=${{ mb: 2 }}>${errs.action}<//>` : null}
-        <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
+        <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
           <${Box} id="pa-block">
-            <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>PA action <${Typography} component="span" variant="body2" color="text.secondary">· Barix, ELA<//><//>
-            <${RadioGroup} value=${d.pa} onChange=${e => set({ pa: e.target.value })} id="ed-pa">
-              ${Opt('none', 'Leave unchanged', "Audio stays at each station's default volume.")}
-              ${Opt('adjust', 'Adjust volume', 'Changes the volume only during this period.')}
+            <${FormControl} fullWidth>
+              <${InputLabel} id="ed-pa-label">PA action<//>
+              <${Select} id="ed-pa" labelId="ed-pa-label" label="PA action" value=${d.pa} onChange=${e => set({ pa: e.target.value })}>
+                <${MenuItem} value="none">No action<//>
+                <${MenuItem} value="adjust">Set volume<//>
+              <//>
             <//>
             ${d.pa === 'adjust' ? html`
-              <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 4, pl: 4, pr: 1 }}>
-                <${Slider} value=${Number(d.paPct) || 0} min=${-100} max=${100} step=${5} aria-label="Volume adjustment"
-                  marks=${[{ value: -100, label: '−100%' }, { value: 0, label: '0' }, { value: 100, label: '+100%' }]}
-                  onChange=${(e, v) => set({ paPct: v })} sx=${{ flex: 1, mx: 2, '& .MuiSlider-markLabel': { fontSize: 14 } }} />
-                <${TextField} id="ed-pct" label="%" type="number" value=${d.paPct} sx=${{ width: 96 }}
-                  inputProps=${{ min: -100, max: 100, step: 5 }} error=${!!errs.pa}
-                  onChange=${e => set({ paPct: e.target.value === '' ? '' : Number(e.target.value) })} />
-              <//>
-              <${Typography} variant="body2" color=${errs.pa ? 'error' : 'text.secondary'} sx=${{ pl: 4, mt: 1.5 }} id="pa-help">
-                ${errs.pa || html`Relative to each station's default volume: −100% is silent, +100% is the station's maximum configured amplification.
-                  ${Number.isFinite(Number(d.paPct)) ? html` At ${stName(exSt)} (default ${stAudio(exSt).volume}%, max ${stAudio(exSt).max}%): ${d.paPct > 0 ? '+' : d.paPct < 0 ? '−' : ''}${Math.abs(d.paPct)}% → <b>${volumeAt(exSt, d.paPct)}%</b>.` : ''}`}
+              <${Box} sx=${{ mt: 2, px: 1 }}>
+                <${Typography} variant="body2" id="vol-value">Volume <b>${Number(d.paPct) === 0 ? 'Mute (0%)' : d.paPct + '%'}</b><//>
+                <${Slider} id="ed-vol" value=${Number(d.paPct) || 0} min=${0} max=${100} step=${5} aria-label="Volume"
+                  valueLabelDisplay="auto" marks=${[{ value: 0, label: '0%' }, { value: 100, label: '100%' }]}
+                  onChange=${(e, v) => set({ paPct: v })} sx=${{ '& .MuiSlider-markLabel': { fontSize: 14 } }} />
+                ${errs.pa ? html`<${Typography} variant="body2" color="error">${errs.pa}<//>` : null}
               <//>` : null}
             <${Gap} id="G4" />
           <//>
           <${Box} id="display-block">
-            <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>Display action <${Typography} component="span" variant="body2" color="text.secondary">· displays only<//><//>
-            <${RadioGroup} value=${d.display} onChange=${e => set({ display: e.target.value })} id="ed-display">
-              ${Opt('none', 'Leave unchanged', 'Displays keep running as usual.')}
-              ${Opt('darken', 'Darken all displays', 'Displays are turned off for this period, then back on.')}
-              ${Opt('more', 'More display actions', 'Not defined yet.', html` <${Chip} size="small" label="To confirm with Tuan" variant="outlined" sx=${{ ml: 1 }} />`)}
+            <${FormControl} fullWidth>
+              <${InputLabel} id="ed-display-label">Display action<//>
+              <${Select} id="ed-display" labelId="ed-display-label" label="Display action" value=${d.display} onChange=${e => set({ display: e.target.value })}>
+                <${MenuItem} value="none">No action<//>
+                <${MenuItem} value="darken">Darken all displays<//>
+                <${MenuItem} value="more" disabled>More actions — to confirm with Tuan<//>
+              <//>
             <//>
-            <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>ELA speakers and Barix have no display, so they never get a display action.
-              ${' '}<${Link} component="button" underline="hover" id="types-link" onClick=${() => go('types')} sx=${{ verticalAlign: 'baseline' }}>What each device type supports<//><//>
             <${Gap} id="G7" />
-          <//>
-        <//>
-
-        <${Box} id="base-audio-note" sx=${{ mt: 2.5, p: 1.5, border: '1px dashed rgba(0,0,0,.26)', borderRadius: 1, bgcolor: '#FAFAFA', display: 'flex', gap: 1.5 }}>
-          <${Icon} sx=${{ color: 'text.secondary' }}>tune<//>
-          <${Box}>
-            <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>Base audio settings aren't part of a schedule<//>
-            <${Typography} variant="body2" color="text.secondary">
-              Each station's default volume and maximum amplification are persistent settings in Station details › Base audio settings; the Barix equalizer is set on each device. A schedule only adjusts relative to them, and only inside its time window.
-            <//>
           <//>
         <//>
         <${Gap} id="G11" />
@@ -1067,10 +1028,9 @@ function DeviceDetail() {
       ${audio ? html`
         <${SectionCard} title="Base audio settings" id="card-base"
           chip=${html`<${Chip} size="small" label="Persistent — not scheduled" icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px' }}>push_pin<//>`} />`}
-          note=${html`Always in force. Volume comes from the station — set it in <${Link} component="button" underline="hover" id="dv-station-audio" onClick=${() => go('station', { code: d.station, tab: 'audio' })} sx=${{ verticalAlign: 'baseline' }}>Station details<//>. Schedules adjust relative to it, only inside their time window.`}>
+          note=${html`Default volume is set per station in <${Link} component="button" underline="hover" id="dv-station-audio" onClick=${() => go('station', { code: d.station, tab: 'audio' })} sx=${{ verticalAlign: 'baseline' }}>Station details<//>.`}>
           <${FieldGrid} cols=${3}>
             <${TextField} id="dv-vol" label=${`Default volume — station ${d.station}`} value=${sa.volume + '%'} disabled />
-            <${TextField} id="dv-max" label=${`Maximum amplification — station ${d.station}`} value=${sa.max + '%'} disabled />
             ${d.kind === 'barix' ? html`
               <${FormControl}>
                 <${InputLabel} id="dv-eq-label">Equalizer<//>
@@ -1158,7 +1118,7 @@ function DeviceTypes() {
                 <${TableCell} sx=${{ fontWeight: 500 }}>${x.t}<//>
                 <${TableCell}>${x.kind === 'display' ? 'Display' : 'Audio'}<//>
                 <${TableCell} data-cap="display">${CAN[x.kind].display ? 'Darken all displays' : no}<//>
-                <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Adjust volume' : no}<//>
+                <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Set volume' : no}<//>
                 <${TableCell}>${x.kind === 'barix' ? 'Equalizer (on the device) · volume per station' : x.kind === 'ela' ? 'Volume per station' : no}<//>
                 <${TableCell}>${x.n}<//>
                 <${TableCell}>${x.kind === 'ela'
@@ -1207,15 +1167,14 @@ function StationDetail() {
   const list = SCHEDULES.filter(x => targetStations(x).includes(s.code));
   const [au, setAu] = useState(() => ({ ...stAudio(s.code) }));
   const cur = stAudio(s.code);
-  const dirty = String(au.volume) !== String(cur.volume) || String(au.max) !== String(cur.max);
+  const dirty = String(au.volume) !== String(cur.volume);
   useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
-  const v = Number(au.volume), mx = Number(au.max);
-  const auErr = !(au.volume !== '' && v >= 0 && v <= 100) ? { volume: 'Enter 0–100' }
-    : !(au.max !== '' && mx >= v && mx <= 100) ? { max: `Enter ${v}–100 — at least the default volume` } : {};
+  const v = Number(au.volume);
+  const auErr = !(au.volume !== '' && v >= 0 && v <= 100) ? { volume: 'Enter 0–100' } : {};
   const nAudio = DEVICES.filter(d => d.station === s.code && d.kind !== 'display').length;
   const save = () => {
     if (Object.keys(auErr).length) return;
-    STATION_AUDIO[s.code] = { volume: v, max: mx };
+    STATION_AUDIO[s.code] = { volume: v };
     SCHEDULES.filter(x => x.active && targetStations(x).includes(s.code) && x.pa === 'adjust' && x.apply).forEach(x => { x.apply = { ...x.apply, at: 'just now' }; });
     setDirty(false); bump(); toast(`${s.name}: base audio saved — schedules re-applied to its audio devices`);
   };
@@ -1232,14 +1191,11 @@ function StationDetail() {
       <${Box} sx=${{ mt: 2 }}>
         <${SectionCard} title="Base audio settings" id="card-station-audio"
           chip=${html`<${Chip} size="small" label="Persistent — not scheduled" icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px' }}>push_pin<//>`} />`}
-          note=${`Applies to all ${nAudio} audio device${nAudio === 1 ? '' : 's'} at ${s.name}. Schedules adjust relative to these values: −100% is silent, +100% is the maximum.`}>
+          note=${`All ${nAudio} audio device${nAudio === 1 ? '' : 's'} at ${s.name}.`}>
           <${FieldGrid} cols=${3}>
             <${TextField} id="sd-vol" label="Default volume (%)" type="number" value=${au.volume} inputProps=${{ min: 0, max: 100 }}
-              error=${!!auErr.volume} helperText=${auErr.volume || 'Every PA device at the station plays at this level.'}
+              error=${!!auErr.volume} helperText=${auErr.volume || ''}
               onChange=${e => setAu({ ...au, volume: e.target.value })} />
-            <${TextField} id="sd-max" label="Maximum amplification (%)" type="number" value=${au.max} inputProps=${{ min: 0, max: 100 }}
-              error=${!!auErr.max} helperText=${auErr.max || 'What +100% in a schedule means here.'}
-              onChange=${e => setAu({ ...au, max: e.target.value })} />
           <//>
           <${Gap} id="G4" />
         <//>
