@@ -133,9 +133,14 @@ async function run() {
   await page.fill('#ed-end', '06:00'); await wait(200);
   ok(await vis('#overnight') && /next day at 06:00/.test(await txt('#overnight')), 'an earlier end time is marked overnight');
   await page.click('#ed-pa input[value="adjust"]'); await wait(200);
+  ok((await page.inputValue('#ed-pct')) === '0', 'the volume adjustment starts at 0% (DATNETISR-264)');
+  await page.fill('#ed-pct', '50'); await wait(200);
+  ok(/default 50%, max 80%/.test(await txt('#pa-help')) && /\+50% → 65%/.test(await txt('#pa-help')), '+50% runs halfway from the station default to its maximum, not ×1.5', await txt('#pa-help'));
+  await page.fill('#ed-pct', '100'); await wait(150);
+  ok(/\+100% → 80%/.test(await txt('#pa-help')), '+100% is the maximum configured amplification');
   await page.fill('#ed-pct', '-50'); await wait(200);
   ok(await vis('#overlap') && /Shabbat quiet/.test(await txt('#overlap')), 'overlap with another schedule on the same devices is warned');
-  ok(/default 60% → 30%/.test(await txt('#pa-help')), 'relative volume previews the absolute result on a real device');
+  ok(/−50% → 25%/.test(await txt('#pa-help')), '−50% halves the station default');
   await page.fill('#ed-pct', '140'); await page.click('#ed-save'); await wait(250);
   ok(/−100 to \+100/.test(await txt('#pa-help')), 'volume outside −100…+100 is refused');
   await page.fill('#ed-pct', '-50');
@@ -143,6 +148,8 @@ async function run() {
   ok(await page.locator('#ed-display input[value="more"]').isDisabled() && /Tuan/.test(await txt('#ed-display')), 'further display actions are shown as "to confirm with Tuan", not selectable');
   ok(await vis('#base-audio-note') && /aren't part of a schedule/.test(await txt('#base-audio-note')), 'base audio settings are set apart from scheduled actions');
   ok((await count('#card-actions label:has-text("Leave unchanged")')) === 2 && /Displays keep running as usual/.test(await txt('#ed-display')), '"Leave unchanged" with a one-line description on both actions');
+  ok(/turned off/.test(await txt('#ed-display')), 'Darken means the displays are turned off');
+  ok(/system-wide holiday list/.test(await txt('#days-help')), 'Holidays = N8\'s system-wide holiday list');
   await page.click('#toggle-devices'); await wait(300);
   const elaRow = await txt('#reach-table tr[data-reach="ako-ela-1"]');
   ok(/To confirm with PaxLife/.test(elaRow) && !/Darken/.test(elaRow), 'ELA gets PA only — no display action — flagged for PaxLife', elaRow);
@@ -211,13 +218,14 @@ async function run() {
   ok(await count('#d-table tr[data-device]') === await page.evaluate(() => DEVICES.length), 'Device list');
   await page.click('#d-table tr[data-device="ako-barix-1"] td:first-child'); await wait(400);
   ok(await vis('#card-base') && /Persistent — not scheduled/.test(await txt('#card-base')), 'Barix: base audio settings in their own, marked card');
+  ok(await page.locator('#dv-vol').isDisabled() && (await page.inputValue('#dv-vol')) === '50%' && await vis('#dv-eq'), 'volume comes from the station (view only); the equalizer stays on the device');
   ok(await count('#dv-scheds tr[data-sched]') >= 1, 'the schedules reaching the device are listed');
-  ok(await vis('#dv-entries') && /Set volume to 36%/.test(await txt('#dv-entries')) && /Mute/.test(await txt('#dv-entries')) && !/Turn display|screen_on/.test(await txt('#dv-entries')),
+  ok(await vis('#dv-entries') && /Set volume to 30%/.test(await txt('#dv-entries')) && /Mute/.test(await txt('#dv-entries')) && !/Turn display|screen_on/.test(await txt('#dv-entries')),
      'device schedule in plain words — audio actions only');
   ok(/Sun–Thu/.test(await txt('#dv-entries')), 'entries with the same time and action merge their days');
   ok(await count('.api-fields') === 0, 'raw API fields are hidden by default');
   await page.click('#p-gaps'); await wait(250);
-  ok(/API: volume=36/.test(await txt('#dv-entries')), 'Show gaps reveals the PaxLife fields behind each action');
+  ok(/API: volume=30/.test(await txt('#dv-entries')), 'Show gaps reveals the PaxLife fields behind each action');
   await page.click('#p-gaps'); await wait(200);
   ok(!(await count('#card-schedules input, #card-schedules [role="combobox"]')), 'no second schedule editor on the device');
   await page.click('#dv-scheds tr[data-sched] button'); await wait(400);
@@ -237,6 +245,19 @@ async function run() {
   await page.click('#st-table tr[data-station="AKO"] td:first-child'); await wait(400);
   ok(await vis('#station-schedules') && await count('#station-schedules tr[data-sched]') >= 2, 'Station details › Schedules lists group and direct schedules');
   ok(/Group · North line/.test(await txt('#station-schedules')) && /This station/.test(await txt('#station-schedules')), 'says how each one reaches the station');
+  ok(await vis('#card-station-audio') && (await page.inputValue('#sd-vol')) === '50', 'Station details: base audio per station — default 50%');
+  ok(await page.locator('#sd-save').isDisabled(), 'Save waits for a change');
+  await page.fill('#sd-max', '40'); await wait(150);
+  ok(/at least the default/.test(await txt('#sd-max-helper-text')) && await page.locator('#sd-save').isDisabled(), 'a maximum below the default is refused');
+  await page.fill('#sd-max', '80'); await page.fill('#sd-vol', '60'); await wait(150);
+  await nav('devices');
+  ok(await vis('#leave-dialog'), 'unsaved station audio is guarded');
+  await page.click('#leave-stay'); await wait(200);
+  await page.click('#sd-save'); await wait(300);
+  await nav('devices'); await page.click('#d-table tr[data-device="ako-barix-1"] td:first-child'); await wait(400);
+  ok((await page.inputValue('#dv-vol')) === '60%' && /Set volume to 36%/.test(await txt('#dv-entries')), 'the station default reaches every audio device at it: 60% → −40% = 36%');
+  await page.click('#dv-station-audio'); await wait(400);
+  ok(await screen() === 'station', 'the device links to its station for volume');
   await page.click('#add-for-station'); await wait(400);
   ok(await screen() === 'schedule' && /AKO - Akko/.test(await txt('#card-targets')), 'Add schedule for Akko opens the one editor, prefilled');
 
@@ -249,7 +270,7 @@ async function run() {
   ok(/Adjust volume/.test(ela) && !/Darken/.test(ela) && /PaxLife/.test(ela), 'ELA: volume only, no display action, flagged for PaxLife', ela);
   const tft = await txt('#types-table tr[data-type="Platform TFT"]');
   ok(/Darken all displays/.test(tft) && !/Adjust volume/.test(tft), 'a display type: Darken only');
-  ok(/Default volume, equalizer/.test(await txt('#types-table tr[data-type="Barix audio"]')), 'Barix base settings named as persistent');
+  ok(/Equalizer \(on the device\) · volume per station/.test(await txt('#types-table tr[data-type="Barix audio"]')), 'Barix: equalizer on the device, volume per station');
   await nav('schedules');
   await page.click('#s-table tr[data-schedule="s1"] td:first-child'); await wait(400);
   await page.click('#types-link'); await wait(350);

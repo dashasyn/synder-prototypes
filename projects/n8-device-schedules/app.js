@@ -120,9 +120,18 @@ var DEVICES = [
   ['ADA ELA hall', 'ada-ela-1', 'ELA speaker', 'ela', 'ADA', 'Passenger hall', '10.14.0.60'],
 ].map(([name, id, type, kind, station, zone, net]) => ({
   name, id, type, kind, station, zone, net, status: 'Active',
-  base: kind === 'barix' ? { volume: 60, eq: 'Speech' } : kind === 'ela' ? { volume: 70, eq: '' } : null,
+  // Volume lives on the station now (Ignat, 2026-10-05); only the Barix equalizer stays on the device.
+  base: kind === 'barix' ? { eq: 'Speech' } : null,
 }));
 const devById = id => DEVICES.find(d => d.id === id);
+
+/* Base audio per station — DATNETISR-264: the adjustment is "relative to the
+   station's default configured volume", +100% = "maximum configured
+   amplification". Ignat, 2026-10-05: "it should be per station. so all audio
+   devices have 50 % volume". The 80% maximum is sample, and where the maximum
+   is configured is an open question (G4). */
+var STATION_AUDIO = Object.fromEntries(STATIONS.map(s => [s.code, { volume: 50, max: 80 }]));
+const stAudio = code => STATION_AUDIO[code] || { volume: 50, max: 80 };
 
 /* What a device type can do. Display power only on displays; PA only on audio.
    ELA support is unconfirmed (G8). */
@@ -181,11 +190,17 @@ function reach(s) {
   });
 }
 /** Absolute volume a relative adjustment gives on one device (G4). */
-const absVolume = (d, pct) => Math.max(0, Math.min(100, Math.round(d.base.volume * (1 + pct / 100))));
+/** −100…0 scales the station default down to silent; 0…+100 scales it up to
+    the station's maximum configured amplification. Not symmetric on purpose. */
+function volumeAt(code, pct) {
+  const a = stAudio(code), p = Number(pct) || 0;
+  return Math.round(p < 0 ? a.volume * (1 + p / 100) : a.volume + (a.max - a.volume) * p / 100);
+}
+const absVolume = (d, pct) => volumeAt(d.station, pct);
 function onDevice(s, d) {
   const parts = [];
   if (CAN[d.kind].display && s.display === 'darken') parts.push('Darken');
-  if (CAN[d.kind].pa && s.pa === 'adjust') parts.push(s.paPct <= -100 ? 'Mute' : `Volume ${d.base.volume}% → ${absVolume(d, s.paPct)}%`);
+  if (CAN[d.kind].pa && s.pa === 'adjust') parts.push(s.paPct <= -100 ? 'Mute' : `Volume ${stAudio(d.station).volume}% → ${absVolume(d, s.paPct)}%`);
   return parts.join(' · ') || '–';
 }
 
@@ -225,7 +240,7 @@ function weeklyEntries(d) {
     if (CAN[d.kind].display && s.display === 'darken') { on.screen_on = 'false'; off.screen_on = 'true'; }
     if (CAN[d.kind].pa && s.pa === 'adjust') {
       if (s.paPct <= -100) { on.muted = 'true'; off.muted = 'false'; }
-      else { on.volume = absVolume(d, s.paPct) + '%'; off.volume = d.base.volume + '%'; }
+      else { on.volume = absVolume(d, s.paPct) + '%'; off.volume = stAudio(d.station).volume + '%'; }
     }
     s.days.forEach(day => {
       const i = DAYS.findIndex(x => x[0] === day);
@@ -310,9 +325,9 @@ const Opt = (value, title, desc, extra) => html`
 /** A gap, pinned where it bites. Hidden unless "Show gaps" is on. */
 const GAP_TEXT = {
   G1: 'Named, central schedules don\'t exist in the PaxLife API — it stores one weekly schedule per device. ETC must own the schedule list and push the result to each device.',
-  G2: 'Holidays: the API is weekly only, with no dates. Who supplies the holiday calendar, and does ETC write dated overrides around each holiday?',
+  G2: 'Holidays: N8 keeps a central, system-wide list of holiday dates (DATNETISR-264), but the PaxLife API is weekly only, with no dates. ETC has to write dated changes onto each device around every holiday — or holidays can\'t reach the devices.',
   G3: 'Start/End ranges: the API takes weekday/time entries, not ranges. ETC writes an "on" entry at the start and an "off" entry at the end; overnight ranges put the off entry on the next day.',
-  G4: 'Relative volume: the API takes an absolute volume. ETC converts −100…+100% against each device\'s default when applying — and must re-apply if that default changes.',
+  G4: 'Relative volume: the API takes an absolute volume. ETC converts the adjustment against the station\'s default volume (down to silent below 0, up to the station\'s maximum configured amplification above 0) and must re-apply when either value changes. Where is the maximum configured — per station, as shown here?',
   G5: 'Overlaps: a device holds one weekly schedule. When two schedules act on the same device at the same time, which one wins?',
   G6: 'Membership changes: proposed rule — ETC re-applies automatically when a group gains/loses a station or a device is added/moved, and flags the schedule if that fails. Needs agreement with ETC.',
   G7: 'Display actions beyond "Darken all displays" — confirm the list with Tuan before this control is final.',
@@ -626,7 +641,7 @@ function SplitSchedules() {
 /* ══ Screen: schedule editor — the only editor ═════════════════════════ */
 const blank = preset => ({ id: null, name: '', active: true, mode: preset && preset.station ? 'stations' : 'group', group: '',
   stations: preset && preset.station ? [preset.station] : [], days: [], holidays: false, start: '', end: '',
-  pa: 'none', paPct: -30, display: 'none', apply: null });
+  pa: 'none', paPct: 0, display: 'none', apply: null });
 
 function validate(d) {
   const e = {};
@@ -712,7 +727,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
   const title = isNew ? 'New schedule' : (JSON.parse(saved).name || 'Schedule');
   const crumbs = [{ label: 'Output device schedules', onClick: () => go('schedules') }, { label: isNew ? 'New schedule' : 'Schedule details' }];
   const kinds = k => useful.filter(x => x.d.kind === k).length;
-  const ex = DEVICES.find(x => x.kind === 'barix' && targetStations(d).includes(x.station)) || DEVICES.find(x => x.kind === 'barix');
+  const exSt = targetStations(d)[0] || 'AKO';
 
   return html`
     <${Box} sx=${{ maxWidth: embedded ? 'none' : 1180, minWidth: 0 }}>
@@ -843,7 +858,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
           ${phase === 2 ? html`<${PhaseChip} />` : null}
         <//>
         <${Typography} variant="body2" color=${errs.days ? 'error' : 'text.secondary'} sx=${{ mt: .75 }} id="days-help">
-          ${errs.days || (phase === 2 ? 'Holidays need a dated calendar; the per-device API is weekly only.' : 'Holidays: the days in the Holidays category, whatever weekday they fall on.')}
+          ${errs.days || (phase === 2 ? 'Holidays need a dated calendar; the per-device API is weekly only.' : "Holidays: the dates in N8's system-wide holiday list, whatever weekday they fall on.")}
         <//>
         <${Gap} id="G2" />
         <${Box} sx=${{ display: 'flex', gap: 2, mt: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -879,8 +894,8 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
           <${Box} id="pa-block">
             <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>PA action <${Typography} component="span" variant="body2" color="text.secondary">· Barix, ELA<//><//>
             <${RadioGroup} value=${d.pa} onChange=${e => set({ pa: e.target.value })} id="ed-pa">
-              ${Opt('none', 'Leave unchanged', "Audio stays at each device's base settings.")}
-              ${Opt('adjust', 'Adjust volume', "Relative to each device's default volume, only during this period.")}
+              ${Opt('none', 'Leave unchanged', "Audio stays at each station's default volume.")}
+              ${Opt('adjust', 'Adjust volume', 'Changes the volume only during this period.')}
             <//>
             ${d.pa === 'adjust' ? html`
               <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 4, pl: 4, pr: 1 }}>
@@ -892,7 +907,8 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
                   onChange=${e => set({ paPct: e.target.value === '' ? '' : Number(e.target.value) })} />
               <//>
               <${Typography} variant="body2" color=${errs.pa ? 'error' : 'text.secondary'} sx=${{ pl: 4, mt: 1.5 }} id="pa-help">
-                ${errs.pa || html`Relative to each device's configured default volume. −100% mutes.${ex && Number.isFinite(Number(d.paPct)) ? html` E.g. ${ex.name}: default ${ex.base.volume}% → <b>${absVolume(ex, Number(d.paPct))}%</b>.` : ''}`}
+                ${errs.pa || html`Relative to each station's default volume: −100% is silent, +100% is the station's maximum configured amplification.
+                  ${Number.isFinite(Number(d.paPct)) ? html` At ${stName(exSt)} (default ${stAudio(exSt).volume}%, max ${stAudio(exSt).max}%): ${d.paPct > 0 ? '+' : d.paPct < 0 ? '−' : ''}${Math.abs(d.paPct)}% → <b>${volumeAt(exSt, d.paPct)}%</b>.` : ''}`}
               <//>` : null}
             <${Gap} id="G4" />
           <//>
@@ -900,7 +916,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>Display action <${Typography} component="span" variant="body2" color="text.secondary">· displays only<//><//>
             <${RadioGroup} value=${d.display} onChange=${e => set({ display: e.target.value })} id="ed-display">
               ${Opt('none', 'Leave unchanged', 'Displays keep running as usual.')}
-              ${Opt('darken', 'Darken all displays', 'Screens switch off for this period, then back on.')}
+              ${Opt('darken', 'Darken all displays', 'Displays are turned off for this period, then back on.')}
               ${Opt('more', 'More display actions', 'Not defined yet.', html` <${Chip} size="small" label="To confirm with Tuan" variant="outlined" sx=${{ ml: 1 }} />`)}
             <//>
             <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>ELA speakers and Barix have no display, so they never get a display action.
@@ -914,7 +930,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
           <${Box}>
             <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>Base audio settings aren't part of a schedule<//>
             <${Typography} variant="body2" color="text.secondary">
-              Default volume and equalizer are persistent Barix settings, set on each device (Device details › Base audio settings). A schedule only adjusts relative to them, and only inside its time window.
+              Each station's default volume and maximum amplification are persistent settings in Station details › Base audio settings; the Barix equalizer is set on each device. A schedule only adjusts relative to them, and only inside its time window.
             <//>
           <//>
         <//>
@@ -960,12 +976,14 @@ function DeviceDetail() {
   const { go, target, phase, toast, bump, setDirty } = useApp();
   const d = devById(target.id);
   const [base, setBase] = useState(() => d.base ? { ...d.base } : null);
-  const dirty = !!base && (String(base.volume) !== String(d.base.volume) || base.eq !== d.base.eq);
+  const dirty = !!base && base.eq !== d.base.eq;
+  const audio = d.kind !== 'display';
+  const sa = stAudio(d.station);
   useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
   const scheds = SCHEDULES.filter(s => reach(s).some(x => x.d.id === d.id && x.useful));
   const entries = plainEntries(d);
   const { gaps } = useApp();
-  const save = () => { if (base) { d.base = { volume: Number(base.volume), eq: base.eq }; } bump(); setDirty(false); toast('Device saved'); go('devices'); };
+  const save = () => { if (base) { d.base = { eq: base.eq }; } bump(); setDirty(false); toast('Device saved'); go('devices'); };
   const via = s => s.mode === 'group' ? `Group · ${groupName(s.group)}` : `Station · ${stName(d.station)}`;
 
   return html`
@@ -989,13 +1007,13 @@ function DeviceDetail() {
         <${FieldGrid} cols=${3}><${TextField} label="Station" value=${stLabel(d.station)} disabled /><${TextField} label="Output zone" value=${d.zone} disabled /><//>
       <//>
 
-      ${base ? html`
+      ${audio ? html`
         <${SectionCard} title="Base audio settings" id="card-base"
           chip=${html`<${Chip} size="small" label="Persistent — not scheduled" icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px' }}>push_pin<//>`} />`}
-          note="Always in force on this device. Schedules adjust relative to the default volume, only inside their time window.">
+          note=${html`Always in force. Volume comes from the station — set it in <${Link} component="button" underline="hover" id="dv-station-audio" onClick=${() => go('station', { code: d.station, tab: 'audio' })} sx=${{ verticalAlign: 'baseline' }}>Station details<//>. Schedules adjust relative to it, only inside their time window.`}>
           <${FieldGrid} cols=${3}>
-            <${TextField} id="dv-vol" label="Default volume (%)" type="number" value=${base.volume} inputProps=${{ min: 0, max: 100 }}
-              onChange=${e => setBase({ ...base, volume: e.target.value })} />
+            <${TextField} id="dv-vol" label=${`Default volume — station ${d.station}`} value=${sa.volume + '%'} disabled />
+            <${TextField} id="dv-max" label=${`Maximum amplification — station ${d.station}`} value=${sa.max + '%'} disabled />
             ${d.kind === 'barix' ? html`
               <${FormControl}>
                 <${InputLabel} id="dv-eq-label">Equalizer<//>
@@ -1084,11 +1102,11 @@ function DeviceTypes() {
                 <${TableCell}>${x.kind === 'display' ? 'Display' : 'Audio'}<//>
                 <${TableCell} data-cap="display">${CAN[x.kind].display ? 'Darken all displays' : no}<//>
                 <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Adjust volume' : no}<//>
-                <${TableCell}>${x.kind === 'barix' ? 'Default volume, equalizer' : x.kind === 'ela' ? 'Default volume' : no}<//>
+                <${TableCell}>${x.kind === 'barix' ? 'Equalizer (on the device) · volume per station' : x.kind === 'ela' ? 'Volume per station' : no}<//>
                 <${TableCell}>${x.n}<//>
                 <${TableCell}>${x.kind === 'ela'
                   ? (phase === 2 ? html`<${PhaseChip} label="Skipped in phase 1" />` : html`<${Chip} size="small" label="To confirm with PaxLife" variant="outlined" />`)
-                  : x.kind === 'barix' ? 'Base settings are persistent — set on the device, never by a schedule.' : ''}<//>
+                  : x.kind === 'barix' ? 'Base settings are persistent — never changed by a schedule.' : ''}<//>
               <//>`)}
           <//>
         <//>
@@ -1126,19 +1144,48 @@ function StationList() {
 }
 
 function StationDetail() {
-  const { go, target } = useApp();
+  const { go, target, toast, bump, setDirty } = useApp();
   const s = STATIONS.find(x => x.code === target.code);
   const [tab, setTab] = useState(3);
   const list = SCHEDULES.filter(x => targetStations(x).includes(s.code));
+  const [au, setAu] = useState(() => ({ ...stAudio(s.code) }));
+  const cur = stAudio(s.code);
+  const dirty = String(au.volume) !== String(cur.volume) || String(au.max) !== String(cur.max);
+  useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
+  const v = Number(au.volume), mx = Number(au.max);
+  const auErr = !(au.volume !== '' && v >= 0 && v <= 100) ? { volume: 'Enter 0–100' }
+    : !(au.max !== '' && mx >= v && mx <= 100) ? { max: `Enter ${v}–100 — at least the default volume` } : {};
+  const nAudio = DEVICES.filter(d => d.station === s.code && d.kind !== 'display').length;
+  const save = () => {
+    if (Object.keys(auErr).length) return;
+    STATION_AUDIO[s.code] = { volume: v, max: mx };
+    SCHEDULES.filter(x => x.active && targetStations(x).includes(s.code) && x.pa === 'adjust' && x.apply).forEach(x => { x.apply = { ...x.apply, at: 'just now' }; });
+    setDirty(false); bump(); toast(`${s.name}: base audio saved — schedules re-applied to its audio devices`);
+  };
   return html`
     <${Box} sx=${{ maxWidth: 1180 }}>
       <${PageHeader} crumbs=${[{ label: 'Stations', onClick: () => go('stations') }, { label: 'Station details' }]} title=${s.code} titleId="sd-title"
-        action=${html`<${Button} variant="contained" disabled>Save<//>`} />
+        action=${html`<${Button} variant="contained" id="sd-save" disabled=${!dirty || !!Object.keys(auErr).length} onClick=${save}>Save<//>`} />
       <${FieldGrid}>
         <${TextField} label="Full Name (English)" required value=${s.en} disabled />
         <${TextField} label="Full Name (Hebrew)" required value=${s.he} disabled />
         <${TextField} label="MOT Station Name" required value=${s.mot} disabled />
         <${TextField} label="MOT Station ID" required value=${s.motId} disabled />
+      <//>
+      <${Box} sx=${{ mt: 2 }}>
+        <${SectionCard} title="Base audio settings" id="card-station-audio"
+          chip=${html`<${Chip} size="small" label="Persistent — not scheduled" icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px' }}>push_pin<//>`} />`}
+          note=${`Applies to all ${nAudio} audio device${nAudio === 1 ? '' : 's'} at ${s.name}. Schedules adjust relative to these values: −100% is silent, +100% is the maximum.`}>
+          <${FieldGrid} cols=${3}>
+            <${TextField} id="sd-vol" label="Default volume (%)" type="number" value=${au.volume} inputProps=${{ min: 0, max: 100 }}
+              error=${!!auErr.volume} helperText=${auErr.volume || 'Every PA device at the station plays at this level.'}
+              onChange=${e => setAu({ ...au, volume: e.target.value })} />
+            <${TextField} id="sd-max" label="Maximum amplification (%)" type="number" value=${au.max} inputProps=${{ min: 0, max: 100 }}
+              error=${!!auErr.max} helperText=${auErr.max || 'What +100% in a schedule means here.'}
+              onChange=${e => setAu({ ...au, max: e.target.value })} />
+          <//>
+          <${Gap} id="G4" />
+        <//>
       <//>
       <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} sx=${{ mt: 2, borderBottom: '1px solid #E7E7E7' }}>
         <${Tab} label="Devices" /><${Tab} label="Tracks" /><${Tab} label="GPS window" /><${Tab} label="Schedules" id="tab-schedules" />
