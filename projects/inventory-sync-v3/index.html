@@ -112,10 +112,13 @@
   .rec-actions{white-space:nowrap}
   .dlg-list{margin:8px 0;padding-left:20px}
   .diff-list{margin-top:8px;display:flex;flex-direction:column}
-  .diff-row{display:flex;justify-content:space-between;gap:16px;padding:4px 0;color:var(--text-primary);cursor:pointer;text-decoration:none}
-  .diff-row:hover{color:var(--color-primary)}.diff-n{font-variant-numeric:tabular-nums;font-weight:500}
-  .diff-more{margin-top:4px}
-  .diff-age{margin-left:8px;color:var(--color-yellow)}
+  .diff-row{display:flex;flex-direction:column;padding:6px 0;color:var(--text-primary);cursor:pointer;text-decoration:none;line-height:20px}
+  .diff-row:hover .diff-p{color:var(--color-primary)}
+  .diff-n{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text-secondary)}.diff-n b{font-weight:500;color:var(--text-primary)}.diff-sep{margin:0 4px}
+  .diff-ok{display:flex;align-items:center;gap:8px}.diff-ok .material-icons{color:var(--color-green)}
+  .help.stip{cursor:help}
+  .gate{align-items:center}.gate .grow{flex:1}.gate .alert-title{margin-bottom:2px}
+  .gate .material-icons{font-size:20px}
   .diff-fail{display:flex;align-items:center;gap:8px;color:var(--color-red);margin:4px 0 8px}.diff-fail .grow{flex:1}
   .diff-fail-t{color:var(--color-red)}
   .prev-toggle{display:inline-flex;align-items:center;gap:4px;margin:16px 0 8px;padding-left:0}
@@ -363,45 +366,52 @@ function onboarding(){if(L!==2||!S.onb)return null;var i=onbStore();if(!i)return
   if(ready(i)){S.onb=false;S.tab='overview';setTimeout(function(){toast(i.name+' is ready. Click Enable to start sending stock changes.')},0);return null}
   return vOnboard(i)}
 
+/* ---- no store connected yet: every tab says what to do first (Ignat 2026-10-05) ---- */
+var GATE={overview:'Connect a Shopify store below. Then choose its location and set Created product to Inventory. After that, click Enable.',
+  events:'Stock changes sent from QuickBooks to your stores show up here once a store is connected.',
+  mappings:'The products of a store and their QuickBooks items show up here once the store is connected.',
+  reconcile:'Synder compares the stock in QuickBooks and Shopify every night once a store is connected. Differences show up here.'};
+function gate(tab){if(conn().length)return '';
+  return '<div class="alert alert-info gate" id="gate" data-gate="'+tab+'"><span class="material-icons">info</span><div class="grow"><span class="alert-title">Connect a Shopify store first</span>'+GATE[tab]+'</div>'
+    +(tab==='overview'?'':'<button class="btn btn-sm" id="gate-connect" '+(S.connecting?'disabled ':'')+'onclick="askConnect()">Connect store</button>')+'</div>'}
+
 /* ---- overview (sketches 2 + 3) ---- */
 function vOverview(){
   var cs=conn(), notReady=cs.filter(function(i){return !ready(i)}), h='';
   if(L===2) h+=tilesLine()+'<div class="cols2"><div>'+bSync()+bDiffs()+'</div>'+bStores()+'</div>';
   else h+='<div class="cols"><div>'+bActivity()+bDiffs()+'</div>'+bSync()+bStores()+'</div>';
   return h}
-function bDiffs(){   // its own small block: last check summary, biggest differences, failed checks (Ignat 2026-10-02)
+function bDiffs(){   // informative only: how many differ, the 3 biggest, one way to the details (Ignat 2026-10-05: no "Update all", no status chip, no night count, no summary line)
   var st=conn().filter(function(i){return i.loc}),runs=st.map(function(i){return latestRun(i)}).filter(Boolean),n=allDiffs(),multi=st.length>1;
   var failed=st.filter(function(i){var a=lastRunAny(i);return a&&a.status==='Failed'});
   var rows=[];st.forEach(function(i){diffsOf(i).forEach(function(x){rows.push({i:i,x:x,d:x.qq-x.sq})})});rows.sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d)});
-  var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock check <span class="material-icons help" title="Products where QuickBooks and Shopify show different stock. Sync sends only changes, so a difference stays until you fix it.">help</span></div>'
-   +'<div class="box"><div class="act" data-act="diff"><span><span class="status status-purple">Stock differences</span><span class="muted small" style="margin-left:8px">QuickBooks ≠ Shopify</span></span>'
-   +'<a class="text-link" id="act-diff" onclick="go(\'reconcile\')">'+n+'<span class="material-icons i16">chevron_right</span></a></div>';
+  var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock check '+helpIc('Every night at 02:30 UTC, Synder compares the stock of each product in QuickBooks and Shopify. Products where the two numbers differ are shown here. Sync sends only changes, so a difference stays until you fix it.')+'</div><div class="box">';
   failed.forEach(function(i){var a=lastRunAny(i);
-    h+='<div class="diff-fail" data-fail="'+i.id+'"><span class="material-icons i16">error</span><span class="grow">The last check'+(multi?' of '+esc(i.name):'')+' failed ('+esc(a.started)+'). The numbers below may be out of date.</span>'
+    h+='<div class="diff-fail" data-fail="'+i.id+'"><span class="material-icons i16">error</span><span class="grow">The last check'+(multi?' of '+esc(i.name):'')+' failed ('+esc(a.started)+'), so '+(multi?'its':'the')+' stock wasn\'t compared.</span>'
       +tip('Compare every store that has a location now.','<button class="btn btn-outlined btn-sm" id="diff-compare" onclick="compareNow()">Compare now</button>')+'</div>'});
   if(!runs.length)return h+(failed.length?'':'<div class="muted" id="diff-msg">No comparison yet. Connected stores are compared every night at 02:30 UTC.</div>')+'</div></div>';
-  var compared=runs.reduce(function(t,r){return t+r.rows.length},0),when=runs[0].started;
-  h+='<div class="muted" id="diff-msg">Last check: '+esc(when)+' · '+plural(compared,'product')+' compared · '+(n?n+(n===1?' differs':' differ'):'all match')+'</div>';
-  if(n){
-    h+='<div class="diff-list" id="diff-list">'+rows.slice(0,3).map(function(r){var a=Math.abs(r.d),age=openNights(r.i,r.x.prod);
-      var open=L===1?"go('reconcile',{runView:'"+latestRun(r.i).id+"',unresolvedOnly:true})":"go('reconcile',{runView:null,recFilter:'all',unresolvedOnly:true})";
-      return '<a class="diff-row" onclick="'+open+'"><span>'+esc(r.x.prod)+(multi?'<span class="muted"> · '+esc(r.i.name)+'</span>':'')+(age>1?' <span class="diff-age">open '+age+' nights</span>':'')+'</span>'
-        +'<span class="stip diff-n" tabindex="0" data-stip="QuickBooks '+r.x.qq+' · Shopify '+r.x.sq+'">Shopify '+a+(r.d>0?' fewer':' more')+'</span></a>'}).join('')
-      +(n>3?'<a class="text-link diff-more" onclick="go(\'reconcile\')">and '+(n-3)+' more</a>':'')+'</div>';
-    if(n<=10)h+='<div class="row-actions" style="margin-top:8px">'+tip('Send every difference to Shopify so it matches QuickBooks. You confirm the list first.','<button class="btn btn-outlined btn-sm" id="diff-update-all" onclick="updateAll()">Update all</button>')+'</div>'}
+  if(!n)return h+'<div class="diff-ok" id="diff-msg"><span class="material-icons i16">check_circle</span>Stock is the same in QuickBooks and Shopify.</div></div></div>';
+  /* one store with differences → open its comparison; several → the list (variant 1) / the differences page (variant 2) */
+  var ds=st.filter(function(i){return diffsOf(i).length}),one=ds.length===1;
+  var open=function(i){return L===1&&i?"go('reconcile',{runView:'"+latestRun(i).id+"',unresolvedOnly:true})":"go('reconcile',{runView:null,recFilter:'all',unresolvedOnly:true})"};
+  h+='<div id="diff-msg"><b>'+(n===1?'1 product has':n+' products have')+'</b> different stock in QuickBooks and Shopify. Check '+(n===1?'it':'them')+' now.</div>'
+   +'<div class="diff-list" id="diff-list">'+rows.slice(0,3).map(function(r){
+     return '<a class="diff-row" onclick="'+open(r.i)+'"><span class="diff-p">'+esc(r.x.prod)+(multi?'<span class="muted"> · '+esc(r.i.name)+'</span>':'')+'</span>'
+       +'<span class="diff-n">QuickBooks <b>'+r.x.qq+'</b> <span class="diff-sep">·</span> Shopify <b>'+r.x.sq+'</b></span></a>'}).join('')+'</div>'   // name on top, both numbers below: same height whatever the column width
+   +'<div class="row-actions" style="margin-top:12px">'+tip('Open the comparison: see every difference and decide what to do with each one.','<button class="btn btn-outlined btn-sm" id="diff-review" onclick="'+open(one?ds[0]:null)+'">Review differences</button>')+'</div>';
   return h+'</div></div>'}
-function updateAll(){S.recSel={};conn().filter(function(i){return i.loc}).forEach(function(i){diffsOf(i).forEach(function(x){S.recSel[i.id+'|'+x.prod]=true})});bulkAccept()}
 function tilesLine(){ // the numbers that need the user are coloured only when they are above 0
   var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, d=allDiffs();
   var t=[['Held',c('Held'),'Not sent: needs you','t-held',"go('events',{evFilter:'Held'})"],['Failed',c('Failed'),'Shopify rejected it','t-failed',"go('events',{evFilter:'Failed'})"],
     ['Pending',c('Pending'),'Waiting for the next check','',"go('events',{evFilter:'Pending'})"],
     ['Applied in 24h',c('Applied'),'Stock updated in Shopify','',"go('events',{evFilter:'Applied'})"]];
   return '<div class="tiles" id="tiles">'+t.map(function(x){return '<div class="tile '+(x[1]>0?x[3]:'')+'" data-tile="'+x[0]+'"><div class="tl">'+x[0]+'</div><div class="tv">'+(S.enabledOn?'<a class="text-link" onclick="'+x[4]+'">'+x[1]+'<span class="material-icons i16">chevron_right</span></a>':'<span class="muted">–</span>')+'</div></div>'}).join('')+'</div>'}
+function helpIc(text){return '<span class="material-icons help stip" tabindex="0" role="img" aria-label="'+esc(text)+'" data-stip="'+esc(text)+'">help</span>'}   // (?) next to a header: same tooltip as the statuses
 function tip(text,inner){return '<span class="tip" data-tip="'+esc(text)+'">'+inner+'</span>'}   // tooltip wrapper (works on disabled buttons too)
 function bActivity(){
   var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, never=!S.enabledOn;
   var rows=[['Held','status-yellow',c('Held')],['Failed','status-red',c('Failed')],['Pending','status-blue',c('Pending')],['Applied in 24h','status-green',c('Applied')]];
-  var h='<div class="block" id="b-activity"><div class="block-t">Activity <span class="material-icons help" title="Stock changes from QuickBooks and what happened to them.">help</span></div><div class="box">';
+  var h='<div class="block" id="b-activity"><div class="block-t">Activity '+helpIc('Stock changes from QuickBooks and what happened to them.')+'</div><div class="box">';
   rows.forEach(function(r){h+='<div class="act" data-act="'+r[0]+'">'+stip(r[0]==='Applied in 24h'?'Applied':r[0],'<span class="status '+r[1]+'">'+r[0]+'</span>')
     +(never?'<span class="muted act-n">–</span>':'<a class="text-link act-n" onclick="go(\'events\',{evFilter:\''+(r[0]==='Applied in 24h'?'Applied':r[0])+'\'})">'+r[2]+'<span class="material-icons i16">chevron_right</span></a>')+'</div>'});
   return h+'</div></div>'}
@@ -409,7 +419,7 @@ function nextSync(){var d=new Date(),m=d.getMinutes(),add=5-m%5;d.setMinutes(m+a
 function bSync(){
   var cs=conn(), rd=cs.filter(ready), mode=S.sync;
   var chip={off:'<span class="status status-grey">Disabled</span>',on:'<span class="status status-green">Enabled</span>',paused:'<span class="status status-yellow">Paused</span>'}[mode];
-  var h='<div class="block" id="b-sync"><div class="block-t">Sync <span class="material-icons help" title="Synder reads stock changes from QuickBooks and sends them to the stores that are ready.">help</span></div><div class="box">'
+  var h='<div class="block" id="b-sync"><div class="block-t">Sync '+helpIc('Synder reads stock changes from QuickBooks and sends them to the stores that are ready.')+'</div><div class="box">'
    +'<div class="line"><span class="k">State:</span><span id="sync-state">'+chip+'</span></div>';
   if(S.enabledOn) h+='<div class="line" id="enabled-on"><span class="k">Enabled on:</span>'+esc(S.enabledOn)+'</div><div class="line"><span class="k">Last sync:</span>'+esc(S.lastSync)+'</div>';
   if(mode==='on') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>'+nextSync()+'</div>';
@@ -435,7 +445,7 @@ function kebab(i){var q="'"+i.id+"'",items='';
   return '<div class="kebab"><button class="btn-icon kebab-btn" aria-label="Actions for '+esc(i.name)+'" aria-haspopup="menu" onclick="toggleMenu(event,'+q+')"><span class="material-icons">more_horiz</span></button>'
     +'<div class="menu" id="menu-'+i.id+'" role="menu" hidden>'+items+'</div></div>'}
 function bStores(){
-  var h='<div class="block" id="stores-card"><div class="block-t">Shopify stores <span class="material-icons help" title="Each store receives stock changes at one location once its setup is done.">help</span></div>';
+  var h='<div class="block" id="stores-card"><div class="block-t">Shopify stores '+helpIc('Each store receives stock changes at one location once its setup is done.')+'</div>';
   // connected stores that need setup first, then ready ones, then the ones not connected yet
   var rank=function(i){return !i.connected?2:ready(i)?1:0};
   S.ints.slice().sort(function(a,b){return rank(a)-rank(b)}).forEach(function(i){
@@ -624,7 +634,8 @@ function render(){
   var tabs=['overview','events','mappings','reconcile'],names={overview:'Overview',mappings:'Mappings',events:'Activity',reconcile:'Stock check'};
   var ob=onboarding();
   if(ob!==null){m.innerHTML='<div class="ob-page">'+ob+'</div>';return}
-  var v=S.tab==='overview'?vOverview():S.tab==='mappings'?vMappings():S.tab==='events'?vEvents():vReconcile();
+  var v=gate(S.tab)||'';
+  if(!v||S.tab==='overview')v+=S.tab==='overview'?vOverview():S.tab==='mappings'?vMappings():S.tab==='events'?vEvents():vReconcile();   // other tabs: only the alert until a store is connected
   m.innerHTML='<div class="page-header"><div class="page-header-text"><h1 class="page-title">Inventory sync</h1><p class="page-subtitle">Pushes QuickBooks Online stock movements into your Shopify store.</p></div></div>'
    +'<div class="tabs" role="tablist">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t?' active':'')+'" role="tab" id="tab-'+t+'" aria-selected="'+(S.tab===t)+'" onclick="go(\''+t+'\')">'+names[t]+'</button>'}).join('')+'</div>'+v;
 }
