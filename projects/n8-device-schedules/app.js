@@ -155,7 +155,8 @@ var SCHEDULES = [
     pa: 'none', paPct: 50, display: 'darken', apply: null },
   { id: 's4', name: 'South line evening', active: true, groups: ['south'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu'], holidays: false, start: '21:00', end: '23:00',
-    pa: 'adjust', paPct: 40, display: 'none', apply: { at: '30 Sep 2026, 03:00', failed: [], stale: 'Group South line changed on 1 Oct — B. Sheva Uni was added' } },
+    pa: 'adjust', paPct: 40, display: 'none', apply: { at: '30 Sep 2026, 03:00', failed: [],
+      stale: { on: '1 Oct 2026', added: [{ group: 'south', station: 'BS' }], removed: [{ name: 'ASK Barix PH2', station: 'ASK', why: 'removed from the station' }] } } },
 ];
 
 /* ── Pure logic ────────────────────────────────────────────────────── */
@@ -332,7 +333,7 @@ const GAP_TEXT = {
   G3: 'Start/End ranges: the API takes weekday/time entries, not ranges. ETC writes an "on" entry at the start and an "off" entry at the end; overnight ranges put the off entry on the next day.',
   G4: 'Volume scale: DATNETISR-264 specifies a relative adjustment, −100…+100% against the station\'s default volume (+100% = maximum configured amplification). This prototype sets an absolute level, 0–100% (0 = silent), as Ignat asked on 5 Oct. Confirm with ETC — the API takes an absolute volume, so this version needs no conversion.',
   G5: 'Overlaps: a device holds one weekly schedule. When two schedules act on the same device at the same time, which one wins?',
-  G6: 'Membership changes: proposed rule — ETC re-applies automatically when a group gains/loses a station or a device is added/moved, and flags the schedule if that fails. Needs agreement with ETC.',
+  G6: 'Membership changes: proposed rule — ETC updates the devices automatically when a group gains/loses a station or a device is added/moved, and marks the schedule Out of date if that fails. Needs agreement with ETC.',
   G7: 'Display actions beyond "Darken all displays" — confirm the list with Tuan before this control is final.',
   G8: 'ELA speakers: confirm with PaxLife whether ELA devices accept schedules at all, and which fields.',
   G9: 'Partial failures: is the per-device replace atomic? A device that fails keeps its old schedule — confirm with PaxLife.',
@@ -356,12 +357,11 @@ function applyState(s, phase) {
   const r = reach(s).filter(x => x.useful);
   const skipped = phase === 2 ? r.filter(x => x.d.kind === 'ela').length : 0;
   const total = r.length - skipped;
-  if (!s.active) return { kind: 'off', text: 'Not applied', total };
-  if (!s.apply) return { kind: 'off', text: 'Not applied yet', total };
-  if (s.apply.stale) return { kind: 'stale', text: 'Needs re-apply', total, detail: s.apply.stale };
+  if (!s.active || !s.apply) return { kind: 'off', text: '0 devices', total };
+  if (s.apply.stale) return { kind: 'stale', text: 'Out of date', total };
   const failed = s.apply.failed.filter(f => !(phase === 2 && (devById(f.id) || {}).kind === 'ela')).length;
-  if (failed) return { kind: 'partial', text: `${total - failed} of ${total} · ${failed} failed`, total };
-  return { kind: 'ok', text: `${total} of ${total} applied${skipped ? ` · ${skipped} ELA skipped` : ''}`, total };
+  if (failed) return { kind: 'partial', text: `${total - failed} of ${total} devices · ${failed} failed`, total };
+  return { kind: 'ok', text: `${total} of ${total} devices${skipped ? ` · ${skipped} ELA skipped` : ''}`, total };
 }
 const STATE_STYLE = { ok: ['#E8F5E9', '#2E7D32', 'check_circle'], partial: ['#FDECEA', '#C62828', 'error'],
                       stale: ['#FFF3E0', '#E65100', 'sync_problem'], off: ['#F5F5F5', 'rgba(0,0,0,.6)', 'remove_circle_outline'] };
@@ -461,7 +461,7 @@ function VariantSwitch() {
     </div>`;
 }
 
-/** Active switch + Re-apply, shared by the list table and the split rail. */
+/** Active switch, shared by the list table and the split rail. */
 function listActions({ phase, bump, toast }) {
   return {
     toggle: s => {
@@ -469,9 +469,8 @@ function listActions({ phase, bump, toast }) {
       const t = applyState(s, phase).total;
       if (s.active) s.apply = { at: 'just now', failed: [] };
       bump();
-      toast(s.active ? `"${s.name}" is active — applied to ${t} device${t === 1 ? '' : 's'}` : `"${s.name}" is inactive — removed from ${t} device${t === 1 ? '' : 's'}`);
+      toast(s.active ? `"${s.name}" is active — ${t} device${t === 1 ? '' : 's'} updated` : `"${s.name}" is inactive — removed from ${t} device${t === 1 ? '' : 's'}`);
     },
-    reapply: s => { s.apply = { at: 'just now', failed: [] }; bump(); toast(`"${s.name}" re-applied to ${applyState(s, phase).total} devices`); },
   };
 }
 
@@ -484,10 +483,10 @@ function ScheduleList() {
 
   const n = q.trim().toLowerCase();
   const rows = listState === 'empty' ? [] : SCHEDULES.filter(s => !n || `${s.name} ${targetText(s)}`.toLowerCase().includes(n));
-  const { toggle, reapply } = listActions(useApp());
+  const { toggle } = listActions(useApp());
 
   const add = html`<${Button} variant="contained" id="add-btn" startIcon=${html`<${Icon}>add<//>`} onClick=${() => go('schedule', { id: null })}>Add schedule<//>`;
-  const cols = ['Name', 'Active', 'Targets', 'Days', 'Time', 'PA action', 'Display action', 'Devices'];
+  const cols = ['Name', 'Active', 'Stations', 'Days', 'Time', 'PA action', 'Display action', 'Devices'];
 
   let body;
   if (listState === 'error') body = html`
@@ -529,8 +528,7 @@ function ScheduleList() {
                   <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${paText(s)}<//>
                   <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${displayText(s)}<//>
                   <${TableCell}>
-                    <${Tooltip} title=${st.detail || ''}><span><${StateChip} st=${st} /></span><//>
-                    ${st.kind === 'stale' ? html`<${Button} size="small" sx=${{ ml: 1 }} data-reapply=${s.id} onClick=${e => { e.stopPropagation(); reapply(s); }}>Re-apply<//>` : null}
+                    <${StateChip} st=${st} />
                   <//>
                   <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap', py: 0 }}>
                     <${RowIcon} icon="edit" label=${'Edit ' + s.name} onClick=${() => go('schedule', { id: s.id })} />
@@ -632,7 +630,7 @@ function StationPicker({ groups, stations, onChange, error }) {
 function SplitSchedules() {
   const app = useApp();
   const { go, target, screen, phase, listState, setListState } = app;
-  const { toggle, reapply } = listActions(app);
+  const { toggle } = listActions(app);
   const [q, setQ] = useState('');
   const [savedId, setSavedId] = useState(null);
   const all = listState === 'empty' ? [] : SCHEDULES;
@@ -690,7 +688,6 @@ function SplitSchedules() {
                 <${Typography} variant="body2" color="text.secondary">PA: ${paText(s)} · Displays: ${displayText(s)}<//>
                 <${Box} sx=${{ mt: .75, display: 'flex', alignItems: 'center', gap: 1 }}>
                   <${StateChip} st=${st} />
-                  ${st.kind === 'stale' ? html`<${Button} size="small" data-reapply=${s.id} onClick=${e => { e.stopPropagation(); reapply(s); }}>Re-apply<//>` : null}
                 <//>
               <//>`;
           }) : html`<${Typography} variant="body2" color="text.secondary" sx=${{ p: 2 }}>No schedules match "${q}".<//>`}
@@ -791,6 +788,8 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
   const retry = () => { ddRef.current = d; startApply(applyTo.filter(x => run.failed.some(f => f.id === x.d.id)), true); };
 
   const isNew = !d.id || !SCHEDULES.some(s => s.id === d.id);
+  const recNow = SCHEDULES.find(s => s.id === d.id);
+  const stale = recNow && recNow.active && recNow.apply && recNow.apply.stale;
   const title = isNew ? 'New schedule' : (JSON.parse(saved).name || 'Schedule');
   const crumbs = [{ label: 'Output device schedules', onClick: () => go('schedules') }, { label: isNew ? 'New schedule' : 'Schedule details' }];
   const kinds = k => useful.filter(x => x.d.kind === k).length;
@@ -807,10 +806,17 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
         Phase 1: on Save, ETC writes the result into each device's weekly schedule through the PaxLife API, replacing what was there.<//>` : null}
 
       <${Box} id="status-area">
+        ${stale && !run ? html`
+          <${Alert} severity="warning" id="stale-alert" sx=${{ mb: 2 }}>
+            <${AlertTitle}>Out of date — stations changed since the last save (${stale.on})<//>
+            ${stale.added.map(a => html`<div key=${'a' + a.station} data-stale="added">Added to ${groupName(a.group)}: <b>${stName(a.station)}</b> — ${DEVICES.filter(x => x.station === a.station).length} device${DEVICES.filter(x => x.station === a.station).length === 1 ? '' : 's'}</div>`)}
+            ${stale.removed.map(r => html`<div key=${'r' + r.name} data-stale="removed">Removed: <b>${r.name}</b> (${stName(r.station)}) — ${r.why}</div>`)}
+            <div style=${{ marginTop: 4 }}>Save to update the devices.</div>
+          <//>` : null}
         ${nErr ? html`<${Alert} severity="error" id="err-summary" sx=${{ mb: 2 }}>Fix ${nErr} field${nErr > 1 ? 's' : ''} before saving — nothing has been sent to the devices.<//>` : null}
         ${run && run.phase === 'applying' ? html`
           <${Alert} severity="info" icon=${false} id="applying" sx=${{ mb: 2 }}>
-            <b>Saving and applying…</b> ${run.total ? `${run.done} of ${run.total} devices updated` : ''}
+            <b>Saving…</b> ${run.total ? `${run.done} of ${run.total} devices updated` : ''}
             <${LinearProgress} variant=${run.total ? 'determinate' : 'indeterminate'} value=${run.total ? run.done / run.total * 100 : 0} sx=${{ mt: 1 }} />
           <//>` : null}
         ${run && run.phase === 'error' ? html`
@@ -819,18 +825,18 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             ETC didn't respond. Nothing was sent to the devices, and your changes are still here.
           <//>` : null}
         ${run && run.phase === 'done' && run.inactive ? html`
-          <${Alert} severity="success" id="save-result" sx=${{ mb: 2 }}>Saved as inactive — it isn't applied to any device.<//>` : null}
+          <${Alert} severity="success" id="save-result" sx=${{ mb: 2 }}>Saved — inactive, removed from all devices.<//>` : null}
         ${run && run.phase === 'done' && !run.inactive ? (run.failed.length ? html`
           <${Alert} severity="warning" id="save-result" data-result="partial" sx=${{ mb: 2 }}
             action=${html`<${Button} color="inherit" id="retry-failed" onClick=${retry}>Retry failed<//>`}>
-            <${AlertTitle}>Saved. Applied to ${run.total - run.failed.length} of ${run.total} devices — ${run.failed.length} couldn't be updated<//>
+            <${AlertTitle}>Saved — ${run.total - run.failed.length} of ${run.total} devices updated, ${run.failed.length} failed<//>
             <${Box} component="ul" sx=${{ m: 0, pl: 2.5 }}>
               ${run.failed.map(f => html`<li key=${f.id} data-failed=${f.id}><b>${(devById(f.id) || {}).name}</b> (${stName((devById(f.id) || {}).station)}) — ${f.reason}<//>`)}
             <//>
             <${Typography} variant="body2" sx=${{ mt: .5 }}>The other devices already run the new schedule. A failed device keeps its previous schedule.<//>
           <//>` : html`
           <${Alert} severity="success" id="save-result" data-result="ok" sx=${{ mb: 2 }}>
-            Saved. Applied to ${run.total} of ${run.total} device${run.total === 1 ? '' : 's'}${skipped.length ? ` · ${skipped.length} ELA speaker${skipped.length > 1 ? 's' : ''} skipped (phase 1)` : ''}.
+            Saved — ${run.total} of ${run.total} device${run.total === 1 ? '' : 's'} updated${skipped.length ? ` · ${skipped.length} ELA speaker${skipped.length > 1 ? 's' : ''} skipped (phase 1)` : ''}.
           <//>`) : null}
         <${Gap} id="G9" />
       <//>
@@ -843,7 +849,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
           <${TextField} id="ed-name" label="Schedule name" required value=${d.name} sx=${{ flex: 1 }}
             error=${!!errs.name} helperText=${errs.name || ''} onChange=${e => set({ name: e.target.value })} />
           <${FormControlLabel} id="ed-active-label" sx=${{ flexShrink: 0, mr: 0 }}
-            label=${d.active ? 'Active — runs on the selected stations' : 'Inactive — paused on all devices'}
+            label="Schedule active"
             control=${html`<${Switch} id="ed-active" checked=${d.active} onChange=${e => set({ active: e.target.checked })} />`} />
         <//>
         <${Gap} id="G10" />
@@ -1062,7 +1068,7 @@ function DeviceDetail() {
                       <${TableCell}>${onDevice(s, d)}<//>
                       <${TableCell}>${!s.active ? html`<${ActiveChip} s=${s} />` : skip ? html`<${PhaseChip} label="Skipped in phase 1" />`
                         : f ? html`<${Tooltip} title=${f.reason}><span><${StateChip} st=${{ kind: 'partial', text: 'Failed' }} /></span><//>`
-                        : html`<${StateChip} st=${{ kind: s.apply && s.apply.stale ? 'stale' : 'ok', text: s.apply && s.apply.stale ? 'Needs re-apply' : `Applied ${s.apply ? s.apply.at : ''}` }} />`}<//>
+                        : html`<${StateChip} st=${{ kind: s.apply && s.apply.stale ? 'stale' : 'ok', text: s.apply && s.apply.stale ? 'Out of date' : `Updated ${s.apply ? s.apply.at : ''}` }} />`}<//>
                     <//>`;
                 })}
               <//>
@@ -1072,7 +1078,7 @@ function DeviceDetail() {
         ${entries.length && !(phase === 2 && d.kind === 'ela') ? html`
           <${Typography} variant="subtitle2" sx=${{ mt: 2.5, mb: .5 }}>Schedule on this device<//>
           <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 1 }}>
-            The changes this device makes, as ETC wrote them through the PaxLife API and read them back. Replaced on every apply.
+            As written through the PaxLife API and read back from the device.
           <//>
           <${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
             <${Table} id="dv-entries">
@@ -1107,7 +1113,7 @@ function DeviceTypes() {
     <${Box}>
       <${Typography} variant="h6" id="page-title">Device types<//>
       <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5, mb: 2 }}>
-        What each device type can do in a schedule. A schedule applies only these actions — anything else is skipped for that device.
+        Schedule actions per device type.
       <//>
       <${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
         <${Table} id="types-table">
@@ -1178,7 +1184,7 @@ function StationDetail() {
     if (Object.keys(auErr).length) return;
     STATION_AUDIO[s.code] = { volume: v };
     SCHEDULES.filter(x => x.active && targetStations(x).includes(s.code) && x.pa === 'adjust' && x.apply).forEach(x => { x.apply = { ...x.apply, at: 'just now' }; });
-    setDirty(false); bump(); toast(`${s.name}: base audio saved — schedules re-applied to its audio devices`);
+    setDirty(false); bump(); toast(`${s.name}: default volume saved — ${nAudio} audio device${nAudio === 1 ? '' : 's'} updated`);
   };
   return html`
     <${Box}>

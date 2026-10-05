@@ -80,10 +80,19 @@ async function run() {
   const nS = await page.evaluate(() => SCHEDULES.length);
   ok(await count('#s-table tbody tr[data-schedule]') === nS, `every schedule is a row (${nS})`);
   ok(await count('#s-table [data-toggle]') === nS, 'each row has an Active switch');
-  ok(await count('.apply-chip[data-state="partial"]') >= 1 && await count('.apply-chip[data-state="stale"]') >= 1, 'device rollout status: partial failure and needs re-apply are visible');
+  ok(await count('.apply-chip[data-state="partial"]') >= 1 && await count('.apply-chip[data-state="stale"]') >= 1, 'device status: partial failure and out of date are visible');
+  const statusText = await page.$$eval('#s-table .apply-chip', c => c.map(x => x.textContent).join(' | '));
+  ok(!/appl/i.test(statusText) && /9 of 9 devices/.test(statusText) && /Out of date/.test(statusText), 'statuses speak of devices, never "apply"', statusText);
+  ok(!(await count('[data-reapply]')), 'no separate Re-apply action in the list');
   ok(/23:30–05:00 \(\+1 day\)/.test(await txt('#s-table tr[data-schedule="s1"]')), 'overnight range reads with +1 day');
-  await page.click('[data-reapply="s4"]'); await wait(300);
-  ok(await page.locator('#s-table tr[data-schedule="s4"] .apply-chip').getAttribute('data-state') === 'ok', 'Re-apply clears "Needs re-apply"');
+  await page.click('#s-table tr[data-schedule="s4"] td:first-child'); await wait(400);
+  ok(await vis('#stale-alert') && /B\. Sheva Uni/.test(await txt('#stale-alert [data-stale="added"]')) && /ASK Barix PH2/.test(await txt('#stale-alert [data-stale="removed"]')),
+     'an out-of-date schedule opens with an orange alert: which stations were added, which devices removed');
+  ok(/Save to update the devices/.test(await txt('#stale-alert')), 'and says Save updates them');
+  await page.click('#ed-save'); await page.waitForSelector('#save-result', { timeout: 6000 });
+  ok(!(await vis('#stale-alert')) && /devices? updated/.test(await txt('#save-result')), 'Save updates the devices and clears the alert');
+  await page.click('.MuiBreadcrumbs-root button'); await wait(350);
+  ok(await page.locator('#s-table tr[data-schedule="s4"] .apply-chip').getAttribute('data-state') === 'ok', 'back in the list it is up to date');
   await page.click('#s-table [data-toggle="s3"] input'); await wait(300);
   ok(/is active/.test(await txt('.MuiSnackbar-root')), 'the Active switch says what it did to the devices');
   await page.click('#ls-empty'); await wait(300);
@@ -103,9 +112,9 @@ async function run() {
   const tb = await page.locator('#card-targets').boundingBox(), sb = await page.locator('#card-timing').boundingBox();
   ok(tb.x + tb.width < sb.x && Math.abs(tb.y - sb.y) < 4, 'Stations and Schedule sit side by side, like Event details');
   ok(!(await count('#card-general h6')) && await vis('#ed-active'), 'name and Active switch in one untitled row');
-  ok(/Active — runs on the selected stations/.test(await txt('#ed-active-label')), 'the switch says what Active means');
+  ok(/^Schedule active$/.test(await txt('#ed-active-label')), 'switch label: "Schedule active"');
   await page.click('#ed-active'); await wait(150);
-  ok(/Inactive — paused on all devices/.test(await txt('#ed-active-label')), 'and what Inactive means');
+  ok(/^Schedule active$/.test(await txt('#ed-active-label')), 'the label does not change with the switch');
   await page.click('#ed-active'); await wait(150);
   const ge = await page.locator('#card-general').boundingBox(), mn = await page.locator('main').boundingBox();
   ok(ge.width > mn.width - 60, 'details use the full width', [ge.width, mn.width]);
