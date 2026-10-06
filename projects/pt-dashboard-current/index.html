@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — Per Transaction (as developed)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+/* Recreation of the developed Per Transaction dashboard, from Ignat's three
+   screenshots (2026-10-06). Layout only on top of the kit; every text is ≥14px. */
+body { margin: 0; background: var(--bg-surface); color: var(--text-primary); font-family: var(--font-family); }
+
+/* ---- prototype variant switch (not product chrome) ---- */
+.variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+  color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:14px}
+.variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;
+  text-transform:uppercase}
+.variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+  border-radius:6px;padding:3px}
+.variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+  font-family:inherit;font-size:14px;padding:5px 12px;border-radius:4px;cursor:pointer;
+  white-space:nowrap}
+.variant-switch button:hover{color:var(--color-white)}
+.variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+
+/* ---- shell ---- */
+.shell { display: flex; min-height: calc(100vh - 46px); }
+.sidebar { position: static; height: auto; border-right: 1px solid var(--border-nav); }
+.sidebar-logo { font-size: 18px; color: var(--color-primary); font-weight: 700; padding: 18px 16px; border-bottom: 1px solid var(--color-sidebar-divider); }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { position: static; justify-content: flex-end; font-size: 14px; }
+.syncs-left a { color: var(--text-link); text-decoration: none; }
+.content { padding: 20px 24px 40px; }
+
+/* ---- page head ---- */
+.ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.ph h1 { font-size: 24px; font-weight: 400; line-height: 32px; margin: 0; }
+.ph select { width: 140px; }
+
+.alert .alert-body { flex: 1; }
+.alert .alert-ico { flex-shrink: 0; width: 20px; height: 20px; }
+.alert .btn { margin-left: auto; flex-shrink: 0; }
+
+/* ---- KPI band ---- */
+.kpi-band { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 20px; }
+.kpi { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 12px 12px 14px; }
+.kpi.bad  { background: var(--color-red-light); border-color: var(--color-status-red-bg); }
+.kpi.good { background: var(--color-green-light); border-color: var(--color-status-green-bg); }
+.kpi-t { font-weight: 500; font-size: 14px; line-height: 20px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.kpi-v { font-size: 16px; line-height: 24px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.kpi-v .lnk { font-size: 14px; }
+
+/* ---- columns ---- */
+.cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.panel { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px; }
+.panel-t { font-weight: 500; font-size: 14px; line-height: 20px; display: flex; align-items: center; gap: 6px; }
+.panel-big { font-size: 17px; line-height: 24px; margin: 2px 0 10px; }
+.panel-big .help { vertical-align: -2px; margin-left: 4px; }
+.panel-big .n { color: var(--text-link); }
+.panel-t + .box, .panel-t + .items { margin-top: 10px; }
+.box { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 6px; }
+.box.scroll { max-height: 236px; overflow-y: auto; }
+
+/* rows inside a box: label left, count + chevron right; whole row is the link */
+.row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 27px; padding: 3px 6px; border: none; background: none; border-radius: var(--radius-sm); font: inherit; font-size: 14px; color: var(--text-primary); text-align: left; cursor: pointer; }
+.row:hover { background: var(--bg-subtle); }
+.row.hot { background: var(--color-red-light); }
+.row.hot:hover { background: var(--color-status-red-bg); }
+.row .lbl { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.row .lbl .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .cnt { color: var(--text-link); display: inline-flex; align-items: center; gap: 4px; }
+.row:focus-visible, .lnk:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+
+/* accounting / integration cards */
+.items { display: flex; flex-direction: column; gap: 10px; }
+.item { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 10px 12px; }
+.item.bad { background: var(--color-red-light); border-color: var(--color-status-red-bg); }
+.item-h { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.item-h .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+.lnk { background: none; border: none; padding: 0; font: inherit; font-size: 14px; color: var(--text-link); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.lnk:hover { text-decoration: underline; }
+.icon-btn { background: none; border: none; padding: 2px; border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary); display: inline-flex; }
+.icon-btn:hover { background: var(--bg-hover); }
+
+.logo { width: 18px; height: 18px; flex-shrink: 0; display: block; }
+.chev { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* help "?" — tooltip copy is not captured, the marker says so */
+.help { position: relative; display: inline-flex; color: var(--color-grey-30); cursor: help; }
+.help svg { width: 16px; height: 16px; }
+.help .tooltip { font-size: 14px; line-height: 20px; white-space: nowrap; font-weight: 400; max-width: none; }
+.help:hover .tooltip, .help:focus .tooltip { opacity: 1; }
+
+/* row menu */
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-wrap .dropdown-menu { left: auto; right: 0; }
+.dropdown-item.muted { color: var(--text-secondary); cursor: default; }
+.dropdown-item.muted:hover { background: none; }
+
+/* prototype toast */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--color-grey); color: var(--color-white); padding: 10px 16px; border-radius: var(--radius-sm); font-size: 14px; box-shadow: var(--shadow-elevated); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 200; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="variant-switch">
+  <span class="vs-label">State</span>
+  <div class="vs-opts">
+    <button id="vs-attention" class="on" onclick="setState('attention')">1 · Needs attention</button>
+    <button id="vs-clear" onclick="setState('clear')">2 · All clear</button>
+    <button id="vs-lost" onclick="setState('lost')">3 · Connection lost</button>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">Synder</div>
+    <nav>
+      <a class="sidebar-item active" href="#">Dashboard</a>
+      <a class="sidebar-item" href="#">Transactions</a>
+      <a class="sidebar-item" href="#">Transaction reconciliation</a>
+      <a class="sidebar-item" href="#">Smart rules</a>
+      <a class="sidebar-item" href="#">Invoicing</a>
+      <a class="sidebar-item" href="#">AI reports</a>
+      <a class="sidebar-item" href="#">Reporting</a>
+      <a class="sidebar-item" href="#">Revenue recognition</a>
+      <a class="sidebar-item" href="#">Settings</a>
+      <a class="sidebar-item" href="#">AI Agents</a>
+      <a class="sidebar-item" href="#">What's new</a>
+      <a class="sidebar-item" href="#">Custom development</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar"><span class="syncs-left">Syncs left: <a href="#" id="syncs-left">1000</a></span></div>
+    <div class="content">
+      <div class="ph">
+        <h1>Hi Dalia, your data is ready to review</h1>
+        <select class="select" id="period" aria-label="Period">
+          <option>Last 30 days</option>
+          <option disabled>[live copy not captured]</option>
+        </select>
+      </div>
+      <div id="banner"></div>
+      <div class="kpi-band" id="kpis"></div>
+      <div class="cols">
+        <div class="col" id="col-left"></div>
+        <div class="col" id="col-mid"></div>
+        <div class="col" id="col-right"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---- icons (SVG, so no icon font is needed) ---- */
+var ICON = {
+  help: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M6.2 6.1a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.7" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="#fff"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  dots: '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" fill="currentColor"/><circle cx="10" cy="10" r="1.6" fill="currentColor"/><circle cx="15.5" cy="10" r="1.6" fill="currentColor"/></svg>',
+  alert: '<svg class="alert-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 5.6v5.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="14" r="1.1" fill="currentColor"/></svg>',
+  stripe: '<svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><rect width="18" height="18" rx="4" fill="#635BFF"/><path d="M11.6 6.3c-.6-.3-1.4-.5-2.2-.5-.8 0-1.2.3-1.2.7 0 1.2 3.8.6 3.8 3.3 0 1.4-1.1 2.4-3 2.4-.9 0-1.9-.2-2.6-.6v-1.8c.7.4 1.7.7 2.6.7.6 0 1-.2 1-.6 0-1.2-3.8-.7-3.8-3.3 0-1.4 1.1-2.4 2.9-2.4.9 0 1.7.2 2.5.5z" fill="#fff"/></svg>',
+  amazon: '<svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><path d="M10.4 7.4c-2.2.1-4.6.6-4.6 2.9 0 1.5 1 2.3 2.2 2.3 1 0 1.8-.4 2.5-1.2.3.4.6.8.9 1.1l1.4-1.2c-.4-.5-.7-.9-.7-1.6V6.2C12.1 4.6 10.9 3.4 8.8 3.4 7 3.4 5.6 4.2 5.2 5.9l1.8.2c.2-.8.8-1.1 1.6-1.1 1 0 1.8.5 1.8 1.6zm0 1.6c0 1.5-.8 2.3-1.7 2.3-.7 0-1-.5-1-1.1 0-1.2 1.2-1.4 2.7-1.4z" fill="#1A1B24"/><path d="M2.6 13.3c3.6 2.2 9 2.4 12.6.3.3-.2.6.2.3.4-3.2 2.6-9.1 2.6-13 .6-.4-.2-.2-.6.1-.4z" fill="#FF9900"/><path d="M14.6 12.8c.5-.1 1.6-.2 1.8.1.2.3-.1 1.2-.4 1.7" fill="none" stroke="#FF9900" stroke-width=".9" stroke-linecap="round"/></svg>',
+  qbo: '<svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="9" fill="#2CA01C"/><path d="M7.6 5.4v7.2M6.9 6.3H6a2.7 2.7 0 0 0 0 5.4h.9M10.4 12.6V5.4M11.1 11.7h.9a2.7 2.7 0 0 0 0-5.4h-.9" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>'
+};
+
+/* ---- status → kit <Status> colour, read off the screenshots ---- */
+var TONE = {
+  'Failed':'status-red', 'Rollback failed':'status-red',
+  'Synced with rule failed':'status-yellow', 'Canceled':'status-yellow', 'Rollback canceled':'status-yellow',
+  'Synced with warnings':'status-yellow', 'Skipped':'status-yellow', 'Deleted with warnings':'status-yellow', 'Incomplete':'status-yellow',
+  'Synced':'status-green', 'Ready':'status-green',
+  'In progress':'status-blue', 'Scheduled':'status-blue', 'Rollback in progress':'status-blue', 'Rollback scheduled':'status-blue', 'Delayed':'status-blue',
+  'Ready to sync':'status-dark-blue',
+  'Deleted':'status-black',
+  'Pending':'status-grey', 'Not parsed':'status-grey', 'Generating entries':'status-grey'
+};
+var HOT = { 'Failed':1, 'Rollback failed':1 };   /* rows tinted red in screenshot 3 */
+
+/* ---- data: numbers and names exactly as on the screenshots ---- */
+var STRIPE = { logo:'stripe', name:'My wonderful flowers (Stripe)' };
+var AMAZON = { logo:'amazon', name:'My great bread (Amazon)' };
+var AMAZON_LONG = { logo:'amazon', name:'My great bread with some other words to make the name long (Amazon)' };
+
+var STATES = {
+  attention: {
+    banner: false,
+    score: '80%', scoreLink: true, timeLink: true, attention: 80,
+    imports: [STRIPE, AMAZON_LONG],
+    sync: [['Failed',50],['Rollback failed',20],['Synced with rule failed',20],['Canceled',20],['Rollback canceled',20],
+           ['Synced',300],['In progress',30],['Synced with warnings',20],['Skipped',300],['Deleted with warnings',20]],
+    revrec: null,
+    accounting: 'lost',
+    integrations: [
+      { src: STRIPE, action: 'Reconnect', chips: [['Connection lost','status-red']] },
+      { src: AMAZON, action: 'Reconnect', chips: [['Connection lost','status-red']] }
+    ]
+  },
+  clear: {
+    banner: false,
+    score: '100%', scoreLink: false, timeLink: false, attention: 0,
+    imports: [STRIPE],
+    sync: [['Ready to sync',30],['Synced',300],['In progress',30]],
+    revrec: null,
+    accounting: 'ok',
+    integrations: [
+      { src: STRIPE, action: 'Settings', chips: [['Connected','status-green'],['Auto-import on','status-green'],['Auto-sync on','status-green']] }
+    ]
+  },
+  lost: {
+    banner: true,
+    score: '70%', scoreLink: true, timeLink: true, attention: 80,
+    imports: [STRIPE, AMAZON_LONG, STRIPE, AMAZON, STRIPE, AMAZON, STRIPE, AMAZON, STRIPE, AMAZON],
+    sync: [['Failed',50],['Rollback failed',20],['Synced with rule failed',20],['Canceled',20],['Rollback canceled',20],
+           ['Deleted',30],['Ready to sync',30],['Pending',30],['Synced',300],['In progress',30],['Scheduled',30],
+           ['Rollback in progress',30],['Rollback scheduled',30],['Synced with warnings',20],['Skipped',300],
+           ['Delayed',30],['Deleted with warnings',20],['Not parsed',20]],
+    revrec: [['Ready',300],['Generating entries',30],['Incomplete',20]],
+    accounting: 'lost',
+    integrations: [
+      { src: STRIPE, action: 'Reconnect', chips: [['Connection lost','status-red']] },
+      { src: AMAZON, action: 'Reconnect', chips: [['Connection lost','status-red']] },
+      { src: STRIPE, action: 'Reconnect', chips: [['Connection lost','status-red']] },
+      { src: AMAZON, action: 'Reconnect', chips: [['Connection lost','status-red']] },
+      { src: STRIPE, action: 'Reconnect', chips: [['Connection lost','status-red']] },
+      { src: AMAZON, action: 'Settings',  chips: [['Connection lost','status-red'],['Auto-import off','status-yellow'],['Auto-sync off','status-red']] }
+    ]
+  }
+};
+
+/* ---- render helpers ---- */
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt(n) { return n.toLocaleString('en-US'); }
+function help() {
+  return '<span class="help" tabindex="0">' + ICON.help + '<span class="tooltip">[live copy not captured]</span></span>';
+}
+function go(msg) { return ' data-go="' + esc(msg) + '"'; }
+
+function statusRow(name, n, where) {
+  return '<button type="button" class="row' + (HOT[name] ? ' hot' : '') + '"' + go(where + ' · ' + name) + '>'
+       + '<span class="lbl"><span class="status ' + (TONE[name] || 'status-grey') + '">' + esc(name) + '</span></span>'
+       + '<span class="cnt">' + fmt(n) + ICON.chev + '</span></button>';
+}
+function sourceRow(src, n) {
+  return '<button type="button" class="row"' + go('Platform transactions · ' + src.name) + '>'
+       + '<span class="lbl">' + ICON[src.logo] + '<span class="txt">' + esc(src.name) + '</span></span>'
+       + '<span class="cnt">' + fmt(n) + ICON.chev + '</span></button>';
+}
+var menuSeq = 0;
+function rowMenu() {
+  var id = 'm' + (++menuSeq);
+  return '<span class="menu-wrap"><button type="button" class="icon-btn" aria-label="More actions" aria-haspopup="true" aria-expanded="false" data-menu="' + id + '">' + ICON.dots + '</button>'
+       + '<div class="dropdown-menu" id="' + id + '" role="menu"><div class="dropdown-item muted" role="menuitem">[live copy not captured]</div></div></span>';
+}
+
+function render(key) {
+  var s = STATES[key];
+  menuSeq = 0;
+
+  document.getElementById('banner').innerHTML = s.banner
+    ? '<div class="alert alert-error" id="lost-banner">' + ICON.alert
+      + '<div class="alert-body"><span class="alert-title">Connection lost</span>'
+      + 'One or more of your integrations have lost connection. Please reconnect to continue syncing.</div>'
+      + '<button type="button" class="btn btn-error btn-sm"' + go('Reconnect integrations') + '>Reconnect</button></div>'
+    : '';
+
+  var attn = s.attention
+    ? '<button type="button" class="lnk" id="attn-link" style="font-size:16px"' + go('Platform transactions · Needs attention') + '>' + fmt(s.attention) + ' transactions' + ICON.chev + '</button>'
+    : 'All clear';
+  document.getElementById('kpis').innerHTML =
+      '<div class="kpi" id="kpi-time"><div class="kpi-t">Time saved' + help() + '</div><div class="kpi-v">~ 47 h'
+    +   (s.timeLink ? '<button type="button" class="lnk"' + go('How to save more time') + '>How to save more time</button>' : '') + '</div></div>'
+    + '<div class="kpi" id="kpi-score"><div class="kpi-t">Sync score' + help() + '</div><div class="kpi-v">' + s.score
+    +   (s.scoreLink ? '<button type="button" class="lnk"' + go('How to bring it up to 100%') + '>How to bring it up to 100%</button>' : '') + '</div></div>'
+    + '<div class="kpi ' + (s.attention ? 'bad' : 'good') + '" id="kpi-attn"><div class="kpi-t">Needs attention' + help() + '</div><div class="kpi-v">' + attn + '</div></div>';
+
+  /* left: Import (+ Revenue recognition when RevRec is on) */
+  var left = '<section class="panel" id="p-import"><div class="panel-t">Import' + help() + '</div>'
+    + '<div class="panel-big"><span><span class="n">1,200</span> transactions imported</span></div>'
+    + '<div class="box' + (s.imports.length > 8 ? ' scroll' : '') + '" id="import-rows">'
+    + s.imports.map(function (src) { return sourceRow(src, 1200); }).join('') + '</div></section>';
+  if (s.revrec) {
+    left += '<section class="panel" id="p-revrec"><div class="panel-t">Revenue recognition' + help() + '</div>'
+      + '<div class="box">' + s.revrec.map(function (r) { return statusRow(r[0], r[1], 'Revenue recognition'); }).join('') + '</div></section>';
+  }
+  document.getElementById('col-left').innerHTML = left;
+
+  /* middle: Sync */
+  document.getElementById('col-mid').innerHTML =
+      '<section class="panel" id="p-sync"><div class="panel-t">Sync' + help() + '</div>'
+    + '<div class="panel-big"><span><span class="n">1,200</span> transactions synchronized to books</span>' + help() + '</div>'
+    + '<div class="box" id="sync-rows">' + s.sync.map(function (r) { return statusRow(r[0], r[1], 'Platform transactions · Status'); }).join('') + '</div></section>';
+
+  /* right: Accounting + Integrations */
+  var acctLost = s.accounting === 'lost';
+  var right = '<section class="panel" id="p-accounting"><div class="panel-t">Accounting' + help() + '</div>'
+    + '<div class="items"><div class="item' + (acctLost ? ' bad' : '') + '">'
+    + '<div class="item-h">' + ICON.qbo + '<span class="nm">My lovely money (QuickBooks Online)</span>'
+    + '<button type="button" class="lnk"' + go('Manage accounting connection') + '>Manage</button></div>'
+    + '<div class="item-chips"><span class="status ' + (acctLost ? 'status-red">Connection lost' : 'status-green">Connected') + '</span></div>'
+    + '</div></div></section>';
+  right += '<section class="panel" id="p-integrations"><div class="panel-t">Integrations' + help() + '</div><div class="items">'
+    + s.integrations.map(function (it) {
+        var bad = it.chips.some(function (c) { return c[0] === 'Connection lost'; });
+        return '<div class="item' + (bad ? ' bad' : '') + '"><div class="item-h">' + ICON[it.src.logo]
+          + '<span class="nm">' + esc(it.src.name) + '</span>'
+          + '<button type="button" class="lnk"' + go(it.action + ' · ' + it.src.name) + '>' + it.action + '</button>' + rowMenu() + '</div>'
+          + '<div class="item-chips">' + it.chips.map(function (c) { return '<span class="status ' + c[1] + '">' + esc(c[0]) + '</span>'; }).join('') + '</div></div>';
+      }).join('')
+    + '</div></section>';
+  document.getElementById('col-right').innerHTML = right;
+}
+
+/* ---- state switch: swaps in place ---- */
+var current = 'attention';
+function setState(key) {
+  current = key;
+  ['attention','clear','lost'].forEach(function (k) {
+    document.getElementById('vs-' + k).classList.toggle('on', k === key);
+  });
+  render(key);
+  try { history.replaceState(null, '', '#' + key); } catch (e) {}
+}
+
+/* ---- interactions ---- */
+var toastTimer;
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = 'Prototype — would open: ' + msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+}
+function closeMenus(except) {
+  document.querySelectorAll('.dropdown-menu.show').forEach(function (m) {
+    if (m !== except) {
+      m.classList.remove('show');
+      var b = document.querySelector('[data-menu="' + m.id + '"]');
+      if (b) b.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+document.addEventListener('click', function (e) {
+  var menuBtn = e.target.closest('[data-menu]');
+  if (menuBtn) {
+    var m = document.getElementById(menuBtn.getAttribute('data-menu'));
+    closeMenus(m);
+    var open = m.classList.toggle('show');
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return;
+  }
+  if (!e.target.closest('.dropdown-menu')) closeMenus(null);
+  var g = e.target.closest('[data-go]');
+  if (g) { e.preventDefault(); toast(g.getAttribute('data-go')); return; }
+  var a = e.target.closest('a[href="#"]');
+  if (a) { e.preventDefault(); toast(a.textContent.trim()); }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Escape') {
+    var open = document.querySelector('.dropdown-menu.show');
+    if (open) { closeMenus(null); var b = document.querySelector('[data-menu="' + open.id + '"]'); if (b) b.focus(); }
+  }
+});
+
+function fromHash() {
+  var k = (location.hash || '').slice(1);
+  if (STATES[k] && k !== current) setState(k);
+}
+window.addEventListener('hashchange', fromHash);
+var start = (location.hash || '').slice(1);
+setState(STATES[start] ? start : 'attention');
+</script>
+</body>
+</html>
