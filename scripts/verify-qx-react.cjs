@@ -1279,7 +1279,7 @@ const fs = require('fs');
   ok('no KPI cards: production has none', !(await page.$('#kpi-row')) && !(await page.$('.kpi-card')));
   const ub = await page.evaluate(() => {
     const ent = document.querySelector('#fa-ub-tu-sel .MuiSelect-select').textContent;
-    const d = FA_UBERSICHT_DATA[ent] || FA_UBERSICHT_DATA.GESAMT;
+    const d = faUbData('tu', ent);
     return { ent, flows: document.querySelectorAll('.fa-ub-flow').length, want: d.causes.length,
       title: document.getElementById('fa-ub-title').textContent,
       summary: document.getElementById('fa-ub-summary').textContent,
@@ -1307,7 +1307,7 @@ const fs = require('fs');
   const faHeads = await page.$$eval('#fa-table thead tr', r => r.map(x =>
     [...x.querySelectorAll('th')].map(c => c.textContent.trim())));
   ok('the table has ONE header row of nine named columns, as production',
-    faHeads.length === 1 && faHeads[0].length === 10 && /total|gesamt/i.test(faHeads[0][1]), faHeads);
+    faHeads.length === 1 && faHeads[0].length === 11 && /total|gesamt/i.test(faHeads[0][1]), faHeads);
   const faCount = await page.evaluate(() => FA_DATA.tus.length);
   ok('Gesamt is the root, open, with every TU under it',
     (await page.$$('#fa-table tbody tr')).length === faCount + 1);
@@ -1317,9 +1317,19 @@ const fs = require('fs');
     faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2) + '%']);
   ok('Trip Failures totals equal FA_DATA, unseparated as production prints them',
     JSON.stringify(fa) === JSON.stringify(faWant), { fa, faWant });
-  const firstCell = await page.$eval('#fa-table tbody tr:nth-child(2) td', td =>
-    [...td.querySelectorAll('button')].map(b => b.getAttribute('aria-label')));
-  ok('chart and mask icons sit at the START of the row', firstCell.includes('chart') && firstCell.includes('mask'), firstCell);
+  // Ignat, 2026-10-06: "we agreed to have all icons at the end of the rows"
+  const ends = await page.$eval('#fa-table tbody tr:nth-child(2)', tr => {
+    const td = [...tr.querySelectorAll('td')];
+    const lbl = c => [...c.querySelectorAll('button')].map(b => b.getAttribute('aria-label'));
+    return { first: lbl(td[0]), last: lbl(td[td.length - 1]) };
+  });
+  ok('chart and mask icons sit at the END of the row, as on Pünktlichkeit',
+    ends.last.includes('chart') && ends.last.includes('mask') && !ends.first.includes('chart'), ends);
+  ok('the table has an Actions column', /actions|aktionen/i.test(faHeads[0][faHeads[0].length - 1]), faHeads[0]);
+  // every TU with cancellations leads to trips in its mask — no dead ends
+  const cover = await page.evaluate(() => FA_DATA.tus.filter(tu => tu.v[1] > 0)
+    .filter(tu => !FA_MASK_ROWS.some(x => x.r[1] === tu.id)).map(tu => tu.id));
+  ok('every TU with cancellations has trips to show in its mask', cover.length === 0, cover);
   // TU → Betriebstag → Ersatzverkehr
   await page.click('#fa-table tbody tr:nth-child(2) .fa-expand');
   await page.waitForTimeout(300);
@@ -1491,7 +1501,7 @@ const fs = require('fs');
   ok('the mask has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
   ok('the mask carries the same parameter grid',
     (await page.$$eval('#fa-mask-header .MuiCardContent-root > div > div', e => e.length)) === 10);
-  const maskAll = await page.evaluate(() => FA_MASK_DATA.length);
+  const maskAll = await page.evaluate(() => FA_MASK_ROWS.length);
   ok('the pie draws the causes', (await page.$$('#fa-mask-pie .fa-pie-slice')).length >= 1);
   const legend = await page.$$eval('.fa-legend-item', e => e.map(x => x.textContent.trim()));
   const legendSum = legend.reduce((s, l) => s + Number((l.match(/(\d+)$/) || [0, 0])[1]), 0);
@@ -1547,6 +1557,17 @@ const fs = require('fs');
   await page.click('#fa-mask-reset');
   await page.waitForTimeout(400);
   ok('reset restores the trips', (await page.$$('#fa-mask-table')).length === 1);
+  // a TU's mask shows that TU's trips, a day's mask that day's
+  await goBack();
+  await openByName(await nameOf('trip_failures'));
+  await page.click('#fa-tab-tab');
+  await page.waitForTimeout(400);
+  await page.click('#fa-table tbody tr:nth-child(3) .fa-mask-btn');
+  await page.waitForTimeout(500);
+  const tuMask = await page.evaluate(() => ({ want: FA_DATA.tus[1].id,
+    got: [...new Set([...document.querySelectorAll('#fa-mask-table tbody tr td:nth-child(3)')].map(c => c.textContent))] }));
+  ok('a TU row\'s table icon opens a mask of that TU\'s trips',
+    tuMask.got.length === 1 && tuMask.got[0] === tuMask.want, tuMask);
   // Ignat, 2026-10-01: nothing under 14px, anywhere
   const tinyFa = await page.evaluate(() => {
     const out = []; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n;

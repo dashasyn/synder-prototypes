@@ -1731,8 +1731,8 @@ function ReportConnection({ go, row }) {
    2026-10-06-fa/, local only). Production supersedes the vanilla here: a
    parameter grid instead of chips, Übersicht and Tabelle tabs, a flow chart
    of cancelled journey time by cause, one header row of nine named columns
-   tinted by group, Gesamt as the tree root, and the chart and mask icons at
-   the START of each row. The vanilla's KPI cards and rate badges are not in
+   tinted by group, and Gesamt as the tree root. The row icons stay at the END,
+   as agreed for every report (Ignat, 2026-10-06), though production puts them first. The vanilla's KPI cards and rate badges are not in
    production and are gone. */
 
 // The grid production puts above the report and above the mask.
@@ -1773,34 +1773,76 @@ const faParamFields = (t, lang, row, tuValue) => {
 const FA_TINT = ['rgba(139,195,74,0.14)', 'rgba(126,87,194,0.10)', 'rgba(255,152,0,0.13)'];
 const faRate = (a, b) => faPct(a, b).toFixed(2) + '%';
 
-/* The Übersicht data. FA_UBERSICHT_DATA carries causes for GESAMT and three
-   TUs; Verkehrsmittel is derived from those same TUs through the mode each
-   one runs in PUNCT_RECORDS — summed, causes weighted by cancelled time —
-   so nothing here is made up. TUs without cause data are not offered. */
-const FA_UB_TUS = Object.keys(FA_UBERSICHT_DATA);
+/* ── Mock data for Trip Failures ─────────────────────────────────────
+   Ignat, 2026-10-06: "all data should be mock. At the moment it is more
+   important to show the connections between screens: you click here, and
+   you get there." The vanilla had cancelled trips for AAGL only and causes
+   for three TUs, so most icons led to an empty mask. Every TU and day now has
+   trips, generated deterministically from FA_DATA (same counts, same days),
+   and the Übersicht shares are computed FROM those trips — so the overview,
+   the table and the mask describe the same cancellations. The cancellation
+   types are production's own labels. */
+const FA_ARTEN = [
+  ['6. Teilstrecke einer Fahrt hat Status Unbekannt', '#A5E28F'],
+  ['3. Ganze Fahrt hat Status Unbekannt', '#D2EE9A'],
+  ['11. Teilstrecke als Ausfall gemeldet', '#A3A0EE'],
+  ['2. Keine Echtzeitdaten für ganze Fahrt', '#EF9A9A'],
+  ['4. Ganze Fahrt über Takt', '#7986CB'],
+];
 const FA_TU_MODE = (() => {
   const m = {};
   PUNCT_RECORDS.forEach(r => { if (!m[r.tu_konz]) m[r.tu_konz] = r.vm; });
   return m;
 })();
-const FA_UB_MODES = (() => {
-  const by = {};
-  FA_UB_TUS.filter(k => k !== 'GESAMT' && FA_TU_MODE[k]).forEach(k => {
-    const vm = FA_TU_MODE[k], d = FA_UBERSICHT_DATA[k];
-    const acc = by[vm] || (by[vm] = { totalMin: 0, ausMin: 0, w: {} });
-    acc.totalMin += d.totalMin; acc.ausMin += d.ausMin;
-    d.causes.forEach(c => {
-      const w = acc.w[c.label] || (acc.w[c.label] = { label: c.label, color: c.color, min: 0 });
-      w.min += d.ausMin * c.pct / 100;
+const faModeOf = (tu, i) => FA_TU_MODE[tu] || ['Bus', 'Bahn', 'Tram'][i % 3];
+// replacement transport per day: mock, mostly none
+const faErsatzOf = (ti, di) => (di % 5 === 3 ? 'fa_ersatz_teil' : (ti + di) % 7 === 5 ? 'fa_ersatz_komplett' : 'fa_kein_ersatz');
+const ERSATZ_KEY = { fa_kein_ersatz: 'kein', fa_ersatz_teil: 'teil', fa_ersatz_komplett: 'komplett' };
+const hhmm = m => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}:00`;
+const FA_MASK_ROWS = (() => {
+  const out = [];
+  FA_DATA.tus.forEach((tu, ti) => {
+    // a TU with cancellations but no daily breakdown still gets its trips,
+    // on the evaluation's last day, so its mask is never empty
+    const days = (tu.tage || []).some(d => d.v[1]) ? tu.tage
+      : tu.v[1] ? [{ d: '23.06.2026', v: tu.v }] : [];
+    days.forEach((d, di) => {
+    const n = Math.min(d.v[1] || 0, 8);
+    for (let k = 0; k < n; k++) {
+      const seed = ti * 97 + di * 31 + k * 7;
+      const a = RD_STOPS[seed % RD_STOPS.length], b = RD_STOPS[(seed + 3) % RD_STOPS.length];
+      const from = 300 + (seed * 37) % 1100, dur = 6 + seed % 34;
+      const art = (k + ti) % 6 === 4 ? 2 : (k + di) % 4 === 1 ? 1 : (ti % 5 === 3 && k % 2) ? 3 : 0;
+      out.push({
+        r: [d.d, tu.id, String(800 + ti), `${tu.id} BusÜ ${1 + k % 2}`, `${50 + ti}.0${70 + k % 4}`,
+            String(70000 + ti * 1000 + di * 10 + k), `ch:1:sjyid:1000${ti}:${15000 + seed}-001`,
+            `(${a[0]}) ${a[1]}`, hhmm(from), `(${b[0]}) ${b[1]}`, hhmm(from + dur),
+            String(2 + seed % 15), FA_ARTEN[art][0]],
+        dur, mode: faModeOf(tu.id, ti),
+        ersatz: ERSATZ_KEY[faErsatzOf(ti, di)],
+        cause: seed % 9 === 4 ? 'tech' : seed % 13 === 7 ? 'ktu' : 'none',
+      });
+    }
     });
   });
-  Object.values(by).forEach(a => {
-    const tot = Object.values(a.w).reduce((s, c) => s + c.min, 0) || 1;
-    a.causes = Object.values(a.w).map(c => ({ label: c.label, color: c.color, pct: c.min / tot * 100 }))
-      .sort((x, y) => y.pct - x.pct);
-  });
-  return by;
+  return out.map((x, i) => ({ ...x, i }));
 })();
+// the Übersicht for one entity: totals from FA_DATA, shares from its trips
+const faUbData = (dim, ent) => {
+  const tus = dim === 'vm'
+    ? FA_DATA.tus.filter((tu, i) => faModeOf(tu.id, i) === ent)
+    : ent === 'GESAMT' ? FA_DATA.tus : FA_DATA.tus.filter(tu => tu.id === ent);
+  const v = ent === 'GESAMT' && dim !== 'vm' ? FA_DATA.gesamt
+    : tus.reduce((s, tu) => s.map((x, i) => x + tu.v[i]), [0, 0, 0, 0, 0, 0]);
+  const ids = new Set(tus.map(tu => tu.id));
+  const rows = FA_MASK_ROWS.filter(x => ids.has(x.r[1]));
+  const tot = rows.reduce((s, x) => s + x.dur, 0) || 1;
+  const causes = FA_ARTEN.map(([label, color]) => ({ label, color,
+    pct: rows.filter(x => x.r[12] === label).reduce((s, x) => s + x.dur, 0) / tot * 100 }))
+    .filter(c => c.pct > 0);
+  return { totalMin: v[2], ausMin: v[3], causes };
+};
+const FA_UB_MODES = [...new Set(FA_DATA.tus.map((tu, i) => faModeOf(tu.id, i)))].sort();
 
 /* Production's flow chart: one bar for the cancelled time on the left, one
    per cause on the right, each flow as wide as that cause's share. */
@@ -1845,11 +1887,11 @@ function FaSankey({ causes }) {
 
 function FaOverview({ t, lang }) {
   const [dim, setDim] = useState('tu');
-  const modes = Object.keys(FA_UB_MODES);
-  const entities = dim === 'vm' ? modes : FA_UB_TUS;
-  const [ent, setEnt] = useState(FA_UB_TUS.find(k => k !== 'GESAMT') || 'GESAMT');
+  const modes = FA_UB_MODES;
+  const entities = dim === 'vm' ? modes : ['GESAMT', ...FA_DATA.tus.map(x => x.id)];
+  const [ent, setEnt] = useState(FA_DATA.tus[0].id);
   React.useEffect(() => { if (!entities.includes(ent)) setEnt(entities[0]); }, [dim]);
-  const d = dim === 'vm' ? FA_UB_MODES[ent] : FA_UBERSICHT_DATA[ent];
+  const d = entities.includes(ent) ? faUbData(dim, ent) : null;
   const entLabel = k => k === 'GESAMT' ? t('fa_mask_all') : k;
   const [snap, setSnap] = useState(false);
   return html`
@@ -1880,7 +1922,7 @@ function FaOverview({ t, lang }) {
             <b>${t('fa_ub_rate')}: ${(d.ausMin / d.totalMin * 100).toFixed(2)}%</b>
             ${' '}(${t('fa_ub_summary_from')} ${fmtHM(d.totalMin)}${t('fa_ub_summary_sind') === ',' ? ',' : ' ' + t('fa_ub_summary_sind')} ${fmtHM(d.ausMin)} ${t('fa_ub_summary_gefallen')})
           <//>
-          <${FaSankey} causes=${d.causes} />
+          ${d.causes.length > 0 && html`<${FaSankey} causes=${d.causes} />`}
         <//><//>`}
       <${Snackbar} open=${snap} autoHideDuration=${2500} onClose=${() => setSnap(false)}
         message=${t('chart_snapshot_done')} />
@@ -1905,18 +1947,23 @@ function FaRow({ node, depth, t, onChart, onMask, hideZero, startOpen }) {
               aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open}>
               <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
             <//>` : html`<${Box} component="span" sx=${{ display: 'inline-block', width: 30 }} />`}
-          ${node.chart !== false && html`
-            <${Tooltip} title=${t('rpt_action_chart')}>
-              <${IconButton} aria-label="chart" className="fa-chart-btn" onClick=${() => onChart(node)}>
-                <${Icon} sx=${{ fontSize: 18 }}>bar_chart<//><//><//>
-            <${Tooltip} title=${t('fa_mask_title')}>
-              <${IconButton} aria-label="mask" className="fa-mask-btn" onClick=${() => onMask(node)}>
-                <${Icon} sx=${{ fontSize: 18 }}>table_rows<//><//><//>`}
           <${Box} component="span" sx=${{ ml: .5, fontWeight: depth === 0 ? 500 : 400 }}>${fmtDate(node.label, lang)}<//>
         <//>
         ${cell(0, v[0])}${cell(0, v[1])}${cell(0, faRate(v[1], v[0]), true)}
         ${cell(1, fmtMin(v[2]))}${cell(1, fmtMin(v[3]))}${cell(1, faRate(v[3], v[2]), true)}
         ${cell(2, v[4])}${cell(2, v[5])}${cell(2, faRate(v[5], v[4]), true)}
+        ${/* Ignat, 2026-10-06: "previously we agreed to have all icons at the
+              end of the rows. Check Pünktlichkeit." Production puts them first;
+              the agreement wins. Same icons and order as PunctRow. */''}
+        <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
+          ${node.chart !== false && html`
+            <${Tooltip} title=${t('rpt_action_chart')}>
+              <${IconButton} aria-label="chart" className="fa-chart-btn" onClick=${() => onChart(node)}>
+                <${Icon}>bar_chart<//><//><//>
+            <${Tooltip} title=${t('fa_mask_title')}>
+              <${IconButton} aria-label="mask" className="fa-mask-btn" onClick=${() => onMask(node)}>
+                <${Icon}>table_chart<//><//><//>`}
+        <//>
       <//>
       ${open && kids.map((k, i) => html`
         <${FaRow} key=${k.id + i} node=${k} depth=${depth + 1} t=${t} hideZero=${hideZero}
@@ -1949,10 +1996,10 @@ function ReportTripFailures({ go, row }) {
     id: 'GESAMT', label: t('fa_row_gesamt'), v: FA_DATA.gesamt,
     kids: FA_DATA.tus.map(tu => ({
       id: tu.id, label: tu.label, v: tu.v, tu: tu.id,
-      kids: withDays ? (tu.tage || []).map(d => ({
+      kids: withDays ? (tu.tage || []).map((d, di) => ({
         id: tu.id + '/' + d.d, label: d.d, v: d.v, tu: tu.id, day: d.d,
         kids: withErsatz && (d.v[1] || d.v[3] || d.v[5]) ? [{
-          id: tu.id + '/' + d.d + '/e', label: t(d.ersatz || 'fa_kein_ersatz'), v: d.v,
+          id: tu.id + '/' + d.d + '/e', label: t(faErsatzOf(FA_DATA.tus.indexOf(tu), di)), v: d.v,
           tu: tu.id, day: d.d, chart: false, kids: [] }] : [],
       })) : [],
     })),
@@ -2029,6 +2076,7 @@ function ReportTripFailures({ go, row }) {
                        'fa_col_halt_ges', 'fa_col_halt_aus', 'fa_col_halt_q'].map((k, i) => html`
                       <${TableCell} key=${k} align="right"
                         sx=${{ bgcolor: FA_TINT[Math.floor(i / 3)] }}>${t(k)}<//>`)}
+                    <${TableCell} align="right">${t('col_actions')}<//>
                   <//>
                 <//>
                 <${TableBody}>
@@ -2649,12 +2697,10 @@ const MASK_COLS = ['fa_mask_col_tag', 'fa_mask_col_tu', 'fa_mask_col_go', 'fa_ma
   'fa_mask_col_linie', 'fa_mask_col_fahrt_id', 'fa_mask_col_fahrt_tu', 'fa_mask_col_halt_von',
   'fa_mask_col_aus_von', 'fa_mask_col_halt_bis', 'fa_mask_col_aus_bis', 'fa_mask_col_anz_halt',
   'fa_mask_col_ausfallart', 'fa_mask_col_ersatz'];
-// Production's three causes and its colours. Which demo trip carries which
-// cause is demo data: FA_MASK_DATA has no cause column, so most rows have
-// none recorded, as most of production's 5'270 do.
+// Production's three causes and its colours; which mock trip carries which
+// is set in FA_MASK_ROWS — most have none recorded, as most of production's 5'270 do.
 const MASK_CAUSES = [['none', 'fa_mask_no_cause', '#E8473A'], ['tech', 'fa_cause_tech', '#D9862E'],
                      ['ktu', 'fa_cause_ktu', '#C2702A']];
-const maskCause = i => (i % 12 === 10 ? 'tech' : i % 12 === 11 ? 'ktu' : 'none');
 const ERSATZ = [['kein', 'fa_kein_ersatz'], ['teil', 'fa_ersatz_teil'], ['komplett', 'fa_ersatz_komplett']];
 
 function MaskPie({ counts }) {
@@ -2680,11 +2726,10 @@ function Ausfallmaske({ go, row, tuId, day }) {
   const { t, lang } = useT();
   const key = tuId || 'GESAMT';
   // every demo trip, its cause and its saved Ersatzverkehr
-  const base = useMemo(() => FA_MASK_DATA
-    .map((r, i) => ({ i, r, cause: maskCause(i) }))
+  const base = useMemo(() => FA_MASK_ROWS
     .filter(x => key === 'GESAMT' || x.r[1] === key)
     .filter(x => !day || x.r[0] === day), [key, day]);
-  const [saved, setSaved] = useState(() => Object.fromEntries(base.map(x => [x.i, 'kein'])));
+  const [saved, setSaved] = useState(() => Object.fromEntries(base.map(x => [x.i, x.ersatz])));
   const [ersatz, setErsatz] = useState(saved);
   const [cause, setCause] = useState('');
   const [von, setVon] = useState(''), [bis, setBis] = useState('');
