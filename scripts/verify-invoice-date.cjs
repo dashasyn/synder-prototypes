@@ -19,7 +19,9 @@ const MARK = '[live copy not captured]';
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  await page.goto(target, { waitUntil: 'load' });
+  await page.goto(target, { waitUntil: 'networkidle' });
+  ok('icon font renders glyphs, not words', await page.evaluate(async () => { await document.fonts.ready;
+    return [...document.querySelectorAll('.mi')].every(e => e.getBoundingClientRect().width <= 26); }));
 
   const vis = s => page.locator(s).isVisible();
   const en = s => page.locator(s).isEnabled();
@@ -58,20 +60,33 @@ const MARK = '[live copy not captured]';
   ok('Invoice date is the first row on the Invoices tab', await page.evaluate(() =>
     document.querySelector('.set-body .row-label').textContent.trim() === 'Invoice date'));
   ok('existing Invoices toggles match live defaults (all Off)', await page.evaluate(() =>
-    [...document.querySelectorAll('.set-body .toggle')].every(t => t.getAttribute('aria-checked') === 'false')));
+    [...document.querySelectorAll('.set-body [role=switch]')].every(t => t.getAttribute('aria-checked') === 'false')));
   ok('no teaching note in the switcher', (await page.locator('#vs-note').count()) === 0);
   ok('no Trial state in the switcher', (await page.locator('#st-trial').count()) === 0);
   ok('existing connection defaults to Created', (await val('#inv-date')) === 'created');
   ok('select enabled on Pro+', await en('#inv-date'));
   ok('no lock note on Pro+', (await page.locator('#inv-lock').count()) === 0);
   ok('no Upgrade chip on Pro+', (await page.locator('#chip-upgrade').count()) === 0);
+  ok('live shell: sidebar, sync-mode picker, transaction-type tabs, Update', (await vis('.sb')) &&
+     (await vis('.pick')) && (await txt('.type.on')).endsWith('Default') && (await vis('#btn-update')));
+  ok('no horizontal overflow at 1280', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  ok('Update disabled with nothing to save', !(await en('#btn-update')));
   await page.selectOption('#inv-date', 'issued');
   ok('change to Issued sticks', (await val('#inv-date')) === 'issued');
+  ok('select keeps focus after change', await page.evaluate(() => document.activeElement.id === 'inv-date'));
+  ok('Update enabled after a change', await en('#btn-update'));
+  await page.locator('#btn-update').click();
+  ok('Update disables itself once saved', !(await en('#btn-update')));
+  ok('focus returns to the edited field after saving', await page.evaluate(() => document.activeElement.id === 'inv-date'));
+  ok('saved value kept after Update', (await val('#inv-date')) === 'issued');
+  await page.locator('#tab-Sales').click(); await page.locator('#tab-Invoices').click();
+  ok('saved value survives a tab round-trip', (await val('#inv-date')) === 'issued');
   ok('no confirmation on Stripe setting', !(await modalOpen()));
   ok('select still visible + enabled after change', (await vis('#inv-date')) && (await en('#inv-date')));
-  ok('select keeps focus after change', await page.evaluate(() => document.activeElement.id === 'inv-date'));
   await page.selectOption('#inv-date', 'created');
   ok('change back to Created sticks', (await val('#inv-date')) === 'created');
+  ok('Update re-enabled by the second change', await en('#btn-update'));
+  await page.locator('#btn-update').click();
   await checkFonts('screen 1');
 
   await state('new');
@@ -81,6 +96,7 @@ const MARK = '[live copy not captured]';
   ok('below Pro: row still visible', await vis('#inv-row'));
   ok('below Pro: Upgrade to use chip visible', await vis('#chip-upgrade'));
   ok('below Pro: select disabled', !(await en('#inv-date')));
+  ok('below Pro: Update stays disabled', !(await en('#btn-update')));
   ok('below Pro: value Created', (await val('#inv-date')) === 'created');
   ok('below Pro: live gate line visible', (await vis('#inv-gate')) &&
      (await txt('#inv-gate')).startsWith('This feature is available on higher plans.'));
@@ -165,6 +181,10 @@ const MARK = '[live copy not captured]';
      (await txt('#post-help')).includes('Invoice date setting'));
   ok('old “Select posting date for transactions” helper gone', !(await txt('#post-help')).includes('Select posting date'));
   ok('posting default Balance date', (await val('#post-date')) === 'balance');
+  await page.selectOption('#post-date', 'created');
+  ok('Sales change enables Update', await en('#btn-update'));
+  await page.locator('#btn-update').click();
+  ok('Sales Update saves', (await val('#post-date')) === 'created' && !(await en('#btn-update')));
   ok('org states disabled on Sales tab', !(await en('#st-pro')) && !(await en('#st-rrinv')));
   await checkFonts('screen 2');
   await page.locator('#tab-Invoices').click();
