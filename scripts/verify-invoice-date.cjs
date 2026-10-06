@@ -57,8 +57,9 @@ const MARK = '[live copy not captured]';
   // ── 1 · Invoices tab, Pro+ existing ──────────────────────────────────
   ok('starts on Invoices tab', (await txt('.set-tab.on')) === 'Invoices');
   ok('Invoice date row visible', await vis('#inv-row'));
-  ok('Invoice date is the first row on the Invoices tab', await page.evaluate(() =>
-    document.querySelector('.set-body .row-label').textContent.trim() === 'Invoice date'));
+  ok('Invoice date sits right after Sync unpaid (open) invoices', await page.evaluate(() => {
+    const l = [...document.querySelectorAll('.set-body .row-label')].map(e => e.textContent.replace(/Off$/, '').trim());
+    return l.indexOf('Invoice date') === l.indexOf('Sync unpaid (open) invoices') + 1; }));
   ok('existing Invoices toggles match live defaults (all Off)', await page.evaluate(() =>
     [...document.querySelectorAll('.set-body [role=switch]')].every(t => t.getAttribute('aria-checked') === 'false')));
   ok('no teaching note in the switcher', (await page.locator('#vs-note').count()) === 0);
