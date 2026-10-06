@@ -110,8 +110,9 @@ const fs = require('fs');
     loginGeom.flag);
   ok('the QMS RPV CH wordmark is there at 210x61',
     loginGeom.name && loginGeom.name.w === 210 && loginGeom.name.h === 61, loginGeom.name);
-  ok('the submit button is navy, full width and 39px tall',
-    loginGeom.btnBg === 'rgb(28, 40, 72)' && loginGeom.btn.h === 39 && loginGeom.btn.w === 298,
+  // 41px, not the vanilla's 39: its label is 14px now (Ignat, 2026-10-01: nothing under 14px)
+  ok('the submit button is navy, full width and 41px tall',
+    loginGeom.btnBg === 'rgb(28, 40, 72)' && loginGeom.btn.h === 41 && loginGeom.btn.w === 298,
     { bg: loginGeom.btnBg, btn: loginGeom.btn });
   ok('the forgot-password link is there', loginGeom.forgot);
   ok('the utility bar is pinned to the bottom with its four links',
@@ -170,8 +171,9 @@ const fs = require('fs');
   ok('AppBar is flat', theme.barShadow === 'none', theme.barShadow);
   ok('primary is the measured #2196F3', theme.btnBg === 'rgb(33, 150, 243)', theme.btnBg);
   ok('contained buttons carry no elevation', theme.btnShadow === 'none', theme.btnShadow);
-  ok('buttons are sizeSmall (13px, uppercase)',
-    theme.btnSize === '13px' && theme.btnTransform === 'uppercase', theme);
+  // MUI small is 13px; the 14px floor (Ignat, 2026-10-01) lifts it in the theme
+  ok('buttons are sizeSmall at the 14px floor, uppercase',
+    theme.btnSize === '14px' && theme.btnTransform === 'uppercase', theme);
   ok('TableHead carries the measured #F4F4F4 band',
     theme.headBg === 'rgb(244, 244, 244)', theme.headBg);
   ok('cards are outlined with the measured #E7E7E7 hairline, no shadow',
@@ -503,7 +505,7 @@ const fs = require('fs');
   ok('the header pads 12px vertically, 24px horizontally', hdr.pad === '12px 24px', hdr.pad);
   ok('the list header fits in the measured budget', hdr.h <= 60, hdr.h);
   ok('the primary action is a small button in the corner',
-    hdr.btnH >= 29 && hdr.btnH <= 32 && hdr.btnRight === 24, hdr);
+    hdr.btnH >= 31 && hdr.btnH <= 34 && hdr.btnRight === 24, hdr);
 
 
   /* ── dates carry a short month name, in both languages ────────────
@@ -1239,7 +1241,7 @@ const fs = require('fs');
   const EXPECT = {
     punctuality:   '#punct-table',
     connection:    '#rpt-table',
-    trip_failures: '#fa-table',
+    trip_failures: '#fa-tabs',
     data_quality:  '#dqi-tabs',
   };
   // Line Analysis is deliberately absent: not one of its rows carries a
@@ -1258,24 +1260,98 @@ const fs = require('fs');
     // this view actually renders instead of assuming every report is a table.
     const n = await page.evaluate(() =>
       document.querySelectorAll('tbody tr').length
-      + document.querySelectorAll('.dqi-track').length);
+      + document.querySelectorAll('.dqi-track').length
+      + document.querySelectorAll('.fa-ub-flow').length);
     ok(`${group} renders content`, n > 0, n);
     ok(`${group} has no untranslated keys`, (await rawKeys(page)).length === 0, await rawKeys(page));
     await goBack();
   }
 
-  // Trip Failures: the totals row and the failure rate come from FA_DATA
-  // and the extracted faNum/faPct, not from anything written in the view.
+  /* ── Trip Failures, rebuilt 2026-10-06 from eight production screens ──
+     Expected structure typed from the screenshots (reference/production-
+     2026-10-06-fa/), values computed from FA_DATA / FA_UBERSICHT_DATA. */
   await openByName(await nameOf('trip_failures'));
-  // renderFATable() puts the Gesamt row FIRST, as every other report does
+  const faHead = await page.$$eval('#fa-params .MuiTypography-root[class*="body2"]', e => e.map(x => x.textContent));
+  ok('Trip Failures opens with production\'s ten-field parameter grid',
+    (await page.$$eval('#fa-params .MuiCardContent-root > div > div', e => e.length)) === 10, faHead.slice(0, 6));
+  ok('and two tabs, Overview first', (await page.$$('#fa-tabs [role="tab"]')).length === 2
+    && (await page.getAttribute('#fa-tab-ub', 'aria-selected')) === 'true');
+  ok('no KPI cards: production has none', !(await page.$('#kpi-row')) && !(await page.$('.kpi-card')));
+  const ub = await page.evaluate(() => {
+    const ent = document.querySelector('#fa-ub-tu-sel .MuiSelect-select').textContent;
+    const d = FA_UBERSICHT_DATA[ent] || FA_UBERSICHT_DATA.GESAMT;
+    return { ent, flows: document.querySelectorAll('.fa-ub-flow').length, want: d.causes.length,
+      title: document.getElementById('fa-ub-title').textContent,
+      summary: document.getElementById('fa-ub-summary').textContent,
+      rate: (d.ausMin / d.totalMin * 100).toFixed(2) + '%', hm: fmtHM(d.totalMin) };
+  });
+  ok('the Overview draws one flow per cause', ub.flows === ub.want && ub.want > 0, ub);
+  ok('its title names the entity', ub.title.includes(ub.ent), ub.title);
+  ok('its summary states the rate and the target journey time, from the data',
+    ub.summary.includes(ub.rate) && ub.summary.includes(ub.hm), ub.summary);
+  await page.click('#fa-ub-tu-sel .MuiSelect-select');
+  await page.waitForTimeout(250);
+  await page.click('.MuiMenu-list li:last-child');
+  await page.waitForTimeout(400);
+  ok('choosing another entity redraws the chart for it',
+    (await page.textContent('#fa-ub-title')) !== ub.title, await page.textContent('#fa-ub-title'));
+  await page.click('#fa-ub-dim .MuiSelect-select');
+  await page.waitForTimeout(250);
+  const dimOpts = await page.$$eval('.MuiMenu-list li', e => e.map(x => x.textContent.trim()));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(250);
+  ok('"Show" offers TU and transport mode, as production does', dimOpts.length === 2, dimOpts);
+
+  await page.click('#fa-tab-tab');
+  await page.waitForTimeout(500);
+  const faHeads = await page.$$eval('#fa-table thead tr', r => r.map(x =>
+    [...x.querySelectorAll('th')].map(c => c.textContent.trim())));
+  ok('the table has ONE header row of nine named columns, as production',
+    faHeads.length === 1 && faHeads[0].length === 10 && /total|gesamt/i.test(faHeads[0][1]), faHeads);
+  const faCount = await page.evaluate(() => FA_DATA.tus.length);
+  ok('Gesamt is the root, open, with every TU under it',
+    (await page.$$('#fa-table tbody tr')).length === faCount + 1);
   const fa = await page.$$eval('#fa-table tbody tr:first-child td',
     c => c.map(x => x.textContent.trim()).slice(1, 4));
-  const faWant = await page.evaluate(() => [faNum(FA_DATA.gesamt[0]), faNum(FA_DATA.gesamt[1]),
+  const faWant = await page.evaluate(() => [String(FA_DATA.gesamt[0]), String(FA_DATA.gesamt[1]),
     faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2) + '%']);
-  ok('Trip Failures totals equal FA_DATA through faNum/faPct',
+  ok('Trip Failures totals equal FA_DATA, unseparated as production prints them',
     JSON.stringify(fa) === JSON.stringify(faWant), { fa, faWant });
+  const firstCell = await page.$eval('#fa-table tbody tr:nth-child(2) td', td =>
+    [...td.querySelectorAll('button')].map(b => b.getAttribute('aria-label')));
+  ok('chart and mask icons sit at the START of the row', firstCell.includes('chart') && firstCell.includes('mask'), firstCell);
+  // TU → Betriebstag → Ersatzverkehr
+  await page.click('#fa-table tbody tr:nth-child(2) .fa-expand');
+  await page.waitForTimeout(300);
+  const dayRows = await page.$$('#fa-table tbody tr[data-depth="2"]');
+  const wantDays = await page.evaluate(() => (FA_DATA.tus[0].tage || []).length);
+  ok('a TU opens into its operating days', dayRows.length === wantDays, { got: dayRows.length, wantDays });
+  const withFail = await page.$$('#fa-table tbody tr[data-depth="2"] .fa-expand');
+  if (withFail.length) {
+    await withFail[0].click();
+    await page.waitForTimeout(300);
+  }
+  ok('a day with cancellations opens into its replacement-transport row',
+    (await page.$$('#fa-table tbody tr[data-depth="3"]')).length === 1);
+  await page.click('#fa-hide-zero');
+  await page.waitForTimeout(300);
+  const zeroDays = await page.evaluate(() => (FA_DATA.tus[0].tage || [])
+    .filter(d => !d.v[1] && !d.v[3] && !d.v[5]).length);
+  ok('"hide rows without cancellations" removes them',
+    (await page.$$('#fa-table tbody tr[data-depth="2"]')).length === wantDays - zeroDays, zeroDays);
+  await page.click('#fa-hide-zero');
+  // the chart: three rates per child
+  await page.click('#fa-table tbody tr:nth-child(2) .fa-chart-btn');
+  await page.waitForTimeout(500);
+  const ch = await page.evaluate(() => ({
+    groups: document.querySelectorAll('.fa-chart-group').length,
+    bars: document.querySelectorAll('.fa-chart-bar').length,
+    legend: document.querySelectorAll('#fa-chart-legend > div').length,
+    title: (document.getElementById('fa-chart-title') || {}).textContent }));
+  ok('the row chart draws the three cancellation rates for each child',
+    ch.groups === wantDays && ch.bars === wantDays * 3 && ch.legend === 3, ch);
+  ok('the chart is titled with the evaluation period', /:/.test(ch.title || ''), ch.title);
   await goBack();
-
   await openByName(await nameOf('data_quality'));
   // the table lives behind the second tab; Overview is what opens
   ok('DQI opens on the Overview tab', (await page.$$('#dqi-overview')).length === 1);
@@ -1407,29 +1483,63 @@ const fs = require('fs');
   await goBack();
 
   await openByName(await nameOf('trip_failures'));
+  await page.click('#fa-tab-tab');
+  await page.waitForTimeout(400);
   await page.click('#fa-table tbody tr:first-child button[aria-label="mask"]');
   await page.waitForTimeout(700);
-  ok('a trip-failures row opens the Ausfallmaske', (await page.$$('#fa-mask-causes')).length === 1);
+  ok('the table icon opens the Ausfallmaske', (await page.$$('#fa-mask-causes')).length === 1);
   ok('the mask has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
-
-  /* The mask's trip table. The parity checker read "tables 1 -> 0" here and I
-     took it for a formatting difference; it was the whole list of cancelled
-     trips, plus its date window and rows-per-page. */
+  ok('the mask carries the same parameter grid',
+    (await page.$$eval('#fa-mask-header .MuiCardContent-root > div > div', e => e.length)) === 10);
+  const maskAll = await page.evaluate(() => FA_MASK_DATA.length);
+  ok('the pie draws the causes', (await page.$$('#fa-mask-pie .fa-pie-slice')).length >= 1);
+  const legend = await page.$$eval('.fa-legend-item', e => e.map(x => x.textContent.trim()));
+  const legendSum = legend.reduce((s, l) => s + Number((l.match(/(\d+)$/) || [0, 0])[1]), 0);
+  ok('the legend lists production\'s three causes, counts adding up to the trips',
+    legend.length === 3 && legendSum === maskAll, { legend, maskAll });
   ok('the Ausfallmaske lists the individual trips', (await page.$$('#fa-mask-table')).length === 1);
   const maskCols = await page.$$eval('#fa-mask-table thead th', th => th.length);
-  ok('the trip table has all 14 columns', maskCols === 14, maskCols);
-  const maskRows = await page.$$eval('#fa-mask-table tbody tr', r => r.length);
-  ok('the trip table pages at 10', maskRows === 10, maskRows);
+  ok('the trip table has a tick column and all 14 columns', maskCols === 15, maskCols);
+  ok('the trip table pages at 10', (await page.$$eval('#fa-mask-table tbody tr', r => r.length)) === 10);
+  await page.click('.fa-legend-item[data-cause="tech"]');
+  await page.waitForTimeout(300);
+  const techRows = await page.$$eval('#fa-mask-table tbody tr', r => r.map(x => x.getAttribute('data-cause')));
+  ok('clicking a cause in the legend filters the table to it',
+    techRows.length >= 1 && techRows.every(c => c === 'tech'), techRows);
+  ok('and marks that cause as selected', (await page.getAttribute('.fa-legend-item[data-cause="tech"]', 'aria-pressed')) === 'true');
+  await page.click('.fa-legend-item[data-cause="tech"]');
+  await page.waitForTimeout(300);
+  ok('clicking it again shows every trip', (await page.$$eval('#fa-mask-table tbody tr', r => r.length)) === 10);
+  // Ersatzverkehr is editable per trip, with Abbrechen / Speichern
+  ok('nothing to save until something changes', await page.$eval('#fa-mask-save', b => b.disabled));
+  await page.click('#fa-mask-table tbody tr:first-child .fa-ersatz');
+  await page.waitForTimeout(250);
+  const ersOpts = await page.$$eval('.MuiMenu-list li', e => e.map(x => x.textContent.trim()));
+  ok('Ersatzverkehr offers production\'s three values', ersOpts.length === 3, ersOpts);
+  await page.click('.MuiMenu-list li:nth-child(2)');
+  await page.waitForTimeout(250);
+  ok('changing it enables Save', !(await page.$eval('#fa-mask-save', b => b.disabled)));
+  await page.click('#fa-mask-cancel');
+  await page.waitForTimeout(250);
+  ok('Abbrechen puts the saved value back', (await page.$eval('#fa-mask-save', b => b.disabled))
+    && /kein|no repl/i.test(await page.textContent('#fa-mask-table tbody tr:first-child .fa-ersatz')));
+  await page.click('#fa-mask-all');
+  await page.waitForTimeout(200);
+  ok('the header tick selects every row on the page',
+    (await page.$$('#fa-mask-table tbody tr.Mui-selected')).length === 10);
+  await page.click('#fa-mask-collapse');
+  await page.waitForTimeout(200);
+  ok('Collapse all keeps each trip to one line',
+    (await page.$eval('#fa-mask-table td:nth-child(9)', td => getComputedStyle(td).whiteSpace)) === 'nowrap');
 
   await page.click('#fa-mask-pp .MuiSelect-select');
   await page.waitForTimeout(250);
   await page.click('.MuiMenu-list li:nth-child(2)');       // 25
   await page.waitForTimeout(400);
-  const maskAll = await page.evaluate(() => FA_MASK_DATA.length);
   ok('rows-per-page changes what the table shows',
     (await page.$$eval('#fa-mask-table tbody tr', r => r.length)) === Math.min(25, maskAll));
 
-  await page.fill('#fa-mask-von', '01.01.2099');
+  await page.fill('#fa-mask-von', '2099-01-01T00:00');
   await page.click('#fa-mask-apply');
   await page.waitForTimeout(400);
   ok('a date window that matches nothing shows the empty state',
@@ -1437,6 +1547,15 @@ const fs = require('fs');
   await page.click('#fa-mask-reset');
   await page.waitForTimeout(400);
   ok('reset restores the trips', (await page.$$('#fa-mask-table')).length === 1);
+  // Ignat, 2026-10-01: nothing under 14px, anywhere
+  const tinyFa = await page.evaluate(() => {
+    const out = []; const w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); let n;
+    while ((n = w.nextNode())) { const el = n.parentElement, tx = n.textContent.replace(/​/g, '').trim();
+      if (!tx || !el.offsetParent || el.closest('.material-icons')) continue;
+      const fs = parseFloat(getComputedStyle(el).fontSize);
+      if (fs < 14) out.push(tx.slice(0, 24) + ' @' + fs); }
+    return out; });
+  ok('no text in the Ausfallmaske is under 14px', tinyFa.length === 0, tinyFa.slice(0, 6));
   await goBack();
 
   // A raw_data row in the list is a FINISHED export: download, no preview.

@@ -106,6 +106,17 @@ const DELIBERATE = {
   ],
 };
 
+/* Views whose spec is now PRODUCTION, not the vanilla. Ignat sent eight
+   production screens of Fahrtausfälle on 2026-10-06 (kept locally under
+   projects/q-explorer-mui/reference/production-2026-10-06-fa/); where they and
+   the vanilla disagree, production wins, and verify-qx-react.cjs asserts the
+   production structure instead. Printed on every run, never silent. */
+const PRODUCTION_SPEC = {
+  'report-fa':    'Übersicht/Tabelle tabs, parameter grid, flow chart, one-row header — production 2026-10-06',
+  'ausfallmaske': 'cause pie with filtering legend, editable Ersatzverkehr — production 2026-10-06',
+  'chart-fa':     'three rates per child, grouped — production 2026-10-06',
+};
+
 const uniq = a => [...new Set(a.filter(Boolean))];
 
 (async () => {
@@ -194,6 +205,8 @@ const uniq = a => [...new Set(a.filter(Boolean))];
   await r.waitForTimeout(500);
 
   await openGroup('trip_failures');
+  await r.click('#fa-tab-tab').catch(() => {});   // the row icons live on the Table tab
+  await r.waitForTimeout(400);
   await r.click('#fa-table tbody tr:first-child button[aria-label="mask"]').catch(() => {});
   await r.waitForTimeout(600);
   react['ausfallmaske'] = await affordances(r);
@@ -201,6 +214,8 @@ const uniq = a => [...new Set(a.filter(Boolean))];
   await r.waitForTimeout(500);
 
   await openGroup('trip_failures');
+  await r.click('#fa-tab-tab').catch(() => {});   // the row icons live on the Table tab
+  await r.waitForTimeout(400);
   await r.click('#fa-table tbody tr:first-child button[aria-label="chart"]').catch(() => {});
   await r.waitForTimeout(600);
   react['chart-fa'] = await affordances(r);
@@ -278,7 +293,9 @@ const uniq = a => [...new Set(a.filter(Boolean))];
     if (a.tables > b.tables) lines.push(`tables ${a.tables} -> ${b.tables}`);
     if (a.expanders > b.expanders)
       lines.push(`collapsible ${a.expanders} -> ${b.expanders}`);
-    if (lines.length) {
+    if (PRODUCTION_SPEC[view]) {
+      console.log(`${view.padEnd(20)} spec: production — ${PRODUCTION_SPEC[view]}`);
+    } else if (lines.length) {
       console.log(`${view.padEnd(20)} ${lines.join('\n' + ' '.repeat(21))}`);
       gaps += lines.length;
     } else {

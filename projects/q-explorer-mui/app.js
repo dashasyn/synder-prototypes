@@ -19,7 +19,7 @@ const {
   Stack, FormControl, InputLabel, Select, InputAdornment, Alert, Tooltip,
   Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
   Snackbar, Checkbox, ListItemText, OutlinedInput, ToggleButton, ToggleButtonGroup,
-  FormControlLabel, Divider, Autocomplete, createFilterOptions,
+  FormControlLabel, Divider, Autocomplete, createFilterOptions, Pagination,
 } = M;
 const Fragment = React.Fragment;
 
@@ -47,9 +47,17 @@ const theme = createTheme({
     background: { default: '#FAFAFA' },
   },
   shape: { borderRadius: 4 },
+  // Ignat, 2026-10-01: "the minimum font size is 14 px. Don't use 12px or
+  // 13px!!!" MUI's caption, helper text, tooltip, chip and small button all
+  // sit below it by default, so the floor is set here, once, for all of them.
+  typography: { caption: { fontSize: '0.875rem' }, overline: { fontSize: '0.875rem' } },
   components: {
     // Ignat, 2026-09-14: "We usually use small. Buttons without shadows."
-    MuiButton:      { defaultProps: { size: 'small', disableElevation: true } },
+    MuiButton:      { defaultProps: { size: 'small', disableElevation: true },
+                      styleOverrides: { sizeSmall: { fontSize: 14 } } },
+    MuiChip:        { styleOverrides: { root: { fontSize: 14 } } },
+    MuiFormHelperText: { styleOverrides: { root: { fontSize: 14 } } },
+    MuiTooltip:     { styleOverrides: { tooltip: { fontSize: 14 } } },
     MuiIconButton:  { defaultProps: { size: 'small' } },
     MuiTextField:   { defaultProps: { size: 'small', variant: 'filled' } },
     MuiFormControl: { defaultProps: { size: 'small', variant: 'filled' } },
@@ -1719,100 +1727,239 @@ function ReportConnection({ go, row }) {
 }
 
 /* ── Screen: Trip Failures DPM (Fahrtausfälle) ────────────────────────
-   Each TU carries six metrics and a list of Betriebstage. The failure-rate
-   colouring uses faPct(), extracted, so the thresholds match the vanilla
-   (0 / <2 / 2–5 / 5–50 / 50+) rather than being re-invented here. */
-/**
- * A Trip Failures row — NINE metric columns, not five.
- *
- * renderFATable(): trips (total / cancelled / rate), journey time as h:mm:ss
- * through fmtMin(), and stops — each group the same three. The port showed
- * five columns and called the journey-time minutes a count. Ignat, 2026-09-22.
- */
-function FaRow({ tu, t, onMask, onChart, depth = 0 }) {
-  const [open, setOpen] = useState(false);
-  const days = tu.tage || [];
-  const v = tu.v;
-  // faPctCell(): 0 is grey, and the rate climbs through warning to error
-  const rate = (a, b) => {
-    const pct = faPct(a, b);
-    const colour = pct === 0 ? 'text.disabled' : pct >= 50 ? 'error.main'
-                 : pct >= 5 ? 'warning.main' : pct >= 2 ? 'warning.light' : 'success.main';
-    return html`<${Typography} variant="body2" component="span" color=${colour}>${pct.toFixed(2)}%<//>`;
-  };
-  const allZero = v[1] === 0 && v[3] === 0 && v[5] === 0;
-  const totalFail = v[0] > 0 && v[1] >= v[0];
+   Rebuilt 2026-10-06 from eight production screens (reference/production-
+   2026-10-06-fa/, local only). Production supersedes the vanilla here: a
+   parameter grid instead of chips, Übersicht and Tabelle tabs, a flow chart
+   of cancelled journey time by cause, one header row of nine named columns
+   tinted by group, Gesamt as the tree root, and the chart and mask icons at
+   the START of each row. The vanilla's KPI cards and rate badges are not in
+   production and are gone. */
+
+// The grid production puts above the report and above the mask.
+function ParamGrid({ id, fields }) {
+  return html`
+    <${Card} sx=${{ mb: 2 }} id=${id}><${CardContent} sx=${{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+      ${/* a long value (the transport-mode list) gets a wider column, as in production */''}
+      <${Box} sx=${{ display: 'grid', columnGap: 0, gridTemplateColumns: fields
+                      .map(f => `minmax(0, ${String(f[1]).length > 40 ? 2.6 : 1}fr)`).join(' ') }}>
+        ${fields.map(([label, value, dim], i) => html`
+          <${Box} key=${i} sx=${{ px: 1.5, borderLeft: i ? '1px solid #E7E7E7' : 'none' }}>
+            <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${label}<//>
+            <${Typography} variant="body2" color=${dim ? 'text.secondary' : 'text.primary'}>${value}<//>
+          <//>`)}
+      <//>
+    <//><//>`;
+}
+
+const faParamFields = (t, lang, row, tuValue) => {
+  const p = rowPeriod({ dataset: { von: (row && row.von) || '', bis: (row && row.bis) || '',
+                                    period: (row && row.periodKey) || '' } });
+  const un = t('fa_mask_unlimited');
+  return [
+    [lang === 'de' ? 'von' : 'from', fmtDate(p.von, lang)],
+    [lang === 'de' ? 'bis' : 'to', fmtDate(p.bis, lang)],
+    [t('fa_mask_wochentage'), un, true],
+    [t('fa_mask_rpv'), 'RPV'],
+    [t('fa_mask_vm'), t('fa_vm_modes')],
+    [t('fa_mask_konz'), t('fa_mask_licensed')],
+    [t('fa_mask_tus'), tuValue || un, !tuValue],
+    [t('fa_mask_regionen'), un, true],
+    [t('fa_mask_kantone'), un, true],
+    [t('fa_mask_linien'), un, true],
+  ];
+};
+
+// Group tints, as production's columns are tinted: trips / journey time / stops
+const FA_TINT = ['rgba(139,195,74,0.14)', 'rgba(126,87,194,0.10)', 'rgba(255,152,0,0.13)'];
+const faRate = (a, b) => faPct(a, b).toFixed(2) + '%';
+
+/* The Übersicht data. FA_UBERSICHT_DATA carries causes for GESAMT and three
+   TUs; Verkehrsmittel is derived from those same TUs through the mode each
+   one runs in PUNCT_RECORDS — summed, causes weighted by cancelled time —
+   so nothing here is made up. TUs without cause data are not offered. */
+const FA_UB_TUS = Object.keys(FA_UBERSICHT_DATA);
+const FA_TU_MODE = (() => {
+  const m = {};
+  PUNCT_RECORDS.forEach(r => { if (!m[r.tu_konz]) m[r.tu_konz] = r.vm; });
+  return m;
+})();
+const FA_UB_MODES = (() => {
+  const by = {};
+  FA_UB_TUS.filter(k => k !== 'GESAMT' && FA_TU_MODE[k]).forEach(k => {
+    const vm = FA_TU_MODE[k], d = FA_UBERSICHT_DATA[k];
+    const acc = by[vm] || (by[vm] = { totalMin: 0, ausMin: 0, w: {} });
+    acc.totalMin += d.totalMin; acc.ausMin += d.ausMin;
+    d.causes.forEach(c => {
+      const w = acc.w[c.label] || (acc.w[c.label] = { label: c.label, color: c.color, min: 0 });
+      w.min += d.ausMin * c.pct / 100;
+    });
+  });
+  Object.values(by).forEach(a => {
+    const tot = Object.values(a.w).reduce((s, c) => s + c.min, 0) || 1;
+    a.causes = Object.values(a.w).map(c => ({ label: c.label, color: c.color, pct: c.min / tot * 100 }))
+      .sort((x, y) => y.pct - x.pct);
+  });
+  return by;
+})();
+
+/* Production's flow chart: one bar for the cancelled time on the left, one
+   per cause on the right, each flow as wide as that cause's share. */
+function FaSankey({ causes }) {
+  const W = 1000, H = 300, NODE = 20, GAP = 10;
+  const list = [...causes].sort((a, b) => b.pct - a.pct);
+  const usable = H - GAP * Math.max(0, list.length - 1);
+  // a right-hand node is never thinner than its 14px label: small causes get
+  // MIN, the rest share what is left in proportion. The left side stays exact.
+  const MIN = 24;
+  const raw = list.map(c => usable * c.pct / 100);
+  const small = raw.filter(h => h < MIN).length;
+  const bigSum = raw.filter(h => h >= MIN).reduce((s, h) => s + h, 0) || 1;
+  const scale = (usable - small * MIN) / bigSum;
+  let yl = 0, yr = 0;
+  const flows = list.map((c, i) => {
+    const h = raw[i] < MIN ? MIN : raw[i] * scale;
+    const f = { c, h, r0: yr, lTop: yl, lH: H * c.pct / 100 };
+    yl += f.lH; yr += h + GAP;
+    return f;
+  });
+  return html`
+    <svg viewBox=${`0 0 ${W} ${H}`} width="100%" role="img" id="fa-ub-sankey"
+         style=${{ display: 'block', maxHeight: 320 }}>
+      <rect x="0" y="0" width=${NODE} height=${H} fill="#2B5F8E" />
+      ${flows.map((f, i) => {
+        const x0 = NODE, x1 = W - NODE, mx = (x0 + x1) / 2;
+        const a0 = f.lTop, a1 = f.lTop + f.lH, b0 = f.r0, b1 = f.r0 + f.h;
+        const d = `M${x0},${a0} C${mx},${a0} ${mx},${b0} ${x1},${b0} L${x1},${b1} C${mx},${b1} ${mx},${a1} ${x0},${a1} Z`;
+        return html`
+          <g key=${i} className="fa-ub-flow">
+            <path d=${d} fill=${f.c.color} fill-opacity="0.75" />
+            <rect x=${W - NODE} y=${b0} width=${NODE} height=${Math.max(f.h, 1)} fill="#2B5F8E" />
+            <text x=${W - NODE - 8} y=${b0 + f.h / 2} text-anchor="end" dominant-baseline="middle"
+                  font-size="14" fill="rgba(0,0,0,0.87)">
+              ${f.c.label} <tspan font-weight="700">${f.c.pct.toFixed(2)}%</tspan>
+            </text>
+          </g>`;
+      })}
+    </svg>`;
+}
+
+function FaOverview({ t, lang }) {
+  const [dim, setDim] = useState('tu');
+  const modes = Object.keys(FA_UB_MODES);
+  const entities = dim === 'vm' ? modes : FA_UB_TUS;
+  const [ent, setEnt] = useState(FA_UB_TUS.find(k => k !== 'GESAMT') || 'GESAMT');
+  React.useEffect(() => { if (!entities.includes(ent)) setEnt(entities[0]); }, [dim]);
+  const d = dim === 'vm' ? FA_UB_MODES[ent] : FA_UBERSICHT_DATA[ent];
+  const entLabel = k => k === 'GESAMT' ? t('fa_mask_all') : k;
+  const [snap, setSnap] = useState(false);
+  return html`
+    <${Box} id="fa-overview">
+      <${Stack} direction="row" spacing=${2} alignItems="flex-start" sx=${{ mb: 2 }}>
+        <${FilterSelect} id="fa-ub-dim" label=${t('sel_dimension')} value=${dim} minWidth=${180}
+          onChange=${v => setDim(v || 'tu')}
+          options=${[{ value: 'tu', label: t('fa_opt_tu') },
+                     ...(modes.length ? [{ value: 'vm', label: t('fa_opt_vm') }] : [])]} />
+        <${FilterSelect} id="fa-ub-tu-sel" label=${t('sel_entity')} value=${ent} minWidth=${180}
+          onChange=${v => setEnt(v || entities[0])}
+          options=${entities.map(k => ({ value: k, label: entLabel(k) }))} />
+        <${Box} sx=${{ flex: 1 }} />
+        <${Link} href="#" onClick=${e => e.preventDefault()} id="fa-ub-infoblatt"
+          sx=${{ display: 'inline-flex', alignItems: 'center', gap: .5, pt: 1.5 }}>
+          ${t('fa_infoblatt')} <${Icon} sx=${{ fontSize: 16 }}>open_in_new<//><//>
+      <//>
+      ${d && html`
+        <${Card} id="fa-ub-card"><${CardContent} sx=${{ position: 'relative' }}>
+          <${Tooltip} title=${t('fa_ub_camera')}>
+            <${IconButton} aria-label=${t('fa_ub_camera')} id="fa-ub-camera"
+              onClick=${() => setSnap(true)} sx=${{ position: 'absolute', top: 8, right: 8 }}>
+              <${Icon}>photo_camera<//><//>
+          <//>
+          <${Typography} variant="h6" align="center" id="fa-ub-title" sx=${{ mb: 2 }}>
+            ${t('fa_ub_title_prefix')} - ${dim === 'vm' ? t('fa_opt_vm') : 'TU'}: ${entLabel(ent)}<//>
+          <${Typography} variant="body1" id="fa-ub-summary" sx=${{ mb: 1.5 }}>
+            <b>${t('fa_ub_rate')}: ${(d.ausMin / d.totalMin * 100).toFixed(2)}%</b>
+            ${' '}(${t('fa_ub_summary_from')} ${fmtHM(d.totalMin)}${t('fa_ub_summary_sind') === ',' ? ',' : ' ' + t('fa_ub_summary_sind')} ${fmtHM(d.ausMin)} ${t('fa_ub_summary_gefallen')})
+          <//>
+          <${FaSankey} causes=${d.causes} />
+        <//><//>`}
+      <${Snackbar} open=${snap} autoHideDuration=${2500} onClose=${() => setSnap(false)}
+        message=${t('chart_snapshot_done')} />
+    <//>`;
+}
+
+/* One table row. The tree is Gesamt → TU → Betriebstag → Ersatzverkehr,
+   each level present only when its breakdown is chosen. */
+function FaRow({ node, depth, t, onChart, onMask, hideZero, startOpen }) {
+  const { lang } = useT();
+  const [open, setOpen] = useState(!!startOpen);
+  const v = node.v;
+  const kids = (node.kids || []).filter(k => !hideZero || k.v[1] || k.v[3] || k.v[5]);
+  const cell = (g, content, bold) => html`
+    <${TableCell} align="right" sx=${{ bgcolor: FA_TINT[g], fontWeight: bold ? 700 : 400 }}>${content}<//>`;
   return html`
     <${React.Fragment}>
-      <${TableRow} hover>
-        <${TableCell} sx=${{ pl: `${16 + depth * 20}px` }}>
-          ${days.length > 0 ? html`
-            <${IconButton} onClick=${() => setOpen(o => !o)}
-              aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
+      <${TableRow} hover data-depth=${depth} className="fa-row">
+        <${TableCell} sx=${{ pl: `${8 + depth * 20}px`, whiteSpace: 'nowrap' }}>
+          ${kids.length ? html`
+            <${IconButton} onClick=${() => setOpen(o => !o)} className="fa-expand"
+              aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open}>
               <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
-            <//>` : html`<${Box} component="span" sx=${{ display: 'inline-block', width: 28 }} />`}
-          ${tu.label}
-          ${allZero && html`
-            <${Chip} size="small" variant="outlined" color="success" sx=${{ ml: 1 }}
-              icon=${html`<${Icon} sx=${{ fontSize: 11 }}>check_circle<//>`}
-              label=${t('fa_kein_ausfall')} />`}
-          ${totalFail && html`
-            <${Chip} size="small" variant="outlined" color="error" sx=${{ ml: 1 }}
-              icon=${html`<${Icon} sx=${{ fontSize: 11 }}>warning<//>`} label="100%" />`}
+            <//>` : html`<${Box} component="span" sx=${{ display: 'inline-block', width: 30 }} />`}
+          ${node.chart !== false && html`
+            <${Tooltip} title=${t('rpt_action_chart')}>
+              <${IconButton} aria-label="chart" className="fa-chart-btn" onClick=${() => onChart(node)}>
+                <${Icon} sx=${{ fontSize: 18 }}>bar_chart<//><//><//>
+            <${Tooltip} title=${t('fa_mask_title')}>
+              <${IconButton} aria-label="mask" className="fa-mask-btn" onClick=${() => onMask(node)}>
+                <${Icon} sx=${{ fontSize: 18 }}>table_rows<//><//><//>`}
+          <${Box} component="span" sx=${{ ml: .5, fontWeight: depth === 0 ? 500 : 400 }}>${fmtDate(node.label, lang)}<//>
         <//>
-        <${TableCell} align="right">${faNum(v[0])}<//>
-        <${TableCell} align="right">${faNum(v[1])}<//>
-        <${TableCell} align="right">${rate(v[1], v[0])}<//>
-        <${TableCell} align="right">${fmtMin(v[2])}<//>
-        <${TableCell} align="right">${fmtMin(v[3])}<//>
-        <${TableCell} align="right">${rate(v[3], v[2])}<//>
-        <${TableCell} align="right">${faNum(v[4])}<//>
-        <${TableCell} align="right">${faNum(v[5])}<//>
-        <${TableCell} align="right">${rate(v[5], v[4])}<//>
-        <${TableCell} align="right">
-          <${Tooltip} title=${t('rpt_action_chart')}>
-            <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(tu)}>
-              <${Icon}>bar_chart<//><//>
-          <//>
-          <${Tooltip} title=${t('fa_mask_title')}>
-            <${IconButton} aria-label="mask" onClick=${() => onMask && onMask(tu)}>
-              <${Icon}>fact_check<//><//>
-          <//>
-        <//>
+        ${cell(0, v[0])}${cell(0, v[1])}${cell(0, faRate(v[1], v[0]), true)}
+        ${cell(1, fmtMin(v[2]))}${cell(1, fmtMin(v[3]))}${cell(1, faRate(v[3], v[2]), true)}
+        ${cell(2, v[4])}${cell(2, v[5])}${cell(2, faRate(v[5], v[4]), true)}
       <//>
-      ${open && days.map((d, i) => html`
-        <${FaRow} key=${d.d + i} depth=${1} t=${t} onMask=${onMask} onChart=${onChart}
-          tu=${{ id: tu.id + '/' + d.d, label: d.d, v: d.v, tage: [] }} />`)}
+      ${open && kids.map((k, i) => html`
+        <${FaRow} key=${k.id + i} node=${k} depth=${depth + 1} t=${t} hideZero=${hideZero}
+          onChart=${onChart} onMask=${onMask} />`)}
     <//>`;
 }
 
 function ReportTripFailures({ go, row }) {
-  const { t } = useT();
-  // The vanilla offers eight controls here and my first pass had none —
-  // the parity check counted 8 -> 0. Show (which TU), Metric, and the same
-  // three-level breakdown plus two "additionally by" levels.
-  const [tu, setTu] = useState('');
-  const [metric, setMetric] = useState('0');
-  // dqi-auf-1 has no "no selection" and starts on TU, exactly as the markup
-  // does; the three levels offer DIFFERENT option sets, which is why a single
-  // shared list would have been wrong.
-  const [dims, setDims] = useState(['tu', '', '']);
-  const [add, setAdd] = useState(['', '']);
+  const { t, lang } = useT();
+  const [tab, setTab] = useState(0);
+  // production's defaults: TU · Betriebstag · none, and additionally Ersatzverkehr
+  const [dims, setDims] = useState(['tu', 'betriebstag', '']);
+  const [add, setAdd] = useState(['ersatz', '']);
+  const [netto, setNetto] = useState(false);
+  const [hideZero, setHideZero] = useState(false);
 
-  const all = FA_DATA.tus || [];
-  const tus = tu ? all.filter(x => x.id === tu) : all;
-
-  const METRICS = [
-    { value: '0', key: 'fa_col_fahrtzeit' },
-    { value: '1', key: 'fa_col_fahrten' },
-    { value: '2', key: 'fa_col_haltestellen' },
-  ];
-  const FA_DIMS = ['betriebstag', 'linie', 'tu', 'vm', 'region'];
-  const setLevel = (arr, setArr) => (i, v) => setArr(d => {
+  const FA_DIMS = ['tu', 'betriebstag', 'linie', 'vm', 'region'];
+  const ADD_DIMS = ['ersatz', 'betriebstag', 'linie', 'vm'];
+  const dimLabel = d => d === 'ersatz' ? t('fa_opt_ersatz') : t(PUNCT_DIM_LABELS[d] || 'fa_opt_' + d);
+  const setLevel = setArr => (i, v) => setArr(d => {
     const n = [...d]; n[i] = v;
     for (let j = i + 1; j < n.length; j++) n[j] = '';
     return n;
   });
+
+  // the tree the chosen breakdown produces, from FA_DATA
+  const withDays = dims.includes('betriebstag');
+  const withErsatz = add.includes('ersatz');
+  const tree = useMemo(() => ({
+    id: 'GESAMT', label: t('fa_row_gesamt'), v: FA_DATA.gesamt,
+    kids: FA_DATA.tus.map(tu => ({
+      id: tu.id, label: tu.label, v: tu.v, tu: tu.id,
+      kids: withDays ? (tu.tage || []).map(d => ({
+        id: tu.id + '/' + d.d, label: d.d, v: d.v, tu: tu.id, day: d.d,
+        kids: withErsatz && (d.v[1] || d.v[3] || d.v[5]) ? [{
+          id: tu.id + '/' + d.d + '/e', label: t(d.ersatz || 'fa_kein_ersatz'), v: d.v,
+          tu: tu.id, day: d.d, chart: false, kids: [] }] : [],
+      })) : [],
+    })),
+  }), [withDays, withErsatz, t]);
+
+  const onChart = node => go('fa-chart', row, { node });
+  const onMask = node => go('mask', row, { tuId: node.tu || 'GESAMT', day: node.day });
 
   return html`
     <${Box}>
@@ -1823,94 +1970,135 @@ function ReportTripFailures({ go, row }) {
         action=${html`<${Button} variant="outlined"
                         startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
       <${Box} sx=${{ p: 3 }}>
-        ${/* renderFAKpi(): three cards — trips, journey time, stops — each
-              showing the total, the cancelled count and the rate, with the
-              rate turning red above 3%. The port had none of them. */''}
-        <${KpiRow} cards=${[
-          { label: t('fa_col_fahrten'),
-            value: faNum(FA_DATA.gesamt[0]),
-            tone: faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]) > 3 ? 'bad' : '',
-            foot: `${faNum(FA_DATA.gesamt[1])} ${t('fa_col_ausgefallen')} · ${t('fa_kpi_rate')}: ${faPct(FA_DATA.gesamt[1], FA_DATA.gesamt[0]).toFixed(2)}%` },
-          { label: t('fa_col_fahrtzeit'),
-            value: fmtMin(FA_DATA.gesamt[2]),
-            tone: faPct(FA_DATA.gesamt[3], FA_DATA.gesamt[2]) > 3 ? 'bad' : '',
-            foot: `${fmtMin(FA_DATA.gesamt[3])} ${t('fa_col_ausgefallen')} · ${t('fa_kpi_rate')}: ${faPct(FA_DATA.gesamt[3], FA_DATA.gesamt[2]).toFixed(2)}%` },
-          { label: t('fa_col_haltestellen'),
-            value: faNum(FA_DATA.gesamt[4]),
-            tone: faPct(FA_DATA.gesamt[5], FA_DATA.gesamt[4]) > 3 ? 'bad' : '',
-            foot: `${faNum(FA_DATA.gesamt[5])} ${t('fa_col_ausgefallen')} · ${t('fa_kpi_rate')}: ${faPct(FA_DATA.gesamt[5], FA_DATA.gesamt[4]).toFixed(2)}%` },
-        ]} />
+        <${ParamGrid} id="fa-params" fields=${faParamFields(t, lang, row)} />
+        <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} sx=${{ mb: 2 }} id="fa-tabs">
+          <${Tab} label=${t('fa_tab_ubersicht')} id="fa-tab-ub" />
+          <${Tab} label=${t('fa_tab_tabelle')} id="fa-tab-tab" />
+        <//>
 
-        <${Card} sx=${{ mb: 3 }}><${CardContent}>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap sx=${{ mb: 2 }}>
-            <${FilterSelect} id="fa-ub-tu-sel" label=${t('sel_show')} value=${tu}
-              onChange=${setTu} minWidth=${200}
-              options=${all.map(x => ({ value: x.id, label: x.label }))} />
-            <${FilterSelect} id="fa-ub-metric-sel" label=${t('sel_metric')} value=${metric}
-              onChange=${v => setMetric(v || '0')} minWidth=${200}
-              options=${METRICS.map(m => ({ value: m.value, label: t(m.key) }))} />
-          <//>
-          <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('punct_aufschluss_label')}<//>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap sx=${{ mb: 2 }}>
-            ${[0, 1, 2].map(i => html`
-              <${FilterSelect} key=${i} id=${'fa-auf-' + (i + 1)}
-                label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
-                value=${dims[i]} onChange=${v => setLevel(dims, setDims)(i, v)} minWidth=${200}
-                options=${FA_DIMS.filter(d => !dims.some((x, j) => x === d && j !== i))
-                  .map(d => ({ value: d, label: t(PUNCT_DIM_LABELS[d] || 'fa_opt_' + d) }))} />`)}
-          <//>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-            ${[0, 1].map(i => html`
-              <${FilterSelect} key=${i} id=${'fa-add-' + (i + 1)}
-                label=${t(i === 0 ? 'sel_additional_1' : 'sel_additional_2')}
-                value=${add[i]} onChange=${v => setLevel(add, setAdd)(i, v)} minWidth=${200}
-                options=${FA_DIMS.filter(d => !add.some((x, j) => x === d && j !== i))
-                  .map(d => ({ value: d, label: t(PUNCT_DIM_LABELS[d] || 'fa_opt_' + d) }))} />`)}
+        ${tab === 0 ? html`<${FaOverview} t=${t} lang=${lang} />` : html`
+          <${Box} id="fa-tabelle">
+            <${Card} sx=${{ mb: 2 }}><${CardContent}>
+              <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                <${Box}>
+                  <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('fa_aufschluss_label')}<//>
+                  <${Stack} direction="row" spacing=${1}>
+                    ${[0, 1, 2].map(i => html`
+                      <${FilterSelect} key=${i} id=${'fa-auf-' + (i + 1)} minWidth=${170}
+                        label=${t(['sel_breakdown_1', 'sel_breakdown_2', 'sel_breakdown_3'][i])}
+                        value=${dims[i]} onChange=${v => setLevel(setDims)(i, i === 0 ? (v || 'tu') : v)}
+                        options=${FA_DIMS.filter(d => !dims.some((x, j) => x === d && j !== i))
+                          .map(d => ({ value: d, label: dimLabel(d) }))} />`)}
+                  <//>
+                <//>
+                <${Box}>
+                  <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('fa_add_aufschluss_label')}<//>
+                  <${Stack} direction="row" spacing=${1}>
+                    ${[0, 1].map(i => html`
+                      <${FilterSelect} key=${i} id=${'fa-add-' + (i + 1)} minWidth=${i === 0 ? 300 : 170}
+                        label=${t(i === 0 ? 'sel_additional_1' : 'sel_additional_2')}
+                        value=${add[i]} onChange=${v => setLevel(setAdd)(i, v)}
+                        options=${ADD_DIMS.filter(d => !add.some((x, j) => x === d && j !== i))
+                          .map(d => ({ value: d, label: dimLabel(d) }))} />`)}
+                  <//>
+                <//>
+                <${Box}>
+                  <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('fa_netto_label')}<//>
+                  <${FormControlLabel} control=${html`<${Checkbox} id="fa-netto"
+                      checked=${netto} onChange=${e => setNetto(e.target.checked)} />`}
+                    label=${t('fa_ersatz_cb')} />
+                <//>
+                <${Box}>
+                  <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('fa_filter_label')}<//>
+                  <${FormControlLabel} control=${html`<${Checkbox} id="fa-hide-zero"
+                      checked=${hideZero} onChange=${e => setHideZero(e.target.checked)} />`}
+                    label=${t('fa_filter_hide_cb')} />
+                <//>
+                <${Box} sx=${{ flex: 1 }} />
+                <${Link} href="#" onClick=${e => e.preventDefault()} sx=${{ pt: 1 }}>${t('fa_infoblatt')}<//>
+              <//>
+            <//><//>
+
+            <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+              <${Table} id="fa-table">
+                <${TableHead}>
+                  <${TableRow}>
+                    <${TableCell} />
+                    ${['fa_col_fahrten_ges', 'fa_col_fahrten_aus', 'fa_col_fahrten_q',
+                       'fa_col_fahrtzeit_ges', 'fa_col_fahrtzeit_aus', 'fa_col_fahrtzeit_q',
+                       'fa_col_halt_ges', 'fa_col_halt_aus', 'fa_col_halt_q'].map((k, i) => html`
+                      <${TableCell} key=${k} align="right"
+                        sx=${{ bgcolor: FA_TINT[Math.floor(i / 3)] }}>${t(k)}<//>`)}
+                  <//>
+                <//>
+                <${TableBody}>
+                  <${FaRow} node=${tree} depth=${0} t=${t} hideZero=${hideZero} startOpen
+                    onChart=${onChart} onMask=${onMask} />
+                <//>
+              <//>
+            <//>
+          <//>`}
+      <//>
+    <//>`;
+}
+
+/* The chart icon's view: the three cancellation rates of each child of the
+   row, grouped, as production's popup draws them. It stays a page with a
+   breadcrumb — Ignat's rule from 2026-08-28 for row drill-ins. */
+function FaChart({ go, row, node }) {
+  const { t, lang } = useT();
+  const p = rowPeriod({ dataset: { von: (row && row.von) || '', bis: (row && row.bis) || '',
+                                    period: (row && row.periodKey) || '' } });
+  const kids = (node.kids || []).length ? node.kids : [node];
+  const SER = [['fa_chart_quot_fahrten', 1, 0, '#3B78B5'], ['fa_chart_quot_fahrtzeit', 3, 2, '#F28E2B'],
+               ['fa_chart_quot_halt', 5, 4, '#59A14F']];
+  const vals = kids.map(k => SER.map(([, a, b]) => faPct(k.v[a], k.v[b])));
+  const max = Math.max(1, ...vals.flat());
+  const top = max > 50 ? 100 : Math.ceil(max / 5) * 5;
+  const W = 900, H = 360, L = 80, B = 50, plotW = W - L - 20, plotH = H - B - 20;
+  const groupW = plotW / kids.length, barW = Math.min(24, groupW / 4);
+  const pct = n => n.toFixed(2).replace('.', lang === 'de' ? ',' : '.') + '%';
+  const sub = [node.tu || '', node.day ? fmtDate(node.day, lang) : ''].filter(Boolean).join(', ')
+    || node.label;
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_trip_failures'), onClick: () => go('report', row) },
+                  { label: t('rpt_action_chart') }]}
+        title=${t('rpt_action_chart')} subtitle=${sub} />
+      <${Box} sx=${{ p: 3 }}>
+        <${Card}><${CardContent}>
+          <${Typography} variant="h6" align="center" id="fa-chart-title">
+            ${t('fa_chart_period')}: ${fmtDate(p.von, lang)} - ${fmtDate(p.bis, lang)}<//>
+          <${Typography} variant="body1" align="center" sx=${{ mb: 2 }} id="fa-chart-sub">${sub}<//>
+          <${Box} sx=${{ display: 'flex', gap: 3, alignItems: 'flex-start' }}>
+            <svg viewBox=${`0 0 ${W} ${H}`} width="100%" id="fa-chart-svg" style=${{ flex: 1 }}>
+              ${[0, .2, .4, .6, .8, 1].map(f => {
+                const y = 20 + plotH * (1 - f);
+                return html`<g key=${f}>
+                  <line x1=${L} x2=${W - 20} y1=${y} y2=${y} stroke="#E7E7E7" />
+                  <text x=${L - 8} y=${y} text-anchor="end" dominant-baseline="middle" font-size="14"
+                        fill="rgba(0,0,0,0.6)">${pct(top * f)}</text></g>`;
+              })}
+              ${kids.map((k, i) => html`<g key=${i} className="fa-chart-group">
+                ${SER.map((s, j) => {
+                  const v = vals[i][j], h = plotH * Math.min(v, top) / top;
+                  const x = L + groupW * i + groupW / 2 - barW * 1.5 + barW * j;
+                  return html`<rect key=${j} className="fa-chart-bar" x=${x} y=${20 + plotH - h}
+                    width=${barW - 2} height=${h} fill=${s[3]}><title>${t(s[0])}: ${pct(v)}</title></rect>`;
+                })}
+                <text x=${L + groupW * i + groupW / 2} y=${H - B + 22} text-anchor="middle" font-size="14"
+                      fill="rgba(0,0,0,0.87)">${fmtDate(k.label, lang)}</text>
+              </g>`)}
+            </svg>
+            <${Stack} spacing=${1} id="fa-chart-legend" sx=${{ minWidth: 220, pt: 2 }}>
+              ${SER.map(s => html`<${Stack} key=${s[0]} direction="row" spacing=${1} alignItems="center">
+                <${Box} sx=${{ width: 14, height: 14, bgcolor: s[3] }} />
+                <${Typography} variant="body2">${t(s[0])}<//><//>`)}
+            <//>
           <//>
         <//><//>
-        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
-          <${Table} id="fa-table">
-            ${/* two header rows: Trips / Journey time / Stops, each split into
-                  total, cancelled and rate */''}
-            <${TableHead}>
-              <${TableRow}>
-                <${TableCell} />
-                <${TableCell} colSpan=${3} align="center">${t('fa_col_fahrten')}<//>
-                <${TableCell} colSpan=${3} align="center">${t('fa_col_fahrtzeit')}<//>
-                <${TableCell} colSpan=${3} align="center">${t('fa_col_haltestellen')}<//>
-                <${TableCell} />
-              <//>
-              <${TableRow}>
-                <${TableCell}>${t('fa_col_name')}<//>
-                ${[0, 1, 2].map(g => html`
-                  <${React.Fragment} key=${g}>
-                    <${TableCell} align="right">${t('fa_col_gesamt')}<//>
-                    <${TableCell} align="right">${t('fa_col_ausgefallen')}<//>
-                    <${TableCell} align="right">${t('fa_col_ausfallquote')}<//>
-                  <//>`)}
-                <${TableCell} align="right">${t('fa_col_aktionen')}<//>
-              <//>
-            <//>
-            <${TableBody}>
-              ${/* the Gesamt row comes first, from FA_DATA.gesamt */''}
-              <${FaRow} t=${t} onChart=${() => go('chart', row, { chart: {
-                  title: t('fa_row_gesamt'), backLabel: t('type_trip_failures'),
-                  format: v => faNum(Math.round(v)),
-                  items: FA_DATA.tus.map(x => ({ label: x.label, value: x.v[1] })),
-                } })}
-                onMask=${() => go('mask', row, { tuId: 'GESAMT' })}
-                tu=${{ id: 'GESAMT', label: t('fa_row_gesamt'), v: FA_DATA.gesamt, tage: [] }} />
-              ${tus.map((tu, i) => html`
-                <${FaRow} key=${tu.id + i} tu=${tu} t=${t}
-                  onMask=${x => go('mask', row, { tuId: x.id })}
-                  onChart=${x => go('chart', row, { chart: {
-                    title: x.label, backLabel: t('type_trip_failures'),
-                    format: v => faNum(Math.round(v)),
-                    items: (x.tage || []).map(d => ({ label: d.d, value: d.v[1] || 0 })),
-                  } })} />`)}
-            <//>
-          <//>
-        <//>
       <//>
     <//>`;
 }
@@ -2452,124 +2640,160 @@ function RohdatenConfig({ go, row }) {
 }
 
 /* ── Screen: Ausfallmaske (FA mask) ───────────────────────────────────
-   The per-TU failure breakdown: which causes account for the lost minutes.
-   FA_UBERSICHT_DATA carries the cause list with its own colours and
-   percentages, so the bars are the data's colours, not a palette I chose. */
-// The 14 column headings, in the vanilla's own order and by its own keys.
+   Rebuilt 2026-10-06 from production (reference/production-2026-10-06-fa/
+   5–7): the parameter grid, a pie of cancellation CAUSES whose legend filters
+   the table, the Ausfall von/bis window, rows you can tick, expand and
+   collapse, and an editable Ersatzverkehr per row with Abbrechen / Speichern.
+   The vanilla's bars here were the Übersicht's causes — a different thing. */
 const MASK_COLS = ['fa_mask_col_tag', 'fa_mask_col_tu', 'fa_mask_col_go', 'fa_mask_col_lb',
   'fa_mask_col_linie', 'fa_mask_col_fahrt_id', 'fa_mask_col_fahrt_tu', 'fa_mask_col_halt_von',
   'fa_mask_col_aus_von', 'fa_mask_col_halt_bis', 'fa_mask_col_aus_bis', 'fa_mask_col_anz_halt',
   'fa_mask_col_ausfallart', 'fa_mask_col_ersatz'];
+// Production's three causes and its colours. Which demo trip carries which
+// cause is demo data: FA_MASK_DATA has no cause column, so most rows have
+// none recorded, as most of production's 5'270 do.
+const MASK_CAUSES = [['none', 'fa_mask_no_cause', '#E8473A'], ['tech', 'fa_cause_tech', '#D9862E'],
+                     ['ktu', 'fa_cause_ktu', '#C2702A']];
+const maskCause = i => (i % 12 === 10 ? 'tech' : i % 12 === 11 ? 'ktu' : 'none');
+const ERSATZ = [['kein', 'fa_kein_ersatz'], ['teil', 'fa_ersatz_teil'], ['komplett', 'fa_ersatz_komplett']];
 
-function Ausfallmaske({ go, row, tuId }) {
+function MaskPie({ counts }) {
+  const total = counts.reduce((s, c) => s + c.n, 0) || 1;
+  let a = -Math.PI / 2;
+  const R = 90, C = 100;
+  return html`
+    <svg viewBox="0 0 200 200" width="200" height="200" id="fa-mask-pie" role="img">
+      ${counts.filter(c => c.n).map(c => {
+        const span = 2 * Math.PI * c.n / total;
+        if (span >= 2 * Math.PI - 1e-6)
+          return html`<circle key=${c.key} cx=${C} cy=${C} r=${R} fill=${c.color} className="fa-pie-slice" />`;
+        const x0 = C + R * Math.cos(a), y0 = C + R * Math.sin(a);
+        a += span;
+        const x1 = C + R * Math.cos(a), y1 = C + R * Math.sin(a);
+        return html`<path key=${c.key} className="fa-pie-slice" fill=${c.color} stroke="#fff" stroke-width="1"
+          d=${`M${C},${C} L${x0},${y0} A${R},${R} 0 ${span > Math.PI ? 1 : 0} 1 ${x1},${y1} Z`} />`;
+      })}
+    </svg>`;
+}
+
+function Ausfallmaske({ go, row, tuId, day }) {
   const { t, lang } = useT();
-  const key = tuId && FA_UBERSICHT_DATA[tuId] ? tuId : 'GESAMT';
-  const d = FA_UBERSICHT_DATA[key] || { causes: [], totalMin: 0, ausMin: 0 };
-  const period = rowPeriod({ dataset: {
-    von: (row && row.von) || '', bis: (row && row.bis) || '',
-    period: (row && row.periodKey) || '' } });
-  const [von, setVon] = useState('');
-  const [bis, setBis] = useState('');
+  const key = tuId || 'GESAMT';
+  // every demo trip, its cause and its saved Ersatzverkehr
+  const base = useMemo(() => FA_MASK_DATA
+    .map((r, i) => ({ i, r, cause: maskCause(i) }))
+    .filter(x => key === 'GESAMT' || x.r[1] === key)
+    .filter(x => !day || x.r[0] === day), [key, day]);
+  const [saved, setSaved] = useState(() => Object.fromEntries(base.map(x => [x.i, 'kein'])));
+  const [ersatz, setErsatz] = useState(saved);
+  const [cause, setCause] = useState('');
+  const [von, setVon] = useState(''), [bis, setBis] = useState('');
   const [range, setRange] = useState({ von: '', bis: '' });
   const [pp, setPp] = useState(10);
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
+  const [ticked, setTicked] = useState(new Set());
+  const [wrap, setWrap] = useState(true);
+  const [toast, setToast] = useState('');
 
-  // the vanilla's own date window, through its own faMaskStamp()
-  const filtered = useMemo(() => {
-    const from = faMaskStamp(range.von), to = faMaskStamp(range.bis);
-    if (!from && !to) return FA_MASK_DATA;
-    return FA_MASK_DATA.filter(r => {
-      const st = faMaskStamp(r[0]);
-      if (st === null) return false;
-      return (!from || st >= from) && (!to || st <= to);
-    });
-  }, [range]);
-  const shown = filtered.slice(page * pp, page * pp + pp);
+  // the window is a datetime, compared against the trip's day + cancelled-from time
+  const stamp = x => { const m = String(x.r[0]).match(/(\d+)\.(\d+)\.(\d+)/);
+    return m ? `${m[3]}-${m[2]}-${m[1]}T${(x.r[8] || '00:00').slice(0, 5)}` : ''; };
+  const inWindow = base.filter(x => (!range.von || stamp(x) >= range.von) && (!range.bis || stamp(x) <= range.bis));
+  const counts = MASK_CAUSES.map(([k, lbl, color]) => ({ key: k, label: t(lbl), color,
+    n: inWindow.filter(x => x.cause === k).length }));
+  const rows = cause ? inWindow.filter(x => x.cause === cause) : inWindow;
+  const pages = Math.max(1, Math.ceil(rows.length / pp));
+  const shown = rows.slice((page - 1) * pp, page * pp);
+  const dirty = Object.keys(ersatz).some(k => ersatz[k] !== saved[k]);
+  const allTicked = shown.length > 0 && shown.every(x => ticked.has(x.i));
 
   return html`
     <${Box}>
       <${PageHeader}
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                  { label: t('type_trip_failures'), onClick: () => go('report', row) },
+                  { label: row ? row.name : t('type_trip_failures'), onClick: () => go('report', row) },
                   { label: t('fa_mask_title') }]}
-        title=${t('fa_mask_title')} subtitle=${key} />
-      <${Box} sx=${{ p: 3, maxWidth: 1000 }}>
-        ${/* openFAMask() writes a FIELD GRID here — period, weekdays, RPV,
-              transport mode, concession, TUs, regions, cantons — not the three
-              big figures I had invented. "Unlimited" is the dimmed default. */''}
-        <${Card} sx=${{ mb: 3 }} id="fa-mask-header"><${CardContent}>
-          <${Box} sx=${{ display: 'grid', gap: 1.5,
-                          gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-            ${[
-              [lang === 'de' ? 'von' : 'from', fmtDate(period.von, lang), false],
-              [lang === 'de' ? 'bis' : 'to', fmtDate(period.bis, lang), false],
-              [t('fa_mask_wochentage'), t('fa_mask_unlimited'), true],
-              [t('fa_mask_rpv'), 'RPV', false],
-              [t('fa_mask_vm'), t('fa_mask_unlimited'), true],
-              [t('fa_mask_konz'), t('fa_mask_licensed'), false],
-              [t('fa_mask_tus'), key === 'GESAMT' ? t('fa_mask_all') : key, false],
-              [t('fa_mask_regionen'), t('fa_mask_unlimited'), true],
-              [t('fa_mask_kantone'), t('fa_mask_unlimited'), true],
-            ].map(([label, value, dim], i) => html`
-              <${Box} key=${i}>
-                <${Typography} variant="caption" color="text.secondary" display="block">
-                  ${label}<//>
-                <${Typography} variant="body2" color=${dim ? 'text.disabled' : 'text.primary'}>
-                  ${value}<//>
-              <//>`)}
+        title=${t('fa_mask_title')} subtitle=${[key === 'GESAMT' ? '' : key, day ? fmtDate(day, lang) : '']
+          .filter(Boolean).join(' · ')} />
+      <${Box} sx=${{ p: 3 }}>
+        <${ParamGrid} id="fa-mask-header" fields=${faParamFields(t, lang, row, key === 'GESAMT' ? '' : key)} />
+
+        <${Card} sx=${{ mb: 2 }} id="fa-mask-causes"><${CardContent}>
+          <${Box} sx=${{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+            <${MaskPie} counts=${counts} />
+            <${Stack} spacing=${1} id="fa-mask-legend" sx=${{ minWidth: 300 }}>
+              ${counts.map(c => html`
+                <${Box} key=${c.key} role="button" tabIndex=${0} className="fa-legend-item"
+                  data-cause=${c.key} aria-pressed=${cause === c.key}
+                  onClick=${() => { setCause(x => x === c.key ? '' : c.key); setPage(1); }}
+                  onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault();
+                    setCause(x => x === c.key ? '' : c.key); setPage(1); } }}
+                  sx=${{ display: 'flex', alignItems: 'center', gap: 1.5, px: 1.5, py: 1, borderRadius: 1,
+                         cursor: 'pointer', bgcolor: cause === c.key ? 'rgba(33,150,243,0.12)' : 'transparent',
+                         '&:hover': { bgcolor: cause === c.key ? 'rgba(33,150,243,0.16)' : 'action.hover' } }}>
+                  <${Box} sx=${{ width: 16, height: 12, bgcolor: c.color, flexShrink: 0 }} />
+                  <${Typography} variant="body2" sx=${{ flex: 1 }}>${c.label}<//>
+                  <${Typography} variant="body2" sx=${{ fontWeight: 500, minWidth: 32, textAlign: 'right' }}>${c.n}<//>
+                <//>`)}
+            <//>
+            <${Box} sx=${{ flex: 1 }} />
+            <${Stack} spacing=${1.5} sx=${{ width: 240 }}>
+              <${TextField} label=${t('fa_mask_ausfall_von')} id="fa-mask-von" type="datetime-local"
+                InputLabelProps=${{ shrink: true }} value=${von} onChange=${e => setVon(e.target.value)} />
+              <${TextField} label=${t('fa_mask_ausfall_bis')} id="fa-mask-bis" type="datetime-local"
+                InputLabelProps=${{ shrink: true }} value=${bis} onChange=${e => setBis(e.target.value)} />
+              <${Stack} direction="row" spacing=${1}>
+                <${Button} variant="contained" id="fa-mask-apply"
+                  onClick=${() => { setRange({ von, bis }); setPage(1); }}>${t('fa_mask_apply')}<//>
+                <${Button} id="fa-mask-reset"
+                  onClick=${() => { setVon(''); setBis(''); setRange({ von: '', bis: '' }); setPage(1); }}>
+                  ${t('fa_mask_reset')}<//>
+              <//>
+            <//>
           <//>
         <//><//>
-        <${Card} id="fa-mask-causes"><${CardContent}>
-          <${Typography} variant="h6" gutterBottom>${t('fa_mask_title')}<//>
-          ${(d.causes || []).map((c, i) => html`
-            <${Box} key=${i} sx=${{ mb: 1.5 }}>
-              <${Stack} direction="row" justifyContent="space-between" sx=${{ mb: .5 }}>
-                <${Typography} variant="body2">${c.label}<//>
-                <${Typography} variant="body2" color="text.secondary">${c.pct.toFixed(1)}%<//>
-              <//>
-              <${Box} sx=${{ height: 8, bgcolor: '#F0F0F0', borderRadius: 1, overflow: 'hidden' }}>
-                <${Box} sx=${{ width: `${c.pct}%`, height: '100%', bgcolor: c.color }} />
-              <//>
-            <//>`)}
-        <//><//>
 
-        ${/* The trip table, its Ausfall von/bis filter and its rows-per-page
-              select. All three were missing: the parity checker reported this
-              view as "tables 1 -> 0" and I had read that as a formatting
-              difference rather than a missing table. It is the only place the
-              individual cancelled trips are listed. */''}
-        <${Stack} direction="row" spacing=${2} sx=${{ mt: 3, mb: 2 }} alignItems="center">
-          <${TextField} label=${t('fa_mask_ausfall_von')} id="fa-mask-von"
-            placeholder="dd.mm.yyyy" value=${von} onChange=${e => setVon(e.target.value)} />
-          <${TextField} label=${t('fa_mask_ausfall_bis')} id="fa-mask-bis"
-            placeholder="dd.mm.yyyy" value=${bis} onChange=${e => setBis(e.target.value)} />
-          <${Button} variant="contained" id="fa-mask-apply"
-            onClick=${() => { setRange({ von, bis }); setPage(0); }}>${t('fa_mask_apply')}<//>
-          <${Button} id="fa-mask-reset"
-            onClick=${() => { setVon(''); setBis(''); setRange({ von: '', bis: '' }); setPage(0); }}>
-            ${t('fa_mask_reset')}<//>
+        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mb: 1 }}>
+          <${FilterSelect} id="fa-mask-pp" label=${t('fa_mask_entries')} minWidth=${170}
+            value=${String(pp)} onChange=${v => { setPp(Number(v) || 10); setPage(1); }}
+            options=${['10', '25', '50', '100'].map(v => ({ value: v, label: v }))} />
           <${Box} sx=${{ flex: 1 }} />
-          <${FilterSelect} id="fa-mask-pp" label=${t('sel_rows_per_page')} minWidth=${110}
-            value=${String(pp)} onChange=${v => { setPp(Number(v) || 10); setPage(0); }}
-            options=${['10', '25', '50'].map(v => ({ value: v, label: v }))} />
+          <${Button} variant="outlined" id="fa-mask-expand" onClick=${() => setWrap(true)}>${t('fa_mask_expand_all')}<//>
+          <${Button} variant="outlined" id="fa-mask-collapse" onClick=${() => setWrap(false)}>${t('fa_mask_collapse_all')}<//>
         <//>
 
-        ${filtered.length === 0 ? html`
-          <${Alert} severity="info" id="fa-mask-empty" action=${html`
-            <${Button} size="small" onClick=${() => { setVon(''); setBis(''); setRange({ von: '', bis: '' }); }}>
-              ${t('raw_clear_filters')}<//>`}>${t('fa_mask_no_match')}<//>` : html`
+        ${rows.length === 0 ? html`
+          <${Alert} severity="info" id="fa-mask-empty">${t('fa_mask_no_match')}<//>` : html`
           <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
-            <${Table} id="fa-mask-table">
+            <${Table} id="fa-mask-table" sx=${{ '& td': { whiteSpace: wrap ? 'normal' : 'nowrap' } }}>
               <${TableHead}>
                 <${TableRow}>
+                  <${TableCell} padding="checkbox">
+                    <${Checkbox} id="fa-mask-all" checked=${allTicked}
+                      inputProps=${{ 'aria-label': t('fa_mask_select_all') }}
+                      onChange=${e => setTicked(s => { const n = new Set(s);
+                        shown.forEach(x => e.target.checked ? n.add(x.i) : n.delete(x.i)); return n; })} />
+                  <//>
                   ${MASK_COLS.map(c => html`<${TableCell} key=${c}>${t(c)}<//>`)}
                 <//>
               <//>
               <${TableBody}>
-                ${shown.map((r, i) => html`
-                  <${TableRow} key=${i} hover>
-                    ${r.map((c, k) => html`
-                      <${TableCell} key=${k}>${k === 0 ? fmtDate(c, lang) : c}<//>`)}
+                ${shown.map(x => html`
+                  <${TableRow} key=${x.i} hover selected=${ticked.has(x.i)} data-cause=${x.cause}>
+                    <${TableCell} padding="checkbox">
+                      <${Checkbox} checked=${ticked.has(x.i)} inputProps=${{ 'aria-label': x.r[5] }}
+                        onChange=${() => setTicked(s => { const n = new Set(s);
+                          n.has(x.i) ? n.delete(x.i) : n.add(x.i); return n; })} />
+                    <//>
+                    ${x.r.slice(0, 13).map((c, k) => html`
+                      <${TableCell} key=${k} align=${k === 11 ? 'right' : 'left'}>${k === 0 ? fmtDate(c, lang) : c}<//>`)}
+                    <${TableCell} sx=${{ minWidth: 230 }}>
+                      <${Select} value=${ersatz[x.i] || 'kein'} variant="standard" fullWidth
+                        className="fa-ersatz" inputProps=${{ 'aria-label': t('fa_mask_col_ersatz') }}
+                        onChange=${e => setErsatz(s => ({ ...s, [x.i]: e.target.value }))}>
+                        ${ERSATZ.map(([k, lbl]) => html`<${MenuItem} key=${k} value=${k}>${t(lbl)}<//>`)}
+                      <//>
+                    <//>
                   <//>`)}
               <//>
             <//>
@@ -2578,17 +2802,29 @@ function Ausfallmaske({ go, row, tuId }) {
         <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mt: 2 }}>
           <${Typography} variant="body2" color="text.secondary" id="fa-mask-info">
             ${t('fa_pager_info')
-                .replace('{start}', filtered.length === 0 ? 0 : page * pp + 1)
-                .replace('{end}', Math.min((page + 1) * pp, filtered.length))
-                .replace('{total}', filtered.length)}
+                .replace('{start}', rows.length === 0 ? 0 : (page - 1) * pp + 1)
+                .replace('{end}', Math.min(page * pp, rows.length))
+                .replace('{total}', rows.length)}
           <//>
           <${Box} sx=${{ flex: 1 }} />
-          <${Button} disabled=${page === 0} id="fa-mask-prev"
-            onClick=${() => setPage(p => p - 1)}>${t('rpt_pager_prev')}<//>
-          <${Button} disabled=${(page + 1) * pp >= filtered.length} id="fa-mask-next"
-            onClick=${() => setPage(p => p + 1)}>${t('rpt_pager_next')}<//>
+          <${Pagination} count=${pages} page=${Math.min(page, pages)} id="fa-mask-pager"
+            onChange=${(e, v) => setPage(v)} showFirstButton showLastButton shape="rounded" />
+        <//>
+        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mt: 2 }}>
+          <${Button} variant="outlined" id="fa-mask-cancel" disabled=${!dirty}
+            startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>undo<//>`}
+            onClick=${() => setErsatz(saved)}>${t('cf_cancel')}<//>
+          <${Button} variant="contained" id="fa-mask-save" disabled=${!dirty}
+            startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>save<//>`}
+            onClick=${() => { setSaved(ersatz); setToast(t('fa_mask_saved')); }}>${t('fa_mask_save')}<//>
+          <${Box} sx=${{ flex: 1 }} />
+          <${Tooltip} title=${t('fa_export_pdf')}>
+            <${IconButton} aria-label=${t('fa_export_pdf')}><${Icon}>picture_as_pdf<//><//><//>
+          <${Tooltip} title=${t('fa_export_xls')}>
+            <${IconButton} aria-label=${t('fa_export_xls')}><${Icon}>grid_on<//><//><//>
         <//>
       <//>
+      <${Snackbar} open=${!!toast} autoHideDuration=${2500} onClose=${() => setToast('')} message=${toast} />
     <//>`;
 }
 
@@ -2697,7 +2933,7 @@ function Login({ onLogin }) {
   const util = k => html`
     <${Box} component="button" key=${k} onClick=${e => e.preventDefault()}
       sx=${{ display: 'inline-flex', alignItems: 'center', gap: '7px', background: 'none',
-              border: 'none', p: 0, font: 'inherit', fontSize: 13, cursor: 'pointer',
+              border: 'none', p: 0, font: 'inherit', fontSize: 14, cursor: 'pointer',
               color: 'primary.dark' }}>
       <${Icon} sx=${{ fontSize: 18 }}>${UTIL_ICON[k]}<//>
       ${t(k)}
@@ -2743,7 +2979,7 @@ function Login({ onLogin }) {
 
         <${Link} href="#" id="login-forgot" underline="none"
           onClick=${e => e.preventDefault()}
-          sx=${{ display: 'block', textAlign: 'center', mt: 2, fontSize: 13 }}>
+          sx=${{ display: 'block', textAlign: 'center', mt: 2, fontSize: 14 }}>
           ${t('login_forgot')}<//>
       <//>
 
@@ -2794,7 +3030,8 @@ function App() {
                                    format=${route.chart.format}
                                    backLabel=${route.chart.backLabel}
                                    onBack=${() => go('report', route.row)} />` :
-    route.name === 'mask'      ? html`<${Ausfallmaske} go=${go} row=${route.row} tuId=${route.tuId} />` :
+    route.name === 'mask'      ? html`<${Ausfallmaske} go=${go} row=${route.row} tuId=${route.tuId} day=${route.day} />` :
+    route.name === 'fa-chart'  ? html`<${FaChart} go=${go} row=${route.row} node=${route.node} />` :
     route.name === 'raw'       ? html`<${RawDataTable} go=${go} row=${route.row} rows=${PUNCT_RAW}
                                         title=${t('rpt_action_raw')}
                                         backLabel=${route.row ? route.row.name : ''}
@@ -2824,7 +3061,7 @@ function App() {
                    px: 3, py: .5, bgcolor: '#fff', borderTop: '1px solid #E7E7E7' }}>
             ${['util_impressum', 'util_dokumente', 'util_support', 'util_kontakt'].map(k =>
               html`<${Button} key=${k} size="small" color="inherit"
-                              sx=${{ color: 'text.secondary', fontSize: 12 }}>${t(k)}<//>`)}
+                              sx=${{ color: 'text.secondary', fontSize: 14 }}>${t(k)}<//>`)}
           <//>
         <//>
       <//>

@@ -122,6 +122,16 @@ const DELIBERATE = {
      'the vanilla writes the breakdown label into the header\'s top-left SPACER cell, which is color:transparent — the text is in the DOM but invisible, and reproducing it would put unreadable text in front of a screen reader'],
   ],
 };
+/* Views whose spec is now PRODUCTION, not the vanilla. Ignat sent eight
+   production screens of Fahrtausfälle on 2026-10-06 (kept locally under
+   projects/q-explorer-mui/reference/production-2026-10-06-fa/); where they and
+   the vanilla disagree, production wins, and verify-qx-react.cjs asserts the
+   production structure instead. Printed on every run, never silent. */
+const PRODUCTION_SPEC = {
+  'report-fa':    'Übersicht/Tabelle tabs, parameter grid, flow chart, one-row header — production 2026-10-06',
+  'ausfallmaske': 'cause pie with filtering legend, editable Ersatzverkehr — production 2026-10-06',
+  'chart-fa':     'three rates per child, grouped — production 2026-10-06',
+};
 const allowed = (view, kind, value) =>
   (DELIBERATE[view] || []).some(([k, v]) => k === kind && v === value);
 
@@ -243,11 +253,13 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     react['chart-punct'] = await probe(r); await back(); await back();
   }
   if (VIEWS.includes('ausfallmaske')) {
-    await open('trip_failures'); await rowAction('#fa-table', 'mask');
+    await open('trip_failures'); await r.click('#fa-tab-tab').catch(() => {}); await r.waitForTimeout(400);
+    await rowAction('#fa-table', 'mask');
     react['ausfallmaske'] = await probe(r); await back(); await back();
   }
   if (VIEWS.includes('chart-fa')) {
-    await open('trip_failures'); await rowAction('#fa-table', 'chart');
+    await open('trip_failures'); await r.click('#fa-tab-tab').catch(() => {}); await r.waitForTimeout(400);
+    await rowAction('#fa-table', 'chart');
     react['chart-fa'] = await probe(r); await back(); await back();
   }
   if (VIEWS.includes('chart-connection')) {
@@ -295,7 +307,8 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
       else if (!eq(ca.shape, cb.shape)) lines.push(`chart${i} shape differs`);
     });
 
-    if (lines.length) { console.log(`${view.padEnd(20)} ${lines.join('\n' + ' '.repeat(21))}`); gaps += lines.length; }
+    if (PRODUCTION_SPEC[view]) console.log(`${view.padEnd(20)} spec: production — ${PRODUCTION_SPEC[view]}`);
+    else if (lines.length) { console.log(`${view.padEnd(20)} ${lines.join('\n' + ' '.repeat(21))}`); gaps += lines.length; }
     else console.log(`${view.padEnd(20)} ok`);
     for (const [, v, why] of DELIBERATE[view] || [])
       console.log(`${' '.repeat(20)} · allowed: "${v}" — ${why}`);
