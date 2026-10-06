@@ -31,7 +31,7 @@ plain words ("Turn display off", "Set volume to 36%", with the API fields only u
 "Leave unchanged" options with a one-line description each, and the list + editor layout as
 option B.
 
-## 2 · Full target workflow (variant 1)
+## 2 · Full target workflow
 - **List**: name, Active switch, targets, days, time, PA action, display action, device rollout
   status (applied / partial failure / needs re-apply).
 - **Targets**: one *Stations* field with predefined Station groups and single stations together,
@@ -60,15 +60,17 @@ option B.
   failed*), save error (changes kept). A guard catches unsaved changes on every navigation and on
   closing the tab.
 
-## 3 · Feasible first step (variant 2 — phase 1, per device)
-The screens and the one place stay the same. ETC stores the named schedules, resolves each target
-to its devices, converts the schedule into each device's weekly entries and **replaces** that
-device's schedule through the PaxLife API. Not in phase 1, but shown rather than hidden:
-**Holidays** (the API is weekly only) and **ELA speakers** (skipped until PaxLife confirms
-support). This is not completion of DATNETISR-264.
+## 3 · Feasible first step (per device, on the current PaxLife API)
+One design — no separate phase-1 screen (Ignat, 2026-10-06). The screens stay the same; ETC keeps
+the named schedules, resolves each one to the devices at its stations and groups, converts it into
+each device's weekly entries and **replaces** that device's schedule through the PaxLife API.
+Not possible in the first step, and marked under *Show gaps*: **Holidays** (G2 — the API is weekly
+only) and **ELA speakers** (G8 — skipped until PaxLife confirms support). This is not completion
+of DATNETISR-264.
 
-Proposed rule for later changes (G6): when a group gains or loses a station, or a device is added
-or moved, ETC re-applies automatically. If that fails, the schedule shows *Needs re-apply*.
+Rule for later changes (G6): when a group gains or loses a station, or a device is added or
+moved, ETC updates the devices automatically; if that fails, the schedule shows *Out of date* and
+opens with an alert listing what changed — Save updates the devices.
 
 ## 4 · API and requirement gaps to refine (toggle "Show gaps" in the prototype)
 | # | Gap | Who |

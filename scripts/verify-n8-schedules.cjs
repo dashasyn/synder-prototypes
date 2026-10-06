@@ -219,17 +219,12 @@ async function run() {
   await page.click('#leave-discard'); await wait(300);
   ok(await screen() === 'schedules' && /23:30/.test(await txt('#s-table tr[data-schedule="s1"]')), 'Discard leaves the saved schedule untouched');
 
-  /* ── phase 1 variant ────────────────────────────────────────────── */
-  section('phase 1 — per device');
-  await page.click('#vs-2'); await wait(300);
-  ok(await vis('#phase-line') && /PaxLife API/.test(await txt('#phase-line')), 'phase 1 says how it is applied');
-  ok(/Holidays: phase 2/.test(await txt('#s-table tr[data-schedule="s2"]')), 'holiday schedules are flagged in the list');
+  /* ── one design ─────────────────────────────────────────────────── */
+  section('one design, no variant switch');
+  ok(!(await count('#vs-1, #vs-2')) && !/Variant|Phase 1/.test(await txt('#variant-switch')), 'no Target / Phase 1 switch');
+  ok(!(await count('#phase-line, .phase-chip')), 'no phase-1 lines or chips anywhere');
   await page.click('#s-table tr[data-schedule="s2"] td:first-child'); await wait(400);
-  ok(await page.locator('#ed-holidays').isDisabled() && await vis('#card-timing .phase-chip'), 'Holidays is disabled in phase 1 — shown, not hidden');
-  await page.click('#toggle-devices'); await wait(300);
-  ok(/Skipped — ELA not confirmed/.test(await txt('#reach-table tr[data-reach="ako-ela-1"]')), 'ELA speakers are skipped in phase 1');
-  await page.click('#vs-1'); await wait(300);
-  ok(await page.locator('#ed-holidays').isEnabled() && await screen() === 'schedule', 'switching back is in place — same editor, Holidays back');
+  ok(await page.locator('#ed-holidays').isEnabled(), 'Holidays is a normal day choice');
 
   /* ── gaps ───────────────────────────────────────────────────────── */
   section('gaps');
@@ -237,6 +232,7 @@ async function run() {
   await page.click('#p-gaps'); await wait(300);
   const ids = await page.$$eval('.gap', g => [...new Set(g.map(x => x.dataset.gap))]);
   ok(['G2', 'G3', 'G4', 'G6', 'G7', 'G8', 'G9', 'G10', 'G11'].every(g => ids.includes(g)), 'the editor pins its gaps in place', ids);
+  ok(/Not possible on the current API/.test(await txt('.gap[data-gap="G2"]')) && /first step skips them/.test(await txt('.gap[data-gap="G8"]')), 'the first-step limits (Holidays, ELA) live in Show gaps');
   await page.click('#p-gaps');
 
   /* ── contextual: device ─────────────────────────────────────────── */

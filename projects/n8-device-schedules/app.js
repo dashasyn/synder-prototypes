@@ -328,14 +328,14 @@ const Opt = (value, title, desc, extra) => html`
 
 /** A gap, pinned where it bites. Hidden unless "Show gaps" is on. */
 const GAP_TEXT = {
-  G1: 'Named, central schedules don\'t exist in the PaxLife API — it stores one weekly schedule per device. ETC must own the schedule list and push the result to each device.',
-  G2: 'Holidays: N8 keeps a central, system-wide list of holiday dates (DATNETISR-264), but the PaxLife API is weekly only, with no dates. ETC has to write dated changes onto each device around every holiday — or holidays can\'t reach the devices.',
+  G1: 'Named, central schedules don\'t exist in the PaxLife API — it stores one weekly schedule per device. First step: ETC keeps the schedules, resolves each one to the devices at its stations and replaces every device\'s weekly schedule through the API. Not completion of DATNETISR-264.',
+  G2: 'Holidays: N8 keeps a central, system-wide list of holiday dates (DATNETISR-264), but the PaxLife API is weekly only, with no dates. Not possible on the current API — the per-device first step ships without Holidays unless ETC writes dated changes around each holiday.',
   G3: 'Start/End ranges: the API takes weekday/time entries, not ranges. ETC writes an "on" entry at the start and an "off" entry at the end; overnight ranges put the off entry on the next day.',
   G4: 'Volume scale: DATNETISR-264 specifies a relative adjustment, −100…+100% against the station\'s default volume (+100% = maximum configured amplification). This prototype sets an absolute level, 0–100% (0 = silent), as Ignat asked on 5 Oct. Confirm with ETC — the API takes an absolute volume, so this version needs no conversion.',
   G5: 'Overlaps: a device holds one weekly schedule. When two schedules act on the same device at the same time, which one wins?',
   G6: 'Membership changes: proposed rule — ETC updates the devices automatically when a group gains/loses a station or a device is added/moved, and marks the schedule Out of date if that fails. Needs agreement with ETC.',
   G7: 'Display actions beyond "Darken all displays" — confirm the list with Tuan before this control is final.',
-  G8: 'ELA speakers: confirm with PaxLife whether ELA devices accept schedules at all, and which fields.',
+  G8: 'ELA speakers: confirm with PaxLife whether ELA devices accept schedules at all, and which fields. Until then the per-device first step skips them.',
   G9: 'Partial failures: is the per-device replace atomic? A device that fails keeps its old schedule — confirm with PaxLife.',
   G10: 'Active/Inactive: map to the API\'s per-device "enabled" flag, or remove the entries? A device can carry several schedules, so "enabled" can\'t mean one of them.',
   G11: 'Equalizer: the API supports a scheduled equalizer, DATNETISR-264 doesn\'t ask for it. Left out — the equalizer stays a base audio setting.',
@@ -438,7 +438,7 @@ function Rail() {
 /* The prototype frame, not product chrome: first element, full width, dark.
    Variant + demo states + the gaps toggle. */
 function VariantSwitch() {
-  const { phase, setPhase, listState, setListState, saveMode, setSaveMode, gaps, setGaps, layout, setLayout } = useApp();
+  const { listState, setListState, saveMode, setSaveMode, gaps, setGaps, layout, setLayout } = useApp();
   const btn = (id, on, label, onClick) => html`
     <button id=${id} className=${on ? 'on' : ''} onClick=${onClick}
       style=${{ background: on ? '#fff' : 'none', color: on ? 'rgba(0,0,0,.87)' : 'rgba(255,255,255,.75)',
@@ -453,7 +453,6 @@ function VariantSwitch() {
     <div className="variant-switch" id="variant-switch"
       style=${{ display: 'flex', alignItems: 'center', gap: 14, background: '#1b1b1b', color: '#fff', flexWrap: 'wrap',
                 padding: '7px 20px', flexShrink: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif' }}>
-      ${group('Variant', html`${btn('vs-1', phase === 1, '1 · Target (264)', () => setPhase(1))}${btn('vs-2', phase === 2, '2 · Phase 1, per device', () => setPhase(2))}`)}
       ${group('Layout', html`${btn('lay-full', layout === 'full', 'A · Full page', () => setLayout('full'))}${btn('lay-split', layout === 'split', 'B · List + editor', () => setLayout('split'))}`)}
       ${group('List', ['data', 'empty', 'loading', 'error'].map(k => btn('ls-' + k, listState === k, k[0].toUpperCase() + k.slice(1), () => setListState(k))))}
       ${group('Save', [['ok', 'Succeeds'], ['partial', 'Partial failure'], ['error', 'Fails']].map(([k, l]) => btn('sv-' + k, saveMode === k, l, () => setSaveMode(k))))}
@@ -1243,7 +1242,8 @@ function StationDetail() {
 
 /* ══ Root ═════════════════════════════════════════════════════════════ */
 function Root() {
-  const [phase, setPhase] = useState(1);
+  // One design (Ignat, 2026-10-06): the per-device first step is described in Show gaps, not a variant.
+  const phase = 1;
   const [listState, setListState] = useState('data');
   const [saveMode, setSaveMode] = useState('ok');
   const [gaps, setGaps] = useState(false);
@@ -1279,7 +1279,7 @@ function Root() {
 
   // Switching layout swaps in place; with unsaved edits it asks first, as any navigation does.
   const pickLayout = k => { if (k === layout) return; if (dirtyRef.current) { setLeave({ layout: k }); return; } setLayout(k); };
-  const value = { phase, setPhase, listState, setListState: pickList, saveMode, setSaveMode, gaps, setGaps, layout, setLayout: pickLayout,
+  const value = { phase, listState, setListState: pickList, saveMode, setSaveMode, gaps, setGaps, layout, setLayout: pickLayout,
                   screen, target, go, rev, bump, toast: setToastMsg, askDelete, setDirty };
   const split = layout === 'split' && (screen === 'schedules' || screen === 'schedule');
   const View = split ? SplitSchedules : { schedules: ScheduleList, schedule: ScheduleEditor, devices: DeviceList, device: DeviceDetail, types: DeviceTypes,
