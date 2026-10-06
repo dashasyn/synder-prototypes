@@ -24,7 +24,6 @@
   .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
   .variant-switch button:disabled{opacity:.3;cursor:not-allowed}
   .vs-sep{width:1px;height:22px;background:rgba(255,255,255,.2)}
-  .vs-note{opacity:.7;font-size:14px;flex-basis:100%}
 
   .stage{flex:1;padding:24px;display:flex;justify-content:center}
   .screen{width:100%;max-width:1060px}
@@ -71,6 +70,8 @@
 
   .table-block{margin-top:24px}
   th.is-new,td.is-new{background:var(--color-primary-5)}
+  tr.row-built td{background:var(--color-primary-5)}
+  tr.row-built td:first-child{box-shadow:inset 3px 0 0 var(--color-primary)}
 </style>
 </head>
 <body>
@@ -89,7 +90,6 @@
     <button id="st-pro" onclick="setState('pro')">Pro+ existing</button>
     <button id="st-new" onclick="setState('new')">Pro+ new</button>
     <button id="st-below" onclick="setState('below')">Below Pro</button>
-    <button id="st-trial" onclick="setState('trial')">Trial</button>
     <button id="st-rrinv" onclick="setState('rrinv')">RevRec · invoice</button>
     <button id="st-rrpay" onclick="setState('rrpay')">RevRec · payment</button>
   </div>
@@ -97,7 +97,6 @@
     <button id="ex-issued" onclick="setExample('issued')">A · Synced on issued</button>
     <button id="ex-created" onclick="setExample('created')">B · Synced on created</button>
   </div>
-  <span class="vs-note" id="vs-note"></span>
 </div>
 
 <div class="stage">
@@ -131,12 +130,12 @@ var v = {};   // per-state values, reset on state change
 
 var STATES = {
   pro:   'Pro+ · existing connection', new: 'Pro+ · new connection', below: 'Below Pro',
-  trial: 'Trial', rrinv: 'RevRec · invoice date', rrpay: 'RevRec · payment date'
+  rrinv: 'RevRec · invoice date', rrpay: 'RevRec · payment date'
 };
 var VALID = {                     // which org states change anything on a screen
-  1: ['pro','new','below','trial','rrinv','rrpay'],
+  1: ['pro','new','below','rrinv','rrpay'],
   2: [],
-  3: ['pro','new','below','trial'],
+  3: ['pro','new','below'],
   4: ['rrinv','rrpay'],
   5: []
 };
@@ -145,6 +144,19 @@ function resetValues(){
   v.sync     = (state === 'new') ? 'issued' : 'created';
   v.summary  = (state === 'new') ? 'issued' : 'created';
   v.schedule = (state === 'rrpay') ? 'payment' : 'created';
+  v.built    = [];
+}
+
+/* schedules built after a Schedule start change — they use the value in effect when built */
+var NEW_INVOICES = [
+  { inv: 'in_1QD9wTE4pygkgelb', cust: 'Contoso Ltd', created: 'Sep 29, 2026', issued: 'Oct 5, 2026', paid: 'Oct 12, 2026', amt: '$18,000.00' },
+  { inv: 'in_1QDb3uE4pygkgelb', cust: 'Fabrikam Inc', created: 'Sep 30, 2026', issued: 'Oct 6, 2026', paid: 'Oct 14, 2026', amt: '$7,200.00' },
+  { inv: 'in_1QDcQ1E4pygkgelb', cust: 'Tailspin Toys', created: 'Oct 1, 2026', issued: 'Oct 2, 2026', paid: 'Oct 9, 2026', amt: '$2,400.00' }
+];
+function buildAfterChange(){
+  var src = NEW_INVOICES[v.built.length % NEW_INVOICES.length];
+  var start = { created: src.created, issued: src.issued, payment: src.paid }[v.schedule];
+  v.built.push({ inv: src.inv, cust: src.cust, created: src.created, issued: src.issued, start: start, amt: src.amt, built: true });
 }
 
 /* ---- shared bits -------------------------------------------------------- */
@@ -192,21 +204,13 @@ function screen1(){
   var gated = state === 'below', locked = rrLock();
   var value = gated ? 'created' : v.sync;
   var extra = '';
+  if (gated) extra = '<div class="lock-note" id="inv-gate">This feature is available on higher plans. '
+      + '<a class="text-link" href="#">Upgrade plan</a></div>';
   if (locked) extra = '<div class="lock-note" id="inv-lock">Locked while Revenue Recognition starts '
       + 'schedules from the invoice date. To change it, change '
       + '<a class="text-link" href="#" id="go-schedule" onclick="setScreen(4);return false">Schedule start date</a>.</div>';
 
   var rows = [
-    { label: 'Apply payments to unpaid Invoice transactions', ctl: toggle(true, 'Apply payments to unpaid Invoice transactions'),
-      help: 'Payment will be applied to the matching unpaid Invoice transaction.' },
-    { label: 'Cancel sync if there is no matching open invoice found for a payment',
-      ctl: toggle(false, 'Cancel sync if there is no matching open invoice found for a payment'),
-      help: 'If you enable this setting, Synder will search across the existing invoices in your books '
-          + 'and if the matching invoice doesn’t exist, it will cancel synchronization.' },
-    { label: 'Sync unpaid (open) invoices', ctl: toggle(true, 'Sync unpaid (open) invoices'),
-      help: 'This setting allows you to sync open invoices with your accounting system. Once received, '
-          + 'the payment will be automatically attached to the corresponding invoice and the invoice '
-          + 'will be marked as paid. <a class="text-link" href="#">Learn more &gt;&gt;</a>' },
     { isNew: true, id: 'inv-row', label: '<label for="inv-date">Invoice date</label>',
       chip: gated ? UPGRADE : '', helpId: 'inv-help',
       help: 'The date Synder puts on Stripe invoices in your books: when the invoice was created, '
@@ -215,6 +219,16 @@ function screen1(){
       extra: extra,
       ctl: select('inv-date', [{v:'created',t:'Created date'},{v:'issued',t:'Issued date'}],
                   value, gated || locked, 'Invoice date') },
+    { label: 'Apply payments to unpaid Invoice transactions', ctl: toggle(false, 'Apply payments to unpaid Invoice transactions'),
+      help: 'Payment will be applied to the matching unpaid Invoice transaction.' },
+    { label: 'Cancel sync if there is no matching open invoice found for a payment',
+      ctl: toggle(false, 'Cancel sync if there is no matching open invoice found for a payment'),
+      help: 'If you enable this setting, Synder will search across the existing invoices in your books '
+          + 'and if the matching invoice doesn’t exist, it will cancel synchronization.' },
+    { label: 'Sync unpaid (open) invoices', ctl: toggle(false, 'Sync unpaid (open) invoices'),
+      help: 'This setting allows you to sync open invoices with your accounting system. Once received, '
+          + 'the payment will be automatically attached to the corresponding invoice and the invoice '
+          + 'will be marked as paid. <a class="text-link" href="#">Learn more &gt;&gt;</a>' },
     { label: 'Sync zero invoices', ctl: toggle(false, 'Sync zero invoices'),
       help: 'Enable this setting to import and sync invoices where all line amounts are 0 and the '
           + 'totals are 0. <a class="text-link" href="#">Learn more &gt;&gt;</a>' }
@@ -233,10 +247,11 @@ function screen2(){
       help: 'This Payment Method will be set for QuickBooks Sales Receipts, Refund Receipts, Payments and Expenses.' },
     { isNew: true, id: 'post-row', label: '<label for="post-date" id="post-label">Payment posting date</label>',
       helpId: 'post-help',
-      help: 'Select posting date for transactions: Balance transaction date (recommended) - when the '
-          + 'amount hits your Stripe balance, or Created date - when transaction is created in Stripe. '
-          + '<a class="text-link" href="#">Learn more</a>',
-      ctl: select('post-date', [{v:'created',t:'Created date'},{v:'balance',t:'Balance date'}],
+      help: 'The date Synder uses for payments, refunds and other Stripe balance transactions: '
+          + 'Balance date, when the money reaches your Stripe balance, or Created date, when Stripe created '
+          + 'the transaction. Invoices follow the Invoice date setting on the Invoices tab. '
+          + '<a class="text-link" href="#">Learn more →</a>',
+      ctl: select('post-date', [{v:'created',t:'Created date'},{v:'balance',t:'Balance date (recommended)'}],
                   'balance', false, 'Payment posting date') },
     { label: 'Enable QuickBooks Doc Numbers', ctl: toggle(false, 'Enable QuickBooks Doc Numbers'),
       help: 'By enabling this configuration your transactions will follow the standard QuickBooks Doc Number sequence.' },
@@ -297,8 +312,8 @@ function screen4(){
        +     '<th>Invoice</th><th>Customer</th><th>Invoice created date</th>'
        +     '<th class="is-new">Invoice issued date</th><th>Schedule start</th><th class="col-amount">Amount</th>'
        +   '</tr></thead><tbody>'
-       +   rowsData.map(function(r){
-             return '<tr><td>' + r.inv + '</td><td>' + r.cust + '</td><td>' + r.created + '</td>'
+       +   rowsData.concat(v.built).map(function(r){
+             return '<tr' + (r.built ? ' class="row-built"' : '') + '><td>' + r.inv + '</td><td>' + r.cust + '</td><td>' + r.created + '</td>'
                   + '<td class="is-new">' + r.issued + '</td><td>' + r.start + '</td>'
                   + '<td class="col-amount">' + r.amt + '</td></tr>'; }).join('')
        +   '</tbody></table></div>'
@@ -337,30 +352,6 @@ function screen5(){
        + '</div></div>';
 }
 
-/* ---- notes in the bar (prototype chrome, not product) ------------------- */
-function note(){
-  if (screen === 1) return {
-    pro:   'Existing connection keeps Created date. Saves on change — no confirmation (FDD).',
-    new:   'New connections default to Issued date.',
-    below: 'Shown under Upgrade to use, not hidden. Value stays Created date.',
-    trial: 'Available on trial. Subscribing below Pro while on Issued date hits the existing plan-limit popup.',
-    rrinv: 'Locked: RevRec starts schedules from an invoice date. Change Schedule start to Payment date (screen 4) and this unlocks.',
-    rrpay: 'RevRec on Payment date does not lock the Sync setting.'
-  }[state];
-  if (screen === 2) return 'Rename only: “Posting date” → “Payment posting date”. Options and behaviour unchanged.';
-  if (screen === 3) return {
-    pro:   'Existing Summary org keeps Invoice created date (assumed — FDD default table omits Summary).',
-    new:   'New Summary orgs default to Invoice issued date.',
-    below: 'Only the new value is gated; the two existing values stay selectable.',
-    trial: 'Available on trial, same plan-limit path as screen 1.'
-  }[state];
-  if (screen === 4) return 'Changing the value asks for confirmation. Existing schedule rows do not change — '
-      + 'only a success-specialist rebuild re-dates them. Issued column is blank for pre-release syncs.';
-  if (screen === 5) return example === 'issued'
-      ? 'Table keeps the created date; the extra row says which date went to the books.'
-      : 'Books date = created date, so no extra row — only Issued date is added.';
-}
-
 /* ---- render ------------------------------------------------------------- */
 function render(){
   var el = document.getElementById('screen');
@@ -378,7 +369,6 @@ function render(){
   document.getElementById('grp-label').textContent = screen === 5 ? 'Example' : 'Org';
   document.getElementById('ex-issued').classList.toggle('on', example === 'issued');
   document.getElementById('ex-created').classList.toggle('on', example === 'created');
-  document.getElementById('vs-note').textContent = note() || '';
   wire();
 }
 
@@ -419,7 +409,7 @@ function closeConfirm(apply){
   var m = document.getElementById('confirm');
   if (!m.classList.contains('show')) return;
   m.classList.remove('show');
-  if (apply && pending) v.schedule = pending;
+  if (apply && pending) { v.schedule = pending; buildAfterChange(); }
   pending = null;
   render();
   focusSoon('sched-date');

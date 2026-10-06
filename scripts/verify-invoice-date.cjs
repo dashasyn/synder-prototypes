@@ -55,10 +55,12 @@ const MARK = '[live copy not captured]';
   // ── 1 · Invoices tab, Pro+ existing ──────────────────────────────────
   ok('starts on Invoices tab', (await txt('.set-tab.on')) === 'Invoices');
   ok('Invoice date row visible', await vis('#inv-row'));
-  ok('Invoice date sits after Sync unpaid (open) invoices', await page.evaluate(() => {
-    const labels = [...document.querySelectorAll('.row-label')].map(e => e.textContent.trim());
-    return labels.indexOf('Invoice date') === labels.indexOf('Sync unpaid (open) invoices') + 1;
-  }));
+  ok('Invoice date is the first row on the Invoices tab', await page.evaluate(() =>
+    document.querySelector('.set-body .row-label').textContent.trim() === 'Invoice date'));
+  ok('existing Invoices toggles match live defaults (all Off)', await page.evaluate(() =>
+    [...document.querySelectorAll('.set-body .toggle')].every(t => t.getAttribute('aria-checked') === 'false')));
+  ok('no teaching note in the switcher', (await page.locator('#vs-note').count()) === 0);
+  ok('no Trial state in the switcher', (await page.locator('#st-trial').count()) === 0);
   ok('existing connection defaults to Created', (await val('#inv-date')) === 'created');
   ok('select enabled on Pro+', await en('#inv-date'));
   ok('no lock note on Pro+', (await page.locator('#inv-lock').count()) === 0);
@@ -80,10 +82,8 @@ const MARK = '[live copy not captured]';
   ok('below Pro: Upgrade to use chip visible', await vis('#chip-upgrade'));
   ok('below Pro: select disabled', !(await en('#inv-date')));
   ok('below Pro: value Created', (await val('#inv-date')) === 'created');
-
-  await state('trial');
-  ok('trial: select enabled', await en('#inv-date'));
-  ok('trial: no chip', (await page.locator('#chip-upgrade').count()) === 0);
+  ok('below Pro: live gate line visible', (await vis('#inv-gate')) &&
+     (await txt('#inv-gate')).startsWith('This feature is available on higher plans.'));
 
   await state('rrpay');
   ok('RevRec payment date: select enabled', await en('#inv-date'));
@@ -107,7 +107,9 @@ const MARK = '[live copy not captured]';
   ok('Issued column present', (await page.locator('#sched-table th').allTextContents()).includes('Invoice issued date'));
   ok('pre-release row has blank issued date',
      (await page.locator('#sched-table tbody tr').nth(2).locator('td').nth(3).textContent()).trim() === '');
-  const startsBefore = await page.locator('#sched-table tbody tr td:nth-child(5)').allTextContents();
+  const existing = '#sched-table tbody tr:not(.row-built) td:nth-child(5)';
+  const startsBefore = await page.locator(existing).allTextContents();
+  ok('no post-change rows before a change', (await page.locator('#sched-table tr.row-built').count()) === 0);
 
   await page.selectOption('#sched-date', 'issued');
   ok('changing Schedule start opens confirmation', await modalOpen());
@@ -130,7 +132,12 @@ const MARK = '[live copy not captured]';
   await page.locator('#dlg-ok').click();
   ok('Change applies value', (await val('#sched-date')) === 'issued');
   ok('existing schedule rows not re-dated',
-     JSON.stringify(await page.locator('#sched-table tbody tr td:nth-child(5)').allTextContents()) === JSON.stringify(startsBefore));
+     JSON.stringify(await page.locator(existing).allTextContents()) === JSON.stringify(startsBefore));
+  ok('one schedule built after the change', (await page.locator('#sched-table tr.row-built').count()) === 1);
+  ok('post-change schedule starts on its issued date',
+     (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(4).textContent()) === 'Oct 5, 2026' &&
+     (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(3).textContent()) === 'Oct 5, 2026');
+  ok('post-change row visible', await page.locator('#sched-table tr.row-built').first().isVisible());
   await checkFonts('screen 4');
   await page.locator('#confirm').evaluate(e => e.classList.add('show'));
   await checkFonts('confirm dialog');
@@ -139,6 +146,12 @@ const MARK = '[live copy not captured]';
   await page.selectOption('#sched-date', 'payment');
   await page.locator('#dlg-ok').click();
   ok('Schedule start now Payment date', (await val('#sched-date')) === 'payment');
+  ok('second post-change schedule starts on its payment date',
+     (await page.locator('#sched-table tr.row-built').nth(1).locator('td').nth(4).textContent()) === 'Oct 14, 2026');
+  ok('earlier post-change schedule not re-dated',
+     (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(4).textContent()) === 'Oct 5, 2026');
+  ok('existing schedules still not re-dated',
+     JSON.stringify(await page.locator(existing).allTextContents()) === JSON.stringify(startsBefore));
   await screen(1);
   ok('Sync lock lifts once Schedule start = Payment date', (await en('#inv-date')) && (await page.locator('#inv-lock').count()) === 0);
 
@@ -147,7 +160,10 @@ const MARK = '[live copy not captured]';
   ok('Sales tab reachable from tab bar', (await txt('.set-tab.on')) === 'Sales');
   ok('renamed label shown', (await txt('#post-label')) === 'Payment posting date');
   ok('old "Posting date" label gone', !(await page.locator('.row-label').allTextContents()).map(s => s.trim()).includes('Posting date'));
-  ok('posting options unchanged', (await page.locator('#post-date option').allTextContents()).join('|') === 'Created date|Balance date');
+  ok('posting options unchanged', (await page.locator('#post-date option').allTextContents()).join('|') === 'Created date|Balance date (recommended)');
+  ok('posting helper names the cash side and points to Invoice date', (await txt('#post-help')).includes('balance transactions') &&
+     (await txt('#post-help')).includes('Invoice date setting'));
+  ok('old “Select posting date for transactions” helper gone', !(await txt('#post-help')).includes('Select posting date'));
   ok('posting default Balance date', (await val('#post-date')) === 'balance');
   ok('org states disabled on Sales tab', !(await en('#st-pro')) && !(await en('#st-rrinv')));
   await checkFonts('screen 2');
