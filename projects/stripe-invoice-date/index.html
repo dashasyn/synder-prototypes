@@ -110,7 +110,11 @@
   .lrow .row-help{display:flex;gap:6px;margin-top:6px;max-width:640px}
   .lrow .row-help .mi{font-size:16px;color:var(--text-secondary);margin-top:2px}
   .lrow .lctl{margin-top:8px}
-  .lrow .lctl select{width:260px}
+  .lrow .lctl select{width:100%}
+  .chip-up{display:inline-block;background:var(--color-status-purple-bg);color:var(--color-purple);
+    text-decoration:underline;padding:0 6px;border-radius:4px;line-height:24px;margin-left:4px}
+  .gate-msg{margin-top:6px;color:var(--color-red)}
+  .gate-msg a{color:var(--color-primary);text-decoration:none}
   .lrow.is-new{background:var(--color-primary-5);margin:0 -20px;padding:12px 20px 12px 17px;
     border-left:3px solid var(--color-primary)}
   .row-main{flex:1;min-width:0}
@@ -238,6 +242,7 @@ function resetValues(){
   v.summary  = (state === 'new') ? 'issued' : 'created';
   v.schedule = (state === 'rrpay') ? 'payment' : 'created';
   v.built    = [];
+  v.gateMsg  = null;
 }
 
 /* schedules built after a Schedule start change — they use the value in effect when built */
@@ -270,7 +275,10 @@ function select(id, opts, value, disabled, label){
                 + (o.disabled ? ' disabled' : '') + '>' + o.t + '</option>'; }).join('')
        + '</select>';
 }
-var UPGRADE = ' <span class="status status-grey" id="chip-upgrade">Upgrade to use</span>';
+var UPGRADE = ' <a class="chip-up" href="#" id="chip-upgrade">Upgrade to use</a>';
+/* live pattern (Apply location): the red line appears only after the user tries the gated control */
+function gateMsg(id){ return '<div class="gate-msg" id="' + id + '">This feature is available on higher plans. '
+  + '<a href="#">Upgrade plan</a></div>'; }
 
 /* live settings rows: label + inline Off switch, then ℹ + description */
 function liveToggle(label){
@@ -328,8 +336,7 @@ function screen1(){
   var gated = state === 'below', locked = rrLock();
   var value = gated ? 'created' : (locked ? v.syncSaved : v.sync);
   var extra = '';
-  if (gated) extra = '<div class="lock-note" id="inv-gate">This feature is available on higher plans. '
-      + '<a class="text-link" href="#">Upgrade plan</a></div>';
+  if (gated && v.gateMsg === 'inv') extra = gateMsg('inv-gate');
   if (locked) extra = '<div class="lock-note" id="inv-lock">Locked while Revenue Recognition starts '
       + 'schedules from the invoice date. To change it, change '
       + '<a class="text-link" href="#" id="go-schedule" onclick="setScreen(4);return false">Schedule start date</a>.</div>';
@@ -351,7 +358,7 @@ function screen1(){
           + '<a class="text-link" href="#">Learn more →</a>',
       extra: extra,
       ctl: select('inv-date', [{v:'created',t:'Created date'},{v:'issued',t:'Issued date'}],
-                  value, gated || locked, 'Invoice date') },
+                  value, locked, 'Invoice date') },
     { label: 'Sync zero invoices', toggle: true,
       help: 'Enable this setting to import and sync invoices where all line amounts are 0 and the '
           + 'totals are 0. <a class="text-link" href="#">Learn more &gt;&gt;</a>' }
@@ -382,7 +389,7 @@ function screen2(){
       help: 'By enabling this configuration your transactions will follow the standard QuickBooks Doc Number sequence.' },
     { label: 'Apply generic customer', toggle: true,
       help: 'It is an option to assign a generic customer instead of sending over each customer on sales transaction individually.' },
-    { label: 'Sync discounts as products', chip: ' <span class="status status-grey">Upgrade to use</span>', toggle: true,
+    { label: 'Sync discounts as products', chip: ' <a class="chip-up" href="#">Upgrade to use</a>', toggle: true,
       help: 'Any discount will be synced as an additional product with default “Stripe discount” name '
           + 'or discount name from the integration (if any).' }
   ];
@@ -397,10 +404,11 @@ function screen3(){
        +   'surrounding settings and this setting’s existing description are not shown.</p>'
        + '<div class="set-card"><div class="set-body">'
        + row({ isNew: true, id: 'sum-row', label: '<label for="sum-date">Sales recording date</label>',
+               chip: gated ? UPGRADE : '', extra: (gated && v.gateMsg === 'sum') ? gateMsg('sum-gate') : '',
                help: '<span class="marker" style="margin:0">' + MARK + '</span>',
                ctl: select('sum-date', [
                  {v:'created', t:'Invoice created date'},
-                 {v:'issued',  t:'Invoice issued date' + (gated ? ' — Upgrade to use' : ''), disabled: gated},
+                 {v:'issued',  t:'Invoice issued date'},
                  {v:'payment', t:'Payment date'}], value, false, 'Sales recording date') })
        + '</div></div></div>';
 }
@@ -494,11 +502,21 @@ function render(){
 
 function wire(){
   var inv = document.getElementById('inv-date');
-  if (inv) inv.onchange = function(){ v.sync = inv.value; lastEdited = 'inv-date'; render(); focusSoon('inv-date'); };
+  var gated = state === 'below';
+  if (inv) {
+    inv.onchange = function(){
+      if (gated) { v.gateMsg = 'inv'; render(); focusSoon('inv-date'); return; }   // value re-renders as Created
+      v.sync = inv.value; lastEdited = 'inv-date'; render(); focusSoon('inv-date'); };
+    inv.onmousedown = function(e){
+      if (!gated) return;
+      e.preventDefault(); v.gateMsg = 'inv'; render(); focusSoon('inv-date'); };
+  }
   var post = document.getElementById('post-date');
   if (post) post.onchange = function(){ v.post = post.value; lastEdited = 'post-date'; render(); focusSoon('post-date'); };
   var sum = document.getElementById('sum-date');
-  if (sum) sum.onchange = function(){ v.summary = sum.value; render(); focusSoon('sum-date'); };
+  if (sum) sum.onchange = function(){
+    if (gated && sum.value === 'issued') { v.gateMsg = 'sum'; render(); focusSoon('sum-date'); return; }
+    v.gateMsg = null; v.summary = sum.value; render(); focusSoon('sum-date'); };
   var sch = document.getElementById('sched-date');
   if (sch) sch.onchange = function(){
     var next = sch.value;

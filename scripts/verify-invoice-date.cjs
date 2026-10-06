@@ -96,11 +96,19 @@ const MARK = '[live copy not captured]';
   await state('below');
   ok('below Pro: row still visible', await vis('#inv-row'));
   ok('below Pro: Upgrade to use chip visible', await vis('#chip-upgrade'));
-  ok('below Pro: select disabled', !(await en('#inv-date')));
-  ok('below Pro: Update stays disabled', !(await en('#btn-update')));
+  ok('below Pro: chip is the live link-style chip', (await page.locator('#chip-upgrade').evaluate(e => e.tagName)) === 'A');
   ok('below Pro: value Created', (await val('#inv-date')) === 'created');
-  ok('below Pro: live gate line visible', (await vis('#inv-gate')) &&
-     (await txt('#inv-gate')).startsWith('This feature is available on higher plans.'));
+  ok('below Pro: no red line before an attempt', (await page.locator('#inv-gate').count()) === 0);
+  await page.locator('#inv-date').click();
+  ok('below Pro: clicking the select reveals the red line', (await vis('#inv-gate')) &&
+     (await txt('#inv-gate')) === 'This feature is available on higher plans. Upgrade plan');
+  ok('below Pro: click does not change the value', (await val('#inv-date')) === 'created');
+  await page.selectOption('#inv-date', 'issued');
+  ok('below Pro: keyboard/selection attempt reverts to Created', (await val('#inv-date')) === 'created');
+  ok('below Pro: red line still shown after attempt', await vis('#inv-gate'));
+  ok('below Pro: select stays visible and focusable', (await vis('#inv-date')) &&
+     await page.evaluate(() => document.activeElement.id === 'inv-date'));
+  ok('below Pro: Update stays disabled', !(await en('#btn-update')));
 
   await state('rrpay');
   ok('RevRec payment date: select enabled', await en('#inv-date'));
@@ -202,12 +210,15 @@ const MARK = '[live copy not captured]';
   ok('new Summary org on Invoice issued date', (await val('#sum-date')) === 'issued');
   await state('below');
   ok('below Pro: Summary select still enabled', await en('#sum-date'));
-  ok('below Pro: issued option disabled',
-     await page.locator('#sum-date option[value="issued"]').evaluate(o => o.disabled));
-  ok('below Pro: payment option selectable',
-     !(await page.locator('#sum-date option[value="payment"]').evaluate(o => o.disabled)));
+  ok('below Pro: Summary chip shown', await vis('#chip-upgrade'));
+  ok('below Pro: no Summary red line before an attempt', (await page.locator('#sum-gate').count()) === 0);
+  await page.selectOption('#sum-date', 'issued');
+  ok('below Pro: picking Invoice issued date reverts', (await val('#sum-date')) === 'created');
+  ok('below Pro: and reveals the red line', (await vis('#sum-gate')) &&
+     (await txt('#sum-gate')).startsWith('This feature is available on higher plans.'));
   await page.selectOption('#sum-date', 'payment');
   ok('below Pro: can pick Payment date', (await val('#sum-date')) === 'payment');
+  ok('below Pro: red line clears after a valid pick', (await page.locator('#sum-gate').count()) === 0);
   await checkFonts('screen 3');
 
   // ── 5 · Sync details ────────────────────────────────────────────────
