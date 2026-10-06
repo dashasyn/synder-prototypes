@@ -128,6 +128,7 @@ const MARK = '[live copy not captured]';
   ok('no option still called plain "Invoice date"',
      !(await page.locator('#sched-date option').allTextContents()).includes('Invoice date'));
   ok('RevRec marker visible', (await txt('#rr-marker')).startsWith(MARK));
+  ok('RevRec is labelled a spec note', await vis('#rr-spec'));
   ok('table marker visible', (await txt('#tbl-marker')).startsWith(MARK));
   ok('Issued column present', (await page.locator('#sched-table th').allTextContents()).includes('Invoice issued date'));
   ok('pre-release row has blank issued date',
@@ -203,6 +204,9 @@ const MARK = '[live copy not captured]';
   await screen(3);
   ok('Summary row visible', await vis('#sum-row'));
   ok('Summary marker visible', (await txt('#sum-marker')).startsWith(MARK));
+  ok('Summary is labelled a spec note', await vis('#sum-spec'));
+  ok('spec notes sit in their own switcher group', await page.evaluate(() =>
+    document.getElementById('sc-3').parentElement !== document.getElementById('sc-1').parentElement));
   ok('RevRec states disabled on Summary', !(await en('#st-rrinv')));
   await state('pro');
   ok('existing Summary org on Invoice created date', (await val('#sum-date')) === 'created');
