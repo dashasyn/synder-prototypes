@@ -21,7 +21,7 @@
                 columns, Device details cards: Ignat's screenshots,
                 2026-09-28 / 09-29 (kept in ~/.openclaw/reference/etc/).
    · proposed — everything about schedules.
-   · sample   — station groups, schedules, ELA / Barix devices, volumes.
+   · sample   — station groups, schedules, Barix devices, volumes.
    Minimum text size 14px (Ignat, 2026-10-01).
    ════════════════════════════════════════════════════════════════════ */
 const { useState, useEffect, useRef, useContext, createContext, useCallback } = React;
@@ -100,8 +100,9 @@ var GROUPS = [
 ];
 const groupName = id => (GROUPS.find(g => g.id === id) || {}).name || id;
 
-/* Devices. kind: display | barix | ela. Displays are captured rows where the
-   station is known; Barix and ELA devices are sample. */
+/* Devices. kind: display | barix — the two families the PaxLife API schedules
+   (led-isr / html-isr, audio-barix). Displays are captured rows where the
+   station is known; Barix devices are sample. No ELA in this project. */
 var DEVICES = [
   ['Platfrom HGA Display 2', 'hga-plat-2', 'Platform TFT', 'display', 'SMS', '2', '1111'],
   ['Device', 'device-11001', 'Corridor TFT', 'display', 'AFA', 'TP100926', '1111.1111'],
@@ -116,9 +117,8 @@ var DEVICES = [
   ['AFA Barix Hall', 'afa-barix-1', 'Barix audio', 'barix', 'AFA', 'Passenger hall', '10.12.8.40'],
   ['NTBG Barix Hall', 'ntbg-barix-1', 'Barix audio', 'barix', 'NTBG', 'Airport Hall', '10.16.0.40'],
   ['ASK Barix PH1', 'ask-barix-1', 'Barix audio', 'barix', 'ASK', 'Platform 1', '10.14.2.40'],
-  ['AKO ELA zone 1', 'ako-ela-1', 'ELA speaker', 'ela', 'AKO', 'Platform 1', '10.12.0.60'],
-  ['BIN ELA zone 1', 'bin-ela-1', 'ELA speaker', 'ela', 'BIN', 'Platform 1', '10.12.6.60'],
-  ['ADA ELA hall', 'ada-ela-1', 'ELA speaker', 'ela', 'ADA', 'Passenger hall', '10.14.0.60'],
+  ['BIN Barix PH1', 'bin-barix-1', 'Barix audio', 'barix', 'BIN', 'Platform 1', '10.12.6.40'],
+  ['ADA Barix Hall', 'ada-barix-1', 'Barix audio', 'barix', 'ADA', 'Passenger hall', '10.14.0.40'],
 ].map(([name, id, type, kind, station, zone, net]) => ({
   name, id, type, kind, station, zone, net, status: 'Active',
   // Volume lives on the station now (Ignat, 2026-10-05); only the Barix equalizer stays on the device.
@@ -133,12 +133,11 @@ const devById = id => DEVICES.find(d => d.id === id);
 var STATION_AUDIO = Object.fromEntries(STATIONS.map(s => [s.code, { volume: 50 }]));
 const stAudio = code => STATION_AUDIO[code] || { volume: 50 };
 
-/* What a device type can do. Display power only on displays; PA only on audio.
-   ELA support is unconfirmed (G8). */
+/* What a device type can do — PaxLife Device Configuration API: visual devices
+   schedule screen_on, Barix devices schedule muted / volume / equalizer. */
 const CAN = {
   display: { pa: false, display: true },
   barix:   { pa: true,  display: false },
-  ela:     { pa: true,  display: false, unconfirmed: true },
 };
 
 const DAYS = [['sun', 'Sun'], ['mon', 'Mon'], ['tue', 'Tue'], ['wed', 'Wed'], ['thu', 'Thu'], ['fri', 'Fri'], ['sat', 'Sat']];
@@ -150,7 +149,7 @@ var SCHEDULES = [
   { id: 's2', name: 'Shabbat quiet — Akko, Binyamina', active: true, groups: [], stations: ['AKO', 'BIN'],
     days: ['fri', 'sat'], holidays: true, start: '16:00', end: '20:00',
     pa: 'adjust', paPct: 0, display: 'none',
-    apply: { at: '2 Oct 2026, 03:00', failed: [{ id: 'bin-ela-1', reason: 'PaxLife rejected the schedule — field "volume" not supported on this device type' }] } },
+    apply: { at: '2 Oct 2026, 03:00', failed: [{ id: 'bin-barix-1', reason: '404 — PaxLife doesn\'t know this device (removed or renamed?)' }] } },
   { id: 's3', name: 'Airport late night', active: false, groups: ['airport'], stations: [],
     days: ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'], holidays: true, start: '01:00', end: '04:30',
     pa: 'none', paPct: 50, display: 'darken', apply: null },
@@ -225,14 +224,35 @@ function clockOverlap(x, y) {
   const span = s => { const a = toMin(s.start), b = toMin(s.end); return b > a ? [[a, b]] : [[a, 1440], [0, b]]; };
   return span(x).some(([a, b]) => span(y).some(([c, e]) => a < e && c < b));
 }
-/** Other active schedules that act on the same devices at the same time (G5). */
-function overlapsWith(draft) {
-  const mine = intervals(draft);
-  const myDev = new Set(reach(draft).filter(r => r.useful).map(r => r.d.id));
+/** The entries one schedule writes for one device family: day, time, setting, value. */
+function scheduleEntries(s, kind) {
+  const out = [];
+  const a = toMin(s.start), b = toMin(s.end);
+  if (a == null || b == null || a === b) return out;
+  const set = [];
+  if (kind === 'display' && s.display === 'darken') set.push(['screen_on', false, true]);
+  if (kind === 'barix' && s.pa === 'adjust') set.push(Number(s.paPct) === 0 ? ['muted', true, false] : ['volume', Number(s.paPct), 'default']);
+  s.days.forEach(day => {
+    const i = DAYS.findIndex(x => x[0] === day);
+    set.forEach(([field, onV, offV]) => {
+      out.push({ day: i, t: s.start, field, value: onV });
+      out.push({ day: b < a ? (i + 1) % 7 : i, t: s.end, field, value: offV });
+    });
+  });
+  return out;
+}
+/** Other active schedules that would set the same setting to a different value on
+    the same device at the same day and time — the PaxLife API can't hold both (G5). */
+function conflictsWith(draft) {
+  const mine = reach(draft).filter(r => r.useful);
   return SCHEDULES.filter(o => o.id !== draft.id && o.active).map(o => {
-    const shared = reach(o).filter(r => r.useful && myDev.has(r.d.id)).length;
-    const hit = intervals(o).some(([a, b]) => mine.some(([c, e]) => a < e && c < b)) || (draft.holidays && o.holidays && clockOverlap(draft, o));
-    return shared && hit ? { s: o, shared } : null;
+    const shared = reach(o).filter(r => r.useful && mine.some(m => m.d.id === r.d.id));
+    let hit = null;
+    shared.some(r => scheduleEntries(draft, r.d.kind).some(e => scheduleEntries(o, r.d.kind).some(f => {
+      if (f.day === e.day && f.t === e.t && f.field === e.field && f.value !== e.value) { hit = e; return true; }
+      return false;
+    })));
+    return hit ? { s: o, shared: shared.length, at: `${DAYS[hit.day][1]} ${hit.t}` } : null;
   }).filter(Boolean);
 }
 
@@ -334,13 +354,13 @@ const ActiveChip = ({ s }) => html`<${Chip} size="small" label=${s.active ? 'Act
 /** Device rollout state for one schedule — the list's "Devices" column. */
 function applyState(s, phase) {
   const r = reach(s).filter(x => x.useful);
-  const skipped = phase === 2 ? r.filter(x => x.d.kind === 'ela').length : 0;
+  const skipped = 0;
   const total = r.length - skipped;
   if (!s.active || !s.apply) return { kind: 'off', text: '0 devices', total };
   if (s.apply.stale) return { kind: 'stale', text: 'Out of date', total };
-  const failed = s.apply.failed.filter(f => !(phase === 2 && (devById(f.id) || {}).kind === 'ela')).length;
+  const failed = s.apply.failed.length;
   if (failed) return { kind: 'partial', text: `${total - failed} of ${total} devices · ${failed} failed`, total };
-  return { kind: 'ok', text: `${total} of ${total} devices${skipped ? ` · ${skipped} ELA skipped` : ''}`, total };
+  return { kind: 'ok', text: `${total} of ${total} devices`, total };
 }
 const STATE_STYLE = { ok: ['#E8F5E9', '#2E7D32', 'check_circle'], partial: ['#FDECEA', '#C62828', 'error'],
                       stale: ['#FFF3E0', '#E65100', 'sync_problem'], off: ['#F5F5F5', 'rgba(0,0,0,.6)', 'remove_circle_outline'] };
@@ -693,6 +713,7 @@ function validate(d) {
   if (toMin(d.end) == null) e.end = d.end.trim() ? 'Use 24-hour hh:mm, e.g. 05:00' : 'End time is required';
   if (!e.start && !e.end && toMin(d.start) === toMin(d.end)) e.end = 'End time must differ from start time';
   if (d.pa === 'none' && d.display === 'none') e.action = 'Choose a PA or a display action — with both left unchanged, the schedule does nothing.';
+  if (conflictsWith(d).length) e.conflict = 'conflict';
   if (d.pa === 'adjust' && !(Number(d.paPct) >= 0 && Number(d.paPct) <= 100)) e.pa = 'Choose a volume from 0 to 100%';
   return e;
 }
@@ -715,9 +736,9 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
   const nErr = Object.keys(errs).length;
   const r = reach(d);
   const useful = r.filter(x => x.useful);
-  const skipped = phase === 2 ? useful.filter(x => x.d.kind === 'ela') : [];
+  const skipped = [];
   const applyTo = useful.filter(x => !skipped.includes(x));
-  const ov = (d.days.length || d.holidays) && toMin(d.start) != null && toMin(d.end) != null ? overlapsWith(d) : [];
+  const ov = conflictsWith(d);
   const timer = useRef(null);
   useEffect(() => () => clearInterval(timer.current), []);
 
@@ -732,9 +753,10 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
       clearInterval(timer.current);
       let failed = [];
       if (saveMode === 'partial') {
-        failed = devs.filter(x => x.d.kind === 'ela').map(x => ({ id: x.d.id, reason: 'PaxLife rejected the schedule — field "volume" not supported on this device type' }));
-        const offline = devs.find(x => x.d.kind === 'barix');
-        if (offline && !retry) failed.push({ id: offline.d.id, reason: 'Device offline — PaxLife didn\'t answer within 30 s' });
+        const gone = devs.find(x => x.d.kind === 'display');
+        if (gone) failed.push({ id: gone.d.id, reason: '404 — PaxLife doesn\'t know this device (removed or renamed?)' });
+        const slow = devs.find(x => x.d.kind === 'barix');
+        if (slow && !retry) failed.push({ id: slow.d.id, reason: 'No response from PaxLife — try again' });
       }
       const rec = SCHEDULES.find(s => s.id === ddRef.current.id);
       if (rec) rec.apply = { at: 'just now', failed };
@@ -811,7 +833,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <${Typography} variant="body2" sx=${{ mt: .5 }}>The other devices already run the new schedule. A failed device keeps its previous schedule.<//>
           <//>` : html`
           <${Alert} severity="success" id="save-result" data-result="ok" sx=${{ mb: 2 }}>
-            Saved — ${run.total} of ${run.total} device${run.total === 1 ? '' : 's'} updated${skipped.length ? ` · ${skipped.length} ELA speaker${skipped.length > 1 ? 's' : ''} skipped (phase 1)` : ''}.
+            Saved — ${run.total} of ${run.total} device${run.total === 1 ? '' : 's'} updated.
           <//>`) : null}
       <//>
 
@@ -837,7 +859,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
           ${r.length ? html`
             <${Box} id="reach" sx=${{ mt: 1.5, display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
               <${Typography} variant="body2" color="text.secondary" id="reach-summary">
-                Reaches <b>${applyTo.length} device${applyTo.length === 1 ? '' : 's'}</b>: ${kinds('display')} display${kinds('display') === 1 ? '' : 's'} · ${kinds('barix')} Barix · ${kinds('ela')} ELA${skipped.length ? ` (${skipped.length} skipped in phase 1)` : ''}
+                Reaches <b>${applyTo.length} device${applyTo.length === 1 ? '' : 's'}</b>: ${kinds('display')} display${kinds('display') === 1 ? '' : 's'} · ${kinds('barix')} Barix
               <//>
               <${Button} size="small" id="toggle-devices" onClick=${() => setShowDev(!showDev)}>${showDev ? 'Hide devices' : 'Show devices'}<//>
             <//>
@@ -851,10 +873,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
                         <${TableCell}><${Link} component="button" underline="hover" onClick=${() => go('device', { id: x.d.id })}>${x.d.name}<//><//>
                         <${TableCell}>${x.d.type}<//>
                         <${TableCell}>${stName(x.d.station)}<//>
-                        <${TableCell}>${phase === 2 && x.d.kind === 'ela' && x.useful
-                          ? html`<${PhaseChip} label="Skipped — ELA not confirmed" />`
-                          : x.useful ? onDevice(d, x.d) : '–'}
-                          ${phase === 1 && x.d.kind === 'ela' && x.useful ? html` <${Chip} size="small" label="To confirm with PaxLife" variant="outlined" />` : null}<//>
+                        <${TableCell}>${x.useful ? onDevice(d, x.d) : '–'}<//>
                       <//>`)}
                   <//>
                 <//>
@@ -889,8 +908,8 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
           ${overnight(d) ? html`<${Chip} id="overnight" size="small" sx=${{ mt: 1.5, bgcolor: '#EDE7F6', color: '#4527A0' }}
             icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px', color: '#4527A0' }}>bedtime<//>`} label=${`Overnight · ends next day ${d.end}`} />` : null}
           ${ov.length ? html`
-            <${Alert} severity="warning" id="overlap" sx=${{ mt: 1.5 }}>
-              Overlaps ${ov.map((o, i) => html`<span key=${o.s.id}>${i ? ', ' : ''}<b>${o.s.name}</b> (${o.shared} device${o.shared > 1 ? 's' : ''})</span>`)}
+            <${Alert} severity="error" id="conflict" sx=${{ mt: 1.5 }}>
+              ${ov.map((o, i) => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} on ${o.shared} device${o.shared > 1 ? 's' : ''}</div>`)}
             <//>` : null}
           
         <//>
@@ -1015,7 +1034,6 @@ function DeviceDetail() {
 
       <${SectionCard} title="Schedules" id="card-schedules"
         note=${html`Schedules that reach this device. They're edited in <${Link} component="button" underline="hover" onClick=${() => go('schedules')} sx=${{ verticalAlign: 'baseline' }}>Output device schedules<//> — one editor for every station and device.`}>
-        ${d.kind === 'ela' ? html`<${Alert} severity="info" sx=${{ mb: 1.5 }} id="ela-note">ELA speaker: PA actions only${phase === 2 ? ' — skipped in phase 1 until PaxLife confirms ELA schedule support.' : ' — schedule support still to be confirmed with PaxLife.'}<//>` : null}
         ${scheds.length ? html`
           <${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
             <${Table} id="dv-scheds">
@@ -1023,7 +1041,7 @@ function DeviceDetail() {
               <${TableBody}>
                 ${scheds.map(s => {
                   const f = s.apply && s.apply.failed.find(x => x.id === d.id);
-                  const skip = phase === 2 && d.kind === 'ela';
+                  const skip = false;
                   return html`
                     <${TableRow} key=${s.id} data-sched=${s.id}>
                       <${TableCell}><${Link} component="button" underline="hover" onClick=${() => go('schedule', { id: s.id })}>${s.name}<//><//>
@@ -1039,7 +1057,7 @@ function DeviceDetail() {
             <//>
           <//>` : html`<${Typography} variant="body2" color="text.secondary" id="dv-none">No schedule reaches this device.<//>`}
 
-        ${entries.length && !(phase === 2 && d.kind === 'ela') ? html`
+        ${entries.length ? html`
           <${Typography} variant="subtitle2" sx=${{ mt: 2.5, mb: .5 }}>Schedule on this device<//>
           <${Typography} variant="body2" color="text.secondary" sx=${{ mb: 1 }}>
             As written through the PaxLife API and read back from the device.
@@ -1089,11 +1107,9 @@ function DeviceTypes() {
                 <${TableCell}>${x.kind === 'display' ? 'Display' : 'Audio'}<//>
                 <${TableCell} data-cap="display">${CAN[x.kind].display ? 'Darken all displays' : no}<//>
                 <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Set volume' : no}<//>
-                <${TableCell}>${x.kind === 'barix' ? 'Equalizer (on the device) · volume per station' : x.kind === 'ela' ? 'Volume per station' : no}<//>
+                <${TableCell}>${x.kind === 'barix' ? 'Equalizer (on the device) · volume per station' : no}<//>
                 <${TableCell}>${x.n}<//>
-                <${TableCell}>${x.kind === 'ela'
-                  ? (phase === 2 ? html`<${PhaseChip} label="Skipped in phase 1" />` : html`<${Chip} size="small" label="To confirm with PaxLife" variant="outlined" />`)
-                  : x.kind === 'barix' ? 'Base settings are persistent — never changed by a schedule.' : ''}<//>
+                <${TableCell}>${x.kind === 'barix' ? 'Base settings are persistent — never changed by a schedule.' : ''}<//>
               <//>`)}
           <//>
         <//>

@@ -82,7 +82,7 @@ async function run() {
   ok(await count('#s-table [data-toggle]') === nS, 'each row has an Active switch');
   ok(await count('.apply-chip[data-state="partial"]') >= 1 && await count('.apply-chip[data-state="stale"]') >= 1, 'device status: partial failure and out of date are visible');
   const statusText = await page.$$eval('#s-table .apply-chip', c => c.map(x => x.textContent).join(' | '));
-  ok(!/appl/i.test(statusText) && /9 of 9 devices/.test(statusText) && /Out of date/.test(statusText), 'statuses speak of devices, never "apply"', statusText);
+  ok(!/appl/i.test(statusText) && /(\d+) of \1 devices/.test(statusText) && /Out of date/.test(statusText), 'statuses speak of devices, never "apply"', statusText);
   ok(!(await count('[data-reapply]')), 'no separate Re-apply action in the list');
   ok(/23:30–05:00 \(\+1 day\)/.test(await txt('#s-table tr[data-schedule="s1"]')), 'overnight range reads with +1 day');
   await page.click('#s-table tr[data-schedule="s4"] td:first-child'); await wait(400);
@@ -171,14 +171,25 @@ async function run() {
   for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowLeft');
   await wait(150);
   ok(/Volume 30%/.test(await txt('#vol-value')), 'steps of 5', await txt('#vol-value'));
-  ok(await vis('#overlap') && /Shabbat quiet/.test(await txt('#overlap')), 'overlap with another schedule on the same devices is warned');
+  ok(!(await count('#conflict')), 'no conflict while no entry lands on the same minute');
+  await page.keyboard.press('Home'); await wait(100);
+  await page.fill('#ed-start', '06:00'); await page.fill('#ed-end', '16:00'); await wait(250);
+  ok(await vis('#conflict') && /Shabbat quiet/.test(await txt('#conflict')) && /Fri 16:00/.test(await txt('#conflict')),
+     'same device, same day and time, different value (unmute vs mute) → conflict', await txt('#conflict').catch(() => ''));
+  await page.click('#ed-save'); await wait(250);
+  ok(await vis('#err-summary') && !(await vis('#applying')), 'a conflict blocks Save, as the PaxLife API would reject it');
+  await page.fill('#ed-start', '18:00'); await page.fill('#ed-end', '06:00');
+  await page.focus('#ed-vol input'); await page.keyboard.press('End');
+  for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowLeft');
+  await wait(200);
+  ok(!(await count('#conflict')) && /Volume 30%/.test(await txt('#vol-value')), 'conflict clears when the times differ again');
   await pickMenu('#ed-display', 'Darken all displays');
   await page.click('#ed-display'); await page.waitForSelector('.MuiMenu-list');
   ok(await count('.MuiMenu-list li') === 2 && !/Tuan/.test(await txt('.MuiMenu-list')), 'display action: No action / Darken all displays only');
   await page.keyboard.press('Escape'); await wait(250);
   await page.click('#toggle-devices'); await wait(300);
-  const elaRow = await txt('#reach-table tr[data-reach="ako-ela-1"]');
-  ok(/To confirm with PaxLife/.test(elaRow) && !/Darken/.test(elaRow), 'ELA gets PA only — no display action — flagged for PaxLife', elaRow);
+  ok(/Volume 50% → 30%/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')) && !/Darken/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')), 'Barix gets the PA action only');
+  ok(!/ELA/.test(await txt('#reach')), 'no ELA anywhere — not in this project');
   ok(/Darken/.test(await txt('#reach-table tr[data-reach="ako-plat-1"]')) && !/Volume/.test(await txt('#reach-table tr[data-reach="ako-plat-1"]')), 'a display gets the display action only');
   ok(/Volume 50% → 30%/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')), 'Barix: station default 50% → 30%');
 
@@ -199,10 +210,10 @@ async function run() {
   ok(await vis('#applying'), 'saving shows progress per device');
   await page.waitForSelector('#save-result', { timeout: 6000 });
   ok(await page.getAttribute('#save-result', 'data-result') === 'partial', 'partial failure is reported');
-  ok(await count('#save-result [data-failed]') === 2 && /offline/.test(await txt('#save-result')) && /not supported/.test(await txt('#save-result')), 'each failed device is named with its reason');
+  ok(await count('#save-result [data-failed]') === 2 && /404/.test(await txt('#save-result')) && /No response/.test(await txt('#save-result')), 'each failed device is named with its API reason');
   ok(/keeps its previous schedule/.test(await txt('#save-result')), 'says what a failed device is left running');
   await page.click('#retry-failed'); await page.waitForTimeout(2200);
-  ok((await count('#save-result [data-failed]')) === 1, 'Retry failed re-sends only the failed ones; the offline one recovers');
+  ok((await count('#save-result [data-failed]')) === 1, 'Retry failed re-sends only the failed ones; the timeout recovers, the 404 stays');
   ok(await txt('#ed-title') === 'Weekend quiet — Akko', 'the new schedule is saved');
   await nav('schedules');
   ok(!(await vis('#leave-dialog')) && await count('#s-table tbody tr[data-schedule]') === nS + 1, 'no prompt after saving; it is in the list');
@@ -244,10 +255,7 @@ async function run() {
   await page.click('#dv-scheds tr[data-sched] button'); await wait(400);
   ok(await screen() === 'schedule', 'a schedule link opens the one editor');
   await nav('devices');
-  await page.click('#d-table tr[data-device="ako-ela-1"] td:first-child'); await wait(400);
-  ok(await vis('#ela-note') && !/screen_on|Turn display/.test(await txt('main')), 'ELA: no display power anywhere on the page');
-  ok(!/screen_on|Darken/.test(await txt('#card-schedules')), 'ELA schedules card shows no display action');
-  await nav('devices');
+  ok(!/ELA/.test(await txt('#d-table')), 'Device list has no ELA devices');
   await page.click('#d-table tr[data-device="ako-plat-1"] td:first-child'); await wait(400);
   ok(!(await vis('#card-base')) && /Turn display off/.test(await txt('#dv-entries')) && /Turn display on/.test(await txt('#dv-entries')) && !/volume|Mute/i.test(await txt('#dv-entries')), 'a display: no base audio card, display on/off only');
 
@@ -280,8 +288,7 @@ async function run() {
   await nav('types');
   const nTypes = await page.evaluate(() => new Set(DEVICES.map(d => d.type)).size);
   ok(await screen() === 'types' && await count('#types-table tr[data-type]') === nTypes, `one row per device type (${nTypes})`);
-  const ela = await txt('#types-table tr[data-type="ELA speaker"]');
-  ok(/Set volume/.test(ela) && !/Darken/.test(ela) && /PaxLife/.test(ela), 'ELA: volume only, no display action, flagged for PaxLife', ela);
+  ok(!(await count('#types-table tr[data-type="ELA speaker"]')), 'no ELA type');
   const tft = await txt('#types-table tr[data-type="Platform TFT"]');
   ok(/Darken all displays/.test(tft) && !/Set volume/.test(tft), 'a display type: Darken only');
   ok(/Equalizer \(on the device\) · volume per station/.test(await txt('#types-table tr[data-type="Barix audio"]')), 'Barix: equalizer on the device, volume per station');

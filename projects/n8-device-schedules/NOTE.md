@@ -65,7 +65,7 @@ One design — no separate phase-1 screen (Ignat, 2026-10-06). The screens stay 
 the named schedules, resolves each one to the devices at its stations and groups, converts it into
 each device's weekly entries and **replaces** that device's schedule through the PaxLife API.
 Not possible in the first step (see §4): **Holidays** (G2 — the API is weekly
-only) and **ELA speakers** (G8 — skipped until PaxLife confirms support). This is not completion
+only). This is not completion
 of DATNETISR-264.
 
 Rule for later changes (G6): when a group gains or loses a station, or a device is added or
@@ -89,3 +89,25 @@ opens with an alert listing what changed — Save updates the devices.
 
 Samples: station groups, schedules, ELA/Barix devices and volumes are sample data. The chrome,
 Stations rows, Device list columns and Device details cards are captured from N8.
+
+## 5 · Checked against the PaxLife Device Configuration API (2026-10-06)
+Kept privately (`~/.openclaw/reference/etc/`). Ignat's calls on the findings:
+- **Fits:** weekday + HH:MM entries (a range = an "on" and an "off" entry, overnight off-entry on
+  the next day); absolute volume 0–100 (the slider maps 1:1); **0 = muted**; Darken = `screen_on`
+  false/true on `led-isr` / `html-isr`; the station default volume is written to each Barix device
+  (`PUT audio/config`); the device page reads `GET /schedule`.
+- **No ELA** in this project (ELA is BVG Berlin only). Only `led-isr`, `html-isr`, `audio-barix`.
+- **Failures follow the API.** A schedule `PUT` is stored by PaxLife and applied when the device is
+  reachable, so an offline device doesn't fail it. Shown: 404 (device unknown) and a transient
+  "no response" that Retry fixes. Only the station default volume can hit 502/504 (device offline).
+- **No immediate switch on Save** — schedules are set up in advance for long periods.
+- **For ETC:** send `timezone: "Asia/Jerusalem"` (the API defaults to Europe/Berlin). A device has
+  **one** schedule list in PaxLife; ETC merges every active N8 schedule that reaches the device into
+  it on each save, and an inactive N8 schedule simply contributes no entries (the API's `enabled`
+  flag is per device, so it isn't used for this).
+- **Conflicts:** PaxLife rejects two entries for one device at the same weekday + time. ETC merges
+  entries that set different settings (e.g. volume + mute) into one. Two schedules that set the
+  *same* setting to *different* values at the same minute on the same device are a real conflict —
+  the editor shows it and blocks Save.
+- **Open:** equalizer (bass / mid / treble, −12…+12 dB per the API) — where it lives in N8, and
+  whether a schedule may change it. Ignat has PaxLife sketches with separate controls.
