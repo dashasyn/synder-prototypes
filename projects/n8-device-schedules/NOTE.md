@@ -27,7 +27,7 @@ in view on the left with the same editor beside it. Both use the same editor, va
 unsaved-changes guard.
 
 Taken from the DATNETISR-1036 concept (2026-10-02): the Device types page, the device schedule in
-plain words ("Turn display off", "Set volume to 36%", with the API fields only under Show gaps),
+plain words ("Turn display off", "Set volume to 30%"),
 "Leave unchanged" options with a one-line description each, and the list + editor layout as
 option B.
 
@@ -64,7 +64,7 @@ option B.
 One design — no separate phase-1 screen (Ignat, 2026-10-06). The screens stay the same; ETC keeps
 the named schedules, resolves each one to the devices at its stations and groups, converts it into
 each device's weekly entries and **replaces** that device's schedule through the PaxLife API.
-Not possible in the first step, and marked under *Show gaps*: **Holidays** (G2 — the API is weekly
+Not possible in the first step (see §4): **Holidays** (G2 — the API is weekly
 only) and **ELA speakers** (G8 — skipped until PaxLife confirms support). This is not completion
 of DATNETISR-264.
 
@@ -72,7 +72,7 @@ Rule for later changes (G6): when a group gains or loses a station, or a device 
 moved, ETC updates the devices automatically; if that fails, the schedule shows *Out of date* and
 opens with an alert listing what changed — Save updates the devices.
 
-## 4 · API and requirement gaps to refine (toggle "Show gaps" in the prototype)
+## 4 · API and requirement gaps to refine (not shown in the prototype — it shows the result only)
 | # | Gap | Who |
 |---|---|---|
 | G1 | No named or central schedules in the API: ETC must own them | ETC |

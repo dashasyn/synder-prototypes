@@ -226,14 +226,7 @@ async function run() {
   await page.click('#s-table tr[data-schedule="s2"] td:first-child'); await wait(400);
   ok(await page.locator('#ed-holidays').isEnabled(), 'Holidays is a normal day choice');
 
-  /* ── gaps ───────────────────────────────────────────────────────── */
-  section('gaps');
-  ok(await count('.gap') === 0, 'gap notes are hidden by default');
-  await page.click('#p-gaps'); await wait(300);
-  const ids = await page.$$eval('.gap', g => [...new Set(g.map(x => x.dataset.gap))]);
-  ok(['G2', 'G3', 'G4', 'G6', 'G7', 'G8', 'G9', 'G10', 'G11'].every(g => ids.includes(g)), 'the editor pins its gaps in place', ids);
-  ok(/Not possible on the current API/.test(await txt('.gap[data-gap="G2"]')) && /first step skips them/.test(await txt('.gap[data-gap="G8"]')), 'the first-step limits (Holidays, ELA) live in Show gaps');
-  await page.click('#p-gaps');
+  ok(!(await count('#p-gaps, .gap')) && !/gaps/i.test(await txt('#variant-switch')), 'no Show gaps toggle and no gap notes — managers see the result only');
 
   /* ── contextual: device ─────────────────────────────────────────── */
   section('device-level view');
@@ -246,10 +239,7 @@ async function run() {
   ok(await vis('#dv-entries') && /Set volume to 30%/.test(await txt('#dv-entries')) && /Mute/.test(await txt('#dv-entries')) && !/Turn display|screen_on/.test(await txt('#dv-entries')),
      'device schedule in plain words — audio actions only');
   ok(/Sun–Thu/.test(await txt('#dv-entries')), 'entries with the same time and action merge their days');
-  ok(await count('.api-fields') === 0, 'raw API fields are hidden by default');
-  await page.click('#p-gaps'); await wait(250);
-  ok(/API: volume=30/.test(await txt('#dv-entries')), 'Show gaps reveals the PaxLife fields behind each action');
-  await page.click('#p-gaps'); await wait(200);
+  ok(!/API:|volume=/.test(await txt('#dv-entries')), 'no raw API fields on the device');
   ok(!(await count('#card-schedules input, #card-schedules [role="combobox"]')), 'no second schedule editor on the device');
   await page.click('#dv-scheds tr[data-sched] button'); await wait(400);
   ok(await screen() === 'schedule', 'a schedule link opens the one editor');
