@@ -954,7 +954,6 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
               <${Select} id="ed-display" labelId="ed-display-label" label="Display action" value=${d.display} onChange=${e => set({ display: e.target.value })}>
                 <${MenuItem} value="none">No action<//>
                 <${MenuItem} value="darken">Darken all displays<//>
-                <${MenuItem} value="more" disabled>More actions — to confirm with Tuan<//>
               <//>
             <//>
             <${Gap} id="G7" />

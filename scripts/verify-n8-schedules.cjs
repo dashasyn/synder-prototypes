@@ -174,7 +174,7 @@ async function run() {
   ok(await vis('#overlap') && /Shabbat quiet/.test(await txt('#overlap')), 'overlap with another schedule on the same devices is warned');
   await pickMenu('#ed-display', 'Darken all displays');
   await page.click('#ed-display'); await page.waitForSelector('.MuiMenu-list');
-  ok(await page.getAttribute('.MuiMenu-list li[data-value="more"]', 'aria-disabled') === 'true' && /Tuan/.test(await txt('.MuiMenu-list li[data-value="more"]')), 'further display actions: listed, not selectable, to confirm with Tuan');
+  ok(await count('.MuiMenu-list li') === 2 && !/Tuan/.test(await txt('.MuiMenu-list')), 'display action: No action / Darken all displays only');
   await page.keyboard.press('Escape'); await wait(250);
   await page.click('#toggle-devices'); await wait(300);
   const elaRow = await txt('#reach-table tr[data-reach="ako-ela-1"]');
