@@ -592,6 +592,32 @@ const fs = require('fs');
   ok('resuming flips it back',
     (await page.$$('#sched-table button[aria-label="pause"]')).length === pauseBefore);
 
+  /* Ignat, 2026-10-07, on Scheduled Reports: "make frequency a plain text" and
+     "make status colourful as we have on other pages" — filled tinted pills. */
+  await page.click('#qx-nav-trigger');
+  await page.waitForTimeout(250);
+  await page.click('.MuiMenu-list li:nth-child(2)');
+  await page.waitForTimeout(400);
+  const sch = await page.evaluate(() => {
+    const lum = c => { const v = c.match(/\d+(\.\d+)?/g).slice(0, 3).map(n => { n /= 255;
+      return n <= .03928 ? n / 12.92 : ((n + .055) / 1.055) ** 2.4; });
+      return .2126 * v[0] + .7152 * v[1] + .0722 * v[2]; };
+    const chips = [...document.querySelectorAll('#sched-table .status-chip')].map(c => {
+      const cs = getComputedStyle(c), lab = getComputedStyle(c.querySelector('.MuiChip-label'));
+      const a = lum(cs.backgroundColor), b = lum(lab.color);
+      return { s: c.dataset.status, bg: cs.backgroundColor, border: cs.borderTopWidth,
+               ratio: (Math.max(a, b) + .05) / (Math.min(a, b) + .05) };
+    });
+    return { chips, freqChips: document.querySelectorAll('#sched-table .sched-freq .MuiChip-root').length,
+             freqText: [...document.querySelectorAll('#sched-table .sched-freq')].map(c => c.textContent) };
+  });
+  ok('frequency is plain text, not a chip', sch.freqChips === 0 && sch.freqText.every(Boolean), sch.freqText);
+  ok('status is a filled pill with no border', sch.chips.length > 0 && sch.chips.every(c =>
+    c.bg !== 'rgba(0, 0, 0, 0)' && (c.border === '0px' || c.border === '')), sch.chips.slice(0, 2));
+  ok('active and paused read in different colours',
+    new Set(sch.chips.map(c => c.s + c.bg)).size >= 2 && sch.chips.some(c => c.s === 'active') && sch.chips.some(c => c.s === 'paused'));
+  ok('every status pill passes AA contrast', sch.chips.every(c => c.ratio >= 4.5), sch.chips.map(c => c.ratio.toFixed(1)));
+
   // ── the creation flow ────────────────────────────────────────
   await page.click('#qx-nav-trigger');
   await page.waitForTimeout(250);

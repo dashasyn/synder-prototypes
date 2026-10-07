@@ -93,10 +93,26 @@ const ROWS = EVALUATIONS;
 
 // The real data carries a `running` status my invented sample rows never had —
 // which is exactly the kind of gap retyping data hides.
-const STATUS_COLOUR = { done: 'success', in_progress: 'warning', running: 'info',
-                        failed: 'error', active: 'success', paused: 'default' };
 const STATUS_KEY = { done: 'status_done', in_progress: 'status_in_progress',
                      running: 'status_running', failed: 'status_failed' };
+
+/* Ignat, 2026-10-07: "make status colourful as we have on other pages" —
+   his other products use a FILLED pill: tinted background, dark text of the
+   same hue, no border (Aktiv green, Beendet blue, Entwurf/Pausiert grey,
+   Erstellt purple). One component, so the list and the schedules agree. */
+const STATUS_TINT = {
+  active:      ['#C8E6C9', '#1B5E20'],
+  done:        ['#BBDEFB', '#0D47A1'],
+  paused:      ['#E0E0E0', 'rgba(0,0,0,0.87)'],
+  in_progress: ['#FFE0B2', '#BF360C'],
+  running:     ['#FFE0B2', '#BF360C'],
+  failed:      ['#FFCDD2', '#B71C1C'],
+};
+function StatusChip({ status, label, sx }) {
+  const [bg, fg] = STATUS_TINT[status] || STATUS_TINT.paused;
+  return html`<${Chip} size="small" label=${label} data-status=${status} className="status-chip"
+    sx=${{ bgcolor: bg, color: fg, border: 'none', ...(sx || {}) }} />`;
+}
 
 /**
  * Status options, derived from the data rather than hardcoded.
@@ -405,9 +421,9 @@ function EvaluationsList({ go }) {
                       <${TableCell}>
                         <${Tooltip} title=${statusOf(r) === 'failed' && FAIL_REASON_OF(r)
                                              ? t(FAIL_REASON_OF(r)) : ''}>
-                          <${Chip} size="small" variant="outlined"
+                          <${StatusChip} status=${statusOf(r)}
                                    sx=${statusOf(r) === 'failed' ? { cursor: 'help' } : undefined}
-                                   label=${t(STATUS_KEY[statusOf(r)])} color=${STATUS_COLOUR[statusOf(r)]} />
+                                   label=${t(STATUS_KEY[statusOf(r)])} />
                         <//>
                       <//>
                       <${TableCell} align="right">
@@ -520,13 +536,12 @@ function ScheduledReports({ go }) {
                   <${TableCell}>${s.name}<//>
                   ${/* the badge carries its own wording — "Weekly (Monday)",
                         "Monthly (1st)" — not just the raw frequency */''}
-                  <${TableCell}><${Chip} size="small" variant="outlined"
-                                         label=${t(s.freqKey)} /><//>
+                  ${/* Ignat, 2026-10-07: "make frequency a plain text" */''}
+                  <${TableCell} className="sched-freq">${t(s.freqKey)}<//>
                   <${TableCell}>${fmtDate(s.next, lang)}<//>
                   <${TableCell}>${fmtDate(s.last, lang)}<//>
                   <${TableCell}>
-                    <${Chip} size="small" variant="outlined" label=${t('status_' + statusOf(s))}
-                             color=${statusOf(s) === 'active' ? 'success' : 'default'} />
+                    <${StatusChip} status=${statusOf(s)} label=${t('status_' + statusOf(s))} />
                   <//>
                   <${TableCell} align="right">
                     <${Tooltip} title=${t(statusOf(s) === 'active' ? 'sched_pause' : 'sched_resume')}>
