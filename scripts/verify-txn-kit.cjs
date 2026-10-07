@@ -73,6 +73,7 @@ const BRAND_OK = new Set(['#6772e5', '#96bf48', '#635bff', '#2ca01c']);
       sbWidth: Math.round(sb.getBoundingClientRect().width),
       sbPos: csb.position,
       sbTop: Math.round(sb.getBoundingClientRect().top),
+      vsBottom: Math.round(document.querySelector('.variant-switch').getBoundingClientRect().bottom),
       tbPos: ctb.position,
       tbHeight: Math.round(tb.getBoundingClientRect().height),
       navHeights: [...document.querySelectorAll('.nav-item')].map(n => Math.round(n.getBoundingClientRect().height)),
@@ -80,7 +81,9 @@ const BRAND_OK = new Set(['#6772e5', '#96bf48', '#635bff', '#2ca01c']);
   });
   ok('sidebar is the kit width (230px)', shell.sbWidth === 230, shell.sbWidth + 'px');
   ok('kit app-shell positioning neutralised — sidebar not sticky', shell.sbPos === 'static', shell.sbPos);
-  ok('sidebar starts at the top, no dead band', shell.sbTop === 0, shell.sbTop + 'px');
+  // The variant switcher is the full-width first element of <body> (AGENTS.md prototype rule),
+  // so the sidebar starts right under it — no dead band between them.
+  ok('sidebar starts right under the switcher, no dead band', shell.sbTop === shell.vsBottom, shell.sbTop + 'px vs ' + shell.vsBottom + 'px');
   ok('topbar not sticky', shell.tbPos === 'static', shell.tbPos);
   ok('topbar keeps its 50px height', shell.tbHeight === 50, shell.tbHeight + 'px');
   ok('every nav row is one line at the kit row height', shell.navHeights.every(h => h === 42), shell.navHeights.join(','));
