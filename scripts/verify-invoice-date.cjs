@@ -120,15 +120,23 @@ const MARK = '[live copy not captured]';
   ok('lock note links to Schedule start', await vis('#go-schedule'));
   await page.locator('#go-schedule').click();
 
-  // ── 4 · RevRec ──────────────────────────────────────────────────────
-  ok('lock link lands on RevRec screen', await vis('#sched-row'));
+  // ── 4 · RevRec · Recognition settings (live layout, Ignat's screenshots 2026-10-07) ──
+  ok('lock link lands on RevRec settings', await vis('#sched-row'));
+  ok('RevRec opens as the full-screen Configuration overlay (no app sidebar)', !(await vis('.sb')) &&
+     (await txt('.rr-head')).endsWith('Configuration') && (await txt('.rr-main h1')) === 'Recognition settings');
+  ok('live banner kept', (await txt('.rr-banner')) ===
+     'New settings will apply to all future transactions. To update previously imported transactions contact support for help.');
+  ok('live field order around Schedule start', (await page.$$eval('.rr-field label', ls => ls.map(l => l.childNodes[0].textContent.trim()))).join('|')
+     === 'Discounts recognition mode|Schedule start date|Group revrec entries|Monthly subscriptions in revenue recognition');
   ok('Schedule start reads Invoice created date', (await val('#sched-date')) === 'created');
   ok('three schedule values', (await page.locator('#sched-date option').allTextContents()).join('|')
      === 'Invoice created date|Invoice issued date|Payment date');
   ok('no option still called plain "Invoice date"',
      !(await page.locator('#sched-date option').allTextContents()).includes('Invoice date'));
-  ok('RevRec marker visible', (await txt('#rr-marker')).startsWith(MARK));
-  ok('RevRec is labelled a spec note', await vis('#rr-spec'));
+  ok('RevRec settings is a real screen, not a spec note', (await page.locator('#sc-4').evaluate(b => b.parentElement === document.getElementById('sc-1').parentElement)));
+
+  await screen(6);
+  ok('schedule details is labelled a spec note', await vis('#rr-spec'));
   ok('table marker visible', (await txt('#tbl-marker')).startsWith(MARK));
   ok('Issued column present', (await page.locator('#sched-table th').allTextContents()).includes('Invoice issued date'));
   ok('pre-release row has blank issued date',
@@ -136,6 +144,7 @@ const MARK = '[live copy not captured]';
   const existing = '#sched-table tbody tr:not(.row-built) td:nth-child(5)';
   const startsBefore = await page.locator(existing).allTextContents();
   ok('no post-change rows before a change', (await page.locator('#sched-table tr.row-built').count()) === 0);
+  await screen(4);
 
   await page.selectOption('#sched-date', 'issued');
   ok('changing Schedule start opens confirmation', await modalOpen());
@@ -157,6 +166,11 @@ const MARK = '[live copy not captured]';
   await page.selectOption('#sched-date', 'issued');
   await page.locator('#dlg-ok').click();
   ok('Change applies value', (await val('#sched-date')) === 'issued');
+  await checkFonts('screen 4');
+  await page.locator('#confirm').evaluate(e => e.classList.add('show'));
+  await checkFonts('confirm dialog');
+  await page.locator('#confirm').evaluate(e => e.classList.remove('show'));
+  await screen(6);
   ok('existing schedule rows not re-dated',
      JSON.stringify(await page.locator(existing).allTextContents()) === JSON.stringify(startsBefore));
   ok('one schedule built after the change', (await page.locator('#sched-table tr.row-built').count()) === 1);
@@ -164,14 +178,13 @@ const MARK = '[live copy not captured]';
      (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(4).textContent()) === 'Oct 5, 2026' &&
      (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(3).textContent()) === 'Oct 5, 2026');
   ok('post-change row visible', await page.locator('#sched-table tr.row-built').first().isVisible());
-  await checkFonts('screen 4');
-  await page.locator('#confirm').evaluate(e => e.classList.add('show'));
-  await checkFonts('confirm dialog');
-  await page.locator('#confirm').evaluate(e => e.classList.remove('show'));
+  await checkFonts('schedule details');
 
+  await screen(4);
   await page.selectOption('#sched-date', 'payment');
   await page.locator('#dlg-ok').click();
   ok('Schedule start now Payment date', (await val('#sched-date')) === 'payment');
+  await screen(6);
   ok('second post-change schedule starts on its payment date',
      (await page.locator('#sched-table tr.row-built').nth(1).locator('td').nth(4).textContent()) === 'Oct 14, 2026');
   ok('earlier post-change schedule not re-dated',
@@ -179,6 +192,7 @@ const MARK = '[live copy not captured]';
   ok('existing schedules still not re-dated',
      JSON.stringify(await page.locator(existing).allTextContents()) === JSON.stringify(startsBefore));
   await screen(1);
+  ok('app shell back after leaving RevRec', await vis('.sb'));
   ok('Sync lock lifts once Schedule start = Payment date', (await en('#inv-date')) && (await page.locator('#inv-lock').count()) === 0);
 
   // ── 2 · Sales tab rename ────────────────────────────────────────────
