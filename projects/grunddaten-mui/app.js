@@ -90,6 +90,13 @@ function Shell() {
             ${['Incidents', 'Line view', 'Messages view'].map(l => html`
               <${Button} key=${l} color="inherit" disabled
                 sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14 }}>${l}<//>`)}
+            ${/* Ignat, 2026-10-07: what each station plays and shows right now */ ''}
+            <${Button} color="inherit" data-nav="live" onClick=${() => nav('live')}
+              sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
+                     fontWeight: s.view === 'live' ? 500 : 400,
+                     borderBottom: '3px solid', borderColor: s.view === 'live' ? 'primary.main' : 'transparent',
+                     color: s.view === 'live' ? 'primary.main' : 'inherit' }}>
+              ${state.lang === 'de' ? 'Stationssicht' : 'Station view'}<//>
 
             <${NavMenu} id="evr" label=${t('evrMenu')} active=${EVR_VIEWS.includes(s.view)}>
               ${close => [

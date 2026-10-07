@@ -111,6 +111,10 @@
     if (!s.radii) s.radii = { arrOuter: s.triggerArrival || 100, depOuter: (s.triggerDeparture || 80) + 80,
                               depInner: 10, station: 50 };
     if (s.ttsText === undefined) s.ttsText = s.name;
+    // Ignat, 2026-10-07: "a station has from 2 up to 5 tracks" — the big
+    // interchanges get their real track count (Alexanderplatz already has 5)
+    const TRACKS = { KT: 4, HE: 4, NO: 4, WI: 5 };
+    if (TRACKS[s.id]) while (s.tracks.length < TRACKS[s.id]) s.tracks.push({ num: String(s.tracks.length + 1), exits: (s.directions || [0, 0]).map(() => 'right') });
     // priority = row order, and the main one is always last (Ignat, 2026-09-30)
     if (s.transferAnnouncements.length)
       s.transferAnnouncements = [...s.transferAnnouncements.filter(a => !a.isMain), ...s.transferAnnouncements.filter(a => a.isMain)];
