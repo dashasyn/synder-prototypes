@@ -116,16 +116,14 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .issues-head .tog { color: var(--text-link); }
 .tw { width: 16px; height: 16px; flex-shrink: 0; transition: transform .15s; }
 [aria-expanded="true"] > .tw { transform: rotate(90deg); }
-.issues-body { padding: 0 16px 8px 42px; }
-.issue { border-top: 1px solid var(--color-status-red-bg); }
-.issue-h { display: flex; align-items: center; gap: 8px; min-height: 40px; font-size: 14px; }
-.issue-h .txt { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
-.issue-h .meta { color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.issue-grp { display: flex; align-items: center; gap: 8px; background: none; border: none; padding: 0; font: inherit; font-size: 14px; color: var(--text-primary); cursor: pointer; text-align: left; }
-.issue-grp .tw { color: var(--text-secondary); }
-.issue-sub { padding: 0 0 8px 24px; }
-.issue-sub .issue-h { min-height: 32px; }
-.issues-head:focus-visible, .issue-grp:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+.issues-body { padding: 0 16px 6px 42px; }
+/* Rich-style row: red title, quieter red description, bridge link on the right */
+.issue { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--color-status-red-bg); }
+.issue-txt { flex: 1; min-width: 0; color: var(--color-red); font-size: 14px; line-height: 20px; }
+.issue-title { font-weight: 500; }
+.issue-desc { opacity: .8; }
+.issue .lnk { flex-shrink: 0; }
+.issues-head:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 </style>
 </head>
 <body>
@@ -288,51 +286,50 @@ function rowMenu() {
        + '<div class="dropdown-menu" id="' + id + '" role="menu"><div class="dropdown-item muted" role="menuitem">[live copy not captured]</div></div></span>';
 }
 
-/* ---- Var 1: every problem on the page, as one collapsed list ----
+/* ---- Var 1: every problem on the page, as one collapsed Rich-style list ----
    Built from the same state data as the panels, so the block can't
-   disagree with the columns underneath it. */
-var PROBLEM_STATUSES = ['Failed', 'Rollback failed', 'Synced with rule failed', 'Not parsed'];
+   disagree with the columns underneath it. Plain sentences, no status chips.
+   Connection rows collapse into ONE message, the way production's banner does. */
 function issuesFor(s) {
   var out = [];
-  if (s.accounting === 'lost') out.push({ id: 'acct', html: 'Accounting connection lost <span class="meta">My lovely money (QuickBooks Online)</span>',
-    action: 'Reconnect', go: 'Reconnect · My lovely money (QuickBooks Online)' });
-  var lost = s.integrations.filter(function (it) { return it.chips.some(function (c) { return c[0] === 'Connection lost'; }); });
-  if (lost.length) out.push({ id: 'lost', html: lost.length + (lost.length === 1 ? ' integration' : ' integrations') + ' lost connection',
-    items: lost.map(function (it) { return { src: it.src, action: 'Reconnect' }; }) });
-  var off = s.integrations.filter(function (it) { return it.chips.some(function (c) { return / off$/.test(c[0]); }); });
-  off.forEach(function (it, i) {
-    var what = it.chips.filter(function (c) { return / off$/.test(c[0]); }).map(function (c) { return c[0].replace(/ off$/, ''); });
-    out.push({ id: 'off' + i, html: what.join(' and ') + ' off <span class="meta">' + esc(it.src.name) + '</span>',
-      action: 'Settings', go: 'Integration settings · ' + it.src.name });
+  var lostInts = s.integrations.filter(function (it) { return it.chips.some(function (c) { return c[0] === 'Connection lost'; }); });
+  if (s.accounting === 'lost' || lostInts.length) out.push({ id: 'conn',
+    title: 'Connection lost',
+    desc: 'One or more of your integrations have lost connection. Please reconnect to continue syncing.',   /* live copy, production banner */
+    action: 'Organization settings', go: 'Organization settings' });
+  s.integrations.forEach(function (it, i) {
+    var off = it.chips.filter(function (c) { return / off$/.test(c[0]); }).map(function (c) { return c[0].replace(/ off$/, ''); });
+    if (!off.length) return;
+    out.push({ id: 'off' + i, title: off.join(' and ') + (off.length > 1 ? ' are' : ' is') + ' off',
+      desc: it.src.name + ' doesn\u2019t ' + off.map(function (x) { return x.replace('Auto-', '').toLowerCase(); }).join(' or ') + ' new transactions automatically.',
+      action: 'Integration settings', go: 'Integration settings · ' + it.src.name });
   });
+  var TXN = {
+    'Failed':                  ['Transactions failed',     function (n) { return n + ' transactions failed to sync to your books.'; }],
+    'Rollback failed':         ['Rollback failed',         function (n) { return n + ' transactions could not be rolled back.'; }],
+    'Synced with rule failed': ['Smart rule failed',       function (n) { return n + ' transactions synced, but a smart rule failed on them.'; }],
+    'Not parsed':              ['Transactions not parsed', function (n) { return n + ' transactions could not be read from the integration.'; }]
+  };
   s.sync.forEach(function (r) {
-    if (PROBLEM_STATUSES.indexOf(r[0]) < 0) return;
-    out.push({ id: 'st-' + r[0], html: '<span class="status ' + TONE[r[0]] + '">' + esc(r[0]) + '</span>' + fmt(r[1]) + ' transactions',
+    var t = TXN[r[0]];
+    if (!t) return;
+    out.push({ id: 'st-' + r[0], title: t[0], desc: t[1](fmt(r[1])),
       action: 'View transactions', go: 'Platform transactions · Status: ' + r[0] });
   });
   (s.revrec || []).forEach(function (r) {
     if (r[0] !== 'Incomplete') return;
-    out.push({ id: 'rr', html: '<span class="status ' + TONE[r[0]] + '">' + esc(r[0]) + '</span>' + fmt(r[1]) + ' in Revenue recognition',
-      action: 'View', go: 'Revenue recognition · Incomplete' });
+    out.push({ id: 'rr', title: 'Revenue recognition incomplete', desc: fmt(r[1]) + ' items in Revenue recognition are incomplete.',
+      action: 'Revenue recognition', go: 'Revenue recognition · Incomplete' });
   });
   return out;
-}
-function issueAction(label, msg) {
-  return '<button type="button" class="lnk"' + go(msg) + '>' + label + ICON.chev + '</button>';
 }
 function renderIssues(s) {
   var list = issuesFor(s);
   if (!list.length) return '';
   var rows = list.map(function (is) {
-    if (is.items) {
-      return '<div class="issue" data-issue="' + is.id + '"><div class="issue-h"><button type="button" class="issue-grp" aria-expanded="false" data-grp>'
-        + ICON.chev.replace('class="chev"', 'class="tw"') + '<span>' + is.html + '</span></button></div>'
-        + '<div class="issue-sub" hidden>' + is.items.map(function (x) {
-            return '<div class="issue-h"><span class="txt">' + ICON[x.src.logo] + '<span class="meta" style="color:var(--text-primary)">' + esc(x.src.name) + '</span></span>'
-              + issueAction(x.action, x.action + ' · ' + x.src.name) + '</div>';
-          }).join('') + '</div></div>';
-    }
-    return '<div class="issue" data-issue="' + is.id + '"><div class="issue-h"><span class="txt">' + is.html + '</span>' + issueAction(is.action, is.go) + '</div></div>';
+    return '<div class="issue" data-issue="' + is.id + '"><div class="issue-txt"><div class="issue-title">' + esc(is.title) + '</div>'
+      + '<div class="issue-desc">' + esc(is.desc) + '</div></div>'
+      + '<button type="button" class="lnk"' + go(is.go) + '>' + esc(is.action) + ICON.chev + '</button></div>';
   }).join('');
   return '<div class="issues" id="issues"><button type="button" class="issues-head" aria-expanded="false" aria-controls="issues-body" id="issues-head">'
     + ICON.chev.replace('class="chev"', 'class="tw"') + '<span class="t">' + list.length + ' issues found</span><span class="tog">Show</span></button>'
@@ -441,8 +438,6 @@ document.addEventListener('click', function (e) {
     head.querySelector('.tog').textContent = open ? 'Hide' : 'Show';
     return;
   }
-  var grp = e.target.closest('[data-grp]');
-  if (grp) { toggle(grp, grp.closest('.issue').querySelector('.issue-sub')); return; }
   var menuBtn = e.target.closest('[data-menu]');
   if (menuBtn) {
     var m = document.getElementById(menuBtn.getAttribute('data-menu'));
