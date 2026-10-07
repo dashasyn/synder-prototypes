@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FDD [Stripe] Invoice date setting — suggested updates</title>
+<link rel="stylesheet" href="../../../ui-kit/synder-ui-kit.css">
+<style>
+  body{margin:0;background:var(--color-white);font-size:14px;color:var(--text-primary)}
+  .wrap{max-width:960px;margin:0 auto;padding:32px 24px 64px}
+  h1{font-size:24px;font-weight:500;margin:0 0 4px}
+  h2{font-size:18px;font-weight:500;margin:32px 0 8px}
+  .meta{color:var(--text-secondary);margin:0 0 16px;line-height:20px}
+  ol{padding-left:22px;margin:0}
+  li{margin:0 0 14px;line-height:22px}
+  li b.t{display:block}
+  .why{color:var(--text-secondary)}
+  .rec{display:block}
+  code{font-size:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>FDD: [Stripe] Invoice date setting · suggested updates</h1>
+  <p class="meta">From the prototype (rebuilt on live Synder screens), one structured design review (UX, accountant, business owner)
+    and three independent external reviews · 7 Oct 2026 ·
+    Prototype: <a class="text-link" href="../">stripe-invoice-date</a> · Review report: <a class="text-link" href="../review/">round 1</a></p>
+
+  <h2>A. Decisions the FDD needs to make</h2>
+  <ol>
+    <li><b class="t">Summary Sync default for existing orgs</b>
+      <span class="rec"><b>Suggest:</b> add a Summary row to the default matrix. Existing orgs keep their current Sales recording date (Invoice created date or Payment date). Only new orgs default to Invoice issued date.</span>
+      <span class="why">Why: S2.1 makes Issued the default without saying "new only", which conflicts with the FDD's own rule "no silent re-dating of an existing organization". Flipping existing orgs would move summary sales between months on release day.</span></li>
+    <li><b class="t">Summary plan gate: the whole control, or only the new value?</b>
+      <span class="rec"><b>Suggest:</b> below Pro, lock only <em>Invoice issued date</em>. Invoice created date and Payment date stay available.</span>
+      <span class="why">Why: §2 gates "the values introduced here", but S2.3 locks the whole control, so the FDD contradicts itself. Sales recording date already exists, and below-Pro customers use it today. Locking all of it takes away a working feature and is likely to cause support tickets.</span></li>
+    <li><b class="t">RevRec lock: which value is the Sync setting locked at?</b>
+      <span class="rec"><b>Suggest:</b> while Schedule start = an invoice date, <em>Invoice date in books</em> follows it (Invoice created date → Created, Invoice issued date → Issued). It unlocks on Payment date, as now.</span>
+      <span class="why">Why: the FDD only says the setting can't be changed. If it just freezes, a user who switches Schedule start to Issued keeps the books on Created, so revenue recognition and the books use different dates. The lock note sends them to Schedule start, and that doesn't help. This was the top issue in the design review (raised 3 times out of 3).</span></li>
+    <li><b class="t">New Stripe connections below Pro</b>
+      <span class="rec"><b>Suggest:</b> they default to Created date.</span>
+      <span class="why">Why: the FDD defaults new connections to Issued, but Issued is Pro-only, so the two rules collide for a below-Pro org.</span></li>
+    <li><b class="t">Sales recording date with non-Stripe integrations</b>
+      <span class="rec"><b>Suggest:</b> state what Invoice issued date means for integrations without an issued date (for example, fall back to the created/order date), or make the setting per integration.</span>
+      <span class="why">Why: in live, Sales recording date is one setting for the whole organization, while Summary period, Timezone and Sync open invoices are per integration. Only Stripe has an issued date, so a Stripe + Shopify org has an undefined case.</span></li>
+    <li><b class="t">Summary past periods (S2.4–S2.5)</b>
+      <span class="rec"><b>Suggest:</b> once engineering confirms the dual snapshot, specify the copy. If refreshed past summaries switch to the new date, the setting's description must say so.</span>
+      <span class="why">Why: the Stripe setting says "applies to invoices synced from now on". If Summary behaves differently for past periods, users need to know before they change it, because closed months could move.</span></li>
+    <li><b class="t">Confirmation when Summary switches to Payment date</b>
+      <span class="rec"><b>Suggest:</b> no dialog. Explain it in the description instead: "With Payment date, summaries don't show Accounts Receivable (money customers still owe you)."</span>
+      <span class="why">Why: two reviews asked for a warning, because Payment date removes AR. But Payment date is an existing option, so a new dialog would change old behaviour outside this feature's scope. If Product wants the dialog anyway, it belongs in the FDD next to the RevRec one.</span></li>
+  </ol>
+
+  <h2>B. Wording to fix in the FDD (proposed by the prototype)</h2>
+  <ol start="8">
+    <li><b class="t">Rename the setting "Invoice date" → "Invoice date in books"</b>
+      <span class="why">Why: all three external reviews independently chose this name. "Invoice date" reads like Stripe's own invoice field, not "the date that lands in QuickBooks". It also pairs with the Sales tab's "Payment posting date".</span></li>
+    <li><b class="t">Use the same option names on every screen: Invoice created date / Invoice issued date (/ Payment date)</b>
+      <span class="why">Why: the FDD uses "Created date / Issued date" on the Stripe tab and the long form on Summary and RevRec. It's the same choice on three screens. Different words make users treat them as different settings and pick inconsistently (3 of 3 reviews).</span></li>
+    <li><b class="t">S4: "Posting date" → "Payment posting date", with a description</b>
+      <span class="rec">"The date Synder uses for payments, refunds and other Stripe balance transactions: Balance date, when the money reaches your Stripe balance, or Created date, when Stripe created the transaction. Invoices follow the Invoice date in books setting on the Invoices tab."</span>
+      <span class="why">Why: the FDD leaves the string to Figma, which isn't linked yet. All reviews accepted this label. Without the description, the rename doesn't remove the confusion it's meant to fix.</span></li>
+    <li><b class="t">The lock message (S1.4)</b>
+      <span class="rec">"Locked while Synder RevRec starts schedules from the invoice created date. To change it, change Schedule start date." (It names whichever option is active.)</span>
+      <span class="why">Why: the FDD has only a reference string. Reviewers read the draft wording "from the invoice date" as "Invoice date is locked by the invoice date", because the RevRec option was renamed and the setting itself is called Invoice date.</span></li>
+  </ol>
+
+  <h2>C. Clarifications</h2>
+  <ol start="12">
+    <li><b class="t">"Saves immediately" means no confirmation dialog</b>
+      <span class="why">Why: in live Per Transaction settings, every change goes through the page's Update button. The FDD wording can be read as "no Update button". The prototype keeps Update, with no dialog.</span></li>
+    <li><b class="t">Sync details (S1.5): always show "Issued date" and "Date in books"</b>
+      <span class="rec">For example: "Date in books: Dec 28, 2025 · invoice created date, per Invoice date in books setting".</span>
+      <span class="why">Why: S1.5 only asks to make it clear when the dates differ. When they match, users auditing a created-date invoice can't tell which date reached the books (2 of 3 reviews plus the design review).</span></li>
+    <li><b class="t">How the plan gate looks below Pro</b>
+      <span class="rec">The control is shown locked from the start, with "Upgrade to use" plus "This feature is available on higher plans. Upgrade plan". It shouldn't appear selectable first and then revert.</span>
+      <span class="why">Why: all three reviews called "pick Issued, then it snaps back" a false affordance on a setting that changes the books. Users believe Issued is on while the books stay on Created.</span></li>
+    <li><b class="t">The RevRec confirmation dialog (optional addition)</b>
+      <span class="rec">Add one clause about the effect on the Stripe setting, for example "Invoice date in books will follow this value" or "…can be changed again".</span>
+      <span class="why">Why: users confirm without knowing it locks or unlocks a setting on another screen (design review, 2 of 3 UX passes).</span></li>
+    <li><b class="t">Typo</b>
+      <span class="why">The "Confirmation on change" section calls the RevRec setting "S2". Everywhere else it's S3.</span></li>
+  </ol>
+
+  <h2>D. Considered and not suggested</h2>
+  <ol start="17">
+    <li><b class="t">A confirmation on every Invoice date / Sales recording date change</b>
+      <span class="why">One review asked for it. It contradicts the FDD's no-confirmation rule, and the forward-only description ("applies to invoices synced from now on") already answers the question it would ask.</span></li>
+  </ol>
+</div>
+</body>
+</html>
