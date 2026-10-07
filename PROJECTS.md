@@ -5,6 +5,19 @@
 
 ## 🔧 Active Projects
 
+### PT Dashboard — as developed (2026-10-06)
+- **Status:** ✅ Base + Var 1 live. More bridge variants to come (Ignat, 2026-10-07: "we will add variants").
+- **Ask:** Ignat, 2026-10-06 (topic Dashboard): sent 3 screenshots of the **developed** Per Transaction dashboard. "Recreate this page and we will add other elements." He said it is close to the old iter5 *Var 2 — Adaptive*.
+- **Live:** https://dashasyn.github.io/synder-prototypes/projects/pt-dashboard-current/ — `projects/pt-dashboard-current/index.html`. On the hub under Dashboard.
+- **States (switcher, in place, `#attention` / `#clear` / `#lost`):** 1 Needs attention (80%, 10 statuses, 2 lost integrations) · 2 All clear (100%, green Needs-attention card, Connected + Auto-import/sync on) · 3 Connection lost (red banner + Reconnect, 70%, 18 statuses, 10 imports scrolling in their card, Revenue recognition panel, 6 integrations).
+- **Unified to screenshot 3's conventions:** chevrons on counts, `1,200` with a comma, Failed/Rollback failed rows tinted red, lost-connection cards tinted red. Screenshot 1 looks like an older build that has none of these.
+- **Kept as shown, not fixed:** counts don't add up (the header says 1,200 synced, the statuses list 300 Synced). These are mock numbers from production/Figma.
+- **Uncaptured copy is marked:** `?` tooltips, the ⋯ row menu, and the other period options.
+- **Verify:** `node scripts/verify-pt-dashboard-current.cjs [url]`. 73 assertions, 0 failures, local and live.
+- **Var 1 · Collapsed issues (2026-10-07):** Ignat: "add bridges to other pages", starting with the red issues block from *Var 1 – Rich* (iter3), showing every problem but collapsed. It replaces the production Connection-lost banner in the same spot, above the KPI band. Collapsed head reads `N issues found` with Show/Hide. Expanded, it has one row per problem, each with its bridge: accounting Reconnect · lost integrations grouped into one row that expands to a Reconnect per integration · Auto-import/Auto-sync off → Settings · Failed / Rollback failed / Synced with rule failed / Not parsed → View transactions (Platform transactions filtered by status) · RevRec Incomplete → View. Built from the same state data as the panels, so it can't disagree with them. All clear → no block. Hash `#v1-<state>`. iter3's "View full report" (Monitoring → Problems page) is dropped because no such production page is known.
+- **Verify now 148 assertions.**
+- **Older dashboard work** (iter1–6, `reports/dashboard-variants` A–D from 2026-09-09): superseded as a base by this page.
+
 ### TxnRecon setup — all prototypes (2026-09-11)
 - **Status:** ✅ Gallery live for team discussion.
 - **Ask:** Ignat — put every setup prototype in one hub folder (do not archive), plus two finalists.

@@ -126,6 +126,82 @@ const EXPECT = {
   ok("1280: no horizontal overflow", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   ok("1280: integration actions visible", await page.locator("#p-integrations .lnk").first().isVisible());
 
+  /* ---------- Var 1: collapsed issues block ---------- */
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const V1 = {
+    attention: { issues: 5, lost: 2, rows: ["Accounting connection lost", "2 integrations lost connection", "Failed", "Rollback failed", "Synced with rule failed"] },
+    clear:     { issues: 0 },
+    lost:      { issues: 8, lost: 6, rows: ["Accounting connection lost", "6 integrations lost connection", "Auto-import and Auto-sync off", "Failed", "Rollback failed", "Synced with rule failed", "Not parsed", "Incomplete"] },
+  };
+  await page.click("#vs-attention");
+  await page.click("#vv-1");
+  ok("[v1] variant button on", await page.locator("#vv-1.on").isVisible());
+  ok("[v1] state kept when switching variant", await page.locator("#vs-attention.on").isVisible());
+  ok("[v1] hash records variant", page.url().endsWith("#v1-attention"));
+  for (const key of Object.keys(V1)) {
+    const e = V1[key];
+    await page.click(`#vs-${key}`);
+    ok(`[v1 ${key}] production banner absent`, (await page.locator("#lost-banner").count()) === 0);
+    if (!e.issues) {
+      ok(`[v1 ${key}] no issues block when nothing is wrong`, (await page.locator("#issues").count()) === 0);
+      continue;
+    }
+    const head = page.locator("#issues-head");
+    ok(`[v1 ${key}] issues head visible`, await head.isVisible());
+    ok(`[v1 ${key}] head reads "${e.issues} issues found"`, (await head.innerText()).includes(`${e.issues} issues found`));
+    ok(`[v1 ${key}] collapsed by default`, !(await page.locator("#issues-body").isVisible()) && (await head.getAttribute("aria-expanded")) === "false");
+    ok(`[v1 ${key}] head sits above the KPI band`, await page.evaluate(() => document.getElementById("issues").getBoundingClientRect().bottom <= document.getElementById("kpis").getBoundingClientRect().top));
+    await head.click();
+    ok(`[v1 ${key}] expands on click`, await page.locator("#issues-body").isVisible());
+    ok(`[v1 ${key}] toggle reads Hide`, (await head.locator(".tog").innerText()) === "Hide");
+    const rows = page.locator("#issues-body > .issue");
+    ok(`[v1 ${key}] ${e.issues} issue rows`, (await rows.count()) === e.issues, "got " + (await rows.count()));
+    for (let i = 0; i < e.rows.length; i++) {
+      const t = (await rows.nth(i).locator(".issue-h").first().innerText()).replace(/\s+/g, " ");
+      ok(`[v1 ${key}] row ${i + 1} is "${e.rows[i]}"`, t.includes(e.rows[i]), t);
+      ok(`[v1 ${key}] row ${i + 1} visible`, await rows.nth(i).isVisible());
+    }
+    /* every non-group row has exactly one visible bridge */
+    const bridges = await page.$$eval("#issues-body > .issue", (els) => els.filter((el) => !el.querySelector("[data-grp]")).map((el) => el.querySelectorAll(":scope > .issue-h .lnk").length));
+    ok(`[v1 ${key}] each plain row has one bridge`, bridges.every((n) => n === 1), bridges.join(","));
+    /* grouped integrations: collapsed until opened */
+    const grp = page.locator('[data-issue="lost"] [data-grp]');
+    const sub = page.locator('[data-issue="lost"] .issue-sub');
+    ok(`[v1 ${key}] integration group collapsed`, !(await sub.isVisible()));
+    await grp.click();
+    ok(`[v1 ${key}] integration group opens`, await sub.isVisible());
+    ok(`[v1 ${key}] ${e.lost} integrations listed`, (await sub.locator(".issue-h").count()) === e.lost);
+    ok(`[v1 ${key}] last integration Reconnect visible`, await sub.locator(".lnk").last().isVisible());
+    await sub.locator(".lnk").first().click();
+    ok(`[v1 ${key}] integration Reconnect bridges`, (await page.locator("#toast").innerText()).includes("Reconnect · My wonderful flowers (Stripe)"));
+    ok(`[v1 ${key}] block stays open after a bridge click`, await sub.isVisible() && await page.locator("#issues-body").isVisible());
+    await rows.filter({ hasText: "Failed" }).first().locator(".lnk").click();
+    ok(`[v1 ${key}] Failed row bridges to Platform transactions`, (await page.locator("#toast").innerText()).includes("Platform transactions · Status: Failed"));
+    const small = await page.evaluate(() => [...document.querySelectorAll("#issues *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
+    ok(`[v1 ${key}] no text under 14px in the block`, small === 0);
+    ok(`[v1 ${key}] no horizontal overflow expanded`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await grp.click();
+    ok(`[v1 ${key}] integration group closes`, !(await sub.isVisible()));
+    await head.click();
+    ok(`[v1 ${key}] collapses again`, !(await page.locator("#issues-body").isVisible()) && await head.isVisible());
+  }
+  /* switching state resets to collapsed */
+  await page.click("#vs-attention");
+  await page.click("#issues-head");
+  await page.click("#vs-lost");
+  ok("[v1] state switch re-collapses the block", !(await page.locator("#issues-body").isVisible()));
+  /* keyboard */
+  await page.focus("#issues-head");
+  await page.keyboard.press("Enter");
+  ok("[v1] Enter on head expands", await page.locator("#issues-body").isVisible());
+  /* back to production keeps state, restores banner */
+  await page.click("#vv-0");
+  ok("[v0] production banner back in state 3", await page.locator("#lost-banner").isVisible() && (await page.locator("#issues").count()) === 0);
+  /* deep link */
+  await page.goto(target.split("#")[0] + "#v1-lost");
+  await page.waitForSelector("#issues-head");
+  ok("#v1-lost opens Var 1 state 3", await page.locator("#vv-1.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
+
   ok("no JS errors", errors.length === 0, errors.join(" | "));
 
   await browser.close();
