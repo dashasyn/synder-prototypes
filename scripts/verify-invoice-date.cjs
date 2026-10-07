@@ -103,6 +103,10 @@ const MARK = '[live copy not captured]';
   ok('below Pro: clicking the select reveals the red line', (await vis('#inv-gate')) &&
      (await txt('#inv-gate')) === 'This feature is available on higher plans. Upgrade plan');
   ok('below Pro: click does not change the value', (await val('#inv-date')) === 'created');
+  ok('below Pro: red line sits right under the select, above the description', await page.evaluate(() => {
+    const sel = document.getElementById('inv-date').getBoundingClientRect(), g = document.getElementById('inv-gate').getBoundingClientRect(),
+          h = document.getElementById('inv-help').getBoundingClientRect();
+    return g.top >= sel.bottom && g.bottom <= h.top; }));
   await page.selectOption('#inv-date', 'issued');
   ok('below Pro: keyboard/selection attempt reverts to Created', (await val('#inv-date')) === 'created');
   ok('below Pro: red line still shown after attempt', await vis('#inv-gate'));
