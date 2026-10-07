@@ -217,10 +217,15 @@ const MARK = '[live copy not captured]';
   // ── 3 · Summary Sync ────────────────────────────────────────────────
   await screen(3);
   ok('Summary row visible', await vis('#sum-row'));
-  ok('Summary marker visible', (await txt('#sum-marker')).startsWith(MARK));
-  ok('Summary is labelled a spec note', await vis('#sum-spec'));
-  ok('spec notes sit in their own switcher group', await page.evaluate(() =>
-    document.getElementById('sc-3').parentElement !== document.getElementById('sc-1').parentElement));
+  ok('Summary opens as the live Settings overlay', !(await vis('.sb')) &&
+     (await txt('.rr-head')).endsWith('Settings (DS_test_with_AI)') && (await txt('.ss-main h2')) === 'General');
+  ok('live card order kept', (await page.$$eval('.ss-hd b', bs => bs.map(b => b.childNodes[0].textContent.trim()))).join('|') ===
+     'Synchronization frequency|Summary period|Timezone|Sales recording date|Sync mode|Sync open invoices|QuickBooks Online JE number sequence');
+  ok('Sales recording date has the three FDD values', (await page.locator('#sum-date option').allTextContents()).join('|') ===
+     'Invoice created date|Invoice issued date|Payment date');
+  ok('old payment-only description replaced', !(await txt('#sum-row')).includes('Enable this setting to record sales on the payment date'));
+  ok('Summary is a real screen, not a spec note', await page.evaluate(() =>
+    document.getElementById('sc-3').parentElement === document.getElementById('sc-1').parentElement));
   ok('RevRec states disabled on Summary', !(await en('#st-rrinv')));
   await state('pro');
   ok('existing Summary org on Invoice created date', (await val('#sum-date')) === 'created');
