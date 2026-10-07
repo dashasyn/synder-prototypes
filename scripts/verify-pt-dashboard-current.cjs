@@ -195,6 +195,51 @@ const EXPECT = {
   await page.waitForSelector("#issues-head");
   ok("#v1-lost opens Var 1 state 3", await page.locator("#vv-1.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
 
+  /* ---------- Var 2: always-visible action list ---------- */
+  await page.goto(target.split("#")[0] + "#attention");
+  await page.waitForSelector("#sync-rows .row");
+  await page.click("#vv-2");
+  ok("[v2] variant button on", await page.locator("#vv-2.on").isVisible());
+  ok("[v2] hash records variant", page.url().endsWith("#v2-attention"));
+  const V2 = {
+    attention: { req: ["Reconnect lost connections", "Review 80 transactions that need attention"], next: ["Run Transaction reconciliation"] },
+    clear:     { req: [], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
+    lost:      { req: ["Reconnect lost connections", "Turn on Auto-import and Auto-sync", "Review 80 transactions that need attention", "Complete revenue recognition"], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
+  };
+  for (const key of Object.keys(V2)) {
+    const e = V2[key];
+    await page.click(`#vs-${key}`);
+    ok(`[v2 ${key}] no production banner, no collapsed block`, (await page.locator("#lost-banner").count()) === 0 && (await page.locator("#issues").count()) === 0);
+    ok(`[v2 ${key}] list sits between KPI band and columns`, await page.evaluate(() => {
+      const a = document.getElementById("acts").getBoundingClientRect(), k = document.getElementById("kpis").getBoundingClientRect(), c = document.querySelector(".cols").getBoundingClientRect();
+      return a.top >= k.bottom && a.bottom <= c.top; }));
+    ok(`[v2 ${key}] Required section ${e.req.length ? "shown" : "absent"}`, (await page.locator("#acts-req").count()) === (e.req.length ? 1 : 0));
+    for (const [sec, want] of [["req", e.req], ["next", e.next]]) {
+      if (!want.length) continue;
+      const items = page.locator(`#acts-${sec} .act`);
+      ok(`[v2 ${key}] ${sec}: ${want.length} actions`, (await items.count()) === want.length, "got " + (await items.count()));
+      for (let i = 0; i < want.length; i++) {
+        ok(`[v2 ${key}] ${sec} ${i + 1} is "${want[i]}"`, (await items.nth(i).locator(".act-title").innerText()) === want[i], await items.nth(i).locator(".act-title").innerText());
+        ok(`[v2 ${key}] ${sec} ${i + 1} visible without clicking`, await items.nth(i).isVisible() && await items.nth(i).locator(".btn").isVisible());
+      }
+    }
+    if (e.req.length) {
+      ok(`[v2 ${key}] connection action uses production copy`, (await page.locator('[data-act="conn"] .act-desc').innerText()) === "One or more of your integrations have lost connection. Please reconnect to continue syncing.");
+      await page.locator('[data-act="conn"] .btn').click();
+      ok(`[v2 ${key}] Reconnect bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
+      await page.locator('[data-act="txn"] .btn').click();
+      ok(`[v2 ${key}] transactions action bridges to Needs attention`, (await page.locator("#toast").innerText()).includes("Platform transactions · Needs attention"));
+    }
+    await page.locator('[data-act="recon"] .btn').click();
+    ok(`[v2 ${key}] reconciliation bridges`, (await page.locator("#toast").innerText()).includes("Transaction reconciliation"));
+    const small = await page.evaluate(() => [...document.querySelectorAll("#acts *")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
+    ok(`[v2 ${key}] no text under 14px`, small === 0);
+    ok(`[v2 ${key}] no horizontal overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  }
+  await page.goto(target.split("#")[0] + "#v2-lost");
+  await page.waitForSelector("#acts");
+  ok("#v2-lost opens Var 2 state 3", await page.locator("#vv-2.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
+
   ok("no JS errors", errors.length === 0, errors.join(" | "));
 
   await browser.close();

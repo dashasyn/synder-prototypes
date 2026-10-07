@@ -123,6 +123,18 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .issue-title { font-weight: 500; }
 .issue-desc { opacity: .8; }
 .issue .lnk { flex-shrink: 0; }
+/* ---- Var 2: always-visible action list (from dashboard-variants D) ---- */
+.acts { margin-bottom: 20px; display: flex; flex-direction: column; gap: 16px; }
+.acts-t { font-size: 16px; font-weight: 500; line-height: 24px; margin: 0 0 8px; }
+.act-list { display: flex; flex-direction: column; gap: 8px; }
+.act { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); }
+.act.req { border-left: 3px solid var(--color-red); }
+.act-box { width: 20px; height: 20px; border-radius: 5px; border: 2px solid var(--color-grey-30); flex-shrink: 0; }
+.act.next .act-box { border-color: var(--color-primary-50); background: var(--color-primary-5); }
+.act-body { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; }
+.act-title { font-weight: 500; }
+.act-desc { color: var(--text-secondary); }
+.act .btn { flex-shrink: 0; }
 .issues-head:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 </style>
 </head>
@@ -140,6 +152,7 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
   <div class="vs-opts">
     <button id="vv-0" class="on" onclick="setVariant(0)">0 · As developed</button>
     <button id="vv-1" onclick="setVariant(1)">1 · Collapsed issues</button>
+    <button id="vv-2" onclick="setVariant(2)">2 · Action list</button>
   </div>
 </div>
 
@@ -174,6 +187,7 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
       </div>
       <div id="banner"></div>
       <div class="kpi-band" id="kpis"></div>
+      <div id="actions"></div>
       <div class="cols">
         <div class="col" id="col-left"></div>
         <div class="col" id="col-mid"></div>
@@ -331,11 +345,45 @@ function renderIssues(s) {
     + '<div class="issues-body" id="issues-body" hidden>' + rows + '</div></div>';
 }
 
+/* ---- Var 2: the same problems as Var 1, phrased as actions and always
+   visible, plus optional next steps. Same source data, so Var 1 and Var 2
+   never disagree about what's wrong. */
+function actionsFor(s) {
+  var req = issuesFor(s).map(function (is) {
+    if (is.id === 'conn') return { id: 'conn', title: 'Reconnect lost connections', desc: is.desc, btn: 'Reconnect', go: 'Organization settings' };
+    if (is.id === 'txn')  return { id: 'txn',  title: 'Review ' + fmt(s.attention) + ' transactions that need attention', desc: is.desc, btn: 'View transactions', go: is.go };
+    if (is.id === 'rr')   return { id: 'rr',   title: 'Complete revenue recognition', desc: is.desc, btn: 'Open Revenue recognition', go: is.go };
+    return { id: is.id, title: 'Turn on ' + is.title.replace(/ (are|is) off$/, ''), desc: is.desc, btn: 'Open settings', go: is.go };
+  });
+  var next = [];
+  s.sync.forEach(function (r) {
+    if (r[0] === 'Ready to sync') next.push({ id: 'ready', title: 'Sync ' + fmt(r[1]) + ' ready transactions', desc: 'Imported and waiting to sync to your books.',
+      btn: 'Sync now', go: 'Sync ' + fmt(r[1]) + ' ready transactions' });
+  });
+  next.push({ id: 'recon', title: 'Run Transaction reconciliation', desc: 'Check this period against your bank before you close it.',
+    btn: 'Open reconciliation', go: 'Transaction reconciliation' });
+  return { req: req, next: next };
+}
+function renderActions(s) {
+  var a = actionsFor(s);
+  function list(items, kind) {
+    return '<div class="act-list">' + items.map(function (x) {
+      return '<div class="act ' + kind + '" data-act="' + x.id + '"><span class="act-box" aria-hidden="true"></span>'
+        + '<div class="act-body"><div class="act-title">' + esc(x.title) + '</div><div class="act-desc">' + esc(x.desc) + '</div></div>'
+        + '<button type="button" class="btn btn-sm ' + (kind === 'req' ? 'btn-primary' : 'btn-outlined') + '"' + go(x.go) + '>' + esc(x.btn) + '</button></div>';
+    }).join('') + '</div>';
+  }
+  return '<div class="acts" id="acts">'
+    + (a.req.length ? '<section id="acts-req"><h2 class="acts-t">Required actions</h2>' + list(a.req, 'req') + '</section>' : '')
+    + '<section id="acts-next"><h2 class="acts-t">Next actions</h2>' + list(a.next, 'next') + '</section></div>';
+}
+
 function render(key) {
   var s = STATES[key];
   menuSeq = 0;
 
-  document.getElementById('banner').innerHTML = variant === 1 ? renderIssues(s) : s.banner
+  document.getElementById('actions').innerHTML = variant === 2 ? renderActions(s) : '';
+  document.getElementById('banner').innerHTML = variant === 1 ? renderIssues(s) : variant === 2 ? '' : s.banner
     ? '<div class="alert alert-error" id="lost-banner">' + ICON.alert
       + '<div class="alert-body"><span class="alert-title">Connection lost</span>'
       + 'One or more of your integrations have lost connection. Please reconnect to continue syncing.</div>'
@@ -395,7 +443,7 @@ function sync() {
   ['attention','clear','lost'].forEach(function (k) {
     document.getElementById('vs-' + k).classList.toggle('on', k === current);
   });
-  [0, 1].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
+  [0, 1, 2].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
   render(current);
   try { history.replaceState(null, '', '#' + (variant ? 'v' + variant + '-' : '') + current); } catch (e) {}
 }
@@ -457,7 +505,7 @@ document.addEventListener('keydown', function (e) {
 function parseHash() {
   var m = /^#(?:v(\d)-)?(\w+)$/.exec(location.hash || '');
   var v = m && m[1] ? +m[1] : 0;
-  return { v: v === 1 ? 1 : 0, k: m && STATES[m[2]] ? m[2] : 'attention' };
+  return { v: v === 1 || v === 2 ? v : 0, k: m && STATES[m[2]] ? m[2] : 'attention' };
 }
 window.addEventListener('hashchange', function () {
   var h = parseHash();
