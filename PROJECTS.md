@@ -15,7 +15,8 @@
 - **Uncaptured copy is marked:** `?` tooltips, the ⋯ row menu, and the other period options.
 - **Verify:** `node scripts/verify-pt-dashboard-current.cjs [url]`. 73 assertions, 0 failures, local and live.
 - **Var 1 · Collapsed issues (2026-10-07):** the collapsed red issues block from *Var 1 – Rich* (iter3), in the spot where production shows its Connection-lost banner. **Round 2 (same day, Ignat):** combine both variants. Keep Rich's simple, easy-to-read list, with **no status chips**, and **all Connection lost in ONE message** (production banner copy, verbatim) with a link to **Organization settings**. Now each row is a red bold title, a one-sentence description, and a bridge on the right: Connection lost → Organization settings · Auto-import/Auto-sync off → Integration settings · Transactions failed / Rollback failed / Smart rule failed / Transactions not parsed → View transactions (filtered by status) · Revenue recognition incomplete → Revenue recognition. The counts are 4 issues in state 1 and 7 in state 3. All clear has no block. Hash `#v1-<state>`. Every row except Connection lost uses my proposed copy. "Items" is a guess for the RevRec Incomplete unit.
-- **Verify now 149 assertions.**
+- **Round 3 (2026-10-07 18:40, Ignat):** all failed-transaction messages become ONE row: `80 transactions need attention`. The description lists which statuses are present; the link goes to Platform transactions · Needs attention. He wrote "100" as an example. I used the Needs attention card's number (80) so the row and the card can't disagree. State 1 = 2 issues, state 3 = 4 (Connection lost · Auto-import/sync off · transactions · RevRec incomplete).
+- **Verify now 140 assertions.**
 - **Older dashboard work** (iter1–6, `reports/dashboard-variants` A–D from 2026-09-09): superseded as a base by this page.
 
 ### TxnRecon setup — all prototypes (2026-09-11)

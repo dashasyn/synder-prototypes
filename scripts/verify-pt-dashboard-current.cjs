@@ -129,9 +129,9 @@ const EXPECT = {
   /* ---------- Var 1: collapsed issues block ---------- */
   await page.setViewportSize({ width: 1440, height: 1000 });
   const V1 = {
-    attention: { issues: 4, rows: ["Connection lost", "Transactions failed", "Rollback failed", "Smart rule failed"] },
+    attention: { issues: 2, rows: ["Connection lost", "80 transactions need attention"], desc: "Failed, rollback failed, synced with rule failed." },
     clear:     { issues: 0 },
-    lost:      { issues: 7, rows: ["Connection lost", "Auto-import and Auto-sync are off", "Transactions failed", "Rollback failed", "Smart rule failed", "Transactions not parsed", "Revenue recognition incomplete"] },
+    lost:      { issues: 4, rows: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention", "Revenue recognition incomplete"], desc: "Failed, rollback failed, synced with rule failed, not parsed." },
   };
   await page.click("#vs-attention");
   await page.click("#vv-1");
@@ -167,8 +167,11 @@ const EXPECT = {
     await page.locator('[data-issue="conn"] .lnk').click();
     ok(`[v1 ${key}] connection row bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
     ok(`[v1 ${key}] block stays open after a bridge click`, await page.locator("#issues-body").isVisible());
-    await page.locator('[data-issue="st-Failed"] .lnk').click();
-    ok(`[v1 ${key}] Failed row bridges to Platform transactions`, (await page.locator("#toast").innerText()).includes("Platform transactions · Status: Failed"));
+    ok(`[v1 ${key}] exactly one transactions message`, (await page.locator('#issues-body .issue-title', { hasText: "transactions need attention" }).count()) === 1);
+    ok(`[v1 ${key}] transactions count matches the Needs attention card`, (await page.locator('[data-issue="txn"] .issue-title').innerText()).split(" ")[0] + " transactions" === (await page.locator("#attn-link").innerText()).trim());
+    ok(`[v1 ${key}] transactions row lists the failed statuses`, (await page.locator('[data-issue="txn"] .issue-desc').innerText()) === e.desc, await page.locator('[data-issue="txn"] .issue-desc').innerText());
+    await page.locator('[data-issue="txn"] .lnk').click();
+    ok(`[v1 ${key}] transactions row bridges to Platform transactions · Needs attention`, (await page.locator("#toast").innerText()).includes("Platform transactions · Needs attention"));
     const small = await page.evaluate(() => [...document.querySelectorAll("#issues *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
     ok(`[v1 ${key}] no text under 14px in the block`, small === 0);
     ok(`[v1 ${key}] no horizontal overflow expanded`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
