@@ -300,20 +300,8 @@ const MARK = '[live copy not captured]';
   await checkFonts('screen 5');
   await page.locator('#ex-issued').click();
 
-  // ── 3 · Transactions list (live, 2026-10-08) and RevRec org on the Invoices tab ─────
-  await screen(7);
-  ok('Transactions list in the app shell with Transactions list active', (await vis('#tx-table')) && (await txt('.sb-sub.on')).endsWith('Transactions list'));
-  ok('Stripe invoice keeps its created date in the table', (await page.locator('#tx-inv-a td.tx-date').textContent()) === 'Dec 28, 2025 10:12');
-  ok('rows sorted newest first', await page.evaluate(() => {
-    const d = [...document.querySelectorAll('#tx-table td.tx-date')].map(e => Date.parse(e.textContent.replace(/ (\d\d:\d\d)$/, ' $1')));
-    return d.every((x, i) => i === 0 || d[i - 1] >= x); }));
-  await page.locator('#tx-inv-a-explain').click();
-  ok('Explain opens Sync details for that invoice', (await vis('#log-table')) && (await txt('#log-why')).startsWith('Invoice date: Jan 6, 2026'));
-  await page.locator('#sd-back').click();
-  ok('back link returns to the Transactions list', await vis('#tx-table'));
-  await page.locator('#tx-inv-b-explain').click();
-  ok('second invoice opens the created-date example', (await txt('#log-why')).startsWith('Invoice date: Dec 28, 2025'));
-  await checkFonts('transactions list');
+  // ── RevRec org on the Invoices tab (screenshot 2026-10-08) ─────
+  ok('Transactions screen removed', (await page.locator('#sc-7').count()) === 0);
   await screen(1); await state('pro');
   ok('Pro org: PT_3, no Category column, Sync unpaid Off', (await txt('.sb-org')).startsWith('PTPT_3') &&
      (await page.locator('#bad-debt').count()) === 0 &&
