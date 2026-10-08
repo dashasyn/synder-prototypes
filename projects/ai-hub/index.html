@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Hub</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+<style>
+  body{margin:0;display:flex;flex-direction:column;min-height:100vh;background:var(--color-grey-5);font-size:14px}
+
+  /* switcher — deliberately not product chrome */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:14px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);font-family:inherit;
+    font-size:14px;padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+
+  /* live app shell — from Ignat's AI Hub screenshot, 2026-10-08 (PT_QBO_test_2) */
+  .mi{font-family:'Material Icons Outlined';font-weight:normal;font-style:normal;font-size:20px;
+    line-height:1;display:inline-block;-webkit-font-smoothing:antialiased;font-feature-settings:'liga'}
+  .app{flex:1;display:flex;min-height:0;background:var(--color-white)}
+  .sb{width:208px;flex-shrink:0;border-right:1px solid var(--border-default);background:var(--color-white);
+    display:flex;flex-direction:column}
+  .sb-org{display:flex;align-items:center;gap:10px;height:56px;padding:0 14px;
+    border-bottom:1px solid var(--border-default);font-weight:500}
+  .sb-av{width:28px;height:28px;border-radius:50%;background:#F5C6CB;color:#B23B4B;display:flex;
+    align-items:center;justify-content:center;font-size:14px}
+  .sb-org .mi{margin-left:auto;color:var(--text-secondary)}
+  .sb-item{position:relative;display:flex;align-items:center;gap:10px;height:40px;padding:0 14px;
+    color:var(--text-primary);border-bottom:1px solid var(--border-default);font-size:14px}
+  .sb-item .mi{color:var(--color-primary);font-size:20px}
+  .sb-item .chev{margin-left:auto;color:var(--text-secondary)}
+  .sb-item.on{background:var(--color-primary);color:var(--color-white)}
+  .sb-item.on .mi{color:var(--color-white)}
+  .sb-item.on::after{content:'';position:absolute;right:-9px;top:50%;margin-top:-8px;border:8px solid transparent;
+    border-left-color:var(--color-primary);border-right:0}
+  .sb-gap{height:40px;border-bottom:1px solid var(--border-default)}
+  .sb-promo{margin:16px 8px;background:var(--color-primary-5);border-radius:6px;padding:14px 12px;text-align:center;font-size:14px}
+  .sb-promo b{display:block;margin-bottom:6px}
+  .sb-promo p{margin:0 0 10px;color:var(--text-primary)}
+  .sb-promo .btn{width:100%}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  .top{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:24px;
+    padding:0 24px;border-bottom:1px solid var(--border-default)}
+  .syncs{color:var(--text-secondary);border-bottom:3px solid var(--color-primary);padding:6px 0}
+  .syncs b{color:var(--color-primary);font-weight:500;font-size:16px}
+  .top .mi{color:var(--color-primary);font-size:24px}
+  .content{flex:1;padding:24px 32px 48px;overflow:auto;background:var(--color-grey-5)}
+
+  /* AI Hub page */
+  .hub{max-width:1040px}
+  .hub h1{font-size:24px;font-weight:400;margin:0 0 4px;color:var(--text-primary)}
+  .hub .lede{margin:0 0 24px;color:var(--text-secondary);font-size:16px}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
+  .ai-card{background:var(--color-white);border-radius:var(--radius-md);box-shadow:var(--shadow-card);
+    padding:24px;display:flex;flex-direction:column;gap:12px}
+  .ai-card .ic{width:40px;height:40px;border-radius:8px;background:var(--color-primary-10);color:var(--color-primary);
+    display:flex;align-items:center;justify-content:center}
+  .ai-card .ic .mi{font-size:24px}
+  .ai-card h2{font-size:18px;font-weight:500;margin:0;display:flex;align-items:center;gap:8px;color:var(--text-primary)}
+  .ai-card p{margin:0;color:var(--text-primary);line-height:20px;flex:1}
+  .ai-card .clients{color:var(--text-secondary)}
+  .ai-card .acts{margin-top:4px}
+
+  .sec-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
+  .sec-head h2{font-size:18px;font-weight:500;margin:0;color:var(--text-primary)}
+  .tok-empty{background:var(--color-white);border-radius:var(--radius-md);box-shadow:var(--shadow-card);
+    padding:24px;color:var(--text-secondary)}
+  .synder-table .muted{color:var(--text-secondary)}
+  .synder-table td.act{text-align:right;width:1%;white-space:nowrap}
+  .revoke{background:none;border:none;color:var(--color-red);font:inherit;font-weight:500;cursor:pointer;padding:6px 8px;border-radius:4px}
+  .revoke:hover{background:var(--color-red-light)}
+  .revoke:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+  tr.fresh td{background:var(--color-primary-5)}
+
+  /* modals */
+  .modal-bg{align-items:flex-start;padding:48px 16px;overflow:auto}
+  .synder-modal{max-height:none}
+  .synder-modal-header{display:flex;align-items:center;gap:8px;font-size:18px}
+  .synder-modal-header .x{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-secondary);
+    width:32px;height:32px;border-radius:4px;display:flex;align-items:center;justify-content:center}
+  .synder-modal-header .x:hover{background:var(--color-grey-5)}
+  .synder-modal-body{color:var(--text-primary)}
+  .synder-modal-body .form-field{margin-bottom:20px}
+  .synder-modal-body .form-field:last-child{margin-bottom:0}
+  .form-field .form-label{margin-bottom:6px}
+  .scope{color:var(--text-secondary);margin:0 0 20px}
+  .access{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+  .access label{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+  .access label input{margin-top:0}
+  .access .an{font-weight:500}
+  .access .ad{color:var(--text-secondary)}
+  .perm{margin-top:16px;border:1px solid var(--border-default);border-radius:4px;padding:16px;
+    display:grid;grid-template-columns:1fr 1fr;gap:16px 24px}
+  .perm[hidden]{display:none}
+  .perm h4{margin:0 0 6px;font-size:14px;font-weight:500}
+  .perm .synder-checkbox{align-items:flex-start;display:flex;margin:6px 0}
+  .perm .synder-checkbox input{margin-top:1px}
+  .perm .pd{color:var(--text-secondary)}
+  .warn-line{display:flex;gap:8px;align-items:center;margin:12px 0 0}
+  .warn-line[hidden]{display:none}
+  .alert{margin-bottom:12px}
+  .alert .mi{font-size:20px}
+  .alert code{background:rgba(255,255,255,.6);padding:0 4px;border-radius:3px;font-family:'Roboto Mono',monospace}
+  .tabs{padding:0;margin:20px 0 16px}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;font-family:inherit}
+  .tab:focus-visible{outline:2px solid var(--border-focus);outline-offset:-2px}
+  .steps{margin:0 0 12px;padding-left:20px;line-height:22px}
+  .steps li{margin-bottom:4px}
+  .intro{margin:0 0 12px;line-height:22px}
+  code.k{font-family:'Roboto Mono',monospace;background:var(--color-grey-5);border:1px solid var(--border-default);
+    border-radius:3px;padding:0 4px;font-size:14px}
+  .code{position:relative;background:var(--color-grey-5);border:1px solid var(--border-default);border-radius:4px}
+  .code pre{margin:0;padding:12px 96px 12px 12px;font-family:'Roboto Mono',monospace;font-size:14px;line-height:20px;
+    white-space:pre-wrap;word-break:break-all;color:var(--text-primary)}
+  .copy{position:absolute;top:6px;right:6px;display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;
+    background:var(--color-white);border:1px solid var(--border-default);border-radius:4px;cursor:pointer;
+    font:inherit;font-size:14px;color:var(--color-primary);font-weight:500}
+  .copy .mi{font-size:16px}
+  .copy.done{color:var(--color-green);border-color:var(--color-green)}
+  .copy:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+  .code-label{font-weight:500;margin:12px 0 6px}
+  .code + .extra{margin-top:8px}
+  .expander{margin-top:16px;border:1px solid var(--border-default);border-radius:4px}
+  .expander summary{cursor:pointer;padding:10px 12px;font-weight:500;color:var(--color-primary);list-style:none;display:flex;align-items:center;gap:6px}
+  .expander summary::-webkit-details-marker{display:none}
+  .expander[open] summary .mi{transform:rotate(180deg)}
+  .expander .ex-body{padding:0 12px 12px}
+  .uncap{display:inline-block;background:#FFF4D6;color:#7A4B00;border:1px dashed #CB7515;border-radius:3px;padding:0 6px}
+  .count{display:flex;justify-content:flex-end;color:var(--text-secondary);margin-top:4px}
+  .count.ok{color:var(--color-green)}
+  .money{position:relative}
+  .money span{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-secondary)}
+  .money input{padding-left:22px}
+  .form-hint.soft{color:var(--text-secondary);margin-top:4px}
+  .form-error-msg{margin-top:4px}
+  .form-error-msg[hidden]{display:none}
+
+  #toasts{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:1100;display:flex;flex-direction:column;gap:8px;width:420px}
+  .toast{display:flex;align-items:center;gap:12px;background:var(--color-green);color:var(--color-white);
+    border-radius:4px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-size:16px;line-height:24px}
+</style>
+</head>
+<body>
+
+<div class="variant-switch">
+  <span class="vs-label">State</span>
+  <div class="vs-opts">
+    <button id="vs-1" onclick="setState('empty')">1 · No tokens yet</button>
+    <button id="vs-2" onclick="setState('tokens')">2 · With tokens</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+
+<div class="app">
+  <nav class="sb" aria-label="Main">
+    <div class="sb-org"><span class="sb-av">PT</span>PT_QBO_test_2<span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">dashboard</span>Dashboard</div>
+    <div class="sb-item"><span class="mi">swap_horiz</span>Transactions<span class="mi chev">expand_more</span></div>
+    <div class="sb-item"><span class="mi">account_tree</span>Smart rules<span class="mi chev">expand_more</span></div>
+    <div class="sb-item"><span class="mi">shopping_cart</span>Invoicing<span class="mi chev">expand_more</span></div>
+    <div class="sb-item"><span class="mi">trending_up</span>Analytics<span class="mi chev">expand_more</span></div>
+    <div class="sb-gap"></div>
+    <div class="sb-item"><span class="mi">settings</span>Settings</div>
+    <div class="sb-item on" aria-current="page"><span class="mi">hub</span>AI Hub</div>
+    <div class="sb-item"><span class="mi">stars</span>What's New</div>
+    <div class="sb-item"><span class="mi">grid_view</span>Custom development</div>
+    <div class="sb-promo">
+      <b>Missed any transactions?</b>
+      <p>Compare your accounting records to your payment platform — find any transaction that's missing, mismatched, or didn't sync.</p>
+      <span class="btn">Check now</span>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="top">
+      <span class="syncs">Syncs left : <b>1000</b></span>
+      <a class="text-link" href="#" style="text-decoration:none">How it works?</a>
+      <span class="mi">notifications</span>
+      <span class="mi">help_outline</span>
+      <span class="mi">person</span>
+    </div>
+    <div id="toasts" aria-live="polite"></div>
+    <main class="content">
+      <div class="hub">
+        <h1>AI Hub</h1>
+        <p class="lede">Automate your accounting workflows with AI-powered agents</p>
+
+        <div class="cards">
+          <section class="ai-card" id="card-connect" aria-labelledby="h-connect">
+            <span class="ic"><span class="mi">cable</span></span>
+            <h2 id="h-connect">Connect Claude, ChatGPT or Cursor <span class="status status-blue">Beta</span></h2>
+            <p>Your AI assistant checks syncs, explains failures, reviews and changes integration settings and re-syncs transactions on your behalf.</p>
+            <div class="clients">Claude Code · Claude Desktop · ChatGPT · Cursor and others</div>
+            <div class="acts"><button class="btn" id="btn-connect" onclick="openConnect(this)">Connect your AI agent</button></div>
+          </section>
+
+          <section class="ai-card" id="card-request" aria-labelledby="h-request">
+            <span class="ic"><span class="mi">smart_toy</span></span>
+            <h2 id="h-request">Request a custom agent</h2>
+            <p>Describe a task you do by hand today, and we automate it with an agent built for your workflow. Typical agents cost $20 to $200 a month.</p>
+            <div class="acts"><button class="btn-outlined" id="btn-request" onclick="openRequest(this)">Request an Agent</button></div>
+          </section>
+        </div>
+
+        <div class="sec-head"><h2 id="h-tokens">Your tokens</h2></div>
+        <div id="tokens"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Connect your AI agent -->
+<div class="modal-bg" id="m-connect" onclick="if(event.target===this)closeModal()">
+  <div class="synder-modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="mc-title">
+    <div class="synder-modal-header">
+      <span id="mc-title">Connect your AI agent</span> <span class="status status-blue">Beta</span>
+      <button class="x" aria-label="Close" onclick="closeModal()"><span class="mi">close</span></button>
+    </div>
+
+    <!-- step 1: create -->
+    <div id="mc-step1">
+      <div class="synder-modal-body">
+        <p class="scope">The agent acts on your behalf in any organization you belong to and does only what the token allows.</p>
+        <div class="form-field">
+          <label class="form-label" for="tok-name">Token name</label>
+          <input class="input" id="tok-name" placeholder="e.g. Claude Code on my laptop" autocomplete="off"
+            oninput="clearErr('tok-name')">
+          <div class="form-error-msg" id="tok-name-err" hidden>Enter a token name</div>
+        </div>
+        <div class="form-field" role="radiogroup" aria-labelledby="acc-label">
+          <div class="form-label" id="acc-label">Access</div>
+          <div class="access">
+            <label class="radio-wrap"><input type="radio" name="acc" value="read" checked onchange="accChange()">
+              <span><span class="an">Read only</span> <span class="ad">see syncs, transactions, settings, reports and billing</span></span></label>
+            <label class="radio-wrap"><input type="radio" name="acc" value="full" onchange="accChange()">
+              <span><span class="an">Full access</span> <span class="ad">also change settings, sync, roll back, resync and import</span></span></label>
+            <label class="radio-wrap"><input type="radio" name="acc" value="custom" onchange="accChange()">
+              <span><span class="an">Custom</span> <span class="ad">tick the permissions below one by one</span></span></label>
+          </div>
+          <div class="alert alert-warning warn-line" id="full-warn" hidden>
+            <span class="mi">warning_amber</span>
+            <span>Full access can roll back syncs and enable smart rules. Both change your books.</span>
+          </div>
+          <div class="perm" id="perm" hidden></div>
+          <div class="form-error-msg" id="perm-err" hidden>Pick at least one permission</div>
+        </div>
+      </div>
+      <div class="synder-modal-footer">
+        <button class="btn-outlined" onclick="closeModal()">Cancel</button>
+        <button class="btn" id="btn-generate" onclick="generate()">Generate access token</button>
+      </div>
+    </div>
+
+    <!-- step 2: token issued -->
+    <div id="mc-step2" hidden>
+      <div class="synder-modal-body">
+        <div class="alert alert-success" id="issued"></div>
+        <div class="alert alert-warning">
+          <span class="mi">key</span>
+          <span><b>Copy it now: the full token is shown only once.</b> Keep it to yourself, like a password. It does not expire on its own; revoke it on this page when the agent no longer needs it.</span>
+        </div>
+        <div class="tabs" role="tablist" aria-label="AI client" id="client-tabs"></div>
+        <div id="client-panel" role="tabpanel"></div>
+      </div>
+      <div class="synder-modal-footer">
+        <button class="btn-outlined" id="btn-another" onclick="another()">Generate another token</button>
+        <button class="btn" id="btn-done" onclick="done()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Request an AI Agent -->
+<div class="modal-bg" id="m-request" onclick="if(event.target===this)closeModal()">
+  <div class="synder-modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="mr-title">
+    <div class="synder-modal-header">
+      <span id="mr-title">Request an AI Agent</span>
+      <button class="x" aria-label="Close" onclick="closeModal()"><span class="mi">close</span></button>
+    </div>
+    <div class="synder-modal-body">
+      <div class="form-field">
+        <label class="form-label" for="rq-name">Name</label>
+        <input class="input" id="rq-name" placeholder="e.g., Invoice Processing Agent" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="rq-purpose">Purpose</label>
+        <input class="input" id="rq-purpose" placeholder="e.g., Automatically categorize incoming Stripe transactions" autocomplete="off">
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="rq-desc">Detailed task description</label>
+        <textarea class="textarea" id="rq-desc" rows="5" oninput="countDesc()"
+          placeholder="e.g., Pull all new Stripe transactions daily. Match each against open invoices in QuickBooks by amount and customer name. Auto-categorize matched transactions as 'Sales Revenue'. Flag unmatched transactions for manual review and send a summary email."></textarea>
+        <div class="form-error-msg" id="rq-desc-err" hidden></div>
+        <div class="count" id="rq-count">0 / 100 characters minimum</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="rq-freq">How often</label>
+        <select class="select" id="rq-freq">
+          <option value="">Select frequency...</option>
+          <option>Real-time: runs as soon as new data arrives</option>
+          <option>On demand: you run it when needed</option>
+          <option disabled>[live copy not captured: other frequencies]</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="rq-now">How are you doing it now</label>
+        <textarea class="textarea" id="rq-now" rows="4"
+          placeholder="e.g., Every Monday I export Stripe transactions to CSV, open QuickBooks, manually match each transaction by customer name, then create journal entries. It takes about 3 hours per week and is error-prone."></textarea>
+      </div>
+      <div class="form-field">
+        <label class="form-label" for="rq-budget">Monthly budget (USD)</label>
+        <div class="money"><span>$</span><input class="input" id="rq-budget" inputmode="decimal" placeholder="50"></div>
+        <div class="form-hint soft">Typical agents cost $20–200/month.</div>
+      </div>
+    </div>
+    <div class="synder-modal-footer">
+      <button class="btn-outlined" onclick="closeModal()">Cancel</button>
+      <button class="btn" id="btn-submit" onclick="submitRequest()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Revoke confirmation -->
+<div class="modal-bg" id="m-revoke" onclick="if(event.target===this)closeModal()">
+  <div class="synder-modal" role="alertdialog" aria-modal="true" aria-labelledby="rv-title" aria-describedby="rv-body">
+    <div class="synder-modal-header"><span id="rv-title">Revoke token?</span>
+      <button class="x" aria-label="Close" onclick="closeModal()"><span class="mi">close</span></button></div>
+    <div class="synder-modal-body" id="rv-body"></div>
+    <div class="synder-modal-footer">
+      <button class="btn-outlined" id="rv-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-error" id="rv-confirm" onclick="confirmRevoke()">Revoke</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var MCP = 'https://demo-mcp.synderapp.com/mcp';
+var PERMS = [
+  ['Settings', [['view','View','See integration settings, accounts and tax codes',1],['change','Change','Change integration settings, including per transaction type',0]]],
+  ['Transactions', [['view','View','Search transactions, see their status and links',1]]],
+  ['Syncs', [['view','View','See syncs, their details and what needs attention',1],['run','Run','Sync and resync transactions',0],['rollback','Roll back','Remove what a sync created from the books',0]]],
+  ['Imports', [['view','View','See import runs and their results',1],['run','Run','Import historical transactions; uses syncs of the plan',0]]],
+  ['Reports', [['view','View','Sales, expenses, profit and loss and balance sheet reports',1]]],
+  ['Billing', [['view','View','Plan, syncs left, add-ons, renewal and linked card',1]]],
+  ['Reconciliation', [['view','View','See reconciliations and their results',1],['run','Run','Start a reconciliation',0]]],
+  ['Smart Rules', [['view','View','See rules, what they did, and what a rule can be written from',1],['change','Change','Create rules (always disabled), change, disable and archive them',0],['enable','Enable','Enable a rule: from then on it changes the books',0]]],
+  ['Accounting firm', [['view','View','The accounting firm you work at: its clients, licenses, subscription and billing',1]]],
+  ['Access', [['view','View tokens','See your own API tokens: label, permissions, expiry and last use; never the token itself',1]]]
+];
+var ACC = { read: 'Read only', full: 'Full access' };
+var SEED = [
+  { name: 'Claude Code on my laptop', access: 'Read only', created: 'Sep 28, 2026', used: 'Today, 11:02' },
+  { name: 'Cursor · revrec repo', access: 'Custom · 12 permissions', created: 'Oct 2, 2026', used: 'Never' }
+];
+var tokens = [], freshName = null, lastTrigger = null, openId = null, issued = null, client = 'code', revokeIdx = -1;
+
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+/* ---------- state switcher ---------- */
+function setState(s){
+  tokens = s === 'tokens' ? SEED.slice() : [];
+  freshName = null;
+  document.getElementById('vs-1').classList.toggle('on', s === 'empty');
+  document.getElementById('vs-2').classList.toggle('on', s === 'tokens');
+  history.replaceState(null, '', '#' + s);
+  renderTokens();
+}
+
+function renderTokens(){
+  var el = document.getElementById('tokens');
+  if (!tokens.length){ el.innerHTML = '<div class="tok-empty" id="tok-empty">No tokens yet.</div>'; return; }
+  el.innerHTML = '<div class="table-wrap"><table class="synder-table" id="tok-table" aria-labelledby="h-tokens"><thead><tr>'
+    + '<th>Token name</th><th>Access</th><th>Created</th><th>Last used</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>'
+    + tokens.map(function(t, i){
+        return '<tr' + (t.name === freshName ? ' class="fresh"' : '') + '><td>' + esc(t.name) + '</td><td>' + esc(t.access) + '</td>'
+          + '<td class="muted">' + t.created + '</td><td class="muted">' + t.used + '</td>'
+          + '<td class="act"><button class="revoke" data-i="' + i + '" onclick="askRevoke(' + i + ', this)">Revoke</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+}
+
+/* ---------- modal plumbing ---------- */
+function openModal(id, trigger){
+  closeModal(true);
+  lastTrigger = trigger || null; openId = id;
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(silent){
+  if (!openId) return;
+  document.getElementById(openId).classList.remove('show');
+  openId = null;
+  if (!silent && lastTrigger && document.body.contains(lastTrigger)) lastTrigger.focus();
+}
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
+function focusSoon(id){ setTimeout(function(){ var el = document.getElementById(id); if (el) el.focus(); }, 30); }
+function clearErr(id){ document.getElementById(id + '-err').hidden = true; document.getElementById(id).removeAttribute('aria-invalid'); }
+
+function toast(msg){
+  var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status');
+  t.innerHTML = '<span class="mi">check_circle</span><span>' + esc(msg) + '</span>';
+  document.getElementById('toasts').appendChild(t);
+  setTimeout(function(){ t.remove(); }, 4000);
+}
+
+/* ---------- connect: step 1 ---------- */
+function openConnect(trigger){
+  document.getElementById('tok-name').value = '';
+  clearErr('tok-name');
+  document.querySelector('input[name=acc][value=read]').checked = true;
+  renderPerms(); accChange();
+  document.getElementById('mc-step1').hidden = false;
+  document.getElementById('mc-step2').hidden = true;
+  openModal('m-connect', trigger);
+  focusSoon('tok-name');
+}
+function renderPerms(){
+  document.getElementById('perm').innerHTML = PERMS.map(function(g, gi){
+    return '<div><h4>' + g[0] + '</h4>' + g[1].map(function(p){
+      var id = 'p-' + gi + '-' + p[0];
+      return '<label class="synder-checkbox" for="' + id + '"><input type="checkbox" id="' + id + '"' + (p[3] ? ' checked' : '')
+        + ' onchange="document.getElementById(\'perm-err\').hidden=true"><span><b>' + p[1] + '</b> <span class="pd">' + p[2] + '</span></span></label>';
+    }).join('') + '</div>';
+  }).join('');
+}
+function acc(){ return document.querySelector('input[name=acc]:checked').value; }
+function accChange(){
+  var a = acc();
+  document.getElementById('perm').hidden = a !== 'custom';
+  document.getElementById('full-warn').hidden = a !== 'full';
+  document.getElementById('perm-err').hidden = true;
+}
+function generate(){
+  var name = document.getElementById('tok-name').value.trim(), a = acc(), label = ACC[a];
+  if (!name){
+    document.getElementById('tok-name-err').hidden = false;
+    document.getElementById('tok-name').setAttribute('aria-invalid', 'true');
+    document.getElementById('tok-name').focus(); return;
+  }
+  if (a === 'custom'){
+    var n = document.querySelectorAll('#perm input:checked').length;
+    if (!n){ document.getElementById('perm-err').hidden = false; return; }
+    label = 'Custom · ' + n + ' permission' + (n === 1 ? '' : 's');
+  }
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', tok = 'sat_';
+  for (var i = 0; i < 40; i++) tok += chars[Math.floor(Math.random() * chars.length)];
+  issued = { name: name, access: label, token: tok };
+  document.getElementById('issued').innerHTML = '<span class="mi">check_circle</span><span><b>Token created:</b> '
+    + esc(name) + ' · ' + esc(label) + '</span>';
+  document.getElementById('mc-step1').hidden = true;
+  document.getElementById('mc-step2').hidden = false;
+  client = 'code'; renderClient();
+  focusSoon('tab-code');
+}
+
+/* ---------- connect: step 2 ---------- */
+var CLIENTS = [['code','Claude Code'],['desktop','Claude Desktop'],['chatgpt','ChatGPT'],['cursor','Cursor and others']];
+function codeBlock(id, text, label){
+  return (label ? '<div class="code-label" id="' + id + '-l">' + label + '</div>' : '')
+    + '<div class="code"><pre id="' + id + '"' + (label ? ' aria-labelledby="' + id + '-l"' : '') + '>' + esc(text) + '</pre>'
+    + '<button class="copy" id="' + id + '-copy" onclick="copyText(\'' + id + '\', this)"><span class="mi">content_copy</span>Copy</button></div>';
+}
+var UNCAP_GUIDE = '<details class="expander" id="guide"><summary><span class="mi">expand_more</span>Show me where to paste it, step by step</summary>'
+  + '<div class="ex-body"><span class="uncap">[live copy not captured]</span></div></details>';
+function renderClient(){
+  var t = issued.token;
+  document.getElementById('client-tabs').innerHTML = CLIENTS.map(function(c){
+    var on = c[0] === client;
+    return '<button class="tab' + (on ? ' active' : '') + '" role="tab" id="tab-' + c[0] + '" aria-selected="' + on + '"'
+      + ' tabindex="' + (on ? 0 : -1) + '" onclick="pickClient(\'' + c[0] + '\')" onkeydown="tabKey(event)">' + c[1] + '</button>';
+  }).join('');
+  var p = document.getElementById('client-panel'), h = '';
+  p.setAttribute('aria-labelledby', 'tab-' + client);
+  if (client === 'code'){
+    h = '<p class="intro">Paste into a terminal, then start <code class="k">claude</code> and ask: "Why did my last Stripe sync fail?"</p>'
+      + codeBlock('snip', 'claude mcp add --transport http synder ' + MCP + ' --header "Authorization: Bearer ' + t + '"');
+  } else if (client === 'desktop'){
+    var json = '{\n  "mcpServers": {\n    "synder": {\n      "command": "npx",\n      "args": [\n        "-y",\n        "mcp-remote",\n        "'
+      + MCP + '",\n        "--header",\n        "Authorization: Bearer ' + t + '"\n      ]\n    }\n  }\n}';
+    h = '<ol class="steps">'
+      + '<li>In Claude Desktop open <b>Settings → Developer → Edit Config</b>. It opens <code class="k">claude_desktop_config.json</code>.</li>'
+      + '<li>If the file is empty, paste the snippet as is. If it already has other servers, press <b>Copy prompt for Claude</b>, paste it into any Claude chat together with the current content of your file, and save the full file it returns.</li>'
+      + '<li>Fully restart Claude Desktop.</li></ol>'
+      + '<p class="intro" style="color:var(--text-secondary)">Needs Node.js 18 or newer (nodejs.org).</p>'
+      + codeBlock('snip', json)
+      + '<div class="extra"><button class="btn-outlined" id="copy-prompt" onclick="copyPrompt(this)"><span class="mi" style="font-size:18px">auto_fix_high</span>Copy prompt for Claude</button></div>'
+      + UNCAP_GUIDE;
+  } else if (client === 'chatgpt'){
+    h = '<ol class="steps">'
+      + '<li>In ChatGPT desktop open <b>Settings → Plugins → Add → Add MCP server</b>.</li>'
+      + '<li>Choose <b>Streamable HTTP</b> and paste the URL.</li>'
+      + '<li>Add a header named <code class="k">Authorization</code> with the value below.</li></ol>'
+      + codeBlock('snip-url', MCP, 'URL')
+      + codeBlock('snip', 'Bearer ' + t, 'Value of the Authorization header')
+      + UNCAP_GUIDE;
+  } else {
+    var cj = '{\n  "mcpServers": {\n    "synder": {\n      "url": "' + MCP + '",\n      "headers": {\n        "Authorization": "Bearer ' + t + '"\n      }\n    }\n  }\n}';
+    h = '<p class="intro">Add to <code class="k">.cursor/mcp.json</code> (or the MCP config of your client).</p>' + codeBlock('snip', cj);
+  }
+  p.innerHTML = h;
+}
+function pickClient(c){ client = c; renderClient(); document.getElementById('tab-' + c).focus(); }
+function tabKey(e){
+  var i = CLIENTS.findIndex(function(c){ return c[0] === client; });
+  if (e.key === 'ArrowRight') i = (i + 1) % CLIENTS.length;
+  else if (e.key === 'ArrowLeft') i = (i + CLIENTS.length - 1) % CLIENTS.length;
+  else if (e.key === 'Home') i = 0; else if (e.key === 'End') i = CLIENTS.length - 1; else return;
+  e.preventDefault(); pickClient(CLIENTS[i][0]);
+}
+function flash(btn){
+  btn.classList.add('done'); var old = btn.innerHTML;
+  btn.innerHTML = '<span class="mi">check</span>Copied';
+  setTimeout(function(){ if (document.body.contains(btn)){ btn.classList.remove('done'); btn.innerHTML = old; } }, 1800);
+}
+function clip(text){ try { navigator.clipboard && navigator.clipboard.writeText(text).catch(function(){}); } catch (e) {} }
+function copyText(id, btn){ clip(document.getElementById(id).textContent); flash(btn); }
+function copyPrompt(btn){ clip('[live copy not captured: Copy prompt for Claude]'); flash(btn); }
+
+function another(){
+  addIssued();
+  openConnect(lastTrigger);
+}
+function addIssued(){
+  if (!issued) return;
+  tokens.unshift({ name: issued.name, access: issued.access, created: 'Oct 8, 2026', used: 'Never' });
+  freshName = issued.name; issued = null; renderTokens();
+}
+function done(){ addIssued(); closeModal(); }
+
+/* ---------- request ---------- */
+function openRequest(trigger){
+  ['rq-name','rq-purpose','rq-desc','rq-now','rq-budget'].forEach(function(id){ document.getElementById(id).value = ''; });
+  document.getElementById('rq-freq').value = '';
+  document.getElementById('rq-desc-err').hidden = true;
+  document.getElementById('rq-desc').removeAttribute('aria-invalid');
+  countDesc();
+  openModal('m-request', trigger);
+  focusSoon('rq-name');
+}
+function countDesc(){
+  var n = document.getElementById('rq-desc').value.trim().length, c = document.getElementById('rq-count');
+  c.textContent = n >= 100 ? n + ' characters' : n + ' / 100 characters minimum';
+  c.classList.toggle('ok', n >= 100);
+  if (n >= 100){ document.getElementById('rq-desc-err').hidden = true; document.getElementById('rq-desc').removeAttribute('aria-invalid'); }
+}
+function submitRequest(){
+  var n = document.getElementById('rq-desc').value.trim().length;
+  if (n < 100){
+    var e = document.getElementById('rq-desc-err');
+    e.textContent = 'Describe the task in at least 100 characters (' + n + ' now)';
+    e.hidden = false;
+    document.getElementById('rq-desc').setAttribute('aria-invalid', 'true');
+    document.getElementById('rq-desc').focus(); return;
+  }
+  closeModal();
+  toast('Request sent');
+}
+
+/* ---------- revoke ---------- */
+function askRevoke(i, btn){
+  revokeIdx = i;
+  document.getElementById('rv-body').innerHTML = '<b>' + esc(tokens[i].name) + '</b> stops working right away. The agent using it loses access to Synder.';
+  openModal('m-revoke', btn);
+  focusSoon('rv-cancel');
+}
+function confirmRevoke(){
+  var name = tokens[revokeIdx].name;
+  tokens.splice(revokeIdx, 1); renderTokens();
+  closeModal(true);
+  toast('Token revoked: ' + name);
+  setTimeout(function(){ (document.querySelector('.revoke') || document.getElementById('btn-connect')).focus(); }, 30);
+}
+
+setState(location.hash === '#tokens' ? 'tokens' : 'empty');
+</script>
+</body>
+</html>
