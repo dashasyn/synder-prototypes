@@ -172,7 +172,9 @@
           <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
             <${Table} id="live-table">
               <${TableHead}><${TableRow}>
-                <${TableCell} sx=${{ width: 280 }}>Station<//>
+                <${TableCell} sx=${{ width: 260 }}>Station<//>
+                ${/* Ignat, 2026-10-08: the line in its own column, after the station name */ ''}
+                <${TableCell} sx=${{ width: 80 }}>${t('colLine')}<//>
                 <${TableCell}>DAISY<//>
                 <${TableCell} sx=${{ width: '40%' }}>ELA<//>
               <//><//>
@@ -184,11 +186,9 @@
                   return html`
                     <${TableRow} key=${r.key} data-station=${r.key} data-tracks=${L.daisy.length} sx=${{ verticalAlign: 'top', '& td': flash }}>
                       <${TableCell}>
-                        <${Stack} direction="row" spacing=${1} alignItems="center">
-                          <${LineBadge} line=${r.line} />
-                          <${Typography} variant="body2" sx=${{ fontWeight: 500 }} className="live-name">${r.name} (${r.code})<//>
-                        <//>
+                        <${Typography} variant="body2" sx=${{ fontWeight: 500 }} className="live-name">${r.name} (${r.code})<//>
                       <//>
+                      <${TableCell} className="live-line"><${LineBadge} line=${r.line} /><//>
                       <${TableCell} className="daisy">
                         ${nd.daisy ? html`<${NoData} />` : groups.length ? html`
                           <${Stack} spacing=${1.25}>
@@ -208,7 +208,7 @@
                           <${Box} className="ela-ann"><${TwoLang} de=${L.ela.de} en=${L.ela.en} /><//>`}
                       <//>
                     <//>`;
-                }) : html`<${EmptyRow} colSpan=${3} />`}
+                }) : html`<${EmptyRow} colSpan=${4} />`}
               <//>
             <//>
           <//>
