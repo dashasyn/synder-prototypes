@@ -293,9 +293,10 @@ const MARK = '[live copy not captured]';
   ok('Transaction date row present', (await page.locator('#kv .k').allTextContents()).includes('Transaction date'));
   ok('Issued date / Date in books rows removed', (await page.locator('#kv-issued, #kv-books').count()) === 0);
   ok('Sync log present', await vis('#log-table'));
-  ok('A: Sync log message gives the reason', (await txt('#log-inv td:nth-child(4)')) === 'Invoice was created. We used issue date for this date.');
+  ok('A: Sync log message gives the reason', (await txt('#log-inv td:nth-child(4)')) === 'Invoice was created. Invoice date: Jan 6, 2026 (issued date in Stripe, per your Invoice date setting).');
   await page.locator('#ex-created').click();
-  ok('B: reason names the created date', (await txt('#log-why')) === 'We used created date for this date.');
+  ok('B: reason names the created date', (await txt('#log-why')) === 'Invoice date: Dec 28, 2025 (created date in Stripe, per your Invoice date setting).');
+  ok('reason is a normal message, not red', await page.evaluate(() => getComputedStyle(document.getElementById('log-why')).color === getComputedStyle(document.getElementById('log-why').parentElement).color));
   await checkFonts('screen 5');
   await page.locator('#ex-issued').click();
 
@@ -307,11 +308,11 @@ const MARK = '[live copy not captured]';
     const d = [...document.querySelectorAll('#tx-table td.tx-date')].map(e => Date.parse(e.textContent.replace(/ (\d\d:\d\d)$/, ' $1')));
     return d.every((x, i) => i === 0 || d[i - 1] >= x); }));
   await page.locator('#tx-inv-a-explain').click();
-  ok('Explain opens Sync details for that invoice', (await vis('#log-table')) && (await txt('#log-why')) === 'We used issue date for this date.');
+  ok('Explain opens Sync details for that invoice', (await vis('#log-table')) && (await txt('#log-why')).startsWith('Invoice date: Jan 6, 2026'));
   await page.locator('#sd-back').click();
   ok('back link returns to the Transactions list', await vis('#tx-table'));
   await page.locator('#tx-inv-b-explain').click();
-  ok('second invoice opens the created-date example', (await txt('#log-why')) === 'We used created date for this date.');
+  ok('second invoice opens the created-date example', (await txt('#log-why')).startsWith('Invoice date: Dec 28, 2025'));
   await checkFonts('transactions list');
   await screen(1); await state('pro');
   ok('Pro org: PT_3, no Category column, Sync unpaid Off', (await txt('.sb-org')).startsWith('PTPT_3') &&
