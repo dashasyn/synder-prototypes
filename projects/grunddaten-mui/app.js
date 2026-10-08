@@ -90,13 +90,15 @@ function Shell() {
             ${['Incidents', 'Line view', 'Messages view'].map(l => html`
               <${Button} key=${l} color="inherit" disabled
                 sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14 }}>${l}<//>`)}
-            ${/* Ignat, 2026-10-07: what each station plays and shows right now */ ''}
-            <${Button} color="inherit" data-nav="live" onClick=${() => nav('live')}
-              sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
-                     fontWeight: s.view === 'live' ? 500 : 400,
-                     borderBottom: '3px solid', borderColor: s.view === 'live' ? 'primary.main' : 'transparent',
-                     color: s.view === 'live' ? 'primary.main' : 'inherit' }}>
-              ${state.lang === 'de' ? 'Stationssicht' : 'Station view'}<//>
+            ${/* Ignat, 2026-10-07/08: what each station plays and shows right now —
+                  "another point in an expandable menu for live data": table + map */ ''}
+            <${NavMenu} id="live" label=${state.lang === 'de' ? 'Live-Daten' : 'Live data'}
+              active=${s.view === 'live' || s.view === 'liveMap'}>
+              ${close => [
+                item('live',    state.lang === 'de' ? 'Stationssicht' : 'Station view', () => { close(); nav('live'); }),
+                item('liveMap', state.lang === 'de' ? 'Netzplan' : 'Network map',     () => { close(); nav('liveMap'); }),
+              ]}
+            <//>
 
             <${NavMenu} id="evr" label=${t('evrMenu')} active=${EVR_VIEWS.includes(s.view)}>
               ${close => [

@@ -49,8 +49,9 @@
   // sample codes: the first line keeps the station's code in BVG style ("Al");
   // further lines get a different, unique one ("Ap", "A", …)
   const titleCase = c => c.charAt(0) + c.slice(1).toLowerCase();
+  const USED_CODES = new Set();
   function buildRows() {
-    const used = new Set(), rows = [];
+    const used = USED_CODES, rows = [];
     const take = c => { used.add(c); return c; };
     stations.forEach(st => st.lines.forEach((line, k) => {
       const base = titleCase(st.id);
@@ -68,6 +69,16 @@
   const NO_DATA = { 'BI-U2': { daisy: true }, 'TH-U12': { ela: true }, 'SE-U2': { daisy: true, ela: true } };
 
   /* deterministic start state, so the first screen is the same every time */
+  const seedOne = (key, i) => {
+      const n = TRACKS[key] || 2;
+      const daisy = Array.from({ length: n }, (_, k) => {
+        if ((i * 7 + k * 3) % 11 < 4) return null;
+        if (i % 4 === 0) return DAISY_POOL[(i + 1) % DAISY_POOL.length];
+        return DAISY_POOL[(i + k) % DAISY_POOL.length];
+      });
+      const e = i % 5;
+      return { daisy, ela: e === 0 || e === 3 ? null : ELA_POOL[(i * 3) % ELA_POOL.length], changed: 0 };
+  };
   const seedState = rows => {
     const out = {};
     rows.forEach((r, i) => {
@@ -108,6 +119,32 @@
     setTimeout(notify, 3100);   // let the highlight of the changed rows fade
   }
   window.__liveTick = liveTick;   // the checks drive it instead of waiting 10 s
+
+  /* The Netzplan (views-live-map.js) reads the same live state. A map station
+     outside the Grunddaten sample gets its own seeded state and a sample code,
+     keyed by name + line, and from then on ticks along with the rest. */
+  const hash = str => [...str].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  window.LIVE_API = {
+    get(name, line) {
+      ensure();
+      const row = LIVE.rows.find(r => r.name === name && r.line === line);
+      if (row) return { key: row.key, code: row.code, ...LIVE.state[row.key], noData: NO_DATA[row.key] || {} };
+      const key = 'MAP-' + name + '-' + line;
+      if (!LIVE.state[key]) {
+        const letters = name.replace(/[^A-Za-zÄÖÜäöüß]/g, '');
+        const cands = [letters[0] + (letters[1] || '').toLowerCase(), letters[0] + (letters[2] || '').toLowerCase(),
+                       letters[0] + (letters[3] || '').toLowerCase(), letters[0] + (letters[4] || '').toLowerCase()];
+        const code = cands.find(c => !USED_CODES.has(c)) || letters.slice(0, 3);
+        USED_CODES.add(code);
+        LIVE.state[key] = { ...seedOne(key, hash(key) % 97), code };
+        LIVE.rows.push({ key, name, code, line, mapOnly: true });
+      }
+      return { key, code: LIVE.state[key].code, ...LIVE.state[key], noData: NO_DATA[key] || {} };
+    },
+    at: () => LIVE.at,
+    subscribe(fn) { LIVE.listeners.add(fn); return () => LIVE.listeners.delete(fn); },
+    pools: { DAISY_POOL, ELA_POOL },
+  };
   setInterval(() => { if (LIVE.listeners.size) liveTick(); }, 10000);
 
   const hhmmss = d => [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
@@ -145,7 +182,7 @@
     const de = lang === 'de';
     const q = (s.liveSearch || '').toLowerCase();
     const rows = LIVE.rows
-      .filter(r => (!s.liveLine || r.line === s.liveLine)
+      .filter(r => !r.mapOnly && (!s.liveLine || r.line === s.liveLine)
                 && (!q || r.name.toLowerCase().includes(q) || r.code.toLowerCase() === q))
       .slice().sort((a, b) => a.name.localeCompare(b.name, 'de') || a.line.localeCompare(b.line, 'de', { numeric: true }));
     const lineOptions = lineData.map(l => ({ value: l.id, label: l.id }));
