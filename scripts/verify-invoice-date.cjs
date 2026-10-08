@@ -59,8 +59,8 @@ const MARK = '[live copy not captured]';
   ok('Invoice date row visible', await vis('#inv-row'));
   ok('Invoice date sits right after Sync unpaid (open) invoices', await page.evaluate(() => {
     const l = [...document.querySelectorAll('.set-body .row-label')].map(e => e.textContent.replace(/Off$/, '').trim());
-    return l.indexOf('Invoice date in books') === l.indexOf('Sync unpaid (open) invoices') + 1; }));
-  ok('Invoice date in books uses the long option names', (await page.locator('#inv-date option').allTextContents()).join('|') === 'Invoice created date|Invoice issued date');
+    return l.indexOf('Invoice date') === l.indexOf('Sync unpaid (open) invoices') + 1; }));
+  ok('Invoice date: long option names, issued marked recommended', (await page.locator('#inv-date option').allTextContents()).join('|') === 'Invoice created date|Invoice issued date (recommended)');
   ok('no dead Learn more on the new row', (await page.locator('#inv-row a', { hasText: 'Learn more' }).count()) === 0);
   ok('existing Invoices toggles match live defaults (all Off)', await page.evaluate(() =>
     [...document.querySelectorAll('.set-body [role=switch]')].every(t => t.getAttribute('aria-checked') === 'false')));
@@ -101,13 +101,7 @@ const MARK = '[live copy not captured]';
   ok('below Pro: chip is the live link-style chip', (await page.locator('#chip-upgrade').evaluate(e => e.tagName)) === 'A');
   ok('below Pro: value Created', (await val('#inv-date')) === 'created');
   ok('below Pro: select locked before any interaction', !(await en('#inv-date')));
-  ok('below Pro: red line shown up front', (await vis('#inv-gate')) &&
-     (await txt('#inv-gate')) === 'This feature is available on higher plans. Upgrade plan');
-  ok('below Pro: red line sits right under the select, above the description', await page.evaluate(() => {
-    const sel = document.getElementById('inv-date').getBoundingClientRect(), g = document.getElementById('inv-gate').getBoundingClientRect(),
-          h = document.getElementById('inv-help').getBoundingClientRect();
-    return g.top >= sel.bottom && g.bottom <= h.top; }));
-  ok('below Pro: Upgrade plan link is reachable', await vis('#inv-gate a'));
+  ok('below Pro: no red upgrade line, only the chip', (await page.locator('.gate-msg').count()) === 0);
   ok('below Pro: Update stays disabled', !(await en('#btn-update')));
 
   await state('rrpay');
@@ -119,6 +113,10 @@ const MARK = '[live copy not captured]';
   ok('RevRec invoice date: lock note visible', await vis('#inv-lock'));
   ok('lock note names the product and the exact option', (await txt('#inv-lock')).startsWith('Locked while Synder RevRec starts schedules from the invoice created date.'));
   ok('lock note links to Schedule start', await vis('#go-schedule'));
+  ok('lock note sits right under the select, above the description', await page.evaluate(() => {
+    const sel = document.getElementById('inv-date').getBoundingClientRect(), n = document.getElementById('inv-lock').getBoundingClientRect(),
+          h = document.getElementById('inv-help').getBoundingClientRect();
+    return n.top >= sel.bottom && n.bottom <= h.top; }));
   await page.locator('#go-schedule').click();
 
   // ── 4 · RevRec · Recognition settings (live layout, Ignat's screenshots 2026-10-07) ──
@@ -229,7 +227,7 @@ const MARK = '[live copy not captured]';
   ok('old "Posting date" label gone', !(await page.locator('.row-label').allTextContents()).map(s => s.trim()).includes('Posting date'));
   ok('posting options unchanged', (await page.locator('#post-date option').allTextContents()).join('|') === 'Created date|Balance date (recommended)');
   ok('posting helper names the cash side and points to Invoice date', (await txt('#post-help')).includes('balance transactions') &&
-     (await txt('#post-help')).includes('Invoice date in books setting'));
+     (await txt('#post-help')).includes('Invoice date setting'));
   ok('old “Select posting date for transactions” helper gone', !(await txt('#post-help')).includes('Select posting date'));
   ok('posting default Balance date', (await val('#post-date')) === 'balance');
   await page.selectOption('#post-date', 'created');
@@ -253,19 +251,13 @@ const MARK = '[live copy not captured]';
   ok('old payment-only description replaced', !(await txt('#sum-row')).includes('Enable this setting to record sales on the payment date'));
   ok('Summary is a real screen, not a spec note', await page.evaluate(() =>
     document.getElementById('sc-3').parentElement === document.getElementById('sc-1').parentElement));
-  ok('RevRec states disabled on Summary', !(await en('#st-rrinv')));
+  ok('RevRec states available on Summary', await en('#st-rrinv'));
   await state('pro');
   ok('existing Summary org on Invoice created date', (await val('#sum-date')) === 'created');
   await state('new');
   ok('new Summary org on Invoice issued date', (await val('#sum-date')) === 'issued');
-  await state('below');
-  ok('below Pro: Summary select still enabled', await en('#sum-date'));
-  ok('below Pro: Summary chip shown', await vis('#chip-upgrade'));
-  ok('below Pro: Invoice issued date disabled before any pick',
-     await page.locator('#sum-date option[value="issued"]').evaluate(o => o.disabled));
-  ok('below Pro: Summary red line shown up front', (await vis('#sum-gate')) &&
-     (await txt('#sum-gate')).startsWith('This feature is available on higher plans.'));
   ok('AR explained in plain words', (await txt('#sum-row')).includes('Accounts Receivable (money customers still owe you)'));
+  await state('pro');
   await page.selectOption('#sum-date', 'payment');
   ok('Payment date asks first', await modalOpen());
   ok('Payment date dialog says what changes', (await txt('#dlg-title')) === 'Record sales on the payment date?' &&
@@ -275,10 +267,23 @@ const MARK = '[live copy not captured]';
   ok('Escape keeps Invoice created date', !(await modalOpen()) && (await val('#sum-date')) === 'created');
   await page.selectOption('#sum-date', 'payment');
   await page.locator('#dlg-ok').click();
-  ok('below Pro: can pick Payment date after confirming', (await val('#sum-date')) === 'payment');
+  ok('can pick Payment date after confirming', (await val('#sum-date')) === 'payment');
   ok('focus back on the select', await page.evaluate(() => document.activeElement.id === 'sum-date'));
   await page.selectOption('#sum-date', 'created');
   ok('leaving Payment date needs no confirmation', !(await modalOpen()) && (await val('#sum-date')) === 'created');
+  await state('below');
+  ok('below Pro: whole Sales recording date disabled', !(await en('#sum-date')));
+  ok('below Pro: Summary chip shown, no red line', (await vis('#chip-upgrade')) && (await page.locator('.gate-msg').count()) === 0);
+  await state('rrinv');
+  ok('RevRec active: Summary select looks usable', await en('#sum-date'));
+  await page.selectOption('#sum-date', 'issued');
+  ok('RevRec active: change refused, value kept', (await val('#sum-date')) === 'created');
+  ok('RevRec active: red toast at the top says why', (await vis('.toast-err')) &&
+     (await txt('.toast-err .toast-msg')) === 'You cannot change this setting, as revenue recognition is set to recognize invoices since invoice created date');
+  ok('toast closes with ×', await (async () => { await page.locator('.toast-err .toast-x').click(); return (await page.locator('.toast-err').count()) === 0; })());
+  await state('rrpay');
+  await page.selectOption('#sum-date', 'issued');
+  ok('RevRec on Payment date: Summary change allowed, no toast', (await val('#sum-date')) === 'issued' && (await page.locator('.toast-err').count()) === 0);
   await checkFonts('screen 3');
 
   // ── 5 · Sync details ────────────────────────────────────────────────
@@ -286,17 +291,13 @@ const MARK = '[live copy not captured]';
   ok('example group shown on screen 5', await vis('#ex-issued'));
   ok('org group hidden on screen 5', !(await vis('#st-pro')));
   ok('Transaction date row present', (await page.locator('#kv .k').allTextContents()).includes('Transaction date'));
-  ok('A: Issued date row visible', await vis('#kv-issued'));
-  ok('A: Date in books row visible', await vis('#kv-books'));
-  ok('A: books date is the issued date', (await txt('#kv-books')).startsWith('Jan 6, 2026'));
+  ok('Issued date / Date in books rows removed', (await page.locator('#kv-issued, #kv-books').count()) === 0);
+  ok('Sync log present', await vis('#log-table'));
+  ok('A: Sync log message gives the reason', (await txt('#log-inv td:nth-child(4)')) === 'Invoice was created. We used issue date for this date.');
   await page.locator('#ex-created').click();
-  ok('B: Issued date row visible', await vis('#kv-issued'));
-  ok('B: Date in books row always shown', await vis('#kv-books'));
-  ok('B: books date is the created date', (await txt('#kv-books')).startsWith('Dec 28, 2025 · invoice created date, per Invoice date in books setting'));
+  ok('B: reason names the created date', (await txt('#log-why')) === 'We used created date for this date.');
   await checkFonts('screen 5');
   await page.locator('#ex-issued').click();
-  ok('Date in books is plain text, no link', (await page.locator('#kv-books a').count()) === 0);
-  ok('A: Date in books names the setting', (await txt('#kv-books')).includes('invoice issued date, per Invoice date in books setting'));
 
   // ── 3 · Transactions list (live, 2026-10-08) and RevRec org on the Invoices tab ─────
   await screen(7);
@@ -306,11 +307,11 @@ const MARK = '[live copy not captured]';
     const d = [...document.querySelectorAll('#tx-table td.tx-date')].map(e => Date.parse(e.textContent.replace(/ (\d\d:\d\d)$/, ' $1')));
     return d.every((x, i) => i === 0 || d[i - 1] >= x); }));
   await page.locator('#tx-inv-a-explain').click();
-  ok('Explain opens Sync details for that invoice', (await vis('#kv-books')) && (await txt('#kv-books')).startsWith('Jan 6, 2026'));
+  ok('Explain opens Sync details for that invoice', (await vis('#log-table')) && (await txt('#log-why')) === 'We used issue date for this date.');
   await page.locator('#sd-back').click();
   ok('back link returns to the Transactions list', await vis('#tx-table'));
   await page.locator('#tx-inv-b-explain').click();
-  ok('second invoice opens the created-date example', (await txt('#kv-books')).startsWith('Dec 28, 2025 · invoice created date'));
+  ok('second invoice opens the created-date example', (await txt('#log-why')) === 'We used created date for this date.');
   await checkFonts('transactions list');
   await screen(1); await state('pro');
   ok('Pro org: PT_3, no Category column, Sync unpaid Off', (await txt('.sb-org')).startsWith('PTPT_3') &&
@@ -322,9 +323,36 @@ const MARK = '[live copy not captured]';
   ok('RevRec org: Sync unpaid (open) invoices On (live)', (await page.locator('[role=switch][aria-label="Sync unpaid (open) invoices"]').getAttribute('aria-checked')) === 'true');
   ok('RevRec org: Bad Debts category column visible', (await vis('#bad-debt')) && (await val('#bad-debt-cat')) === 'b');
   ok('RevRec org: transaction-type tabs are Default + Payment', (await page.locator('.type').allTextContents()).map(s => s.replace('home', '').trim()).join('|') === 'Default|Payment');
-  ok('RevRec org: Invoice date in books still visible and locked', (await vis('#inv-date')) && !(await en('#inv-date')));
+  ok('RevRec org: Invoice date still visible and locked', (await vis('#inv-date')) && !(await en('#inv-date')));
   ok('RevRec org: no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
   await checkFonts('invoices tab, RevRec org');
+
+  // ── 6 · RevRec setup (live 'Revenue recognition set up', screenshot 2026-10-08) ──
+  await screen(8);
+  ok('setup screen in RevRec org with Revenue recognition active', (await txt('.setup h1')) === 'Revenue recognition set up' && (await txt('.sb-sub.on')).endsWith('Revenue recognition'));
+  ok('Synder-settings switches shown on setup screen', (await vis('#so-off')) && (await vis('#sid-created')));
+  await page.locator('#so-off').click(); await page.locator('#sid-created').click();
+  await page.selectOption('#setup-sched', 'issued');
+  ok('both checks fail → two separate toasts', (await page.locator('.toast-err').count()) === 2);
+  ok('toast 1: sync open invoices (live copy)', (await page.locator('.toast-err .toast-msg').nth(0).textContent()) === 'Enable sync open invoices in Synder Settings first, if you want to recognize revenue since invoice date');
+  ok('toast 2: Invoice date', (await page.locator('.toast-err .toast-msg').nth(1).textContent()).startsWith('Set Invoice date to Invoice issued date'));
+  ok('refused pick reverts to Payment date', (await val('#setup-sched')) === 'payment');
+  await page.locator('#so-on').click();
+  await page.selectOption('#setup-sched', 'issued');
+  ok('only the failing check toasts', (await page.locator('.toast-err').count()) === 1 &&
+     (await txt('.toast-err .toast-msg')).startsWith('Set Invoice date'));
+  await page.selectOption('#setup-sched', 'created');
+  ok('Invoice created date needs only open invoices → accepted', (await val('#setup-sched')) === 'created' && (await page.locator('.toast-err').count()) === 0);
+  await page.locator('#sid-issued').click();
+  await page.selectOption('#setup-sched', 'issued');
+  ok('both settings in place → Invoice issued date accepted', (await val('#setup-sched')) === 'issued' && (await page.locator('.toast-err').count()) === 0);
+  await page.locator('#so-off').click();
+  await page.selectOption('#setup-sched', 'payment');
+  ok('Payment date never checks', (await val('#setup-sched')) === 'payment' && (await page.locator('.toast-err').count()) === 0);
+  await page.selectOption('#setup-sched', 'created');
+  await page.waitForTimeout(50);
+  await checkFonts('setup + toast');
+  ok('setup: no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
   ok('no page errors' + (errors.length ? ' — ' + errors[0] : ''), errors.length === 0);
   await checkFonts('switcher bar');
