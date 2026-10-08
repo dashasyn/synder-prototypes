@@ -298,6 +298,34 @@ const MARK = '[live copy not captured]';
   ok('Date in books is plain text, no link', (await page.locator('#kv-books a').count()) === 0);
   ok('A: Date in books names the setting', (await txt('#kv-books')).includes('invoice issued date, per Invoice date in books setting'));
 
+  // ── 3 · Transactions list (live, 2026-10-08) and RevRec org on the Invoices tab ─────
+  await screen(7);
+  ok('Transactions list in the app shell with Transactions list active', (await vis('#tx-table')) && (await txt('.sb-sub.on')).endsWith('Transactions list'));
+  ok('Stripe invoice keeps its created date in the table', (await page.locator('#tx-inv-a td.tx-date').textContent()) === 'Dec 28, 2025 10:12');
+  ok('rows sorted newest first', await page.evaluate(() => {
+    const d = [...document.querySelectorAll('#tx-table td.tx-date')].map(e => Date.parse(e.textContent.replace(/ (\d\d:\d\d)$/, ' $1')));
+    return d.every((x, i) => i === 0 || d[i - 1] >= x); }));
+  await page.locator('#tx-inv-a-explain').click();
+  ok('Explain opens Sync details for that invoice', (await vis('#kv-books')) && (await txt('#kv-books')).startsWith('Jan 6, 2026'));
+  await page.locator('#sd-back').click();
+  ok('back link returns to the Transactions list', await vis('#tx-table'));
+  await page.locator('#tx-inv-b-explain').click();
+  ok('second invoice opens the created-date example', (await txt('#kv-books')).startsWith('Dec 28, 2025 · invoice created date'));
+  await checkFonts('transactions list');
+  await screen(1); await state('pro');
+  ok('Pro org: PT_3, no Category column, Sync unpaid Off', (await txt('.sb-org')).startsWith('PTPT_3') &&
+     (await page.locator('#bad-debt').count()) === 0 &&
+     (await page.locator('[role=switch][aria-label="Sync unpaid (open) invoices"]').getAttribute('aria-checked')) === 'false');
+  await state('rrinv');
+  ok('RevRec org: RevRec_test with Revenue recognition in the sidebar', (await txt('.sb-org')).includes('RevRec_test') &&
+     (await page.locator('.sb-item', { hasText: 'Revenue recognition' }).count()) === 1);
+  ok('RevRec org: Sync unpaid (open) invoices On (live)', (await page.locator('[role=switch][aria-label="Sync unpaid (open) invoices"]').getAttribute('aria-checked')) === 'true');
+  ok('RevRec org: Bad Debts category column visible', (await vis('#bad-debt')) && (await val('#bad-debt-cat')) === 'b');
+  ok('RevRec org: transaction-type tabs are Default + Payment', (await page.locator('.type').allTextContents()).map(s => s.replace('home', '').trim()).join('|') === 'Default|Payment');
+  ok('RevRec org: Invoice date in books still visible and locked', (await vis('#inv-date')) && !(await en('#inv-date')));
+  ok('RevRec org: no horizontal overflow', await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await checkFonts('invoices tab, RevRec org');
+
   ok('no page errors' + (errors.length ? ' — ' + errors[0] : ''), errors.length === 0);
   await checkFonts('switcher bar');
 
