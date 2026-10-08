@@ -269,8 +269,8 @@ const MARK = '[live copy not captured]';
   ok('B: books date is the created date', (await txt('#kv-books')).startsWith('Dec 28, 2025 · invoice created date, per Invoice date in books setting'));
   await checkFonts('screen 5');
   await page.locator('#ex-issued').click();
-  await page.locator('#kv-books a').click();
-  ok('setting link in Sync details opens Invoices tab', await vis('#inv-row'));
+  ok('Date in books is plain text, no link', (await page.locator('#kv-books a').count()) === 0);
+  ok('A: Date in books names the setting', (await txt('#kv-books')).includes('invoice issued date, per Invoice date in books setting'));
 
   ok('no page errors' + (errors.length ? ' — ' + errors[0] : ''), errors.length === 0);
   await checkFonts('switcher bar');
