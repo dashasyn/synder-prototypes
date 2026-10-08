@@ -137,14 +137,41 @@ const MARK = '[live copy not captured]';
   ok('RevRec settings is a real screen, not a spec note', (await page.locator('#sc-4').evaluate(b => b.parentElement === document.getElementById('sc-1').parentElement)));
 
   await screen(6);
-  ok('schedule details is labelled a spec note', await vis('#rr-spec'));
-  ok('table marker visible', (await txt('#tbl-marker')).startsWith(MARK));
-  ok('Issued column present', (await page.locator('#sched-table th').allTextContents()).includes('Invoice issued date'));
-  ok('pre-release row has blank issued date',
-     (await page.locator('#sched-table tbody tr').nth(2).locator('td').nth(3).textContent()).trim() === '');
-  const existing = '#sched-table tbody tr:not(.row-built) td:nth-child(5)';
+  ok('RevRec subscriptions is a real screen (no spec notes left)', (await page.locator('.spec-tag').count()) === 0 &&
+     await page.evaluate(() => document.getElementById('sc-6').parentElement === document.getElementById('sc-1').parentElement));
+  ok('Subscriptions list in the app shell', (await vis('.sb')) && (await vis('#subs-table')));
+  const existing = '#subs-table tbody tr:not(.row-built) td.sub-start';
   const startsBefore = await page.locator(existing).allTextContents();
-  ok('no post-change rows before a change', (await page.locator('#sched-table tr.row-built').count()) === 0);
+  ok('no post-change subscriptions before a change', (await page.locator('#subs-table tr.row-built').count()) === 0);
+  ok('variant switch shown on screen 6', (await vis('#var-tl')) && (await vis('#var-rs')) && !(await vis('#st-pro')));
+  await page.locator('#see-details').click();
+  ok('See details opens full-screen Subscription details', !(await vis('.sb')) && (await txt('.rr-head')).endsWith('Subscription details'));
+  ok('three live tabs', (await page.locator('.sd-tabs button').allTextContents()).join('|') === 'Revenue schedule|Transaction timeline|Revenue recognition transactions');
+  ok('A: Revenue schedule has no inline issued date', (await page.locator('.rs-iss').count()) === 0);
+  await page.locator('#subtab-timeline').click();
+  ok('A: Issued date column in Transaction timeline', await vis('#th-issued'));
+  ok('A: column sits right after Transaction date', await page.evaluate(() => {
+    const h = [...document.querySelectorAll('#tl-table th')].map(e => e.textContent.trim()); return h.indexOf('Issued date') === h.indexOf('Transaction date') + 1; }));
+  ok('A: post-release invoice shows its issued date', (await txt('#tl-iss-1')) === '05/24/2026');
+  ok('A: Transaction date stays the created date', (await page.locator('#tl-inv-1 td').nth(6).textContent()) === '05/22/2026');
+  await page.locator('#tl-tg-3').click();
+  ok('A: expanding an older payment shows its invoice', await vis('#tl-inv-3'));
+  ok('A: pre-release invoice has a blank issued date', (await txt('#tl-iss-3')) === '');
+  await page.locator('#tl-tg-3').click();
+  ok('A: collapsing hides it again', (await page.locator('#tl-inv-3').count()) === 0);
+  await checkFonts('transaction timeline');
+  ok('timeline table fits without horizontal scroll', await page.evaluate(() => { const w = document.querySelector('#tl-table').closest('.table-wrap'); return w.scrollWidth <= w.clientWidth + 1; }));
+  await page.locator('#var-rs').click();
+  ok('B: no Issued date column in Transaction timeline', (await page.locator('#th-issued').count()) === 0);
+  await page.locator('#subtab-schedule').click();
+  ok('B: issued date inline on Revenue schedule invoices', (await txt('#rs-iss-1')) === '· Issued May 24, 2026');
+  ok('B: pre-release invoice shows a dash', (await txt('#rs-iss-3')) === '· Issued —');
+  await checkFonts('revenue schedule');
+  await page.locator('#subtab-rrtx').click();
+  ok('Revenue recognition transactions tab renders', (await txt('#screen')).includes('No data'));
+  await page.locator('#var-tl').click();
+  await page.locator('.rr-head a').click();
+  ok('closing details returns to the list', await vis('#subs-table'));
   await screen(4);
 
   await page.selectOption('#sched-date', 'issued');
@@ -172,24 +199,23 @@ const MARK = '[live copy not captured]';
   await checkFonts('confirm dialog');
   await page.locator('#confirm').evaluate(e => e.classList.remove('show'));
   await screen(6);
-  ok('existing schedule rows not re-dated',
+  ok('existing subscriptions not re-dated',
      JSON.stringify(await page.locator(existing).allTextContents()) === JSON.stringify(startsBefore));
-  ok('one schedule built after the change', (await page.locator('#sched-table tr.row-built').count()) === 1);
-  ok('post-change schedule starts on its issued date',
-     (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(4).textContent()) === 'Oct 5, 2026' &&
-     (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(3).textContent()) === 'Oct 5, 2026');
-  ok('post-change row visible', await page.locator('#sched-table tr.row-built').first().isVisible());
-  await checkFonts('schedule details');
+  ok('one subscription built after the change', (await page.locator('#subs-table tr.row-built').count()) === 1);
+  ok('post-change subscription starts on its issued date',
+     (await page.locator('#subs-table tr.row-built', { hasText: 'Contoso' }).locator('td.sub-start').textContent()) === '10/05/2026');
+  ok('post-change row visible', await page.locator('#subs-table tr.row-built').first().isVisible());
+  await checkFonts('subscriptions list');
 
   await screen(4);
   await page.selectOption('#sched-date', 'payment');
   await page.locator('#dlg-ok').click();
   ok('Schedule start now Payment date', (await val('#sched-date')) === 'payment');
   await screen(6);
-  ok('second post-change schedule starts on its payment date',
-     (await page.locator('#sched-table tr.row-built').nth(1).locator('td').nth(4).textContent()) === 'Oct 14, 2026');
-  ok('earlier post-change schedule not re-dated',
-     (await page.locator('#sched-table tr.row-built').nth(0).locator('td').nth(4).textContent()) === 'Oct 5, 2026');
+  ok('second post-change subscription starts on its payment date',
+     (await page.locator('#subs-table tr.row-built', { hasText: 'Fabrikam' }).locator('td.sub-start').textContent()) === '10/14/2026');
+  ok('earlier post-change subscription not re-dated',
+     (await page.locator('#subs-table tr.row-built', { hasText: 'Contoso' }).locator('td.sub-start').textContent()) === '10/05/2026');
   ok('existing schedules still not re-dated',
      JSON.stringify(await page.locator(existing).allTextContents()) === JSON.stringify(startsBefore));
   await screen(1);
