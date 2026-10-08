@@ -31,8 +31,11 @@ const {
    is concatenated into the accessible name of whatever contains it — screen
    readers announced "Everrunning expand more, button". Decorative at every call
    site; the ones that need a name set aria-label on the button itself. */
-const Icon = ({ children, sx, ...rest }) =>
-  html`<span className="material-icons" aria-hidden="true"
+// className is merged, not overwritten: MUI (Chip's icon, for one) clones the
+// icon with its own className, and a spread that replaced "material-icons"
+// printed the ligature as text — "volume_up" on the Stationssicht (2026-10-08)
+const Icon = ({ children, sx, className, ...rest }) =>
+  html`<span className=${'material-icons' + (className ? ' ' + className : '')} aria-hidden="true"
         style=${{ fontSize: 20, ...(sx || {}) }} ...${rest}>${children}</span>`;
 
 /* ── The theme — copied verbatim, three measured deviations ─────────
