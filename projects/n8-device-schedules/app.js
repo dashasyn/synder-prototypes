@@ -239,9 +239,12 @@ function evWarnings(s) {
   return out;
 }
 /** Week state per weekday: segments {a, b, disp, pa} in minutes. The state carried into
-    Sunday is the one left at the end of Saturday, so the week runs as a loop. */
+    Sunday is the one left at the end of Saturday, so the week runs as a loop.
+    Per day with Holidays events adds an 8th row; it starts from the same carried-in state. */
 function evTimeline(s) {
-  const lists = DAYS.map(([k]) => (s.ev.mode === 'all' ? s.ev.all : s.ev.day[k] || []).filter(e => toMin(e.t) != null).slice().sort(byTime));
+  const keys = DAYS.map(x => x[0]);
+  const withHol = s.ev.mode === 'day' && (s.ev.day.hol || []).length > 0;
+  const lists = keys.map(k => (s.ev.mode === 'all' ? s.ev.all : s.ev.day[k] || []).filter(e => toMin(e.t) != null).slice().sort(byTime));
   let st = { disp: 'on', pa: 'default' };
   const step = e => {
     if (e.disp !== 'none') st = { ...st, disp: e.disp };
@@ -249,12 +252,16 @@ function evTimeline(s) {
     if (e.pa === 'default') st = { ...st, pa: 'default' };
   };
   lists.forEach(l => l.forEach(step));
-  return lists.map(l => {
+  const carried = { ...st };
+  const day = l => {
     const segs = []; let a = 0;
     l.forEach(e => { const m = toMin(e.t); if (m > a) segs.push({ a, b: m, ...st }); step(e); a = Math.max(a, m); });
     segs.push({ a, b: 1440, ...st });
     return segs.filter(x => x.b > x.a);
-  });
+  };
+  const rows = lists.map((l, i) => ({ k: keys[i], label: DAYS[i][1], segs: day(l) }));
+  if (withHol) { st = carried; rows.push({ k: 'hol', label: 'Holidays', segs: day(s.ev.day.hol.filter(e => toMin(e.t) != null).slice().sort(byTime)) }); }
+  return rows;
 }
 
 /* ── Pure logic ────────────────────────────────────────────────────── */
@@ -361,12 +368,14 @@ function conflictsWith(draft) {
   const mine = reach(draft).filter(r => r.useful);
   return live().filter(o => o.id !== draft.id && o.active).map(o => {
     const shared = reach(o).filter(r => r.useful && mine.some(m => m.d.id === r.d.id));
-    let hit = null;
-    shared.some(r => scheduleEntries(draft, r.d.kind).some(e => scheduleEntries(o, r.d.kind).some(f => {
-      if (f.day === e.day && f.t === e.t && f.field === e.field && f.value !== e.value) { hit = e; return true; }
-      return false;
-    })));
-    return hit ? { s: o, shared: shared.length, at: `${dayName(hit.day)} ${hit.t}` } : null;
+    // Every clashing device is named, so the operator knows which station to change (UX review r1).
+    let hit = null; const devs = [];
+    shared.forEach(r => {
+      const e = scheduleEntries(draft, r.d.kind).find(e => scheduleEntries(o, r.d.kind).some(f =>
+        f.day === e.day && f.t === e.t && f.field === e.field && f.value !== e.value));
+      if (e) { hit = hit || e; devs.push(r.d); }
+    });
+    return hit ? { s: o, shared: devs.length, devs, at: `${dayName(hit.day)} ${hit.t}` } : null;
   }).filter(Boolean);
 }
 
@@ -793,7 +802,7 @@ function validate(d) {
 /* ── Variant 2 · Schedule card: events, Every day or Per day ─────────────
    PaxLife's entry list (time + what to set), here per station. Default: one
    list for every day; Per day gives each weekday and Holidays its own. */
-function EventsCard({ d, set, errs, ov, toast }) {
+function EventsCard({ d, set, errs, ov, toast, saveTry }) {
   const [tab, setTab] = useState(() => DAYKEYS.find(k => d.ev.day[k].length) || 'sun');
   const [copyAt, setCopyAt] = useState(null);
   const [copySel, setCopySel] = useState([]);
@@ -802,19 +811,35 @@ function EventsCard({ d, set, errs, ov, toast }) {
   const list = ev.mode === 'all' ? ev.all : ev.day[tab];
   const setList = l => set({ ev: ev.mode === 'all' ? { ...ev, all: l } : { ...ev, day: { ...ev.day, [tab]: l } } });
   const upd = (i, p) => setList(list.map((x, j) => j === i ? { ...x, ...p } : x));
+  const [toAll, setToAll] = useState(false);     // confirm Per day → Every day when days differ
+  const toEveryDay = src => set({ ev: { ...ev, mode: 'all', all: src.map(x => ({ ...x })), day: emptyDays() } });
   const setMode = m => {
     if (!m || m === ev.mode) return;
-    // First switch to Per day: every day starts from the Every day list.
-    const fresh = m === 'day' && DAYKEYS.every(k => !ev.day[k].length);
-    set({ ev: { ...ev, mode: m, day: fresh ? Object.fromEntries(DAYKEYS.map(k => [k, ev.all.map(x => ({ ...x }))])) : ev.day } });
+    if (m === 'day') {
+      // First switch to Per day: every day starts from the Every day list.
+      const fresh = DAYKEYS.every(k => !ev.day[k].length);
+      set({ ev: { ...ev, mode: 'day', day: fresh ? Object.fromEntries(DAYKEYS.map(k => [k, ev.all.map(x => ({ ...x }))])) : ev.day } });
+      return;
+    }
+    // Per day → Every day carries the events over; if the days differ, ask which list wins (UX review r1).
+    const lists = DAYKEYS.map(k => JSON.stringify(ev.day[k]));
+    if (lists.every(x => x === lists[0])) toEveryDay(ev.day[tab]);
+    else setToAll(true);
   };
   const tabErr = k => Object.keys(errs).some(x => x.startsWith(`ev:${k}:`));
+  // A failed Save opens the first day that holds an error, if the open one has none.
+  useEffect(() => {
+    if (!saveTry || ev.mode !== 'day' || tabErr(tab)) return;
+    const first = DAYKEYS.find(tabErr);
+    if (first) setTab(first);
+  }, [saveTry]);
   const warn = evWarnings(d);
+  const replacing = copySel.some(k => ev.day[k].length);
   const doCopy = () => {
     const day = { ...ev.day };
     copySel.forEach(k => { day[k] = list.map(x => ({ ...x })); });
     set({ ev: { ...ev, day } });
-    toast(`${dayLabel(tab)} copied to ${copySel.map(dayLabel).join(', ')}`);
+    toast(`${dayLabel(tab)} copied to ${copySel.map(dayLabel).join(', ')}${replacing ? ' — their events replaced' : ''}`);
     setCopyAt(null); setCopySel([]);
   };
   const sel = (id, label, value, onChange, items, error, width) => html`
@@ -839,6 +864,7 @@ function EventsCard({ d, set, errs, ov, toast }) {
             ${DAYKEYS.map(k => {
               const n = ev.day[k].length;
               return html`<${Tab} key=${k} value=${k} data-daytab=${k} label=${n ? `${dayLabel(k)} · ${n}` : dayLabel(k)}
+                icon=${tabErr(k) ? html`<${Icon} sx=${{ fontSize: 18 }}>error<//>` : undefined} iconPosition="end"
                 sx=${{ minWidth: 0, px: 1.5, minHeight: 40, fontSize: 14, textTransform: 'none',
                        color: tabErr(k) ? 'error.main' : n ? 'text.primary' : 'text.secondary' }} />`;
             })}
@@ -849,12 +875,21 @@ function EventsCard({ d, set, errs, ov, toast }) {
             ${DAYKEYS.filter(k => k !== tab).map(k => html`
               <${MenuItem} key=${k} data-copyday=${k} dense onClick=${() => setCopySel(s => s.includes(k) ? s.filter(x => x !== k) : [...s, k])}>
                 <${M.Checkbox} size="small" checked=${copySel.includes(k)} sx=${{ p: .5, mr: 1 }} tabIndex=${-1} />${dayLabel(k)}
+                <${Typography} component="span" variant="body2" color="text.secondary" sx=${{ ml: 'auto', pl: 3 }}>${ev.day[k].length ? `${ev.day[k].length} event${ev.day[k].length > 1 ? 's' : ''}` : '–'}<//>
               <//>`)}
             <${Box} sx=${{ px: 2, pt: 1, display: 'flex', justifyContent: 'flex-end' }}>
-              <${Button} variant="contained" id="ev-copy-apply" disabled=${!copySel.length} onClick=${doCopy}>Copy<//>
+              <${Button} variant="contained" id="ev-copy-apply" disabled=${!copySel.length} onClick=${doCopy}>${replacing ? 'Replace' : 'Copy'}<//>
             <//>
           <//>
         <//>` : null}
+      <${Dialog} open=${toAll} onClose=${() => setToAll(false)} PaperProps=${{ id: 'to-all-dialog' }}>
+        <${DialogTitle}>Use ${dayLabel(tab)} events for every day?<//>
+        <${DialogContent}><${DialogContentText}>The days have different events. Every day keeps the ${dayLabel(tab)} list; the other days' events are removed.<//><//>
+        <${DialogActions}>
+          <${Button} id="to-all-cancel" onClick=${() => setToAll(false)}>Cancel<//>
+          <${Button} variant="contained" id="to-all-confirm" onClick=${() => { setToAll(false); toEveryDay(ev.day[tab]); }}>Use ${dayLabel(tab)}<//>
+        <//>
+      <//>
 
       <${Box} id="ev-list" sx=${{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
         ${list.map((x, i) => {
@@ -887,7 +922,7 @@ function EventsCard({ d, set, errs, ov, toast }) {
         <//>` : null}
       ${ov.length ? html`
         <${Alert} severity="error" id="conflict" sx=${{ mt: 1.5 }}>
-          ${ov.map(o => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} on ${o.shared} device${o.shared > 1 ? 's' : ''}</div>`)}
+          ${ov.map(o => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} · ${o.devs.map(x => `${x.name} (${stName(x.station)})`).join(', ')}</div>`)}
         <//>` : null}
     <//>`;
 }
@@ -903,19 +938,19 @@ function WeekCard({ d }) {
     <${SectionCard} title="Week" id="card-week"
       action=${html`<${Box} sx=${{ display: 'flex', gap: 2, fontSize: 14, color: 'text.secondary' }} id="week-legend">
         ${swatch(OFF, 'Displays off')}${swatch(QUIET, 'Volume changed')}${swatch(MUTE, 'Muted')}<//>`}>
-      <${Box} id="timeline" sx=${{ display: 'grid', gridTemplateColumns: '48px 1fr', rowGap: .75, columnGap: 1.5, alignItems: 'center' }}>
+      <${Box} id="timeline" sx=${{ display: 'grid', gridTemplateColumns: '72px 1fr', rowGap: .75, columnGap: 1.5, alignItems: 'center' }}>
         <span />
         <${Box} sx=${{ position: 'relative', height: 20, fontSize: 14, color: 'text.secondary' }}>
           ${[0, 6, 12, 18, 24].map(h => html`<${Box} key=${h} component="span"
             sx=${{ position: 'absolute', left: `${h / 24 * 100}%`, transform: h === 0 ? 'none' : h === 24 ? 'translateX(-100%)' : 'translateX(-50%)' }}>${String(h).padStart(2, '0')}:00<//>`)}
         <//>
-        ${rows.map((segs, i) => html`
-          <${Typography} key=${'l' + i} variant="body2" sx=${{ fontWeight: 500 }}>${DAYS[i][1]}<//>
-          <${Box} key=${'r' + i} data-tl=${DAYS[i][0]} sx=${{ position: 'relative', height: 28, bgcolor: '#F4F4F4', borderRadius: '2px',
+        ${rows.map(({ k, label, segs }, i) => html`
+          <${Typography} key=${'l' + i} variant="body2" sx=${{ fontWeight: 500 }}>${label}<//>
+          <${Box} key=${'r' + i} data-tl=${k} sx=${{ position: 'relative', height: 28, bgcolor: '#F4F4F4', borderRadius: '2px',
                     backgroundImage: 'linear-gradient(90deg, transparent calc(25% - 1px), #E0E0E0 25%, transparent calc(25% + 1px), transparent calc(50% - 1px), #E0E0E0 50%, transparent calc(50% + 1px), transparent calc(75% - 1px), #E0E0E0 75%, transparent calc(75% + 1px))' }}>
-            ${segs.filter(x => x.disp === 'off').map(x => html`<${Tooltip} key=${'d' + x.a} title=${`${DAYS[i][1]} ${fmt(x.a)}–${fmt(x.b)} · Displays off`}>
+            ${segs.filter(x => x.disp === 'off').map(x => html`<${Tooltip} key=${'d' + x.a} title=${`${label} ${fmt(x.a)}–${fmt(x.b)} · Displays off`}>
               <${Box} data-seg="off" sx=${{ position: 'absolute', top: 0, height: '50%', left: `${x.a / 14.4}%`, width: `${(x.b - x.a) / 14.4}%`, bgcolor: OFF }} /><//>`)}
-            ${segs.filter(x => x.pa !== 'default').map(x => html`<${Tooltip} key=${'p' + x.a} title=${`${DAYS[i][1]} ${fmt(x.a)}–${fmt(x.b)} · ${volWord(x.pa)}`}>
+            ${segs.filter(x => x.pa !== 'default').map(x => html`<${Tooltip} key=${'p' + x.a} title=${`${label} ${fmt(x.a)}–${fmt(x.b)} · ${volWord(x.pa)}`}>
               <${Box} data-seg=${x.pa === 0 ? 'mute' : 'quiet'} sx=${{ position: 'absolute', top: '50%', height: '50%', left: `${x.a / 14.4}%`, width: `${(x.b - x.a) / 14.4}%`, bgcolor: x.pa === 0 ? MUTE : QUIET }} /><//>`)}
           <//>`)}
       <//>
@@ -937,8 +972,15 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
   useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
 
   const errs = tried ? validate(d) : {};
-  const nErr = Object.keys(errs).length;
   const v2 = VARIANT === 2;
+  // Summary names the days that hold errors and says a conflict is a conflict, not a field (UX review r1).
+  const nErr = Object.keys(errs).filter(k => k !== 'conflict').length;
+  const errDays = DAYKEYS.filter(k => Object.keys(errs).some(x => x.startsWith(`ev:${k}:`)));
+  const fieldsTxt = nErr ? `Fix ${nErr} field${nErr > 1 ? 's' : ''}${v2 && d.ev.mode === 'day' && errDays.length ? ' on ' + errDays.map(dayLabel).join(', ') : ''}` : '';
+  const summary = !Object.keys(errs).length ? '' : errs.conflict
+    ? (nErr ? `${fieldsTxt} and resolve the conflict with another schedule before saving` : 'Conflicts with another schedule — change the events or the stations')
+    : `${fieldsTxt} before saving`;
+  const [saveTry, setSaveTry] = useState(0);
   const r = reach(d);
   const useful = r.filter(x => x.useful);
   const skipped = [];
@@ -971,7 +1013,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
   };
   const ddRef = useRef(d);
   const save = () => {
-    setTried(true);
+    setTried(true); setSaveTry(n => n + 1);
     if (Object.keys(validate(d)).length) return;
     if (saveMode === 'error') {
       setRun({ phase: 'applying', done: 0, total: applyTo.length });
@@ -1016,7 +1058,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             ${stale.removed.map(r => html`<div key=${'r' + r.name} data-stale="removed">Removed: <b>${r.name}</b> (${stName(r.station)}) — ${r.why}</div>`)}
             <div style=${{ marginTop: 4 }}>Save to update the devices.</div>
           <//>` : null}
-        ${nErr ? html`<${Alert} severity="error" id="err-summary" sx=${{ mb: 2 }}>Fix ${nErr} field${nErr > 1 ? 's' : ''} before saving — nothing has been sent to the devices.<//>` : null}
+        ${summary ? html`<${Alert} severity="error" id="err-summary" sx=${{ mb: 2 }}>${summary} — nothing has been sent to the devices.<//>` : null}
         ${run && run.phase === 'applying' ? html`
           <${Alert} severity="info" icon=${false} id="applying" sx=${{ mb: 2 }}>
             <b>Saving…</b> ${run.total ? `${run.done} of ${run.total} devices updated` : ''}
@@ -1087,7 +1129,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <//>` : null}
         <//>
 
-        ${v2 ? html`<${EventsCard} d=${d} set=${set} errs=${errs} ov=${ov} toast=${toast} />` : html`
+        ${v2 ? html`<${EventsCard} d=${d} set=${set} errs=${errs} ov=${ov} toast=${toast} saveTry=${saveTry} />` : html`
         <${SectionCard} title="Schedule" id="card-timing">
           <${Box} id="ed-days" sx=${{ display: 'flex', flexWrap: 'wrap', gap: .75 }} role="group" aria-label="Days">
             ${DAYS.map(([k, l]) => {
@@ -1115,7 +1157,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
           <//>
           ${ov.length ? html`
             <${Alert} severity="error" id="conflict" sx=${{ mt: 1.5 }}>
-              ${ov.map((o, i) => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} on ${o.shared} device${o.shared > 1 ? 's' : ''}</div>`)}
+              ${ov.map((o, i) => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} · ${o.devs.map(x => `${x.name} (${stName(x.station)})`).join(', ')}</div>`)}
             <//>` : null}
         <//>`}
       <//>

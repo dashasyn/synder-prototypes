@@ -304,7 +304,17 @@ async function run() {
   const offDays = await page.$$eval('#timeline [data-tl]', r => r.filter(x => x.querySelector('[data-seg="off"]')).map(x => x.dataset.tl));
   ok(offDays.join() === 'sun,mon,fri,sat', 'week timeline: dark Fri night → Mon morning, the week runs as a loop', offDays);
   ok(await vis('#card-week') && await vis('#week-legend'), 'timeline is visible with its legend');
-  await page.click('#vs-ranges'); await wait(400);
+  // UX review r1 fix: Per day → Every day with different days asks which list wins
+  await page.click('#ev-tabs [data-daytab="mon"]'); await wait(150);
+  await page.click('#ev-mode-all'); await wait(300);
+  ok(await vis('#to-all-dialog') && /Use Mon events for every day/.test(await txt('#to-all-dialog')), 'Per day → Every day with different days asks first');
+  await page.click('#to-all-cancel'); await wait(250);
+  ok(await page.getAttribute('#ev-mode-day', 'aria-pressed') === 'true' && /Fri · 1/.test(await txt('#ev-tabs [data-daytab="fri"]')), 'Cancel keeps the per-day events');
+  await page.click('#ev-mode-all'); await wait(250); await page.click('#to-all-confirm'); await wait(300);
+  ok(await count('#ev-list [data-event]') === 1 && (await page.inputValue('#ev-t-0')) === '06:00' && !(await count('#ev-empty')), 'confirm: Every day carries the Mon events, never an empty list');
+  await page.click('#vs-ranges'); await wait(300);
+  ok(await vis('#leave-dialog'), 'the change is guarded');
+  await page.click('#leave-discard'); await wait(400);
   ok(await screen() === 'schedules' && !(await count('#s-table tr[data-schedule="s5"]')), 'back to ranges: that schedule falls back to the list (ranges can\'t hold it)');
   await page.click('#vs-events'); await wait(400);
 
@@ -332,17 +342,36 @@ async function run() {
 
   await page.click('#ev-mode-day'); await wait(300);
   ok(await vis('#ev-tabs') && /Sun · 2/.test(await txt('#ev-tabs [data-daytab="sun"]')) && /Holidays · 2/.test(await txt('#ev-tabs [data-daytab="hol"]')), 'Per day: every day and Holidays start from the Every day list');
+  ok(await vis('#timeline [data-tl="hol"]') && await count('#timeline [data-tl="hol"] [data-seg="off"]') === 2, 'Week timeline gets a Holidays row when Holidays has events');
+  await page.click('#ev-mode-all'); await wait(300);
+  ok(!(await count('#to-all-dialog')) && await count('#ev-list [data-event]') === 2, 'identical days → Every day carries the list over without asking');
+  await page.click('#ev-mode-day'); await wait(300);
   await page.click('#ev-tabs [data-daytab="sat"]'); await wait(150);
   await page.click('#ev-del-1'); await page.click('#ev-del-0'); await wait(150);
   ok(await vis('#ev-empty') && /No events on Sat/.test(await txt('#ev-empty')) && /^Sat$/.test(await txt('#ev-tabs [data-daytab="sat"]')), 'a day can be emptied');
   await page.click('#ev-tabs [data-daytab="fri"]'); await wait(150);
   await page.click('#ev-add'); await page.fill('#ev-t-2', '16:00'); await pickMenu('#ev-pa-2', 'Station default'); await wait(200);
   ok(await vis('#conflict') && /Shabbat quiet/.test(await txt('#conflict')) && /Fri 16:00/.test(await txt('#conflict')), 'same-minute clash with another schedule still blocks, per day', await txt('#conflict').catch(() => ''));
+  ok(/AKO Barix PH1 \(Akko\)/.test(await txt('#conflict')), 'the conflict names the device and station');
+  await page.click('#ed-save'); await wait(250);
+  ok(/^Conflicts with another schedule/.test(await txt('#err-summary')) && !/field/.test(await txt('#err-summary')), 'summary calls a conflict a conflict, not a field', await txt('#err-summary'));
   await page.click('#ev-del-2'); await wait(150);
   ok(!(await count('#conflict')), 'and clears');
   await page.click('#ev-copy'); await page.waitForSelector('#ev-copy-menu .MuiMenu-list');
-  await page.click('#ev-copy-menu [data-copyday="sat"]'); await page.click('#ev-copy-apply'); await wait(300);
+  ok(/–/.test(await txt('#ev-copy-menu [data-copyday="sat"]')) && /2 events/.test(await txt('#ev-copy-menu [data-copyday="mon"]')), 'Copy to… shows how many events each day already has');
+  await page.click('#ev-copy-menu [data-copyday="mon"]'); await wait(150);
+  ok(/^Replace$/i.test(await txt('#ev-copy-apply')), 'a non-empty target turns the button into Replace');
+  await page.click('#ev-copy-menu [data-copyday="mon"]'); await wait(150);
+  await page.click('#ev-copy-menu [data-copyday="sat"]'); await wait(150);
+  ok(/^Copy$/i.test(await txt('#ev-copy-apply')), 'an empty target keeps Copy');
+  await page.click('#ev-copy-apply'); await wait(300);
   ok(/Sat · 2/.test(await txt('#ev-tabs [data-daytab="sat"]')), 'Copy to… copies a day\'s events to other days');
+  // UX review r1 fix: an error on a day that isn't open
+  await page.click('#ev-tabs [data-daytab="mon"]'); await page.fill('#ev-t-0', '6');
+  await page.click('#ev-tabs [data-daytab="sun"]'); await wait(150); await page.click('#ed-save'); await wait(300);
+  ok(/Fix 1 field on Mon/.test(await txt('#err-summary')), 'the summary names the day with the error', await txt('#err-summary'));
+  ok(/Mon/.test(await txt('#ev-tabs [aria-selected="true"]')) && await vis('#ev-t-0-helper-text') && await vis('#ev-tabs [data-daytab="mon"] .material-icons'), 'a failed Save opens that day; its tab carries an error icon');
+  await page.fill('#ev-t-0', '23:00'); await wait(150);
   await page.click('#ed-save'); await page.waitForSelector('#save-result', { timeout: 6000 });
   ok(/updated/.test(await txt('#save-result')), 'saves like variant 1');
   await nav('schedules');
