@@ -387,6 +387,7 @@
   .link-p:hover{text-decoration:underline}
   .link-p:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
 
+  .not-copied{margin:0 12px 0 0;align-self:center}
   .wait{display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px 14px;border-radius:8px;background:var(--color-grey-5);color:var(--text-secondary)}
   .wait.ok{background:var(--color-green-light);color:var(--color-green)}
   .spin{width:16px;height:16px;border-radius:50%;border:2px solid #C9D3E6;border-top-color:var(--color-primary);animation:spin 1s linear infinite;flex-shrink:0}
@@ -573,7 +574,7 @@
           <li><b>Claude</b> (web, desktop, mobile): Settings → Connectors → Add custom connector → paste the address → Add, then sign in.</li>
           <li><b>ChatGPT</b> (web): Settings → Apps &amp; Connectors → Developer mode → Create → paste the address, authentication OAuth → Create, then sign in.</li>
         </ul>
-        <p class="scope">The app acts on your behalf in any organization you belong to and does only what you allow on the Synder page.</p>
+        <p class="scope">The app acts on your behalf in any organization you belong to and does only what you allow on the Synder page. You can revoke it here anytime; it stops working at once.</p>
         <h3 class="mc-sec mc-sec2">Claude Code, Cursor and other tools</h3>
         <p class="scope">Tools that cannot sign in take an access token. Keep it to yourself, like a password: it does not expire on its own, revoke it on this page when the tool no longer needs it.</p>
         <div class="form-field">
@@ -619,7 +620,7 @@
       </div>
       <div class="synder-modal-footer">
         <button class="btn-outlined" id="btn-another" onclick="another()">Generate another token</button>
-        <button class="btn" id="btn-done" onclick="done()">Done</button>
+        <button class="btn" id="btn-done" onclick="guardDone(this, done)">Done</button>
       </div>
     </div>
   </div>
@@ -786,8 +787,8 @@ function renderDrawer(){
   var b = document.getElementById('dr-body'), f = document.getElementById('dr-foot');
   document.getElementById('dr-note').hidden = dr.step === 'pick';
   document.getElementById('dr-note').textContent = isSignin(dr.app)
-    ? 'The app acts on your behalf in any organization you belong to and does only what you allow on the Synder page.'
-    : 'The agent acts on your behalf in any organization you belong to and does only what the token allows.';
+    ? 'The app acts on your behalf in any organization you belong to and does only what you allow on the Synder page. You can revoke it here anytime; it stops working at once.'
+    : 'The agent acts on your behalf in any organization you belong to and does only what the token allows. You can revoke it here anytime; it stops working at once.';
   if (dr.step === 'setup' && isSignin(dr.app)){
     b.innerHTML = '<button class="dr-back" id="dr-back" onclick="dr.step=\'pick\';renderDrawer();focusSoon(\'dr-app-' + dr.app + '\')"><span class="mi" style="font-size:18px">chevron_left</span>Choose another app</button>'
       + '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + APPS[dr.app][0] + '</div>'
@@ -820,7 +821,7 @@ function renderDrawer(){
       + '<div class="alert alert-success" id="dr-issued"><span class="mi">check_circle</span><span><b>Token created:</b> ' + esc(dr.name) + ' · ' + esc(dr.label) + '</span></div>'
       + '<div class="alert alert-warning"><span class="mi">key</span><span><b>Copy it now: the full token is shown only once.</b> Keep it to yourself, like a password.</span></div>'
       + clientHTML(k, dr.token).replace(/(['"])(snip-url|snip)/g, '$1dr-$2');
-    f.innerHTML = '<button class="btn" id="dr-done" onclick="drDone()">Done</button>';
+    f.innerHTML = '<button class="btn" id="dr-done" onclick="guardDone(this, drDone)">Done</button>';
   }
   fillLogos(document.getElementById('m-drawer'));
 }
@@ -858,6 +859,7 @@ function drGenerate(){
   var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', t = 'sat_';
   for (var i = 0; i < 40; i++) t += chars[Math.floor(Math.random() * chars.length)];
   dr.name = n; dr.label = label; dr.token = t; dr.step = 'done';
+  tokCopied = false;
   dr.obj = { name: n, prefix: t.slice(0, 12), access: label, created: '10/9/2026', used: 'Never' };
   renderDrawer(); focusSoon('dr-done');
 }
@@ -917,7 +919,7 @@ function clearErr(id){ document.getElementById(id + '-err').hidden = true; docum
 function toast(msg){
   var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status');
   t.innerHTML = '<span class="mi">check_circle</span><span>' + esc(msg) + '</span>';
-  document.getElementById('toasts').appendChild(t);
+  var box = document.getElementById('toasts'); box.innerHTML = ''; box.appendChild(t);
   setTimeout(function(){ t.remove(); }, 4000);
 }
 
@@ -963,6 +965,8 @@ function generate(){
   var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', tok = 'sat_';
   for (var i = 0; i < 40; i++) tok += chars[Math.floor(Math.random() * chars.length)];
   issued = { name: name, access: label, token: tok };
+  tokCopied = false; var bd = document.getElementById('btn-done'); delete bd.dataset.armed; bd.textContent = 'Done';
+  var ow = document.getElementById('btn-done-warn'); if (ow) ow.remove();
   document.getElementById('issued').innerHTML = '<span class="mi">check_circle</span><span><b>Token created:</b> '
     + esc(name) + ' · ' + esc(label) + '</span>';
   document.getElementById('mc-step1').hidden = true;
@@ -1014,7 +1018,16 @@ function flash(btn){
   setTimeout(function(){ if (document.body.contains(btn)){ btn.classList.remove('done'); btn.innerHTML = old; } }, 1800);
 }
 function clip(text){ try { navigator.clipboard && navigator.clipboard.writeText(text).catch(function(){}); } catch (e) {} }
-function copyText(id, btn){ clip(document.getElementById(id).textContent); flash(btn); }
+var tokCopied = false;
+function copyText(id, btn){ clip(document.getElementById(id).textContent); flash(btn); if (/snip$/.test(id)) tokCopied = true; }
+/* shown-once token: first Done without Copy asks; second click closes */
+function guardDone(btn, go){
+  if (tokCopied || btn.dataset.armed){ go(); return; }
+  btn.dataset.armed = '1'; btn.textContent = 'Close anyway';
+  var w = document.createElement('div'); w.className = 'form-error-msg not-copied'; w.id = btn.id + '-warn';
+  w.textContent = "You haven't copied the token. It won't be shown again.";
+  btn.parentNode.insertBefore(w, btn);
+}
 
 function another(){
   addIssued();
@@ -1070,15 +1083,20 @@ function submitRequest(){
 /* ---------- revoke ---------- */
 function askRevoke(i, btn){
   revokeIdx = i;
-  document.getElementById('rv-body').innerHTML = '<b>' + esc(tokens[i].name) + '</b> stops working right away. The agent using it loses access to Synder.';
+  var signin = !tokens[i].prefix;
+  document.getElementById('rv-title').textContent = signin ? 'Disconnect ' + tokens[i].name + '?' : 'Revoke token?';
+  document.getElementById('rv-confirm').textContent = signin ? 'Disconnect' : 'Revoke';
+  document.getElementById('rv-body').innerHTML = signin
+    ? '<b>' + esc(tokens[i].name) + '</b> stops working right away and loses access to Synder. You can connect it again later.'
+    : '<b>' + esc(tokens[i].name) + '</b> stops working right away. The agent using it loses access to Synder.';
   openModal('m-revoke', btn);
   focusSoon('rv-cancel');
 }
 function confirmRevoke(){
-  var name = tokens[revokeIdx].name;
+  var name = tokens[revokeIdx].name, signin = !tokens[revokeIdx].prefix;
   tokens.splice(revokeIdx, 1); renderTokens();
   closeModal(true);
-  toast('Token revoked: ' + name);
+  toast(signin ? name + ' disconnected' : 'Token revoked: ' + name);
   setTimeout(function(){ (document.querySelector('.revoke') || document.querySelector('#v' + variant + '-head [data-connect], #v' + variant + '-head #btn-connect, #v' + variant + '-head #btn-connect-2')).focus(); }, 30);
 }
 
