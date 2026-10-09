@@ -120,6 +120,7 @@
   .diff-n{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text-secondary)}.diff-n b{font-weight:500;color:var(--text-primary)}.diff-sep{margin:0 4px}
   .diff-ok{display:flex;align-items:center;gap:8px}.diff-ok .material-icons{color:var(--color-green)}
   .help.stip{cursor:help}
+  .block-link{color:var(--text-primary)}.block-link:hover{color:var(--text-link)}
   .gate{align-items:center}.gate .grow{flex:1}.gate .alert-title{margin-bottom:2px}
   .gate .material-icons{font-size:20px}
   .diff-fail{display:flex;align-items:center;gap:8px;color:var(--color-red);margin:4px 0 8px}.diff-fail .grow{flex:1}
@@ -191,7 +192,7 @@
     <button id="vs-2" onclick="setVariant(2)">2 · Store needs fixes</button>
     <button id="vs-3" onclick="setVariant(3)">3 · All connected</button>
   </div>
-  <span class="vs-note">Built on Ignat's sketches · sample data</span>
+  <span class="vs-note">Sample data · <a href="dev-questions.html" id="dev-q-link" style="color:inherit">Questions for dev</a></span>
 </div>
 <div class="app-shell">
   <header class="topbar">
@@ -361,7 +362,7 @@ function vOnboard(i){var q="'"+i.id+"'",d1=!!i.loc,d2=i.inv==='Inventory',cur=!d
      '<div class="ob-loc-row"><div class="form-field"><label class="form-label" for="onb-loc">Location</label><select class="select ob-select" id="onb-loc" onchange="S.onbLoc=this.value;render()"><option value="">Choose location</option>'
        +i.locations.map(function(l){return '<option '+(S.onbLoc===l?'selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select></div>'
        +why(S.onbLoc?'Save the location and go to the next step.':'Choose a location first.','<button class="btn" id="onb-finish" '+(S.onbLoc?'':'disabled ')+'onclick="setLoc('+q+',S.onbLoc)">Save location</button>',!S.onbLoc)+'</div>')
-   +step(2,d2,d1&&!d2,'Set Created product to Inventory','Created product should be: Inventory','In Settings › Products/Services, set Created product should be to Inventory and click Update. This page updates by itself.',
+   +step(2,d2,d1&&!d2,'Track stock for products in QuickBooks','Created product should be: Inventory','Settings › Products/Services › Created product should be: Inventory. This page updates by itself.',
      '<button class="btn" id="onb-settings" onclick="openSettings('+q+')">Open Settings <span class="material-icons i16">open_in_new</span></button>')
    +step(3,false,d1&&d2,'Start sending stock changes','','Only changes made in QuickBooks from now on are sent to Shopify. Stock that already differs shows up in Stock check.',
      '<button class="btn" id="onb-enable" onclick="enable()">Enable</button>')
@@ -374,7 +375,7 @@ function onboarding(){if(L!==2||!S.onb)return null;var i=onbStore();if(!i)return
   return vOnboard(i)}
 
 /* ---- no store connected yet: every tab says what to do first (Ignat 2026-10-05) ---- */
-var GATE={overview:'Connect a Shopify store below. Then choose its location and set Created product to Inventory. After that, click Enable.',
+var GATE={overview:'Connect a Shopify store below. Then choose its location and track stock for its products in QuickBooks. After that, click Enable.',
   events:'Stock changes sent from QuickBooks to your stores show up here once a store is connected.',
   mappings:'The products of a store and their QuickBooks items show up here once the store is connected.',
   reconcile:'Synder compares the stock in QuickBooks and Shopify every night once a store is connected. Differences show up here.'};
@@ -395,11 +396,12 @@ function bDiffs(){   // informative only: how many differ, the 3 biggest, one wa
   var st=compared(),runs=st.map(function(i){return latestRun(i)}),n=allDiffs(),multi=conn().filter(function(i){return i.loc}).length>1;
   var failed=conn().filter(function(i){return i.loc}).filter(function(i){var a=lastRunAny(i);return a&&a.status==='Failed'});
   var rows=[];st.forEach(function(i){diffsOf(i).forEach(function(x){rows.push({i:i,x:x,d:x.qq-x.sq})})});rows.sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d)});
-  var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t">Stock check '+helpIc('Every night at 02:30 UTC, Synder compares the stock of each product in QuickBooks and Shopify. Products where the two numbers differ are shown here. Sync sends only changes, so a difference stays until you fix it.')+'</div><div class="box">';
+  var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t"><a class="text-link block-link" id="diff-title" onclick="go(\'reconcile\')">Stock check</a> '+helpIc('Every night at 02:30 UTC, Synder compares the stock of each product in QuickBooks and Shopify. Products where the two numbers differ are shown here. Sync sends only changes, so a difference stays until you fix it.')+'</div><div class="box">';
   failed.forEach(function(i){var a=lastRunAny(i);
     h+='<div class="diff-fail" data-fail="'+i.id+'"><span class="material-icons i16">error</span><span class="grow">The last check'+(multi?' of '+esc(i.name):'')+' failed ('+esc(a.started)+'), so '+(multi?'its':'the')+' stock wasn\'t compared.</span>'
       +tip('Compare every store that has a location now.','<button class="btn btn-outlined btn-sm" id="diff-compare" onclick="compareNow()">Compare now</button>')+'</div>'});
-  if(!runs.length)return h+(failed.length?'':'<div class="muted" id="diff-msg">No comparison yet. Connected stores are compared every night at 02:30 UTC.</div>')+'</div></div>';
+  if(!runs.length){var cl=conn().filter(function(i){return i.loc}).length;   // empty: offer the comparison instead of waiting for the night
+    return h+(failed.length?'':'<div class="muted" id="diff-msg">No comparison yet.</div><div class="row-actions" style="margin-top:8px">'+why(cl?'Compare stock in QuickBooks and Shopify now, instead of waiting for the night.':'Choose a location for a store first.','<button class="btn btn-outlined btn-sm" id="diff-compare-empty" '+(cl?'':'disabled ')+'onclick="compareNow()">Compare now</button>',!cl)+'</div>')+'</div></div>'}
   if(!n){var ok=st.filter(function(i){return failed.indexOf(i)<0&&latestRun(i)});if(!ok.length)return h+'</div></div>';   // never claim a match for a store that wasn't compared
     return h+'<div class="diff-ok" id="diff-msg"><span class="material-icons i16">check_circle</span>'+(failed.length?esc(ok.map(function(i){return i.name}).join(', '))+': stock is the same in QuickBooks and Shopify.':'Stock is the same in QuickBooks and Shopify.')+'</div></div></div>'}
   /* one store with differences → open its comparison; several → the list (variant 1) / the differences page (variant 2) */
@@ -419,6 +421,7 @@ function tilesLine(){ // the numbers that need the user are coloured only when t
   return '<div class="tiles" id="tiles">'+t.map(function(x){return '<div class="tile '+(x[1]>0?x[3]:'')+'" data-tile="'+x[0]+'"><div class="tl">'+stip(x[0]==='Applied in 24h'?'Applied':x[0],x[0])+'</div><div class="tv">'+(S.enabledOn?'<a class="text-link" onclick="'+x[4]+'">'+x[1]+'<span class="material-icons i16">chevron_right</span></a>':'<span class="muted">–</span>')+'</div></div>'}).join('')+'</div>'}
 function helpIc(text){return '<span class="material-icons help stip" tabindex="0" role="img" aria-label="'+esc(text)+'" data-stip="'+esc(text)+'">help</span>'}   // (?) next to a header: same tooltip as the statuses
 function why(text,inner,disabled){return disabled?'<span class="why-wrap">'+tip(text,inner)+'<span class="btn-why">'+esc(text)+'</span></span>':tip(text,inner)}   // keyboard/touch users can't hover a disabled button
+function shopLink(name){return '<a class="text-link shop-link" onclick="toast(\'Product opened in Shopify.\')">'+esc(name)+' <span class="material-icons i16">open_in_new</span></a>'}   // Mappings + Stock check (team 2026-10-09)
 function tip(text,inner){return '<span class="tip" data-tip="'+esc(text)+'">'+inner+'</span>'}   // tooltip wrapper (works on disabled buttons too)
 function bActivity(){
   var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, never=!S.enabledOn;
@@ -438,10 +441,10 @@ function bSync(){
   else if(mode==='paused') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>after you resume</div>';
   if(mode==='paused') h+='<div class="line muted" id="pause-reason">'+esc(S.pauseReason)+'</div>';
   var b;
-  if(mode==='off') b=why(rd.length?'Start sending stock changes from QuickBooks to the ready stores. Only changes made from now on are sent.':'Choose a location and set Created product to Inventory for at least one store first.',
+  if(mode==='off') b=why(rd.length?'Start sending stock changes from QuickBooks to the ready stores. Only changes made from now on are sent.':'Choose a location and track stock in QuickBooks for at least one store first.',
       '<button class="btn" id="btn-enable" '+(rd.length?'':'disabled ')+'onclick="enable()">Enable</button>',!rd.length);
   else if(mode==='on') b=tip('Stop sending to Shopify. Changes are saved and sent when you resume.','<button class="btn btn-outlined" id="btn-pause" onclick="pause()">Pause</button>')
-      +tip('Check QuickBooks now instead of waiting for the next update.','<button class="btn btn-outlined" id="btn-run" onclick="S.lastSync=\'just now\';toast(\'Checked QuickBooks: 0 new changes.\');render()">Check QuickBooks now</button>')
+      +tip('Get the latest changes from QuickBooks and send them now, instead of waiting for the next update.','<button class="btn btn-outlined" id="btn-run" onclick="S.lastSync=\'just now\';toast(\'Refresh finished: 0 new, 0 applied, 0 held, 0 failed.\');render()">Refresh now</button>')
       +tip('Stop reading QuickBooks. Changes made while disabled are never sent.','<button class="btn btn-outlined btn-outlined-error" id="btn-disable" onclick="askDisable()">Disable</button>');
   else b=tip('Send the saved changes and continue.','<button class="btn" id="btn-resume" onclick="S.sync=\'on\';S.pauseReason=null;toast(\'Resumed. Saved changes are being sent.\');render()">Resume</button>')
       +tip('Stop reading QuickBooks. Changes made while disabled are never sent.','<button class="btn btn-outlined btn-outlined-error" id="btn-disable" onclick="askDisable()">Disable</button>');
@@ -470,7 +473,7 @@ function bStores(){
     var m=mappedN(i), un=i.products.length-m, fixes=[];
     // open setup items, in order, each with one action; a done one-time setting is not shown
     if(!i.loc) fixes.push(['loc','Choose location','Pick the Shopify location that receives stock changes.','<button class="btn btn-outlined btn-sm" onclick="askLoc('+q+')">Choose location</button>']);
-    if(i.inv!=='Inventory') fixes.push(['inv','Set Created product to Inventory','Go to Settings › Products/Services and change Created product should be from Non-inventory to Inventory.',
+    if(i.inv!=='Inventory') fixes.push(['inv','Track stock for products in QuickBooks','Settings › Products/Services › Created product should be: Inventory (now Non-inventory).',
       '<button class="btn btn-outlined btn-sm" onclick="openSettings('+q+')">Open Settings <span class="material-icons i16">open_in_new</span></button>']);
     if(un) fixes.push(['map',plural(un,'item')+(un===1?' needs':' need')+' mapping','Products without a QuickBooks item don\'t get stock changes. Map them on the Mappings tab.',
       '<button class="btn btn-outlined btn-sm" onclick="go(\'mappings\',{mapStore:'+q+',unmappedOnly:true})">Map products</button>']);
@@ -517,7 +520,7 @@ function vMappings(){var cs=conn();if(!cs.length)return '<div class="table-wrap"
    +tip('Reload the QuickBooks items and match the products again'+(all?' in every store':'')+'. Last updated '+last+'.','<button class="btn btn-outlined" id="btn-refresh" onclick="refreshMappings(\''+sf+'\')">Refresh</button>')+'</div>';
   h+='<div class="table-wrap"><table class="synder-table" id="map-table"><thead><tr>'+(all?'<th>Store</th>':'')+'<th>Product</th><th>Variant</th><th>SKU</th><th style="width:320px">QuickBooks item</th><th>Match source</th><th>Actions</th></tr></thead><tbody>'
    +(pg.slice(list).map(function(t){var i=t.i,p=t.p,m=i.map[p[0]],dup=m?usedBy(i,m.q,p[0]):[];
-     return '<tr data-prod="'+esc(p[0])+'" data-st="'+i.id+'">'+(all?'<td>'+esc(i.name)+'</td>':'')+'<td>'+esc(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
+     return '<tr data-prod="'+esc(p[0])+'" data-st="'+i.id+'">'+(all?'<td>'+esc(i.name)+'</td>':'')+'<td>'+shopLink(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
      +'<td><select class="select map-sel" style="width:300px" aria-label="QuickBooks item for '+esc(p[0])+'" onchange="setMap(\''+i.id+'\',\''+p[0]+'\',this.value)"><option value="">Search by name or SKU</option>'
      +QBO.map(function(x){var u=usedBy(i,x.id,p[0]);return '<option value="'+x.id+'" '+(m&&m.q===x.id?'selected':'')+'>'+esc(x.name)+(x.sku?' · '+esc(x.sku):'')+(u.length?' · used by '+esc(u.join(', ')):'')+'</option>'}).join('')+'</select>'
      +(dup.length?'<div class="map-dup"><span class="material-icons i16">warning</span>'+esc(qbo(m.q).name)+' is also mapped to '+esc(dup.join(', '))+'. Only one of them gets stock changes.</div>':'')+'</td>'
@@ -603,7 +606,7 @@ function diffTable(items,withStore,emptyText){var sel=S.recSel||{},key=function(
    +(items.map(function(t){var i=t.i,x=t.x,d=x.qq-x.sq,p=i.products.filter(function(y){return y[0]===x.prod})[0],q=qs(i.id)+','+qs(x.prod),canAct=t.latest&&x.res==='Unresolved';
      var st=x.res==='Unresolved'?chip(RES_TIP,'Unresolved','status-yellow'):x.res==='Ignored'?chip(RES_TIP,'Ignored','status-grey'):chip(RES_TIP,'Updated','status-green');
      return '<tr data-prod="'+esc(x.prod)+'" data-st="'+i.id+'"><td class="col-cb">'+(canAct?cb(!!sel[key(t)],'Select '+x.prod,"S.recSel=S.recSel||{};S.recSel["+qs(key(t))+"]=this.checked;render()"):'')+'</td>'
-     +(withStore?'<td>'+esc(i.name)+'</td>':'')+'<td>'+esc(x.prod)+'</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+signed(d)+'</td>'
+     +(withStore?'<td>'+esc(i.name)+'</td>':'')+'<td>'+shopLink(x.prod)+'</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+signed(d)+'</td>'
      +'<td>'+st+(x.by?'<span class="muted cell-sub">by '+esc(x.by)+'</span>':'')+'</td>'
      +'<td class="rec-actions">'+(canAct?'<button class="btn btn-outlined btn-sm accept" onclick="askAccept('+q+')">Update Shopify qty</button><span class="stip" data-stip="Hides this difference until either quantity changes. Nothing is sent to Shopify. You can restore it."><button class="btn btn-text btn-sm ignore" onclick="ignoreRow('+q+')">Ignore</button></span>'
        :t.latest&&x.res==='Ignored'?'<button class="btn btn-text btn-sm restore" onclick="restoreRow('+q+')">Restore</button>':'–')+'</td></tr>'}).join('')
