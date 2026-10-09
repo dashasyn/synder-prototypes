@@ -180,20 +180,27 @@ const CONTENT_MAX = 960;
    own filters / add button on the tabs' row. Detail pages keep breadcrumbs. */
 const GD_TABS = [['stations', 'stations'], ['lines', 'lines'], ['lineMgmt', 'lineMgmt'],
                  ['spc', 'spcPage'], ['texts', 'texts']];  // Tondateien: own menu entry (Ignat, 2026-10-09)
-function GdTabsHeader({ action }) {
-  const { s, nav, t } = useApp();
+/* Ignat, 2026-10-09: Grunddaten and Tondateien share one header structure —
+   title, tabs under it, filters / add button on the right of the tab row. */
+function TabsHeader({ id, tabsId, title, value, onChange, tabs, action }) {
   return html`
-    <${Box} data-page-header="" id="gdHeader" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
+    <${Box} data-page-header="" id=${id} sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
                    position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }}>
-      <${Typography} variant="h6" sx=${{ fontWeight: 500, pt: 2 }}>${state.lang === 'de' ? 'Grunddaten' : 'Basic data'}<//>
+      <${Typography} variant="h6" sx=${{ fontWeight: 500, pt: 2 }}>${title}<//>
       <${Box} sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-        <${Tabs} value=${s.view} onChange=${(e, v) => nav(v)} sx=${{ minHeight: 48 }}>
+        <${Tabs} id=${tabsId} value=${value} onChange=${onChange} sx=${{ minHeight: 48, alignSelf: 'flex-end' }}>
           ${/* stock MUI tabs, uppercase (Ignat, 2026-10-09) */ ''}
-          ${GD_TABS.map(([v, k]) => html`<${Tab} key=${v} value=${v} label=${t(k)} data-gdtab=${v} />`)}
+          ${tabs.map(tb => html`<${Tab} key=${tb.value} ...${tb} />`)}
         <//>
-        ${action ? html`<${Box} sx=${{ py: 1 }}>${action}<//>` : null}
+        ${action ? html`<${Box} data-header-action="" sx=${{ py: 1 }}>${action}<//>` : null}
       <//>
     <//>`;
+}
+function GdTabsHeader({ action }) {
+  const { s, nav, t } = useApp();
+  return html`<${TabsHeader} id="gdHeader" title=${state.lang === 'de' ? 'Grunddaten' : 'Basic data'}
+    value=${s.view} onChange=${(e, v) => nav(v)} action=${action}
+    tabs=${GD_TABS.map(([v, k]) => ({ value: v, label: t(k), 'data-gdtab': v }))} />`;
 }
 
 function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narrow, dense }) {

@@ -87,15 +87,6 @@ function AudioTracksTab() {
 
   return html`
     <${React.Fragment}>
-      <${Stack} direction="row" spacing=${2} alignItems="flex-start" sx=${{ mb: 2 }}>
-        <${TextField} id="snd-search" label=${t('searchByName')} value=${s.soundSearch}
-          onChange=${e => set({ soundSearch: e.target.value })} sx=${{ flex: 1 }}
-          InputProps=${{ startAdornment: html`
-            <${InputAdornment} position="start"><${Icon} sx=${{ fontSize: 18 }}>search<//><//>` }} />
-        <${FilterSelect} id="snd-type-filter" label=${t('colType')} value=${f}
-          onChange=${v => set({ soundFilter: v })} minWidth=${200}
-          options=${AUD_TYPES.map(ty => ({ value: ty, label: t(audTypeKey(ty)) }))} />
-      <//>
 
       <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
         <${Table} id="snd-table">
@@ -584,7 +575,21 @@ function SoundsView() {
     nav('playlistDetail', pl.id);
   };
 
-  const action =
+  // Ignat, 2026-10-09: same structure as Grunddaten — filters + add on the tab row
+  const filters = html`
+    <${Stack} direction="row" spacing=${2} alignItems="center">
+      <${TextField} id="snd-search" label=${t('searchByName')} value=${s.soundSearch} sx=${{ width: 280 }}
+        onChange=${e => set({ soundSearch: e.target.value })}
+        InputProps=${{ endAdornment: s.soundSearch ? html`
+          <${InputAdornment} position="end">
+            <${IconButton} aria-label="clear search" onClick=${() => set({ soundSearch: '' })}>
+              <${Icon} sx=${{ fontSize: 18 }}>close<//><//>
+          <//>` : null }} />
+      <${FilterSelect} id="snd-type-filter" label=${t('colType')} value=${s.soundFilter}
+        onChange=${v => set({ soundFilter: v })} minWidth=${160}
+        options=${AUD_TYPES.map(ty => ({ value: ty, label: t(audTypeKey(ty)) }))} />
+    <//>`;
+  const button =
     tab === 'playlists' ? html`<${Button} id="pl-new" variant="contained"
                                  onClick=${newPlaylist}>${t('newPlaylist')}<//>`
   : tab === 'radio'     ? html`<${Button} id="rs-new" variant="contained"
@@ -592,6 +597,8 @@ function SoundsView() {
   :                       html`<${Button} id="snd-add" variant="contained"
                                  startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
                                  onClick=${() => setAddOpen(true)}>${t('addAudio')}<//>`;
+  const action = tab === 'tracks'
+    ? html`<${Stack} direction="row" spacing=${2} alignItems="center">${filters}${button}<//>` : button;
 
   const count = n => html`<${Chip} size="small" label=${n}
     sx=${{ ml: 1, height: 18, '& .MuiChip-label': { px: .75, fontSize: 11 } }} />`;
@@ -600,14 +607,11 @@ function SoundsView() {
 
   return html`
     <${Box}>
-      <${PageHeader} title=${t('sounds')} action=${action} />
-
-      <${Tabs} id="snd-tabs" value=${tab} onChange=${(e, v) => set({ soundTab: v })}
-        sx=${{ px: 3, bgcolor: '#fff', borderBottom: '1px solid #E7E7E7' }}>
-        <${Tab} value="tracks"    label=${tabLabel('tabTracks', soundFiles.length)} />
-        <${Tab} value="playlists" label=${tabLabel('tabPlaylists', playlists.length)} />
-        <${Tab} value="radio"     label=${tabLabel('tabRadio', radioStreams.length)} />
-      <//>
+      <${TabsHeader} id="sndHeader" tabsId="snd-tabs" title=${t('sounds')} value=${tab} action=${action}
+        onChange=${(e, v) => set({ soundTab: v })}
+        tabs=${[{ value: 'tracks',    label: tabLabel('tabTracks', soundFiles.length) },
+                { value: 'playlists', label: tabLabel('tabPlaylists', playlists.length) },
+                { value: 'radio',     label: tabLabel('tabRadio', radioStreams.length) }]} />
 
       <${PageBody}>
         ${tab === 'playlists' ? html`<${AudioPlaylistsTab} />`
