@@ -9,10 +9,11 @@
    Station details and Device details only *show* the schedules that reach
    them and link into that one editor — no second editor.
 
-   Two variants, swapped in place by the bar at the top:
-   1 · Target — the full DATNETISR-264 workflow.
-   2 · Phase 1 — the same screens, limited to what ETC can do today on top of
-       the PaxLife API (one weekly schedule per device, read + replace).
+   Two variants of the Schedule card, swapped in place by the bar at the top
+   (Ignat, 2026-10-09):
+   1 · Time ranges — days + Start/End, as DATNETISR-264 describes it.
+   2 · On/off events — PaxLife-style events, Every day or Per day (+ Holidays),
+       with a "never back on" warning and a weekly timeline.
    API / requirement gaps (G1–G11) are listed in NOTE.md, not in the UI —
    Ignat, 2026-10-06: "I want managers just to see the result".
 
@@ -160,6 +161,102 @@ var SCHEDULES = [
       stale: { on: '1 Oct 2026', added: [{ group: 'south', station: 'BS' }], removed: [{ name: 'ASK Barix PH2', station: 'ASK', why: 'removed from the station' }] } } },
 ];
 
+/* ── Variant 2 · On/off events (Ignat, 2026-10-09) ─────────────────────
+   PaxLife-style: a list of events (time + what happens), the same for every
+   day by default, or set per weekday and for Holidays. Covers what ranges
+   can't, e.g. off Fri 23:00 → on Mon 06:00. Same schedules, event form. */
+var VARIANT = 1;
+const DAYKEYS = [...DAYS.map(x => x[0]), 'hol'];
+const dayLabel = k => k === 'hol' ? 'Holidays' : DAYS.find(x => x[0] === k)[1];
+const dayIdx = k => k === 'hol' ? 7 : DAYS.findIndex(x => x[0] === k);
+const dayName = i => i === 7 ? 'Holidays' : DAYS[i][1];
+/** One event: time, displays none|off|on, PA none|set|default, volume 0–100 (0 = mute). */
+const EV = (t, disp, pa, vol) => ({ t, disp: disp || 'none', pa: pa || 'none', vol: vol == null ? 50 : vol });
+const emptyDays = () => Object.fromEntries(DAYKEYS.map(k => [k, []]));
+const perDay = (spec) => {
+  const day = emptyDays();
+  Object.entries(spec).forEach(([keys, list]) => keys.split(',').forEach(k => { day[k] = list.map(e => ({ ...e })); }));
+  return { mode: 'day', all: [], day };
+};
+const nightOn = EV('05:00', 'on', 'default'), nightOff = EV('23:30', 'off', 'set', 30);
+const EV_SAMPLE = {
+  s1: perDay({ sun: [nightOff], 'mon,tue,wed,thu': [nightOn, nightOff], fri: [nightOn] }),
+  s2: perDay({ 'fri,sat,hol': [EV('16:00', 'none', 'set', 0), EV('20:00', 'none', 'default')] }),
+  s3: { mode: 'all', all: [EV('01:00', 'off'), EV('04:30', 'on')], day: emptyDays() },
+  s4: perDay({ 'sun,mon,tue,wed,thu': [EV('21:00', 'none', 'set', 40), EV('23:00', 'none', 'default')] }),
+  s5: perDay({ fri: [EV('23:00', 'off', 'set', 0)], mon: [EV('06:00', 'on', 'default')] }),
+};
+// Ignat's example — ranges can't express it, so it exists in variant 2 only.
+SCHEDULES.push({ id: 's5', name: 'Weekend shutdown — Ashkelon', active: true, groups: [], stations: ['ASK'], v2only: true,
+  days: [], holidays: false, start: '', end: '', pa: 'none', paPct: 50, display: 'none', apply: { at: '2 Oct 2026, 03:00', failed: [] } });
+SCHEDULES.forEach(s => { s.ev = EV_SAMPLE[s.id]; });
+/** The schedules that exist in the current variant. */
+const live = () => SCHEDULES.filter(s => VARIANT === 2 ? !s.v1only : !s.v2only);
+/** Every event of a schedule, tagged with its day key (Every day = all 7 + Holidays). */
+const evWeek = s => !s.ev ? [] : DAYKEYS.flatMap(k => (s.ev.mode === 'all' ? s.ev.all : s.ev.day[k] || []).map(e => ({ ...e, day: k })));
+const usesDisp = s => VARIANT === 2 ? evWeek(s).some(e => e.disp !== 'none') : s.display === 'darken';
+const usesPa = s => VARIANT === 2 ? evWeek(s).some(e => e.pa !== 'none') : s.pa === 'adjust';
+const volWord = v => Number(v) === 0 ? 'Mute' : `Volume ${v}%`;
+const evText = e => [e.disp === 'off' ? 'Displays off' : e.disp === 'on' ? 'Displays on' : '',
+  e.pa === 'set' ? volWord(e.vol) : e.pa === 'default' ? 'Station default volume' : ''].filter(Boolean).join(' · ');
+const byTime = (a, b) => (toMin(a.t) ?? 9999) - (toMin(b.t) ?? 9999);
+/** "Sun–Thu 23:30 · Mon–Fri 05:00" — same time + action merge their days. */
+function evSummary(s, max = 3) {
+  const map = new Map();
+  evWeek(s).filter(e => toMin(e.t) != null).forEach(e => {
+    const k = e.t + '|' + evText(e);
+    if (!map.has(k)) map.set(k, { t: e.t, days: [] });
+    map.get(k).days.push(dayIdx(e.day));
+  });
+  if (s.ev.mode === 'all') return [...new Set([...map.values()].map(g => g.t))].sort().join(', ') || '–';
+  // Same set of days → one part with all its times: "Fri, Sat, Holidays 16:00, 20:00".
+  const bySet = new Map();
+  [...map.values()].forEach(g => {
+    const k = [...new Set(g.days)].sort().join(',');
+    if (!bySet.has(k)) bySet.set(k, { days: [...new Set(g.days)].sort(), times: [] });
+    bySet.get(k).times.push(g.t);
+  });
+  const parts = [...bySet.values()].sort((a, b) => a.days[0] - b.days[0])
+    .map(g => `${daysText({ days: g.days.filter(i => i < 7).map(i => DAYS[i][0]), holidays: g.days.includes(7) })} ${g.times.sort().join(', ')}`);
+  return parts.length > max ? parts.slice(0, max).join(' · ') + ` +${parts.length - max}` : parts.join(' · ') || '–';
+}
+const evDays = s => s.ev.mode === 'all' ? 'Every day'
+  : daysText({ days: DAYS.map(x => x[0]).filter(k => s.ev.day[k].length), holidays: s.ev.day.hol.length > 0 });
+function evActions(s) {
+  const w = evWeek(s), out = [];
+  const off = w.some(e => e.disp === 'off'), on = w.some(e => e.disp === 'on');
+  if (off || on) out.push(off && on ? 'Displays off/on' : off ? 'Displays off' : 'Displays on');
+  const lv = [...new Set(w.filter(e => e.pa === 'set').map(e => Number(e.vol)))].sort((a, b) => a - b);
+  if (lv.length) out.push(lv.map(volWord).join(', '));
+  else if (w.some(e => e.pa === 'default')) out.push('Station default volume');
+  return out.join(' · ') || 'No action';
+}
+/** Something switched off / changed and never switched back — a warning, not a blocker. */
+function evWarnings(s) {
+  const w = evWeek(s), out = [];
+  if (w.some(e => e.disp === 'off') && !w.some(e => e.disp === 'on')) out.push(['disp', 'Displays stay off — no event turns them back on.']);
+  if (w.some(e => e.pa === 'set') && !w.some(e => e.pa === 'default')) out.push(['pa', 'Volume never returns to the station default.']);
+  return out;
+}
+/** Week state per weekday: segments {a, b, disp, pa} in minutes. The state carried into
+    Sunday is the one left at the end of Saturday, so the week runs as a loop. */
+function evTimeline(s) {
+  const lists = DAYS.map(([k]) => (s.ev.mode === 'all' ? s.ev.all : s.ev.day[k] || []).filter(e => toMin(e.t) != null).slice().sort(byTime));
+  let st = { disp: 'on', pa: 'default' };
+  const step = e => {
+    if (e.disp !== 'none') st = { ...st, disp: e.disp };
+    if (e.pa === 'set') st = { ...st, pa: Number(e.vol) };
+    if (e.pa === 'default') st = { ...st, pa: 'default' };
+  };
+  lists.forEach(l => l.forEach(step));
+  return lists.map(l => {
+    const segs = []; let a = 0;
+    l.forEach(e => { const m = toMin(e.t); if (m > a) segs.push({ a, b: m, ...st }); step(e); a = Math.max(a, m); });
+    segs.push({ a, b: 1440, ...st });
+    return segs.filter(x => x.b > x.a);
+  });
+}
+
 /* ── Pure logic ────────────────────────────────────────────────────── */
 const toMin = t => { const m = String(t || '').trim().match(/^([01]\d|2[0-3]):([0-5]\d)$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
 const overnight = s => toMin(s.start) != null && toMin(s.end) != null && toMin(s.end) < toMin(s.start);
@@ -194,8 +291,8 @@ function reach(s) {
   const st = targetStations(s);
   return DEVICES.filter(d => st.includes(d.station)).map(d => {
     const can = CAN[d.kind];
-    const pa = can.pa && s.pa === 'adjust';
-    const disp = can.display && s.display === 'darken';
+    const pa = can.pa && usesPa(s);
+    const disp = can.display && usesDisp(s);
     return { d, pa, disp, useful: pa || disp };
   });
 }
@@ -203,6 +300,15 @@ function reach(s) {
 const absVolume = (d, level) => Math.max(0, Math.min(100, Math.round(Number(level) || 0)));
 function onDevice(s, d) {
   const parts = [];
+  if (VARIANT === 2) {
+    const w = evWeek(s);
+    if (CAN[d.kind].display && usesDisp(s)) parts.push(evActions({ ev: { mode: 'all', all: w.map(e => ({ ...e, pa: 'none' })) } }));
+    if (CAN[d.kind].pa && usesPa(s)) {
+      const lv = [...new Set(w.filter(e => e.pa === 'set').map(e => Number(e.vol)))].sort((a, b) => a - b);
+      parts.push([...lv.map(volWord), ...(w.some(e => e.pa === 'default') ? [`back to ${stAudio(d.station).volume}%`] : [])].join(' → '));
+    }
+    return parts.join(' · ') || '–';
+  }
   if (CAN[d.kind].display && s.display === 'darken') parts.push('Darken');
   if (CAN[d.kind].pa && s.pa === 'adjust') parts.push(Number(s.paPct) === 0 ? 'Mute' : `Volume ${stAudio(d.station).volume}% → ${absVolume(d, s.paPct)}%`);
   return parts.join(' · ') || '–';
@@ -227,6 +333,13 @@ function clockOverlap(x, y) {
 }
 /** The entries one schedule writes for one device family: day, time, setting, value. */
 function scheduleEntries(s, kind) {
+  if (VARIANT === 2) return evWeek(s).filter(e => toMin(e.t) != null).flatMap(e => {
+    const day = dayIdx(e.day), o = [];
+    if (kind === 'display' && e.disp !== 'none') o.push({ day, t: e.t, field: 'screen_on', value: e.disp === 'on' });
+    if (kind === 'barix' && e.pa === 'set') o.push(Number(e.vol) === 0 ? { day, t: e.t, field: 'muted', value: true } : { day, t: e.t, field: 'volume', value: Number(e.vol) });
+    if (kind === 'barix' && e.pa === 'default') o.push({ day, t: e.t, field: 'muted', value: false }, { day, t: e.t, field: 'volume', value: 'default' });
+    return o;
+  });
   const out = [];
   const a = toMin(s.start), b = toMin(s.end);
   if (a == null || b == null || a === b) return out;
@@ -246,21 +359,32 @@ function scheduleEntries(s, kind) {
     the same device at the same day and time — the PaxLife API can't hold both (G5). */
 function conflictsWith(draft) {
   const mine = reach(draft).filter(r => r.useful);
-  return SCHEDULES.filter(o => o.id !== draft.id && o.active).map(o => {
+  return live().filter(o => o.id !== draft.id && o.active).map(o => {
     const shared = reach(o).filter(r => r.useful && mine.some(m => m.d.id === r.d.id));
     let hit = null;
     shared.some(r => scheduleEntries(draft, r.d.kind).some(e => scheduleEntries(o, r.d.kind).some(f => {
       if (f.day === e.day && f.t === e.t && f.field === e.field && f.value !== e.value) { hit = e; return true; }
       return false;
     })));
-    return hit ? { s: o, shared: shared.length, at: `${DAYS[hit.day][1]} ${hit.t}` } : null;
+    return hit ? { s: o, shared: shared.length, at: `${dayName(hit.day)} ${hit.t}` } : null;
   }).filter(Boolean);
 }
 
 /** The per-device weekly entries ETC writes through the PaxLife API (G3). */
 function weeklyEntries(d) {
   const rows = [];
-  SCHEDULES.filter(s => s.active && reach(s).some(r => r.d.id === d.id && r.useful)).forEach(s => {
+  if (VARIANT === 2) {
+    live().filter(s => s.active && reach(s).some(r => r.d.id === d.id && r.useful)).forEach(s => evWeek(s).forEach(e => {
+      if (toMin(e.t) == null) return;
+      const row = { day: dayIdx(e.day), t: e.t, edge: 'start', from: s.name };
+      if (CAN[d.kind].display && e.disp !== 'none') row.screen_on = e.disp === 'off' ? 'false' : 'true';
+      if (CAN[d.kind].pa && e.pa === 'set') { if (Number(e.vol) === 0) row.muted = 'true'; else row.volume = e.vol + '%'; }
+      if (CAN[d.kind].pa && e.pa === 'default') { row.volume = stAudio(d.station).volume + '%'; row.edge = 'end'; }
+      if (row.screen_on || row.muted || row.volume) rows.push(row);
+    }));
+    return rows.sort((a, b) => a.day - b.day || a.t.localeCompare(b.t));
+  }
+  live().filter(s => s.active && reach(s).some(r => r.d.id === d.id && r.useful)).forEach(s => {
     const on = {}, off = {};
     if (CAN[d.kind].display && s.display === 'darken') { on.screen_on = 'false'; off.screen_on = 'true'; }
     if (CAN[d.kind].pa && s.pa === 'adjust') {
@@ -293,7 +417,7 @@ function plainEntries(d) {
     if (!map.has(key)) map.set(key, { t: e.t, action: say(e), api: api(e), from: e.from, days: [] });
     map.get(key).days.push(e.day);
   });
-  return [...map.values()].map(r => ({ ...r, dayText: daysText({ days: r.days.map(i => DAYS[i][0]), holidays: false }) }))
+  return [...map.values()].map(r => ({ ...r, dayText: daysText({ days: r.days.filter(i => i < 7).map(i => DAYS[i][0]), holidays: r.days.includes(7) }) }))
     .sort((a, b) => Math.min(...a.days) - Math.min(...b.days) || a.t.localeCompare(b.t));
 }
 
@@ -438,7 +562,7 @@ function Rail() {
 /* The prototype frame, not product chrome: first element, full width, dark.
    Demo states only. */
 function VariantSwitch() {
-  const { saveMode, setSaveMode } = useApp();
+  const { saveMode, setSaveMode, variant, switchVariant } = useApp();
   const btn = (id, on, label, onClick) => html`
     <button id=${id} className=${on ? 'on' : ''} onClick=${onClick}
       style=${{ background: on ? '#fff' : 'none', color: on ? 'rgba(0,0,0,.87)' : 'rgba(255,255,255,.75)',
@@ -453,6 +577,7 @@ function VariantSwitch() {
     <div className="variant-switch" id="variant-switch"
       style=${{ display: 'flex', alignItems: 'center', gap: 14, background: '#1b1b1b', color: '#fff', flexWrap: 'wrap',
                 padding: '7px 20px', flexShrink: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif' }}>
+      ${group('Schedule', [[1, 'ranges', '1 · Time ranges'], [2, 'events', '2 · On/off events']].map(([v, k, l]) => btn('vs-' + k, variant === v, l, () => switchVariant(v))))}
       ${group('Save', [['ok', 'Succeeds'], ['partial', 'Partial failure'], ['error', 'Fails']].map(([k, l]) => btn('sv-' + k, saveMode === k, l, () => setSaveMode(k))))}
     </div>`;
 }
@@ -478,11 +603,13 @@ function ScheduleList() {
   useEffect(() => { setLoading(listState === 'loading'); }, [listState]);
 
   const n = q.trim().toLowerCase();
-  const rows = listState === 'empty' ? [] : SCHEDULES.filter(s => !n || `${s.name} ${targetText(s)}`.toLowerCase().includes(n));
+  const rows = listState === 'empty' ? [] : live().filter(s => !n || `${s.name} ${targetText(s)}`.toLowerCase().includes(n));
   const { toggle } = listActions(useApp());
 
   const add = html`<${Button} variant="contained" id="add-btn" startIcon=${html`<${Icon}>add<//>`} onClick=${() => go('schedule', { id: null })}>Add schedule<//>`;
-  const cols = ['Name', 'Active', 'Stations', 'Days', 'Time', 'PA action', 'Display action', 'Devices'];
+  const v2 = VARIANT === 2;
+  const cols = v2 ? ['Name', 'Active', 'Stations', 'Days', 'Events', 'Actions', 'Devices']
+                  : ['Name', 'Active', 'Stations', 'Days', 'Time', 'PA action', 'Display action', 'Devices'];
 
   let body;
   if (listState === 'error') body = html`
@@ -519,10 +646,14 @@ function ScheduleList() {
                     <${Switch} size="small" checked=${s.active} inputProps=${{ 'aria-label': `Active: ${s.name}` }} data-toggle=${s.id} onChange=${() => toggle(s)} />
                   <//>
                   <${TableCell}>${targetText(s)}<//>
-                  <${TableCell}>${daysText(s)}${phase === 2 && s.holidays ? html` <${PhaseChip} label="Holidays: phase 2" />` : null}<//>
-                  <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${timeText(s)}<//>
-                  <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${paText(s)}<//>
-                  <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${displayText(s)}<//>
+                  ${v2 ? html`
+                    <${TableCell}>${evDays(s)}<//>
+                    <${TableCell} data-col="events">${evSummary(s)}<//>
+                    <${TableCell}>${evActions(s)}<//>` : html`
+                    <${TableCell}>${daysText(s)}<//>
+                    <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${timeText(s)}<//>
+                    <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${paText(s)}<//>
+                    <${TableCell} sx=${{ whiteSpace: 'nowrap' }}>${displayText(s)}<//>`}
                   <${TableCell}>
                     <${StateChip} st=${st} />
                   <//>
@@ -621,13 +752,34 @@ function StationPicker({ groups, stations, onChange, error }) {
 /* ══ Screen: schedule editor — the only editor ═════════════════════════ */
 const blank = preset => ({ id: null, name: '', active: true, groups: [],
   stations: preset && preset.station ? [preset.station] : [], days: [], holidays: false, start: '', end: '',
-  pa: 'none', paPct: 50, display: 'none', apply: null });
+  pa: 'none', paPct: 50, display: 'none', apply: null,
+  ev: { mode: 'all', all: [EV('')], day: emptyDays() } });
+
+/** Variant 2: one error per event field, keyed "day:index:field". */
+function evErrors(d) {
+  const out = {};
+  const lists = d.ev.mode === 'all' ? [['all', d.ev.all]] : DAYKEYS.map(k => [k, d.ev.day[k]]);
+  lists.forEach(([k, l]) => l.forEach((x, i) => {
+    if (!x.t.trim()) out[`${k}:${i}:t`] = 'Required';
+    else if (toMin(x.t) == null) out[`${k}:${i}:t`] = 'Use hh:mm';
+    else if (l.some((y, j) => j < i && toMin(y.t) === toMin(x.t))) out[`${k}:${i}:t`] = `Already an event at ${x.t}`;
+    if (x.disp === 'none' && x.pa === 'none') out[`${k}:${i}:act`] = 'Choose what happens';
+  }));
+  return out;
+}
 
 function validate(d) {
   const e = {};
   if (!d.name.trim()) e.name = 'Name is required';
   else if (SCHEDULES.some(s => s.id !== d.id && s.name.trim().toLowerCase() === d.name.trim().toLowerCase())) e.name = 'A schedule with this name already exists';
   if (!d.groups.length && !d.stations.length) e.target = 'Choose at least one station or station group';
+  if (VARIANT === 2) {
+    const ee = evErrors(d);
+    if (!evWeek(d).length) e.events = 'Add at least one event';
+    Object.keys(ee).forEach(k => { e['ev:' + k] = ee[k]; });
+    if (conflictsWith(d).length) e.conflict = 'conflict';
+    return e;
+  }
   if (!d.days.length && !d.holidays) e.days = 'Choose at least one day';
   if (toMin(d.start) == null) e.start = d.start.trim() ? 'Use 24-hour hh:mm, e.g. 23:30' : 'Start time is required';
   if (toMin(d.end) == null) e.end = d.end.trim() ? 'Use 24-hour hh:mm, e.g. 05:00' : 'End time is required';
@@ -636,6 +788,138 @@ function validate(d) {
   if (conflictsWith(d).length) e.conflict = 'conflict';
   if (d.pa === 'adjust' && !(Number(d.paPct) >= 0 && Number(d.paPct) <= 100)) e.pa = 'Choose a volume from 0 to 100%';
   return e;
+}
+
+/* ── Variant 2 · Schedule card: events, Every day or Per day ─────────────
+   PaxLife's entry list (time + what to set), here per station. Default: one
+   list for every day; Per day gives each weekday and Holidays its own. */
+function EventsCard({ d, set, errs, ov, toast }) {
+  const [tab, setTab] = useState(() => DAYKEYS.find(k => d.ev.day[k].length) || 'sun');
+  const [copyAt, setCopyAt] = useState(null);
+  const [copySel, setCopySel] = useState([]);
+  const ev = d.ev;
+  const key = ev.mode === 'all' ? 'all' : tab;
+  const list = ev.mode === 'all' ? ev.all : ev.day[tab];
+  const setList = l => set({ ev: ev.mode === 'all' ? { ...ev, all: l } : { ...ev, day: { ...ev.day, [tab]: l } } });
+  const upd = (i, p) => setList(list.map((x, j) => j === i ? { ...x, ...p } : x));
+  const setMode = m => {
+    if (!m || m === ev.mode) return;
+    // First switch to Per day: every day starts from the Every day list.
+    const fresh = m === 'day' && DAYKEYS.every(k => !ev.day[k].length);
+    set({ ev: { ...ev, mode: m, day: fresh ? Object.fromEntries(DAYKEYS.map(k => [k, ev.all.map(x => ({ ...x }))])) : ev.day } });
+  };
+  const tabErr = k => Object.keys(errs).some(x => x.startsWith(`ev:${k}:`));
+  const warn = evWarnings(d);
+  const doCopy = () => {
+    const day = { ...ev.day };
+    copySel.forEach(k => { day[k] = list.map(x => ({ ...x })); });
+    set({ ev: { ...ev, day } });
+    toast(`${dayLabel(tab)} copied to ${copySel.map(dayLabel).join(', ')}`);
+    setCopyAt(null); setCopySel([]);
+  };
+  const sel = (id, label, value, onChange, items, error, width) => html`
+    <${FormControl} sx=${{ width }} error=${!!error}>
+      <${InputLabel} id=${id + '-label'}>${label}<//>
+      <${Select} id=${id} labelId=${id + '-label'} label=${label} value=${value} onChange=${e => onChange(e.target.value)}>
+        ${items.map(([v, l]) => html`<${MenuItem} key=${v} value=${v}>${l}<//>`)}
+      <//>
+      ${error ? html`<${M.FormHelperText}>${error}<//>` : null}
+    <//>`;
+
+  return html`
+    <${SectionCard} title="Schedule" id="card-timing"
+      action=${html`
+        <${ToggleButtonGroup} exclusive size="small" value=${ev.mode} onChange=${(e, m) => setMode(m)} id="ev-mode" aria-label="Schedule days">
+          <${ToggleButton} value="all" id="ev-mode-all">Every day<//>
+          <${ToggleButton} value="day" id="ev-mode-day">Per day<//>
+        <//>`}>
+      ${ev.mode === 'day' ? html`
+        <${Box} sx=${{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #E7E7E7', mb: 2, mt: -1 }}>
+          <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} variant="scrollable" id="ev-tabs" sx=${{ flex: 1, minHeight: 40 }}>
+            ${DAYKEYS.map(k => {
+              const n = ev.day[k].length;
+              return html`<${Tab} key=${k} value=${k} data-daytab=${k} label=${n ? `${dayLabel(k)} · ${n}` : dayLabel(k)}
+                sx=${{ minWidth: 0, px: 1.5, minHeight: 40, fontSize: 14, textTransform: 'none',
+                       color: tabErr(k) ? 'error.main' : n ? 'text.primary' : 'text.secondary' }} />`;
+            })}
+          <//>
+          <${Button} id="ev-copy" startIcon=${html`<${Icon}>content_copy<//>`} disabled=${!list.length}
+            onClick=${e => setCopyAt(e.currentTarget)}>Copy to…<//>
+          <${Menu} anchorEl=${copyAt} open=${!!copyAt} onClose=${() => setCopyAt(null)} id="ev-copy-menu">
+            ${DAYKEYS.filter(k => k !== tab).map(k => html`
+              <${MenuItem} key=${k} data-copyday=${k} dense onClick=${() => setCopySel(s => s.includes(k) ? s.filter(x => x !== k) : [...s, k])}>
+                <${M.Checkbox} size="small" checked=${copySel.includes(k)} sx=${{ p: .5, mr: 1 }} tabIndex=${-1} />${dayLabel(k)}
+              <//>`)}
+            <${Box} sx=${{ px: 2, pt: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <${Button} variant="contained" id="ev-copy-apply" disabled=${!copySel.length} onClick=${doCopy}>Copy<//>
+            <//>
+          <//>
+        <//>` : null}
+
+      <${Box} id="ev-list" sx=${{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+        ${list.map((x, i) => {
+          const tErr = errs[`ev:${key}:${i}:t`], aErr = errs[`ev:${key}:${i}:act`];
+          return html`
+            <${Box} key=${key + i} data-event=${i} sx=${{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+              <${TextField} id=${'ev-t-' + i} label="Time" required value=${x.t} placeholder="hh:mm" sx=${{ width: 120, flexShrink: 0 }}
+                inputProps=${{ inputMode: 'numeric', maxLength: 5 }} error=${!!tErr} helperText=${tErr || ''}
+                onChange=${e => upd(i, { t: e.target.value })} />
+              ${sel('ev-disp-' + i, 'Displays', x.disp, v => upd(i, { disp: v }), [['none', 'No change'], ['off', 'Turn off'], ['on', 'Turn on']], aErr, 150)}
+              ${sel('ev-pa-' + i, 'PA', x.pa, v => upd(i, { pa: v }), [['none', 'No change'], ['set', 'Set volume'], ['default', 'Station default']], aErr ? ' ' : '', 170)}
+              ${x.pa === 'set' ? html`
+                <${Box} sx=${{ width: 170, flexShrink: 0, px: 1 }}>
+                  <${Typography} variant="body2" id=${'ev-vol-value-' + i}>${Number(x.vol) === 0 ? 'Mute (0%)' : `Volume ${x.vol}%`}<//>
+                  <${Slider} id=${'ev-vol-' + i} size="small" value=${Number(x.vol) || 0} min=${0} max=${100} step=${5} aria-label="Volume"
+                    onChange=${(e, v) => upd(i, { vol: v })} />
+                <//>` : html`<${Box} sx=${{ width: 170, flexShrink: 0 }} />`}
+              <${IconButton} id=${'ev-del-' + i} aria-label="Delete event" sx=${{ mt: 1 }} onClick=${() => setList(list.filter((_, j) => j !== i))}><${Icon}>delete<//><//>
+            <//>`;
+        })}
+        ${!list.length ? html`<${Typography} variant="body2" color="text.secondary" id="ev-empty">
+          ${key === 'hol' ? 'No events — holidays run as their weekday.' : `No events${key === 'all' ? '' : ' on ' + dayLabel(key)}.`}<//>` : null}
+      <//>
+      <${Button} id="ev-add" sx=${{ mt: 1.5 }} startIcon=${html`<${Icon}>add<//>`}
+        onClick=${() => setList([...list, EV('')])}>Add event<//>
+      ${errs.events ? html`<${Typography} variant="body2" color="error" id="ev-none-error" sx=${{ mt: .75 }}>${errs.events}<//>` : null}
+      ${warn.length ? html`
+        <${Alert} severity="warning" id="ev-warning" sx=${{ mt: 1.5 }}>
+          ${warn.map(([k, t]) => html`<div key=${k} data-warn=${k}>${t}</div>`)}
+        <//>` : null}
+      ${ov.length ? html`
+        <${Alert} severity="error" id="conflict" sx=${{ mt: 1.5 }}>
+          ${ov.map(o => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} on ${o.shared} device${o.shared > 1 ? 's' : ''}</div>`)}
+        <//>` : null}
+    <//>`;
+}
+
+/* Weekly timeline under the events: when displays are off and audio is quiet. */
+function WeekCard({ d }) {
+  const rows = evTimeline(d);
+  const fmt = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  const swatch = (c, l) => html`<${Box} component="span" sx=${{ display: 'inline-flex', alignItems: 'center', gap: .75 }}>
+    <${Box} component="span" sx=${{ width: 14, height: 14, borderRadius: '2px', bgcolor: c }} />${l}<//>`;
+  const MUTE = '#E53935', QUIET = '#FFB74D', OFF = '#455A64';
+  return html`
+    <${SectionCard} title="Week" id="card-week"
+      action=${html`<${Box} sx=${{ display: 'flex', gap: 2, fontSize: 14, color: 'text.secondary' }} id="week-legend">
+        ${swatch(OFF, 'Displays off')}${swatch(QUIET, 'Volume changed')}${swatch(MUTE, 'Muted')}<//>`}>
+      <${Box} id="timeline" sx=${{ display: 'grid', gridTemplateColumns: '48px 1fr', rowGap: .75, columnGap: 1.5, alignItems: 'center' }}>
+        <span />
+        <${Box} sx=${{ position: 'relative', height: 20, fontSize: 14, color: 'text.secondary' }}>
+          ${[0, 6, 12, 18, 24].map(h => html`<${Box} key=${h} component="span"
+            sx=${{ position: 'absolute', left: `${h / 24 * 100}%`, transform: h === 0 ? 'none' : h === 24 ? 'translateX(-100%)' : 'translateX(-50%)' }}>${String(h).padStart(2, '0')}:00<//>`)}
+        <//>
+        ${rows.map((segs, i) => html`
+          <${Typography} key=${'l' + i} variant="body2" sx=${{ fontWeight: 500 }}>${DAYS[i][1]}<//>
+          <${Box} key=${'r' + i} data-tl=${DAYS[i][0]} sx=${{ position: 'relative', height: 28, bgcolor: '#F4F4F4', borderRadius: '2px',
+                    backgroundImage: 'linear-gradient(90deg, transparent calc(25% - 1px), #E0E0E0 25%, transparent calc(25% + 1px), transparent calc(50% - 1px), #E0E0E0 50%, transparent calc(50% + 1px), transparent calc(75% - 1px), #E0E0E0 75%, transparent calc(75% + 1px))' }}>
+            ${segs.filter(x => x.disp === 'off').map(x => html`<${Tooltip} key=${'d' + x.a} title=${`${DAYS[i][1]} ${fmt(x.a)}–${fmt(x.b)} · Displays off`}>
+              <${Box} data-seg="off" sx=${{ position: 'absolute', top: 0, height: '50%', left: `${x.a / 14.4}%`, width: `${(x.b - x.a) / 14.4}%`, bgcolor: OFF }} /><//>`)}
+            ${segs.filter(x => x.pa !== 'default').map(x => html`<${Tooltip} key=${'p' + x.a} title=${`${DAYS[i][1]} ${fmt(x.a)}–${fmt(x.b)} · ${volWord(x.pa)}`}>
+              <${Box} data-seg=${x.pa === 0 ? 'mute' : 'quiet'} sx=${{ position: 'absolute', top: '50%', height: '50%', left: `${x.a / 14.4}%`, width: `${(x.b - x.a) / 14.4}%`, bgcolor: x.pa === 0 ? MUTE : QUIET }} /><//>`)}
+          <//>`)}
+      <//>
+    <//>`;
 }
 
 function ScheduleEditor({ tgt, embedded, onSaved }) {
@@ -654,6 +938,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
 
   const errs = tried ? validate(d) : {};
   const nErr = Object.keys(errs).length;
+  const v2 = VARIANT === 2;
   const r = reach(d);
   const useful = r.filter(x => x.useful);
   const skipped = [];
@@ -695,7 +980,8 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
       return;
     }
     const out = JSON.parse(JSON.stringify(d));
-    if (!out.id) { out.id = 's' + Date.now(); SCHEDULES.push(out); if (onSaved) onSaved(out.id); }
+    if (VARIANT === 2) { out.ev.all.sort(byTime); DAYKEYS.forEach(k => out.ev.day[k].sort(byTime)); }
+    if (!out.id) { out[VARIANT === 2 ? 'v2only' : 'v1only'] = true; out.id = 's' + Date.now(); SCHEDULES.push(out); if (onSaved) onSaved(out.id); }
     else Object.assign(SCHEDULES.find(s => s.id === out.id), out);
     ddRef.current = out;
     setD(out); setSaved(JSON.stringify(out)); setDirty(false);
@@ -770,7 +1056,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
         <//>
       <//>
 
-      <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 7fr) minmax(400px, 5fr)' }, gap: 2, alignItems: 'start' }}>
+      <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: v2 ? 'minmax(0, 4fr) minmax(720px, 8fr)' : 'minmax(0, 7fr) minmax(400px, 5fr)' }, gap: 2, alignItems: 'start' }}>
         <${SectionCard} title=${`Stations (${targetStations(d).length})`} id="card-targets"
           action=${html`<${Tooltip} title="Map view — not part of this prototype"><span>
             <${IconButton} disabled aria-label="Show on map"><${Icon}>map<//><//></span><//>`}>
@@ -801,6 +1087,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <//>` : null}
         <//>
 
+        ${v2 ? html`<${EventsCard} d=${d} set=${set} errs=${errs} ov=${ov} toast=${toast} />` : html`
         <${SectionCard} title="Schedule" id="card-timing">
           <${Box} id="ed-days" sx=${{ display: 'flex', flexWrap: 'wrap', gap: .75 }} role="group" aria-label="Days">
             ${DAYS.map(([k, l]) => {
@@ -830,10 +1117,10 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <${Alert} severity="error" id="conflict" sx=${{ mt: 1.5 }}>
               ${ov.map((o, i) => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} on ${o.shared} device${o.shared > 1 ? 's' : ''}</div>`)}
             <//>` : null}
-          
-        <//>
+        <//>`}
       <//>
 
+      ${v2 ? html`<${WeekCard} d=${d} />` : html`
       <${SectionCard} title="Actions" id="card-actions">
         ${errs.action ? html`<${Alert} severity="error" id="action-error" sx=${{ mb: 2 }}>${errs.action}<//>` : null}
         <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3, alignItems: 'start' }}>
@@ -864,14 +1151,14 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <//>
           <//>
         <//>
-      <//>
+      <//>`}
     <//>`;
 }
 
 /* ══ Screen: Device list (captured columns) + a Schedules column ═══════ */
 function DeviceList() {
   const { go, phase } = useApp();
-  const count = d => SCHEDULES.filter(s => s.active && reach(s).some(x => x.d.id === d.id && x.useful)).length;
+  const count = d => live().filter(s => s.active && reach(s).some(x => x.d.id === d.id && x.useful)).length;
   const cols = ['Device Name', 'Device ID', 'Device Type', 'Status', 'Network Address (Primary)', 'Station', 'Output Zone', 'Schedules'];
   return html`
     <${Box}>
@@ -908,7 +1195,7 @@ function DeviceDetail() {
   const audio = d.kind !== 'display';
   const sa = stAudio(d.station);
   useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
-  const scheds = SCHEDULES.filter(s => reach(s).some(x => x.d.id === d.id && x.useful));
+  const scheds = live().filter(s => reach(s).some(x => x.d.id === d.id && x.useful));
   const entries = plainEntries(d);
   const save = () => { bump(); setDirty(false); toast('Device saved'); go('devices'); };
   const via = s => viaText(s, d.station).replace('This station', 'Station · ' + stName(d.station));
@@ -958,7 +1245,7 @@ function DeviceDetail() {
                     <${TableRow} key=${s.id} data-sched=${s.id}>
                       <${TableCell}><${Link} component="button" underline="hover" onClick=${() => go('schedule', { id: s.id })}>${s.name}<//><//>
                       <${TableCell}>${via(s)}<//>
-                      <${TableCell}>${daysText(s)} · ${timeText(s)}<//>
+                      <${TableCell}>${VARIANT === 2 ? evSummary(s) : `${daysText(s)} · ${timeText(s)}`}<//>
                       <${TableCell}>${onDevice(s, d)}<//>
                       <${TableCell}>${!s.active ? html`<${ActiveChip} s=${s} />` : skip ? html`<${PhaseChip} label="Skipped in phase 1" />`
                         : f ? html`<${Tooltip} title=${f.reason}><span><${StateChip} st=${{ kind: 'partial', text: 'Failed' }} /></span><//>`
@@ -1033,7 +1320,7 @@ function DeviceTypes() {
 function StationList() {
   const { go } = useApp();
   const cols = ['Name', 'Name (EN)', 'Name (HE)', 'Name (AR)', 'Station ID', 'MOT Station Name', 'MOT Station ID', 'Passenger halls', 'Corridors', 'Platforms', 'Schedules'];
-  const count = c => SCHEDULES.filter(s => s.active && targetStations(s).includes(c)).length;
+  const count = c => live().filter(s => s.active && targetStations(s).includes(c)).length;
   return html`
     <${Box}>
       <${Typography} variant="h6" id="page-title" sx=${{ mb: 2 }}>Stations<//>
@@ -1060,7 +1347,7 @@ function StationDetail() {
   const { go, target, toast, bump, setDirty } = useApp();
   const s = STATIONS.find(x => x.code === target.code);
   const [tab, setTab] = useState(3);
-  const list = SCHEDULES.filter(x => targetStations(x).includes(s.code));
+  const list = live().filter(x => targetStations(x).includes(s.code));
   const [au, setAu] = useState(() => ({ ...stAudio(s.code) }));
   const cur = stAudio(s.code);
   const dirty = ['volume', ...EQ.map(e => e[0])].some(k => String(au[k]) !== String(cur[k]));
@@ -1073,7 +1360,7 @@ function StationDetail() {
   const save = () => {
     if (Object.keys(auErr).length) return;
     STATION_AUDIO[s.code] = { volume: v, ...Object.fromEntries(EQ.map(([k]) => [k, Number(au[k])])) };
-    SCHEDULES.filter(x => x.active && targetStations(x).includes(s.code) && x.pa === 'adjust' && x.apply).forEach(x => { x.apply = { ...x.apply, at: 'just now' }; });
+    SCHEDULES.filter(x => x.active && targetStations(x).includes(s.code) && usesPa(x) && x.apply).forEach(x => { x.apply = { ...x.apply, at: 'just now' }; });
     setDirty(false); bump(); toast(`${s.name}: audio output saved — ${nAudio} audio device${nAudio === 1 ? '' : 's'} updated`);
   };
   return html`
@@ -1125,8 +1412,8 @@ function StationDetail() {
                       <${TableRow} key=${x.id} hover data-sched=${x.id} sx=${{ cursor: 'pointer' }} onClick=${() => go('schedule', { id: x.id })}>
                         <${TableCell} sx=${{ fontWeight: 500 }}>${x.name}<//>
                         <${TableCell}>${viaText(x, s.code)}<//>
-                        <${TableCell}>${daysText(x)} · ${timeText(x)}<//>
-                        <${TableCell}>${[x.pa === 'adjust' ? paText(x) : '', x.display === 'darken' ? 'Darken' : ''].filter(Boolean).join(' · ')}<//>
+                        <${TableCell}>${VARIANT === 2 ? evSummary(x) : `${daysText(x)} · ${timeText(x)}`}<//>
+                        <${TableCell}>${VARIANT === 2 ? evActions(x) : [x.pa === 'adjust' ? paText(x) : '', x.display === 'darken' ? 'Darken' : ''].filter(Boolean).join(' · ')}<//>
                         <${TableCell}><${ActiveChip} s=${x} /><//>
                       <//>`)}
                   <//>
@@ -1143,6 +1430,8 @@ function Root() {
   const phase = 1;
   const listState = 'data', setListState = () => {};
   const [saveMode, setSaveMode] = useState('ok');
+  const [variant, setVariant] = useState(1);
+  VARIANT = variant;
   const [screen, setScreen] = useState('schedules');
   const [target, setTarget] = useState(null);
   const [rev, setRev] = useState(0);
@@ -1162,6 +1451,13 @@ function Root() {
   // A list-state demo applies to the list, so jump there.
   const pickList = k => { setListState(k); go('schedules'); };
 
+  // Swapped in place; a schedule that only exists in the other variant falls back to the list.
+  const doSwitch = v => {
+    dirtyRef.current = false; setVariant(v);
+    const rec = screen === 'schedule' && target && target.id && SCHEDULES.find(x => x.id === target.id);
+    if (rec && (v === 1 ? rec.v2only : rec.v1only)) { setScreen('schedules'); setTarget(null); }
+  };
+  const switchVariant = v => { if (v === variant) return; if (dirtyRef.current) setLeave({ fn: () => doSwitch(v) }); else doSwitch(v); };
   const askDelete = (s, after) => setDel({ s, after });
   const doDelete = () => {
     const i = SCHEDULES.indexOf(del.s);
@@ -1172,7 +1468,7 @@ function Root() {
     if (after) { dirtyRef.current = false; after(); }
   };
 
-  const value = { phase, listState, setListState: pickList, saveMode, setSaveMode,
+  const value = { phase, variant, switchVariant, listState, setListState: pickList, saveMode, setSaveMode,
                   screen, target, go, rev, bump, toast: setToastMsg, askDelete, setDirty };
   const View = { schedules: ScheduleList, schedule: ScheduleEditor, devices: DeviceList, device: DeviceDetail, types: DeviceTypes,
                  stations: StationList, station: StationDetail }[screen];
@@ -1186,8 +1482,8 @@ function Root() {
           <${TopBar} />
           <${Box} sx=${{ display: 'flex', flex: 1, minHeight: 0 }}>
             <${Rail} />
-            <${Box} component="main" data-screen=${screen} data-phase=${phase} sx=${{ flex: 1, minWidth: 0, px: 3, py: 2.5, bgcolor: '#fff' }}>
-              <${View} key=${screen + ':' + JSON.stringify(target)} />
+            <${Box} component="main" data-screen=${screen} data-variant=${variant} sx=${{ flex: 1, minWidth: 0, px: 3, py: 2.5, bgcolor: '#fff' }}>
+              <${View} key=${variant + ':' + screen + ':' + JSON.stringify(target)} />
             <//>
           <//>
         <//>
@@ -1206,7 +1502,7 @@ function Root() {
           <${DialogContent}><${DialogContentText}>Your changes haven't been saved or sent to any device. If you leave, they're lost.<//><//>
           <${DialogActions}>
             <${Button} id="leave-stay" onClick=${() => setLeave(null)}>Keep editing<//>
-            <${Button} color="error" id="leave-discard" onClick=${() => { const l = leave; setLeave(null); doGo(l.s, l.t); }}>Discard changes<//>
+            <${Button} color="error" id="leave-discard" onClick=${() => { const l = leave; setLeave(null); if (l.fn) l.fn(); else doGo(l.s, l.t); }}>Discard changes<//>
           <//>
         <//>
         <${Snackbar} open=${!!toastMsg} autoHideDuration=${3200} onClose=${() => setToastMsg('')}

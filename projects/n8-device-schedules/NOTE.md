@@ -60,6 +60,14 @@ option B.
   failed*), save error (changes kept). A guard catches unsaved changes on every navigation and on
   closing the tab.
 
+- **Variant 2 · On/off events** (2026-10-09, for comparison): instead of Start/End, a list of
+  events like PaxLife — time + Displays (turn off / turn on) + PA (set volume, 0 = mute / station
+  default). The same list runs **every day** by default; **Per day** gives each weekday and Holidays
+  its own list (an empty Holidays list runs as the weekday). It covers one-way periods ranges can't
+  (off Fri 23:00 → on Mon 06:00). Guards: a warning when something is switched off and never back on,
+  and a weekly timeline. Each event maps 1:1 to a PaxLife entry; Station default = unmute + the
+  station's volume.
+
 ## 3 · Feasible first step (per device, on the current PaxLife API)
 One design — no separate phase-1 screen (Ignat, 2026-10-06). The screens stay the same; ETC keeps
 the named schedules, resolves each one to the devices at its stations and groups, converts it into

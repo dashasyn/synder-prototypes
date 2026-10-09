@@ -77,7 +77,7 @@ async function run() {
 
   /* ── list ────────────────────────────────────────────────────────── */
   section('list');
-  const nS = await page.evaluate(() => SCHEDULES.length);
+  const nS = await page.evaluate(() => live().length);
   ok(await count('#s-table tbody tr[data-schedule]') === nS, `every schedule is a row (${nS})`);
   ok(await count('#s-table [data-toggle]') === nS, 'each row has an Active switch');
   ok(await count('.apply-chip[data-state="partial"]') >= 1 && await count('.apply-chip[data-state="stale"]') >= 1, 'device status: partial failure and out of date are visible');
@@ -224,8 +224,8 @@ async function run() {
   ok(await screen() === 'schedules' && /23:30/.test(await txt('#s-table tr[data-schedule="s1"]')), 'Discard leaves the saved schedule untouched');
 
   /* ── one design ─────────────────────────────────────────────────── */
-  section('one design, no variant switch');
-  ok(!(await count('#vs-1, #vs-2')) && !/Variant|Phase 1/.test(await txt('#variant-switch')), 'no Target / Phase 1 switch');
+  section('variants: time ranges / on/off events');
+  ok(await vis('#vs-ranges') && await vis('#vs-events') && await page.getAttribute('#vs-ranges', 'class') === 'on' && !/Phase 1/.test(await txt('#variant-switch')), 'switch: 1 · Time ranges (default) / 2 · On/off events');
   ok(!(await count('#phase-line, .phase-chip')), 'no phase-1 lines or chips anywhere');
   await page.click('#s-table tr[data-schedule="s2"] td:first-child'); await wait(400);
   ok(await page.locator('#ed-holidays').isEnabled(), 'Holidays is a normal day choice');
@@ -287,6 +287,69 @@ async function run() {
   const tft = await txt('#types-table tr[data-type="Platform TFT"]');
   ok(/Darken all displays/.test(tft) && !/Set volume/.test(tft), 'a display type: Darken only');
   ok(/Volume, equalizer — per station/.test(await txt('#types-table tr[data-type="Barix audio"]')), 'Barix: equalizer on the device, volume per station');
+
+  /* ── variant 2: on/off events ───────────────────────────────────── */
+  section('variant 2 — on/off events');
+  await nav('schedules');
+  await page.click('#vs-events'); await wait(400);
+  ok(await page.getAttribute('main', 'data-variant') === '2' && await screen() === 'schedules', 'switches in place, same list page');
+  ok(await count('#s-table tbody tr[data-schedule]') === await page.evaluate(() => live().length) && await vis('#s-table tr[data-schedule="s5"]'), 'same schedules, plus one that ranges can\'t express');
+  ok(/Sun–Thu 23:30 · Mon–Fri 05:00/.test(await txt('#s-table tr[data-schedule="s1"] [data-col="events"]')), 'Events column merges days per time', await txt('#s-table tr[data-schedule="s1"] [data-col="events"]'));
+  ok(/Fri, Sat, Holidays 16:00, 20:00/.test(await txt('#s-table tr[data-schedule="s2"] [data-col="events"]')), 'same days → one part with all its times');
+  await page.click('#s-table tr[data-schedule="s5"] td:first-child'); await wait(400);
+  ok(await page.getAttribute('#ev-mode-day', 'aria-pressed') === 'true' && await vis('#ev-tabs'), 'Fri 23:00 → Mon 06:00 is a Per day schedule');
+  ok(/Mon · 1/.test(await txt('#ev-tabs [aria-selected="true"]')) && /Fri · 1/.test(await txt('#ev-tabs [data-daytab="fri"]')) && (await page.inputValue('#ev-t-0')) === '06:00', 'opens on the first day with events; tabs count events');
+  await page.click('#ev-tabs [data-daytab="fri"]'); await wait(200);
+  ok((await page.inputValue('#ev-t-0')) === '23:00' && /Turn off/.test(await txt('#ev-disp-0')) && /Mute \(0%\)/.test(await txt('#ev-vol-value-0')), 'Fri 23:00: displays off, mute');
+  const offDays = await page.$$eval('#timeline [data-tl]', r => r.filter(x => x.querySelector('[data-seg="off"]')).map(x => x.dataset.tl));
+  ok(offDays.join() === 'sun,mon,fri,sat', 'week timeline: dark Fri night → Mon morning, the week runs as a loop', offDays);
+  ok(await vis('#card-week') && await vis('#week-legend'), 'timeline is visible with its legend');
+  await page.click('#vs-ranges'); await wait(400);
+  ok(await screen() === 'schedules' && !(await count('#s-table tr[data-schedule="s5"]')), 'back to ranges: that schedule falls back to the list (ranges can\'t hold it)');
+  await page.click('#vs-events'); await wait(400);
+
+  await page.click('#add-btn'); await wait(400);
+  ok(await page.getAttribute('#ev-mode-all', 'aria-pressed') === 'true' && !(await count('#ev-tabs')) && await count('#ev-list [data-event]') === 1, 'new schedule: Every day by default, one empty event');
+  ok(!(await count('#card-actions')) && !(await count('#ed-start')), 'no Start/End and no Actions card — the events carry the actions');
+  await page.click('#ed-save'); await wait(250);
+  ok(/Required/.test(await txt('#ev-t-0-helper-text')) && /Choose what happens/.test(await txt('#card-timing')) && await vis('#err-summary'), 'empty event: time and action errors in place');
+  await page.fill('#ed-name', 'Night displays — Akko');
+  await page.click('#ed-stations'); await page.waitForSelector('.MuiAutocomplete-popper');
+  await page.click('.MuiAutocomplete-popper [data-opt="s:AKO"]'); await page.keyboard.press('Escape'); await wait(200);
+  await page.fill('#ev-t-0', '23:00'); await pickMenu('#ev-disp-0', 'Turn off');
+  ok(await vis('#ev-warning [data-warn="disp"]'), 'displays off with no "on" → warning');
+  await page.click('#ev-add'); await page.fill('#ev-t-1', '06:00'); await pickMenu('#ev-disp-1', 'Turn on');
+  ok(!(await count('#ev-warning')), 'adding the "on" clears it');
+  const segs = await page.$$eval('#timeline [data-tl] [data-seg="off"]', s => s.length);
+  ok(segs === 14, 'every day: dark 23:00–24:00 and 00:00–06:00', segs);
+  await pickMenu('#ev-pa-0', 'Set volume'); await wait(150);
+  ok(await vis('#ev-vol-0') && /Volume 50%/.test(await txt('#ev-vol-value-0')) && await vis('#ev-warning [data-warn="pa"]'), 'Set volume shows a slider; never back to default → warning');
+  await pickMenu('#ev-pa-1', 'Station default');
+  ok(!(await count('#ev-warning')), 'Station default clears it');
+  await page.click('#ev-add'); await page.fill('#ev-t-2', '06:00'); await pickMenu('#ev-disp-2', 'Turn off'); await page.click('#ed-save'); await wait(250);
+  ok(/Already an event at 06:00/.test(await txt('#ev-t-2-helper-text')), 'two events at the same time on one day are refused (the API rejects them)');
+  await page.click('#ev-del-2'); await wait(150);
+
+  await page.click('#ev-mode-day'); await wait(300);
+  ok(await vis('#ev-tabs') && /Sun · 2/.test(await txt('#ev-tabs [data-daytab="sun"]')) && /Holidays · 2/.test(await txt('#ev-tabs [data-daytab="hol"]')), 'Per day: every day and Holidays start from the Every day list');
+  await page.click('#ev-tabs [data-daytab="sat"]'); await wait(150);
+  await page.click('#ev-del-1'); await page.click('#ev-del-0'); await wait(150);
+  ok(await vis('#ev-empty') && /No events on Sat/.test(await txt('#ev-empty')) && /^Sat$/.test(await txt('#ev-tabs [data-daytab="sat"]')), 'a day can be emptied');
+  await page.click('#ev-tabs [data-daytab="fri"]'); await wait(150);
+  await page.click('#ev-add'); await page.fill('#ev-t-2', '16:00'); await pickMenu('#ev-pa-2', 'Station default'); await wait(200);
+  ok(await vis('#conflict') && /Shabbat quiet/.test(await txt('#conflict')) && /Fri 16:00/.test(await txt('#conflict')), 'same-minute clash with another schedule still blocks, per day', await txt('#conflict').catch(() => ''));
+  await page.click('#ev-del-2'); await wait(150);
+  ok(!(await count('#conflict')), 'and clears');
+  await page.click('#ev-copy'); await page.waitForSelector('#ev-copy-menu .MuiMenu-list');
+  await page.click('#ev-copy-menu [data-copyday="sat"]'); await page.click('#ev-copy-apply'); await wait(300);
+  ok(/Sat · 2/.test(await txt('#ev-tabs [data-daytab="sat"]')), 'Copy to… copies a day\'s events to other days');
+  await page.click('#ed-save'); await page.waitForSelector('#save-result', { timeout: 6000 });
+  ok(/updated/.test(await txt('#save-result')), 'saves like variant 1');
+  await nav('schedules');
+  const newRow = page.locator('#s-table tbody tr[data-schedule]', { hasText: 'Night displays — Akko' });
+  ok(await newRow.isVisible() && /Displays off\/on · Volume 50%/.test(await newRow.innerText()), 'the new schedule is in the list with its actions');
+  await nav('devices'); await page.click('#d-table tr[data-device="ako-plat-1"] td:first-child'); await wait(400);
+  ok(/Turn display off/.test(await txt('#dv-entries')) && /23:00/.test(await txt('#dv-entries')), 'device page shows the event entries in plain words');
 
   section('runtime');
   ok(errors.length === 0, 'no JS errors or failed requests', errors.slice(0, 4));
