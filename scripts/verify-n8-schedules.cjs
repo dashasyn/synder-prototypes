@@ -85,6 +85,7 @@ async function run() {
   ok(!/appl/i.test(statusText) && /(\d+) of \1 devices/.test(statusText) && /Out of date/.test(statusText), 'statuses speak of devices, never "apply"', statusText);
   ok(!(await count('[data-reapply]')), 'no separate Re-apply action in the list');
   ok(/23:30–05:00 \(\+1 day\)/.test(await txt('#s-table tr[data-schedule="s1"]')), 'overnight range reads with +1 day');
+  ok(/Volume 30% · EQ −3 \/ 0 \/ \+2 dB/.test(await txt('#s-table tr[data-schedule="s1"]')), 'list: PA action shows volume and EQ');
   await page.click('#s-table tr[data-schedule="s4"] td:first-child'); await wait(400);
   ok(await vis('#stale-alert') && /B\. Sheva Uni/.test(await txt('#stale-alert [data-stale="added"]')) && /ASK Barix PH2/.test(await txt('#stale-alert [data-stale="removed"]')),
      'an out-of-date schedule opens with an orange alert: which stations were added, which devices removed');
@@ -164,6 +165,14 @@ async function run() {
   for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowLeft');
   await wait(150);
   ok(/Volume 30%/.test(await txt('#vol-value')), 'steps of 5', await txt('#vol-value'));
+  ok(await vis('#ed-bass') && await vis('#ed-mid') && await vis('#ed-treble') && (await page.inputValue('#ed-bass')) === '0', 'Set volume also sets Bass / Mid / Treble (dB), flat by default');
+  await page.fill('#ed-bass', '15'); await page.click('#ed-save'); await wait(250);
+  ok(/−12…12/.test(await txt('#ed-bass-helper-text')) && await vis('#err-summary'), 'EQ outside −12…12 dB is refused');
+  await page.fill('#ed-bass', '3'); await wait(150);
+  await page.focus('#ed-vol input'); await page.keyboard.press('Home'); await wait(150);
+  ok(!(await count('#ed-bass')), 'at 0 (mute) the equalizer is hidden');
+  await page.keyboard.press('End'); for (let i = 0; i < 14; i++) await page.keyboard.press('ArrowLeft'); await wait(150);
+  ok((await page.inputValue('#ed-bass')) === '3', 'and comes back with its value');
   ok(!(await count('#conflict')), 'no conflict while no entry lands on the same minute');
   await page.keyboard.press('Home'); await wait(100);
   await page.fill('#ed-start', '06:00'); await page.fill('#ed-end', '16:00'); await wait(250);
@@ -182,6 +191,7 @@ async function run() {
   await page.keyboard.press('Escape'); await wait(250);
   await page.click('#toggle-devices'); await wait(300);
   ok(/Volume 50% → 30%/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')) && !/Darken/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')), 'Barix gets the PA action only');
+  ok(/EQ \+3 \/ 0 \/ 0 dB/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')), 'the Barix row shows the scheduled EQ');
   ok(!/ELA/.test(await txt('#reach')), 'no ELA anywhere — not in this project');
   ok(/Darken/.test(await txt('#reach-table tr[data-reach="ako-plat-1"]')) && !/Volume/.test(await txt('#reach-table tr[data-reach="ako-plat-1"]')), 'a display gets the display action only');
   ok(/Volume 50% → 30%/.test(await txt('#reach-table tr[data-reach="ako-barix-1"]')), 'Barix: station default 50% → 30%');
@@ -336,6 +346,9 @@ async function run() {
   ok(segs === 14, 'every day: dark 23:00–24:00 and 00:00–06:00', segs);
   await pickMenu('#ev-pa-0', 'Set volume'); await wait(150);
   ok(await vis('#ev-vol-0') && /Volume 50%/.test(await txt('#ev-vol-value-0')) && await vis('#ev-warning [data-warn="pa"]'), 'Set volume shows a slider; never back to default → warning');
+  ok(await vis('#ev-0-bass') && await vis('#ev-0-mid') && await vis('#ev-0-treble'), 'variant 2: an event that sets volume also has Bass / Mid / Treble');
+  await page.fill('#ev-0-treble', '-4'); await wait(150);
+  ok(/EQ 0 \/ 0 \/ −4 dB/.test(await page.evaluate(() => evText({ disp: 'none', pa: 'set', vol: 50, eq: { bass: 0, mid: 0, treble: -4 } }))), 'EQ reads as "EQ 0 / 0 / −4 dB"');
   await pickMenu('#ev-pa-1', 'Station default');
   ok(!(await count('#ev-warning')), 'Station default clears it');
   await page.click('#ev-add'); await page.fill('#ev-t-2', '06:00'); await pickMenu('#ev-disp-2', 'Turn off'); await page.click('#ed-save'); await wait(250);

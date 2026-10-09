@@ -171,14 +171,20 @@ const dayLabel = k => k === 'hol' ? 'Holidays' : DAYS.find(x => x[0] === k)[1];
 const dayIdx = k => k === 'hol' ? 7 : DAYS.findIndex(x => x[0] === k);
 const dayName = i => i === 7 ? 'Holidays' : DAYS[i][1];
 /** One event: time, displays none|off|on, PA none|set|default, volume 0–100 (0 = mute). */
-const EV = (t, disp, pa, vol) => ({ t, disp: disp || 'none', pa: pa || 'none', vol: vol == null ? 50 : vol });
+const EQ_FLAT = () => ({ bass: 0, mid: 0, treble: 0 });
+const EV = (t, disp, pa, vol, eq) => ({ t, disp: disp || 'none', pa: pa || 'none', vol: vol == null ? 50 : vol, eq: eq || EQ_FLAT() });
+const dB = n => Number(n) > 0 ? `+${Number(n)}` : Number(n) < 0 ? `−${-Number(n)}` : '0';
+/** "EQ +3 / 0 / −2 dB" — empty when flat, so plain volume changes read as before. */
+const eqText = eq => !eq || EQ.every(([k]) => !Number(eq[k])) ? '' : `EQ ${EQ.map(([k]) => dB(eq[k])).join(' / ')} dB`;
+const eqKey = eq => EQ.map(([k]) => Number((eq || {})[k]) || 0).join(',');
+const eqBad = eq => EQ.some(([k]) => { const v = (eq || {})[k]; const n = Number(v); return v === '' || !Number.isInteger(n) || n < -12 || n > 12; });
 const emptyDays = () => Object.fromEntries(DAYKEYS.map(k => [k, []]));
 const perDay = (spec) => {
   const day = emptyDays();
   Object.entries(spec).forEach(([keys, list]) => keys.split(',').forEach(k => { day[k] = list.map(e => ({ ...e })); }));
   return { mode: 'day', all: [], day };
 };
-const nightOn = EV('05:00', 'on', 'default'), nightOff = EV('23:30', 'off', 'set', 30);
+const nightOn = EV('05:00', 'on', 'default'), nightOff = EV('23:30', 'off', 'set', 30, { bass: -3, mid: 0, treble: 2 });
 const EV_SAMPLE = {
   s1: perDay({ sun: [nightOff], 'mon,tue,wed,thu': [nightOn, nightOff], fri: [nightOn] }),
   s2: perDay({ 'fri,sat,hol': [EV('16:00', 'none', 'set', 0), EV('20:00', 'none', 'default')] }),
@@ -189,7 +195,7 @@ const EV_SAMPLE = {
 // Ignat's example — ranges can't express it, so it exists in variant 2 only.
 SCHEDULES.push({ id: 's5', name: 'Weekend shutdown — Ashkelon', active: true, groups: [], stations: ['ASK'], v2only: true,
   days: [], holidays: false, start: '', end: '', pa: 'none', paPct: 50, display: 'none', apply: { at: '2 Oct 2026, 03:00', failed: [] } });
-SCHEDULES.forEach(s => { s.ev = EV_SAMPLE[s.id]; });
+SCHEDULES.forEach(s => { s.ev = EV_SAMPLE[s.id]; s.paEq = s.id === 's1' ? { bass: -3, mid: 0, treble: 2 } : EQ_FLAT(); });
 /** The schedules that exist in the current variant. */
 const live = () => SCHEDULES.filter(s => VARIANT === 2 ? !s.v1only : !s.v2only);
 /** Every event of a schedule, tagged with its day key (Every day = all 7 + Holidays). */
@@ -198,7 +204,7 @@ const usesDisp = s => VARIANT === 2 ? evWeek(s).some(e => e.disp !== 'none') : s
 const usesPa = s => VARIANT === 2 ? evWeek(s).some(e => e.pa !== 'none') : s.pa === 'adjust';
 const volWord = v => Number(v) === 0 ? 'Mute' : `Volume ${v}%`;
 const evText = e => [e.disp === 'off' ? 'Displays off' : e.disp === 'on' ? 'Displays on' : '',
-  e.pa === 'set' ? volWord(e.vol) : e.pa === 'default' ? 'Station default volume' : ''].filter(Boolean).join(' · ');
+  e.pa === 'set' ? [volWord(e.vol), Number(e.vol) ? eqText(e.eq) : ''].filter(Boolean).join(' · ') : e.pa === 'default' ? 'Station default audio' : ''].filter(Boolean).join(' · ');
 const byTime = (a, b) => (toMin(a.t) ?? 9999) - (toMin(b.t) ?? 9999);
 /** "Sun–Thu 23:30 · Mon–Fri 05:00" — same time + action merge their days. */
 function evSummary(s, max = 3) {
@@ -228,7 +234,9 @@ function evActions(s) {
   if (off || on) out.push(off && on ? 'Displays off/on' : off ? 'Displays off' : 'Displays on');
   const lv = [...new Set(w.filter(e => e.pa === 'set').map(e => Number(e.vol)))].sort((a, b) => a - b);
   if (lv.length) out.push(lv.map(volWord).join(', '));
-  else if (w.some(e => e.pa === 'default')) out.push('Station default volume');
+  else if (w.some(e => e.pa === 'default')) out.push('Station default audio');
+  const eqs = [...new Set(w.filter(e => e.pa === 'set' && Number(e.vol)).map(e => eqText(e.eq)).filter(Boolean))];
+  if (eqs.length) out.push(eqs.join(', '));
   return out.join(' · ') || 'No action';
 }
 /** Something switched off / changed and never switched back — a warning, not a blocker. */
@@ -278,7 +286,7 @@ function daysText(s) {
   return t || '–';
 }
 const timeText = s => `${s.start}–${s.end}${overnight(s) ? ' (+1 day)' : ''}`;
-const paText = s => s.pa === 'adjust' ? (Number(s.paPct) === 0 ? 'Mute' : `Volume ${s.paPct}%`) : 'No action';
+const paText = s => s.pa === 'adjust' ? (Number(s.paPct) === 0 ? 'Mute' : [`Volume ${s.paPct}%`, eqText(s.paEq)].filter(Boolean).join(' · ')) : 'No action';
 const displayText = s => s.display === 'darken' ? 'Darken all displays' : 'No action';
 /* Targets: groups and individual stations together in one field, as on N8's
    Event details screen (Ignat, 2026-10-05). The schedule reaches the union. */
@@ -313,11 +321,13 @@ function onDevice(s, d) {
     if (CAN[d.kind].pa && usesPa(s)) {
       const lv = [...new Set(w.filter(e => e.pa === 'set').map(e => Number(e.vol)))].sort((a, b) => a - b);
       parts.push([...lv.map(volWord), ...(w.some(e => e.pa === 'default') ? [`back to ${stAudio(d.station).volume}%`] : [])].join(' → '));
+      const eqs = [...new Set(w.filter(e => e.pa === 'set' && Number(e.vol)).map(e => eqText(e.eq)).filter(Boolean))];
+      if (eqs.length) parts.push(eqs.join(', '));
     }
     return parts.join(' · ') || '–';
   }
   if (CAN[d.kind].display && s.display === 'darken') parts.push('Darken');
-  if (CAN[d.kind].pa && s.pa === 'adjust') parts.push(Number(s.paPct) === 0 ? 'Mute' : `Volume ${stAudio(d.station).volume}% → ${absVolume(d, s.paPct)}%`);
+  if (CAN[d.kind].pa && s.pa === 'adjust') parts.push(Number(s.paPct) === 0 ? 'Mute' : [`Volume ${stAudio(d.station).volume}% → ${absVolume(d, s.paPct)}%`, eqText(s.paEq)].filter(Boolean).join(' · '));
   return parts.join(' · ') || '–';
 }
 
@@ -343,8 +353,9 @@ function scheduleEntries(s, kind) {
   if (VARIANT === 2) return evWeek(s).filter(e => toMin(e.t) != null).flatMap(e => {
     const day = dayIdx(e.day), o = [];
     if (kind === 'display' && e.disp !== 'none') o.push({ day, t: e.t, field: 'screen_on', value: e.disp === 'on' });
-    if (kind === 'barix' && e.pa === 'set') o.push(Number(e.vol) === 0 ? { day, t: e.t, field: 'muted', value: true } : { day, t: e.t, field: 'volume', value: Number(e.vol) });
-    if (kind === 'barix' && e.pa === 'default') o.push({ day, t: e.t, field: 'muted', value: false }, { day, t: e.t, field: 'volume', value: 'default' });
+    if (kind === 'barix' && e.pa === 'set') o.push(...(Number(e.vol) === 0 ? [{ day, t: e.t, field: 'muted', value: true }]
+      : [{ day, t: e.t, field: 'volume', value: Number(e.vol) }, { day, t: e.t, field: 'equalizer', value: eqKey(e.eq) }]));
+    if (kind === 'barix' && e.pa === 'default') o.push({ day, t: e.t, field: 'muted', value: false }, { day, t: e.t, field: 'volume', value: 'default' }, { day, t: e.t, field: 'equalizer', value: 'default' });
     return o;
   });
   const out = [];
@@ -352,7 +363,10 @@ function scheduleEntries(s, kind) {
   if (a == null || b == null || a === b) return out;
   const set = [];
   if (kind === 'display' && s.display === 'darken') set.push(['screen_on', false, true]);
-  if (kind === 'barix' && s.pa === 'adjust') set.push(Number(s.paPct) === 0 ? ['muted', true, false] : ['volume', Number(s.paPct), 'default']);
+  if (kind === 'barix' && s.pa === 'adjust') {
+    if (Number(s.paPct) === 0) set.push(['muted', true, false]);
+    else set.push(['volume', Number(s.paPct), 'default'], ['equalizer', eqKey(s.paEq), 'default']);
+  }
   s.days.forEach(day => {
     const i = DAYS.findIndex(x => x[0] === day);
     set.forEach(([field, onV, offV]) => {
@@ -387,7 +401,7 @@ function weeklyEntries(d) {
       if (toMin(e.t) == null) return;
       const row = { day: dayIdx(e.day), t: e.t, edge: 'start', from: s.name };
       if (CAN[d.kind].display && e.disp !== 'none') row.screen_on = e.disp === 'off' ? 'false' : 'true';
-      if (CAN[d.kind].pa && e.pa === 'set') { if (Number(e.vol) === 0) row.muted = 'true'; else row.volume = e.vol + '%'; }
+      if (CAN[d.kind].pa && e.pa === 'set') { if (Number(e.vol) === 0) row.muted = 'true'; else { row.volume = e.vol + '%'; row.eq = eqText(e.eq); } }
       if (CAN[d.kind].pa && e.pa === 'default') { row.volume = stAudio(d.station).volume + '%'; row.edge = 'end'; }
       if (row.screen_on || row.muted || row.volume) rows.push(row);
     }));
@@ -398,7 +412,7 @@ function weeklyEntries(d) {
     if (CAN[d.kind].display && s.display === 'darken') { on.screen_on = 'false'; off.screen_on = 'true'; }
     if (CAN[d.kind].pa && s.pa === 'adjust') {
       if (Number(s.paPct) === 0) { on.muted = 'true'; off.muted = 'false'; }
-      else { on.volume = absVolume(d, s.paPct) + '%'; off.volume = stAudio(d.station).volume + '%'; }
+      else { on.volume = absVolume(d, s.paPct) + '%'; on.eq = eqText(s.paEq); off.volume = stAudio(d.station).volume + '%'; }
     }
     s.days.forEach(day => {
       const i = DAYS.findIndex(x => x[0] === day);
@@ -417,6 +431,7 @@ function plainEntries(d) {
     if (e.screen_on) parts.push(e.screen_on === 'false' ? 'Turn display off' : 'Turn display on');
     if (e.muted) parts.push(e.muted === 'true' ? 'Mute' : 'Unmute');
     if (e.volume) parts.push(e.edge === 'end' ? `Set volume back to ${e.volume} (default)` : `Set volume to ${e.volume}`);
+    if (e.eq) parts.push(e.eq);
     return parts.join(' · ');
   };
   const api = e => ['screen_on', 'muted', 'volume'].filter(k => e[k]).map(k => `${k}=${String(e[k]).replace('%', '')}`).join(', ');
@@ -761,7 +776,7 @@ function StationPicker({ groups, stations, onChange, error }) {
 /* ══ Screen: schedule editor — the only editor ═════════════════════════ */
 const blank = preset => ({ id: null, name: '', active: true, groups: [],
   stations: preset && preset.station ? [preset.station] : [], days: [], holidays: false, start: '', end: '',
-  pa: 'none', paPct: 50, display: 'none', apply: null,
+  pa: 'none', paPct: 50, paEq: EQ_FLAT(), display: 'none', apply: null,
   ev: { mode: 'all', all: [EV('')], day: emptyDays() } });
 
 /** Variant 2: one error per event field, keyed "day:index:field". */
@@ -773,6 +788,7 @@ function evErrors(d) {
     else if (toMin(x.t) == null) out[`${k}:${i}:t`] = 'Use hh:mm';
     else if (l.some((y, j) => j < i && toMin(y.t) === toMin(x.t))) out[`${k}:${i}:t`] = `Already an event at ${x.t}`;
     if (x.disp === 'none' && x.pa === 'none') out[`${k}:${i}:act`] = 'Choose what happens';
+    if (x.pa === 'set' && Number(x.vol) && eqBad(x.eq)) out[`${k}:${i}:eq`] = '−12…12';
   }));
   return out;
 }
@@ -796,7 +812,20 @@ function validate(d) {
   if (d.pa === 'none' && d.display === 'none') e.action = 'Choose a PA or a display action — with both left unchanged, the schedule does nothing.';
   if (conflictsWith(d).length) e.conflict = 'conflict';
   if (d.pa === 'adjust' && !(Number(d.paPct) >= 0 && Number(d.paPct) <= 100)) e.pa = 'Choose a volume from 0 to 100%';
+  if (d.pa === 'adjust' && Number(d.paPct) && eqBad(d.paEq)) e.eq = '−12…12';
   return e;
+}
+
+/** Bass / Mid / Treble for a scheduled volume (PaxLife `equalizer`, −12…12 dB). Hidden at 0 = mute. */
+function EqFields({ idp, eq, onChange, error }) {
+  return html`<${Box} sx=${{ display: 'flex', gap: 1.5 }} data-eq=${idp}>
+    ${EQ.map(([k, l]) => {
+      const v = (eq || {})[k], n = Number(v), bad = error && (v === '' || !Number.isInteger(n) || n < -12 || n > 12);
+      return html`<${TextField} key=${k} id=${idp + k} label=${l} type="number" value=${v} sx=${{ width: 110 }}
+        inputProps=${{ min: -12, max: 12, step: 1 }} error=${!!bad} helperText=${bad ? '−12…12' : ''}
+        onChange=${e => onChange({ ...eq, [k]: e.target.value })} />`;
+    })}
+  <//>`;
 }
 
 /* ── Variant 2 · Schedule card: events, Every day or Per day ─────────────
@@ -904,7 +933,8 @@ function EventsCard({ d, set, errs, ov, toast, saveTry }) {
         ${list.map((x, i) => {
           const tErr = errs[`ev:${key}:${i}:t`], aErr = errs[`ev:${key}:${i}:act`];
           return html`
-            <${Box} key=${key + i} data-event=${i} sx=${{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
+            <${Box} key=${key + i} data-event=${i}>
+            <${Box} sx=${{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
               <${TextField} id=${'ev-t-' + i} label="Time" required value=${x.t} placeholder="hh:mm" sx=${{ width: 120, flexShrink: 0 }}
                 inputProps=${{ inputMode: 'numeric', maxLength: 5 }} error=${!!tErr} helperText=${tErr || ''}
                 onChange=${e => upd(i, { t: e.target.value })} />
@@ -917,6 +947,9 @@ function EventsCard({ d, set, errs, ov, toast, saveTry }) {
                     onChange=${(e, v) => upd(i, { vol: v })} />
                 <//>` : html`<${Box} sx=${{ width: 170, flexShrink: 0 }} />`}
               <${IconButton} id=${'ev-del-' + i} aria-label="Delete event" sx=${{ mt: 1 }} onClick=${() => setList(list.filter((_, j) => j !== i))}><${Icon}>delete<//><//>
+            <//>
+            ${x.pa === 'set' && Number(x.vol) ? html`<${Box} sx=${{ mt: 1.5, pl: '294px' }}>
+              <${EqFields} idp=${'ev-' + i + '-'} eq=${x.eq || EQ_FLAT()} error=${!!errs[`ev:${key}:${i}:eq`]} onChange=${eq => upd(i, { eq })} /><//>` : null}
             <//>`;
         })}
         ${!list.length ? html`<${Typography} variant="body2" color="text.secondary" id="ev-empty">
@@ -1186,6 +1219,8 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
                   valueLabelDisplay="auto" marks=${[{ value: 0, label: '0%' }, { value: 100, label: '100%' }]}
                   onChange=${(e, v) => set({ paPct: v })} sx=${{ '& .MuiSlider-markLabel': { fontSize: 14 } }} />
                 ${errs.pa ? html`<${Typography} variant="body2" color="error">${errs.pa}<//>` : null}
+                ${Number(d.paPct) ? html`<${Box} sx=${{ mt: 2.5, mx: -1 }}>
+                  <${EqFields} idp="ed-" eq=${d.paEq || EQ_FLAT()} error=${!!errs.eq} onChange=${paEq => set({ paEq })} /><//>` : null}
               <//>` : null}
           <//>
           <${Box} id="display-block">
@@ -1352,7 +1387,7 @@ function DeviceTypes() {
                 <${TableCell} sx=${{ fontWeight: 500 }}>${x.t}<//>
                 <${TableCell}>${x.kind === 'display' ? 'Display' : 'Audio'}<//>
                 <${TableCell} data-cap="display">${CAN[x.kind].display ? 'Darken all displays' : no}<//>
-                <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Set volume' : no}<//>
+                <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Set volume, equalizer' : no}<//>
                 <${TableCell}>${x.kind === 'barix' ? 'Volume, equalizer — per station' : no}<//>
                 <${TableCell}>${x.n}<//>
                 <${TableCell}>${x.kind === 'barix' ? 'Base settings are persistent — never changed by a schedule.' : ''}<//>

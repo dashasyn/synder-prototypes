@@ -68,6 +68,10 @@ option B.
   and a weekly timeline. Each event maps 1:1 to a PaxLife entry; Station default = unmute + the
   station's volume.
 
+- **Scheduled equalizer** (2026-10-09, both variants): Set volume also sets Bass / Mid / Treble
+  (−12…12 dB) → the entry's `equalizer` field; the end / Station default entry restores the
+  station's Audio output (volume + EQ). At 0 (mute) only `muted` is written.
+
 ## 3 · Feasible first step (per device, on the current PaxLife API)
 One design — no separate phase-1 screen (Ignat, 2026-10-06). The screens stay the same; ETC keeps
 the named schedules, resolves each one to the devices at its stations and groups, converts it into
