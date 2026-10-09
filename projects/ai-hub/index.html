@@ -343,7 +343,7 @@
   .cmd.pick{text-align:center;padding:48px 40px 36px}
   .cmd.pick h1{max-width:760px;margin:0 auto 12px}
   .cmd.pick p.l{margin:0 auto 28px}
-  .app-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;max-width:820px;margin:0 auto 24px}
+  .app-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;max-width:960px;margin:0 auto 24px}
   .app-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 8px 16px;border-radius:14px;cursor:pointer;font:inherit;
     background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff;backdrop-filter:blur(6px);transition:transform .15s, background .15s, border-color .15s}
   .app-tile:hover{transform:translateY(-3px);background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4)}
@@ -385,6 +385,15 @@
   .link-p{background:none;border:none;color:var(--color-primary);font:inherit;font-weight:500;cursor:pointer;padding:8px 4px;display:inline-flex;align-items:center;gap:4px}
   .link-p:hover{text-decoration:underline}
   .link-p:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+
+  .wait{display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px 14px;border-radius:8px;background:var(--color-grey-5);color:var(--text-secondary)}
+  .wait.ok{background:var(--color-green-light);color:var(--color-green)}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid #C9D3E6;border-top-color:var(--color-primary);animation:spin 1s linear infinite;flex-shrink:0}
+  .st-wait{gap:6px} .st-wait .dot{width:8px;height:8px;border-radius:50%;background:#8C97B1;animation:blinkdot 1.6s ease-in-out infinite}
+  @keyframes blinkdot{50%{opacity:.3}}
+  .edit-acc{background:none;border:none;color:var(--color-primary);font:inherit;font-weight:500;cursor:pointer;padding:6px 8px;border-radius:4px;margin-right:4px}
+  .edit-acc:hover{background:var(--color-primary-5)}
+  .edit-acc:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
 </style>
 </head>
 <body>
@@ -548,7 +557,8 @@
             <h1 id="h-pick">Connect your AI assistant to handle settings, rules, syncs and reconciliation</h1>
             <p class="l">Pick your app. It works with exactly the access you give it.</p>
             <div class="app-grid" role="group" aria-label="Pick your app">
-                <button class="app-tile" id="app-desktop" data-connect onclick="openDrawer(this,'desktop')"><span class="lg-c"><span data-logo="claude"></span></span><span class="an">Claude Desktop</span><span class="as">Desktop app</span></button>
+                <button class="app-tile" id="app-web" data-connect onclick="openDrawer(this,'web')"><span class="lg-c"><span data-logo="claude"></span></span><span class="an">Claude</span><span class="as">claude.ai</span></button>
+                <button class="app-tile" id="app-desktop" onclick="openDrawer(this,'desktop')"><span class="lg-c"><span data-logo="claude"></span></span><span class="an">Claude Desktop</span><span class="as">Desktop app</span></button>
                 <button class="app-tile" id="app-code" onclick="openDrawer(this,'code')"><span class="lg-c"><span data-logo="claude"></span></span><span class="an">Claude Code</span><span class="as">Terminal</span></button>
                 <button class="app-tile" id="app-chatgpt" onclick="openDrawer(this,'chatgpt')"><span class="lg-c"><span data-logo="openai"></span></span><span class="an">ChatGPT</span><span class="as">Desktop app</span></button>
                 <button class="app-tile" id="app-cursor" onclick="openDrawer(this,'cursor')"><span class="lg-c"><span data-logo="cursor"></span></span><span class="an">Cursor</span><span class="as">Code editor</span></button>
@@ -788,7 +798,7 @@ function drawWires(){
 }
 
 /* ---------- variant 5 · Pick your app: drawer ---------- */
-var APPS = { desktop: ['Claude Desktop', 'claude', 'Desktop app'], code: ['Claude Code', 'claude', 'Terminal'], chatgpt: ['ChatGPT', 'openai', 'Desktop app'],
+var APPS = { web: ['Claude', 'claude', 'claude.ai'], desktop: ['Claude Desktop', 'claude', 'Desktop app'], code: ['Claude Code', 'claude', 'Terminal'], chatgpt: ['ChatGPT', 'openai', 'Desktop app'],
   cursor: ['Cursor', 'cursor', 'Code editor'], other: ['Other', null, 'Any MCP client'] };
 var dr = { step: 'pick', app: null, acc: 'read' };
 function appMark(k){ return APPS[k][1] ? '<span class="lg-c"><span data-logo="' + APPS[k][1] + '"></span></span>'
@@ -797,13 +807,27 @@ function connectEntry(btn){ if (variant === 6) openDrawer(btn, null); else openC
 function openDrawer(trigger, app){
   dr = { step: app ? 'setup' : 'pick', app: app, acc: 'read' };
   renderDrawer(); openModal('m-drawer', trigger);
-  focusSoon(app ? 'dr-name' : 'dr-app-desktop');
+  focusSoon(app === 'web' ? 'dr-web-done' : app ? 'dr-name' : 'dr-app-web');
 }
 function renderDrawer(){
   var b = document.getElementById('dr-body'), f = document.getElementById('dr-foot');
-  if (dr.step === 'pick'){
+  document.getElementById('dr-title').textContent = dr.step === 'edit' ? 'Edit access' : 'Connect your AI assistant';
+  if (dr.step === 'edit'){
+    var t0 = tokens[dr.idx];
+    b.innerHTML = '<div class="dr-h"><span class="lg-c"><span class="mi" style="color:#5B2BE0">key</span></span>' + esc(t0.name) + '</div>' + accessFields();
+    f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button><button class="btn" id="dr-save" onclick="drSave()">Save access</button>';
+  } else if (dr.step === 'setup' && dr.app === 'web'){
+    b.innerHTML = '<button class="dr-back" id="dr-back" onclick="dr.step=\'pick\';renderDrawer();focusSoon(\'dr-app-web\')"><span class="mi" style="font-size:18px">chevron_left</span>Choose another app</button>'
+      + '<div class="dr-h">' + appMark('web') + 'Connect Claude</div>'
+      + '<ol class="steps"><li>In Claude, open <b>Settings → Connectors → Add custom connector</b>.</li><li>Paste the Synder address:</li></ol>'
+      + codeBlock('dr-web-url', MCP)
+      + '<ol class="steps" start="3" style="margin-top:12px"><li>Click <b>Add</b>, then sign in to Synder and choose access.</li></ol>'
+      + '<p class="intro" style="color:var(--text-secondary)">No token needed. Read only is the default.</p>' + waitLine('Claude');
+    f.innerHTML = '<button class="btn" id="dr-web-done" onclick="drWebDone()">Done</button>';
+    startWait('Claude', null);
+  } else if (dr.step === 'pick'){
     b.innerHTML = '<div class="dr-apps" role="group" aria-label="Pick your app">' + Object.keys(APPS).map(function(k){
-      return '<button class="dr-app" id="dr-app-' + k + '" onclick="dr.app=\'' + k + '\';dr.step=\'setup\';renderDrawer();focusSoon(\'dr-name\')">' + appMark(k)
+      return '<button class="dr-app" id="dr-app-' + k + '" onclick="drPick(\'' + k + '\')">' + appMark(k)
         + '<span><b>' + APPS[k][0] + '</b><span class="s">' + APPS[k][2] + '</span></span><span class="mi go">chevron_right</span></button>'; }).join('') + '</div>';
     f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button>';
   } else if (dr.step === 'setup'){
@@ -812,40 +836,76 @@ function renderDrawer(){
       + '<div class="form-field"><label class="form-label" for="dr-name">Token name</label>'
       + '<input class="input" id="dr-name" autocomplete="off" value="' + esc(APPS[dr.app][0]) + '" oninput="document.getElementById(\'dr-name-err\').hidden=true">'
       + '<div class="form-error-msg" id="dr-name-err" hidden>Enter a token name</div></div>'
-      + '<div class="form-field" role="radiogroup" aria-labelledby="dr-acc-l"><div class="form-label" id="dr-acc-l">Access</div><div class="access">'
-      + [['read','Read only','see syncs, transactions, settings, reports and billing'],['full','Full access','also change settings, sync, roll back, resync and import'],['custom','Custom','tick the permissions below one by one']].map(function(o){
-          return '<label class="radio-wrap"><input type="radio" name="dracc" value="' + o[0] + '"' + (dr.acc === o[0] ? ' checked' : '') + ' onchange="drAcc(this.value)">'
-            + '<span><span class="an">' + o[1] + '</span> <span class="ad">' + o[2] + '</span></span></label>'; }).join('')
-      + '</div><div class="alert alert-warning warn-line" id="dr-full-warn"' + (dr.acc === 'full' ? '' : ' hidden') + '><span class="mi">warning_amber</span><span>Full access can roll back syncs and enable smart rules. Both change your books.</span></div>'
-      + '<div class="perm" id="dr-perm"' + (dr.acc === 'custom' ? '' : ' hidden') + '>' + PERMS.map(function(g, gi){ return '<div><h4>' + g[0] + '</h4>' + g[1].map(function(q){
-          var id = 'dp-' + gi + '-' + q[0]; return '<label class="synder-checkbox" for="' + id + '"><input type="checkbox" id="' + id + '"' + (q[3] ? ' checked' : '') + '><span><b>' + q[1] + '</b> <span class="pd">' + q[2] + '</span></span></label>'; }).join('') + '</div>'; }).join('')
-      + '</div><div class="form-error-msg" id="dr-perm-err" hidden>Pick at least one permission</div></div>';
+      + accessFields();
     f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button><button class="btn" id="dr-generate" onclick="drGenerate()">Generate access token</button>';
   } else {
     var k = dr.app === 'other' ? 'cursor' : dr.app;
     b.innerHTML = '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + APPS[dr.app][0] + '</div>'
       + '<div class="alert alert-success" id="dr-issued"><span class="mi">check_circle</span><span><b>Token created:</b> ' + esc(dr.name) + ' · ' + esc(dr.label) + '</span></div>'
       + '<div class="alert alert-warning"><span class="mi">key</span><span><b>Copy it now: the full token is shown only once.</b> Keep it to yourself, like a password.</span></div>'
-      + clientHTML(k, dr.token).replace(/(['"])(snip-url|snip|guide|copy-prompt)/g, '$1dr-$2');
+      + clientHTML(k, dr.token).replace(/(['"])(snip-url|snip|guide|copy-prompt)/g, '$1dr-$2') + waitLine(APPS[dr.app][0]);
     f.innerHTML = '<button class="btn" id="dr-done" onclick="drDone()">Done</button>';
   }
   fillLogos(document.getElementById('m-drawer'));
 }
+
+function drPick(k){ dr.app = k; dr.step = 'setup'; renderDrawer(); focusSoon(k === 'web' ? 'dr-web-done' : 'dr-name'); }
+function accessFields(){
+  return '<div class="form-field" role="radiogroup" aria-labelledby="dr-acc-l"><div class="form-label" id="dr-acc-l">Access</div><div class="access">'
+    + [['read','Read only','see syncs, transactions, settings, reports and billing'],['full','Full access','also change settings, sync, roll back, resync and import'],['custom','Custom','tick the permissions below one by one']].map(function(o){
+        return '<label class="radio-wrap"><input type="radio" name="dracc" value="' + o[0] + '"' + (dr.acc === o[0] ? ' checked' : '') + ' onchange="drAcc(this.value)">'
+          + '<span><span class="an">' + o[1] + '</span> <span class="ad">' + o[2] + '</span></span></label>'; }).join('')
+    + '</div><div class="alert alert-warning warn-line" id="dr-full-warn"' + (dr.acc === 'full' ? '' : ' hidden') + '><span class="mi">warning_amber</span><span>Full access can roll back syncs and enable smart rules. Both change your books.</span></div>'
+    + '<div class="perm" id="dr-perm"' + (dr.acc === 'custom' ? '' : ' hidden') + '>' + PERMS.map(function(g, gi){ return '<div><h4>' + g[0] + '</h4>' + g[1].map(function(q){
+        var id = 'dp-' + gi + '-' + q[0]; return '<label class="synder-checkbox" for="' + id + '"><input type="checkbox" id="' + id + '"' + (q[3] ? ' checked' : '') + '><span><b>' + q[1] + '</b> <span class="pd">' + q[2] + '</span></span></label>'; }).join('') + '</div>'; }).join('')
+    + '</div><div class="form-error-msg" id="dr-perm-err" hidden>Pick at least one permission</div></div>';
+}
+function accLabel(){
+  if (dr.acc !== 'custom') return ACC[dr.acc];
+  var c = document.querySelectorAll('#dr-perm input:checked').length;
+  if (!c){ document.getElementById('dr-perm-err').hidden = false; return null; }
+  return 'Custom · ' + c + ' permission' + (c === 1 ? '' : 's');
+}
+/* edit access */
+function editAccess(i, btn){
+  var a = tokens[i].access; dr = { step: 'edit', idx: i, acc: a === 'Full access' ? 'full' : a.indexOf('Custom') === 0 ? 'custom' : 'read' };
+  renderDrawer(); openModal('m-drawer', btn); focusSoon('dr-save');
+}
+function drSave(){ var l = accLabel(); if (!l) return; var t = tokens[dr.idx]; t.access = l; renderTokens(); closeModal(); toast('Access updated: ' + t.name); }
+/* connection status (simulated in the prototype: the first request arrives a few seconds later) */
+var CONNECT_DELAY = 8000;
+function waitLine(app){ return '<div class="wait" id="dr-wait"><span class="spin" aria-hidden="true"></span><span>Waiting for ' + esc(app) + ' to connect…</span></div>'; }
+function startWait(app, obj){
+  setTimeout(function(){
+    if (obj) obj.used = 'Just now';
+    var w = document.getElementById('dr-wait');
+    if (w && openId === 'm-drawer'){ w.className = 'wait ok'; w.innerHTML = '<span class="mi">check_circle</span><span>Connected. ' + esc(app) + ' made its first request.</span>'; }
+    if (obj && tokens.indexOf(obj) > -1){ renderTokens(); toast(obj.name + ' connected'); }
+  }, CONNECT_DELAY);
+}
+function drWebDone(){
+  var o = { name: 'Claude', prefix: null, access: 'Read only', created: '10/9/2026', used: 'Never' };
+  tokens.unshift(o); freshName = o.name; renderTokens(); closeModal(); startWait('Claude', o);
+}
+function statusChip(t){ return t.used === 'Never'
+  ? '<span class="status status-grey st-wait"><span class="dot"></span>Waiting for first request</span>'
+  : '<span class="status status-green">Connected</span>'; }
+function accessChip(a){ return a === 'Full access' ? '<span class="status status-yellow">Full access</span>' : esc(a); }
 function drAcc(v){ dr.acc = v;
   document.getElementById('dr-perm').hidden = v !== 'custom'; document.getElementById('dr-full-warn').hidden = v !== 'full';
   document.getElementById('dr-perm-err').hidden = true; }
 function drGenerate(){
-  var n = document.getElementById('dr-name').value.trim(), label = ACC[dr.acc];
+  var n = document.getElementById('dr-name').value.trim();
   if (!n){ document.getElementById('dr-name-err').hidden = false; document.getElementById('dr-name').focus(); return; }
-  if (dr.acc === 'custom'){ var c = document.querySelectorAll('#dr-perm input:checked').length;
-    if (!c){ document.getElementById('dr-perm-err').hidden = false; return; } label = 'Custom · ' + c + ' permission' + (c === 1 ? '' : 's'); }
+  var label = accLabel(); if (!label) return;
   var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', t = 'sat_';
   for (var i = 0; i < 40; i++) t += chars[Math.floor(Math.random() * chars.length)];
-  dr.name = n; dr.label = label; dr.token = t; dr.step = 'done'; renderDrawer(); focusSoon('dr-done');
+  dr.name = n; dr.label = label; dr.token = t; dr.step = 'done';
+  dr.obj = { name: n, prefix: t.slice(0, 12), access: label, created: '10/9/2026', used: 'Never' };
+  renderDrawer(); startWait(APPS[dr.app][0], dr.obj); focusSoon('dr-done');
 }
 function drDone(){
-  tokens.unshift({ name: dr.name, prefix: dr.token.slice(0, 12), access: dr.label, created: '10/9/2026', used: 'Never' });
-  freshName = dr.name; renderTokens(); closeModal();
+  tokens.unshift(dr.obj); freshName = dr.name; renderTokens(); closeModal();
 }
 function fillLogos(root){ (root || document).querySelectorAll('[data-logo]').forEach(function(el){ if (!el.firstChild) el.innerHTML = logo(el.getAttribute('data-logo')); }); }
 var tokens = [], freshName = null, lastTrigger = null, openId = null, issued = null, client = 'code', revokeIdx = -1;
@@ -871,10 +931,10 @@ function renderTokens(){
   el.innerHTML = '<div class="table-wrap"><table class="synder-table" id="tok-table" aria-labelledby="h-tokens"><thead><tr>'
     + '<th>Name</th><th>Created</th><th>Last used</th><th>Access</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>'
     + tokens.map(function(t, i){
-        return '<tr' + (t.name === freshName ? ' class="fresh"' : '') + '><td>' + esc(t.name) + ' <code class="tok-pre">' + t.prefix + '…</code></td>'
+        return '<tr' + (t.name === freshName ? ' class="fresh"' : '') + '><td>' + esc(t.name) + (t.prefix ? ' <code class="tok-pre">' + t.prefix + '…</code>' : ' <span class="tok-pre">sign-in</span>') + '</td>'
           + '<td>' + t.created + '</td><td' + (t.used === 'Never' ? ' class="muted"' : '') + '>' + t.used + '</td>'
-          + '<td>' + esc(t.access) + '</td><td><span class="status status-green">Active</span></td>'
-          + '<td class="act"><button class="revoke" data-i="' + i + '" onclick="askRevoke(' + i + ', this)">Revoke</button></td></tr>';
+          + '<td>' + accessChip(t.access) + '</td><td>' + statusChip(t) + '</td>'
+          + '<td class="act"><button class="edit-acc" onclick="editAccess(' + i + ', this)">Edit access</button><button class="revoke" data-i="' + i + '" onclick="askRevoke(' + i + ', this)">Revoke</button></td></tr>';
       }).join('') + '</tbody></table></div>';
 }
 
@@ -1027,8 +1087,8 @@ function another(){
 }
 function addIssued(){
   if (!issued) return;
-  tokens.unshift({ name: issued.name, prefix: issued.token.slice(0, 12), access: issued.access, created: '10/8/2026', used: 'Never' });
-  freshName = issued.name; issued = null; renderTokens();
+  var o = { name: issued.name, prefix: issued.token.slice(0, 12), access: issued.access, created: '10/9/2026', used: 'Never' };
+  tokens.unshift(o); freshName = issued.name; issued = null; renderTokens(); startWait(o.name, o);
 }
 function done(){ addIssued(); closeModal(); }
 
