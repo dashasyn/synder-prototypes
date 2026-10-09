@@ -575,7 +575,7 @@ function SoundsView() {
     nav('playlistDetail', pl.id);
   };
 
-  // Ignat, 2026-10-09: same structure as Grunddaten — filters + add on the tab row
+  // Ignat, 2026-10-09: same structure as Grunddaten — filters left, add right, below the tabs
   const filters = html`
     <${Stack} direction="row" spacing=${2} alignItems="center">
       <${TextField} id="snd-search" label=${t('searchByName')} value=${s.soundSearch} sx=${{ width: 280 }}
@@ -597,8 +597,7 @@ function SoundsView() {
   :                       html`<${Button} id="snd-add" variant="contained"
                                  startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>add<//>`}
                                  onClick=${() => setAddOpen(true)}>${t('addAudio')}<//>`;
-  const action = tab === 'tracks'
-    ? html`<${Stack} direction="row" spacing=${2} alignItems="center">${filters}${button}<//>` : button;
+
 
   const count = n => html`<${Chip} size="small" label=${n}
     sx=${{ ml: 1, height: 18, '& .MuiChip-label': { px: .75, fontSize: 11 } }} />`;
@@ -607,7 +606,8 @@ function SoundsView() {
 
   return html`
     <${Box}>
-      <${TabsHeader} id="sndHeader" tabsId="snd-tabs" title=${t('sounds')} value=${tab} action=${action}
+      <${TabsHeader} id="sndHeader" tabsId="snd-tabs" title=${t('sounds')} value=${tab}
+        filters=${tab === 'tracks' ? filters : null} action=${button}
         onChange=${(e, v) => set({ soundTab: v })}
         tabs=${[{ value: 'tracks',    label: tabLabel('tabTracks', soundFiles.length) },
                 { value: 'playlists', label: tabLabel('tabPlaylists', playlists.length) },

@@ -34,7 +34,7 @@ function StationsView() {
     <${React.Fragment}>
       ${/* Ignat, 2026-09-30: no "50 Haltestellen · BVG J/JK" line, a thinner top,
             and the filters on the title's row */ ''}
-      <${PageHeader} dense title=${t('stations')} action=${html`
+      <${PageHeader} dense title=${t('stations')} filters=${html`
         <${Stack} direction="row" spacing=${2} alignItems="center">
           <${TextField} label=${t('searchPlaceholder')} value=${s.search} sx=${{ width: 280 }} id="stSearch"
             onChange=${e => set({ search: e.target.value })}

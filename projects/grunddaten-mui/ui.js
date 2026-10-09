@@ -181,31 +181,37 @@ const CONTENT_MAX = 960;
 const GD_TABS = [['stations', 'stations'], ['lines', 'lines'], ['lineMgmt', 'lineMgmt'],
                  ['spc', 'spcPage'], ['texts', 'texts']];  // Tondateien: own menu entry (Ignat, 2026-10-09)
 /* Ignat, 2026-10-09: Grunddaten and Tondateien share one header structure —
-   title, tabs under it, filters / add button on the right of the tab row. */
-function TabsHeader({ id, tabsId, title, value, onChange, tabs, action }) {
+   title, tabs under it; the tab's own filters (left) and add button (right)
+   sit on a toolbar row below the tabs, above the table ("agree", 13:26). */
+function TabsHeader({ id, tabsId, title, value, onChange, tabs, filters, action }) {
   return html`
-    <${Box} data-page-header="" id=${id} sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
-                   position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }}>
-      <${Typography} variant="h6" sx=${{ fontWeight: 500, pt: 2 }}>${title}<//>
-      <${Box} sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
-        <${Tabs} id=${tabsId} value=${value} onChange=${onChange} sx=${{ minHeight: 48, alignSelf: 'flex-end' }}>
+    <${React.Fragment}>
+      <${Box} data-page-header="" id=${id} sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
+                     position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }}>
+        <${Typography} variant="h6" sx=${{ fontWeight: 500, pt: 2 }}>${title}<//>
+        <${Tabs} id=${tabsId} value=${value} onChange=${onChange} sx=${{ minHeight: 48 }}>
           ${/* stock MUI tabs, uppercase (Ignat, 2026-10-09) */ ''}
           ${tabs.map(tb => html`<${Tab} key=${tb.value} ...${tb} />`)}
         <//>
-        ${action ? html`<${Box} data-header-action="" sx=${{ py: 1 }}>${action}<//>` : null}
       <//>
+      ${filters || action ? html`
+        <${Box} data-tab-toolbar="" sx=${{ px: 3, pt: 3, display: 'flex', alignItems: 'center',
+                                           justifyContent: 'space-between', gap: 2 }}>
+          <${Box} data-tab-filters="">${filters || null}<//>
+          <${Box} data-header-action="">${action || null}<//>
+        <//>` : null}
     <//>`;
 }
-function GdTabsHeader({ action }) {
+function GdTabsHeader({ filters, action }) {
   const { s, nav, t } = useApp();
   return html`<${TabsHeader} id="gdHeader" title=${state.lang === 'de' ? 'Grunddaten' : 'Basic data'}
-    value=${s.view} onChange=${(e, v) => nav(v)} action=${action}
+    value=${s.view} onChange=${(e, v) => nav(v)} filters=${filters} action=${action}
     tabs=${GD_TABS.map(([v, k]) => ({ value: v, label: t(k), 'data-gdtab': v }))} />`;
 }
 
-function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narrow, dense }) {
+function PageHeader({ crumbs, title, titleAfter, subtitle, filters, action, sticky, narrow, dense }) {
   const app = useApp();
-  if (!crumbs && app && GD_TABS.some(([v]) => v === app.s.view)) return html`<${GdTabsHeader} action=${action} />`;
+  if (!crumbs && app && GD_TABS.some(([v]) => v === app.s.view)) return html`<${GdTabsHeader} filters=${filters} action=${action} />`;
   return html`
     <${Box} data-page-header="" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
                    ...(sticky === false ? null : { position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }) }}>
