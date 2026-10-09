@@ -811,7 +811,7 @@ function EventsCard({ d, set, errs, ov, toast, saveTry }) {
   const list = ev.mode === 'all' ? ev.all : ev.day[tab];
   const setList = l => set({ ev: ev.mode === 'all' ? { ...ev, all: l } : { ...ev, day: { ...ev.day, [tab]: l } } });
   const upd = (i, p) => setList(list.map((x, j) => j === i ? { ...x, ...p } : x));
-  const [toAll, setToAll] = useState(false);     // confirm Per day → Every day when days differ
+  const [toAll, setToAll] = useState(false);     // Per day → Every day when days differ: neutral confirm, no day picked for the user
   const toEveryDay = src => set({ ev: { ...ev, mode: 'all', all: src.map(x => ({ ...x })), day: emptyDays() } });
   const setMode = m => {
     if (!m || m === ev.mode) return;
@@ -858,19 +858,27 @@ function EventsCard({ d, set, errs, ov, toast, saveTry }) {
           <${ToggleButton} value="all" id="ev-mode-all">Every day<//>
           <${ToggleButton} value="day" id="ev-mode-day">Per day<//>
         <//>`}>
+      ${warn.length ? html`
+        <${Alert} severity="warning" id="ev-warning" sx=${{ mb: 2, mt: -.5 }}>
+          ${warn.map(([k, t]) => html`<div key=${k} data-warn=${k}>${t}</div>`)}
+        <//>` : null}
       ${ev.mode === 'day' ? html`
         <${Box} sx=${{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #E7E7E7', mb: 2, mt: -1 }}>
           <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} variant="scrollable" id="ev-tabs" sx=${{ flex: 1, minHeight: 40 }}>
             ${DAYKEYS.map(k => {
               const n = ev.day[k].length;
-              return html`<${Tab} key=${k} value=${k} data-daytab=${k} label=${n ? `${dayLabel(k)} · ${n}` : dayLabel(k)}
+              // MUI tabs as they are (caps); the event count sits in its own grey badge (Ignat, 2026-10-09).
+              return html`<${Tab} key=${k} value=${k} data-daytab=${k}
+                label=${html`<${Box} component="span" sx=${{ display: 'inline-flex', alignItems: 'center', gap: .75 }}>${dayLabel(k)}${n ? html`<${Box} component="span" data-count
+                  sx=${{ bgcolor: tab === k ? 'primary.main' : '#E0E0E0', color: tab === k ? '#fff' : 'text.primary', borderRadius: '10px', px: .75, minWidth: 20,
+                         lineHeight: '20px', fontSize: 14, fontWeight: 500, textAlign: 'center' }}>${n}<//>` : null}<//>`}
                 icon=${tabErr(k) ? html`<${Icon} sx=${{ fontSize: 18 }}>error<//>` : undefined} iconPosition="end"
-                sx=${{ minWidth: 0, px: 1.5, minHeight: 40, fontSize: 14, textTransform: 'none',
+                sx=${{ minWidth: 0, px: 1.5, minHeight: 40, fontSize: 14,
                        color: tabErr(k) ? 'error.main' : n ? 'text.primary' : 'text.secondary' }} />`;
             })}
           <//>
           <${Button} id="ev-copy" startIcon=${html`<${Icon}>content_copy<//>`} disabled=${!list.length}
-            onClick=${e => setCopyAt(e.currentTarget)}>Copy to…<//>
+            onClick=${e => setCopyAt(e.currentTarget)}>Copy to<//>
           <${Menu} anchorEl=${copyAt} open=${!!copyAt} onClose=${() => setCopyAt(null)} id="ev-copy-menu">
             ${DAYKEYS.filter(k => k !== tab).map(k => html`
               <${MenuItem} key=${k} data-copyday=${k} dense onClick=${() => setCopySel(s => s.includes(k) ? s.filter(x => x !== k) : [...s, k])}>
@@ -883,11 +891,12 @@ function EventsCard({ d, set, errs, ov, toast, saveTry }) {
           <//>
         <//>` : null}
       <${Dialog} open=${toAll} onClose=${() => setToAll(false)} PaperProps=${{ id: 'to-all-dialog' }}>
-        <${DialogTitle}>Use ${dayLabel(tab)} events for every day?<//>
-        <${DialogContent}><${DialogContentText}>The days have different events. Every day keeps the ${dayLabel(tab)} list; the other days' events are removed.<//><//>
+        <${DialogTitle}>Switch to Every day?<//>
+        <${DialogContent}><${DialogContentText}>Per-day events will be lost.<//><//>
         <${DialogActions}>
           <${Button} id="to-all-cancel" onClick=${() => setToAll(false)}>Cancel<//>
-          <${Button} variant="contained" id="to-all-confirm" onClick=${() => { setToAll(false); toEveryDay(ev.day[tab]); }}>Use ${dayLabel(tab)}<//>
+          ${ev.all.length ? html`<${Button} id="to-all-restore" onClick=${() => { setToAll(false); toEveryDay(ev.all); }}>Restore Every day list<//>` : null}
+          <${Button} variant="contained" id="to-all-confirm" onClick=${() => { setToAll(false); toEveryDay([EV('')]); }}>Start from scratch<//>
         <//>
       <//>
 
@@ -916,10 +925,6 @@ function EventsCard({ d, set, errs, ov, toast, saveTry }) {
       <${Button} id="ev-add" sx=${{ mt: 1.5 }} startIcon=${html`<${Icon}>add<//>`}
         onClick=${() => setList([...list, EV('')])}>Add event<//>
       ${errs.events ? html`<${Typography} variant="body2" color="error" id="ev-none-error" sx=${{ mt: .75 }}>${errs.events}<//>` : null}
-      ${warn.length ? html`
-        <${Alert} severity="warning" id="ev-warning" sx=${{ mt: 1.5 }}>
-          ${warn.map(([k, t]) => html`<div key=${k} data-warn=${k}>${t}</div>`)}
-        <//>` : null}
       ${ov.length ? html`
         <${Alert} severity="error" id="conflict" sx=${{ mt: 1.5 }}>
           ${ov.map(o => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} · ${o.devs.map(x => `${x.name} (${stName(x.station)})`).join(', ')}</div>`)}

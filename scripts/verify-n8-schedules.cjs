@@ -298,7 +298,7 @@ async function run() {
   ok(/Fri, Sat, Holidays 16:00, 20:00/.test(await txt('#s-table tr[data-schedule="s2"] [data-col="events"]')), 'same days → one part with all its times');
   await page.click('#s-table tr[data-schedule="s5"] td:first-child'); await wait(400);
   ok(await page.getAttribute('#ev-mode-day', 'aria-pressed') === 'true' && await vis('#ev-tabs'), 'Fri 23:00 → Mon 06:00 is a Per day schedule');
-  ok(/Mon · 1/.test(await txt('#ev-tabs [aria-selected="true"]')) && /Fri · 1/.test(await txt('#ev-tabs [data-daytab="fri"]')) && (await page.inputValue('#ev-t-0')) === '06:00', 'opens on the first day with events; tabs count events');
+  ok(/^Mon\s*1$/i.test(await txt('#ev-tabs [aria-selected="true"]')) && /^Fri\s*1$/i.test(await txt('#ev-tabs [data-daytab="fri"]')) && (await page.inputValue('#ev-t-0')) === '06:00', 'opens on the first day with events; tabs count events');
   await page.click('#ev-tabs [data-daytab="fri"]'); await wait(200);
   ok((await page.inputValue('#ev-t-0')) === '23:00' && /Turn off/.test(await txt('#ev-disp-0')) && /Mute \(0%\)/.test(await txt('#ev-vol-value-0')), 'Fri 23:00: displays off, mute');
   const offDays = await page.$$eval('#timeline [data-tl]', r => r.filter(x => x.querySelector('[data-seg="off"]')).map(x => x.dataset.tl));
@@ -307,11 +307,12 @@ async function run() {
   // UX review r1 fix: Per day → Every day with different days asks which list wins
   await page.click('#ev-tabs [data-daytab="mon"]'); await wait(150);
   await page.click('#ev-mode-all'); await wait(300);
-  ok(await vis('#to-all-dialog') && /Use Mon events for every day/.test(await txt('#to-all-dialog')), 'Per day → Every day with different days asks first');
+  ok(await vis('#to-all-dialog') && /Switch to Every day\?/.test(await txt('#to-all-dialog')) && /Per-day events will be lost/.test(await txt('#to-all-dialog')) && !/Mon/.test(await txt('#to-all-dialog')), 'Per day → Every day with different days asks first, neutrally (no day picked)');
+  ok(/Start from scratch/i.test(await txt('#to-all-confirm')) && !(await count('#to-all-restore')), 'no earlier Every day list → only Cancel / Start from scratch');
   await page.click('#to-all-cancel'); await wait(250);
-  ok(await page.getAttribute('#ev-mode-day', 'aria-pressed') === 'true' && /Fri · 1/.test(await txt('#ev-tabs [data-daytab="fri"]')), 'Cancel keeps the per-day events');
+  ok(await page.getAttribute('#ev-mode-day', 'aria-pressed') === 'true' && /^Fri\s*1$/i.test(await txt('#ev-tabs [data-daytab="fri"]')), 'Cancel keeps the per-day events');
   await page.click('#ev-mode-all'); await wait(250); await page.click('#to-all-confirm'); await wait(300);
-  ok(await count('#ev-list [data-event]') === 1 && (await page.inputValue('#ev-t-0')) === '06:00' && !(await count('#ev-empty')), 'confirm: Every day carries the Mon events, never an empty list');
+  ok(await count('#ev-list [data-event]') === 1 && (await page.inputValue('#ev-t-0')) === '' && !(await count('#ev-empty')), 'Start from scratch: one blank event, never an empty list');
   await page.click('#vs-ranges'); await wait(300);
   ok(await vis('#leave-dialog'), 'the change is guarded');
   await page.click('#leave-discard'); await wait(400);
@@ -328,6 +329,7 @@ async function run() {
   await page.click('.MuiAutocomplete-popper [data-opt="s:AKO"]'); await page.keyboard.press('Escape'); await wait(200);
   await page.fill('#ev-t-0', '23:00'); await pickMenu('#ev-disp-0', 'Turn off');
   ok(await vis('#ev-warning [data-warn="disp"]'), 'displays off with no "on" → warning');
+  ok((await page.locator('#ev-warning').boundingBox()).y < (await page.locator('#ev-list').boundingBox()).y, 'the warning sits at the top of the Schedule card, above the events');
   await page.click('#ev-add'); await page.fill('#ev-t-1', '06:00'); await pickMenu('#ev-disp-1', 'Turn on');
   ok(!(await count('#ev-warning')), 'adding the "on" clears it');
   const segs = await page.$$eval('#timeline [data-tl] [data-seg="off"]', s => s.length);
@@ -341,14 +343,21 @@ async function run() {
   await page.click('#ev-del-2'); await wait(150);
 
   await page.click('#ev-mode-day'); await wait(300);
-  ok(await vis('#ev-tabs') && /Sun · 2/.test(await txt('#ev-tabs [data-daytab="sun"]')) && /Holidays · 2/.test(await txt('#ev-tabs [data-daytab="hol"]')), 'Per day: every day and Holidays start from the Every day list');
+  ok(await vis('#ev-tabs') && /^Sun\s*2$/i.test(await txt('#ev-tabs [data-daytab="sun"]')) && /^Holidays\s*2$/i.test(await txt('#ev-tabs [data-daytab="hol"]')), 'Per day: every day and Holidays start from the Every day list');
   ok(await vis('#timeline [data-tl="hol"]') && await count('#timeline [data-tl="hol"] [data-seg="off"]') === 2, 'Week timeline gets a Holidays row when Holidays has events');
   await page.click('#ev-mode-all'); await wait(300);
   ok(!(await count('#to-all-dialog')) && await count('#ev-list [data-event]') === 2, 'identical days → Every day carries the list over without asking');
   await page.click('#ev-mode-day'); await wait(300);
+  ok(await page.evaluate(() => getComputedStyle(document.querySelector('#ev-tabs [data-daytab="sun"]')).textTransform) === 'uppercase', 'day tabs are standard MUI tabs (caps)');
+  const badge = await page.evaluate(() => { const b = document.querySelector('#ev-tabs [data-daytab="mon"] [data-count]'); return b && { bg: getComputedStyle(b).backgroundColor, t: b.textContent }; });
+  ok(badge && badge.t === '2' && badge.bg !== 'rgba(0, 0, 0, 0)', 'the event count sits in its own badge with a background', badge);
+  ok(/^content_copy\s*Copy to$/i.test(await txt('#ev-copy')), 'button reads "Copy to", no ellipsis', await txt('#ev-copy'));
   await page.click('#ev-tabs [data-daytab="sat"]'); await wait(150);
   await page.click('#ev-del-1'); await page.click('#ev-del-0'); await wait(150);
-  ok(await vis('#ev-empty') && /No events on Sat/.test(await txt('#ev-empty')) && /^Sat$/.test(await txt('#ev-tabs [data-daytab="sat"]')), 'a day can be emptied');
+  ok(await vis('#ev-empty') && /No events on Sat/.test(await txt('#ev-empty')) && /^Sat$/i.test(await txt('#ev-tabs [data-daytab="sat"]')), 'a day can be emptied');
+  await page.click('#ev-mode-all'); await wait(300);
+  ok(await vis('#to-all-dialog') && await vis('#to-all-restore'), 'with an earlier Every day list the dialog offers Restore Every day list');
+  await page.click('#to-all-cancel'); await wait(250);
   await page.click('#ev-tabs [data-daytab="fri"]'); await wait(150);
   await page.click('#ev-add'); await page.fill('#ev-t-2', '16:00'); await pickMenu('#ev-pa-2', 'Station default'); await wait(200);
   ok(await vis('#conflict') && /Shabbat quiet/.test(await txt('#conflict')) && /Fri 16:00/.test(await txt('#conflict')), 'same-minute clash with another schedule still blocks, per day', await txt('#conflict').catch(() => ''));
@@ -365,12 +374,12 @@ async function run() {
   await page.click('#ev-copy-menu [data-copyday="sat"]'); await wait(150);
   ok(/^Copy$/i.test(await txt('#ev-copy-apply')), 'an empty target keeps Copy');
   await page.click('#ev-copy-apply'); await wait(300);
-  ok(/Sat · 2/.test(await txt('#ev-tabs [data-daytab="sat"]')), 'Copy to… copies a day\'s events to other days');
+  ok(/^Sat\s*2$/i.test(await txt('#ev-tabs [data-daytab="sat"]')), 'Copy to… copies a day\'s events to other days');
   // UX review r1 fix: an error on a day that isn't open
   await page.click('#ev-tabs [data-daytab="mon"]'); await page.fill('#ev-t-0', '6');
   await page.click('#ev-tabs [data-daytab="sun"]'); await wait(150); await page.click('#ed-save'); await wait(300);
   ok(/Fix 1 field on Mon/.test(await txt('#err-summary')), 'the summary names the day with the error', await txt('#err-summary'));
-  ok(/Mon/.test(await txt('#ev-tabs [aria-selected="true"]')) && await vis('#ev-t-0-helper-text') && await vis('#ev-tabs [data-daytab="mon"] .material-icons'), 'a failed Save opens that day; its tab carries an error icon');
+  ok(/Mon/i.test(await txt('#ev-tabs [aria-selected="true"]')) && await vis('#ev-t-0-helper-text') && await vis('#ev-tabs [data-daytab="mon"] .material-icons'), 'a failed Save opens that day; its tab carries an error icon');
   await page.fill('#ev-t-0', '23:00'); await wait(150);
   await page.click('#ed-save'); await page.waitForSelector('#save-result', { timeout: 6000 });
   ok(/updated/.test(await txt('#save-result')), 'saves like variant 1');
