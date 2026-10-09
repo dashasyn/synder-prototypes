@@ -115,9 +115,11 @@ function Shell() {
                 html`<${MenuItem} key="tpl" onClick=${close}>
                   <${ListItemText} primary=${state.lang === 'de' ? 'Vorlagen' : 'Templates'} /><//>`,
                 // Ignat, 2026-10-09: one "Grunddaten" entry; its pages are tabs on that page
-                html`<${MenuItem} key="gd" data-view="gd" selected=${GD_VIEWS.includes(s.view)}
+                html`<${MenuItem} key="gd" data-view="gd" selected=${GD_VIEWS.includes(s.view) && !navActive(s.view, 'sounds')}
                   onClick=${() => { close(); nav('stations'); }}>
                   <${ListItemText} primary=${state.lang === 'de' ? 'Grunddaten' : 'Basic data'} /><//>`,
+                // Ignat, 2026-10-09: "keep audio library a separate tab in the configuration menu"
+                item('sounds', t('sounds'), () => { close(); nav('sounds'); }),
               ]}
             <//>
           <//>

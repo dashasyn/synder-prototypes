@@ -179,7 +179,7 @@ const CONTENT_MAX = 960;
    share one header: the title "Grunddaten", the tabs under it, and the page's
    own filters / add button on the tabs' row. Detail pages keep breadcrumbs. */
 const GD_TABS = [['stations', 'stations'], ['lines', 'lines'], ['lineMgmt', 'lineMgmt'],
-                 ['spc', 'spcPage'], ['texts', 'texts'], ['sounds', 'sounds']];
+                 ['spc', 'spcPage'], ['texts', 'texts']];  // Tondateien: own menu entry (Ignat, 2026-10-09)
 function GdTabsHeader({ action }) {
   const { s, nav, t } = useApp();
   return html`
@@ -188,8 +188,8 @@ function GdTabsHeader({ action }) {
       <${Typography} variant="h6" sx=${{ fontWeight: 500, pt: 2 }}>${state.lang === 'de' ? 'Grunddaten' : 'Basic data'}<//>
       <${Box} sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
         <${Tabs} value=${s.view} onChange=${(e, v) => nav(v)} sx=${{ minHeight: 48 }}>
-          ${GD_TABS.map(([v, k]) => html`<${Tab} key=${v} value=${v} label=${t(k)} data-gdtab=${v}
-            sx=${{ textTransform: 'none', fontSize: 14, minWidth: 0, px: 2 }} />`)}
+          ${/* stock MUI tabs, uppercase (Ignat, 2026-10-09) */ ''}
+          ${GD_TABS.map(([v, k]) => html`<${Tab} key=${v} value=${v} label=${t(k)} data-gdtab=${v} />`)}
         <//>
         ${action ? html`<${Box} sx=${{ py: 1 }}>${action}<//>` : null}
       <//>
