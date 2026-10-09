@@ -240,6 +240,60 @@ const EXPECT = {
   await page.waitForSelector("#acts");
   ok("#v2-lost opens Var 2 state 3", await page.locator("#vv-2.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
 
+  /* ---------- Links: A in blocks / B separate block ---------- */
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(target.split("#")[0] + "#attention");
+  await page.waitForSelector("#sync-rows .row");
+  ok("[links] None by default: no bridge links", (await page.locator("#lnk-sync, #lnk-import, #lnk-trouble, #p-related").count()) === 0);
+  ok("[links] Troubleshooting in sidebar", await page.locator("#nav-troubleshooting").isVisible());
+  await page.click("#vl-1");
+  ok("[links A] hash records links", page.url().endsWith("#l1-attention"));
+  for (const key of ["attention", "clear", "lost"]) {
+    await page.click(`#vs-${key}`);
+    for (const [id, panel, want] of [["#lnk-import", "#p-import .panel-t", "Import activity log"], ["#lnk-sync", "#p-sync .panel-t", "Sync issues"], ["#lnk-trouble", "#kpi-attn .kpi-t", "Troubleshooting"]]) {
+      const l = page.locator(id);
+      ok(`[links A ${key}] ${want} link visible`, await l.isVisible());
+      ok(`[links A ${key}] ${want} link lives in its block header`, (await page.locator(`${panel} ${id}`).count()) === 1);
+      await l.click();
+      ok(`[links A ${key}] ${want} bridges`, (await page.locator("#toast").innerText()).endsWith("would open: " + want));
+    }
+    ok(`[links A ${key}] link right-aligned in Sync header`, await page.evaluate(() => {
+      const h = document.querySelector("#p-sync .panel-t").getBoundingClientRect(), l = document.getElementById("lnk-sync").getBoundingClientRect();
+      return Math.abs(h.right - l.right) < 2; }));
+    ok(`[links A ${key}] no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  }
+  await page.click("#vs-lost");
+  await page.click("#vv-1");
+  await page.click("#issues-head");
+  ok("[links A v1] Troubleshooting link at the foot of the issues block", await page.locator("#issues-body #lnk-trouble-v1").isVisible());
+  await page.click("#vv-2");
+  ok("[links A v2] Troubleshooting link next to Required actions", await page.locator("#acts-req .acts-h #lnk-trouble-v2").isVisible());
+  await page.click("#vv-0");
+  await page.click("#vl-2");
+  const REL = { attention: ["6 error groups", "Last Oct 7, 11:58", "2 issues"], clear: ["No errors", "Last Oct 7, 11:58", "No issues"], lost: ["9 error groups", "Last Oct 2, 05:58", "4 issues"] };
+  for (const key of Object.keys(REL)) {
+    await page.click(`#vs-${key}`);
+    ok(`[links B ${key}] in-block links gone`, (await page.locator("#lnk-sync, #lnk-import, #lnk-trouble").count()) === 0);
+    ok(`[links B ${key}] Related pages panel visible`, await page.locator("#p-related").isVisible());
+    ok(`[links B ${key}] Related pages in left column`, (await page.locator("#col-left #p-related").count()) === 1);
+    const ids = ["#rel-sync", "#rel-import", "#rel-trouble"];
+    for (let i = 0; i < 3; i++) {
+      const r = page.locator(ids[i]);
+      ok(`[links B ${key}] ${ids[i]} visible`, await r.isVisible());
+      ok(`[links B ${key}] ${ids[i]} label not truncated`, await r.locator(".txt").evaluate((el) => el.scrollWidth <= el.clientWidth));
+      ok(`[links B ${key}] ${ids[i]} meta "${REL[key][i]}"`, (await r.locator(".meta").innerText()) === REL[key][i], await r.locator(".meta").innerText());
+    }
+    await page.click("#rel-sync");
+    ok(`[links B ${key}] Sync issues row bridges`, (await page.locator("#toast").innerText()).endsWith("would open: Sync issues"));
+  }
+  await page.goto(target.split("#")[0] + "#v1-l2-lost");
+  await page.waitForSelector("#p-related");
+  ok("#v1-l2-lost opens Var 1 + links B + state 3", await page.locator("#vv-1.on").isVisible() && await page.locator("#vl-2.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
+  await page.setViewportSize({ width: 1280, height: 900 });
+  ok("[links] 1280: no overflow with three switch groups", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  const smallL = await page.evaluate(() => [...document.querySelectorAll("body *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
+  ok("[links] no text under 14px", smallL === 0);
+
   ok("no JS errors", errors.length === 0, errors.join(" | "));
 
   await browser.close();

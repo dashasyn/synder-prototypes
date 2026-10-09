@@ -14,7 +14,7 @@
 body { margin: 0; background: var(--bg-surface); color: var(--text-primary); font-family: var(--font-family); }
 
 /* ---- prototype variant switch (not product chrome) ---- */
-.variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+.variant-switch{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--color-grey);
   color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:14px}
 .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;
   text-transform:uppercase}
@@ -27,7 +27,7 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
 
 /* ---- shell ---- */
-.shell { display: flex; min-height: calc(100vh - 46px); }
+.shell { display: flex; min-height: 100vh; }
 .sidebar { position: static; height: auto; border-right: 1px solid var(--border-nav); }
 .sidebar-logo { font-size: 18px; color: var(--color-primary); font-weight: 700; padding: 18px 16px; border-bottom: 1px solid var(--color-sidebar-divider); }
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -135,6 +135,12 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .act-title { font-weight: 500; }
 .act-desc { color: var(--text-secondary); }
 .act .btn { flex-shrink: 0; }
+.hdr-lnk { margin-left: auto; font-weight: 400; }
+.issues-foot { border-top: 1px solid var(--color-status-red-bg); padding: 10px 0 4px; }
+.acts-h { display: flex; align-items: baseline; gap: 12px; margin: 0 0 8px; }
+.acts-h .acts-t { margin: 0; }
+.related .row .lbl { flex: none; }
+.related .row .meta { flex: 1; min-width: 0; text-align: right; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .issues-head:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
 </style>
 </head>
@@ -154,6 +160,13 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
     <button id="vv-1" onclick="setVariant(1)">1 · Collapsed issues</button>
     <button id="vv-2" onclick="setVariant(2)">2 · Action list</button>
   </div>
+  <span class="vs-sep"></span>
+  <span class="vs-label">Links</span>
+  <div class="vs-opts">
+    <button id="vl-0" class="on" onclick="setLinks(0)">None</button>
+    <button id="vl-1" onclick="setLinks(1)">A · In blocks</button>
+    <button id="vl-2" onclick="setLinks(2)">B · Separate block</button>
+  </div>
 </div>
 
 <div class="shell">
@@ -161,16 +174,15 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
     <div class="sidebar-logo">Synder</div>
     <nav>
       <a class="sidebar-item active" href="#">Dashboard</a>
+      <a class="sidebar-item" href="#" id="nav-troubleshooting">Troubleshooting</a>
       <a class="sidebar-item" href="#">Transactions</a>
-      <a class="sidebar-item" href="#">Transaction reconciliation</a>
+      <a class="sidebar-item" href="#">Inventory sync <span class="sidebar-badge">Beta</span></a>
       <a class="sidebar-item" href="#">Smart rules</a>
       <a class="sidebar-item" href="#">Invoicing</a>
-      <a class="sidebar-item" href="#">AI reports</a>
-      <a class="sidebar-item" href="#">Reporting</a>
-      <a class="sidebar-item" href="#">Revenue recognition</a>
+      <a class="sidebar-item" href="#">Analytics</a>
       <a class="sidebar-item" href="#">Settings</a>
-      <a class="sidebar-item" href="#">AI Agents</a>
-      <a class="sidebar-item" href="#">What's new</a>
+      <a class="sidebar-item" href="#">AI Hub</a>
+      <a class="sidebar-item" href="#">What's New</a>
       <a class="sidebar-item" href="#">Custom development</a>
     </nav>
   </aside>
@@ -342,7 +354,9 @@ function renderIssues(s) {
   }).join('');
   return '<div class="issues" id="issues"><button type="button" class="issues-head" aria-expanded="false" aria-controls="issues-body" id="issues-head">'
     + ICON.chev.replace('class="chev"', 'class="tw"') + '<span class="t">' + list.length + ' issues found</span><span class="tog">Show</span></button>'
-    + '<div class="issues-body" id="issues-body" hidden>' + rows + '</div></div>';
+    + '<div class="issues-body" id="issues-body" hidden>' + rows
+    + (links === 1 ? '<div class="issues-foot"><button type="button" class="lnk" id="lnk-trouble-v1"' + go('Troubleshooting') + '>View all in Troubleshooting' + ICON.chev + '</button></div>' : '')
+    + '</div></div>';
 }
 
 /* ---- Var 2: the same problems as Var 1, phrased as actions and always
@@ -374,8 +388,31 @@ function renderActions(s) {
     }).join('') + '</div>';
   }
   return '<div class="acts" id="acts">'
-    + (a.req.length ? '<section id="acts-req"><h2 class="acts-t">Required actions</h2>' + list(a.req, 'req') + '</section>' : '')
+    + (a.req.length ? '<section id="acts-req"><div class="acts-h"><h2 class="acts-t">Required actions</h2>' + (links === 1 ? '<button type="button" class="lnk" id="lnk-trouble-v2"' + go('Troubleshooting') + '>View all in Troubleshooting' + ICON.chev + '</button>' : '') + '</div>' + list(a.req, 'req') + '</section>' : '')
     + '<section id="acts-next"><h2 class="acts-t">Next actions</h2>' + list(a.next, 'next') + '</section></div>';
+}
+
+/* ---- bridges to Sync issues / Import activity log / Troubleshooting ----
+   Mock figures per state; Troubleshooting count = the same issues Var 1 lists. */
+var BRIDGE = {
+  attention: { groups: 6, lastImport: 'Oct 7, 11:58' },
+  clear:     { groups: 0, lastImport: 'Oct 7, 11:58' },
+  lost:      { groups: 9, lastImport: 'Oct 2, 05:58' }
+};
+function hdrLink(label, msg, id) {
+  return '<button type="button" class="lnk hdr-lnk" id="' + id + '"' + go(msg) + '>' + label + ICON.chev + '</button>';
+}
+function renderRelated(key, s) {
+  var b = BRIDGE[key], n = issuesFor(s).length;
+  function row(id, label, meta, msg) {
+    return '<button type="button" class="row" id="' + id + '"' + go(msg) + '><span class="lbl"><span class="txt">' + label + '</span></span>'
+      + '<span class="meta">' + meta + '</span><span class="cnt">' + ICON.chev + '</span></button>';
+  }
+  return '<section class="panel related" id="p-related"><div class="panel-t">Related pages</div><div class="box">'
+    + row('rel-sync', 'Sync issues', b.groups ? b.groups + ' error groups' : 'No errors', 'Sync issues')
+    + row('rel-import', 'Import activity log', 'Last ' + b.lastImport, 'Import activity log')
+    + row('rel-trouble', 'Troubleshooting', n ? n + (n === 1 ? ' issue' : ' issues') : 'No issues', 'Troubleshooting')
+    + '</div></section>';
 }
 
 function render(key) {
@@ -398,10 +435,10 @@ function render(key) {
     +   (s.timeLink ? '<button type="button" class="lnk"' + go('How to save more time') + '>How to save more time</button>' : '') + '</div></div>'
     + '<div class="kpi" id="kpi-score"><div class="kpi-t">Sync score' + help() + '</div><div class="kpi-v">' + s.score
     +   (s.scoreLink ? '<button type="button" class="lnk"' + go('How to bring it up to 100%') + '>How to bring it up to 100%</button>' : '') + '</div></div>'
-    + '<div class="kpi ' + (s.attention ? 'bad' : 'good') + '" id="kpi-attn"><div class="kpi-t">Needs attention' + help() + '</div><div class="kpi-v">' + attn + '</div></div>';
+    + '<div class="kpi ' + (s.attention ? 'bad' : 'good') + '" id="kpi-attn"><div class="kpi-t">Needs attention' + help() + (links === 1 ? hdrLink('Troubleshooting', 'Troubleshooting', 'lnk-trouble') : '') + '</div><div class="kpi-v">' + attn + '</div></div>';
 
   /* left: Import (+ Revenue recognition when RevRec is on) */
-  var left = '<section class="panel" id="p-import"><div class="panel-t">Import' + help() + '</div>'
+  var left = '<section class="panel" id="p-import"><div class="panel-t">Import' + help() + (links === 1 ? hdrLink('Import activity log', 'Import activity log', 'lnk-import') : '') + '</div>'
     + '<div class="panel-big"><span><span class="n">1,200</span> transactions imported</span></div>'
     + '<div class="box' + (s.imports.length > 8 ? ' scroll' : '') + '" id="import-rows">'
     + s.imports.map(function (src) { return sourceRow(src, 1200); }).join('') + '</div></section>';
@@ -409,11 +446,12 @@ function render(key) {
     left += '<section class="panel" id="p-revrec"><div class="panel-t">Revenue recognition' + help() + '</div>'
       + '<div class="box">' + s.revrec.map(function (r) { return statusRow(r[0], r[1], 'Revenue recognition'); }).join('') + '</div></section>';
   }
+  if (links === 2) left += renderRelated(key, s);
   document.getElementById('col-left').innerHTML = left;
 
   /* middle: Sync */
   document.getElementById('col-mid').innerHTML =
-      '<section class="panel" id="p-sync"><div class="panel-t">Sync' + help() + '</div>'
+      '<section class="panel" id="p-sync"><div class="panel-t">Sync' + help() + (links === 1 ? hdrLink('Sync issues', 'Sync issues', 'lnk-sync') : '') + '</div>'
     + '<div class="panel-big"><span><span class="n">1,200</span> transactions synchronized to books</span>' + help() + '</div>'
     + '<div class="box" id="sync-rows">' + s.sync.map(function (r) { return statusRow(r[0], r[1], 'Platform transactions · Status'); }).join('') + '</div></section>';
 
@@ -438,17 +476,19 @@ function render(key) {
 }
 
 /* ---- state + variant switch: both swap in place ---- */
-var current = 'attention', variant = 0;
+var current = 'attention', variant = 0, links = 0;
 function sync() {
   ['attention','clear','lost'].forEach(function (k) {
     document.getElementById('vs-' + k).classList.toggle('on', k === current);
   });
   [0, 1, 2].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
+  [0, 1, 2].forEach(function (v) { document.getElementById('vl-' + v).classList.toggle('on', v === links); });
   render(current);
-  try { history.replaceState(null, '', '#' + (variant ? 'v' + variant + '-' : '') + current); } catch (e) {}
+  try { history.replaceState(null, '', '#' + (variant ? 'v' + variant + '-' : '') + (links ? 'l' + links + '-' : '') + current); } catch (e) {}
 }
 function setState(key) { current = key; sync(); }
 function setVariant(v) { variant = v; sync(); }
+function setLinks(v) { links = v; sync(); }
 
 /* ---- interactions ---- */
 var toastTimer;
@@ -503,16 +543,16 @@ document.addEventListener('keydown', function (e) {
 });
 
 function parseHash() {
-  var m = /^#(?:v(\d)-)?(\w+)$/.exec(location.hash || '');
-  var v = m && m[1] ? +m[1] : 0;
-  return { v: v === 1 || v === 2 ? v : 0, k: m && STATES[m[2]] ? m[2] : 'attention' };
+  var m = /^#(?:v(\d)-)?(?:l(\d)-)?(\w+)$/.exec(location.hash || '');
+  var v = m && m[1] ? +m[1] : 0, l = m && m[2] ? +m[2] : 0;
+  return { v: v === 1 || v === 2 ? v : 0, l: l === 1 || l === 2 ? l : 0, k: m && STATES[m[3]] ? m[3] : 'attention' };
 }
 window.addEventListener('hashchange', function () {
   var h = parseHash();
-  if (h.k !== current || h.v !== variant) { current = h.k; variant = h.v; sync(); }
+  if (h.k !== current || h.v !== variant || h.l !== links) { current = h.k; variant = h.v; links = h.l; sync(); }
 });
 var h0 = parseHash();
-current = h0.k; variant = h0.v; sync();
+current = h0.k; variant = h0.v; links = h0.l; sync();
 </script>
 </body>
 </html>
