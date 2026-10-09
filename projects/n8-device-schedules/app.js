@@ -817,11 +817,11 @@ function validate(d) {
 }
 
 /** Bass / Mid / Treble for a scheduled volume (PaxLife `equalizer`, −12…12 dB). Hidden at 0 = mute. */
-function EqFields({ idp, eq, onChange, error }) {
-  return html`<${Box} sx=${{ display: 'flex', gap: 1.5 }} data-eq=${idp}>
+function EqFields({ idp, eq, onChange, error, w = 110, gap = 1.5 }) {
+  return html`<${Box} sx=${{ display: 'flex', gap, flexShrink: 0 }} data-eq=${idp}>
     ${EQ.map(([k, l]) => {
       const v = (eq || {})[k], n = Number(v), bad = error && (v === '' || !Number.isInteger(n) || n < -12 || n > 12);
-      return html`<${TextField} key=${k} id=${idp + k} label=${l} type="number" value=${v} sx=${{ width: 110 }}
+      return html`<${TextField} key=${k} id=${idp + k} label=${l} type="number" value=${v} sx=${{ width: w }}
         inputProps=${{ min: -12, max: 12, step: 1 }} error=${!!bad} helperText=${bad ? '−12…12' : ''}
         onChange=${e => onChange({ ...eq, [k]: e.target.value })} />`;
     })}
@@ -934,22 +934,22 @@ function EventsCard({ d, set, errs, ov, toast, saveTry }) {
           const tErr = errs[`ev:${key}:${i}:t`], aErr = errs[`ev:${key}:${i}:act`];
           return html`
             <${Box} key=${key + i} data-event=${i}>
-            <${Box} sx=${{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-              <${TextField} id=${'ev-t-' + i} label="Time" required value=${x.t} placeholder="hh:mm" sx=${{ width: 120, flexShrink: 0 }}
+            <${Box} sx=${{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+              <${TextField} id=${'ev-t-' + i} label="Time" required value=${x.t} placeholder="hh:mm" sx=${{ width: 96, flexShrink: 0 }}
                 inputProps=${{ inputMode: 'numeric', maxLength: 5 }} error=${!!tErr} helperText=${tErr || ''}
                 onChange=${e => upd(i, { t: e.target.value })} />
-              ${sel('ev-disp-' + i, 'Displays', x.disp, v => upd(i, { disp: v }), [['none', 'No change'], ['off', 'Turn off'], ['on', 'Turn on']], aErr, 150)}
-              ${sel('ev-pa-' + i, 'PA', x.pa, v => upd(i, { pa: v }), [['none', 'No change'], ['set', 'Set volume'], ['default', 'Station default']], aErr ? ' ' : '', 170)}
+              ${sel('ev-disp-' + i, 'Displays', x.disp, v => upd(i, { disp: v }), [['none', 'No change'], ['off', 'Turn off'], ['on', 'Turn on']], aErr, 136)}
+              ${sel('ev-pa-' + i, 'PA', x.pa, v => upd(i, { pa: v }), [['none', 'No change'], ['set', 'Set volume'], ['default', 'Station default']], aErr ? ' ' : '', 156)}
               ${x.pa === 'set' ? html`
-                <${Box} sx=${{ width: 170, flexShrink: 0, px: 1 }}>
+                <${Box} sx=${{ width: 136, flexShrink: 0, px: 1 }}>
                   <${Typography} variant="body2" id=${'ev-vol-value-' + i}>${Number(x.vol) === 0 ? 'Mute (0%)' : `Volume ${x.vol}%`}<//>
                   <${Slider} id=${'ev-vol-' + i} size="small" value=${Number(x.vol) || 0} min=${0} max=${100} step=${5} aria-label="Volume"
                     onChange=${(e, v) => upd(i, { vol: v })} />
-                <//>` : html`<${Box} sx=${{ width: 170, flexShrink: 0 }} />`}
-              <${IconButton} id=${'ev-del-' + i} aria-label="Delete event" sx=${{ mt: 1 }} onClick=${() => setList(list.filter((_, j) => j !== i))}><${Icon}>delete<//><//>
+                <//>` : null}
+              ${x.pa === 'set' && Number(x.vol) ? html`<${EqFields} idp=${'ev-' + i + '-'} eq=${x.eq || EQ_FLAT()} w=${76} gap=${1}
+                error=${!!errs[`ev:${key}:${i}:eq`]} onChange=${eq => upd(i, { eq })} />` : null}
+              <${IconButton} id=${'ev-del-' + i} aria-label="Delete event" sx=${{ mt: 1, ml: 'auto' }} onClick=${() => setList(list.filter((_, j) => j !== i))}><${Icon}>delete<//><//>
             <//>
-            ${x.pa === 'set' && Number(x.vol) ? html`<${Box} sx=${{ mt: 1.5, pl: '294px' }}>
-              <${EqFields} idp=${'ev-' + i + '-'} eq=${x.eq || EQ_FLAT()} error=${!!errs[`ev:${key}:${i}:eq`]} onChange=${eq => upd(i, { eq })} /><//>` : null}
             <//>`;
         })}
         ${!list.length ? html`<${Typography} variant="body2" color="text.secondary" id="ev-empty">
@@ -1136,7 +1136,7 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
         <//>
       <//>
 
-      <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: v2 ? 'minmax(0, 4fr) minmax(720px, 8fr)' : 'minmax(0, 7fr) minmax(400px, 5fr)' }, gap: 2, alignItems: 'start' }}>
+      <${Box} sx=${{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: v2 ? 'minmax(0, 3fr) minmax(0, 9fr)' : 'minmax(0, 7fr) minmax(400px, 5fr)' }, gap: 2, alignItems: 'start' }}>
         <${SectionCard} title=${`Stations (${targetStations(d).length})`} id="card-targets"
           action=${html`<${Tooltip} title="Map view — not part of this prototype"><span>
             <${IconButton} disabled aria-label="Show on map"><${Icon}>map<//><//></span><//>`}>

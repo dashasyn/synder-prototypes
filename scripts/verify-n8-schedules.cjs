@@ -347,6 +347,18 @@ async function run() {
   await pickMenu('#ev-pa-0', 'Set volume'); await wait(150);
   ok(await vis('#ev-vol-0') && /Volume 50%/.test(await txt('#ev-vol-value-0')) && await vis('#ev-warning [data-warn="pa"]'), 'Set volume shows a slider; never back to default → warning');
   ok(await vis('#ev-0-bass') && await vis('#ev-0-mid') && await vis('#ev-0-treble'), 'variant 2: an event that sets volume also has Bass / Mid / Treble');
+  const rowFit = async () => page.evaluate(() => {
+    const row = document.querySelector('#ev-list [data-event="0"] > div'), card = document.querySelector('#card-timing .MuiCardContent-root');
+    const r = id => document.getElementById(id).getBoundingClientRect();
+    const del = r('ev-del-0'), cr = card.getBoundingClientRect();
+    return { sameRow: Math.abs(r('ev-0-bass').top - r('ev-pa-0').top) < 30 && r('ev-0-treble').right <= del.left, inside: del.right <= cr.right - 8 && row.scrollWidth <= row.clientWidth + 1 };
+  });
+  let fit = await rowFit();
+  ok(fit.sameRow && fit.inside, 'Bass / Mid / Treble sit on the event row, before the delete icon, inside the card (1440)', fit);
+  await page.setViewportSize({ width: 1280, height: 900 }); await wait(300);
+  fit = await rowFit();
+  ok(fit.sameRow && fit.inside, '… and still fit on one row at 1280', fit);
+  await page.setViewportSize({ width: 1440, height: 900 }); await wait(300);
   await page.fill('#ev-0-treble', '-4'); await wait(150);
   ok(/EQ 0 \/ 0 \/ −4 dB/.test(await page.evaluate(() => evText({ disp: 'none', pa: 'set', vol: 50, eq: { bass: 0, mid: 0, treble: -4 } }))), 'EQ reads as "EQ 0 / 0 / −4 dB"');
   await pickMenu('#ev-pa-1', 'Station default');
