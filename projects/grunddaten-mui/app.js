@@ -114,14 +114,10 @@ function Shell() {
                   <${ListItemText} primary=${state.lang === 'de' ? 'Benutzer und Rechte' : 'Users and permissions'} /><//>`,
                 html`<${MenuItem} key="tpl" onClick=${close}>
                   <${ListItemText} primary=${state.lang === 'de' ? 'Vorlagen' : 'Templates'} /><//>`,
-                item('sounds',   t('sounds'),   () => { close(); nav('sounds'); }),
-                item('lineMgmt', t('lineMgmt'), () => { close(); nav('lineMgmt'); }),
-                html`<${Divider} key="sep" />`,
-                html`<${ListSubheader} key="hdr" sx=${{ lineHeight: '30px' }}>${t('stationConfigs')}<//>`,
-                item('stations', t('stations'), () => { close(); nav('stations'); }),
-                item('lines',    t('lines'),    () => { close(); nav('lines'); }),
-                item('spc',      t('spcPage'),  () => { close(); nav('spc'); }),
-                item('texts',    t('texts'),    () => { close(); nav('texts'); }),
+                // Ignat, 2026-10-09: one "Grunddaten" entry; its pages are tabs on that page
+                html`<${MenuItem} key="gd" data-view="gd" selected=${GD_VIEWS.includes(s.view)}
+                  onClick=${() => { close(); nav('stations'); }}>
+                  <${ListItemText} primary=${state.lang === 'de' ? 'Grunddaten' : 'Basic data'} /><//>`,
               ]}
             <//>
           <//>

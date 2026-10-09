@@ -174,7 +174,31 @@ const CONTENT_MAX = 960;
     stays under the fixed top bar; sticky={false} opts out.
     narrow — the centred 960px column (station detail only). */
 /** dense — a thinner header with the action (e.g. filters) centred on the title's row (stations list). */
+/* Ignat, 2026-10-09: "in the Configuration menu make one tab 'Basic data' …
+   make all those pages as tabs on the 'Basic data' page". The six list pages
+   share one header: the title "Grunddaten", the tabs under it, and the page's
+   own filters / add button on the tabs' row. Detail pages keep breadcrumbs. */
+const GD_TABS = [['stations', 'stations'], ['lines', 'lines'], ['lineMgmt', 'lineMgmt'],
+                 ['spc', 'spcPage'], ['texts', 'texts'], ['sounds', 'sounds']];
+function GdTabsHeader({ action }) {
+  const { s, nav, t } = useApp();
+  return html`
+    <${Box} data-page-header="" id="gdHeader" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
+                   position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }}>
+      <${Typography} variant="h6" sx=${{ fontWeight: 500, pt: 2 }}>${state.lang === 'de' ? 'Grunddaten' : 'Basic data'}<//>
+      <${Box} sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+        <${Tabs} value=${s.view} onChange=${(e, v) => nav(v)} sx=${{ minHeight: 48 }}>
+          ${GD_TABS.map(([v, k]) => html`<${Tab} key=${v} value=${v} label=${t(k)} data-gdtab=${v}
+            sx=${{ textTransform: 'none', fontSize: 14, minWidth: 0, px: 2 }} />`)}
+        <//>
+        ${action ? html`<${Box} sx=${{ py: 1 }}>${action}<//>` : null}
+      <//>
+    <//>`;
+}
+
 function PageHeader({ crumbs, title, titleAfter, subtitle, action, sticky, narrow, dense }) {
+  const app = useApp();
+  if (!crumbs && app && GD_TABS.some(([v]) => v === app.s.view)) return html`<${GdTabsHeader} action=${action} />`;
   return html`
     <${Box} data-page-header="" sx=${{ bgcolor: '#fff', borderBottom: '1px solid #E7E7E7', px: 3,
                    ...(sticky === false ? null : { position: 'sticky', top: 'var(--app-top, 0px)', zIndex: 10 }) }}>
