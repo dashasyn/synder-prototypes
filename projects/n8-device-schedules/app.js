@@ -122,7 +122,7 @@ var DEVICES = [
 ].map(([name, id, type, kind, station, zone, net]) => ({
   name, id, type, kind, station, zone, net, status: 'Active',
   // Volume lives on the station now (Ignat, 2026-10-05); only the Barix equalizer stays on the device.
-  base: kind === 'barix' ? { eq: 'Speech' } : null,
+  base: null,
 }));
 const devById = id => DEVICES.find(d => d.id === id);
 
@@ -130,8 +130,9 @@ const devById = id => DEVICES.find(d => d.id === id);
    all audio devices have 50 % volume"). A schedule sets a volume level from 0
    (silent) to 100 (Ignat, same day) instead of 264's −100…+100 relative
    adjustment — flagged as G4. */
-var STATION_AUDIO = Object.fromEntries(STATIONS.map(s => [s.code, { volume: 50 }]));
-const stAudio = code => STATION_AUDIO[code] || { volume: 50 };
+var STATION_AUDIO = Object.fromEntries(STATIONS.map(s => [s.code, { volume: 50, bass: 0, mid: 0, treble: 0 }]));
+const stAudio = code => STATION_AUDIO[code] || { volume: 50, bass: 0, mid: 0, treble: 0 };
+const EQ = [['bass', 'Bass (dB)'], ['mid', 'Mid (dB)'], ['treble', 'Treble (dB)']];
 
 /* What a device type can do — PaxLife Device Configuration API: visual devices
    schedule screen_on, Barix devices schedule muted / volume / equalizer. */
@@ -437,7 +438,7 @@ function Rail() {
 /* The prototype frame, not product chrome: first element, full width, dark.
    Demo states only. */
 function VariantSwitch() {
-  const { listState, setListState, saveMode, setSaveMode, layout, setLayout } = useApp();
+  const { saveMode, setSaveMode } = useApp();
   const btn = (id, on, label, onClick) => html`
     <button id=${id} className=${on ? 'on' : ''} onClick=${onClick}
       style=${{ background: on ? '#fff' : 'none', color: on ? 'rgba(0,0,0,.87)' : 'rgba(255,255,255,.75)',
@@ -452,8 +453,6 @@ function VariantSwitch() {
     <div className="variant-switch" id="variant-switch"
       style=${{ display: 'flex', alignItems: 'center', gap: 14, background: '#1b1b1b', color: '#fff', flexWrap: 'wrap',
                 padding: '7px 20px', flexShrink: 0, fontSize: 14, fontFamily: 'Roboto, sans-serif' }}>
-      ${group('Layout', html`${btn('lay-full', layout === 'full', 'A · Full page', () => setLayout('full'))}${btn('lay-split', layout === 'split', 'B · List + editor', () => setLayout('split'))}`)}
-      ${group('List', ['data', 'empty', 'loading', 'error'].map(k => btn('ls-' + k, listState === k, k[0].toUpperCase() + k.slice(1), () => setListState(k))))}
       ${group('Save', [['ok', 'Succeeds'], ['partial', 'Partial failure'], ['error', 'Fails']].map(([k, l]) => btn('sv-' + k, saveMode === k, l, () => setSaveMode(k))))}
     </div>`;
 }
@@ -617,85 +616,6 @@ function StationPicker({ groups, stations, onChange, error }) {
       }}
       renderInput=${p => html`<${TextField} ...${p} label="Stations" required error=${!!error}
         helperText=${error || ''} />`} />`;
-}
-
-/* ══ Layout B: list + editor on one page ════════════════════════════════
-   From the manager's DATNETISR-1036 concept: the list stays in view while
-   editing. Same editor, same guard — picking another schedule with unsaved
-   changes asks first. */
-function SplitSchedules() {
-  const app = useApp();
-  const { go, target, screen, phase, listState, setListState } = app;
-  const { toggle } = listActions(app);
-  const [q, setQ] = useState('');
-  const [savedId, setSavedId] = useState(null);
-  const all = listState === 'empty' ? [] : SCHEDULES;
-  const n = q.trim().toLowerCase();
-  const rows = all.filter(s => !n || `${s.name} ${targetText(s)}`.toLowerCase().includes(n));
-  const sel = screen === 'schedule' && target ? target : (all[0] ? { id: all[0].id } : null);
-  const selKey = sel ? (sel.id || 'new:' + JSON.stringify(sel.preset || {})) : 'none';
-  useEffect(() => setSavedId(null), [selKey]);
-  const current = (sel && sel.id) || savedId;
-  const loading = listState === 'loading';
-  const add = html`<${Button} variant="contained" id="add-btn" startIcon=${html`<${Icon}>add<//>`} onClick=${() => go('schedule', { id: null })}>Add schedule<//>`;
-
-  return html`
-    <${Box}>
-      <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-        <${Typography} variant="h6" id="page-title">Output device schedules<//>
-        <${Box} sx=${{ flex: 1 }} />${add}
-      <//>
-      ${listState === 'error' ? html`
-        <${Alert} severity="error" id="list-error" action=${html`<${Button} color="inherit" onClick=${() => setListState('data')}>Retry<//>`}>
-          Couldn't load schedules. ETC didn't respond — nothing has changed on the devices.
-        <//>` : html`
-      <${Box} id="split" sx=${{ display: 'grid', gridTemplateColumns: '360px minmax(0, 1fr)', gap: 2, alignItems: 'start' }}>
-        <${Paper} variant="outlined" id="rail" sx=${{ borderColor: '#E7E7E7', position: 'sticky', top: 16 }}>
-          <${Box} sx=${{ p: 1.5, borderBottom: '1px solid #E7E7E7' }}>
-            <${TextField} id="q" hiddenLabel placeholder="Search" value=${q} fullWidth
-              inputProps=${{ 'aria-label': 'Search schedules' }} onChange=${e => setQ(e.target.value)}
-              InputProps=${{ endAdornment: html`<${InputAdornment} position="end"><${Icon} sx=${{ color: 'text.secondary' }}>search<//><//>` }} />
-          <//>
-          ${loading ? html`<${Box} id="list-loading" aria-busy="true">${[0, 1, 2, 3].map(i => html`
-              <${Box} key=${i} sx=${{ px: 2, py: 1.5, borderBottom: '1px solid #E7E7E7' }}><${Skeleton} width="70%" /><${Skeleton} width="90%" /><${Skeleton} width="40%" /><//>`)}<//>`
-          : !all.length ? html`
-            <${Box} id="list-empty" sx=${{ px: 2, py: 5, textAlign: 'center' }}>
-              <${Icon} sx=${{ fontSize: 40, color: 'rgba(0,0,0,.38)' }}>event_repeat<//>
-              <${Typography} variant="subtitle1" sx=${{ mt: 1, fontWeight: 500 }}>No schedules yet<//>
-              <${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>A schedule darkens displays or changes PA volume at set times, for a station group or for the stations you choose.<//>
-            <//>`
-          : rows.length ? rows.map(s => {
-            const st = applyState(s, phase);
-            const on = s.id === current;
-            return html`
-              <${Box} key=${s.id} data-rail=${s.id} role="button" tabIndex=${0} aria-current=${on ? 'true' : undefined}
-                onClick=${() => go('schedule', { id: s.id })}
-                onKeyDown=${e => { if (e.key === 'Enter') go('schedule', { id: s.id }); }}
-                sx=${{ px: 2, py: 1.5, borderBottom: '1px solid #E7E7E7', cursor: 'pointer',
-                       bgcolor: on ? '#E3F2FD' : '#fff', boxShadow: on ? 'inset 3px 0 #2196F3' : 'none',
-                       '&:hover': { bgcolor: on ? '#E3F2FD' : '#F7F9FC' } }}>
-                <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <${Typography} variant="body2" sx=${{ fontWeight: 500, flex: 1, fontSize: 15 }}>${s.name}<//>
-                  <${Box} onClick=${e => e.stopPropagation()}>
-                    <${Switch} size="small" checked=${s.active} inputProps=${{ 'aria-label': `Active: ${s.name}` }} data-toggle=${s.id} onChange=${() => toggle(s)} />
-                  <//>
-                <//>
-                <${Typography} variant="body2" color="text.secondary">${targetText(s)} · ${daysText(s)} · ${timeText(s)}<//>
-                <${Typography} variant="body2" color="text.secondary">PA: ${paText(s)} · Displays: ${displayText(s)}<//>
-                <${Box} sx=${{ mt: .75, display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <${StateChip} st=${st} />
-                <//>
-              <//>`;
-          }) : html`<${Typography} variant="body2" color="text.secondary" sx=${{ p: 2 }}>No schedules match "${q}".<//>`}
-        <//>
-        <${Box} id="split-editor" sx=${{ minWidth: 0 }}>
-          ${loading ? null : sel
-            ? html`<${ScheduleEditor} key=${selKey} tgt=${sel} embedded=${true} onSaved=${setSavedId} />`
-            : html`<${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', p: 4, textAlign: 'center' }}>
-                <${Typography} variant="body2" color="text.secondary">Add a schedule to start.<//><//>`}
-        <//>
-      <//>`}
-    <//>`;
 }
 
 /* ══ Screen: schedule editor — the only editor ═════════════════════════ */
@@ -903,10 +823,9 @@ function ScheduleEditor({ tgt, embedded, onSaved }) {
             <${TextField} id="ed-end" label="End time" required value=${d.end} placeholder="hh:mm"
               inputProps=${{ inputMode: 'numeric', maxLength: 5 }}
               InputProps=${{ endAdornment: html`<${InputAdornment} position="end"><${Icon} sx=${{ color: 'text.secondary' }}>schedule<//><//>` }}
-              error=${!!errs.end} helperText=${errs.end || ''} onChange=${e => set({ end: e.target.value })} />
+              error=${!!errs.end} helperText=${errs.end || (overnight(d) ? `Ends next day${d.days.length ? ' · ' + daysText({ days: d.days.map(k => DAYS[(DAYS.findIndex(x => x[0] === k) + 1) % 7][0]), holidays: false }) : ''}` : '')}
+              onChange=${e => set({ end: e.target.value })} />
           <//>
-          ${overnight(d) ? html`<${Chip} id="overnight" size="small" sx=${{ mt: 1.5, bgcolor: '#EDE7F6', color: '#4527A0' }}
-            icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px', color: '#4527A0' }}>bedtime<//>`} label=${`Overnight · ends next day ${d.end}`} />` : null}
           ${ov.length ? html`
             <${Alert} severity="error" id="conflict" sx=${{ mt: 1.5 }}>
               ${ov.map((o, i) => html`<div key=${o.s.id}>Conflicts with <b>${o.s.name}</b> at ${o.at} on ${o.shared} device${o.shared > 1 ? 's' : ''}</div>`)}
@@ -985,14 +904,13 @@ function DeviceList() {
 function DeviceDetail() {
   const { go, target, phase, toast, bump, setDirty } = useApp();
   const d = devById(target.id);
-  const [base, setBase] = useState(() => d.base ? { ...d.base } : null);
-  const dirty = !!base && base.eq !== d.base.eq;
+  const dirty = false;
   const audio = d.kind !== 'display';
   const sa = stAudio(d.station);
   useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
   const scheds = SCHEDULES.filter(s => reach(s).some(x => x.d.id === d.id && x.useful));
   const entries = plainEntries(d);
-  const save = () => { if (base) { d.base = { eq: base.eq }; } bump(); setDirty(false); toast('Device saved'); go('devices'); };
+  const save = () => { bump(); setDirty(false); toast('Device saved'); go('devices'); };
   const via = s => viaText(s, d.station).replace('This station', 'Station · ' + stName(d.station));
 
   return html`
@@ -1019,16 +937,10 @@ function DeviceDetail() {
       ${audio ? html`
         <${SectionCard} title="Base audio settings" id="card-base"
           chip=${html`<${Chip} size="small" label="Persistent — not scheduled" icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px' }}>push_pin<//>`} />`}
-          note=${html`Default volume is set per station in <${Link} component="button" underline="hover" id="dv-station-audio" onClick=${() => go('station', { code: d.station, tab: 'audio' })} sx=${{ verticalAlign: 'baseline' }}>Station details<//>.`}>
-          <${FieldGrid} cols=${3}>
-            <${TextField} id="dv-vol" label=${`Default volume — station ${d.station}`} value=${sa.volume + '%'} disabled />
-            ${d.kind === 'barix' ? html`
-              <${FormControl}>
-                <${InputLabel} id="dv-eq-label">Equalizer<//>
-                <${Select} id="dv-eq" labelId="dv-eq-label" label="Equalizer" value=${base.eq} onChange=${e => setBase({ ...base, eq: e.target.value })}>
-                  ${['Speech', 'Music', 'Flat'].map(x => html`<${MenuItem} key=${x} value=${x}>${x}<//>`)}
-                <//>
-              <//>` : null}
+          note=${html`Set per station in <${Link} component="button" underline="hover" id="dv-station-audio" onClick=${() => go('station', { code: d.station, tab: 'audio' })} sx=${{ verticalAlign: 'baseline' }}>Station details<//>.`}>
+          <${FieldGrid}>
+            <${TextField} id="dv-vol" label="Volume" value=${sa.volume + '%'} disabled />
+            ${EQ.map(([k, l]) => html`<${TextField} key=${k} id=${'dv-' + k} label=${l} value=${sa[k]} disabled />`)}
           <//>
         <//>` : null}
 
@@ -1107,7 +1019,7 @@ function DeviceTypes() {
                 <${TableCell}>${x.kind === 'display' ? 'Display' : 'Audio'}<//>
                 <${TableCell} data-cap="display">${CAN[x.kind].display ? 'Darken all displays' : no}<//>
                 <${TableCell} data-cap="pa">${CAN[x.kind].pa ? 'Set volume' : no}<//>
-                <${TableCell}>${x.kind === 'barix' ? 'Equalizer (on the device) · volume per station' : no}<//>
+                <${TableCell}>${x.kind === 'barix' ? 'Volume, equalizer — per station' : no}<//>
                 <${TableCell}>${x.n}<//>
                 <${TableCell}>${x.kind === 'barix' ? 'Base settings are persistent — never changed by a schedule.' : ''}<//>
               <//>`)}
@@ -1151,16 +1063,18 @@ function StationDetail() {
   const list = SCHEDULES.filter(x => targetStations(x).includes(s.code));
   const [au, setAu] = useState(() => ({ ...stAudio(s.code) }));
   const cur = stAudio(s.code);
-  const dirty = String(au.volume) !== String(cur.volume);
+  const dirty = ['volume', ...EQ.map(e => e[0])].some(k => String(au[k]) !== String(cur[k]));
   useEffect(() => { setDirty(dirty); return () => setDirty(false); }, [dirty]);
   const v = Number(au.volume);
-  const auErr = !(au.volume !== '' && v >= 0 && v <= 100) ? { volume: 'Enter 0–100' } : {};
+  const auErr = {};
+  if (!(au.volume !== '' && v >= 0 && v <= 100)) auErr.volume = 'Enter 0–100';
+  EQ.forEach(([k]) => { const n = Number(au[k]); if (au[k] === '' || !Number.isInteger(n) || n < -12 || n > 12) auErr[k] = '−12…12'; });
   const nAudio = DEVICES.filter(d => d.station === s.code && d.kind !== 'display').length;
   const save = () => {
     if (Object.keys(auErr).length) return;
-    STATION_AUDIO[s.code] = { volume: v };
+    STATION_AUDIO[s.code] = { volume: v, ...Object.fromEntries(EQ.map(([k]) => [k, Number(au[k])])) };
     SCHEDULES.filter(x => x.active && targetStations(x).includes(s.code) && x.pa === 'adjust' && x.apply).forEach(x => { x.apply = { ...x.apply, at: 'just now' }; });
-    setDirty(false); bump(); toast(`${s.name}: default volume saved — ${nAudio} audio device${nAudio === 1 ? '' : 's'} updated`);
+    setDirty(false); bump(); toast(`${s.name}: audio output saved — ${nAudio} audio device${nAudio === 1 ? '' : 's'} updated`);
   };
   return html`
     <${Box}>
@@ -1173,13 +1087,19 @@ function StationDetail() {
         <${TextField} label="MOT Station ID" required value=${s.motId} disabled />
       <//>
       <${Box} sx=${{ mt: 2 }}>
-        <${SectionCard} title="Base audio settings" id="card-station-audio"
+        <${SectionCard} title="Audio output" id="card-station-audio"
           chip=${html`<${Chip} size="small" label="Persistent — not scheduled" icon=${html`<${Icon} sx=${{ fontSize: 18, ml: '6px' }}>push_pin<//>`} />`}
           note=${`All ${nAudio} audio device${nAudio === 1 ? '' : 's'} at ${s.name}.`}>
-          <${FieldGrid} cols=${3}>
-            <${TextField} id="sd-vol" label="Default volume (%)" type="number" value=${au.volume} inputProps=${{ min: 0, max: 100 }}
-              error=${!!auErr.volume} helperText=${auErr.volume || ''}
-              onChange=${e => setAu({ ...au, volume: e.target.value })} />
+          ${/* PaxLife "Audio output" (Ignat's screenshots, 2026-10-06): volume slider + bass/mid/treble, here per station. */ ''}
+          <${Box} sx=${{ maxWidth: 520, px: 1 }}>
+            <${Typography} variant="body2" id="sd-vol-value">Volume — ${au.volume}%<//>
+            <${Slider} id="sd-vol" value=${Number(au.volume) || 0} min=${0} max=${100} step=${5} aria-label="Volume"
+              onChange=${(e, x) => setAu({ ...au, volume: x })} />
+          <//>
+          <${Box} sx=${{ display: 'flex', gap: 2, mt: 1 }}>
+            ${EQ.map(([k, l]) => html`<${TextField} key=${k} id=${'sd-' + k} label=${l} type="number" value=${au[k]} sx=${{ width: 140 }}
+              inputProps=${{ min: -12, max: 12, step: 1 }} error=${!!auErr[k]} helperText=${auErr[k] || ''}
+              onChange=${e => setAu({ ...au, [k]: e.target.value })} />`)}
           <//>
         <//>
       <//>
@@ -1221,9 +1141,8 @@ function StationDetail() {
 function Root() {
   // One design (Ignat, 2026-10-06): the per-device first step is described in NOTE.md, not a variant.
   const phase = 1;
-  const [listState, setListState] = useState('data');
+  const listState = 'data', setListState = () => {};
   const [saveMode, setSaveMode] = useState('ok');
-  const [layout, setLayout] = useState('full');
   const [screen, setScreen] = useState('schedules');
   const [target, setTarget] = useState(null);
   const [rev, setRev] = useState(0);
@@ -1253,12 +1172,9 @@ function Root() {
     if (after) { dirtyRef.current = false; after(); }
   };
 
-  // Switching layout swaps in place; with unsaved edits it asks first, as any navigation does.
-  const pickLayout = k => { if (k === layout) return; if (dirtyRef.current) { setLeave({ layout: k }); return; } setLayout(k); };
-  const value = { phase, listState, setListState: pickList, saveMode, setSaveMode, layout, setLayout: pickLayout,
+  const value = { phase, listState, setListState: pickList, saveMode, setSaveMode,
                   screen, target, go, rev, bump, toast: setToastMsg, askDelete, setDirty };
-  const split = layout === 'split' && (screen === 'schedules' || screen === 'schedule');
-  const View = split ? SplitSchedules : { schedules: ScheduleList, schedule: ScheduleEditor, devices: DeviceList, device: DeviceDetail, types: DeviceTypes,
+  const View = { schedules: ScheduleList, schedule: ScheduleEditor, devices: DeviceList, device: DeviceDetail, types: DeviceTypes,
                  stations: StationList, station: StationDetail }[screen];
 
   return html`
@@ -1271,7 +1187,7 @@ function Root() {
           <${Box} sx=${{ display: 'flex', flex: 1, minHeight: 0 }}>
             <${Rail} />
             <${Box} component="main" data-screen=${screen} data-phase=${phase} sx=${{ flex: 1, minWidth: 0, px: 3, py: 2.5, bgcolor: '#fff' }}>
-              <${View} key=${split ? 'split' : screen + ':' + JSON.stringify(target)} />
+              <${View} key=${screen + ':' + JSON.stringify(target)} />
             <//>
           <//>
         <//>
@@ -1290,7 +1206,7 @@ function Root() {
           <${DialogContent}><${DialogContentText}>Your changes haven't been saved or sent to any device. If you leave, they're lost.<//><//>
           <${DialogActions}>
             <${Button} id="leave-stay" onClick=${() => setLeave(null)}>Keep editing<//>
-            <${Button} color="error" id="leave-discard" onClick=${() => { const l = leave; setLeave(null); if (l.layout) { dirtyRef.current = false; setLayout(l.layout); } else doGo(l.s, l.t); }}>Discard changes<//>
+            <${Button} color="error" id="leave-discard" onClick=${() => { const l = leave; setLeave(null); doGo(l.s, l.t); }}>Discard changes<//>
           <//>
         <//>
         <${Snackbar} open=${!!toastMsg} autoHideDuration=${3200} onClose=${() => setToastMsg('')}
