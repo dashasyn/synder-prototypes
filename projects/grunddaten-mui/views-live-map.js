@@ -78,6 +78,56 @@
   LINES.forEach(L => L.stops.forEach(n => { (LINES_AT[n] = LINES_AT[n] || []).push(L.id); }));
   const NAMES = Object.keys(ST);
 
+  /* ── DAISY as the platform display shows it (Ignat, 2026-10-09: the team's
+     preview) — Linie · Ziel · Abfahrt, two departures, and the message as the
+     running last row. A running row can't be read at once, so the full text
+     sits under the board as well. Departures are sample data. ── */
+  const TERMINI = {
+    U1: ['Uhlandstraße', 'Warschauer Straße'], U2: ['Ruhleben', 'Pankow'], U3: ['Krumme Lanke', 'Warschauer Straße'],
+    U5: ['Hauptbahnhof', 'Hönow'], U6: ['Alt-Tegel', 'Alt-Mariendorf'], U8: ['Wittenau', 'Hermannstraße'],
+  };
+  const SHORT = {   // a short-turning second train, per direction (sample)
+    U1: ['Wittenbergplatz', 'Kottbusser Tor'], U2: ['Theodor-Heuss-Platz', 'Senefelderplatz'], U3: ['Nollendorfplatz', 'Wittenbergplatz'],
+    U5: ['Alexanderplatz', 'Kaulsdorf-Nord'], U6: ['Kurt-Schumacher-Platz', 'Tempelhof'], U8: ['Paracelsus-Bad', 'Hermannplatz'],
+  };
+  const MONO = '"DejaVu Sans Mono", "Roboto Mono", Menlo, Consolas, monospace';
+  function DaisyBoard({ name, line, track, msg, de }) {
+    const dir = track % 2;                       // odd tracks one way, even the other
+    const minute = Math.floor(LIVE_API.at().getTime() / 60000);
+    const seed = [...(name + track)].reduce((h, c) => h + c.charCodeAt(0), 0);
+    const m1 = (seed + minute) % 5 + 1, m2 = m1 + 3 + seed % 4;
+    const rows = [[line, (TERMINI[line] || ['—', '—'])[dir], m1], [line, (SHORT[line] || ['—', '—'])[dir], m2]];
+    const orange = '#F5A623', red = '#E2522E';
+    const run = msg ? `${msg.de}   +++   ${msg.en}` : '';
+    return html`
+      <${Box} className="daisy-board" sx=${{ bgcolor: '#0b0b0b', borderRadius: 1, px: 1.75, py: 1.25, mt: .75, fontFamily: MONO, color: orange, overflow: 'hidden' }}>
+        <${Box} sx=${{ display: 'flex', fontSize: 14, fontWeight: 700, pb: .5, borderBottom: '1px solid #262626' }}>
+          <${Box} sx=${{ width: 56 }}>Linie<//><${Box} sx=${{ flex: 1 }}>Ziel<//><${Box}>Abfahrt<//>
+        <//>
+        ${rows.map((r, i) => html`
+          <${Box} key=${i} className="daisy-dep" sx=${{ display: 'flex', alignItems: 'baseline', fontSize: 20, lineHeight: 1.35, mt: i ? 0 : .5 }}>
+            <${Box} sx=${{ width: 56, color: red, fontWeight: 700 }}>${r[0]}<//>
+            <${Box} sx=${{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'clip' }}>${r[1]}<//>
+            <${Box} sx=${{ fontWeight: 700 }}>${r[2]}´<//>
+          <//>`)}
+        ${msg ? html`
+          <${Box} className="daisy-run" sx=${{ mt: .5, fontSize: 18, whiteSpace: 'nowrap', overflow: 'hidden', position: 'relative', height: 26 }}>
+            <${Box} component="span" sx=${{ position: 'absolute', left: 0, whiteSpace: 'nowrap',
+              animation: `daisyRun ${Math.max(10, run.length * 0.22)}s linear infinite` }}>${run}<//>
+          <//>` : null}
+        <${Box} sx=${{ mt: .75, fontSize: 14, color: '#9a9a9a' }}>${name} · Gleis ${track}<//>
+      <//>
+      ${msg ? html`<${Box} className="daisy-full" sx=${{ mt: .75 }}>
+        <${Typography} variant="body2" lang="de">${msg.de}<//>
+        <${Typography} variant="body2" color="text.secondary" lang="en">${msg.en}<//>
+      <//>` : null}`;
+  }
+  if (!document.getElementById('daisy-kf')) {
+    const st = document.createElement('style'); st.id = 'daisy-kf';
+    st.textContent = '@keyframes daisyRun { from { transform: translateX(0); } to { transform: translateX(-100%); } } .daisy-run > span { padding-left: 100%; }';
+    document.head.appendChild(st);
+  }
+
   /* ── The card: ELA first, then DAISY per track ───────────────────── */
   function StationSection({ name, line, de }) {
     const v = LIVE_API.get(name, line);
@@ -101,7 +151,7 @@
         ${v.daisy.map((m, k) => html`
           <${Box} key=${k} className="map-track">
             <${Typography} ...${label} className="map-label">${de ? 'Gleis' : 'Track'} ${k + 1} DAISY<//>
-            ${nd.daisy ? noData : m ? two(m) : none}
+            ${nd.daisy ? noData : html`<${DaisyBoard} name=${name} line=${line} track=${k + 1} msg=${m} de=${de} />`}
           <//>`)}
       <//>`;
   }
@@ -189,7 +239,7 @@
           modifiers=${[{ name: 'offset', options: { offset: [0, 12] } }, { name: 'flip', enabled: true }, { name: 'preventOverflow', options: { padding: 12 } }]}>
           <${Paper} id="mapCard" elevation=${0} onMouseEnter=${stay} onMouseLeave=${leave} onClick=${e => e.stopPropagation()}
             sx=${{ border: '1px solid #E0E0E0', borderRadius: 1, boxShadow: '0 4px 16px rgba(0,0,0,.12)',
-                   width: 380, maxHeight: '70vh', overflowY: 'auto', px: 2 }}>
+                   width: 460, maxHeight: '75vh', overflowY: 'auto', px: 2 }}>
             ${hover ? (LINES_AT[hover.name] || []).slice().sort((a, b) => a.localeCompare(b, 'de', { numeric: true })).map(l => html`<${StationSection} key=${l} name=${hover.name} line=${l} de=${de} />`) : null}
           <//>
         <//>
