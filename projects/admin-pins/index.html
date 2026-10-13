@@ -70,6 +70,8 @@
   .sw-opt.hl{background:var(--color-primary-5)}
   .sw-opt mark{background:none;color:inherit;font-weight:500}
   .sw-empty{padding:12px 14px;color:var(--text-secondary)}
+  .sw-label{padding:8px 14px 4px;font-weight:500;color:var(--text-secondary)}
+  .sw-div{height:1px;background:var(--border-default);margin:4px 0}
 
   /* ---- top bar + content ---- */
   .main{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -92,13 +94,14 @@
   .af-row{display:flex;align-items:center;min-height:28px}
   .af-row a{color:var(--text-link);text-decoration:none}
   .af-row a:hover{text-decoration:underline}
-  .pin{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin-left:2px;
+  .pin{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin-left:2px;opacity:0;
     border:none;border-radius:4px;background:none;padding:0;cursor:pointer;color:var(--text-muted)}
   .pin .mi,.pin .mf{font-size:18px}
+  .af-row:hover .pin,.pin:focus-visible,.pin[aria-pressed="true"]{opacity:1}
   .af-row:hover .pin,.pin:focus-visible{color:var(--text-secondary)}
   .pin:hover{background:var(--color-grey-5);color:var(--color-primary)!important}
   .pin[aria-pressed="true"]{color:var(--color-primary)}
-  .pin[aria-disabled="true"]{cursor:not-allowed;color:var(--text-muted)!important;background:none!important;opacity:.6}
+  .pin[aria-disabled="true"]{cursor:not-allowed;color:var(--text-muted)!important;background:none!important}
 
   /* Organizations list */
   .flt{display:grid;grid-template-columns:repeat(6,1fr);gap:8px 20px;padding:4px 8px 16px;border-bottom:1px solid var(--border-default)}
@@ -303,19 +306,31 @@ function closeSwitcher(refocus){
   document.getElementById('sw').hidden = true; document.getElementById('org-btn').setAttribute('aria-expanded', 'false');
   if (refocus) document.getElementById('org-btn').focus();
 }
+var RECENT_KEY = 'synder-admin-recent-orgs', RECENT_MAX = 5;
+var recent = (function(){
+  try { var r = JSON.parse(localStorage.getItem(RECENT_KEY)); if (Array.isArray(r)) return r.filter(byId); } catch(e){}
+  return ['c4','c1','c6'];   // mock history so the section is populated on first open
+})();
 function renderSwitch(){
   var q = document.getElementById('sw-q').value.trim().toLowerCase();
-  // empty query → the admin's own orgs (today's list); typed query → every organization, by name
-  shown = ORGS.filter(function(o){ return o.id !== current && (q ? o.name.toLowerCase().indexOf(q) >= 0 : o.mine); });
+  // empty query → Recently viewed, then the admin's own orgs (today's list); typed query → every organization, by name
+  var rec = q ? [] : recent.filter(function(id){ return id !== current; }).slice(0, RECENT_MAX).map(byId);
+  var rest = ORGS.filter(function(o){ return o.id !== current && (q ? o.name.toLowerCase().indexOf(q) >= 0 : o.mine); });
+  shown = rec.concat(rest);
   hl = 0;
-  var list = document.getElementById('sw-list');
-  list.innerHTML = shown.length ? shown.map(function(o, i){
+  function opt(o, i, pre){
     var nm = esc(o.name);
     if (q) { var at = o.name.toLowerCase().indexOf(q); nm = esc(o.name.slice(0, at)) + '<mark>' + esc(o.name.slice(at, at + q.length)) + '</mark>' + esc(o.name.slice(at + q.length)); }
-    return '<div class="sw-opt' + (i === 0 ? ' hl' : '') + '" role="option" id="opt-' + o.id + '" aria-selected="' + (i === 0) + '" data-id="' + o.id + '" onmousedown="event.preventDefault()" onclick="selectOrg(\'' + o.id + '\')" onmousemove="setHl(' + i + ')">'
+    return '<div class="sw-opt' + (i === 0 ? ' hl' : '') + '" role="option" id="opt-' + pre + o.id + '" aria-selected="' + (i === 0) + '" data-id="' + o.id + '" onmousedown="event.preventDefault()" onclick="selectOrg(\'' + o.id + '\')" onmousemove="setHl(' + i + ')">'
          + avatar(o).replace('<span style', '<span class="av" style') + '<span class="nm">' + nm + '</span></div>';
-  }).join('') : '<div class="sw-empty" id="sw-empty">No organizations found</div>';
-  document.getElementById('sw-q').setAttribute('aria-activedescendant', shown.length ? 'opt-' + shown[0].id : '');
+  }
+  var h = '';
+  if (rec.length) h += '<div role="group" aria-labelledby="sw-rec-l" id="sw-recent"><div class="sw-label" id="sw-rec-l">Recently viewed</div>'
+    + rec.map(function(o, i){ return opt(o, i, 'r-'); }).join('') + '</div><div class="sw-div" role="presentation"></div>';
+  h += rest.map(function(o, i){ return opt(o, rec.length + i, ''); }).join('');
+  document.getElementById('sw-list').innerHTML = shown.length ? h : '<div class="sw-empty" id="sw-empty">No organizations found</div>';
+  var first = document.querySelector('#sw-list .sw-opt');
+  document.getElementById('sw-q').setAttribute('aria-activedescendant', first ? first.id : '');
 }
 function setHl(i){
   var opts = document.querySelectorAll('#sw-list .sw-opt');
@@ -339,7 +354,11 @@ document.addEventListener('mousedown', function(e){
 
 // Same result as the green "Select Organization" button: the admin sees the org as a normal user.
 function selectOrg(id){
+  var prev = current;
   current = id; closeSwitcher(false); renderOrg();
+  // the org being left is the most recently viewed one
+  recent = [id, prev].concat(recent.filter(function(r){ return r !== id && r !== prev; })).slice(0, RECENT_MAX + 1);
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify(recent)); } catch(e){}
   announce('Switched to ' + byId(id).name);
   if (location.hash === '#dashboard') render(); else location.hash = 'dashboard';
   setTimeout(function(){ var h = document.querySelector('#content h1'); if (h) h.focus(); }, 0);
