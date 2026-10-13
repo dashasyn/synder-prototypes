@@ -47,6 +47,14 @@
   .sb-item.on{background:var(--sb-on-bg);color:var(--sb-on-fg);font-weight:500}
   .sb-item.on .mi{color:var(--sb-on-fg)}
   .sb-item:focus-visible,.sb-item a:focus-visible,.sb-org:focus-visible{outline:2px solid #0053CC;outline-offset:-2px}
+  .sb-group{display:flex;align-items:center;gap:12px;min-height:36px;padding:0 6px 0 10px;border-radius:8px;width:100%;
+    border:none;background:none;font:inherit;font-size:14px;color:var(--sb-fg);cursor:pointer;text-align:left}
+  .sb-group:hover{background:var(--sb-hover)}
+  .sb-group .mi{color:var(--sb-ic);font-size:20px;flex-shrink:0}
+  .sb-group .lb{flex:1;min-width:0}
+  .sb-group:focus-visible{outline:2px solid #0053CC;outline-offset:-2px}
+  .sb-sub{padding-left:30px}
+  .sb-sub .mi{font-size:18px}
   .sb-new{color:#1F8940;background:#E3F3E7;border-radius:10px;padding:0 8px;font-size:14px;line-height:20px;font-weight:400}
   /* pinned admin pages: unpin on hover */
   .sb-pin .unpin{display:none;align-items:center;justify-content:center;width:28px;height:28px;border:none;
@@ -281,6 +289,7 @@ function sbItem(r, icon, label, extra){
   return '<a class="sb-item' + (on ? ' on' : '') + '" href="#' + r + '"' + (on ? ' aria-current="page"' : '') + '>'
        + '<span class="mi">' + icon + '</span><span class="lb">' + label + '</span>' + (extra || '') + '</a>';
 }
+var txOpen = false;
 function renderSidebar(){
   var chev = '<span class="mi chev">expand_more</span>';
   var h = '<div class="sb-sec"><a class="sb-item' + (route === 'admin' ? ' on' : '') + '" href="#admin" id="sb-admin"' + (route === 'admin' ? ' aria-current="page"' : '') + '>'
@@ -295,7 +304,13 @@ function renderSidebar(){
   }).join('') + '</div></div>';
   else h += '<div id="sb-pins" hidden></div>';
   h += '<div class="sb-sec">' + sbItem('dashboard', 'dashboard', 'Dashboard')
-     + sbItem('transactions', 'swap_horiz', 'Transactions', chev)
+     + '<button class="sb-group" id="sb-tx" aria-expanded="' + txOpen + '" aria-controls="sb-tx-sub" onclick="txOpen=!txOpen;renderSidebar();document.getElementById(\'sb-tx\').focus()">'
+     +   '<span class="mi">swap_horiz</span><span class="lb">Transactions</span><span class="mi chev">' + (txOpen ? 'expand_less' : 'expand_more') + '</span></button>'
+     + (txOpen ? '<div id="sb-tx-sub" class="sb-sec">'
+       + sbItem('tx/list', 'table_view', 'Transactions list').replace('class="sb-item', 'class="sb-item sb-sub')
+       + sbItem('tx/import', 'download_for_offline', 'Import activity log').replace('class="sb-item', 'class="sb-item sb-sub')
+       + sbItem('tx/recon', 'description', 'Transaction reconciliation', '<span class="sb-new">New</span>').replace('class="sb-item', 'class="sb-item sb-sub')
+       + '</div>' : '')
      + sbItem('smart-rules', 'account_tree', 'Smart rules', chev)
      + sbItem('invoicing', 'shopping_cart', 'Invoicing', chev)
      + sbItem('analytics', 'trending_up', 'Analytics', chev)
@@ -371,7 +386,7 @@ document.addEventListener('mousedown', function(e){
 
 // Same result as the green "Select Organization" button: the admin sees the org as a normal user.
 function selectOrg(id, dest){
-  dest = dest || 'dashboard';   // row Select on the Organizations list lands on Transactions (most used page)
+  dest = dest || 'dashboard';   // row Select on the Organizations list lands on Transactions list (most used page)
   var prev = current;
   current = id; closeSwitcher(false); renderOrg();
   // the org being left is the most recently viewed one
@@ -423,7 +438,7 @@ function pageOrgs(){
          return '<tr data-id="' + o.id + '"><td><a href="#org/' + o.id + '">' + esc(o.name) + '</a></td><td>' + o.country + '</td><td>' + o.industry + '</td>'
               + '<td class="num">' + o.gp + '</td><td>' + o.rev + '</td><td class="multi">' + esc(o.plan) + '</td><td class="multi">' + esc(o.providers) + '</td>'
               + '<td>' + esc(o.cc) + '</td><td class="num">' + o.syncs + '</td><td>' + o.created + '</td><td>' + o.onb + '</td>'
-              + '<td class="act"><button class="btn-outlined row-select" aria-label="Select ' + esc(o.name) + '" onclick="selectOrg(\'' + o.id + '\', \'transactions\')">Select</button></td></tr>';
+              + '<td class="act"><button class="btn-outlined row-select" aria-label="Select ' + esc(o.name) + '" onclick="selectOrg(\'' + o.id + '\', \'tx/list\')">Select</button></td></tr>';
        }).join('') : '<tr><td colspan="12">No organizations found</td></tr>') + '</tbody></table></div>';
 }
 function pageOrg(id){
@@ -451,7 +466,7 @@ function pageOrg(id){
        + '<section><h2>Users</h2><ul><li>▸ ignatiy.plotnikov@synder.com — manager</li><li>▸ andrew.shitsko@synder.com — manager</li></ul></section>'
        + '<section><h2>Companies</h2><ul>' + esc(o.providers || 'synder(ACTIVE)').split('\n').map(function(p){ return '<li>▸ ' + p + '</li>'; }).join('') + '</ul></section></div></div>';
 }
-var LABELS = { dashboard:'Dashboard', transactions:'Transactions', 'smart-rules':'Smart rules', invoicing:'Invoicing', analytics:'Analytics',
+var LABELS = { dashboard:'Dashboard', 'tx/list':'Transactions list', 'tx/import':'Import activity log', 'tx/recon':'Transaction reconciliation', 'smart-rules':'Smart rules', invoicing:'Invoicing', analytics:'Analytics',
   troubleshooting:'Troubleshooting', insights:'Business Insights (A)', revrec:'Revenue recognition', settings:'Settings', 'ai-hub':'AI Hub',
   'whats-new':'What\'s New', 'custom-dev':'Custom development' };
 function pageStub(title){ return '<h1 tabindex="-1">' + esc(title) + '</h1>' + STUB; }
@@ -468,6 +483,7 @@ function renderContent(focusPin){
 }
 function render(){
   route = (location.hash || '#admin').slice(1) || 'admin';
+  if (/^tx\//.test(route)) txOpen = true;   // landing on a Transactions subpage opens its group
   renderSidebar(); renderContent();
 }
 window.addEventListener('hashchange', function(){ render(); var h = document.querySelector('#content h1'); if (h) h.focus({ preventScroll: true }); });
