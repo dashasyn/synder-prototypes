@@ -434,6 +434,10 @@
                   fill=${STATUS_BG[s.status]} stroke="#fff" strokeWidth="1.5" />
                 <rect className="hit" x="-13" y="-10" width="26" height="20" fill="transparent" />
               </g>`)}
+              ${/* the station circle itself always wins the pointer, even with a train beside it */ ''}
+              <g className="st-top">${NAMES.map(n => { const p = ST[n], r = (LINES_AT[n] || []).length > 1 ? 12 : 7;
+                return html`<circle key=${'t' + n} className="hit-top" data-st-top=${n} cx=${p.x} cy=${p.y} r=${r + 2} fill="transparent"
+                  style=${{ cursor: 'pointer' }} onMouseEnter=${e => open('st', n, e.currentTarget)} onMouseLeave=${leave} onClick=${click('st', n)} />`; })}</g>
               ${/* labels last, haloed, so a train passing under a name never hides it */ ''}
               <g className="labels">${NAMES.map(n => lbl(n, ST[n]))}</g>
             </svg>
