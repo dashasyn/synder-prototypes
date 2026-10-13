@@ -419,9 +419,8 @@
                 const ev = topEvent(n), r = many ? 12 : 7;
                 return html`<g key=${n} data-st=${n} data-event=${ev ? ev.type : null} style=${{ cursor: 'pointer' }}
                   onMouseEnter=${e => open('st', n, e.currentTarget)} onMouseLeave=${leave} onClick=${click('st', n)}>
-                  ${ev ? html`<circle className="ev-halo" cx=${p.x} cy=${p.y} r=${r + 6} fill=${EV_COLOR[ev.type]}
-                    stroke=${ev.type === 'info' ? '#C8B400' : 'none'} strokeWidth="1" />` : null}
-                  <circle cx=${p.x} cy=${p.y} r=${r} fill="#fff" stroke=${dead(n) ? '#9e9e9e' : '#1d1d1d'}
+                  ${/* Ignat, 2026-10-13: the event colour fills the station, the ring stays */ ''}
+                  <circle className="st-dot" data-fill=${ev ? ev.type : 'none'} cx=${p.x} cy=${p.y} r=${r} fill=${ev ? EV_COLOR[ev.type] : '#fff'} stroke=${dead(n) ? '#9e9e9e' : '#1d1d1d'}
                     strokeWidth=${on ? 4 : many ? 3 : 2} />
                   <circle className="hit" cx=${p.x} cy=${p.y} r="18" fill="transparent" />
                 </g>`;
