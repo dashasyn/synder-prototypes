@@ -331,6 +331,7 @@
     const [, force] = useState(0);
     const [hover, setHover] = useState(null);   // { kind: 'st' | 'train', id, anchor }
     const [sheet, setSheet] = useState(null);   // { kind, id } — click opens a side sheet (Ignat, 2026-10-13)
+    const [sheetLine, setSheetLine] = useState(null);   // interchange: one tab per line-station (Ignat, 2026-10-13)
     const closeT = useRef(null);
     useEffect(() => LIVE_API.subscribe(() => force(x => x + 1)), []);
     useEffect(() => {
@@ -342,10 +343,11 @@
       setTimeout(() => { const el = document.querySelector('#mapSheet .train-here, #mapSheet .sched-stop.at'); if (el) el.scrollIntoView({ block: 'center' }); }, 250);
     }, [sheet && sheet.id]);
 
+    const linesAt = n => (LINES_AT[n] || []).slice().sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
     const open = (kind, id, el) => { clearTimeout(closeT.current); setHover({ kind, id, anchor: el }); };
     const leave = () => { clearTimeout(closeT.current); closeT.current = setTimeout(() => setHover(null), 200); };
     const stay = () => clearTimeout(closeT.current);
-    const click = (kind, id) => e => { e.stopPropagation(); setHover(null); setSheet({ kind, id }); };
+    const click = (kind, id) => e => { e.stopPropagation(); setHover(null); setSheet({ kind, id }); setSheetLine(kind === 'st' ? linesAt(id)[0] : null); };
 
     const at = LIVE_API.at();
     const hhmmss = [at.getHours(), at.getMinutes(), at.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
@@ -386,7 +388,6 @@
 
     const hTrain = hover && hover.kind === 'train' ? TRAINS.find(t => t.id === hover.id) : null;
     const sTrain = sheet && sheet.kind === 'train' ? TRAINS.find(t => t.id === sheet.id) : null;
-    const linesAt = n => (LINES_AT[n] || []).slice().sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
     const stationBody = n => linesAt(n).map(l => html`<${StationSection} key=${l} name=${n} line=${l} de=${de} />`);
 
     return html`
@@ -467,8 +468,16 @@
             <//>
             <${IconButton} aria-label=${de ? 'Schließen' : 'Close'} onClick=${() => setSheet(null)}><${Icon}>close<//><//>
           <//>
+          ${sheet && sheet.kind === 'st' && linesAt(sheet.id).length > 1 ? html`
+            <${Tabs} id="sheetTabs" value=${sheetLine || linesAt(sheet.id)[0]} onChange=${(e, v) => setSheetLine(v)}
+              sx=${{ px: 3, borderBottom: '1px solid #E7E7E7' }}>
+              ${linesAt(sheet.id).map(l => html`<${Tab} key=${l} value=${l} data-line=${l}
+                label=${html`<${Stack} direction="row" spacing=${1} alignItems="center"><${LineBadge} line=${l} />
+                  <span>${LIVE_API.get(sheet.id, l).code}</span><//>`} sx=${{ textTransform: 'none' }} />`)}
+            <//>` : null}
           <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: sTrain ? 2 : 0 }}>
-            ${sTrain ? html`<${TrainSchedule} tr=${sTrain} de=${de} />` : sheet ? stationBody(sheet.id) : null}
+            ${sTrain ? html`<${TrainSchedule} tr=${sTrain} de=${de} />`
+              : sheet ? html`<${StationSection} key=${sheetLine} name=${sheet.id} line=${sheetLine || linesAt(sheet.id)[0]} de=${de} />` : null}
           <//>
         <//>
       <//>`;
