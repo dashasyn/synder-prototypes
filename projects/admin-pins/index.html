@@ -87,6 +87,7 @@
   .sw-opt.hl{background:#F2F4F7}
   .sw-opt mark{background:none;color:inherit;font-weight:500}
   .sw-empty{padding:8px;color:var(--text-secondary)}
+  #sw-all{border-top:1px solid var(--border-default);margin-top:6px;padding-top:6px}
   .sw-label{padding:4px 8px 6px;font-weight:500;color:var(--text-secondary)}
 
 
@@ -219,6 +220,7 @@ var CATALOG = [
   { col: 3, title: 'JS modifications', items: [ ['js-scripts','JS Scripts','code'], ['executions','Executions','play_circle'] ]},
   { col: 3, title: 'Outreach', items: [ ['contact','Contact them','contact_mail'], ['simple-email','Simple email','mail'] ]}
 ];
+function pageHref(k){ return k === 'current-org' ? 'org/' + current : 'p/' + k; }   // Current organization admin page = details of the selected org
 var PAGES = {};
 CATALOG.forEach(function(g){ g.items.forEach(function(i){ PAGES[i[0]] = { key: i[0], label: i[1], icon: i[2] }; }); });
 var PIN_CAP = 10, PIN_KEY = 'synder-admin-pins';
@@ -303,7 +305,8 @@ function renderSidebar(){
         + '<span class="mi">apps</span><span class="lb">Administrative functions</span></a></div>';
   if (pins.length) h += '<div class="sb-sec" id="sb-pins-sec"><div class="sb-label" id="sb-pins-l">Pinned</div>'
     + '<div id="sb-pins" class="sb-sec" role="list" aria-labelledby="sb-pins-l">' + pins.map(function(k){
-    var p = PAGES[k], r = 'p/' + k, on = route === r || (k === 'organizations' && /^org\//.test(route));
+    var p = PAGES[k], r = pageHref(k), curPinned = pins.indexOf('current-org') >= 0,
+        on = route === r || (k === 'organizations' && /^org\//.test(route) && !(curPinned && route === 'org/' + current));
     return '<div class="sb-item sb-pin' + (on ? ' on' : '') + '" role="listitem" data-pin="' + k + '">'
          + '<span class="mi">' + p.icon + '</span>'
          + '<a class="lb" href="#' + r + '" style="color:inherit;text-decoration:none"' + (on ? ' aria-current="page"' : '') + '>' + esc(p.label) + '</a>'
@@ -344,16 +347,17 @@ function closeSwitcher(refocus){
   document.getElementById('sw').hidden = true; document.getElementById('org-btn').setAttribute('aria-expanded', 'false');
   if (refocus) document.getElementById('org-btn').focus();
 }
-var RECENT_KEY = 'synder-admin-recent-orgs', RECENT_MAX = 8;
+var RECENT_KEY = 'synder-admin-recent-orgs', RECENT_MAX = 5;
 var recent = (function(){
   try { var r = JSON.parse(localStorage.getItem(RECENT_KEY)); if (Array.isArray(r)) return r.filter(byId); } catch(e){}
   return ['c4','c1','c6','c9','c11'];   // mock history so the section is populated on first open
 })();
 function renderSwitch(){
   var q = document.getElementById('sw-q').value.trim().toLowerCase();
-  // empty query → Recently viewed only (support has no orgs of its own); typed query → every organization, by name
+  // empty query → 5 Recently viewed, then All organizations (A–Z); typed query → every organization, by name
   var rec = q ? [] : recent.filter(function(id){ return id !== current; }).slice(0, RECENT_MAX).map(byId);
-  var rest = q ? ORGS.filter(function(o){ return o.id !== current && o.name.toLowerCase().indexOf(q) >= 0; }) : [];
+  var rest = ORGS.filter(function(o){ return o.id !== current && (!q || o.name.toLowerCase().indexOf(q) >= 0); });
+  if (!q) rest = rest.slice().sort(function(a, b){ return a.name.localeCompare(b.name); });
   shown = rec.concat(rest);
   hl = 0;
   function opt(o, i, pre){
@@ -365,7 +369,8 @@ function renderSwitch(){
   var h = '';
   if (rec.length) h += '<div role="group" aria-labelledby="sw-rec-l" id="sw-recent"><div class="sw-label" id="sw-rec-l">Recently viewed</div>'
     + rec.map(function(o, i){ return opt(o, i, 'r-'); }).join('') + '</div>';
-  h += rest.map(function(o, i){ return opt(o, rec.length + i, ''); }).join('');
+  var all = rest.map(function(o, i){ return opt(o, rec.length + i, ''); }).join('');
+  h += q ? all : '<div role="group" aria-labelledby="sw-all-l" id="sw-all"><div class="sw-label" id="sw-all-l">All organizations</div>' + all + '</div>';
   document.getElementById('sw-list').innerHTML = shown.length ? h
     : '<div class="sw-empty" id="sw-empty">' + (q ? 'No organizations found' : 'No recently viewed organizations') + '</div>';
   var first = document.querySelector('#sw-list .sw-opt');
@@ -428,7 +433,7 @@ function pageAdmin(){
            return '<div>' + c.map(function(g){
              return '<div class="af-grp"><h2>' + g.title + '</h2>' + g.items.map(function(i){
                var k = i[0], on = pins.indexOf(k) >= 0, dis = !on && full;
-               return '<div class="af-row"><a href="#p/' + k + '">' + esc(i[1]) + '</a>'
+               return '<div class="af-row"><a href="#' + pageHref(k) + '">' + esc(i[1]) + '</a>'
                     + '<button class="pin" data-key="' + k + '" aria-pressed="' + on + '"' + (dis ? ' aria-disabled="true" title="Unpin a page to add another"' : ' title="' + (on ? 'Unpin' : 'Pin to sidebar') + '"')
                     + ' aria-label="' + (on ? 'Unpin ' : 'Pin to sidebar: ') + esc(i[1]) + '"'
                     + ' onclick="' + (dis ? '' : 'togglePin(\'' + k + '\',1)') + '">'
@@ -502,6 +507,7 @@ function renderContent(focusPin){
 }
 function render(){
   route = (location.hash || '#admin').slice(1) || 'admin';
+  if (route === 'p/current-org') { location.replace('#org/' + current); return; }
   if (/^tx\//.test(route)) txOpen = true;   // landing on a Transactions subpage opens its group
   renderSidebar(); renderContent();
 }
