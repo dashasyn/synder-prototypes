@@ -11,6 +11,8 @@ const I18N = {
   source:     { de: 'Quelle',                  en: 'Source' },
   prompt:     { de: 'Prompt',                  en: 'Prompt' },
   zusatz:     { de: 'Zusätzliche Angaben',     en: 'Additional details' },
+  voice:      { de: 'Stimme',                  en: 'Voice' },
+  voiceAi:    { de: 'KI-Stimme',               en: 'AI voice' },
   meldungen:  { de: 'Meldungen',               en: 'Messages' },
   stations:   { de: 'Stationen',               en: 'Stations' },
   planned:    { de: 'Geplant',                 en: 'Planned' },

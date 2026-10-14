@@ -52,7 +52,7 @@ const SOURCE_ICON = { standard: 'description', library: 'library_music', record:
 /* ══ State — the vanilla's S, same shape. Plus the four values it kept in
    <select>s and read back out of the DOM (stations, intervals). ═════════ */
 const S = {
-  ui: 'de', typ: 'erst', source: 'standard', prompt: '', zusatz: '', daisy: '', daisyCustom: false,
+  ui: 'de', typ: 'erst', source: 'standard', prompt: '', zusatz: '', voice: 'filipa', daisy: '', daisyCustom: false,
   variant: -1, libId: '', recId: '', srcName: '', pairOff: false, zusatzTranslated: true, failMode: false,
   msg: { de: { text: '', state: 'none', variant: null }, en: { text: '', state: 'none', variant: null } },
   enOutdated: false,
@@ -65,7 +65,7 @@ let toast = () => {};
 let askConfirm = (msg, onYes) => {};
 
 const t = k => (I18N[k] || {})[S.ui] || k;
-const audioKey = () => [S.msg.de.text, S.msg.en.text].join(' ');
+const audioKey = () => [S.msg.de.text, S.msg.en.text, S.source === 'empathetic' ? S.voice : ''].join(' ');
 
 function defaultDaisy() {
   return S.typ === 'erst'
@@ -139,6 +139,8 @@ function onEdit(lang, val) {
 }
 function onDaisy(val) { S.daisy = val; S.daisyCustom = val !== defaultDaisy(); rerender(); }
 function onZusatz(val) { S.zusatz = val; rerender(); }
+// Ignat, 2026-10-14: Empathisch picks the voice; a new voice makes existing audio out of date
+function onVoice(val) { S.voice = val; if (S.audio.state === 'ready') S.audio.state = 'stale'; rerender(); }
 function onSource(v) {
   const prev = S.source; S.source = v;
   if (v !== 'library') S.libId = '';
@@ -447,8 +449,12 @@ function Sheet() {
                      '& .MuiFilledInput-root:after': { display: 'none' }, '& textarea': { color: 'text.secondary', cursor: 'default' },
                      '& .MuiInputLabel-root.Mui-focused': { color: 'text.secondary' } }} />
             ${/* ELA GENERIEREN sits below Zusätzliche Angaben (Ignat, 2026-09-30, second pass) */ ''}
-            <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
-              placeholder=${KNOWN[0][S.ui]} sx=${{ mt: 2 }} onChange=${e => onZusatz(e.target.value)} />
+            <${Stack} direction="row" spacing=${2} alignItems="flex-start" sx=${{ mt: 2 }} id="zusatzRow">
+              <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
+                placeholder=${KNOWN[0][S.ui]} onChange=${e => onZusatz(e.target.value)} />
+              <${Pick} id="voice" label=${t('voice')} value=${S.voice} width=${200} onChange=${onVoice}
+                options=${[{ value: 'filipa', label: 'Filipa' }, { value: 'ai', label: t('voiceAi') }]} />
+            <//>
             <${Stack} direction="row" spacing=${1.5} alignItems="center" sx=${{ mt: 1.5 }} id="genRow">
               <${Button} variant="outlined" id="btnGen" disabled=${S.msg.de.state === 'loading' || S.msg.en.state === 'loading'} onClick=${generate}>
                 ${S.msg.de.state === 'loading' ? t('genBusy') : t('genEla')}<//>
