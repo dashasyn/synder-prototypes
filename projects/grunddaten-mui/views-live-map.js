@@ -216,14 +216,29 @@
   };
   const EV_RANK = { unplanned: 0, planned: 1, info: 2 };
   const topEvent = n => (EVENTS[n] || []).slice().sort((a, b) => EV_RANK[a.type] - EV_RANK[b.type])[0];
-  function EventList({ name, line, de }) {
+  const evChip = (type, de) => html`<${Box} component="span" className="ev-chip" sx=${{ flexShrink: 0, px: 1, borderRadius: 1, fontSize: 14,
+    lineHeight: '22px', fontWeight: 500, bgcolor: EV_COLOR[type], color: type === 'info' ? '#1d1d1d' : '#fff' }}>${EV_LABEL[type][de ? 0 : 1]}<//>`;
+  /* In the side sheet each event is one block: type and period, the text, a
+     button to the event (Ignat, 2026-10-14). The hover card stays compact. */
+  function EventList({ name, line, de, sheet }) {
     const evs = (EVENTS[name] || []).filter(e => !line || e.line === line);
     if (!evs.length) return null;
+    if (sheet) return html`<${Stack} spacing=${1.5} className="map-events" sx=${{ mt: 1.5 }}>
+      ${evs.map((e, i) => html`<${Box} key=${i} className="map-event ev-block" data-type=${e.type}
+          sx=${{ border: '1px solid #E0E0E0', borderRadius: 1, p: 1.5 }}>
+        <${Stack} direction="row" spacing=${1} alignItems="center">
+          ${evChip(e.type, de)}
+          <${Typography} variant="body2" color="text.secondary" className="ev-when">${e.when}<//>
+        <//>
+        <${Typography} variant="body2" sx=${{ mt: 1 }}>${de ? e.de : e.en}<//>
+        <${Button} size="small" variant="outlined" className="ev-open" sx=${{ mt: 1.25 }}
+          endIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>arrow_forward<//>`}>${de ? 'Zum Ereignis' : 'Go to event'}<//>
+      <//>`)}
+    <//>`;
     return html`<${Box} className="map-events" sx=${{ mt: 1 }}>
       ${evs.map((e, i) => html`<${Box} key=${i} className="map-event" data-type=${e.type}
           sx=${{ display: 'flex', gap: 1, alignItems: 'flex-start', mt: i ? .75 : 0 }}>
-        <${Box} component="span" sx=${{ flexShrink: 0, px: 1, borderRadius: 1, fontSize: 14, lineHeight: '22px', fontWeight: 500,
-          bgcolor: EV_COLOR[e.type], color: e.type === 'planned' ? '#fff' : '#1d1d1d' }}>${EV_LABEL[e.type][de ? 0 : 1]}<//>
+        ${evChip(e.type, de)}
         <${Box}><${Typography} variant="body2">${de ? e.de : e.en}<//>
           <${Typography} variant="body2" color="text.secondary">${e.when}<//><//>
       <//>`)}
@@ -292,7 +307,7 @@
   }
 
   /* ── The card: ELA first, then DAISY per track ───────────────────── */
-  function StationSection({ name, line, de }) {
+  function StationSection({ name, line, de, sheet }) {
     const v = LIVE_API.get(name, line);
     const nd = v.noData || {};
     const label = { variant: 'body2', sx: { fontWeight: 500, mt: 1 } };
@@ -306,7 +321,7 @@
           <${Typography} variant="body1" sx=${{ fontWeight: 500 }} className="map-title">${name} (${v.code})<//>
           <${LineBadge} line=${line} />
         <//>
-        <${EventList} name=${name} line=${line} de=${de} />
+        <${EventList} name=${name} line=${line} de=${de} sheet=${sheet} />
         <${Typography} ...${label} className="map-label">ELA<//>
         <${Box} className="map-ela">
           ${nd.ela ? noData : !v.ela ? none : v.ela.kind === 'music'
@@ -473,11 +488,15 @@
               sx=${{ px: 3, borderBottom: '1px solid #E7E7E7' }}>
               ${linesAt(sheet.id).map(l => html`<${Tab} key=${l} value=${l} data-line=${l}
                 label=${html`<${Stack} direction="row" spacing=${1} alignItems="center"><${LineBadge} line=${l} />
-                  <span>${LIVE_API.get(sheet.id, l).code}</span><//>`} sx=${{ textTransform: 'none' }} />`)}
+                  <span>${LIVE_API.get(sheet.id, l).code}</span>
+                  ${(() => { const ev = (EVENTS[sheet.id] || []).filter(e => e.line === l).sort((a, b) => EV_RANK[a.type] - EV_RANK[b.type])[0];
+                    return ev ? html`<${Box} component="span" className="tab-ev-dot" data-type=${ev.type} aria-label=${EV_LABEL[ev.type][de ? 0 : 1]}
+                      sx=${{ width: 10, height: 10, borderRadius: '50%', bgcolor: EV_COLOR[ev.type], border: ev.type === 'info' ? '1px solid #C8B400' : 'none' }} />` : null; })()}<//>`}
+                sx=${{ textTransform: 'none' }} />`)}
             <//>` : null}
           <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: sTrain ? 2 : 0 }}>
             ${sTrain ? html`<${TrainSchedule} tr=${sTrain} de=${de} />`
-              : sheet ? html`<${StationSection} key=${sheetLine} name=${sheet.id} line=${sheetLine || linesAt(sheet.id)[0]} de=${de} />` : null}
+              : sheet ? html`<${StationSection} key=${sheetLine} name=${sheet.id} line=${sheetLine || linesAt(sheet.id)[0]} de=${de} sheet />` : null}
           <//>
         <//>
       <//>`;
