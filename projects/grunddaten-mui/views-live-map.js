@@ -167,7 +167,7 @@
   };
   const SEG = 90 * 1000;                     // planned run per stop
   const T0 = Date.UTC(2026, 9, 13, 4, 0);    // sample timetable epoch
-  const BASE_DELAY = [-95, 20, 75, 150, 230, -10, 40, 300, 5, 120, -70, 190];
+  const BASE_DELAY = [-95, 20, 75, 150, 230, -130, 40, 300, 5, 120, -100, 190];
   const DEPOT = ['WA', 'HA', 'KO', 'PA', 'SP', 'GR'];
   const TRAINS = [];
   Object.keys(ROUTE).forEach((line, li) => {
