@@ -330,7 +330,9 @@
         ${v.daisy.map((m, k) => html`
           <${Box} key=${k} className="map-track">
             <${Typography} ...${label} className="map-label">${de ? 'Gleis' : 'Track'} ${k + 1} DAISY<//>
-            ${nd.daisy ? noData : html`<${DaisyBoard} name=${name} line=${line} track=${k + 1} msg=${m} de=${de} />`}
+            ${/* Ignat, 2026-10-14: the display preview only in the side sheet; the hover card shows the text */ ''}
+            ${nd.daisy ? noData : sheet ? html`<${DaisyBoard} name=${name} line=${line} track=${k + 1} msg=${m} de=${de} />`
+              : m ? html`<${Box} className="daisy-text">${two(m)}<//>` : none}
           <//>`)}
       <//>`;
   }
