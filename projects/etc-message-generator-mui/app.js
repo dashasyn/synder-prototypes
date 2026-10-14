@@ -129,6 +129,7 @@ function runGenerate() {
 }
 
 function onEdit(lang, val) {
+  if (S.emptyErr && val.trim()) S.emptyErr = S.emptyErr.filter(x => x !== lang);
   const m = S.msg[lang];
   if (m.text === val) return;
   m.text = val; m.state = val ? 'edited' : 'none';
@@ -180,14 +181,14 @@ function onRec(id) {
 }
 
 /* ── Audio — ONE file containing DE + EN ─────────────────────────── */
-function makeAudio(then) {
+function makeAudio(then, onFail) {
   if (!S.msg.de.text && !S.msg.en.text) return;
   S.audio.state = 'rendering'; S.audio.pct = 0; rerender();
   const iv = setInterval(() => {
     S.audio.pct = Math.min(100, S.audio.pct + 12);
     if (S.audio.pct >= 100) {
       clearInterval(iv);
-      if (S.failMode) S.audio.state = 'error';
+      if (S.failMode) { S.audio.state = 'error'; if (onFail) { onFail(); return; } }
       else {
         S.audio.state = 'ready'; S.audio.forKey = audioKey();
         S.audio.dur = estDur(S.msg.de.text) + estDur(S.msg.en.text) + 0.8;
@@ -234,19 +235,32 @@ function audioStateNow() {
   if (st === 'ready' && S.audio.forKey !== audioKey()) st = 'stale';
   return st;
 }
-/* Every active warning, ordered by consequence. */
+/* Every active warning, ordered by consequence. Audio is no longer one of
+   them: Save makes it (Ignat, 2026-10-14). */
 function saveWarnings() {
-  const a = S.audio, st = audioStateNow(), w = [];
-  if (st === 'stale') w.push(t('saveStale'));
+  const w = [];
   if (S.msg.de.state === 'eventChanged' || S.msg.en.state === 'eventChanged') w.push(t('saveEvent'));
-  if (!S.msg.de.text && !S.msg.en.text) w.push(t('saveEmpty'));
-  else if (st === 'none' || st === 'error') w.push(t('saveNoAudio'));
   if (S.daisy.length > 160) w.push(t('saveDaisy'));
   return w;
 }
+/* Ignat, 2026-10-14: SPEICHERN generates the audio itself when there is none
+   for the current text and voice (Filipa is predictable, so no need to have
+   listened first). Audio that is current — e.g. made by ANHÖREN — is reused.
+   The only stop: an ELA field emptied by hand. */
 function save() {
-  const w = saveWarnings();
-  toast(w.length ? t('savedWarn') + ' ' + w[0] : t('savedClean') + ' (' + fmtDur(S.audio.dur) + ').');
+  if (S.saving) return;
+  const empty = ['de', 'en'].filter(l => !(S.msg[l].text || '').trim());
+  S.emptyErr = empty;
+  if (empty.length) { rerender(); return; }
+  const done = () => {
+    S.saving = false;
+    const w = saveWarnings();
+    toast(w.length ? t('savedWarn') + ' ' + w[0] : t('savedClean') + ' (' + fmtDur(S.audio.dur) + ').');
+    rerender();
+  };
+  if (audioStateNow() === 'ready') { done(); return; }
+  stopPlay(); S.saving = true;
+  makeAudio(done, () => { S.saving = false; toast(t('saveAudioFail')); rerender(); });
 }
 
 /* renderStates(), as data: the rules are the vanilla's, the markup is MUI. */
@@ -333,7 +347,9 @@ function MessageBox({ l }) {
         onChange=${e => onEdit(l, e.target.value)}
         sx=${{ flex: 1, '& .MuiFilledInput-root': { height: '100%', alignItems: 'flex-start', lineHeight: 1.55,
                  ...(s.warned ? { boxShadow: 'inset 0 0 0 1px #f5b400' } : null) } }}
-        inputProps=${{ 'data-warn': s.warned ? 'true' : 'false' }} />
+        inputProps=${{ 'data-warn': s.warned ? 'true' : 'false' }}
+        error=${!!(S.emptyErr && S.emptyErr.includes(l) && !m.text.trim())}
+        helperText=${S.emptyErr && S.emptyErr.includes(l) && !m.text.trim() ? t('emptyErr') : null} />
       ${/* Ignat, 2026-09-29: no green "all fine" lines under the inputs — only states that need attention */ ''}
       ${s.cls === 'g' ? null : html`<${StateLine} id=${'state-' + l} cls=${s.cls} icon=${s.icon}>
         ${s.txt}${s.extra}${s.retry ? html` <${Link} component="button" variant="caption" onClick=${generate}>${t('retry')}<//>` : null}
@@ -372,7 +388,8 @@ function AudioRow() {
                                      bgcolor: S.playing ? 'primary.main' : 'rgba(33,150,243,.3)' }} />`)}
         <//>` : null}
     <//>
-    ${cls === 'g' ? null : html`<${StateLine} id="state-audio" cls=${cls} icon=${icon}>${txt}<//>`}`;
+    ${/* no "no audio yet" / "out of date" lines: Save makes current audio (2026-10-14) */ ''}
+    ${st === 'error' || st === 'rendering' ? html`<${StateLine} id="state-audio" cls=${cls} icon=${icon}>${txt}<//>` : null}`;
 }
 
 function Sheet() {
@@ -516,7 +533,7 @@ function Sheet() {
         <//>
         <${Stack} direction="row" spacing=${1} sx=${{ flexShrink: 0 }}>
           <${Button} id="btnCancel" onClick=${() => toast(t('closeStub'))}>${t('cancel')}<//>
-          <${Button} variant="contained" id="btnSave" onClick=${save}>${t('save')}<//>
+          <${Button} variant="contained" id="btnSave" onClick=${save} disabled=${!!S.saving}>${S.saving ? t('savingAudio') : t('save')}<//>
         <//>
       <//>
     <//>`;
