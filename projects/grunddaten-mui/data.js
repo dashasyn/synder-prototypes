@@ -424,10 +424,25 @@ function sndName(id) { const f = snd(id); return f ? f.filename : '—'; }
 
 function getStation(id) { return stations.find(s => s.id === id); }
 
+/* Directions = line + destination, both ends of every line at the station
+   (Ignat, 2026-10-14, as staging's "Platform directions"). */
+var LINE_ENDS = {
+  U1: ['Uhlandstraße', 'Warschauer Straße'], U2: ['Pankow', 'Ruhleben'], U3: ['Krumme Lanke', 'Warschauer Straße'],
+  U4: ['Nollendorfplatz', 'Innsbrucker Platz'], U5: ['Hauptbahnhof', 'Hönow'], U6: ['Alt-Tegel', 'Alt-Mariendorf'],
+  U7: ['Rathaus Spandau', 'Rudow'], U8: ['Wittenau', 'Hermannstraße'], U9: ['Osloer Straße', 'Rathaus Steglitz'],
+  U12: ['Ruhleben', 'Warschauer Straße'],
+};
+function stationDirections(st) {
+  const out = [];
+  (st.lines || []).forEach(line => (LINE_ENDS[line] || []).forEach(dest => out.push({ key: line + '|' + dest, line, dest })));
+  return out;
+}
+
 function findStationsUsingSound(id) {
   return stations.filter(s =>
-    s.stationNameFile === id ||
-    s.transferAnnouncements.some(ta => ta.fileId === id)
+    s.stationNameFile === id || s.destNameFile === id ||
+    s.transferAnnouncements.some(ta => ta.fileId === id) ||
+    Object.values(s.dirXfers || {}).some(L => L.some(ta => ta.fileId === id))
   );
 }
 

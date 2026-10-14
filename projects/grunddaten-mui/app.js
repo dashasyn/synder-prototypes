@@ -176,7 +176,9 @@ function Shell() {
         confirmLabel=${state.lang === 'de' ? 'Verwerfen' : 'Discard'}
         onConfirm=${app.confirmLeave} onClose=${app.cancelLeave} />
 
-      <${Snackbar} open=${!!app.toastMsg} autoHideDuration=${2400} onClose=${app.clearToast}
+      ${/* a click elsewhere must not swallow a toast that the same click just raised
+            (2026-10-14: Save pressed while the previous toast was still up showed nothing) */ ''}
+      <${Snackbar} open=${!!app.toastMsg} autoHideDuration=${2400} onClose=${(e, why) => { if (why !== 'clickaway') app.clearToast(); }}
         message=${app.toastMsg} anchorOrigin=${{ vertical: 'bottom', horizontal: 'center' }} />
     <//>`;
 }

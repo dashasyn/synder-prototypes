@@ -114,5 +114,17 @@
     // priority = row order, and the main one is always last (Ignat, 2026-09-30)
     if (s.transferAnnouncements.length)
       s.transferAnnouncements = [...s.transferAnnouncements.filter(a => !a.isMain), ...s.transferAnnouncements.filter(a => a.isMain)];
+    /* Ignat, 2026-10-14: transfer announcements per direction (line + destination).
+       The station's old single list seeds both directions of its first line;
+       every other direction starts empty. Sample data. */
+    if (!s.dirXfers) {
+      s.dirXfers = {};
+      stationDirections(s).forEach((dir, i) => {
+        s.dirXfers[dir.key] = dir.line === (s.lines || [])[0] ? JSON.parse(JSON.stringify(s.transferAnnouncements)) : [];
+      });
+    }
+    // and an audio file for when the station is the train's destination
+    if (s.destNameFile === undefined) s.destNameFile = '';
+    if (s.destTtsText === undefined) s.destTtsText = '';
   }
 })();

@@ -124,16 +124,74 @@ function schedPreview(slots, periods) {
   return out.length ? range + out.join('; ') : '';
 }
 
+/* One direction's transfer announcements: priority by row order (drag), the
+   main one last; active time previewed in the row; schedule and "main" as grey
+   icons (Ignat, 2026-09-30) — one table per direction since 2026-10-14. */
+function XferTable({ list, de, t, onMove, onMain, onSched, onRemove }) {
+  const { rowProps, rowSx } = useRowDrag(onMove);
+  return html`
+    <${TableContainer} className="xfer-table" sx=${{ border: '1px solid #E7E7E7', borderRadius: 1, mb: 1.5 }}>
+      <${Table}>
+        <${TableHead}><${TableRow}>
+          <${TableCell} sx=${{ width: 96, whiteSpace: 'nowrap' }}>${de ? 'Priorität' : 'Priority'}<//>
+          <${TableCell} sx=${{ width: 160 }}>${t('colName')}<//>
+          <${TableCell}>${de ? 'Aktivzeit' : 'Active time'}<//>
+          <${TableCell} align="right" sx=${{ width: 136, whiteSpace: 'nowrap' }} />
+        <//><//>
+        <${TableBody}>
+          ${list.map((ann, i) => {
+            const drag = ann.isMain ? {} : rowProps(i);
+            const nm = sndName(ann.fileId);
+            return html`
+            <${TableRow} key=${ann.fileId} data-main=${ann.isMain ? 'true' : 'false'}
+              sx=${ann.isMain ? { bgcolor: '#FAFAFA' } : rowSx(i)} ...${drag}>
+              <${TableCell}>
+                <${Stack} direction="row" spacing=${1} alignItems="center">
+                  ${ann.isMain ? html`<${Box} sx=${{ width: 18 }} />` : html`<${DragHandle} />`}
+                  <span className="prio">${i + 1}</span>
+                <//>
+              <//>
+              <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 14 }}>${nm}<//>
+              <${TableCell} className="active-time" sx=${{ fontSize: 14 }}>
+                ${ann.isMain ? (de ? 'Immer' : 'Always')
+                  : schedPreview(ann.scheduleSlots, ann.periods)
+                  || html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`}
+              <//>
+              <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
+                ${ann.isMain ? html`
+                  <${Tooltip} title=${de ? 'Hauptansage – läuft immer, niedrigste Priorität' : 'Main announcement – always on, lowest priority'}>
+                    <span><${IconButton} disabled aria-label=${(de ? 'Hauptansage' : 'Main announcement') + ': ' + nm}
+                      sx=${{ '&.Mui-disabled': { color: 'text.secondary' } }}><${Icon} sx=${{ fontSize: 20 }}>star<//><//></span>
+                  <//>` : html`
+                  <${Tooltip} title=${t('setAsMain')}>
+                    <${IconButton} aria-label=${t('setAsMain') + ': ' + nm} onClick=${() => onMain(i)}>
+                      <${Icon} sx=${{ fontSize: 20 }}>star_border<//><//>
+                  <//>`}
+                ${ann.isMain ? html`<${Box} component="span" sx=${{ display: 'inline-block', width: 40 }} />` : html`
+                  <${Tooltip} title=${t('editSchedule')}>
+                    <${IconButton} aria-label=${t('editSchedule') + ': ' + nm} onClick=${() => onSched(i)}>
+                      <${Icon} sx=${{ fontSize: 20 }}>edit<//><//>
+                  <//>`}
+                <${DeleteAction} remove name=${`${de ? 'Umstiegsansage' : 'transfer announcement'} ${nm}`}
+                  onClick=${() => onRemove(i)} />
+              <//>
+            <//>`; })}
+        <//>
+      <//>
+    <//>`;
+}
+
 function StationDetailView() {
   const { s, set, nav, t, bump, toast } = useApp();
   const st = getStation(s.selectedId);
   const seed = () => JSON.parse(JSON.stringify(getStation(s.selectedId)));
   const [draft, setDraft] = useState(seed);
   const [pristine, setPristine] = useState(() => JSON.stringify(seed()));
-  const [addXfer, setAddXfer] = useState(null);   // pending file id, or null when closed
+  // Ignat, 2026-10-14: transfer announcements per direction (line + destination)
+  const [addXfer, setAddXfer] = useState(null);   // { file, dirs: [keys], main } while the dialog is open
   const [addXferErr, setAddXferErr] = useState(false);
-  const [addMain, setAddMain] = useState(false);
-  const [schedIdx, setSchedIdx] = useState(null); // transfer announcement being scheduled
+  const [schedAt, setSchedAt] = useState(null);   // { k: direction key, i: row } being scheduled
+  const [openDirs, setOpenDirs] = useState(() => new Set());   // all directions start collapsed
   const [schedDays, setSchedDays] = useState(null);
   const [schedPeriods, setSchedPeriods] = useState([{ from: '', to: '' }]);
 
@@ -143,12 +201,12 @@ function StationDetailView() {
 
   const d = draft;
   const patch = fn => setDraft(prev => { const n = JSON.parse(JSON.stringify(prev)); fn(n); return n; });
-  // HTML5 drag between the non-main rows; the main one stays last
-  const { rowProps, rowSx } = useRowDrag((from, to) => patch(n => {
-    const L = n.transferAnnouncements;
+  // HTML5 drag between the non-main rows of one direction; the main one stays last
+  const moveXfer = (k, from, to) => patch(n => {
+    const L = n.dirXfers[k];
     if (L[from].isMain || L[to].isMain) return;
     const [m] = L.splice(from, 1); L.splice(to, 0, m);
-  }));
+  });
 
   if (!st) return html`<${PageBody}><${Alert} severity="error">${s.selectedId}<//><//>`;
 
@@ -186,14 +244,16 @@ function StationDetailView() {
     st.coords = { lat: d.coords && d.coords.lat !== '' && d.coords.lat !== null ? parseFloat(d.coords.lat) : null,
                   lon: d.coords && d.coords.lon !== '' && d.coords.lon !== null ? parseFloat(d.coords.lon) : null };
     st.nameChanges = d.nameChanges.filter(nc => nc.date || nc.fullName)
-      .map(nc => ({ date: nc.date, fullName: nc.fullName, shortName: nc.shortName, fileId: nc.fileId }));
+      .map(nc => ({ date: nc.date, fullName: nc.fullName, shortName: nc.shortName, fileId: nc.fileId, destFileId: nc.destFileId || '' }));
     st.stationNameFile = d.stationNameFile;
     st.ttsText = (d.ttsText || '').trim();
+    st.destNameFile = d.destNameFile || '';
+    st.destTtsText = (d.destTtsText || '').trim();
+    st.dirXfers = JSON.parse(JSON.stringify(d.dirXfers));
     st.tracks.forEach((tr, ti) => { tr.exits = d.tracks[ti].exits.slice(); });
     st.radii = Object.fromEntries(RADII.map(([k]) => [k, parseInt(d.radii[k], 10)]));
     st.neighborDist.prev.dist = parseInt(d.neighborDist.prev.dist, 10);
     st.neighborDist.next.dist = parseInt(d.neighborDist.next.dist, 10);
-    st.transferAnnouncements = d.transferAnnouncements.map(a => ({ ...a }));
     // re-seed from the record, so the page shows exactly what was stored —
     // a fully empty name-change card is dropped, not left on screen
     const n = seed(); setDraft(n); setPristine(JSON.stringify(n));
@@ -202,21 +262,21 @@ function StationDetailView() {
   };
 
   // setting a main one moves it to the bottom; the old main keeps its place above it
-  const setMain = i => patch(n => {
-    n.transferAnnouncements.forEach((a, j) => { a.isMain = j === i; });
-    n.transferAnnouncements = mainLast(n.transferAnnouncements);
+  const setMain = (k, i) => patch(n => {
+    n.dirXfers[k].forEach((a, j) => { a.isMain = j === i; });
+    n.dirXfers[k] = mainLast(n.dirXfers[k]);
   });
   // removing the main one hands "main" to the lowest one left — a station
   // with announcements but no main was saveable before (validator round 2)
-  const removeXfer = i => patch(n => {
-    const L = n.transferAnnouncements;
+  const removeXfer = (k, i) => patch(n => {
+    const L = n.dirXfers[k];
     const wasMain = L[i].isMain;
     L.splice(i, 1);
     if (wasMain && L.length) L[L.length - 1].isMain = true;
   });
 
-  const openSchedule = i => {
-    const ann = d.transferAnnouncements[i];
+  const openSchedule = (k, i) => {
+    const ann = d.dirXfers[k][i];
     // all seven days, each with at least one period — the vanilla's own seeding
     setSchedDays(DAYS.map(day => {
       const ex = ann.scheduleSlots && ann.scheduleSlots.find(x => x.day === day);
@@ -225,7 +285,7 @@ function StationDetailView() {
     }));
     // several date periods (Ignat, 2026-10-01); always at least one row on screen
     setSchedPeriods(ann.periods && ann.periods.length ? ann.periods.map(p => ({ ...p })) : [{ from: '', to: '' }]);
-    setSchedIdx(i);
+    setSchedAt({ k, i });
   };
 
   const badPeriod = p => !!(p.from && p.to && p.to < p.from);
@@ -235,11 +295,14 @@ function StationDetailView() {
   const removePeriod = k => setSchedPeriods(L => L.length > 1 ? L.filter((_, j) => j !== k) : [{ from: '', to: '' }]);
   const addPeriod = () => setSchedPeriods(L => [...L, { from: '', to: '' }]);
 
-  // a file already on the station is not offered again
-  const assigned = new Set(d.transferAnnouncements.map(a => a.fileId));
-  const transferOptions = soundFiles.filter(f => f.type === 'transfer' && !assigned.has(f.id))
-    .map(f => ({ value: f.id, label: f.filename }));
-  const firstXfer = !d.transferAnnouncements.length;   // the first one is main, necessarily
+  const dirs = stationDirections(st);
+  const dirLabel = dir => dir.line + ' · ' + dir.dest;
+  // a file already in every chosen direction is not offered again
+  const transferOptions = addXfer ? soundFiles.filter(f => f.type === 'transfer'
+      && addXfer.dirs.some(k => !(d.dirXfers[k] || []).some(a => a.fileId === f.id)))
+    .map(f => ({ value: f.id, label: f.filename })) : [];
+  const firstXfer = addXfer ? addXfer.dirs.every(k => !(d.dirXfers[k] || []).length) : false;   // the first one is main, necessarily
+  const toggleDir = k => setOpenDirs(o => { const n = new Set(o); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // a number field for a form row: no label inside, the unit after it
   const num = (label, value, onChange, bad, min, max, id) => html`
@@ -306,6 +369,9 @@ function StationDetailView() {
                       <${FilterSelect} label=${t('stationNameFile')} value=${nc.fileId || ''}
                         options=${nameFileOptions} minWidth=${200}
                         onChange=${v => patch(n => { n.nameChanges[i].fileId = v; })} />
+                      <${FilterSelect} label=${de ? 'Neue Zielname-Datei' : 'New destination name file'} value=${nc.destFileId || ''}
+                        options=${nameFileOptions} minWidth=${200} id=${'ncDest-' + i}
+                        onChange=${v => patch(n => { n.nameChanges[i].destFileId = v; })} />
                       <${Box} sx=${{ flexGrow: 1 }} />
                       <${DeleteAction} remove name=${`${de ? 'Namensänderung' : 'name change'} ${i + 1}`}
                         onClick=${() => patch(n => { n.nameChanges.splice(i, 1); })} />
@@ -315,7 +381,7 @@ function StationDetailView() {
               <${Box} sx=${{ pt: d.nameChanges.length ? 0 : 0.5 }}>
                 ${/* the string already starts with "+", so no add icon in front of it */ ''}
                 <${Button} id="btnAddNc"
-                  onClick=${() => patch(n => n.nameChanges.push({ date: '', fullName: '', shortName: '', fileId: '' }))}>
+                  onClick=${() => patch(n => n.nameChanges.push({ date: '', fullName: '', shortName: '', fileId: '', destFileId: '' }))}>
                   ${t('scheduleChange')}<//>
               <//>
             <//>
@@ -373,65 +439,46 @@ function StationDetailView() {
                              : 'Used as text-to-speech when no audio file is available.' })}
           <//>
 
+          ${/* Ignat, 2026-10-14: the file played when this station is the train's destination —
+                any station can be one when something happens; right below the station name */ ''}
+          <${FormRow} label=${de ? 'Zielname-Datei' : 'Destination name file'}>
+            <${FilterSelect} id="stDestFile" label=${de ? 'Zielname-Datei' : 'Destination name file'} hideLabel fullWidth value=${d.destNameFile || ''}
+              options=${nameFileOptions} minWidth=${300}
+              onChange=${v => patch(n => { n.destNameFile = v; })} />
+          <//>
+          <${FormRow} label=${de ? 'TTS-Text Ziel (Fallback)' : 'Destination TTS text (fallback)'} htmlFor="stDestTts" top>
+            ${text('stDestTts', d.destTtsText, v => patch(n => { n.destTtsText = v; }), { placeholder: d.name || st.name })}
+          <//>
+
           <${Typography} variant="subtitle2" sx=${{ fontWeight: 500, mt: 3, mb: 1 }}>${t('transferFiles')}<//>
-          ${/* Ignat, 2026-09-30: priority by row order (drag), the main one last; active time
-                previewed in the row; schedule and "main" as grey icons; no Typ column. */ ''}
-          ${d.transferAnnouncements.length ? html`
-            <${TableContainer} id="xferTable" sx=${{ border: '1px solid #E7E7E7', borderRadius: 1, mb: 1.5 }}>
-              <${Table}>
-                <${TableHead}><${TableRow}>
-                  <${TableCell} sx=${{ width: 96, whiteSpace: 'nowrap' }}>${de ? 'Priorität' : 'Priority'}<//>
-                  <${TableCell} sx=${{ width: 220 }}>${t('colName')}<//>
-                  <${TableCell}>${de ? 'Aktivzeit' : 'Active time'}<//>
-                  <${TableCell} align="right" sx=${{ width: 136, whiteSpace: 'nowrap' }} />
-                <//><//>
-                <${TableBody}>
-                  ${d.transferAnnouncements.map((ann, i) => {
-                    const drag = ann.isMain ? {} : rowProps(i);
-                    const nm = sndName(ann.fileId);
-                    return html`
-                    <${TableRow} key=${ann.fileId} data-main=${ann.isMain ? 'true' : 'false'}
-                      sx=${ann.isMain ? { bgcolor: '#FAFAFA' } : rowSx(i)} ...${drag}>
-                      <${TableCell}>
-                        <${Stack} direction="row" spacing=${1} alignItems="center">
-                          ${ann.isMain ? html`<${Box} sx=${{ width: 18 }} />` : html`<${DragHandle} />`}
-                          <span className="prio">${i + 1}</span>
-                        <//>
-                      <//>
-                      <${TableCell} sx=${{ fontFamily: 'monospace', fontSize: 13 }}>${nm}<//>
-                      <${TableCell} className="active-time" sx=${{ fontSize: 13 }}>
-                        ${ann.isMain ? (de ? 'Immer' : 'Always')
-                          : schedPreview(ann.scheduleSlots, ann.periods)
-                          || html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`}
-                      <//>
-                      <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
-                        ${/* star = main (material "star" / "star_border") */ ''}
-                        ${ann.isMain ? html`
-                          <${Tooltip} title=${de ? 'Hauptansage – läuft immer, niedrigste Priorität' : 'Main announcement – always on, lowest priority'}>
-                            <span><${IconButton} disabled aria-label=${(de ? 'Hauptansage' : 'Main announcement') + ': ' + nm}
-                              sx=${{ '&.Mui-disabled': { color: 'text.secondary' } }}><${Icon} sx=${{ fontSize: 20 }}>star<//><//></span>
-                          <//>` : html`
-                          <${Tooltip} title=${t('setAsMain')}>
-                            <${IconButton} aria-label=${t('setAsMain') + ': ' + nm} onClick=${() => setMain(i)}>
-                              <${Icon} sx=${{ fontSize: 20 }}>star_border<//><//>
-                          <//>`}
-                        ${/* the main one always plays, so it has no schedule to edit */ ''}
-                        ${ann.isMain ? html`<${Box} component="span" sx=${{ display: 'inline-block', width: 40 }} />` : html`
-                          <${Tooltip} title=${t('editSchedule')}>
-                            <${IconButton} aria-label=${t('editSchedule') + ': ' + nm} onClick=${() => openSchedule(i)}>
-                              <${Icon} sx=${{ fontSize: 20 }}>edit<//><//>
-                          <//>`}
-                        <${DeleteAction} remove name=${`${de ? 'Umstiegsansage' : 'transfer announcement'} ${nm}`}
-                          onClick=${() => removeXfer(i)} />
-                      <//>
-                    <//>`; })}
+          ${/* one collapsible section per direction; opened, the same table as before */ ''}
+          <${Box} id="dirXfers" sx=${{ border: '1px solid #E7E7E7', borderRadius: 1 }}>
+            ${dirs.map((dir, di) => {
+              const L = d.dirXfers[dir.key] || [], open = openDirs.has(dir.key);
+              const main = L.find(a => a.isMain);
+              return html`<${Box} key=${dir.key} id=${'dir-' + di} className="dir-section" data-dir=${dir.key}
+                  sx=${{ '& + &': { borderTop: '1px solid #E7E7E7' } }}>
+                <${Box} component="button" type="button" className="dir-head" aria-expanded=${open} onClick=${() => toggleDir(dir.key)}
+                  sx=${{ all: 'unset', boxSizing: 'border-box', width: '100%', display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25,
+                         cursor: 'pointer', '&:hover': { bgcolor: '#FAFAFA' }, '&:focus-visible': { outline: '2px solid #1976d2', outlineOffset: -2 } }}>
+                  <${Icon} sx=${{ fontSize: 20, color: 'text.secondary', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>chevron_right<//>
+                  <${LineBadge} line=${dir.line} />
+                  <${Typography} variant="body2" sx=${{ fontWeight: 500, flex: 1 }}>${dir.dest}<//>
+                  <${Typography} variant="body2" color="text.secondary" className="dir-count">
+                    ${L.length ? (L.length + ' ' + (de ? (L.length === 1 ? 'Ansage' : 'Ansagen') : (L.length === 1 ? 'announcement' : 'announcements'))
+                                   + (main ? ' · ' + (de ? 'Haupt: ' : 'Main: ') + sndName(main.fileId) : ''))
+                               : (de ? 'Keine Umstiegsansage' : 'No transfer announcement')}<//>
                 <//>
-              <//>
-            <//>` : html`
-            <${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>
-              ${t('noneAssigned')}<//>`}
-          <${Button} id="btnAddXfer" disabled=${!transferOptions.length}
-            onClick=${() => { setAddXfer(''); setAddXferErr(false); setAddMain(false); }}>${t('addTransfer')}<//>
+                ${open ? html`<${Box} sx=${{ px: 2, pb: 2 }}>
+                  ${L.length ? html`<${XferTable} list=${L} de=${de} t=${t}
+                      onMove=${(a, b) => moveXfer(dir.key, a, b)} onMain=${i => setMain(dir.key, i)}
+                      onSched=${i => openSchedule(dir.key, i)} onRemove=${i => removeXfer(dir.key, i)} />`
+                    : html`<${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>${t('noneAssigned')}<//>`}
+                  <${Button} id=${'btnAddXfer-' + di}
+                    onClick=${() => { setAddXfer({ file: '', dirs: [dir.key], main: false }); setAddXferErr(false); }}>${t('addTransfer')}<//>
+                <//>` : null}
+              <//>`; })}
+          <//>
         <//>
 
         ${/* ── Trigger points — their own card, as on staging ── */ ''}
@@ -452,39 +499,49 @@ function StationDetailView() {
         <//>
       <//>
 
-      ${/* ── Add transfer announcement ── */ ''}
+      ${/* ── Add transfer announcement — to one or several directions (Ignat, 2026-10-14) ── */ ''}
       <${Dialog} open=${addXfer !== null} onClose=${() => setAddXfer(null)} fullWidth maxWidth="xs">
         <${DialogTitle}>${t('addTransferTitle')}<//>
         <${DialogContent}>
           <${FormControl} fullWidth required error=${addXferErr} sx=${{ mt: 1 }}>
             <${InputLabel}>${t('selectFile')}<//>
-            <${Select} label=${t('selectFile')} value=${addXfer || ''} id="addXferFile"
-              onChange=${e => { setAddXfer(e.target.value); setAddXferErr(false); }}>
+            <${Select} label=${t('selectFile')} value=${(addXfer && addXfer.file) || ''} id="addXferFile"
+              onChange=${e => { setAddXfer(x => ({ ...x, file: e.target.value })); setAddXferErr(false); }}>
               ${transferOptions.map(o => html`<${MenuItem} key=${o.value} value=${o.value}>${o.label}<//>`)}
             <//>
             ${addXferErr ? html`<${FormHelperText}>${t('selectFile')}<//>` : null}
           <//>
+          <${FormLabel} component="legend" sx=${{ mt: 2.5, mb: .5, display: 'block' }}>${de ? 'Richtungen' : 'Directions'}<//>
+          <${Box} id="addXferDirs" sx=${{ display: 'flex', flexDirection: 'column' }}>
+            ${dirs.map(dir => html`<${FormControlLabel} key=${dir.key}
+              label=${html`<${Stack} direction="row" spacing=${1} alignItems="center"><${LineBadge} line=${dir.line} /><span>${dir.dest}</span><//>`}
+              control=${html`<${Checkbox} size="small" inputProps=${{ 'data-dir': dir.key, 'aria-label': dirLabel(dir) }}
+                checked=${!!(addXfer && addXfer.dirs.includes(dir.key))}
+                onChange=${e => setAddXfer(x => ({ ...x, dirs: e.target.checked ? [...x.dirs, dir.key] : x.dirs.filter(k => k !== dir.key) }))} />`} />`)}
+          <//>
           ${/* Ignat, 2026-09-30: "Mark as main" in the add dialog; the first one is main anyway */ ''}
           <${FormControlLabel} sx=${{ mt: 1 }} label=${de ? 'Als Haupt markieren' : 'Mark as main'}
-            control=${html`<${Checkbox} id="addXferMain" checked=${firstXfer || addMain} disabled=${firstXfer}
-              onChange=${e => setAddMain(e.target.checked)} />`} />
+            control=${html`<${Checkbox} id="addXferMain" checked=${firstXfer || !!(addXfer && addXfer.main)} disabled=${firstXfer}
+              onChange=${e => setAddXfer(x => ({ ...x, main: e.target.checked }))} />`} />
         <//>
         <${DialogActions}>
           <${Button} onClick=${() => setAddXfer(null)}>${t('cancel')}<//>
-          <${Button} variant="contained" id="addXferSave" onClick=${() => {
-            if (!addXfer) { setAddXferErr(true); return; }
-            patch(n => {
-              const L = n.transferAnnouncements;
-              const asMain = !L.length || addMain;
-              const f = snd(addXfer);
-              const item = { fileId: addXfer, label: f ? f.name : sndName(addXfer), isMain: asMain, scheduleSlots: null };
+          <${Button} variant="contained" id="addXferSave" disabled=${!addXfer || !addXfer.dirs.length} onClick=${() => {
+            if (!addXfer.file) { setAddXferErr(true); return; }
+            patch(n => addXfer.dirs.forEach(k => {
+              const L = n.dirXfers[k] = n.dirXfers[k] || [];
+              if (L.some(a => a.fileId === addXfer.file)) return;   // already in this direction
+              const asMain = !L.length || addXfer.main;
+              const f = snd(addXfer.file);
+              const item = { fileId: addXfer.file, label: f ? f.name : sndName(addXfer.file), isMain: asMain, scheduleSlots: null };
               if (asMain) { L.forEach(a => { a.isMain = false; }); L.push(item); }
               else {
                 // a new one joins as the lowest of the scheduled ones, just above the main
                 const at = L.findIndex(a => a.isMain);
                 L.splice(at < 0 ? L.length : at, 0, item);
               }
-            });
+            }));
+            setOpenDirs(o => new Set([...o, ...addXfer.dirs]));
             setAddXfer(null);
           }}>${t('saveEntry')}<//>
         <//>
@@ -493,15 +550,15 @@ function StationDetailView() {
       ${/* ── Transfer announcement schedule — a side sheet (Ignat, 2026-09-30:
             "should be a side sheet instead of popup"), the shared weekly grid inside;
             header and footer stay put, only the week scrolls ── */ ''}
-      <${Drawer} anchor="right" open=${schedIdx !== null} onClose=${() => setSchedIdx(null)} id="schedSheet"
+      <${Drawer} anchor="right" open=${schedAt !== null} onClose=${() => setSchedAt(null)} id="schedSheet"
         PaperProps=${{ sx: { width: 560, maxWidth: '100vw', display: 'flex', flexDirection: 'column' } }}>
         <${Box} sx=${{ display: 'flex', alignItems: 'flex-start', gap: 1, px: 3, py: 2, borderBottom: '1px solid #E7E7E7' }}>
           <${Box} sx=${{ flex: 1, minWidth: 0 }}>
             <${Typography} variant="h6" sx=${{ fontWeight: 500 }}>${t('scheduleTitle')}<//>
             <${Typography} variant="body2" color="text.secondary" sx=${{ fontFamily: 'monospace' }}>
-              ${schedIdx !== null && d.transferAnnouncements[schedIdx] ? sndName(d.transferAnnouncements[schedIdx].fileId) : ''}<//>
+              ${schedAt && d.dirXfers[schedAt.k][schedAt.i] ? dirLabel(dirs.find(x => x.key === schedAt.k)) + ' · ' + sndName(d.dirXfers[schedAt.k][schedAt.i].fileId) : ''}<//>
           <//>
-          <${IconButton} aria-label=${de ? 'Schließen' : 'Close'} onClick=${() => setSchedIdx(null)}><${Icon}>close<//><//>
+          <${IconButton} aria-label=${de ? 'Schließen' : 'Close'} onClick=${() => setSchedAt(null)}><${Icon}>close<//><//>
         <//>
         <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: 2 }}>
           ${/* the date period comes first: from when to when the weekly times apply (Ignat, 2026-10-01) */ ''}
@@ -529,13 +586,13 @@ function StationDetailView() {
             emptyLabel=${de ? 'Kein Zeitplan' : 'No schedule'} slotDefault=${WHOLE_DAY} />` : null}
         <//>
         <${Box} sx=${{ display: 'flex', justifyContent: 'flex-end', gap: 1, px: 3, py: 1.5, borderTop: '1px solid #E7E7E7' }}>
-          <${Button} onClick=${() => setSchedIdx(null)}>${t('cancel')}<//>
+          <${Button} onClick=${() => setSchedAt(null)}>${t('cancel')}<//>
           <${Button} variant="contained" id="schedSave" disabled=${schedBadRange} onClick=${() => {
-            const i = schedIdx;
-            patch(n => { const a = n.transferAnnouncements[i];
+            const { k, i } = schedAt;
+            patch(n => { const a = n.dirXfers[k][i];
               a.scheduleSlots = schedDays.map(dd => ({ day: dd.day, slots: dd.slots.map(sl => ({ ...sl })) }));
               a.periods = schedPeriods.filter(p => p.from || p.to).map(p => ({ ...p })); });
-            setSchedIdx(null);
+            setSchedAt(null);
           }}>${t('saveSchedule')}<//>
         <//>
       <//>
