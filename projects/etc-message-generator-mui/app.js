@@ -52,7 +52,7 @@ const SOURCE_ICON = { standard: 'description', library: 'library_music', record:
 /* ══ State — the vanilla's S, same shape. Plus the four values it kept in
    <select>s and read back out of the DOM (stations, intervals). ═════════ */
 const S = {
-  ui: 'de', typ: 'erst', source: 'standard', prompt: '', zusatz: '', voice: 'filipa', daisy: '', daisyCustom: false,
+  ui: 'de', typ: 'erst', source: 'standard', prompt: '', zusatz: '', emotion: 'neutral', voice: 'filipa', daisy: '', daisyCustom: false,
   variant: -1, libId: '', recId: '', srcName: '', pairOff: false, zusatzTranslated: true, failMode: false,
   msg: { de: { text: '', state: 'none', variant: null }, en: { text: '', state: 'none', variant: null } },
   enOutdated: false,
@@ -469,6 +469,9 @@ function Sheet() {
             <${Stack} direction="row" spacing=${2} alignItems="flex-start" sx=${{ mt: 2 }} id="zusatzRow">
               <${TextField} id="zusatz" label=${t('zusatz')} multiline minRows=${1} fullWidth value=${S.zusatz}
                 placeholder=${KNOWN[0][S.ui]} onChange=${e => onZusatz(e.target.value)} />
+              ${/* Ignat, 2026-10-14: emotion between Zusätzliche Angaben and Stimme */ ''}
+              <${Pick} id="emotion" label=${t('emotion')} value=${S.emotion} width=${180} onChange=${v => { S.emotion = v; rerender(); }}
+                options=${[{ value: 'funny', label: t('emoFunny') }, { value: 'serious', label: t('emoSerious') }, { value: 'neutral', label: t('emoNeutral') }]} />
               <${Pick} id="voice" label=${t('voice')} value=${S.voice} width=${200} onChange=${onVoice}
                 options=${[{ value: 'filipa', label: 'Filipa' }, { value: 'ai', label: t('voiceAi') }]} />
             <//>
