@@ -2908,6 +2908,15 @@ const LA_STOPS = [['8572212', 'Liestal, Bahnhof'], ['8578320', 'Liestal, Törli'
   ['8510216', 'Ziefen, Untertal'], ['8578325', 'Ziefen, Diegmatt'], ['8500851', 'Ziefen, Zentrum'],
   ['8578326', 'Ziefen, Mühlegasse'], ['8578327', 'Ziefen, Hofmatt'], ['8578329', 'Reigoldswil, Bütschen'],
   ['8578330', 'Reigoldswil, Linde'], ['8578331', 'Reigoldswil, Gemeindezentrum'], ['8500852', 'Reigoldswil, Dorfplatz']];
+// "Weitere Haltestellen": stops only some trips serve (mock), each with the
+// base-route stop it follows — so they slot into the route in order
+const LA_EXTRA = [['8572219', 'Liestal, Kantonsspital', 0], ['8578328', 'Ziefen, Schulhaus', 11]];
+const LA_ALL = [...LA_STOPS, ...LA_EXTRA.map(([id, n]) => [id, n])];
+const laRoute = dir => {
+  const out = [];
+  LA_STOPS.forEach((s, i) => { out.push(s); LA_EXTRA.filter(e => e[2] === i).forEach(e => out.push([e[0], e[1]])); });
+  return dir ? out.reverse() : out;
+};
 const LA_SEG_MIN = [1, 2, 2, 3, 2, 2, 1, 1, 1, 1, 1, 1, 0, 3, 1, 1, 2];
 // base line first; the others serve only the stops listed
 const LA_LINES = [
@@ -2955,43 +2964,46 @@ function LaQuantiles({ value, onChange, keys = LA_QS }) {
     <//>`;
 }
 
-function LaRouteDialog({ open, onClose, stops, selected, setSelected }) {
+/* Ignat, 2026-10-15: the overlay was "a weird filter". Line route is a
+   multi-select like the New evaluation filters: stops in route order along a
+   thin route line, the stops only some trips serve grouped under "Weitere
+   Haltestellen", and Most common route / All / None at the top of the list. */
+function LaRouteSelect({ route, selected, setSelected }) {
   const { t } = useT();
-  const toggle = id => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
-  return html`
-    <${Dialog} open=${open} onClose=${onClose} maxWidth="md" fullWidth id="la-route-dialog">
-      <${DialogTitle} sx=${{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        ${t('la_route')}
-        <${Box} sx=${{ flex: 1 }} />
-        <${IconButton} aria-label=${t('cf_cancel')} onClick=${onClose} id="la-route-close"><${Icon}>close<//><//>
-      <//>
-      <${DialogContent} dividers>
-        <${Stack} direction="row" spacing=${1} sx=${{ mb: 2 }}>
-          <${Button} id="la-route-all" onClick=${() => setSelected(stops.map(s => s[0]))}>${t('la_select_all')}<//>
-          <${Button} id="la-route-none" onClick=${() => setSelected([])}>${t('la_deselect_all')}<//>
-          <${Button} variant="contained" id="la-route-common" onClick=${() => setSelected(stops.map(s => s[0]))}>
-            ${t('la_most_common')}<//>
-        <//>
-        <${Box} sx=${{ display: 'flex', gap: 3 }}>
-          <${Box} sx=${{ position: 'relative', width: 380 }}>
-            <${Box} sx=${{ position: 'absolute', left: 150, top: 0, bottom: 0, width: 10, bgcolor: '#E53935' }} />
-            ${stops.map(([id, name]) => {
-              const on = selected.includes(id);
-              return html`<${Box} key=${id} role="checkbox" aria-checked=${on} tabIndex=${0} className="la-route-stop"
-                data-stop=${id} onClick=${() => toggle(id)}
-                onKeyDown=${e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(id); } }}
-                sx=${{ position: 'relative', mb: 1, px: 1.5, py: 1, border: '1px solid', borderRadius: 1, cursor: 'pointer',
-                       borderColor: on ? 'primary.main' : '#BDBDBD', bgcolor: on ? '#E3F0FD' : 'background.paper' }}>
-                <${Typography} variant="body2">${id} ${name}<//>
-              <//>`;
-            })}
-          <//>
-          <${Box} sx=${{ flex: 1, border: '1px solid #E7E7E7', borderRadius: 1, p: 1.5, alignSelf: 'flex-start', minHeight: 60 }}>
-            <${Typography} variant="subtitle2">${t('la_more_stops')}<//>
-          <//>
-        <//>
-      <//>
-    <//>`;
+  const extra = new Set(LA_EXTRA.map(e => e[0]));
+  const opts = route.map(([id, name]) => ({ id, label: `${id} ${name}`, chip: name, extra: extra.has(id) }));
+  const ordered = [...opts.filter(o => !o.extra), ...opts.filter(o => o.extra)];
+  const value = ordered.filter(o => selected.includes(o.id));
+  const quick = (k, ids) => html`<${Button} size="small" id=${'la-route-' + k}
+    onMouseDown=${e => e.preventDefault()} onClick=${() => setSelected(ids)}>${t(k === 'common' ? 'la_most_common' : 'la_' + k)}<//>`;
+  const Paper2 = React.useCallback(props => html`<${Paper} ...${props}>
+    <${Stack} direction="row" spacing=${.5} sx=${{ px: 1, pt: 1 }} id="la-route-quick">
+      ${quick('common', LA_STOPS.map(s => s[0]))}${quick('all', LA_ALL.map(s => s[0]))}${quick('none', [])}
+    <//>${props.children}<//>`, []);
+  return html`<${Autocomplete} multiple disableCloseOnSelect id="la-route" size="small" sx=${{ width: 280 }}
+    options=${ordered} value=${value} filterOptions=${scopeFilter}
+    groupBy=${o => o.extra ? t('la_more_stops') : t('la_most_common')}
+    isOptionEqualToValue=${(o, v) => o.id === v.id} getOptionLabel=${o => o.label}
+    onChange=${(e, v) => setSelected(v.map(o => o.id))}
+    PaperComponent=${Paper2} ListboxProps=${{ style: { maxHeight: 420 } }}
+    componentsProps=${{ popper: { placement: 'bottom-start', style: { width: 420 } } }}
+    renderTags=${() => html`<${Typography} variant="body2" id="la-route-count" sx=${{ pl: 1 }}>
+      ${t('la_stops_of').replace('{n}', value.length).replace('{total}', opts.length)}<//>`}
+    renderOption=${(props, o, { selected: on }) => { const { key, ...rest } = props;
+      return html`<li key=${o.id} ...${rest} className=${(rest.className || '') + ' la-route-stop'} data-stop=${o.id}>
+        <${Box} sx=${{ width: 4, alignSelf: 'stretch', bgcolor: o.extra ? '#BDBDBD' : '#E53935', mr: 1.5, ml: -1 }} />
+        <${Checkbox} size="small" checked=${on} sx=${{ mr: 1 }} />${o.label}</li>`; }}
+    renderInput=${params => html`<${TextField} ...${params} variant="filled" label=${t('la_route')} />`} />`;
+}
+
+// a single required choice — no clear ✕, unlike the filters
+function LaSelect({ id, label, value, onChange, options, minWidth = 200, disabled, tip }) {
+  const field = html`<${FormControl} id=${id} sx=${{ minWidth }} disabled=${!!disabled}>
+    <${InputLabel} id=${id + '-label'}>${label}<//>
+    <${Select} labelId=${id + '-label'} label=${label} value=${value} onChange=${e => onChange(e.target.value)}>
+      ${options.map(o => html`<${MenuItem} key=${o.value} value=${o.value} disabled=${!!o.disabled}>${o.label}<//>`)}
+    <//><//>`;
+  return tip ? html`<${Tooltip} title=${tip}><span>${field}</span><//>` : field;
 }
 
 function LaOverviewChart({ stops, rows, q, kinds }) {
@@ -3099,13 +3111,12 @@ function ReportLineAnalysis({ go, row }) {
   const [dir, setDir] = useState(0);
   const [mode, setMode] = useState('delay');
   const [arrdep, setArrdep] = useState('both');
-  const [deptime, setDeptime] = useState('');
+  const [deptime, setDeptime] = useState('all');
   const [q, setQ] = useState('q50');
-  const [routeOpen, setRouteOpen] = useState(false);
   const [selected, setSelected] = useState(LA_STOPS.map(s => s[0]));
   const [snap, setSnap] = useState(false);
-  const seed = deptime ? laTrips.indexOf(Number(deptime)) + 1 : 0;
-  const ordered = dir ? [...LA_STOPS].reverse() : LA_STOPS;
+  const seed = deptime !== 'all' ? laTrips.indexOf(Number(deptime)) + 1 : 0;
+  const ordered = laRoute(dir);
   const stops = ordered.filter(s => selected.includes(s[0]));
   const last = stops.length - 1;
   // heatmaps show one of arrival / departure, as production's select does there
@@ -3114,8 +3125,9 @@ function ReportLineAnalysis({ go, row }) {
   const rows = LA_LINES.map((line, li) => ({
     line,
     points: stops.flatMap((s, pos) => {
-      const idx = LA_STOPS.findIndex(x => x[0] === s[0]);
+      const idx = LA_ALL.findIndex(x => x[0] === s[0]);
       if (line.stops && !line.stops.includes(idx)) return [];
+      if (idx >= LA_STOPS.length && li > 0) return [];   // variant stops: base line only
       return laKinds(line, pos, last).map(kind => ({ pos, kind, v: laStat(li, idx, kind, dir, mode, seed) }));
     }),
   })).filter(r => r.points.length);
@@ -3134,61 +3146,47 @@ function ReportLineAnalysis({ go, row }) {
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
                   { label: row ? row.name : t('type_line_analysis') }]}
         title=${row ? row.name : t('type_line_analysis')} subtitle=${t('la_title_ext')}
-        action=${html`<${Button} variant="outlined"
-          startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+        action=${html`<${Stack} direction="row" spacing=${1} alignItems="center">
+          <${Tooltip} title=${t('la_tutorial')}>
+            <${IconButton} aria-label=${t('la_tutorial')} id="la-tutorial"><${Icon}>ondemand_video<//><//><//>
+          <${Button} variant="outlined"
+            startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//><//>`} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="la-params" fields=${fields} />
+        ${/* Ignat, 2026-10-15: the filters change every tab, so they sit ABOVE
+              the tabs, and they are all dropdowns of one size. Departure time
+              and "both" do not apply to a heatmap, so there they are disabled
+              with the reason, not hidden — the bar never jumps between tabs. */''}
+        <${Card} sx=${{ mb: 2 }} id="la-controls"><${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
+          <${Box} sx=${{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <${LaSelect} id="la-dir" label=${t('la_direction')} value=${dir} onChange=${setDir} minWidth=${300}
+              options=${[0, 1].map(d => { const r = laRoute(d);
+                return { value: d, label: `${t(d ? 'la_dir_back' : 'la_dir_out')} (${r[0][1].split(',')[0]} → ${r[r.length - 1][1].split(',')[0]})` }; })} />
+            <${LaRouteSelect} route=${ordered} selected=${selected} setSelected=${setSelected} />
+            <${LaSelect} id="la-mode" label=${t('la_mode')} value=${mode} onChange=${setMode}
+              options=${[{ value: 'delay', label: t('la_mode_delay') }, { value: 'headway', label: t('la_mode_headway') }]} />
+            <${LaSelect} id="la-arrdep" label=${t('la_arrdep')} value=${showDeptime ? arrdep : hmKind}
+              onChange=${setArrdep}
+              options=${[['both', 'la_arrdep_both'], ['arr', 'la_arr'], ['dep', 'la_dep']]
+                .map(([v, k]) => ({ value: v, label: t(k), disabled: v === 'both' && !showDeptime }))} />
+            <${LaSelect} id="la-deptime" label=${t('la_deptime')} value=${showDeptime ? deptime : 'all'}
+              onChange=${setDeptime} disabled=${!showDeptime} tip=${showDeptime ? '' : t('la_deptime_hm')}
+              options=${[{ value: 'all', label: t('la_deptime_all') }, ...laTrips.map(m => ({ value: String(m), label: hm(m) }))]} />
+          <//>
+        <//><//>
+
         <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} sx=${{ mb: 2 }} id="la-tabs">
           ${['la_tab_overview', 'la_tab_hm_time', 'la_tab_hm_interval', 'la_tab_table'].map((k, i) =>
             html`<${Tab} key=${k} label=${t(k)} id=${'la-tab-' + i} />`)}
         <//>
-
-        <${Card} sx=${{ mb: 2 }} id="la-controls"><${CardContent}>
-          <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <${Box}>
-              <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('la_direction')}<//>
-              <${Tooltip} title=${t(dir ? 'la_dir_back' : 'la_dir_out')}>
-                <${Button} variant="outlined" id="la-dir" onClick=${() => setDir(d => 1 - d)}
-                  aria-label=${t('la_direction') + ': ' + t(dir ? 'la_dir_back' : 'la_dir_out')}>
-                  <${Icon}>${dir ? 'arrow_back' : 'arrow_forward'}<//><//>
-              <//>
-            <//>
-            <${Box}>
-              <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('la_route')}<//>
-              <${Stack} direction="row" spacing=${1} alignItems="center">
-                <${Typography} variant="body2" id="la-route-count">${t('la_stops_selected').replace('{n}', stops.length)}<//>
-                <${Button} variant="outlined" id="la-route-change" onClick=${() => setRouteOpen(true)}>${t('la_change')}<//>
-              <//>
-            <//>
-            <${Box}>
-              <${Typography} variant="subtitle2">${t('la_mode')}<//>
-              <${RadioGroup} row value=${mode} onChange=${e => setMode(e.target.value)} id="la-mode">
-                <${FormControlLabel} value="delay" control=${html`<${Radio} />`} label=${t('la_mode_delay')} />
-                <${FormControlLabel} value="headway" control=${html`<${Radio} />`} label=${t('la_mode_headway')} />
-              <//>
-            <//>
-            <${FilterSelect} id="la-arrdep" label=${t('la_arrdep')} minWidth=${210}
-              value=${showDeptime ? arrdep : hmKind} onChange=${v => setArrdep(v || (showDeptime ? 'both' : 'arr'))}
-              options=${[['both', 'la_arrdep_both'], ['arr', 'la_arr'], ['dep', 'la_dep']]
-                .filter(o => showDeptime || o[0] !== 'both').map(([v, k]) => ({ value: v, label: t(k) }))} />
-            ${showDeptime && html`<${FilterSelect} id="la-deptime" label=${t('la_deptime')} minWidth=${210}
-              value=${deptime} onChange=${setDeptime}
-              options=${laTrips.map(m => ({ value: String(m), label: hm(m) }))} />`}
-            <${Box} sx=${{ flex: 1 }} />
-            <${Box} sx=${{ maxWidth: 320 }}>
-              <${Typography} variant="body2">${t('la_download')} <${Link} href="#" onClick=${e => e.preventDefault()}
-                id="la-tutorial">${t('la_tutorial')}<//><//>
-              ${(tab === 1 || tab === 2) && html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>
-                ${t('la_outliers')}<//>`}
-            <//>
-          <//>
-        <//><//>
 
         <${Card} id="la-panel"><${CardContent}>
           ${stops.length === 0 ? html`<${Alert} severity="info" id="la-empty">${t('la_no_stops')}<//>` : html`
             ${tab !== 3 && html`<${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mb: 2 }}>
               <${Box} sx=${{ flex: 1 }} />
               <${LaQuantiles} value=${q} onChange=${setQ} />
+              ${(tab === 1 || tab === 2) && html`<${Tooltip} title=${t('la_outliers')}>
+                <${IconButton} aria-label=${t('la_outliers')} id="la-outliers"><${Icon}>info_outline<//><//><//>`}
               <${Tooltip} title=${t('fa_ub_camera')}>
                 <${IconButton} aria-label=${t('fa_ub_camera')} onClick=${() => setSnap(true)}><${Icon}>photo_camera<//><//><//>
             <//>`}
@@ -3199,7 +3197,7 @@ function ReportLineAnalysis({ go, row }) {
               rowsLabels=${stops.map(s => `${s[0]} ${s[1]}`)} cols=${laTrips}
               colLabel=${ci => hm(laTrips[ci])}
               cell=${(r, ci) => {
-                const idx = LA_STOPS.findIndex(x => x[0] === stops[r][0]);
+                const idx = LA_ALL.findIndex(x => x[0] === stops[r][0]);
                 if ((r === 0 && hmKind === 'arr') || laRand(idx * 31 + ci * 7) < 0.04) return null;   // first stop: no arrival
                 const base = laStat(0, idx, hmKind, dir, mode, 0)[q];
                 const v = Math.round(base + 70 * (laRand(idx * 17 + ci * 3 + dir) - .5) + (laTrips[ci] > 420 && laTrips[ci] < 540 ? 40 : 0));
@@ -3214,7 +3212,7 @@ function ReportLineAnalysis({ go, row }) {
               rowsLabels=${stops.map(s => `${s[0]} ${s[1]}`)} cols=${Array.from({ length: 30 }, (_, i) => -180 + i * 10)}
               colLabel=${ci => ci % 6 === 0 ? laMs(-180 + ci * 10) : ''}
               cell=${(r, ci) => {
-                const idx = LA_STOPS.findIndex(x => x[0] === stops[r][0]);
+                const idx = LA_ALL.findIndex(x => x[0] === stops[r][0]);
                 const mu = laStat(0, idx, hmKind, dir, mode, 0)[q];
                 const x = -180 + ci * 10 + 5;
                 const n = Math.max(0, Math.round(18 * Math.exp(-((x - mu) ** 2) / (2 * 35 ** 2)) - 2 * laRand(idx + ci)));
@@ -3253,8 +3251,6 @@ function ReportLineAnalysis({ go, row }) {
           `}
         <//><//>
       <//>
-      <${LaRouteDialog} open=${routeOpen} onClose=${() => setRouteOpen(false)} stops=${ordered}
-        selected=${selected} setSelected=${setSelected} />
       <${Snackbar} open=${snap} autoHideDuration=${2500} onClose=${() => setSnap(false)} message=${t('chart_snapshot_done')} />
     <//>`;
 }
@@ -3265,7 +3261,7 @@ function ReportLineAnalysis({ go, row }) {
 function LaStopHeatmap({ go, row, stop, kind, dir, mode }) {
   const { t } = useT();
   const [q, setQ] = useState('q5');
-  const idx = LA_STOPS.findIndex(x => x[0] === stop[0]);
+  const idx = LA_ALL.findIndex(x => x[0] === stop[0]);
   const base = laStat(0, idx, kind, dir, mode, 0);
   const days = [1, 2, 3, 4, 5, 6, 7].map(d => t('la_day_' + d));
   const title = `${stop[0]} ${stop[1]} [${t(dir ? 'la_dir_back' : 'la_dir_out')}, ${t(mode === 'delay' ? 'la_eval_delay' : 'la_eval_headway')}, ${t(kind === 'arr' ? 'la_arr' : 'la_dep')}]`;

@@ -1406,7 +1406,20 @@ const fs = require('fs');
   ok('the overview draws the base line first and the other lines after it',
     laOv.series[0] === '50.070' && laOv.series.length === 8, laOv.series);
   ok('the quantile switch offers 5% / 50% / 95% / average', laOv.qs.join() === 'q5,q50,q95,avg', laOv.qs);
-  ok('the route starts with all 18 stops', /18/.test(laOv.count), laOv.count);
+  ok('the route starts on the 18 stops of the most common route', /^18 /.test(laOv.count.trim()), laOv.count);
+  /* Ignat, 2026-10-15: filters above the tabs, all dropdowns */
+  const laLay = await page.evaluate(() => {
+    const bar = document.getElementById('la-controls').getBoundingClientRect().top;
+    const tabs = document.getElementById('la-tabs').getBoundingClientRect().top;
+    return { above: bar < tabs, fields: ['la-dir', 'la-route', 'la-mode', 'la-arrdep', 'la-deptime']
+      .map(id => !!document.getElementById(id) && !!document.getElementById(id).closest('.MuiFormControl-root')),
+      radios: document.querySelectorAll('#la-controls input[type=radio]').length,
+      tutorialInHeader: !!document.querySelector('#page-header #la-tutorial') };
+  });
+  ok('the filter bar sits above the tabs', laLay.above, laLay);
+  ok('direction, line route, mode, arrival/departure and departure time are all dropdowns',
+    laLay.fields.every(Boolean) && laLay.radios === 0, laLay);
+  ok('the tutorial video lives in the page header', laLay.tutorialInHeader);
   await page.hover('.la-hover-col[data-i="4"]');
   await page.waitForTimeout(200);
   ok('hovering a stop shows its figures for every line there',
@@ -1416,28 +1429,44 @@ const fs = require('fs');
   await page.waitForTimeout(200);
   ok('switching quantile redraws the line', (await page.$eval('.la-series[data-line="50.070"] circle', c => c.getAttribute('cy'))) !== yBefore);
   const firstStop = await page.$eval('.la-hover-col[data-i="0"]', e => e.parentNode.querySelector('tspan').textContent);
-  await page.click('#la-dir');
-  await page.waitForTimeout(200);
-  ok('the direction button reverses the route',
+  const pickDir = async n => { await page.click('#la-dir .MuiSelect-select'); await page.waitForTimeout(200);
+    await page.click(`.MuiMenu-list li:nth-child(${n})`); await page.waitForTimeout(250); };
+  await pickDir(2);
+  ok('choosing the return direction reverses the route',
     firstStop === '8572212' && (await page.$eval('.la-hover-col[data-i="0"]', e => e.parentNode.querySelector('tspan').textContent)) === '8500852');
-  await page.click('#la-dir');
-  // Linienverlauf dialog
-  await page.click('#la-route-change');
+  ok('each direction names its end stops', /Reigoldswil.*Liestal/.test(await page.textContent('#la-dir .MuiSelect-select')));
+  await pickDir(1);
+  // Line route as a multi-select
+  await page.click('#la-route');
   await page.waitForTimeout(300);
-  ok('"change" opens the line route with all its stops', (await page.$$('.la-route-stop')).length === 18);
+  const routeList = await page.evaluate(() => ({
+    stops: document.querySelectorAll('.la-route-stop').length,
+    groups: [...document.querySelectorAll('.MuiAutocomplete-groupLabel')].map(g => g.textContent),
+    quick: document.querySelectorAll('#la-route-quick button').length }));
+  ok('the line route list holds the route and its other stops, grouped',
+    routeList.stops === 20 && routeList.groups.length === 2, routeList);
+  ok('with Most common route / All / None at the top', routeList.quick === 3, routeList.quick);
   await page.click('#la-route-none');
   await page.waitForTimeout(150);
-  ok('deselect all leaves no stop selected', (await page.$$('.la-route-stop[aria-checked="true"]')).length === 0);
   await page.click('.la-route-stop[data-stop="8572212"]');
   await page.click('.la-route-stop[data-stop="8500855"]');
-  await page.click('#la-route-close');
+  await page.keyboard.press('Escape');
+  await page.click('#page-header');
   await page.waitForTimeout(300);
   ok('the selection drives the count and the chart',
-    /2/.test(await page.textContent('#la-route-count')) && (await page.$$('.la-hover-col')).length === 2);
-  await page.click('#la-route-change');
+    /^2 /.test((await page.textContent('#la-route-count')).trim()) && (await page.$$('.la-hover-col')).length === 2);
+  await page.click('#la-route');
+  await page.waitForTimeout(250);
+  await page.click('#la-route-all');
+  await page.keyboard.press('Escape');
+  await page.click('#page-header');
+  await page.waitForTimeout(300);
+  ok('All adds the other stops into the route, in order', (await page.$$('.la-hover-col')).length === 20);
+  await page.click('#la-route');
   await page.waitForTimeout(250);
   await page.click('#la-route-common');
-  await page.click('#la-route-close');
+  await page.keyboard.press('Escape');
+  await page.click('#page-header');
   await page.waitForTimeout(300);
   // heatmaps
   await page.click('#la-tab-1');
@@ -1447,7 +1476,15 @@ const fs = require('fs');
     note: document.getElementById('la-controls').textContent }));
   ok('the departure-time heatmap has a cell per stop and trip, each with its tooltip',
     hm1.cells > 18 * 30 && /Fahrtnummer/.test(hm1.tip), { cells: hm1.cells, tip: hm1.tip });
-  ok('and production\'s outlier note', /10%/.test(hm1.note));
+  await page.click('#la-arrdep .MuiSelect-select');
+  await page.waitForTimeout(200);
+  ok('"arrival & departure" is offered but disabled on a heatmap',
+    !!(await page.$('.MuiMenu-list li.Mui-disabled')));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
+  ok('production\'s outlier note is an info icon on the heatmap', /10%/.test(await page.getAttribute('#la-outliers', 'aria-label')));
+  ok('departure time is disabled on the heatmaps, not hidden',
+    !!(await page.$('#la-deptime.Mui-disabled, #la-deptime .Mui-disabled')));
   ok('the arrival/departure field shows a value on the heatmap tabs',
     (await page.$eval('#la-arrdep .MuiSelect-select', e => e.textContent.trim())).length > 0);
   await page.click('#la-tab-2');
