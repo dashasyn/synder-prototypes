@@ -315,7 +315,7 @@ var stations = [
 
   { id:'WI', name:'Wittenbergplatz', shortName:'Wittenberg.', longName:'U-Bahnhof Wittenbergplatz',
     coords:{ lat: 52.500833, lon: 13.341111 },
-    lines: ['U1','U2','U3'],
+    lines: ['U1','U2','U3','U12'],
     nameChanges:[],
     directions:[{name:'Richtung Uhlandstraße'},{name:'Richtung Warschauer Str.'}],
     tracks:[{num:'1',exits:['right','left']},{num:'2',exits:['left','right']}],
@@ -434,7 +434,11 @@ var LINE_ENDS = {
 };
 function stationDirections(st) {
   const out = [];
-  (st.lines || []).forEach(line => (LINE_ENDS[line] || []).forEach(dest => out.push({ key: line + '|' + dest, line, dest })));
+  // column first (Richtung 1, then Richtung 2), lines in their sorted order — staging's layout
+  [0, 1].forEach(col => (st.lines || []).forEach(line => {
+    const dest = (LINE_ENDS[line] || [])[col];
+    if (dest) out.push({ key: line + '|' + dest, line, dest, col });
+  }));
   return out;
 }
 

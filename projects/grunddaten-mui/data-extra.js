@@ -97,6 +97,11 @@
     st('TH', 'Theodor-Heuss-Platz', 'U-Bahnhof Theodor-Heuss-Platz', 52.512222, 13.281944,
        ['U12'], ['Richtung Ruhleben', 'Richtung Uhlandstraße'],
        { name: 'Neu-Westend', dist: 820 }, { name: 'Kaiserdamm', dist: 480 }),
+    // Ignat, 2026-10-15: his staging example of a plain station — one line, 2 tracks, 2 directions
+    st('AD', 'Adenauerplatz', 'U-Bahnhof Adenauerplatz', 52.499722, 13.307222,
+       ['U7'], ['Richtung Rathaus Spandau', 'Richtung Rudow'],
+       { name: 'Wilmersdorfer Straße', dist: 870 }, { name: 'Konstanzer Straße', dist: 760 },
+       { tracks: [{ num: '2', exits: ['left', 'left'] }, { num: '1', exits: ['left', 'left'] }] }),
   ];
 
   // Append, never replace: data.js owns the extracted twelve.
@@ -117,6 +122,15 @@
     /* Ignat, 2026-10-14: transfer announcements per direction (line + destination).
        The station's old single list seeds both directions of its first line;
        every other direction starts empty. Sample data. */
+    /* Ignat, 2026-10-15: exit side per direction = per line + destination, as on
+       staging ("U1 · Uhlandstraße" … under Richtung 1). The old two values are the
+       two columns; every line at the station starts with its column's value. */
+    s.lines = (s.lines || []).slice().sort();
+    s.tracks.forEach(tr => {
+      if (!Array.isArray(tr.exits)) return;
+      const old = tr.exits; tr.exits = {};
+      stationDirections(s).forEach(dir => { tr.exits[dir.key] = old[dir.col] || 'left'; });
+    });
     if (!s.dirXfers) {
       s.dirXfers = {};
       stationDirections(s).forEach((dir, i) => {
