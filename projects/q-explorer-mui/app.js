@@ -19,7 +19,7 @@ const {
   Stack, FormControl, InputLabel, Select, InputAdornment, Alert, Tooltip,
   Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
   Snackbar, Checkbox, ListItemText, OutlinedInput, ToggleButton, ToggleButtonGroup,
-  FormControlLabel, Divider, Autocomplete, createFilterOptions, Pagination,
+  FormControlLabel, Divider, Autocomplete, createFilterOptions, Pagination, Radio, RadioGroup,
 } = M;
 const Fragment = React.Fragment;
 
@@ -88,7 +88,13 @@ const TYPE_ICON = Object.fromEntries(EVAL_TYPES.map(x => [x.key, x.icon]));
    of sample rows. Nothing here is retyped now; re-run the extractor to
    resync. Schedules now come across the same way — they were three rows I
    typed by hand against the vanilla's six until 2026-09-17. */
-const ROWS = EVALUATIONS;
+/* Ignat, 2026-10-06: what matters is that "you click here, and you get
+   there". The vanilla gave 5 finished evaluations (all Line Analysis, two
+   Trip Failures) delete as their only action, so their result could not be
+   opened. Every finished report row offers the eye now; Raw Data keeps its
+   download, because its result is a file. */
+const ROWS = EVALUATIONS.map(r => r.status === 'done' && r.group !== 'raw_data' && !r.actions.includes('visibility')
+  ? { ...r, actions: ['visibility', ...r.actions] } : r);
 
 
 // The real data carries a `running` status my invented sample rows never had —
@@ -2888,6 +2894,409 @@ function Ausfallmaske({ go, row, tuId, day }) {
     <//>`;
 }
 
+/* ── Screen: Line Analysis DPM (Linienanalyse) ────────────────────────
+   Built 2026-10-15 from seven production screens (reference/production-
+   2026-10-15-la/, local only). Four tabs — Übersicht, Heatmap nach
+   Abfahrtszeit, Heatmap nach Zeitintervall, Tabelle — under one control bar
+   (Richtung, Linienverlauf, Modus, Ankunft/Abfahrt, Abfahrtszeit) and the
+   quantile switch. The stop names and line names are production's; every
+   number is mock, generated deterministically so the four tabs, the stop
+   heatmap and the parameter grid describe the same measurements. */
+const LA_STOPS = [['8572212', 'Liestal, Bahnhof'], ['8578320', 'Liestal, Törli'], ['8500859', 'Liestal, Stadion'],
+  ['8510616', 'Liestal, Gräubern'], ['8500855', 'Bubendorf, Bad'], ['8578323', 'Bubendorf, Unterdorf'],
+  ['8500850', 'Bubendorf, Zentrum'], ['8578324', 'Bubendorf, Steingasse'], ['8589400', 'Bubendorf, Industrie Süd'],
+  ['8510216', 'Ziefen, Untertal'], ['8578325', 'Ziefen, Diegmatt'], ['8500851', 'Ziefen, Zentrum'],
+  ['8578326', 'Ziefen, Mühlegasse'], ['8578327', 'Ziefen, Hofmatt'], ['8578329', 'Reigoldswil, Bütschen'],
+  ['8578330', 'Reigoldswil, Linde'], ['8578331', 'Reigoldswil, Gemeindezentrum'], ['8500852', 'Reigoldswil, Dorfplatz']];
+const LA_SEG_MIN = [1, 2, 2, 3, 2, 2, 1, 1, 1, 1, 1, 1, 0, 3, 1, 1, 2];
+// base line first; the others serve only the stops listed
+const LA_LINES = [
+  { id: '50.070', name: '70 Liestal - Bubendorf - Ziefen - Reigoldswil', n: 792, color: '#A93226', stops: null },
+  { id: '50.111', name: '111 Laufen - Breitenbach - Nunningen - Liestal', n: 408, color: '#B9913A', stops: [0] },
+  { id: '5.R1', name: '19 Waldenburg - Liestal', n: 844, color: '#8DB33A', stops: [0] },
+  { id: '50.071', name: '71 Liestal - Bubendorf - Arboldswil - Reigoldswil', n: 285, color: '#52A852', stops: [0, 4, 17] },
+  { id: '50.072', name: '72 Augst - Arisdorf - Liestal - Seltisberg - Lupsingen', n: 488, color: '#4FA3A6', stops: [0] },
+  { id: '50.077', name: '77 Dornach - Gempen - Nuglar - Liestal', n: 398, color: '#3248B0', stops: [0] },
+  { id: '50.080', name: '80 Liestal - Pratteln - Basel Aeschenplatz', n: 352, color: '#5B2C8F', stops: [0] },
+  { id: '50.081', name: '81 Liestal - Augst - Basel Aeschenplatz', n: 496, color: '#8E44AD', stops: [0] },
+];
+const LA_QS = ['q5', 'q50', 'q95', 'avg'];
+const laRand = k => { const x = Math.sin(k * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); };
+// one stop's figures for one line, kind ('arr'|'dep'), direction and mode — seconds
+const laStat = (li, stop, kind, dir, mode, seed = 0) => {
+  const k = li * 101 + stop * 7 + (kind === 'dep' ? 3 : 0) + (dir ? 500 : 0) + seed * 13;
+  let avg = 55 + 60 * Math.sin(stop * 0.7 + li) - 12 * li + (kind === 'dep' ? 6 : 0) + 30 * (laRand(k) - .5);
+  if (mode === 'headway') avg = avg * 0.55 - 12;
+  avg = Math.round(avg);
+  const q50 = Math.round(avg - 8 - 10 * laRand(k + 1));
+  return { avg, q50, q5: Math.round(q50 - 50 - 40 * laRand(k + 2)), q95: Math.round(avg + 110 + 70 * laRand(k + 3)),
+           q25: Math.round(q50 - 25), q65: Math.round(q50 + 12), q80: Math.round(q50 + 40) };
+};
+// which kinds a line has at a stop: first stop departs only, last arrives only
+const laKinds = (line, pos, last) => (line.stops ? ['dep'] : pos === 0 ? ['dep'] : pos === last ? ['arr'] : ['arr', 'dep']);
+const laTrips = (() => { const out = [0, 65, 130]; for (let m = 300; m <= 1410; m += 30) out.push(m); return out; })();
+const hm = m => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+const laHms = s => { const a = Math.abs(s); return `${s < 0 ? '-' : ''}${String(Math.floor(a / 3600)).padStart(2, '0')}:${String(Math.floor(a / 60) % 60).padStart(2, '0')}:${String(a % 60).padStart(2, '0')}`; };
+const laMs = s => { const a = Math.abs(s); return `${s < 0 ? '-' : ''}${String(Math.floor(a / 60)).padStart(2, '0')}:${String(a % 60).padStart(2, '0')}`; };
+// diverging colour: blue below zero, grey at zero, brown above
+const laDiv = (v, lo, hi) => {
+  const mix = (a, b, f) => `rgb(${a.map((x, i) => Math.round(x + (b[i] - x) * f)).join(',')})`;
+  return v < 0 ? mix([226, 226, 226], [125, 163, 196], Math.min(1, v / lo)) : mix([226, 226, 226], [196, 136, 88], Math.min(1, v / hi));
+};
+const laSeq = (v, hi) => `rgb(${[201, 201, 201].map((x, i) => Math.round(x + ([200, 105, 42][i] - x) * Math.min(1, v / hi))).join(',')})`;
+
+function LaQuantiles({ value, onChange, keys = LA_QS }) {
+  const { t } = useT();
+  return html`
+    <${ToggleButtonGroup} exclusive size="small" value=${value} id="la-quantile"
+      onChange=${(e, v) => v && onChange(v)}>
+      ${keys.map(k => html`<${ToggleButton} key=${k} value=${k} data-q=${k}
+        sx=${{ fontSize: 14, textTransform: 'none', px: 1.5 }}>${t('la_' + k)}<//>`)}
+    <//>`;
+}
+
+function LaRouteDialog({ open, onClose, stops, selected, setSelected }) {
+  const { t } = useT();
+  const toggle = id => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+  return html`
+    <${Dialog} open=${open} onClose=${onClose} maxWidth="md" fullWidth id="la-route-dialog">
+      <${DialogTitle} sx=${{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        ${t('la_route')}
+        <${Box} sx=${{ flex: 1 }} />
+        <${IconButton} aria-label=${t('cf_cancel')} onClick=${onClose} id="la-route-close"><${Icon}>close<//><//>
+      <//>
+      <${DialogContent} dividers>
+        <${Stack} direction="row" spacing=${1} sx=${{ mb: 2 }}>
+          <${Button} id="la-route-all" onClick=${() => setSelected(stops.map(s => s[0]))}>${t('la_select_all')}<//>
+          <${Button} id="la-route-none" onClick=${() => setSelected([])}>${t('la_deselect_all')}<//>
+          <${Button} variant="contained" id="la-route-common" onClick=${() => setSelected(stops.map(s => s[0]))}>
+            ${t('la_most_common')}<//>
+        <//>
+        <${Box} sx=${{ display: 'flex', gap: 3 }}>
+          <${Box} sx=${{ position: 'relative', width: 380 }}>
+            <${Box} sx=${{ position: 'absolute', left: 150, top: 0, bottom: 0, width: 10, bgcolor: '#E53935' }} />
+            ${stops.map(([id, name]) => {
+              const on = selected.includes(id);
+              return html`<${Box} key=${id} role="checkbox" aria-checked=${on} tabIndex=${0} className="la-route-stop"
+                data-stop=${id} onClick=${() => toggle(id)}
+                onKeyDown=${e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(id); } }}
+                sx=${{ position: 'relative', mb: 1, px: 1.5, py: 1, border: '1px solid', borderRadius: 1, cursor: 'pointer',
+                       borderColor: on ? 'primary.main' : '#BDBDBD', bgcolor: on ? '#E3F0FD' : 'background.paper' }}>
+                <${Typography} variant="body2">${id} ${name}<//>
+              <//>`;
+            })}
+          <//>
+          <${Box} sx=${{ flex: 1, border: '1px solid #E7E7E7', borderRadius: 1, p: 1.5, alignSelf: 'flex-start', minHeight: 60 }}>
+            <${Typography} variant="subtitle2">${t('la_more_stops')}<//>
+          <//>
+        <//>
+      <//>
+    <//>`;
+}
+
+function LaOverviewChart({ stops, rows, q, kinds }) {
+  const { t } = useT();
+  const [hover, setHover] = useState(-1);
+  const W = 1100, H = 430, L = 80, R = 150, T = 20, B = 140;
+  const pw = W - L - R, ph = H - T - B;
+  const xs = i => L + (stops.length < 2 ? pw / 2 : pw * i / (stops.length - 1));
+  const vals = rows.flatMap(r => r.points.map(p => p.v[q]));
+  const lim = Math.max(60, ...vals.map(Math.abs));
+  const y = v => T + ph / 2 - (v / lim) * (ph / 2);
+  return html`
+    <${Box} sx=${{ display: 'flex', gap: 2 }}>
+      <${Box} sx=${{ position: 'relative', flex: 1 }}>
+        <svg viewBox=${`0 0 ${W} ${H}`} width="100%" id="la-overview-svg" onMouseLeave=${() => setHover(-1)}>
+          ${[-1, -.5, 0, .5, 1].map(f => html`<g key=${f}>
+            <line x1=${L} x2=${W - R} y1=${y(lim * f)} y2=${y(lim * f)} stroke=${f === 0 ? '#9E9E9E' : '#EEE'} />
+            <text x=${L - 8} y=${y(lim * f)} text-anchor="end" dominant-baseline="middle" font-size="14" fill="rgba(0,0,0,0.6)">
+              ${laHms(Math.round(lim * f))}</text></g>`)}
+          ${stops.map((s, i) => html`<g key=${s[0]}>
+            <line x1=${xs(i)} x2=${xs(i)} y1=${T} y2=${T + ph} stroke=${hover === i ? '#757575' : '#F2F2F2'}
+                  stroke-dasharray=${hover === i ? '4 3' : ''} />
+            <text transform=${`translate(${xs(i)},${T + ph + 14}) rotate(40)`} font-size="14" fill="rgba(0,0,0,0.75)">
+              <tspan x="0" font-weight=${i === 0 || i === stops.length - 1 ? 700 : 400}>${s[0]}</tspan>
+              <tspan x="0" dy="16">${s[1]}</tspan></text>
+            <rect x=${xs(i) - pw / Math.max(1, stops.length - 1) / 2} y=${T} width=${pw / Math.max(1, stops.length - 1)} height=${ph}
+                  fill="transparent" className="la-hover-col" data-i=${i} onMouseEnter=${() => setHover(i)} />
+          </g>`)}
+          ${rows.map(r => {
+            const pts = r.points.filter(p => kinds.includes(p.kind));
+            const d = pts.map((p, j) => `${j ? 'L' : 'M'}${xs(p.pos)},${y(p.v[q])}`).join(' ');
+            return html`<g key=${r.line.id} className="la-series" data-line=${r.line.id}>
+              <path d=${d} fill="none" stroke=${r.line.color} stroke-width="2" style=${{ pointerEvents: 'none' }} />
+              ${pts.map((p, j) => html`<circle key=${j} cx=${xs(p.pos)} cy=${y(p.v[q])} r="4" fill=${r.line.color}
+                style=${{ pointerEvents: 'none' }} />`)}
+            </g>`;
+          })}
+        </svg>
+        ${hover >= 0 && stops[hover] && html`
+          <${Paper} variant="outlined" id="la-tooltip" sx=${{ position: 'absolute', top: 40, p: 1.5, pointerEvents: 'none', zIndex: 2,
+              left: `${Math.min(70, (xs(hover) / W) * 100 + 1)}%` }}>
+            <${Typography} variant="body2" sx=${{ fontWeight: 700 }}>${stops[hover][0]} ${stops[hover][1]}<//>
+            ${rows.map((r, ri) => {
+              const ps = r.points.filter(p => p.pos === hover && kinds.includes(p.kind));
+              if (!ps.length) return null;
+              return html`<${Box} key=${r.line.id} sx=${{ mt: .5 }}>
+                ${ri === 1 && html`<${Typography} variant="body2" color="text.secondary">${t('la_more_lines')}<//>`}
+                <${Typography} variant="body2" sx=${{ color: r.line.color }}>${r.line.id}<//>
+                ${ps.map(p => html`<${Typography} key=${p.kind} variant="body2">
+                  ${t(p.kind === 'arr' ? 'la_arr' : 'la_dep')}: ${laHms(p.v[q])} (${t('la_measurements')}: ${r.line.n})<//>`)}
+              <//>`;
+            })}
+          <//>`}
+      <//>
+      <${Stack} spacing=${.75} id="la-legend" sx=${{ minWidth: 150, pt: 4 }}>
+        ${rows.map((r, i) => html`<${React.Fragment} key=${r.line.id}>
+          ${i === 1 && html`<${Typography} variant="body2" color="text.secondary" sx=${{ pt: 1 }}>${t('la_more_lines')}<//>`}
+          <${Stack} direction="row" spacing=${1} alignItems="center">
+            <${Box} sx=${{ width: 18, height: 3, bgcolor: r.line.color }} />
+            <${Typography} variant="body2">${r.line.id}<//>
+          <//><//>`)}
+      <//>
+    <//>`;
+}
+
+function LaHeatmap({ rowsLabels, cols, colLabel, cell, colour, legendTitle, legend, xTitle, id }) {
+  const CW = 40, CH = 26, LW = 310;
+  return html`
+    <${Box} sx=${{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+      <${Box} sx=${{ overflowX: 'auto', flex: 1 }}>
+        <svg id=${id} width=${LW + cols.length * CW + 10} height=${rowsLabels.length * CH + 90}>
+          ${rowsLabels.map((lab, r) => html`<g key=${r}>
+            <text x=${LW - 8} y=${r * CH + CH / 2} text-anchor="end" dominant-baseline="middle" font-size="14"
+                  fill="rgba(0,0,0,0.75)">${lab}</text>
+            ${cols.map((c, ci) => {
+              const v = cell(r, ci);
+              if (v === null) return null;
+              return html`<g key=${ci} className="la-hm-cell">
+                <rect x=${LW + ci * CW} y=${r * CH} width=${CW - 1} height=${CH - 1} fill=${colour(v.v)}><title>${v.tip}</title></rect>
+                <text x=${LW + ci * CW + CW / 2} y=${r * CH + CH / 2} text-anchor="middle" dominant-baseline="middle"
+                      font-size="14" fill="rgba(0,0,0,0.8)" style=${{ pointerEvents: 'none' }}>${v.label}</text></g>`;
+            })}
+          </g>`)}
+          ${cols.map((c, ci) => colLabel(ci) && html`<text key=${ci}
+            transform=${`translate(${LW + ci * CW + CW / 2},${rowsLabels.length * CH + 8}) rotate(-90)`}
+            text-anchor="end" dominant-baseline="middle" font-size="14" fill="rgba(0,0,0,0.75)">${colLabel(ci)}</text>`)}
+        </svg>
+        <${Typography} variant="body2" color="text.secondary" align="center">${xTitle}<//>
+      <//>
+      <${Box} sx=${{ minWidth: 110 }} id=${id + '-legend'}>
+        <${Typography} variant="body2" sx=${{ mb: 1 }}>${legendTitle}<//>
+        <${Box} sx=${{ display: 'flex', gap: 1 }}>
+          <${Box} sx=${{ width: 20, height: 240, background: legend.gradient }} />
+          <${Stack} justifyContent="space-between" sx=${{ height: 240 }}>
+            ${legend.ticks.map(tk => html`<${Typography} key=${tk} variant="body2">${tk}<//>`)}
+          <//>
+        <//>
+      <//>
+    <//>`;
+}
+
+function ReportLineAnalysis({ go, row }) {
+  const { t, lang } = useT();
+  const [tab, setTab] = useState(0);
+  const [dir, setDir] = useState(0);
+  const [mode, setMode] = useState('delay');
+  const [arrdep, setArrdep] = useState('both');
+  const [deptime, setDeptime] = useState('');
+  const [q, setQ] = useState('q50');
+  const [routeOpen, setRouteOpen] = useState(false);
+  const [selected, setSelected] = useState(LA_STOPS.map(s => s[0]));
+  const [snap, setSnap] = useState(false);
+  const seed = deptime ? laTrips.indexOf(Number(deptime)) + 1 : 0;
+  const ordered = dir ? [...LA_STOPS].reverse() : LA_STOPS;
+  const stops = ordered.filter(s => selected.includes(s[0]));
+  const last = stops.length - 1;
+  // heatmaps show one of arrival / departure, as production's select does there
+  const hmKind = arrdep === 'dep' ? 'dep' : 'arr';
+  const kinds = arrdep === 'both' ? ['arr', 'dep'] : [arrdep];
+  const rows = LA_LINES.map((line, li) => ({
+    line,
+    points: stops.flatMap((s, pos) => {
+      const idx = LA_STOPS.findIndex(x => x[0] === s[0]);
+      if (line.stops && !line.stops.includes(idx)) return [];
+      return laKinds(line, pos, last).map(kind => ({ pos, kind, v: laStat(li, idx, kind, dir, mode, seed) }));
+    }),
+  })).filter(r => r.points.length);
+  const p = rowPeriod({ dataset: { von: (row && row.von) || '', bis: (row && row.bis) || '', period: (row && row.periodKey) || '' } });
+  const un = t('fa_mask_unlimited');
+  const fields = [
+    [lang === 'de' ? 'von' : 'from', fmtDate(p.von, lang)], [lang === 'de' ? 'bis' : 'to', fmtDate(p.bis, lang)],
+    [t('fa_mask_wochentage'), un, true], [t('la_time_from'), un, true], [t('la_time_to'), un, true],
+    ['TU', 'AAGL'], [t('filter_base_line'), '50.070']];
+  const showDeptime = tab === 0 || tab === 3;
+  const qKeys = LA_QS;
+
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_line_analysis') }]}
+        title=${row ? row.name : t('type_line_analysis')} subtitle=${t('la_title_ext')}
+        action=${html`<${Button} variant="outlined"
+          startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+      <${Box} sx=${{ p: 3 }}>
+        <${ParamGrid} id="la-params" fields=${fields} />
+        <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} sx=${{ mb: 2 }} id="la-tabs">
+          ${['la_tab_overview', 'la_tab_hm_time', 'la_tab_hm_interval', 'la_tab_table'].map((k, i) =>
+            html`<${Tab} key=${k} label=${t(k)} id=${'la-tab-' + i} />`)}
+        <//>
+
+        <${Card} sx=${{ mb: 2 }} id="la-controls"><${CardContent}>
+          <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <${Box}>
+              <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('la_direction')}<//>
+              <${Tooltip} title=${t(dir ? 'la_dir_back' : 'la_dir_out')}>
+                <${Button} variant="outlined" id="la-dir" onClick=${() => setDir(d => 1 - d)}
+                  aria-label=${t('la_direction') + ': ' + t(dir ? 'la_dir_back' : 'la_dir_out')}>
+                  <${Icon}>${dir ? 'arrow_back' : 'arrow_forward'}<//><//>
+              <//>
+            <//>
+            <${Box}>
+              <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('la_route')}<//>
+              <${Stack} direction="row" spacing=${1} alignItems="center">
+                <${Typography} variant="body2" id="la-route-count">${t('la_stops_selected').replace('{n}', stops.length)}<//>
+                <${Button} variant="outlined" id="la-route-change" onClick=${() => setRouteOpen(true)}>${t('la_change')}<//>
+              <//>
+            <//>
+            <${Box}>
+              <${Typography} variant="subtitle2">${t('la_mode')}<//>
+              <${RadioGroup} row value=${mode} onChange=${e => setMode(e.target.value)} id="la-mode">
+                <${FormControlLabel} value="delay" control=${html`<${Radio} />`} label=${t('la_mode_delay')} />
+                <${FormControlLabel} value="headway" control=${html`<${Radio} />`} label=${t('la_mode_headway')} />
+              <//>
+            <//>
+            <${FilterSelect} id="la-arrdep" label=${t('la_arrdep')} minWidth=${210}
+              value=${showDeptime ? arrdep : hmKind} onChange=${v => setArrdep(v || (showDeptime ? 'both' : 'arr'))}
+              options=${[['both', 'la_arrdep_both'], ['arr', 'la_arr'], ['dep', 'la_dep']]
+                .filter(o => showDeptime || o[0] !== 'both').map(([v, k]) => ({ value: v, label: t(k) }))} />
+            ${showDeptime && html`<${FilterSelect} id="la-deptime" label=${t('la_deptime')} minWidth=${210}
+              value=${deptime} onChange=${setDeptime}
+              options=${laTrips.map(m => ({ value: String(m), label: hm(m) }))} />`}
+            <${Box} sx=${{ flex: 1 }} />
+            <${Box} sx=${{ maxWidth: 320 }}>
+              <${Typography} variant="body2">${t('la_download')} <${Link} href="#" onClick=${e => e.preventDefault()}
+                id="la-tutorial">${t('la_tutorial')}<//><//>
+              ${(tab === 1 || tab === 2) && html`<${Typography} variant="body2" color="text.secondary" sx=${{ mt: .5 }}>
+                ${t('la_outliers')}<//>`}
+            <//>
+          <//>
+        <//><//>
+
+        <${Card} id="la-panel"><${CardContent}>
+          ${stops.length === 0 ? html`<${Alert} severity="info" id="la-empty">${t('la_no_stops')}<//>` : html`
+            ${tab !== 3 && html`<${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mb: 2 }}>
+              <${Box} sx=${{ flex: 1 }} />
+              <${LaQuantiles} value=${q} onChange=${setQ} />
+              <${Tooltip} title=${t('fa_ub_camera')}>
+                <${IconButton} aria-label=${t('fa_ub_camera')} onClick=${() => setSnap(true)}><${Icon}>photo_camera<//><//><//>
+            <//>`}
+
+            ${tab === 0 && html`<${LaOverviewChart} stops=${stops} rows=${rows} q=${q} kinds=${kinds} />`}
+
+            ${tab === 1 && html`<${LaHeatmap} id="la-hm-time"
+              rowsLabels=${stops.map(s => `${s[0]} ${s[1]}`)} cols=${laTrips}
+              colLabel=${ci => hm(laTrips[ci])}
+              cell=${(r, ci) => {
+                const idx = LA_STOPS.findIndex(x => x[0] === stops[r][0]);
+                if ((r === 0 && hmKind === 'arr') || laRand(idx * 31 + ci * 7) < 0.04) return null;   // first stop: no arrival
+                const base = laStat(0, idx, hmKind, dir, mode, 0)[q];
+                const v = Math.round(base + 70 * (laRand(idx * 17 + ci * 3 + dir) - .5) + (laTrips[ci] > 420 && laTrips[ci] < 540 ? 40 : 0));
+                const soll = laTrips[ci] + LA_SEG_MIN.slice(0, idx).reduce((a, b) => a + b, 0);
+                return { v, label: String(v), tip: `${hm(laTrips[ci])}\n${stops[r][0]} ${stops[r][1]}\nSoll ${t(hmKind === 'arr' ? 'la_arr' : 'la_dep')}: ${hm(soll % 1440)}:00\n${t('la_' + q)}: ${laMs(v)}\nFahrtnummer: ${70001 + ci}` };
+              }}
+              colour=${v => laDiv(v, -44, 179)} legendTitle="min:sec" xTitle=${t('la_x_deptimes')}
+              legend=${{ gradient: 'linear-gradient(to bottom, rgb(196,136,88), rgb(226,226,226) 80%, rgb(125,163,196))',
+                         ticks: ['02:59', '02:00', '01:00', '00:00', '-00:44'] }} />`}
+
+            ${tab === 2 && html`<${LaHeatmap} id="la-hm-interval"
+              rowsLabels=${stops.map(s => `${s[0]} ${s[1]}`)} cols=${Array.from({ length: 30 }, (_, i) => -180 + i * 10)}
+              colLabel=${ci => ci % 6 === 0 ? laMs(-180 + ci * 10) : ''}
+              cell=${(r, ci) => {
+                const idx = LA_STOPS.findIndex(x => x[0] === stops[r][0]);
+                const mu = laStat(0, idx, hmKind, dir, mode, 0)[q];
+                const x = -180 + ci * 10 + 5;
+                const n = Math.max(0, Math.round(18 * Math.exp(-((x - mu) ** 2) / (2 * 35 ** 2)) - 2 * laRand(idx + ci)));
+                return { v: n, label: String(n), tip: `${stops[r][0]} ${stops[r][1]}\n${laMs(x - 5)} – ${laMs(x + 5)}: ${n}` };
+              }}
+              colour=${v => laSeq(v, 18)} legendTitle=${t('la_cb_interval')} xTitle=${t('la_x_intervals')}
+              legend=${{ gradient: 'linear-gradient(to bottom, rgb(200,105,42), rgb(201,201,201))', ticks: ['18', '12', '6', '0'] }} />`}
+
+            ${tab === 3 && html`
+              <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+                <${Table} id="la-table">
+                  <${TableHead}><${TableRow}>
+                    ${['la_col_line', 'la_col_stop', 'la_arrdep', 'la_avg', 'la_q5', 'la_q50', 'la_q95', 'la_col_count']
+                      .map((k, i) => html`<${TableCell} key=${k} align=${i > 2 ? 'right' : 'left'}>${t(k)}<//>`)}
+                    <${TableCell} align="right">${t('col_actions')}<//>
+                  <//><//>
+                  <${TableBody}>
+                    ${stops.flatMap((s, pos) => rows.flatMap(r => r.points.filter(pt => pt.pos === pos && kinds.includes(pt.kind))
+                      .map(pt => html`<${TableRow} key=${r.line.id + s[0] + pt.kind} hover data-line=${r.line.id}>
+                        <${TableCell} sx=${{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          (${r.line.id}) ${r.line.name}<//>
+                        <${TableCell}>${s[0]} ${s[1]}<//>
+                        <${TableCell}>${t(pt.kind === 'arr' ? 'la_arr' : 'la_dep')}<//>
+                        ${['avg', 'q5', 'q50', 'q95'].map(k => html`<${TableCell} key=${k} align="right">${laHms(pt.v[k])}<//>`)}
+                        <${TableCell} align="right">${r.line.n}<//>
+                        <${TableCell} align="right">
+                          ${r.line.stops === null && html`<${Tooltip} title=${t('la_stop_heatmap')}>
+                            <${IconButton} aria-label=${t('la_stop_heatmap')} className="la-stop-hm-btn"
+                              onClick=${() => go('la-stop', row, { stop: s, kind: pt.kind, dir, mode })}>
+                              <${Icon}>calendar_view_month<//><//><//>`}
+                        <//>
+                      <//>`)))}
+                  <//>
+                <//>
+              <//>`}
+          `}
+        <//><//>
+      <//>
+      <${LaRouteDialog} open=${routeOpen} onClose=${() => setRouteOpen(false)} stops=${ordered}
+        selected=${selected} setSelected=${setSelected} />
+      <${Snackbar} open=${snap} autoHideDuration=${2500} onClose=${() => setSnap(false)} message=${t('chart_snapshot_done')} />
+    <//>`;
+}
+
+/* The Tabelle icon's view: one stop's figures by weekday and hour. Production
+   opens it in a separate window; here it is a page with a breadcrumb, the rule
+   for row drill-ins since 2026-08-28. */
+function LaStopHeatmap({ go, row, stop, kind, dir, mode }) {
+  const { t } = useT();
+  const [q, setQ] = useState('q5');
+  const idx = LA_STOPS.findIndex(x => x[0] === stop[0]);
+  const base = laStat(0, idx, kind, dir, mode, 0);
+  const days = [1, 2, 3, 4, 5, 6, 7].map(d => t('la_day_' + d));
+  const title = `${stop[0]} ${stop[1]} [${t(dir ? 'la_dir_back' : 'la_dir_out')}, ${t(mode === 'delay' ? 'la_eval_delay' : 'la_eval_headway')}, ${t(kind === 'arr' ? 'la_arr' : 'la_dep')}]`;
+  const keys = ['q5', 'q25', 'q50', 'q65', 'q80', 'q95', 'avg'];
+  return html`
+    <${Box}>
+      <${PageHeader}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+                  { label: row ? row.name : t('type_line_analysis'), onClick: () => go('report', row) },
+                  { label: `${stop[0]} ${stop[1]}` }]}
+        title=${t('la_stop_heatmap')} subtitle=${`${stop[0]} ${stop[1]}`} />
+      <${Box} sx=${{ p: 3 }}>
+        <${Card}><${CardContent}>
+          <${Typography} variant="h6" align="center" id="la-stop-title" sx=${{ mb: 2 }}>${title}<//>
+          <${Box} sx=${{ display: 'flex', justifyContent: 'center', mb: 2 }}>
+            <${LaQuantiles} value=${q} onChange=${setQ} keys=${keys} />
+          <//>
+          <${LaHeatmap} id="la-stop-hm" rowsLabels=${days} cols=${Array.from({ length: 24 }, (_, h) => h)}
+            colLabel=${h => String(h)}
+            cell=${(d, h) => {
+              if (h >= 2 && h <= 4 && !(d === 4 && h === 2)) return null;
+              const v = Math.max(0, Math.round(base[q] + 70 + 60 * (laRand(idx * 7 + d * 24 + h) - .3) + (h >= 7 && h <= 8 ? 50 : 0)));
+              return { v, label: String(v), tip: `${days[d]} ${String(h).padStart(2, '0')}:00\n${t('la_' + q)}: ${laMs(v)}` };
+            }}
+            colour=${v => laSeq(v, 221)} legendTitle="min:sec" xTitle=${t('la_hours')}
+            legend=${{ gradient: 'linear-gradient(to bottom, rgb(200,105,42), rgb(201,201,201))', ticks: ['03:41', '02:30', '01:30', '00:30'] }} />
+        <//><//>
+      <//>
+    <//>`;
+}
+
 /* ── Screen: a report view that has not been ported yet ───────────── */
 function NotPorted({ go, row }) {
   const { t } = useT();
@@ -3084,7 +3493,9 @@ function App() {
     (route.name === 'report' && route.row && route.row.group === 'data_quality')
                                ? html`<${ReportDQI} go=${go} row=${route.row} />` :
     (route.name === 'report' && route.row && route.row.group === 'line_analysis')
-                               ? html`<${ReportPunctuality} go=${go} row=${route.row} />` :
+                               ? html`<${ReportLineAnalysis} go=${go} row=${route.row} />` :
+    route.name === 'la-stop'   ? html`<${LaStopHeatmap} go=${go} row=${route.row} stop=${route.stop}
+                                   kind=${route.kind} dir=${route.dir} mode=${route.mode} />` :
     route.name === 'chart'     ? html`<${ChartView} go=${go} row=${route.row}
                                    title=${route.chart.title} items=${route.chart.items}
                                    format=${route.chart.format}

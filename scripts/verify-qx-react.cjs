@@ -248,12 +248,16 @@ const fs = require('fs');
       const tr = [...document.querySelectorAll('tbody tr')].find(x => x.textContent.includes(r.name));
       if (!tr) { bad.push(r.name + ': missing'); continue; }
       const got = [...tr.querySelectorAll('button[data-act]')].map(b => b.getAttribute('data-act')).sort();
-      const want = r.actions.map(a => MAP[a]).sort();
+      // the vanilla's actions, plus the eye on every finished report row that
+      // lacked one (2026-10-15: "you click here, and you get there")
+      const acts = r.status === 'done' && r.group !== 'raw_data' && !r.actions.includes('visibility')
+        ? ['visibility', ...r.actions] : r.actions;
+      const want = acts.map(a => MAP[a]).sort();
       if (got.join() !== want.join()) bad.push(`${r.name}: ${got} != ${want}`);
     }
     return bad;
   });
-  ok('every row offers exactly the actions the vanilla gives it',
+  ok('every row offers the vanilla\'s actions, and every finished report can be opened',
     actionMismatch.length === 0, actionMismatch.slice(0, 3));
 
   // delete asks first, then offers undo — the vanilla's cfAsk + showUndoToast
@@ -1259,8 +1263,8 @@ const fs = require('fs');
   // The first row of a group is often in_progress or failed, and those carry
   // no preview at all in the vanilla — so ask for one that does.
   const nameOf = g => page.evaluate(gr => {
-    const r = EVALUATIONS.find(x => x.group === gr && x.actions.includes('visibility'))
-           || EVALUATIONS.find(x => x.group === gr);
+    const r = ROWS.find(x => x.group === gr && x.actions.includes('visibility'))
+           || ROWS.find(x => x.group === gr);
     return r && r.name;
   }, g);
 
@@ -1269,14 +1273,12 @@ const fs = require('fs');
     connection:    '#rpt-table',
     trip_failures: '#fa-tabs',
     data_quality:  '#dqi-tabs',
+    line_analysis: '#la-tabs',
   };
-  // Line Analysis is deliberately absent: not one of its rows carries a
-  // preview in the vanilla, so it has no report to open. Asserted rather than
-  // assumed, because "I ported it and nothing happens" looks identical.
-  const lineActs = await page.evaluate(() =>
-    [...new Set(EVALUATIONS.filter(r => r.group === 'line_analysis').flatMap(r => r.actions))]);
-  ok('no line-analysis row offers a preview, as in the vanilla',
-    !lineActs.includes('visibility'), lineActs);
+  // 2026-10-15: Line Analysis has a report now, so every finished row opens it
+  const doneNoEye = await page.evaluate(() => ROWS.filter(r => r.status === 'done' && r.group !== 'raw_data'
+    && !r.actions.includes('visibility')).map(r => r.name));
+  ok('every finished report row can be opened', doneNoEye.length === 0, doneNoEye);
   for (const [group, sel] of Object.entries(EXPECT)) {
     const name = await nameOf(group);
     if (!name) { fails.push(`no evaluation of type ${group}`); continue; }
@@ -1287,7 +1289,8 @@ const fs = require('fs');
     const n = await page.evaluate(() =>
       document.querySelectorAll('tbody tr').length
       + document.querySelectorAll('.dqi-track').length
-      + document.querySelectorAll('.fa-ub-flow').length);
+      + document.querySelectorAll('.fa-ub-flow').length
+      + document.querySelectorAll('.la-series').length);
     ok(`${group} renders content`, n > 0, n);
     ok(`${group} has no untranslated keys`, (await rawKeys(page)).length === 0, await rawKeys(page));
     await goBack();
@@ -1388,6 +1391,88 @@ const fs = require('fs');
     ch.groups === wantDays && ch.bars === wantDays * 3 && ch.legend === 3, ch);
   ok('the chart is titled with the evaluation period', /:/.test(ch.title || ''), ch.title);
   await goBack();
+  /* ── Line Analysis, built 2026-10-15 from seven production screens ──
+     Structure typed from reference/production-2026-10-15-la/. */
+  await openByName(await nameOf('line_analysis'));
+  ok('Line Analysis opens with its seven-field parameter grid',
+    (await page.$$eval('#la-params .MuiCardContent-root > div > div', e => e.length)) === 7);
+  const laTabs = await page.$$eval('#la-tabs [role="tab"]', e => e.map(x => x.textContent));
+  ok('four tabs: overview, two heatmaps, table', laTabs.length === 4, laTabs);
+  const laOv = await page.evaluate(() => ({
+    series: [...document.querySelectorAll('.la-series')].map(g => g.dataset.line),
+    legend: document.querySelectorAll('#la-legend p').length,
+    count: document.getElementById('la-route-count').textContent,
+    qs: [...document.querySelectorAll('#la-quantile [data-q]')].map(b => b.dataset.q) }));
+  ok('the overview draws the base line first and the other lines after it',
+    laOv.series[0] === '50.070' && laOv.series.length === 8, laOv.series);
+  ok('the quantile switch offers 5% / 50% / 95% / average', laOv.qs.join() === 'q5,q50,q95,avg', laOv.qs);
+  ok('the route starts with all 18 stops', /18/.test(laOv.count), laOv.count);
+  await page.hover('.la-hover-col[data-i="4"]');
+  await page.waitForTimeout(200);
+  ok('hovering a stop shows its figures for every line there',
+    /8500855/.test(await page.textContent('#la-tooltip')) && /50\.071/.test(await page.textContent('#la-tooltip')));
+  const yBefore = await page.$eval('.la-series[data-line="50.070"] circle', c => c.getAttribute('cy'));
+  await page.click('#la-quantile [data-q="q95"]');
+  await page.waitForTimeout(200);
+  ok('switching quantile redraws the line', (await page.$eval('.la-series[data-line="50.070"] circle', c => c.getAttribute('cy'))) !== yBefore);
+  const firstStop = await page.$eval('.la-hover-col[data-i="0"]', e => e.parentNode.querySelector('tspan').textContent);
+  await page.click('#la-dir');
+  await page.waitForTimeout(200);
+  ok('the direction button reverses the route',
+    firstStop === '8572212' && (await page.$eval('.la-hover-col[data-i="0"]', e => e.parentNode.querySelector('tspan').textContent)) === '8500852');
+  await page.click('#la-dir');
+  // Linienverlauf dialog
+  await page.click('#la-route-change');
+  await page.waitForTimeout(300);
+  ok('"change" opens the line route with all its stops', (await page.$$('.la-route-stop')).length === 18);
+  await page.click('#la-route-none');
+  await page.waitForTimeout(150);
+  ok('deselect all leaves no stop selected', (await page.$$('.la-route-stop[aria-checked="true"]')).length === 0);
+  await page.click('.la-route-stop[data-stop="8572212"]');
+  await page.click('.la-route-stop[data-stop="8500855"]');
+  await page.click('#la-route-close');
+  await page.waitForTimeout(300);
+  ok('the selection drives the count and the chart',
+    /2/.test(await page.textContent('#la-route-count')) && (await page.$$('.la-hover-col')).length === 2);
+  await page.click('#la-route-change');
+  await page.waitForTimeout(250);
+  await page.click('#la-route-common');
+  await page.click('#la-route-close');
+  await page.waitForTimeout(300);
+  // heatmaps
+  await page.click('#la-tab-1');
+  await page.waitForTimeout(400);
+  const hm1 = await page.evaluate(() => ({ cells: document.querySelectorAll('#la-hm-time .la-hm-cell').length,
+    tip: (document.querySelector('#la-hm-time .la-hm-cell title') || {}).textContent || '',
+    note: document.getElementById('la-controls').textContent }));
+  ok('the departure-time heatmap has a cell per stop and trip, each with its tooltip',
+    hm1.cells > 18 * 30 && /Fahrtnummer/.test(hm1.tip), { cells: hm1.cells, tip: hm1.tip });
+  ok('and production\'s outlier note', /10%/.test(hm1.note));
+  ok('the arrival/departure field shows a value on the heatmap tabs',
+    (await page.$eval('#la-arrdep .MuiSelect-select', e => e.textContent.trim())).length > 0);
+  await page.click('#la-tab-2');
+  await page.waitForTimeout(400);
+  ok('the time-interval heatmap counts measurements per stop and interval',
+    (await page.$$('#la-hm-interval .la-hm-cell')).length === 18 * 30);
+  // table and the stop heatmap
+  await page.click('#la-tab-3');
+  await page.waitForTimeout(400);
+  const laT = await page.evaluate(() => ({ head: [...document.querySelectorAll('#la-table thead th')].map(x => x.textContent),
+    rows: document.querySelectorAll('#la-table tbody tr').length,
+    other: document.querySelectorAll('#la-table tbody tr[data-line="50.071"] .la-stop-hm-btn').length,
+    base: document.querySelectorAll('#la-table tbody tr[data-line="50.070"] .la-stop-hm-btn').length }));
+  ok('the table has production\'s columns plus actions at the end', laT.head.length === 9, laT.head);
+  ok('only the base line\'s rows carry the stop heatmap icon', laT.base > 0 && laT.other === 0, laT);
+  await page.click('#la-table tbody tr[data-line="50.070"] .la-stop-hm-btn >> nth=1');
+  await page.waitForTimeout(500);
+  const sh = await page.evaluate(() => ({ title: (document.getElementById('la-stop-title') || {}).textContent || '',
+    cells: document.querySelectorAll('#la-stop-hm .la-hm-cell').length,
+    qs: document.querySelectorAll('#la-quantile [data-q]').length }));
+  ok('the icon opens that stop\'s heatmap by weekday and hour', /8578320/.test(sh.title) && sh.cells > 7 * 18, sh);
+  ok('with seven quantile choices', sh.qs === 7, sh.qs);
+  ok('Line Analysis has no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
+  await goBack();
+
   await openByName(await nameOf('data_quality'));
   // the table lives behind the second tab; Overview is what opens
   ok('DQI opens on the Overview tab', (await page.$$('#dqi-overview')).length === 1);
