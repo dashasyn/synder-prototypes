@@ -156,13 +156,29 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .tp-more { padding: 8px 0 10px; font-size: 14px; color: var(--color-red); border-top: 1px solid var(--color-status-red-bg); }
 .tp-ok { padding: 10px 0; font-size: 14px; color: var(--color-green); }
 .tp-go { margin-top: 10px; }
-/* Var 3 inline findings: severity on the row only */
-.finding { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; margin: 0 0 10px; background: var(--color-red-light); border: 1px solid var(--color-status-red-bg); border-left: 3px solid var(--color-red); border-radius: var(--radius-sm); }
-.item .finding { margin: 8px 0 0; }
-.f-txt { width: 100%; min-width: 0; font-size: 14px; line-height: 20px; color: var(--color-red); }
-.f-title { font-weight: 500; }
-.f-desc { opacity: .8; }
-.finding .lnk { flex-shrink: 0; }
+/* Var 4 expandable inline findings: severity on the row only, cards stay as they are */
+.fchip { margin-left: auto; }
+.panel-t .hdr-lnk + .fchip { margin-left: 8px; }
+.xf { margin: 10px 0 0; border: 1px solid; border-radius: var(--radius-sm); background: var(--bg-surface); }
+.xf + .xf { margin-top: 8px; }
+.panel-t + .xf { margin-top: 10px; }
+.xf.sev-info { border-color: var(--color-primary-20); background: var(--color-primary-5); }
+.xf.sev-warn { border-color: var(--color-status-yellow-bg); background: var(--color-yellow-light); }
+.xf.sev-danger { border-color: var(--color-status-red-bg); background: var(--color-red-light); }
+.xf-h { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; background: none; border: none; font: inherit; font-size: 14px; font-weight: 500; color: var(--text-primary); text-align: left; cursor: pointer; }
+.xf-h:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+.xf-ico svg { width: 18px; height: 18px; display: block; }
+.sev-info .xf-ico { color: var(--color-primary); }
+.sev-warn .xf-ico { color: var(--color-yellow); }
+.sev-danger .xf-ico { color: var(--color-red); }
+.xf-t { flex: 1; min-width: 0; }
+.xf-tw { color: var(--text-secondary); }
+.xf-b { padding: 0 12px 12px 38px; font-size: 14px; line-height: 20px; }
+.xf-b p { margin: 0 0 8px; }
+.xf-l { font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; }
+.xf-b ul { margin: 0 0 10px; padding-left: 18px; }
+.xf-btns { display: flex; gap: 8px; }
+.panel > .xf:last-of-type { margin-bottom: 10px; }
 .sidebar-item.active .nav-new { background: var(--color-status-green-bg); }
 /* ---- Troubleshooting page (from production screenshots 2026-10-16) ---- */
 .ts-head { margin-bottom: 16px; }
@@ -222,8 +238,9 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
     <button id="vv-0" class="on" onclick="setVariant(0)">0 · As developed</button>
     <button id="vv-1" onclick="setVariant(1)">1 · Collapsed issues</button>
     <button id="vv-2" onclick="setVariant(2)">2 · Troubleshooting block</button>
-    <button id="vv-3" onclick="setVariant(3)">3 · Inline</button>
-    <button id="vv-4" onclick="setVariant(4)">4 · Action list</button>
+    <button id="vv-3" onclick="setVariant(3)">3 · Inline · links</button>
+    <button id="vv-4" onclick="setVariant(4)">4 · Inline · expandable</button>
+    <button id="vv-5" onclick="setVariant(5)">5 · Action list</button>
   </div>
 </div>
 
@@ -490,41 +507,74 @@ function renderTroublePanel(s) {
     + '<div class="box tp-box' + (list.length ? ' bad' : '') + '">' + body + '</div>'
     + '<button type="button" class="btn btn-outlined btn-sm tp-go" id="tp-go"' + go('Troubleshooting') + '>Go to Troubleshooting</button></section>';
 }
-/* ---- Var 3: inline findings, after pt-dashboard-inline (zip, 2026-10-16):
-   each problem sits in the block it belongs to, under the block header;
-   a host with Connection lost shows only that, nothing else. */
-function finding(id, title, desc, action, dest) {
-  return '<div class="finding" data-finding="' + id + '"><div class="f-txt"><div class="f-title">' + esc(title) + '</div><div class="f-desc">' + esc(desc) + '</div></div>'
-    + '<button type="button" class="lnk"' + go(dest) + '>' + esc(action) + ICON.chev + '</button></div>';
-}
-function inlineFindings(s) {
-  var list = issuesFor(s), out = { sync: '', revrec: '', integrations: {} };
-  list.forEach(function (is) {
-    if (is.id === 'txn') out.sync += finding('txn', is.title, is.desc, is.action, is.go);
-    if (is.id === 'rr') out.revrec += finding('rr', is.title, is.desc, is.action, is.go);
-  });
-  s.integrations.forEach(function (it, i) {
-    var lost = it.chips.some(function (c) { return c[0] === 'Connection lost'; });
-    var off = it.chips.filter(function (c) { return / off$/.test(c[0]); }).map(function (c) { return c[0].replace(/ off$/, ''); });
-    if (!lost && off.length) out.integrations[i] = finding('off' + i, off.join(' and ') + (off.length > 1 ? ' are' : ' is') + ' off',
-      'New transactions don\u2019t import or sync automatically.', 'Integration settings', 'Integration settings · ' + it.src.name);
+/* ---- Var 4: expandable inline findings, after pt-dashboard-inline (zip, 2026-10-16).
+   Each finding lives in its host block, under the header; What / Why / How + Fix + Ignore.
+   Import + Sync copy is the zip's (its "Re-run Integrity check" steps dropped: no Integrity
+   check here). Transactions + RevRec findings are ours. Hosts with Connection lost get none. */
+var XF = {
+  imp: { host: 'import', sev: 'info', title: 'Import activity issues',
+    what: 'Import activity shows repeated failures or stalled pulls for one or more sources.',
+    why: 'Stalled imports mean books lag behind the channel \u2014 recon and reports miss recent sales.',
+    how: ['Open the Import activity log and identify failing sources.', 'Reconnect or re-authorize the channel if credentials expired.'],
+    fix: 'Open import activity log', go: 'Import activity log' },
+  slow: { host: 'sync', sev: 'warn', title: 'Syncs running slower than usual',
+    what: 'Recent syncs are taking longer than usual for this org.',
+    why: 'Slow syncs delay books updates and can pile up failures if left unchecked.',
+    how: ['Review Sync speed insights for bottlenecks.', 'Reduce backlog (failed / in-progress) before large re-syncs.'],
+    fix: 'Review sync speed', go: 'Sync speed' },
+  txn: { host: 'sync', sev: 'danger', title: null,
+    what: null,
+    why: 'These transactions are not in your books until they are fixed.',
+    how: ['Open Synchronization issues to see them grouped by error.', 'Fix the cause, then sync them again.'],
+    fix: 'View sync issues', go: 'Sync issues' },
+  rr: { host: 'revrec', sev: 'warn', title: null,
+    what: null,
+    why: 'Revenue schedules can\u2019t post until these are complete.',
+    how: ['Open Revenue recognition and filter by Incomplete.', 'Complete the missing details.'],
+    fix: 'Open Revenue recognition', go: 'Revenue recognition · Incomplete' }
+};
+var ignored = {};
+function findingsFor(s) {
+  var out = { import: [], sync: [], revrec: [] };
+  function add(id, over) { if (ignored[id]) return; var f = {}; for (var k in XF[id]) f[k] = XF[id][k]; for (var k2 in (over || {})) f[k2] = over[k2]; f.id = id; out[f.host].push(f); }
+  if (s.attention) { add('imp'); add('slow'); }
+  issuesFor(s).forEach(function (is) {
+    if (is.id === 'txn') add('txn', { title: is.title, what: is.desc.replace(/\.$/, '') + ' transactions in this period.' });
+    if (is.id === 'rr') add('rr', { title: is.title, what: is.desc });
   });
   return out;
 }
-function hdrLink(label, msg, id) {
-  return '<button type="button" class="lnk hdr-lnk" id="' + id + '"' + go(msg) + '>' + label + ICON.chev + '</button>';
+var SEV_ICON = {
+  info: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 9v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="6.3" r="1.1" fill="currentColor"/></svg>',
+  warn: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.2 18 17H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 8.2v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="14.6" r="1" fill="currentColor"/></svg>',
+  danger: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="13.8" r="1.1" fill="currentColor"/></svg>'
+};
+function xfBlock(list) {
+  return list.map(function (f) {
+    return '<div class="xf sev-' + f.sev + '" data-xf="' + f.id + '"><button type="button" class="xf-h" aria-expanded="false">'
+      + '<span class="xf-ico">' + SEV_ICON[f.sev] + '</span><span class="xf-t">' + esc(f.title) + '</span>' + ICON.chev.replace('class="chev"', 'class="tw xf-tw"') + '</button>'
+      + '<div class="xf-b" hidden><div class="xf-l">What</div><p>' + esc(f.what) + '</p><div class="xf-l">Why it matters</div><p>' + esc(f.why) + '</p>'
+      + '<div class="xf-l">How to fix</div><ul>' + f.how.map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('') + '</ul>'
+      + '<div class="xf-btns"><button type="button" class="btn btn-primary btn-sm"' + go(f.go) + '>' + esc(f.fix) + '</button>'
+      + '<button type="button" class="btn btn-outlined btn-sm" data-ignore="' + f.id + '">Ignore</button></div></div></div>';
+  }).join('');
+}
+function fChip(list) {
+  if (!list.length) return '';
+  var sev = list.some(function (f) { return f.sev === 'danger'; }) ? 'status-red' : list.some(function (f) { return f.sev === 'warn'; }) ? 'status-yellow' : 'status-blue';
+  return '<span class="status ' + sev + ' fchip">' + list.length + (list.length === 1 ? ' finding' : ' findings') + '</span>';
 }
 
 function render(key) {
   var s = STATES[key];
   menuSeq = 0;
 
-  var inl = variant === 3 ? inlineFindings(s) : null, nIssues = issuesFor(s).length;
-  document.getElementById('hdr-extra').innerHTML = variant === 3
+  var fx = variant === 4 ? findingsFor(s) : null, nIssues = issuesFor(s).length;
+  document.getElementById('hdr-extra').innerHTML = variant === 4
     ? '<button type="button" class="btn btn-outlined btn-sm" id="hdr-trouble"' + go('Troubleshooting') + '>Troubleshooting'
       + (nIssues ? ' <span class="status status-red">' + nIssues + '</span>' : '') + '</button>' : '';
-  document.getElementById('actions').innerHTML = variant === 4 ? renderActions(s) : '';
-  document.getElementById('banner').innerHTML = variant === 1 ? renderIssues(s) : (variant === 2 || variant === 4) ? '' : s.banner
+  document.getElementById('actions').innerHTML = variant === 5 ? renderActions(s) : '';
+  document.getElementById('banner').innerHTML = variant === 1 ? renderIssues(s) : (variant === 2 || variant === 5) ? '' : s.banner
     ? '<div class="alert alert-error" id="lost-banner">' + ICON.alert
       + '<div class="alert-body"><span class="alert-title">Connection lost</span>'
       + 'One or more of your integrations have lost connection. Please reconnect to continue syncing.</div>'
@@ -539,24 +589,26 @@ function render(key) {
     +   (s.timeLink ? '<button type="button" class="lnk"' + go('How to save more time') + '>How to save more time</button>' : '') + '</div></div>'
     + '<div class="kpi" id="kpi-score"><div class="kpi-t">Sync score' + help() + '</div><div class="kpi-v">' + s.score
     +   (s.scoreLink ? '<button type="button" class="lnk"' + go('How to bring it up to 100%') + '>How to bring it up to 100%</button>' : '') + '</div></div>'
-    + '<div class="kpi ' + (s.attention ? 'bad' : 'good') + '" id="kpi-attn"><div class="kpi-t">Needs attention' + help() + '</div><div class="kpi-v">' + attn + '</div></div>';
+    + '<div class="kpi ' + (s.attention ? 'bad' : 'good') + '" id="kpi-attn"><div class="kpi-t">Needs attention' + help() + (variant === 3 ? hdrLink('Troubleshooting', 'Troubleshooting', 'lnk-trouble') : '') + '</div><div class="kpi-v">' + attn + '</div></div>';
 
   /* left: Import (+ Revenue recognition when RevRec is on) */
-  var left = '<section class="panel" id="p-import"><div class="panel-t">Import' + help() + (variant === 3 ? hdrLink('Import activity log', 'Import activity log', 'lnk-import') : '') + '</div>'
+  var left = '<section class="panel" id="p-import"><div class="panel-t">Import' + help() + (variant === 3 ? hdrLink('Import activity log', 'Import activity log', 'lnk-import') : '') + (fx ? fChip(fx.import) : '') + '</div>'
+    + (fx ? xfBlock(fx.import) : '')
     + '<div class="panel-big"><span><span class="n">1,200</span> transactions imported</span></div>'
     + '<div class="box' + (s.imports.length > 8 ? ' scroll' : '') + '" id="import-rows">'
     + s.imports.map(function (src) { return sourceRow(src, 1200); }).join('') + '</div></section>';
   if (s.revrec) {
-    left += '<section class="panel" id="p-revrec"><div class="panel-t">Revenue recognition' + help() + '</div>'
-      + (inl ? inl.revrec : '') + '<div class="box">' + s.revrec.map(function (r) { return statusRow(r[0], r[1], 'Revenue recognition'); }).join('') + '</div></section>';
+    left += '<section class="panel" id="p-revrec"><div class="panel-t">Revenue recognition' + help() + (fx ? fChip(fx.revrec) : '') + '</div>'
+      + (fx ? xfBlock(fx.revrec) : '') + '<div class="box">' + s.revrec.map(function (r) { return statusRow(r[0], r[1], 'Revenue recognition'); }).join('') + '</div></section>';
   }
   document.getElementById('col-left').innerHTML = left;
 
   /* middle: Sync */
   document.getElementById('col-mid').innerHTML =
-      '<section class="panel" id="p-sync"><div class="panel-t">Sync' + help() + (variant === 3 ? hdrLink('Sync issues', 'Sync issues', 'lnk-sync') : '') + '</div>'
+      '<section class="panel" id="p-sync"><div class="panel-t">Sync' + help() + (variant === 3 ? hdrLink('Sync issues', 'Sync issues', 'lnk-sync') : '') + (fx ? fChip(fx.sync) : '') + '</div>'
+    + (fx ? xfBlock(fx.sync) : '')
     + '<div class="panel-big"><span><span class="n">1,200</span> transactions synchronized to books</span>' + help() + '</div>'
-    + (inl ? inl.sync : '')
+
     + '<div class="box" id="sync-rows">' + s.sync.map(function (r) { return statusRow(r[0], r[1], 'Platform transactions · Status'); }).join('') + '</div></section>';
 
   /* right: Accounting + Integrations */
@@ -574,7 +626,7 @@ function render(key) {
           + '<span class="nm">' + esc(it.src.name) + '</span>'
           + '<button type="button" class="lnk"' + go(it.action + ' · ' + it.src.name) + '>' + it.action + '</button>' + rowMenu() + '</div>'
           + '<div class="item-chips">' + it.chips.map(function (c) { return '<span class="status ' + c[1] + '">' + esc(c[0]) + '</span>'; }).join('') + '</div>'
-          + (inl && inl.integrations[idx] ? inl.integrations[idx] : '') + '</div>';
+          + '</div>';
       }).join('')
     + '</div></section>';
   document.getElementById('col-right').innerHTML = right;
@@ -770,7 +822,7 @@ function readFilters(tab) {
   if (tab === 'speed') tsf.speed = { intg: v('sp-intg') };
   tsPage[tab] = 0;
 }
-var ROUTES = { 'Troubleshooting': 'sync', 'Sync issues': 'sync', 'Import activity log': 'import' };
+var ROUTES = { 'Troubleshooting': 'sync', 'Sync issues': 'sync', 'Import activity log': 'import', 'Sync speed': 'speed' };
 function openPage(p, tab) {
   page = p; if (tab) tsTab = tab;
   document.getElementById('page-dash').hidden = p !== 'dash';
@@ -788,7 +840,7 @@ function sync() {
   ['attention','clear','lost'].forEach(function (k) {
     document.getElementById('vs-' + k).classList.toggle('on', k === current);
   });
-  [0, 1, 2, 3, 4].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
+  [0, 1, 2, 3, 4, 5].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
   render(current);
   if (page === 'trouble') renderTrouble();
   writeHash();
@@ -796,7 +848,7 @@ function sync() {
 function writeHash() {
   try { history.replaceState(null, '', '#' + (variant ? 'v' + variant + '-' : '') + current + (page === 'trouble' ? '/' + tsTab : '')); } catch (e) {}
 }
-function setState(key) { current = key; resetTsFilters(); sync(); }
+function setState(key) { current = key; ignored = {}; resetTsFilters(); sync(); }
 function setVariant(v) { variant = v; sync(); }
 
 /* ---- interactions ---- */
@@ -829,6 +881,10 @@ document.addEventListener('click', function (e) {
     toggle(head, document.getElementById('issues-body'));
     return;
   }
+  var xh = e.target.closest('.xf-h');
+  if (xh) { toggle(xh, xh.parentElement.querySelector('.xf-b')); return; }
+  var ig = e.target.closest('[data-ignore]');
+  if (ig) { ignored[ig.getAttribute('data-ignore')] = 1; render(current); return; }
   var menuBtn = e.target.closest('[data-menu]');
   if (menuBtn) {
     var m = document.getElementById(menuBtn.getAttribute('data-menu'));
@@ -880,7 +936,7 @@ document.addEventListener('keydown', function (e) {
 function parseHash() {
   var m = /^#(?:v(\d)-)?(\w+)(?:\/(sync|import|speed))?$/.exec(location.hash || '');
   var v = m && m[1] ? +m[1] : 0;
-  return { v: v >= 1 && v <= 4 ? v : 0, k: m && STATES[m[2]] ? m[2] : 'attention', t: m && m[3] ? m[3] : null };
+  return { v: v >= 1 && v <= 5 ? v : 0, k: m && STATES[m[2]] ? m[2] : 'attention', t: m && m[3] ? m[3] : null };
 }
 window.addEventListener('hashchange', function () {
   var h = parseHash();
