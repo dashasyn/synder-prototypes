@@ -311,7 +311,7 @@ const EXPECT = {
       ok(`[v4 ${key}] ${host} chip ${e[host].length ? e[host].length + " finding(s)" : "absent"}`, e[host].length ? (await chip.innerText()) === e[host].length + (e[host].length === 1 ? " finding" : " findings") : (await chip.count()) === 0);
     }
     ok(`[v4 ${key}] lost hosts carry no findings`, (await page.locator("#p-accounting .xf, #p-integrations .xf").count()) === 0);
-    ok(`[v4 ${key}] no header links (that's v3)`, (await page.locator("#lnk-import, #lnk-sync, #lnk-trouble").count()) === 0);
+
     ok(`[v4 ${key}] Troubleshooting header button`, await page.locator("#hdr-trouble").isVisible());
     if (key === "clear") continue;
     const f = page.locator('[data-xf="slow"]');
@@ -378,6 +378,30 @@ const EXPECT = {
   await page.click("#dt-overview");
   await page.click("#vv-0");
   ok("[v6→v0] blocks visible again in other variants", await page.locator("#p-sync").isVisible() && (await page.locator(".dash-tabs").count()) === 0);
+
+  /* ---------- every variant links to the 3 pages, in every state ---------- */
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (let v = 1; v <= 6; v++) for (const key of ["attention", "clear", "lost"]) {
+    await page.goto(target.split("#")[0] + "#v" + v + "-" + key);
+    await page.waitForSelector("#kpis .kpi");
+    if (v === 6) { await page.click("#dt-issues"); }
+    const dests = await page.$$eval("#page-dash [data-go]", (els) => [...new Set(els.filter((e) => e.offsetParent).map((e) => e.dataset.go))]);
+    for (const d of ["Troubleshooting", "Sync issues", "Import activity log"]) {
+      if (v === 6 && d !== "Troubleshooting") continue;   /* Issues tab hides the blocks; checked on Overview below */
+      ok(`[links v${v} ${key}] visible link to ${d}`, dests.includes(d), dests.join(","));
+    }
+    if (v === 6) {
+      await page.click("#dt-overview");
+      const d2 = await page.$$eval("#page-dash [data-go]", (els) => [...new Set(els.filter((e) => e.offsetParent).map((e) => e.dataset.go))]);
+      ok(`[links v6 ${key}] Overview links to Sync issues + Import activity log`, d2.includes("Sync issues") && d2.includes("Import activity log"));
+    }
+    for (const [sel, tab] of [["#lnk-sync", "sync"], ["#lnk-import", "import"]]) {
+      await page.click(sel);
+      ok(`[links v${v} ${key}] ${sel} lands on Troubleshooting · ${tab}`, await page.locator("#page-trouble").isVisible() && await page.locator(`#tab-${tab}.active`).isVisible());
+      await page.click("#nav-dashboard");
+    }
+    ok(`[links v${v} ${key}] one Troubleshooting link on the card at most, none when the variant has its own`, (await page.locator("#lnk-trouble").count()) === ((v === 3 || v === 5 || (v === 1 && key === "clear")) ? 1 : 0));
+  }
 
   await page.setViewportSize({ width: 1280, height: 900 });
   for (const v of [1, 2, 3, 4, 5, 6]) {
