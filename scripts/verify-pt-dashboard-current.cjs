@@ -151,7 +151,7 @@ const EXPECT = {
   /* ---------- Var 1: collapsed issues block ---------- */
   await page.setViewportSize({ width: 1440, height: 1000 });
   const V1 = {
-    attention: { issues: 2, rows: ["Connection lost", "80 transactions need attention"], desc: "Failed, rollback failed, synced with rule failed." },
+    attention: { issues: 1, rows: ["80 transactions need attention"], desc: "Failed, rollback failed, synced with rule failed." },
     clear:     { issues: 0 },
     lost:      { issues: 4, rows: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention", "Revenue recognition incomplete"], desc: "Failed, rollback failed, synced with rule failed, not parsed." },
   };
@@ -170,7 +170,8 @@ const EXPECT = {
     }
     const head = page.locator("#issues-head");
     ok(`[v1 ${key}] issues head visible`, await head.isVisible());
-    ok(`[v1 ${key}] head reads "${e.issues} issues found"`, (await head.innerText()).includes(`${e.issues} issues found`));
+    const found = e.issues + (e.issues === 1 ? " issue found" : " issues found");
+    ok(`[v1 ${key}] head reads "${found}"`, (await head.innerText()).includes(found));
     ok(`[v1 ${key}] collapsed by default`, !(await page.locator("#issues-body").isVisible()) && (await head.getAttribute("aria-expanded")) === "false");
     ok(`[v1 ${key}] head sits above the KPI band`, await page.evaluate(() => document.getElementById("issues").getBoundingClientRect().bottom <= document.getElementById("kpis").getBoundingClientRect().top));
     await head.click();
@@ -185,10 +186,13 @@ const EXPECT = {
       ok(`[v1 ${key}] row ${i + 1} bridge visible`, (await rows.nth(i).locator(".lnk").count()) === 1 && await rows.nth(i).locator(".lnk").isVisible());
     }
     ok(`[v1 ${key}] no status chips in the block`, (await page.locator("#issues .status").count()) === 0);
-    ok(`[v1 ${key}] exactly one connection message`, (await page.locator('#issues-body .issue-title', { hasText: "Connection lost" }).count()) === 1);
-    ok(`[v1 ${key}] connection message is production copy`, (await page.locator('[data-issue="conn"] .issue-desc').innerText()) === "One or more of your integrations have lost connection. Please reconnect to continue syncing.");
-    await page.locator('[data-issue="conn"] .lnk').click();
-    ok(`[v1 ${key}] connection row bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
+    const hasConn = e.rows.includes("Connection lost");
+    ok(`[v1 ${key}] ${hasConn ? "exactly one" : "no"} connection message`, (await page.locator('#issues-body .issue-title', { hasText: "Connection lost" }).count()) === (hasConn ? 1 : 0));
+    if (hasConn) {
+      ok(`[v1 ${key}] connection message is production copy`, (await page.locator('[data-issue="conn"] .issue-desc').innerText()) === "One or more of your integrations have lost connection. Please reconnect to continue syncing.");
+      await page.locator('[data-issue="conn"] .lnk').click();
+      ok(`[v1 ${key}] connection row bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
+    }
     ok(`[v1 ${key}] block stays open after a bridge click`, await page.locator("#issues-body").isVisible());
     ok(`[v1 ${key}] exactly one transactions message`, (await page.locator('#issues-body .issue-title', { hasText: "transactions need attention" }).count()) === 1);
     ok(`[v1 ${key}] transactions count matches the Needs attention card`, (await page.locator('[data-issue="txn"] .issue-title').innerText()).split(" ")[0] + " transactions" === (await page.locator("#attn-link").innerText()).trim());
@@ -228,7 +232,7 @@ const EXPECT = {
   ok("[v5] variant button on", await page.locator("#vv-5.on").isVisible());
   ok("[v5] hash records variant", page.url().endsWith("#v5-attention"));
   const V2 = {
-    attention: { req: ["Reconnect lost connections", "Review 80 transactions that need attention"], next: ["Run Transaction reconciliation"] },
+    attention: { req: ["Review 80 transactions that need attention"], next: ["Run Transaction reconciliation"] },
     clear:     { req: [], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
     lost:      { req: ["Reconnect lost connections", "Turn on Auto-import and Auto-sync", "Review 80 transactions that need attention", "Complete revenue recognition"], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
   };
@@ -250,9 +254,11 @@ const EXPECT = {
       }
     }
     if (e.req.length) {
-      ok(`[v5 ${key}] connection action uses production copy`, (await page.locator('[data-act="conn"] .act-desc').innerText()) === "One or more of your integrations have lost connection. Please reconnect to continue syncing.");
-      await page.locator('[data-act="conn"] .btn').click();
-      ok(`[v5 ${key}] Reconnect bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
+      if (e.req[0] === "Reconnect lost connections") {
+        ok(`[v5 ${key}] connection action uses production copy`, (await page.locator('[data-act="conn"] .act-desc').innerText()) === "One or more of your integrations have lost connection. Please reconnect to continue syncing.");
+        await page.locator('[data-act="conn"] .btn').click();
+        ok(`[v5 ${key}] Reconnect bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
+      }
       await page.locator('[data-act="txn"] .btn').click();
       ok(`[v5 ${key}] transactions action opens Synchronization issues`, await page.locator("#tab-sync.active").isVisible());
       await page.click("#nav-dashboard");
@@ -273,7 +279,7 @@ const EXPECT = {
   await page.goto(target.split("#")[0] + "#v2-attention");
   await page.waitForSelector("#p-trouble");
   ok("[v2] no Links switch group", (await page.locator("[id^=vl-]").count()) === 0);
-  const TP = { attention: { n: 2, rows: ["Connection lost", "80 transactions need attention"], more: 0 }, clear: { n: 0 }, lost: { n: 4, rows: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention"], more: 1 } };
+  const TP = { attention: { n: 1, rows: ["80 transactions need attention"], more: 0 }, clear: { n: 0 }, lost: { n: 4, rows: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention"], more: 1 } };
   for (const key of Object.keys(TP)) {
     const e = TP[key];
     await page.click(`#vs-${key}`);
@@ -368,7 +374,7 @@ const EXPECT = {
   /* ---------- Var 6: tabs between KPI band and blocks ---------- */
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.click("#vv-6");
-  const T6 = { attention: ["Connection lost", "80 transactions need attention"], clear: [], lost: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention", "Revenue recognition incomplete"] };
+  const T6 = { attention: ["80 transactions need attention"], clear: [], lost: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention", "Revenue recognition incomplete"] };
   for (const key of Object.keys(T6)) {
     const want = T6[key];
     await page.click(`#vs-${key}`);
@@ -385,7 +391,7 @@ const EXPECT = {
     const rows = page.locator("#dt-issues-body .dt-issue");
     ok(`[v6 ${key}] ${want.length} issues, all visible`, (await rows.count()) === want.length);
     for (let i = 0; i < want.length; i++) ok(`[v6 ${key}] issue ${i + 1} "${want[i]}" + link`, (await rows.nth(i).locator(".dt-title").innerText()) === want[i] && await rows.nth(i).locator(".lnk").isVisible());
-    ok(`[v6 ${key}] header reads ${want.length ? want.length + " issues" : "No issues"}`, (await page.locator("#dt-issues-body .dt-h").innerText()) === (want.length ? want.length + " issues" : "No issues"));
+    ok(`[v6 ${key}] header reads ${want.length ? want.length + " issues" : "No issues"}`, (await page.locator("#dt-issues-body .dt-h").innerText()) === (want.length ? want.length + (want.length === 1 ? " issue" : " issues") : "No issues"));
     ok(`[v6 ${key}] plain list: no grey panel, no box around the list`, await page.evaluate(() => { const t = (el) => !el || (getComputedStyle(el).backgroundColor === "rgba(0, 0, 0, 0)" && getComputedStyle(el).borderLeftStyle === "none"); return t(document.getElementById("dt-issues-body")) && t(document.querySelector(".dt-list")); }));
     ok(`[v6 ${key}] link to full Troubleshooting visible`, await page.locator("#dt-trouble").isVisible());
     await page.click("#dt-trouble");
