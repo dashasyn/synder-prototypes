@@ -316,6 +316,7 @@ const EXPECT = {
     if (key === "clear") continue;
     const f = page.locator('[data-xf="slow"]');
     ok(`[v4 ${key}] findings collapsed by default`, (await page.locator(".xf-b:visible").count()) === 0);
+    for (const host of ["import", "sync"]) ok(`[v4 ${key}] ${host} headline sits above its findings`, await page.evaluate((h) => document.querySelector(`#p-${h} .panel-big`).getBoundingClientRect().bottom <= document.querySelector(`#p-${h} .xf`).getBoundingClientRect().top, host));
     ok(`[v4 ${key}] finding sits under the Sync header, above the status list`, await page.evaluate(() => document.querySelector('[data-xf="slow"]').getBoundingClientRect().bottom <= document.getElementById("sync-rows").getBoundingClientRect().top));
     await f.locator(".xf-h").click();
     ok(`[v4 ${key}] expands: What / Why it matters / How to fix`, await f.locator(".xf-b").isVisible() && (await f.locator(".xf-l").allInnerTexts()).join("|") === "What|Why it matters|How to fix");
