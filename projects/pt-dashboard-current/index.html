@@ -141,6 +141,21 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .related .row .lbl { flex: none; }
 .related .row .meta { flex: 1; min-width: 0; text-align: right; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav-new { margin-left: auto; }
+/* Var 6 dashboard tabs */
+.dash-tabs { padding: 0; margin: 0 0 20px; }
+.dash-tabs .tab { background: none; border-left: none; border-right: none; border-top: none; font-family: inherit; }
+.cols[hidden] { display: none; }
+.dt-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 48px; text-align: center; color: var(--text-secondary); font-size: 14px; }
+.dt-issues { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px; }
+.dt-head { display: flex; align-items: center; margin-bottom: 10px; font-size: 14px; }
+.dt-h { font-weight: 500; flex: 1; }
+.dt-list { background: var(--color-red-light); border: 1px solid var(--color-status-red-bg); border-radius: var(--radius-sm); padding: 0 16px; }
+.dt-issue { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--color-status-red-bg); }
+.dt-issue:first-child { border-top: none; }
+.dt-txt { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--color-red); }
+.dt-title { font-weight: 500; }
+.dt-desc { opacity: .8; }
+.dt-issue .lnk { flex-shrink: 0; }
 .ph-right { display: flex; align-items: center; gap: 12px; }
 .ph-right .btn .status { margin-left: 6px; }
 /* Var 2 Troubleshooting block */
@@ -242,6 +257,7 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
     <button id="vv-3" onclick="setVariant(3)">3 · Inline · links</button>
     <button id="vv-4" onclick="setVariant(4)">4 · Inline · expandable</button>
     <button id="vv-5" onclick="setVariant(5)">5 · Action list</button>
+    <button id="vv-6" onclick="setVariant(6)">6 · Tabs</button>
   </div>
 </div>
 
@@ -278,6 +294,8 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
       <div id="banner"></div>
       <div class="kpi-band" id="kpis"></div>
       <div id="actions"></div>
+      <div id="dtabs"></div>
+      <div id="dtab-body"></div>
       <div class="cols">
         <div class="col" id="col-left"></div>
         <div class="col" id="col-mid"></div>
@@ -566,6 +584,29 @@ function fChip(list) {
   return '<span class="status ' + sev + ' fchip">' + list.length + (list.length === 1 ? ' finding' : ' findings') + '</span>';
 }
 
+/* ---- Var 6: tabs between the KPI band and the blocks ---- */
+var dtab = 'overview';
+function renderDashTabs(s) {
+  var list = issuesFor(s);
+  var tabs = [['overview', 'Overview', ''], ['custom', 'Custom configurations', ''],
+              ['issues', 'Issues', list.length ? '<span class="tab-count" id="dt-count">' + list.length + '</span>' : '']];
+  return '<div class="tabs dash-tabs" role="tablist">' + tabs.map(function (t) {
+    return '<button type="button" class="tab' + (t[0] === dtab ? ' active' : '') + '" role="tab" aria-selected="' + (t[0] === dtab) + '" id="dt-' + t[0] + '" data-dtab="' + t[0] + '">' + t[1] + t[2] + '</button>';
+  }).join('') + '</div>';
+}
+function renderDashTabBody(s) {
+  if (dtab === 'custom') return '<div class="dt-empty" id="dt-custom-body">[content not designed yet]</div>';
+  if (dtab !== 'issues') return '';
+  var list = issuesFor(s);
+  var rows = list.map(function (is) {
+    return '<div class="dt-issue" data-dti="' + is.id + '"><div class="dt-txt"><div class="dt-title">' + esc(is.title) + '</div><div class="dt-desc">' + esc(is.desc) + '</div></div>'
+      + '<button type="button" class="lnk"' + go(is.go) + '>' + esc(is.action) + ICON.chev + '</button></div>';
+  }).join('');
+  return '<section class="dt-issues" id="dt-issues-body"><div class="dt-head"><span class="dt-h">' + (list.length ? list.length + (list.length === 1 ? ' issue' : ' issues') : 'No issues') + '</span>'
+    + '<button type="button" class="lnk" id="dt-trouble"' + go('Troubleshooting') + '>Go to full Troubleshooting' + ICON.chev + '</button></div>'
+    + (list.length ? '<div class="dt-list">' + rows + '</div>' : '') + '</section>';
+}
+
 function render(key) {
   var s = STATES[key];
   menuSeq = 0;
@@ -575,7 +616,10 @@ function render(key) {
     ? '<button type="button" class="btn btn-outlined btn-sm" id="hdr-trouble"' + go('Troubleshooting') + '>Troubleshooting'
       + (nIssues ? ' <span class="status status-red">' + nIssues + '</span>' : '') + '</button>' : '';
   document.getElementById('actions').innerHTML = variant === 5 ? renderActions(s) : '';
-  document.getElementById('banner').innerHTML = variant === 1 ? renderIssues(s) : (variant === 2 || variant === 5) ? '' : s.banner
+  document.getElementById('dtabs').innerHTML = variant === 6 ? renderDashTabs(s) : '';
+  document.getElementById('dtab-body').innerHTML = variant === 6 ? renderDashTabBody(s) : '';
+  document.querySelector('#page-dash .cols').hidden = variant === 6 && dtab !== 'overview';
+  document.getElementById('banner').innerHTML = variant === 1 ? renderIssues(s) : (variant === 2 || variant === 5 || variant === 6) ? '' : s.banner
     ? '<div class="alert alert-error" id="lost-banner">' + ICON.alert
       + '<div class="alert-body"><span class="alert-title">Connection lost</span>'
       + 'One or more of your integrations have lost connection. Please reconnect to continue syncing.</div>'
@@ -841,7 +885,7 @@ function sync() {
   ['attention','clear','lost'].forEach(function (k) {
     document.getElementById('vs-' + k).classList.toggle('on', k === current);
   });
-  [0, 1, 2, 3, 4, 5].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
+  [0, 1, 2, 3, 4, 5, 6].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
   render(current);
   if (page === 'trouble') renderTrouble();
   writeHash();
@@ -882,6 +926,8 @@ document.addEventListener('click', function (e) {
     toggle(head, document.getElementById('issues-body'));
     return;
   }
+  var dt = e.target.closest('[data-dtab]');
+  if (dt) { dtab = dt.getAttribute('data-dtab'); render(current); return; }
   var xh = e.target.closest('.xf-h');
   if (xh) { toggle(xh, xh.parentElement.querySelector('.xf-b')); return; }
   var ig = e.target.closest('[data-ignore]');
@@ -937,7 +983,7 @@ document.addEventListener('keydown', function (e) {
 function parseHash() {
   var m = /^#(?:v(\d)-)?(\w+)(?:\/(sync|import|speed))?$/.exec(location.hash || '');
   var v = m && m[1] ? +m[1] : 0;
-  return { v: v >= 1 && v <= 5 ? v : 0, k: m && STATES[m[2]] ? m[2] : 'attention', t: m && m[3] ? m[3] : null };
+  return { v: v >= 1 && v <= 6 ? v : 0, k: m && STATES[m[2]] ? m[2] : 'attention', t: m && m[3] ? m[3] : null };
 }
 window.addEventListener('hashchange', function () {
   var h = parseHash();

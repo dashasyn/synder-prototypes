@@ -342,8 +342,45 @@ const EXPECT = {
   await page.click("#vs-attention");
   ok("[v4] state switch brings ignored findings back", (await page.locator('[data-xf="imp"]').count()) === 1);
 
+  /* ---------- Var 6: tabs between KPI band and blocks ---------- */
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.click("#vv-6");
+  const T6 = { attention: ["Connection lost", "80 transactions need attention"], clear: [], lost: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention", "Revenue recognition incomplete"] };
+  for (const key of Object.keys(T6)) {
+    const want = T6[key];
+    await page.click(`#vs-${key}`);
+    await page.click("#dt-overview");
+    ok(`[v6 ${key}] tabs Overview / Custom configurations / Issues`, (await page.locator(".dash-tabs .tab").allInnerTexts()).map((t) => t.replace(/\s*\d+$/, "")).join("|") === "Overview|Custom configurations|Issues");
+    ok(`[v6 ${key}] tabs sit between KPI band and blocks`, await page.evaluate(() => { const t = document.querySelector(".dash-tabs").getBoundingClientRect(); return t.top >= document.getElementById("kpis").getBoundingClientRect().bottom && t.bottom <= document.querySelector("#page-dash .cols").getBoundingClientRect().top; }));
+    ok(`[v6 ${key}] no top block / banner / trouble panel`, (await page.locator("#issues, #lost-banner, #p-trouble, #acts").count()) === 0);
+    ok(`[v6 ${key}] Overview shows the blocks`, await page.locator("#p-sync").isVisible() && await page.locator("#dt-overview.active").isVisible());
+    ok(`[v6 ${key}] Issues tab count ${want.length || "none"}`, want.length ? (await page.locator("#dt-count").innerText()) === String(want.length) : (await page.locator("#dt-count").count()) === 0);
+    await page.click("#dt-custom");
+    ok(`[v6 ${key}] Custom configurations: placeholder, blocks hidden`, await page.locator("#dt-custom-body").isVisible() && (await page.locator("#dt-custom-body").innerText()) === "[content not designed yet]" && !(await page.locator("#p-sync").isVisible()));
+    await page.click("#dt-issues");
+    ok(`[v6 ${key}] Issues tab active, blocks hidden`, await page.locator("#dt-issues.active").isVisible() && !(await page.locator("#p-sync").isVisible()));
+    const rows = page.locator("#dt-issues-body .dt-issue");
+    ok(`[v6 ${key}] ${want.length} issues, all visible`, (await rows.count()) === want.length);
+    for (let i = 0; i < want.length; i++) ok(`[v6 ${key}] issue ${i + 1} "${want[i]}" + link`, (await rows.nth(i).locator(".dt-title").innerText()) === want[i] && await rows.nth(i).locator(".lnk").isVisible());
+    ok(`[v6 ${key}] header reads ${want.length ? want.length + " issues" : "No issues"}`, (await page.locator("#dt-issues-body .dt-h").innerText()) === (want.length ? want.length + " issues" : "No issues"));
+    ok(`[v6 ${key}] link to full Troubleshooting visible`, await page.locator("#dt-trouble").isVisible());
+    await page.click("#dt-trouble");
+    ok(`[v6 ${key}] link opens Troubleshooting`, await page.locator("#page-trouble").isVisible());
+    await page.click("#nav-dashboard");
+    ok(`[v6 ${key}] Issues tab still selected on return`, await page.locator("#dt-issues.active").isVisible() && await page.locator("#dt-issues-body").isVisible());
+    if (want.length) {
+      await page.locator('[data-dti="txn"] .lnk').click();
+      ok(`[v6 ${key}] transactions issue opens Synchronization issues`, await page.locator("#tab-sync.active").isVisible());
+      await page.click("#nav-dashboard");
+    }
+    ok(`[v6 ${key}] no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  }
+  await page.click("#dt-overview");
+  await page.click("#vv-0");
+  ok("[v6→v0] blocks visible again in other variants", await page.locator("#p-sync").isVisible() && (await page.locator(".dash-tabs").count()) === 0);
+
   await page.setViewportSize({ width: 1280, height: 900 });
-  for (const v of [1, 2, 3, 4, 5]) {
+  for (const v of [1, 2, 3, 4, 5, 6]) {
     await page.click("#vv-" + v);
     ok(`[1280 v${v}] no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   }
