@@ -409,9 +409,11 @@ const EXPECT = {
     for (let v = 0; v <= 6; v++) for (const key of ["attention", "lost"]) {
       await page.goto(target.split("#")[0] + "#" + (v ? "v" + v + "-" : "") + key);
       await page.waitForSelector("#kpis .kpi");
-      const d = await page.evaluate(() => { const k = [...document.querySelectorAll("#kpis .kpi")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("#page-dash .cols > .col")].map((e) => e.getBoundingClientRect());
-        return Math.max(...k.map((r, i) => Math.max(Math.abs(r.left - c[i].left), Math.abs(r.right - c[i].right)))); });
-      ok(`[grid ${w} v${v} ${key}] KPI card edges match block edges`, d < 1, "off by " + d.toFixed(1) + "px");
+      const d = await page.evaluate((() => { const b = document.getElementById("kpis").getBoundingClientRect(); const k = [...document.querySelectorAll("#kpis .kpi")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("#page-dash .cols > .col")].map((e) => e.getBoundingClientRect());
+        /* outer edges of the blocks = outer edges of the grey band; inner edges = KPI card edges */
+        const pairs = [[c[0].left, b.left], [c[0].right, k[0].right], [c[1].left, k[1].left], [c[1].right, k[1].right], [c[2].left, k[2].left], [c[2].right, b.right]];
+        return Math.max(...pairs.map(([x, y]) => Math.abs(x - y))); }));
+      ok(`[grid ${w} v${v} ${key}] blocks align: outer edges with the band, inner edges with the cards`, d < 1, "off by " + d.toFixed(1) + "px");
     }
   }
 

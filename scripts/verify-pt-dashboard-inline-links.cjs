@@ -53,9 +53,11 @@ const ST = {
         await page.click("#nav-dashboard");
         ok(`${t} back on dashboard after ${id}`, await page.locator("#page-dash").isVisible() && page.url().endsWith("#" + key));
       }
-      const off = await page.evaluate(() => { const k = [...document.querySelectorAll("#kpis .kpi")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("#page-dash .cols > .col")].map((e) => e.getBoundingClientRect());
-        return Math.max(...k.map((r, i) => Math.max(Math.abs(r.left - c[i].left), Math.abs(r.right - c[i].right)))); });
-      ok(`${t} KPI card edges match block edges`, off < 1, off.toFixed(1) + "px");
+      const off = await page.evaluate((() => { const b = document.getElementById("kpis").getBoundingClientRect(); const k = [...document.querySelectorAll("#kpis .kpi")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("#page-dash .cols > .col")].map((e) => e.getBoundingClientRect());
+        /* outer edges of the blocks = outer edges of the grey band; inner edges = KPI card edges */
+        const pairs = [[c[0].left, b.left], [c[0].right, k[0].right], [c[1].left, k[1].left], [c[1].right, k[1].right], [c[2].left, k[2].left], [c[2].right, b.right]];
+        return Math.max(...pairs.map(([x, y]) => Math.abs(x - y))); }));
+      ok(`${t} blocks align: outer edges with the band, inner edges with the cards`, off < 1, off.toFixed(1) + "px");
       const small = await page.evaluate(() => [...document.querySelectorAll("body *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
       ok(`${t} no text under 14px`, small === 0, String(small));
       ok(`${t} no horizontal overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
