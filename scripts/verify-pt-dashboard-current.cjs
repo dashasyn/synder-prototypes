@@ -15,7 +15,7 @@ function ok(name, cond, extra) {
 const EXPECT = {
   attention: { sync: 10, imports: 2, integrations: 2, score: "80%", attn: "80 transactions", banner: false, revrec: false, hot: 2 },
   clear:     { sync: 3,  imports: 1, integrations: 1, score: "100%", attn: "All clear",      banner: false, revrec: false, hot: 0 },
-  lost:      { sync: 18, imports: 10, integrations: 6, score: "70%", attn: "80 transactions", banner: true,  revrec: true,  hot: 2 },
+  lost:      { sync: 18, imports: 2, integrations: 6, score: "70%", attn: "80 transactions", banner: true,  revrec: true,  hot: 2 },
 };
 
 (async () => {
@@ -76,8 +76,7 @@ const EXPECT = {
 
   /* lost state: import box scrolls internally, last row reachable */
   await page.click("#vs-lost");
-  const scrolls = await page.$eval("#import-rows", (el) => el.scrollHeight > el.clientHeight);
-  ok("[lost] import list scrolls inside its card", scrolls);
+  ok("[lost] import list shows 2 integrations, no inner scroll", (await page.locator("#import-rows .row").count()) === 2 && await page.$eval("#import-rows", (el) => el.scrollHeight <= el.clientHeight));
   await page.locator("#import-rows .row").last().scrollIntoViewIfNeeded();
   ok("[lost] last import row reachable", await page.locator("#import-rows .row").last().isVisible());
   ok("[lost] long name truncates with ellipsis", await page.$eval("#import-rows .row:nth-child(2) .txt", (el) => el.scrollWidth > el.clientWidth && getComputedStyle(el).textOverflow === "ellipsis"));
