@@ -5,6 +5,13 @@
 
 ## 🔧 Active Projects
 
+### PT Dashboard — Inline links (2026-10-16)
+- **Ask:** Ignat, 2026-10-16: "make a copy of this prototype but keep only 3 Inline links".
+- **Live:** https://dashasyn.github.io/synder-prototypes/projects/pt-dashboard-inline-links/ — `projects/pt-dashboard-inline-links/index.html`. On the hub next to the full prototype.
+- A copy of `pt-dashboard-current` with variant 3 fixed. **The Variant switch is removed** (one variant = no switcher); only the State switch is left. Blue header links: Import → Import activity log · Sync → Sync issues · Needs attention → Troubleshooting, plus the full Troubleshooting page (3 tabs). The other variants' code is dormant in the file. Hash `#<state>[/tab]`.
+- **It's a fork:** changes to `pt-dashboard-current` don't flow here.
+- **Verify:** `node scripts/verify-pt-dashboard-inline-links.cjs [url]`, 155 assertions (3 states × 1440/1280, links → the right tab, grid alignment, ≥14px, the Troubleshooting page).
+
 ### PT Dashboard — as developed (2026-10-06)
 - **Status:** ✅ Base + Var 1 live. More bridge variants to come (Ignat, 2026-10-07: "we will add variants").
 - **Ask:** Ignat, 2026-10-06 (topic Dashboard): sent 3 screenshots of the **developed** Per Transaction dashboard. "Recreate this page and we will add other elements." He said it is close to the old iter5 *Var 2 — Adaptive*.
