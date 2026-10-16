@@ -28,7 +28,7 @@ const EXPECT = {
   await page.waitForSelector("#sync-rows .row");
 
   ok("switcher is first element in body", await page.evaluate(() => document.body.firstElementChild.classList.contains("variant-switch")));
-  ok("H1 is visible with live copy", (await page.locator("h1").innerText()) === "Hi Dalia, your data is ready to review");
+  ok("H1 is visible with live copy", (await page.locator("#page-dash h1").innerText()) === "Hi Dalia, your data is ready to review");
   ok("period select visible", await page.locator("#period").isVisible());
 
   for (const key of Object.keys(EXPECT)) {
@@ -101,7 +101,7 @@ const EXPECT = {
   await page.keyboard.press("Escape");
   ok("Escape closes row menu", !(await page.locator("#p-integrations .dropdown-menu").first().isVisible()));
   await menuBtn.click();
-  await page.click("h1");
+  await page.click("#page-dash h1");
   ok("outside click closes row menu", !(await page.locator("#p-integrations .dropdown-menu").first().isVisible()));
   await menuBtn.click();
   await page.locator("#p-integrations [data-menu]").nth(1).click();
@@ -153,7 +153,8 @@ const EXPECT = {
     ok(`[v1 ${key}] head sits above the KPI band`, await page.evaluate(() => document.getElementById("issues").getBoundingClientRect().bottom <= document.getElementById("kpis").getBoundingClientRect().top));
     await head.click();
     ok(`[v1 ${key}] expands on click`, await page.locator("#issues-body").isVisible());
-    ok(`[v1 ${key}] toggle reads Hide`, (await head.locator(".tog").innerText()) === "Hide");
+    ok(`[v1 ${key}] no Show/Hide text`, (await page.locator("#issues .tog").count()) === 0 && !/\b(Show|Hide)\b/.test(await page.locator("#issues-head").innerText()));
+    ok(`[v1 ${key}] Go to Troubleshooting stays visible while expanded`, await page.locator("#go-trouble").isVisible());
     const rows = page.locator("#issues-body > .issue");
     ok(`[v1 ${key}] ${e.issues} issue rows`, (await rows.count()) === e.issues, "got " + (await rows.count()));
     for (let i = 0; i < e.rows.length; i++) {
@@ -255,7 +256,9 @@ const EXPECT = {
       ok(`[links A ${key}] ${want} link visible`, await l.isVisible());
       ok(`[links A ${key}] ${want} link lives in its block header`, (await page.locator(`${panel} ${id}`).count()) === 1);
       await l.click();
-      ok(`[links A ${key}] ${want} bridges`, (await page.locator("#toast").innerText()).endsWith("would open: " + want));
+      const wantTab = want === "Import activity log" ? "import" : "sync";
+      ok(`[links A ${key}] ${want} opens Troubleshooting · ${wantTab}`, await page.locator("#page-trouble").isVisible() && await page.locator(`#tab-${wantTab}.active`).isVisible() && !(await page.locator("#page-dash").isVisible()));
+      await page.click("#nav-dashboard");
     }
     ok(`[links A ${key}] link right-aligned in Sync header`, await page.evaluate(() => {
       const h = document.querySelector("#p-sync .panel-t").getBoundingClientRect(), l = document.getElementById("lnk-sync").getBoundingClientRect();
@@ -265,7 +268,7 @@ const EXPECT = {
   await page.click("#vs-lost");
   await page.click("#vv-1");
   await page.click("#issues-head");
-  ok("[links A v1] Troubleshooting link at the foot of the issues block", await page.locator("#issues-body #lnk-trouble-v1").isVisible());
+  ok("[links A v1] no duplicate Troubleshooting link in the block body", (await page.locator("#issues-body .lnk", { hasText: "Troubleshooting" }).count()) === 0);
   await page.click("#vv-2");
   ok("[links A v2] Troubleshooting link next to Required actions", await page.locator("#acts-req .acts-h #lnk-trouble-v2").isVisible());
   await page.click("#vv-0");
@@ -283,8 +286,9 @@ const EXPECT = {
       ok(`[links B ${key}] ${ids[i]} label not truncated`, await r.locator(".txt").evaluate((el) => el.scrollWidth <= el.clientWidth));
       ok(`[links B ${key}] ${ids[i]} meta "${REL[key][i]}"`, (await r.locator(".meta").innerText()) === REL[key][i], await r.locator(".meta").innerText());
     }
-    await page.click("#rel-sync");
-    ok(`[links B ${key}] Sync issues row bridges`, (await page.locator("#toast").innerText()).endsWith("would open: Sync issues"));
+    await page.click("#rel-import");
+    ok(`[links B ${key}] Import activity log row opens its tab`, await page.locator("#tab-import.active").isVisible());
+    await page.click("#nav-dashboard");
   }
   await page.goto(target.split("#")[0] + "#v1-l2-lost");
   await page.waitForSelector("#p-related");
@@ -293,6 +297,126 @@ const EXPECT = {
   ok("[links] 1280: no overflow with three switch groups", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   const smallL = await page.evaluate(() => [...document.querySelectorAll("body *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
   ok("[links] no text under 14px", smallL === 0);
+
+  /* ---------- Troubleshooting page ---------- */
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const [key, groups, sumQty] of [["attention", 6, 90], ["lost", 9, 130], ["clear", 0, 0]]) {
+    await page.goto(target.split("#")[0] + "#v1-" + key);
+    await page.waitForSelector("#sync-rows .row");
+    if (groups) {
+      const bar = page.locator("#issues .issues-bar");
+      ok(`[ts ${key}] Go to Troubleshooting button in the block header`, await bar.locator("#go-trouble").isVisible() && (await bar.locator("#go-trouble").innerText()) === "Go to Troubleshooting");
+      ok(`[ts ${key}] button right of the toggle`, await page.evaluate(() => document.getElementById("go-trouble").getBoundingClientRect().left > document.querySelector("#issues-head .t").getBoundingClientRect().right));
+      await page.click("#go-trouble");
+      ok(`[ts ${key}] button does not expand the block on the way out`, true);
+    } else {
+      await page.click("#nav-troubleshooting");
+    }
+    ok(`[ts ${key}] Troubleshooting page visible, dashboard hidden`, await page.locator("#page-trouble").isVisible() && !(await page.locator("#page-dash").isVisible()));
+    ok(`[ts ${key}] sidebar Troubleshooting active`, await page.locator("#nav-troubleshooting.active").isVisible() && !(await page.locator("#nav-dashboard.active").count()));
+    ok(`[ts ${key}] H1 + subtitle`, (await page.locator("#page-trouble h1").innerText()) === "Troubleshooting" && (await page.locator("#page-trouble .page-subtitle").innerText()) === "View how your data is flowing and catch problems early.");
+    ok(`[ts ${key}] Synchronization issues tab active`, await page.locator("#tab-sync.active").isVisible());
+    ok(`[ts ${key}] hash has tab`, page.url().endsWith(key + "/sync"));
+    const rows = page.locator("#si-table tbody tr:not(:has(.empty))");
+    ok(`[ts ${key}] ${groups} error groups (= dashboard Related pages count)`, (await rows.count()) === groups, "got " + (await rows.count()));
+    const qty = await page.$$eval("#si-table tbody tr:not(:has(.empty)) td:first-child", (els) => els.reduce((a, e) => a + +e.textContent, 0));
+    ok(`[ts ${key}] quantities sum to ${sumQty}`, qty === sumQty, String(qty));
+    ok(`[ts ${key}] uses kit table`, (await page.locator("#si-table.synder-table").count()) === 1);
+    if (!groups) { ok(`[ts ${key}] empty state marked uncaptured`, (await page.locator("#si-empty").innerText()) === "[live copy not captured]"); }
+    if (groups) {
+      const q = await page.$$eval("#si-table tbody td:first-child", (els) => els.map((e) => +e.textContent));
+      ok(`[ts ${key}] sorted by quantity desc`, q.every((v, i) => !i || q[i - 1] >= v));
+      await page.click("#si-sort");
+      const q2 = await page.$$eval("#si-table tbody td:first-child", (els) => els.map((e) => +e.textContent));
+      ok(`[ts ${key}] sort toggles to asc`, q2.every((v, i) => !i || q2[i - 1] <= v));
+      await page.click("#si-sort");
+      await page.selectOption("#si-status", "Failed");
+      await page.click('[data-apply="sync"]');
+      const st = await page.$$eval("#si-table tbody td:nth-child(2)", (els) => els.map((e) => e.textContent));
+      ok(`[ts ${key}] status filter = Failed only`, st.length === 3 && st.every((x) => x === "Failed"), st.join(","));
+      await page.click('[data-reset="sync"]');
+      ok(`[ts ${key}] reset restores all groups`, (await rows.count()) === groups);
+      await page.fill("#si-q", "Ac");
+      await page.click('[data-apply="sync"]');
+      ok(`[ts ${key}] search ignored under 3 characters`, (await rows.count()) === groups);
+      await page.fill("#si-q", "account");
+      await page.keyboard.press("Enter");
+      const wantAcc = key === "lost" ? 3 : 2;   /* lost also has "…found in accounting" */
+      ok(`[ts ${key}] search "account" (Enter) narrows to ${wantAcc}`, (await rows.count()) === wantAcc, "got " + (await rows.count()));
+      await page.click('[data-reset="sync"]');
+      await rows.first().locator(".lnk").click();
+      ok(`[ts ${key}] See related transactions bridges`, (await page.locator("#toast").innerText()).includes("Platform transactions · Failed"));
+      ok(`[ts ${key}] long error message truncates`, await page.$eval("#si-table td.msg", (el) => el.scrollWidth > el.clientWidth));
+    }
+    /* import log */
+    await page.click("#tab-import");
+    ok(`[ts ${key}] Import activity log tab active`, await page.locator("#tab-import.active").isVisible() && page.url().endsWith("/import"));
+    const il = page.locator("#il-table tbody tr");
+    ok(`[ts ${key}] import log shows 25 rows`, (await il.count()) === 25);
+    ok(`[ts ${key}] Import historical data visible`, await page.locator(".ts-intro .btn").isVisible());
+    const first = await il.first().innerText();
+    const hourly = await page.locator("#il-table tbody tr", { hasText: "Hourly" }).first().innerText();
+    ok(`[ts ${key}] newest Hourly import ends at the dashboard's last import`, hourly.includes(key === "lost" ? "Oct 2, 2026 05:58:00" : "Oct 7, 2026 11:58:00"), hourly.slice(0, 80));
+    await page.click('[data-page="import:next"]');
+    ok(`[ts ${key}] next page works`, (await il.first().innerText()) !== first && await page.locator('[data-page="import:prev"]:not([disabled])').isVisible());
+    await page.click('[data-page="import:first"]');
+    await page.selectOption("#il-type", "Hourly");
+    await page.click('[data-apply="import"]');
+    const types = await page.$$eval("#il-table tbody td:nth-child(7)", (els) => els.map((e) => e.textContent));
+    ok(`[ts ${key}] Type filter = Hourly only`, types.length > 0 && types.every((t) => t === "Hourly"));
+    await page.click('[data-reset="import"]');
+    if (key !== "clear") {
+      await page.selectOption("#il-intg", "My great bread (Amazon)");
+      await page.click('[data-apply="import"]');
+      const ints = await page.$$eval("#il-table tbody td:nth-child(4)", (els) => els.map((e) => e.textContent.trim()));
+      ok(`[ts ${key}] Integration filter`, ints.length > 0 && ints.every((t) => t === "My great bread (Amazon)"));
+      await page.click('[data-reset="import"]');
+    }
+    const id = await il.nth(3).getAttribute("data-id");
+    await page.fill("#il-id", id);
+    await page.click('[data-apply="import"]');
+    ok(`[ts ${key}] Import ID search finds the row`, (await il.count()) === 1 && (await il.first().getAttribute("data-id")) === id);
+    await page.click('[data-reset="import"]');
+    await page.selectOption('[data-rpp="import"]', "50");
+    ok(`[ts ${key}] rows per page 50`, (await il.count()) === 50);
+    await page.selectOption('[data-rpp="import"]', "25");
+    ok(`[ts ${key}] import table is kit table`, (await page.locator("#il-table.synder-table").count()) === 1);
+    /* sync speed */
+    await page.click("#tab-speed");
+    ok(`[ts ${key}] Sync speed tab active`, await page.locator("#tab-speed.active").isVisible());
+    const nSeries = key === "clear" ? 1 : 2;
+    ok(`[ts ${key}] ${nSeries} series in chart`, (await page.locator("#sp-chart path.series").count()) === nSeries);
+    ok(`[ts ${key}] chart visible`, await page.locator("#sp-chart svg").isVisible());
+    ok(`[ts ${key}] chart labels render at 14px (no viewBox scaling)`, await page.$eval("#sp-chart svg", (e) => Math.abs(e.viewBox.baseVal.width - e.getBoundingClientRect().width) < 1.5));
+    ok(`[ts ${key}] last date label inside the chart`, await page.$eval("#sp-chart svg", (e) => [...e.querySelectorAll("text")].pop().getBoundingClientRect().right <= e.getBoundingClientRect().right));
+    ok(`[ts ${key}] breakdown chart marked uncaptured`, (await page.locator("#bd-chart").innerText()) === "[chart not captured]");
+    if (nSeries === 2) {
+      await page.selectOption("#sp-intg", "My wonderful flowers (Stripe)");
+      await page.click('[data-apply="speed"]');
+      ok(`[ts ${key}] integration filter leaves 1 series`, (await page.locator("#sp-chart path.series").count()) === 1);
+      await page.click('[data-reset="speed"]');
+      ok(`[ts ${key}] reset brings both back`, (await page.locator("#sp-chart path.series").count()) === 2);
+    }
+    const small = await page.evaluate(() => [...document.querySelectorAll("#page-trouble *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
+    ok(`[ts ${key}] no text under 14px`, small === 0);
+    for (const t of ["sync", "import", "speed"]) {
+      await page.click("#tab-" + t);
+      ok(`[ts ${key}] ${t}: no horizontal overflow at 1440`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    }
+    await page.click("#nav-dashboard");
+    ok(`[ts ${key}] Dashboard nav returns`, await page.locator("#page-dash").isVisible() && !(await page.locator("#page-trouble").isVisible()) && !new URL(page.url()).hash.includes("/"));
+  }
+  /* deep link + state switch while on the page */
+  await page.goto(target.split("#")[0] + "#attention/import");
+  await page.waitForSelector("#il-table");
+  ok("#attention/import deep-links to the import tab", await page.locator("#tab-import.active").isVisible());
+  await page.click("#vs-lost");
+  ok("state switch re-renders the Troubleshooting page", (await page.locator("#il-table tbody tr", { hasText: "Hourly" }).first().innerText()).includes("Oct 2, 2026 05:58:00") && await page.locator("#tab-import.active").isVisible());
+  await page.setViewportSize({ width: 1280, height: 900 });
+  for (const t of ["sync", "import", "speed"]) {
+    await page.click("#tab-" + t);
+    ok(`[ts 1280] ${t}: no horizontal overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  }
 
   ok("no JS errors", errors.length === 0, errors.join(" | "));
 

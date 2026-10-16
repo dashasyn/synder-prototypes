@@ -23,7 +23,14 @@
   - Hash `#v<n>-l<n>-<state>`.
 - **Sidebar now matches the captured production nav** (Ignat's 2026-10-07 screenshots): Dashboard, Transactions, Inventory sync (Beta), Smart rules, Invoicing, Analytics, Settings, AI Hub, What's New, Custom development. I added **Troubleshooting** under Dashboard; **that position is a guess**.
 - **Ideas not built yet:** C tabs under the H1 (Overview · Sync issues · Troubleshooting) · D context links on the issue rows/actions themselves (transactions row → Sync issues) · E links shown only when there's something to see (e.g. Sync issues only if groups > 0).
-- **Verify now 274 assertions.**
+- **2026-10-16 (Ignat):** Var 1's collapsible block has **no Show/Hide** any more. It has a red **Go to Troubleshooting** button on the right of its header (the chevron + "N issues found" still toggle it). The links-A footer link was removed as a duplicate. **The Troubleshooting page is built in the same file** from his 3 production screenshots (H1, subtitle, tabs Synchronization issues · Import activity log · Sync speed):
+  - Sync issues: filters (Search ≥3 chars, Status, Date range, From/To) · kit table Quantity ↓ (toggles) / Status / Error message (ellipsis) / Actions → See related transactions · Rows per page. Groups per state = Related-pages count (6/0/9), and the quantities add up to the dashboard's statuses.
+  - Import activity log: intro + guide link + Import historical data · 8 filters incl. Import ID · 64 mock rows (Postponed/Hourly/Pending), the newest Hourly import = the dashboard's last import · paging 10/25/50.
+  - Sync speed: info line · Transaction volume by platform (an SVG line chart, one series per integration, the integration filter works; the chart is drawn at its real pixel width so labels stay 14px) · Sync time process breakdown. Its chart is **not captured**, so there's a marker.
+  - Every link to Troubleshooting / Sync issues / Import activity log now **navigates** (head button, links A + B, sidebar). Hash `…<state>/sync|import|speed`.
+  - Uncaptured: empty-table copy, other period/granularity/status/process-group options, the breakdown chart.
+- **Sidebar = the 2026-10-16 production capture** (minus Administrative functions): Dashboard, Transactions, Smart rules, Invoicing, Analytics, **Troubleshooting [New]**, Business Insights (A), Revenue recognition, AI Hub, What's New, Settings. Troubleshooting's position is now real, no longer a guess.
+- **Verify now 394 assertions.**
 - **Older dashboard work** (iter1–6, `reports/dashboard-variants` A–D from 2026-09-09): superseded as a base by this page.
 
 ### TxnRecon setup — all prototypes (2026-09-11)
