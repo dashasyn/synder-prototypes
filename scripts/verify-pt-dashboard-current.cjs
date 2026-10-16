@@ -242,6 +242,7 @@ const EXPECT = {
   }
   await page.goto(target.split("#")[0] + "#v4-lost");
   await page.waitForSelector("#acts");
+  ok("[v4] no checkbox squares in either list", (await page.locator("#acts .act-box, #acts input[type=checkbox]").count()) === 0);
   ok("#v4-lost opens Var 4 state 3", await page.locator("#vv-4.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
 
   /* ---------- Var 2: separate Troubleshooting block ---------- */

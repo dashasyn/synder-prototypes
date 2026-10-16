@@ -38,7 +38,8 @@
   - 4 Action list
   - Hash `#v<0-4>-<state>[/tab]`.
 - **2026-10-16 (Ignat):** the Import block shows at most 2 integrations ("we rarely have more"). Connection lost now lists Stripe + Amazon (long name) instead of 10 rows, and there's no inner scroll. The Integrations panel still has 6 cards in that state; I asked whether to align it.
-- **Verify now 399 assertions.**
+- **2026-10-16:** Var 4 Action list: D's decorative checkbox squares are removed (Ignat: "you can't check/uncheck them").
+- **Verify now 400 assertions.**
 - **Older dashboard work** (iter1–6, `reports/dashboard-variants` A–D from 2026-09-09): superseded as a base by this page.
 
 ### TxnRecon setup — all prototypes (2026-09-11)
