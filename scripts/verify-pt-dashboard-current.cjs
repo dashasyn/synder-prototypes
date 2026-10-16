@@ -363,6 +363,7 @@ const EXPECT = {
     ok(`[v6 ${key}] ${want.length} issues, all visible`, (await rows.count()) === want.length);
     for (let i = 0; i < want.length; i++) ok(`[v6 ${key}] issue ${i + 1} "${want[i]}" + link`, (await rows.nth(i).locator(".dt-title").innerText()) === want[i] && await rows.nth(i).locator(".lnk").isVisible());
     ok(`[v6 ${key}] header reads ${want.length ? want.length + " issues" : "No issues"}`, (await page.locator("#dt-issues-body .dt-h").innerText()) === (want.length ? want.length + " issues" : "No issues"));
+    ok(`[v6 ${key}] plain list: no grey panel, no box around the list`, await page.evaluate(() => { const t = (el) => !el || (getComputedStyle(el).backgroundColor === "rgba(0, 0, 0, 0)" && getComputedStyle(el).borderLeftStyle === "none"); return t(document.getElementById("dt-issues-body")) && t(document.querySelector(".dt-list")); }));
     ok(`[v6 ${key}] link to full Troubleshooting visible`, await page.locator("#dt-trouble").isVisible());
     await page.click("#dt-trouble");
     ok(`[v6 ${key}] link opens Troubleshooting`, await page.locator("#page-trouble").isVisible());

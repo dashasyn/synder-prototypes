@@ -43,7 +43,8 @@
 - **2026-10-16:** in Var 4, the "1,200 transactions imported / synchronized to books" headlines now sit above the findings.
 - **2026-10-16 (Ignat): Var 6 · Tabs.** Kit tabs sit between the KPI band and the blocks: **Overview** (the blocks) · **Custom configurations** (a placeholder, `[content not designed yet]`, "will be created later") · **Issues** (with a count chip). The Issues tab lists every problem from `issuesFor()` (Rich-style title / description / bridge, all visible), with a "N issues" header and **Go to full Troubleshooting**. No top block or banner in this variant. The selected tab survives a trip to Troubleshooting and back.
 - **2026-10-16 (Ignat): every variant must link to 3 pages:** Troubleshooting (main tab) · Sync issues (Troubleshooting's main tab) · Import activity log. The audit found gaps in V1 (no Import link; nothing at all in All clear), V4 (no Import/Sync link without findings) and V5 (no Troubleshooting / Import link). Fix: the **Import activity log** and **Sync issues** header links are permanent in variants 1–6. **Troubleshooting** goes on the Needs attention card where the variant's own entry isn't on screen (V3, V5, V1 All clear). V2's block, V4's header button and V6's Issues tab carry it otherwise. V0 (production) is left without links as the baseline. There's an audit test over 6 variants × 3 states.
-- **Verify now 601 assertions.**
+- **2026-10-16:** V6 Issues tab is now a plain list: no grey panel, no red box, rows split by thin dividers (Ignat).
+- **Verify now 604 assertions.**
 - **Older dashboard work** (iter1–6, `reports/dashboard-variants` A–D from 2026-09-09): superseded as a base by this page.
 
 ### TxnRecon setup — all prototypes (2026-09-11)
