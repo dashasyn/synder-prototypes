@@ -30,7 +30,14 @@
   - Every link to Troubleshooting / Sync issues / Import activity log now **navigates** (head button, links A + B, sidebar). Hash `…<state>/sync|import|speed`.
   - Uncaptured: empty-table copy, other period/granularity/status/process-group options, the breakdown chart.
 - **Sidebar = the 2026-10-16 production capture** (minus Administrative functions): Dashboard, Transactions, Smart rules, Invoicing, Analytics, **Troubleshooting [New]**, Business Insights (A), Revenue recognition, AI Hub, What's New, Settings. Troubleshooting's position is now real, no longer a guess.
-- **Verify now 394 assertions.**
+- **2026-10-16 restructure (Ignat):** "the separate block should be only for Troubleshooting … instead of the top collapsible block"; he liked the **inline** idea from a colleague's zip (`pt-dashboard-inline`, integrity-check MVP) as a third variant. I gave the zip a quick look (not a validator round): Inter font and a dark, old sidebar · 129/225 text nodes under 14px · the Demo panel covers the Import block · the section version says "All enabled checks passed" after Ignore (false) · it shows findings on hosts whose connection is lost. **The Links switch group is gone.** The Variant group is now:
+  - 0 As developed
+  - 1 Collapsed issues (top red block + Go to Troubleshooting; the transactions row → **View sync issues** = Troubleshooting · Synchronization issues)
+  - 2 **Troubleshooting block**: first panel in the right column, the first 3 issues (title / one-line desc / link), "+N more", a count chip, Go to Troubleshooting; All clear = "No issues". No top block, no banner.
+  - 3 **Inline**: findings sit in their own block, under the header and above the content (Sync: transactions → View sync issues · RevRec: incomplete). Hosts with Connection lost get no other findings. A Troubleshooting button with a count sits next to Last 30 days. Import activity log / Sync issues header links. The production banner is kept.
+  - 4 Action list
+  - Hash `#v<0-4>-<state>[/tab]`.
+- **Verify now 399 assertions.**
 - **Older dashboard work** (iter1–6, `reports/dashboard-variants` A–D from 2026-09-09): superseded as a base by this page.
 
 ### TxnRecon setup — all prototypes (2026-09-11)

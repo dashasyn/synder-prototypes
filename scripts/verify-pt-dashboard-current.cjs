@@ -171,8 +171,11 @@ const EXPECT = {
     ok(`[v1 ${key}] exactly one transactions message`, (await page.locator('#issues-body .issue-title', { hasText: "transactions need attention" }).count()) === 1);
     ok(`[v1 ${key}] transactions count matches the Needs attention card`, (await page.locator('[data-issue="txn"] .issue-title').innerText()).split(" ")[0] + " transactions" === (await page.locator("#attn-link").innerText()).trim());
     ok(`[v1 ${key}] transactions row lists the failed statuses`, (await page.locator('[data-issue="txn"] .issue-desc').innerText()) === e.desc, await page.locator('[data-issue="txn"] .issue-desc').innerText());
+    ok(`[v1 ${key}] transactions row links to sync issues`, (await page.locator('[data-issue="txn"] .lnk').innerText()).trim() === "View sync issues");
     await page.locator('[data-issue="txn"] .lnk').click();
-    ok(`[v1 ${key}] transactions row bridges to Platform transactions · Needs attention`, (await page.locator("#toast").innerText()).includes("Platform transactions · Needs attention"));
+    ok(`[v1 ${key}] transactions row opens Troubleshooting · Synchronization issues`, await page.locator("#page-trouble").isVisible() && await page.locator("#tab-sync.active").isVisible());
+    await page.click("#nav-dashboard");
+    ok(`[v1 ${key}] block still open after coming back`, await page.locator("#issues-body").isVisible());
     const small = await page.evaluate(() => [...document.querySelectorAll("#issues *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
     ok(`[v1 ${key}] no text under 14px in the block`, small === 0);
     ok(`[v1 ${key}] no horizontal overflow expanded`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
@@ -196,12 +199,12 @@ const EXPECT = {
   await page.waitForSelector("#issues-head");
   ok("#v1-lost opens Var 1 state 3", await page.locator("#vv-1.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
 
-  /* ---------- Var 2: always-visible action list ---------- */
+  /* ---------- Var 4: always-visible action list ---------- */
   await page.goto(target.split("#")[0] + "#attention");
   await page.waitForSelector("#sync-rows .row");
-  await page.click("#vv-2");
-  ok("[v2] variant button on", await page.locator("#vv-2.on").isVisible());
-  ok("[v2] hash records variant", page.url().endsWith("#v2-attention"));
+  await page.click("#vv-4");
+  ok("[v4] variant button on", await page.locator("#vv-4.on").isVisible());
+  ok("[v4] hash records variant", page.url().endsWith("#v4-attention"));
   const V2 = {
     attention: { req: ["Reconnect lost connections", "Review 80 transactions that need attention"], next: ["Run Transaction reconciliation"] },
     clear:     { req: [], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
@@ -210,93 +213,109 @@ const EXPECT = {
   for (const key of Object.keys(V2)) {
     const e = V2[key];
     await page.click(`#vs-${key}`);
-    ok(`[v2 ${key}] no production banner, no collapsed block`, (await page.locator("#lost-banner").count()) === 0 && (await page.locator("#issues").count()) === 0);
-    ok(`[v2 ${key}] list sits between KPI band and columns`, await page.evaluate(() => {
+    ok(`[v4 ${key}] no production banner, no collapsed block`, (await page.locator("#lost-banner").count()) === 0 && (await page.locator("#issues").count()) === 0);
+    ok(`[v4 ${key}] list sits between KPI band and columns`, await page.evaluate(() => {
       const a = document.getElementById("acts").getBoundingClientRect(), k = document.getElementById("kpis").getBoundingClientRect(), c = document.querySelector(".cols").getBoundingClientRect();
       return a.top >= k.bottom && a.bottom <= c.top; }));
-    ok(`[v2 ${key}] Required section ${e.req.length ? "shown" : "absent"}`, (await page.locator("#acts-req").count()) === (e.req.length ? 1 : 0));
+    ok(`[v4 ${key}] Required section ${e.req.length ? "shown" : "absent"}`, (await page.locator("#acts-req").count()) === (e.req.length ? 1 : 0));
     for (const [sec, want] of [["req", e.req], ["next", e.next]]) {
       if (!want.length) continue;
       const items = page.locator(`#acts-${sec} .act`);
-      ok(`[v2 ${key}] ${sec}: ${want.length} actions`, (await items.count()) === want.length, "got " + (await items.count()));
+      ok(`[v4 ${key}] ${sec}: ${want.length} actions`, (await items.count()) === want.length, "got " + (await items.count()));
       for (let i = 0; i < want.length; i++) {
-        ok(`[v2 ${key}] ${sec} ${i + 1} is "${want[i]}"`, (await items.nth(i).locator(".act-title").innerText()) === want[i], await items.nth(i).locator(".act-title").innerText());
-        ok(`[v2 ${key}] ${sec} ${i + 1} visible without clicking`, await items.nth(i).isVisible() && await items.nth(i).locator(".btn").isVisible());
+        ok(`[v4 ${key}] ${sec} ${i + 1} is "${want[i]}"`, (await items.nth(i).locator(".act-title").innerText()) === want[i], await items.nth(i).locator(".act-title").innerText());
+        ok(`[v4 ${key}] ${sec} ${i + 1} visible without clicking`, await items.nth(i).isVisible() && await items.nth(i).locator(".btn").isVisible());
       }
     }
     if (e.req.length) {
-      ok(`[v2 ${key}] connection action uses production copy`, (await page.locator('[data-act="conn"] .act-desc').innerText()) === "One or more of your integrations have lost connection. Please reconnect to continue syncing.");
+      ok(`[v4 ${key}] connection action uses production copy`, (await page.locator('[data-act="conn"] .act-desc').innerText()) === "One or more of your integrations have lost connection. Please reconnect to continue syncing.");
       await page.locator('[data-act="conn"] .btn').click();
-      ok(`[v2 ${key}] Reconnect bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
+      ok(`[v4 ${key}] Reconnect bridges to Organization settings`, (await page.locator("#toast").innerText()).endsWith("would open: Organization settings"));
       await page.locator('[data-act="txn"] .btn').click();
-      ok(`[v2 ${key}] transactions action bridges to Needs attention`, (await page.locator("#toast").innerText()).includes("Platform transactions · Needs attention"));
-    }
-    await page.locator('[data-act="recon"] .btn').click();
-    ok(`[v2 ${key}] reconciliation bridges`, (await page.locator("#toast").innerText()).includes("Transaction reconciliation"));
-    const small = await page.evaluate(() => [...document.querySelectorAll("#acts *")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
-    ok(`[v2 ${key}] no text under 14px`, small === 0);
-    ok(`[v2 ${key}] no horizontal overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
-  }
-  await page.goto(target.split("#")[0] + "#v2-lost");
-  await page.waitForSelector("#acts");
-  ok("#v2-lost opens Var 2 state 3", await page.locator("#vv-2.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
-
-  /* ---------- Links: A in blocks / B separate block ---------- */
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto(target.split("#")[0] + "#attention");
-  await page.waitForSelector("#sync-rows .row");
-  ok("[links] None by default: no bridge links", (await page.locator("#lnk-sync, #lnk-import, #lnk-trouble, #p-related").count()) === 0);
-  ok("[links] Troubleshooting in sidebar", await page.locator("#nav-troubleshooting").isVisible());
-  await page.click("#vl-1");
-  ok("[links A] hash records links", page.url().endsWith("#l1-attention"));
-  for (const key of ["attention", "clear", "lost"]) {
-    await page.click(`#vs-${key}`);
-    for (const [id, panel, want] of [["#lnk-import", "#p-import .panel-t", "Import activity log"], ["#lnk-sync", "#p-sync .panel-t", "Sync issues"], ["#lnk-trouble", "#kpi-attn .kpi-t", "Troubleshooting"]]) {
-      const l = page.locator(id);
-      ok(`[links A ${key}] ${want} link visible`, await l.isVisible());
-      ok(`[links A ${key}] ${want} link lives in its block header`, (await page.locator(`${panel} ${id}`).count()) === 1);
-      await l.click();
-      const wantTab = want === "Import activity log" ? "import" : "sync";
-      ok(`[links A ${key}] ${want} opens Troubleshooting · ${wantTab}`, await page.locator("#page-trouble").isVisible() && await page.locator(`#tab-${wantTab}.active`).isVisible() && !(await page.locator("#page-dash").isVisible()));
+      ok(`[v4 ${key}] transactions action opens Synchronization issues`, await page.locator("#tab-sync.active").isVisible());
       await page.click("#nav-dashboard");
     }
-    ok(`[links A ${key}] link right-aligned in Sync header`, await page.evaluate(() => {
-      const h = document.querySelector("#p-sync .panel-t").getBoundingClientRect(), l = document.getElementById("lnk-sync").getBoundingClientRect();
-      return Math.abs(h.right - l.right) < 2; }));
-    ok(`[links A ${key}] no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+    await page.locator('[data-act="recon"] .btn').click();
+    ok(`[v4 ${key}] reconciliation bridges`, (await page.locator("#toast").innerText()).includes("Transaction reconciliation"));
+    const small = await page.evaluate(() => [...document.querySelectorAll("#acts *")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
+    ok(`[v4 ${key}] no text under 14px`, small === 0);
+    ok(`[v4 ${key}] no horizontal overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   }
-  await page.click("#vs-lost");
-  await page.click("#vv-1");
-  await page.click("#issues-head");
-  ok("[links A v1] no duplicate Troubleshooting link in the block body", (await page.locator("#issues-body .lnk", { hasText: "Troubleshooting" }).count()) === 0);
-  await page.click("#vv-2");
-  ok("[links A v2] Troubleshooting link next to Required actions", await page.locator("#acts-req .acts-h #lnk-trouble-v2").isVisible());
-  await page.click("#vv-0");
-  await page.click("#vl-2");
-  const REL = { attention: ["6 error groups", "Last Oct 7, 11:58", "2 issues"], clear: ["No errors", "Last Oct 7, 11:58", "No issues"], lost: ["9 error groups", "Last Oct 2, 05:58", "4 issues"] };
-  for (const key of Object.keys(REL)) {
+  await page.goto(target.split("#")[0] + "#v4-lost");
+  await page.waitForSelector("#acts");
+  ok("#v4-lost opens Var 4 state 3", await page.locator("#vv-4.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
+
+  /* ---------- Var 2: separate Troubleshooting block ---------- */
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(target.split("#")[0] + "#v2-attention");
+  await page.waitForSelector("#p-trouble");
+  ok("[v2] no Links switch group", (await page.locator("[id^=vl-]").count()) === 0);
+  const TP = { attention: { n: 2, rows: ["Connection lost", "80 transactions need attention"], more: 0 }, clear: { n: 0 }, lost: { n: 4, rows: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention"], more: 1 } };
+  for (const key of Object.keys(TP)) {
+    const e = TP[key];
     await page.click(`#vs-${key}`);
-    ok(`[links B ${key}] in-block links gone`, (await page.locator("#lnk-sync, #lnk-import, #lnk-trouble").count()) === 0);
-    ok(`[links B ${key}] Related pages panel visible`, await page.locator("#p-related").isVisible());
-    ok(`[links B ${key}] Related pages in left column`, (await page.locator("#col-left #p-related").count()) === 1);
-    const ids = ["#rel-sync", "#rel-import", "#rel-trouble"];
-    for (let i = 0; i < 3; i++) {
-      const r = page.locator(ids[i]);
-      ok(`[links B ${key}] ${ids[i]} visible`, await r.isVisible());
-      ok(`[links B ${key}] ${ids[i]} label not truncated`, await r.locator(".txt").evaluate((el) => el.scrollWidth <= el.clientWidth));
-      ok(`[links B ${key}] ${ids[i]} meta "${REL[key][i]}"`, (await r.locator(".meta").innerText()) === REL[key][i], await r.locator(".meta").innerText());
+    ok(`[v2 ${key}] no top block, no production banner`, (await page.locator("#issues, #lost-banner").count()) === 0);
+    ok(`[v2 ${key}] Troubleshooting block first in right column`, await page.evaluate(() => document.getElementById("col-right").firstElementChild.id === "p-trouble"));
+    ok(`[v2 ${key}] block visible`, await page.locator("#p-trouble").isVisible());
+    ok(`[v2 ${key}] Go to Troubleshooting visible`, await page.locator("#tp-go").isVisible());
+    if (!e.n) {
+      ok(`[v2 ${key}] reads No issues`, (await page.locator("#tp-ok").innerText()) === "No issues" && (await page.locator("#tp-count").count()) === 0);
+    } else {
+      ok(`[v2 ${key}] count chip ${e.n}`, (await page.locator("#tp-count").innerText()) === String(e.n));
+      const rows = page.locator("#p-trouble .tp-row");
+      ok(`[v2 ${key}] shows ${e.rows.length} rows (max 3)`, (await rows.count()) === e.rows.length);
+      for (let i = 0; i < e.rows.length; i++) {
+        ok(`[v2 ${key}] row ${i + 1} "${e.rows[i]}"`, (await rows.nth(i).locator(".tp-title").innerText()) === e.rows[i]);
+        ok(`[v2 ${key}] row ${i + 1} link visible`, await rows.nth(i).locator(".lnk").isVisible());
+      }
+      ok(`[v2 ${key}] +more ${e.more ? "shown" : "absent"}`, e.more ? (await page.locator("#tp-more").innerText()) === "+" + e.more + " more" : (await page.locator("#tp-more").count()) === 0);
+      await page.locator('[data-tp="txn"] .lnk').click();
+      ok(`[v2 ${key}] transactions row opens Synchronization issues`, await page.locator("#tab-sync.active").isVisible());
+      await page.click("#nav-dashboard");
     }
-    await page.click("#rel-import");
-    ok(`[links B ${key}] Import activity log row opens its tab`, await page.locator("#tab-import.active").isVisible());
+    await page.click("#tp-go");
+    ok(`[v2 ${key}] Go to Troubleshooting navigates`, await page.locator("#page-trouble").isVisible());
     await page.click("#nav-dashboard");
+    ok(`[v2 ${key}] no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   }
-  await page.goto(target.split("#")[0] + "#v1-l2-lost");
-  await page.waitForSelector("#p-related");
-  ok("#v1-l2-lost opens Var 1 + links B + state 3", await page.locator("#vv-1.on").isVisible() && await page.locator("#vl-2.on").isVisible() && await page.locator("#vs-lost.on").isVisible());
+
+  /* ---------- Var 3: inline findings ---------- */
+  await page.click("#vv-3");
+  ok("[v3] hash", page.url().endsWith("#v3-lost"));
+  const IN = { attention: { n: 2, sync: true, rr: false }, clear: { n: 0, sync: false, rr: false }, lost: { n: 4, sync: true, rr: true } };
+  for (const key of Object.keys(IN)) {
+    const e = IN[key];
+    await page.click(`#vs-${key}`);
+    const hb = page.locator("#hdr-trouble");
+    ok(`[v3 ${key}] Troubleshooting button next to period`, await hb.isVisible() && await page.evaluate(() => document.getElementById("hdr-trouble").closest(".ph-right") === document.getElementById("period").parentElement));
+    ok(`[v3 ${key}] header count ${e.n || "none"}`, e.n ? (await hb.locator(".status").innerText()) === String(e.n) : (await hb.locator(".status").count()) === 0);
+    ok(`[v3 ${key}] header links in Import + Sync`, await page.locator("#p-import #lnk-import").isVisible() && await page.locator("#p-sync #lnk-sync").isVisible());
+    ok(`[v3 ${key}] no top block / trouble block / Related pages`, (await page.locator("#issues, #p-trouble, #p-related").count()) === 0);
+    ok(`[v3 ${key}] Sync finding ${e.sync ? "shown" : "absent"}`, (await page.locator('#p-sync [data-finding="txn"]').count()) === (e.sync ? 1 : 0));
+    if (e.sync) ok(`[v3 ${key}] Sync finding sits above the status list`, await page.evaluate(() => document.querySelector('#p-sync [data-finding="txn"]').getBoundingClientRect().bottom <= document.getElementById("sync-rows").getBoundingClientRect().top));
+    ok(`[v3 ${key}] RevRec finding ${e.rr ? "shown" : "absent"}`, (await page.locator('#p-revrec [data-finding="rr"]').count()) === (e.rr ? 1 : 0));
+    ok(`[v3 ${key}] lost connections suppress integration findings`, (await page.locator("#p-integrations .finding").count()) === 0);
+    ok(`[v3 ${key}] production banner kept when connections are lost`, (await page.locator("#lost-banner").count()) === (key === "lost" ? 1 : 0));
+    if (e.sync) {
+      await page.locator('[data-finding="txn"] .lnk').click();
+      ok(`[v3 ${key}] Sync finding opens Synchronization issues`, await page.locator("#tab-sync.active").isVisible());
+      await page.click("#nav-dashboard");
+    }
+    await page.click("#lnk-import");
+    ok(`[v3 ${key}] Import activity log link opens its tab`, await page.locator("#tab-import.active").isVisible());
+    await page.click("#nav-dashboard");
+    await page.click("#hdr-trouble");
+    ok(`[v3 ${key}] header button opens Troubleshooting`, await page.locator("#page-trouble").isVisible());
+    await page.click("#nav-dashboard");
+    ok(`[v3 ${key}] no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  }
   await page.setViewportSize({ width: 1280, height: 900 });
-  ok("[links] 1280: no overflow with three switch groups", await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  for (const v of [1, 2, 3, 4]) {
+    await page.click("#vv-" + v);
+    ok(`[1280 v${v}] no overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
+  }
   const smallL = await page.evaluate(() => [...document.querySelectorAll("body *")].filter((el) => !el.closest("svg") && [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
-  ok("[links] no text under 14px", smallL === 0);
+  ok("[variants] no text under 14px", smallL === 0);
 
   /* ---------- Troubleshooting page ---------- */
   await page.setViewportSize({ width: 1440, height: 1000 });
