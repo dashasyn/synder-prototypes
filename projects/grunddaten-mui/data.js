@@ -434,8 +434,8 @@ var LINE_ENDS = {
 };
 function stationDirections(st) {
   const out = [];
-  // column first (Richtung 1, then Richtung 2), lines in their sorted order — staging's layout
-  [0, 1].forEach(col => (st.lines || []).forEach(line => {
+  // per line (sorted), then Richtung 1 and 2 — the developers' staging layout (Ignat, 2026-10-16)
+  (st.lines || []).forEach(line => [0, 1].forEach(col => {
     const dest = (LINE_ENDS[line] || [])[col];
     if (dest) out.push({ key: line + '|' + dest, line, dest, col });
   }));

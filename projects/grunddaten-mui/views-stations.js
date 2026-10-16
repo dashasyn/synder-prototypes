@@ -297,7 +297,7 @@ function StationDetailView() {
 
   const dirs = stationDirections(st);
   const dirLabel = dir => dir.line + ' · ' + dir.dest;
-  const dirCols = [0, 1].map(col => dirs.filter(x => x.col === col));
+  const lineGroups = (st.lines || []).map(line => ({ line, dirs: dirs.filter(x => x.line === line) }));
   const oneLine = (st.lines || []).length <= 1;
   // a file already in every chosen direction is not offered again
   const transferOptions = addXfer ? soundFiles.filter(f => f.type === 'transfer'
@@ -390,45 +390,41 @@ function StationDetailView() {
           <//>
         <//>
 
-        ${/* ── Directions: exit side per track and direction. Ignat, 2026-10-15 (staging):
-              a one-line station names the destination under "Richtung n" and has one
-              field per cell; a station with several lines stacks "U1 · Uhlandstraße" … ── */ ''}
+        ${/* ── Directions: exit side per track and direction. Ignat, 2026-10-16: as the developers
+              built it on staging — one block per line (badge), then Gleis × Richtung 1 / 2 with the
+              destination under each header. Umstiegsansagen below use the same grouping. ── */ ''}
         <${SectionCard} title=${t('directions')} subtitle=${t('dirSubtitle')} disablePadding>
           <${TableContainer}>
             <${Table} id="dirTable">
-              <${TableHead}><${TableRow}>
-                <${TableCell} sx=${{ width: 120 }}>${t('track')}<//>
-                ${[0, 1].map(col => html`
-                  <${TableCell} key=${col}>
-                    <${Box} sx=${{ fontWeight: 500, textTransform: 'uppercase' }}>${t('direction')} ${col + 1}<//>
-                    ${oneLine && dirCols[col][0] ? html`<${Typography} variant="body2" color="text.secondary" className="dir-dest">${dirCols[col][0].dest}<//>` : null}
-                  <//>`)}
-              <//><//>
-              <${TableBody}>
-                ${d.tracks.map((tr, ti) => html`
-                  <${TableRow} key=${ti}>
-                    <${TableCell} sx=${{ fontWeight: 500 }}>${de ? 'Gleis' : 'Track'} ${tr.num}<//>
-                    ${[0, 1].map(col => html`
-                      <${TableCell} key=${col}>
-                        <${Stack} spacing=${1.5}>
-                          ${dirCols[col].map((dir, k) => {
-                            const lbl = `${de ? 'Gleis' : 'Track'} ${tr.num}, ${dirLabel(dir)}`;
-                            return html`<${Box} key=${dir.key} className="exit-cell" data-dir=${dir.key}>
-                              ${oneLine ? null : html`<${Typography} variant="body2" color="text.secondary" sx=${{ mb: .5 }}>${dirLabel(dir)}<//>`}
-                              <${FormControl} sx=${{ minWidth: 200 }}>
-                                <${Select} value=${(tr.exits || {})[dir.key] || 'left'} hiddenLabel
-                                  inputProps=${{ id: oneLine ? `te-${ti}-${col}` : `te-${ti}-${col}-${k}`, 'aria-label': lbl }}
-                                  SelectDisplayProps=${{ 'aria-label': lbl }}
-                                  sx=${{ '& .MuiSelect-select': { py: 1.25 } }}
-                                  onChange=${e => patch(n => { n.tracks[ti].exits = { ...n.tracks[ti].exits, [dir.key]: e.target.value }; })}>
-                                  ${['left', 'right', 'both'].map(v => html`<${MenuItem} key=${v} value=${v}>${t(v)}<//>`)}
-                                <//>
-                              <//>
-                            <//>`; })}
-                        <//>
-                      <//>`)}
-                  <//>`)}
-              <//>
+              ${lineGroups.map((g, li) => html`
+                <${TableBody} key=${g.line} className="dir-line" data-line=${g.line}
+                  sx=${{ '& + &': { borderTop: '2px solid #E0E0E0' } }}>
+                  <${TableRow}><${TableCell} colSpan=${3} sx=${{ borderBottom: 'none', pb: 0 }}><${LineBadge} line=${g.line} /><//><//>
+                  <${TableRow} className="dir-head-row">
+                    <${TableCell} sx=${{ width: 120, fontWeight: 500, textTransform: 'uppercase' }}>${t('track')}<//>
+                    ${g.dirs.map(dir => html`<${TableCell} key=${dir.col}>
+                      <${Box} sx=${{ fontWeight: 500, textTransform: 'uppercase' }}>${t('direction')} ${dir.col + 1}<//>
+                      <${Typography} variant="body2" color="text.secondary" className="dir-dest">${dir.dest}<//>
+                    <//>`)}
+                  <//>
+                  ${d.tracks.map((tr, ti) => html`
+                    <${TableRow} key=${ti}>
+                      <${TableCell}>${de ? 'Gleis' : 'Track'} ${tr.num}<//>
+                      ${g.dirs.map(dir => {
+                        const lbl = `${de ? 'Gleis' : 'Track'} ${tr.num}, ${dirLabel(dir)}`;
+                        return html`<${TableCell} key=${dir.col} className="exit-cell" data-dir=${dir.key}>
+                          <${FormControl} sx=${{ minWidth: 200 }}>
+                            <${Select} value=${(tr.exits || {})[dir.key] || 'left'} hiddenLabel
+                              inputProps=${{ id: oneLine ? `te-${ti}-${dir.col}` : `te-${li}-${ti}-${dir.col}`, 'aria-label': lbl }}
+                              SelectDisplayProps=${{ 'aria-label': lbl }}
+                              sx=${{ '& .MuiSelect-select': { py: 1.25 } }}
+                              onChange=${e => patch(n => { n.tracks[ti].exits = { ...n.tracks[ti].exits, [dir.key]: e.target.value }; })}>
+                              ${['left', 'right', 'both'].map(v => html`<${MenuItem} key=${v} value=${v}>${t(v)}<//>`)}
+                            <//>
+                          <//>
+                        <//>`; })}
+                    <//>`)}
+                <//>`)}
             <//>
           <//>
         <//>
@@ -460,12 +456,11 @@ function StationDetailView() {
 
           <${Typography} variant="subtitle2" sx=${{ fontWeight: 500, mt: 3, mb: 1 }}>${t('transferFiles')}<//>
           ${/* one collapsible section per direction; opened, the same table as before */ ''}
-          ${/* grouped like the Fahrtrichtungen table: Richtung 1, then Richtung 2 (2026-10-15) */ ''}
+          ${/* grouped like Fahrtrichtungen: one block per line, then Richtung 1 / 2 (2026-10-16) */ ''}
           <${Box} id="dirXfers" sx=${{ border: '1px solid #E7E7E7', borderRadius: 1 }}>
             ${dirs.map((dir, di) => {
-              const colHead = (di === 0 || dirs[di - 1].col !== dir.col) ? html`<${Box} key=${'h' + dir.col} className="dir-col-head"
-                sx=${{ px: 2, py: 1, bgcolor: '#F4F4F4', fontWeight: 500, fontSize: 14, textTransform: 'uppercase', borderTop: di ? '1px solid #E7E7E7' : 'none' }}>
-                ${t('direction')} ${dir.col + 1}<//>` : null;
+              const colHead = (di === 0 || dirs[di - 1].line !== dir.line) ? html`<${Box} key=${'h' + dir.line} className="dir-line-head" data-line=${dir.line}
+                sx=${{ px: 2, py: 1, bgcolor: '#F4F4F4', borderTop: di ? '1px solid #E7E7E7' : 'none' }}><${LineBadge} line=${dir.line} /><//>` : null;
               const L = d.dirXfers[dir.key] || [], open = openDirs.has(dir.key);
               const main = L.find(a => a.isMain);
               return html`${colHead}<${Box} key=${dir.key} id=${'dir-' + di} className="dir-section" data-dir=${dir.key}
@@ -474,8 +469,8 @@ function StationDetailView() {
                   sx=${{ all: 'unset', boxSizing: 'border-box', width: '100%', display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25,
                          cursor: 'pointer', '&:hover': { bgcolor: '#FAFAFA' }, '&:focus-visible': { outline: '2px solid #1976d2', outlineOffset: -2 } }}>
                   <${Icon} sx=${{ fontSize: 20, color: 'text.secondary', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>chevron_right<//>
-                  <${LineBadge} line=${dir.line} />
-                  <${Typography} variant="body2" sx=${{ fontWeight: 500, flex: 1 }}>${dir.dest}<//>
+                  <${Typography} variant="body2" sx=${{ fontWeight: 500, flex: 1 }} className="dir-name">
+                    ${t('direction')} ${dir.col + 1}<${Box} component="span" sx=${{ color: 'text.secondary', fontWeight: 400 }}> · ${dir.dest}<//><//>
                   <${Typography} variant="body2" color="text.secondary" className="dir-count">
                     ${L.length ? (L.length + ' ' + (de ? (L.length === 1 ? 'Ansage' : 'Ansagen') : (L.length === 1 ? 'announcement' : 'announcements'))
                                    + (main ? ' · ' + (de ? 'Haupt: ' : 'Main: ') + sndName(main.fileId) : ''))
