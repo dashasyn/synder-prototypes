@@ -380,6 +380,18 @@ const EXPECT = {
   await page.click("#vv-0");
   ok("[v6→v0] blocks visible again in other variants", await page.locator("#p-sync").isVisible() && (await page.locator(".dash-tabs").count()) === 0);
 
+  /* ---------- KPI cards and blocks share one grid ---------- */
+  for (const w of [1280, 1440]) {
+    await page.setViewportSize({ width: w, height: 1000 });
+    for (let v = 0; v <= 6; v++) for (const key of ["attention", "lost"]) {
+      await page.goto(target.split("#")[0] + "#" + (v ? "v" + v + "-" : "") + key);
+      await page.waitForSelector("#kpis .kpi");
+      const d = await page.evaluate(() => { const k = [...document.querySelectorAll("#kpis .kpi")].map((e) => e.getBoundingClientRect()); const c = [...document.querySelectorAll("#page-dash .cols > .col")].map((e) => e.getBoundingClientRect());
+        return Math.max(...k.map((r, i) => Math.max(Math.abs(r.left - c[i].left), Math.abs(r.right - c[i].right)))); });
+      ok(`[grid ${w} v${v} ${key}] KPI card edges match block edges`, d < 1, "off by " + d.toFixed(1) + "px");
+    }
+  }
+
   /* ---------- every variant links to the 3 pages, in every state ---------- */
   await page.setViewportSize({ width: 1440, height: 1000 });
   for (let v = 1; v <= 6; v++) for (const key of ["attention", "clear", "lost"]) {
