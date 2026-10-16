@@ -52,8 +52,8 @@ const EXPECT = {
     ok(`[${key}] revrec ${e.revrec ? "shown" : "absent"}`, (await page.locator("#p-revrec").count()) === (e.revrec ? 1 : 0));
     ok(`[${key}] attention card tone`, (await page.locator(`#kpi-attn.${e.attn === "All clear" ? "good" : "bad"}`).count()) === 1);
     ok(`[${key}] score/time links only when below 100%`,
-      (await page.locator("#kpi-score .lnk").count()) === (e.score === "100%" ? 0 : 1) &&
-      (await page.locator("#kpi-time .lnk").count()) === (e.score === "100%" ? 0 : 1));
+      (await page.locator("#kpi-score .kpi-v .lnk").count()) === (e.score === "100%" ? 0 : 1) &&
+      (await page.locator("#kpi-time .kpi-v .lnk").count()) === (e.score === "100%" ? 0 : 1));
 
     /* every status chip has a known tone, not the grey fallback by accident */
     const untoned = await page.$$eval("#sync-rows .status", (els) => els.filter((x) => !/status-(red|yellow|green|blue|dark-blue|black|grey)/.test(x.className)).length);
@@ -107,12 +107,35 @@ const EXPECT = {
   ok("opening a second menu closes the first", (await page.locator(".dropdown-menu.show").count()) === 1 && await page.locator("#p-integrations .dropdown-menu").nth(1).isVisible());
   await page.keyboard.press("Escape");
 
-  /* tooltip */
-  await page.hover("#kpi-time .help");
+  /* KPI tooltips (production copy, shortened) */
+  for (const [id, text, link] of [["#kpi-time", "Bookkeeping time saved by automatically recording transactions in your books.", "Time saved"], ["#kpi-score", "Percentage of imported transactions synced to your books.", "Sync score"]]) {
+    await page.locator("#page-dash h1").hover();
+    const card = page.locator(`${id} .tip-card`);
+    ok(`${id} tooltip hidden until hover`, !(await card.isVisible()));
+    await page.hover(`${id} .help`);
+    ok(`${id} tooltip opens on hover`, await card.isVisible());
+    ok(`${id} tooltip text`, (await card.locator(".tip-text").innerText()) === text, await card.locator(".tip-text").innerText());
+    const r = await card.evaluate((e) => { const b = e.getBoundingClientRect(); return { w: b.width, right: b.right, vw: innerWidth }; });
+    ok(`${id} tooltip fits on screen`, r.right <= r.vw);
+    await page.hover(`${id} .tip-link`);
+    ok(`${id} tooltip stays open while moving into it`, await card.isVisible() && await card.locator(".tip-link").isVisible());
+    await page.click(`${id} .tip-link`);
+    ok(`${id} How is this calculated? clickable`, (await page.locator("#toast").innerText()).includes("How is this calculated? · " + link));
+    await page.locator("#page-dash h1").hover();
+    ok(`${id} tooltip closes on leave`, !(await card.isVisible()));
+    await page.focus(`${id} .help`);
+    ok(`${id} tooltip opens on keyboard focus`, await card.isVisible());
+    await page.locator("#page-dash h1").click();
+  }
+  const smallTip = await page.evaluate(() => [...document.querySelectorAll(".tip-card *")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
+  ok("tooltip text ≥14px", smallTip === 0);
+
+  /* other "?" icons stay marked as uncaptured */
+  await page.hover("#p-import .panel-t .help");
   await page.waitForTimeout(250);
-  const tip = page.locator("#kpi-time .help .tooltip");
-  ok("help tooltip shows on hover", parseFloat(await tip.evaluate((el) => getComputedStyle(el).opacity)) > 0.9 && await tip.isVisible());
-  ok("tooltip marks uncaptured copy", (await tip.innerText()) === "[live copy not captured]");
+  const tip = page.locator("#p-import .panel-t .help .tooltip");
+  ok("uncaptured tooltip shows on hover", parseFloat(await tip.evaluate((el) => getComputedStyle(el).opacity)) > 0.9 && await tip.isVisible());
+  ok("uncaptured tooltip keeps its marker", (await tip.innerText()) === "[live copy not captured]");
 
   /* deep link by hash */
   await page.goto(target.split("#")[0] + "#clear");

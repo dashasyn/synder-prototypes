@@ -62,6 +62,32 @@ const ST = {
     }
   }
 
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(base + "#attention");
+  await page.waitForSelector("#sync-rows .row");
+  /* KPI tooltips (production copy, shortened) */
+  for (const [id, text, link] of [["#kpi-time", "Bookkeeping time saved by automatically recording transactions in your books.", "Time saved"], ["#kpi-score", "Percentage of imported transactions synced to your books.", "Sync score"]]) {
+    await page.locator("#page-dash h1").hover();
+    const card = page.locator(`${id} .tip-card`);
+    ok(`${id} tooltip hidden until hover`, !(await card.isVisible()));
+    await page.hover(`${id} .help`);
+    ok(`${id} tooltip opens on hover`, await card.isVisible());
+    ok(`${id} tooltip text`, (await card.locator(".tip-text").innerText()) === text, await card.locator(".tip-text").innerText());
+    const r = await card.evaluate((e) => { const b = e.getBoundingClientRect(); return { w: b.width, right: b.right, vw: innerWidth }; });
+    ok(`${id} tooltip fits on screen`, r.right <= r.vw);
+    await page.hover(`${id} .tip-link`);
+    ok(`${id} tooltip stays open while moving into it`, await card.isVisible() && await card.locator(".tip-link").isVisible());
+    await page.click(`${id} .tip-link`);
+    ok(`${id} How is this calculated? clickable`, (await page.locator("#toast").innerText()).includes("How is this calculated? · " + link));
+    await page.locator("#page-dash h1").hover();
+    ok(`${id} tooltip closes on leave`, !(await card.isVisible()));
+    await page.focus(`${id} .help`);
+    ok(`${id} tooltip opens on keyboard focus`, await card.isVisible());
+    await page.locator("#page-dash h1").click();
+  }
+  const smallTip = await page.evaluate(() => [...document.querySelectorAll(".tip-card *")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
+  ok("tooltip text ≥14px", smallTip === 0);
+
   /* Troubleshooting page still works end to end */
   await page.setViewportSize({ width: 1440, height: 1000 });
   for (const [key, groups] of [["attention", 6], ["clear", 0], ["lost", 9]]) {

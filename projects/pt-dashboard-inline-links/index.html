@@ -96,6 +96,12 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .help svg { width: 16px; height: 16px; }
 .help .tooltip { font-size: 14px; line-height: 20px; white-space: nowrap; font-weight: 400; max-width: none; }
 .help:hover .tooltip, .help:focus .tooltip { opacity: 1; }
+/* production-style tooltip card: white, wraps, stays open while the pointer moves into it */
+.help-card .tip-card { display: none; position: absolute; top: 100%; left: -8px; z-index: 120; padding-top: 6px; width: 300px; cursor: default; }
+.help-card .tip-card::before { content: ''; position: absolute; inset: 6px 0 0; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); box-shadow: var(--shadow-dropdown); z-index: -1; }
+.help-card:hover .tip-card, .help-card:focus-within .tip-card { display: block; }
+.tip-text { display: block; padding: 10px 12px 4px; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--text-primary); white-space: normal; }
+.tip-link { margin: 0 12px 10px; font-weight: 400; }
 
 /* row menu */
 .menu-wrap { position: relative; display: inline-flex; }
@@ -387,7 +393,17 @@ var STATES = {
 /* ---- render helpers ---- */
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function fmt(n) { return n.toLocaleString('en-US'); }
-function help() {
+/* KPI tooltips: production copy, shortened with Ignat 2026-10-16. Other "?" icons are
+   still uncaptured and keep the marker. */
+var TIPS = {
+  time:  { text: 'Bookkeeping time saved by automatically recording transactions in your books.', link: 'Time saved' },
+  score: { text: 'Percentage of imported transactions synced to your books.', link: 'Sync score' }
+};
+function help(key) {
+  var t = key && TIPS[key];
+  if (t) return '<span class="help help-card" tabindex="0" data-tip="' + key + '">' + ICON.help
+    + '<span class="tip-card" role="tooltip"><span class="tip-text">' + esc(t.text) + '</span>'
+    + '<button type="button" class="lnk tip-link"' + go('How is this calculated? · ' + t.link) + '>How is this calculated?</button></span></span>';
   return '<span class="help" tabindex="0">' + ICON.help + '<span class="tooltip">[live copy not captured]</span></span>';
 }
 function go(msg) { return ' data-go="' + esc(msg) + '"'; }
@@ -622,9 +638,9 @@ function render(key) {
     ? '<button type="button" class="lnk" id="attn-link" style="font-size:16px"' + go('Platform transactions · Needs attention') + '>' + fmt(s.attention) + ' transactions' + ICON.chev + '</button>'
     : 'All clear';
   document.getElementById('kpis').innerHTML =
-      '<div class="kpi" id="kpi-time"><div class="kpi-t">Time saved' + help() + '</div><div class="kpi-v">~ 47 h'
+      '<div class="kpi" id="kpi-time"><div class="kpi-t">Time saved' + help('time') + '</div><div class="kpi-v">~ 47 h'
     +   (s.timeLink ? '<button type="button" class="lnk"' + go('How to save more time') + '>How to save more time</button>' : '') + '</div></div>'
-    + '<div class="kpi" id="kpi-score"><div class="kpi-t">Sync score' + help() + '</div><div class="kpi-v">' + s.score
+    + '<div class="kpi" id="kpi-score"><div class="kpi-t">Sync score' + help('score') + '</div><div class="kpi-v">' + s.score
     +   (s.scoreLink ? '<button type="button" class="lnk"' + go('How to bring it up to 100%') + '>How to bring it up to 100%</button>' : '') + '</div></div>'
     + '<div class="kpi ' + (s.attention ? 'bad' : 'good') + '" id="kpi-attn"><div class="kpi-t">Needs attention' + help() + (troubleInCard ? hdrLink('Troubleshooting', 'Troubleshooting', 'lnk-trouble') : '') + '</div><div class="kpi-v">' + attn + '</div></div>';
 
@@ -953,6 +969,7 @@ document.addEventListener('click', function (e) {
   if (g) {
     e.preventDefault();
     var dest = g.getAttribute('data-go');
+    if (g.closest('.tip-card')) g.blur();   /* a mouse click shouldn't pin the tooltip open via :focus-within */
     if (ROUTES[dest]) { openPage('trouble', ROUTES[dest]); return; }
     toast(dest); return;
   }
