@@ -191,7 +191,6 @@ function StationDetailView() {
   const [addXfer, setAddXfer] = useState(null);   // { file, dirs: [keys], main } while the dialog is open
   const [addXferErr, setAddXferErr] = useState(false);
   const [schedAt, setSchedAt] = useState(null);   // { k: direction key, i: row } being scheduled
-  const [openDirs, setOpenDirs] = useState(() => new Set());   // all directions start collapsed
   const [schedDays, setSchedDays] = useState(null);
   const [schedPeriods, setSchedPeriods] = useState([{ from: '', to: '' }]);
 
@@ -304,7 +303,6 @@ function StationDetailView() {
       && addXfer.dirs.some(k => !(d.dirXfers[k] || []).some(a => a.fileId === f.id)))
     .map(f => ({ value: f.id, label: f.filename })) : [];
   const firstXfer = addXfer ? addXfer.dirs.every(k => !(d.dirXfers[k] || []).length) : false;   // the first one is main, necessarily
-  const toggleDir = k => setOpenDirs(o => { const n = new Set(o); n.has(k) ? n.delete(k) : n.add(k); return n; });
 
   // a number field for a form row: no label inside, the unit after it
   const num = (label, value, onChange, bad, min, max, id) => html`
@@ -461,29 +459,18 @@ function StationDetailView() {
             ${dirs.map((dir, di) => {
               const colHead = (di === 0 || dirs[di - 1].line !== dir.line) ? html`<${Box} key=${'h' + dir.line} className="dir-line-head" data-line=${dir.line}
                 sx=${{ px: 2, py: 1, bgcolor: '#F4F4F4', borderTop: di ? '1px solid #E7E7E7' : 'none' }}><${LineBadge} line=${dir.line} /><//>` : null;
-              const L = d.dirXfers[dir.key] || [], open = openDirs.has(dir.key);
-              const main = L.find(a => a.isMain);
+              const L = d.dirXfers[dir.key] || [];
+              // Ignat, 2026-10-19: no accordions — every direction's table is visible, like the exit fields
               return html`${colHead}<${Box} key=${dir.key} id=${'dir-' + di} className="dir-section" data-dir=${dir.key}
-                  sx=${{ borderTop: '1px solid #E7E7E7' }}>
-                <${Box} component="button" type="button" className="dir-head" aria-expanded=${open} onClick=${() => toggleDir(dir.key)}
-                  sx=${{ all: 'unset', boxSizing: 'border-box', width: '100%', display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1.25,
-                         cursor: 'pointer', '&:hover': { bgcolor: '#FAFAFA' }, '&:focus-visible': { outline: '2px solid #1976d2', outlineOffset: -2 } }}>
-                  <${Icon} sx=${{ fontSize: 20, color: 'text.secondary', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>chevron_right<//>
-                  <${Typography} variant="body2" sx=${{ fontWeight: 500, flex: 1 }} className="dir-name">
-                    ${t('direction')} ${dir.col + 1}<${Box} component="span" sx=${{ color: 'text.secondary', fontWeight: 400 }}> · ${dir.dest}<//><//>
-                  <${Typography} variant="body2" color="text.secondary" className="dir-count">
-                    ${L.length ? (L.length + ' ' + (de ? (L.length === 1 ? 'Ansage' : 'Ansagen') : (L.length === 1 ? 'announcement' : 'announcements'))
-                                   + (main ? ' · ' + (de ? 'Haupt: ' : 'Main: ') + sndName(main.fileId) : ''))
-                               : (de ? 'Keine Umstiegsansage' : 'No transfer announcement')}<//>
-                <//>
-                ${open ? html`<${Box} sx=${{ px: 2, pb: 2 }}>
-                  ${L.length ? html`<${XferTable} list=${L} de=${de} t=${t}
-                      onMove=${(a, b) => moveXfer(dir.key, a, b)} onMain=${i => setMain(dir.key, i)}
-                      onSched=${i => openSchedule(dir.key, i)} onRemove=${i => removeXfer(dir.key, i)} />`
-                    : html`<${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1.5 }}>${t('noneAssigned')}<//>`}
-                  <${Button} id=${'btnAddXfer-' + di}
-                    onClick=${() => { setAddXfer({ file: '', dirs: [dir.key], main: false }); setAddXferErr(false); }}>${t('addTransfer')}<//>
-                <//>` : null}
+                  sx=${{ borderTop: '1px solid #E7E7E7', px: 2, pt: 1.5, pb: 2 }}>
+                <${Typography} variant="body2" sx=${{ fontWeight: 500, mb: 1 }} className="dir-name">
+                  ${t('direction')} ${dir.col + 1}<${Box} component="span" sx=${{ color: 'text.secondary', fontWeight: 400 }}> · ${dir.dest}<//><//>
+                ${L.length ? html`<${XferTable} list=${L} de=${de} t=${t}
+                    onMove=${(a, b) => moveXfer(dir.key, a, b)} onMain=${i => setMain(dir.key, i)}
+                    onSched=${i => openSchedule(dir.key, i)} onRemove=${i => removeXfer(dir.key, i)} />`
+                  : html`<${Typography} variant="body2" color="text.disabled" sx=${{ fontStyle: 'italic', mb: 1 }} className="dir-none">${t('noneAssigned')}<//>`}
+                <${Button} id=${'btnAddXfer-' + di}
+                  onClick=${() => { setAddXfer({ file: '', dirs: [dir.key], main: false }); setAddXferErr(false); }}>${t('addTransfer')}<//>
               <//>`; })}
           <//>
         <//>
@@ -548,7 +535,6 @@ function StationDetailView() {
                 L.splice(at < 0 ? L.length : at, 0, item);
               }
             }));
-            setOpenDirs(o => new Set([...o, ...addXfer.dirs]));
             setAddXfer(null);
           }}>${t('saveEntry')}<//>
         <//>
