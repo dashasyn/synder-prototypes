@@ -15,7 +15,7 @@ function ok(name, cond, extra) {
 const EXPECT = {
   attention: { sync: 10, imports: 2, integrations: 2, score: "80%", attn: "80 transactions", banner: false, revrec: false, hot: 2 },
   clear:     { sync: 3,  imports: 1, integrations: 1, score: "100%", attn: "All clear",      banner: false, revrec: false, hot: 0 },
-  lost:      { sync: 18, imports: 2, integrations: 6, score: "70%", attn: "80 transactions", banner: true,  revrec: true,  hot: 2 },
+  lost:      { sync: 18, imports: 2, integrations: 2, score: "70%", attn: "80 transactions", banner: true,  revrec: true,  hot: 2 },
 };
 
 (async () => {
@@ -154,7 +154,7 @@ const EXPECT = {
   const V1 = {
     attention: { issues: 1, rows: ["80 transactions need attention"], desc: "Failed, rollback failed, synced with rule failed." },
     clear:     { issues: 0 },
-    lost:      { issues: 4, rows: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention", "Revenue recognition incomplete"], desc: "Failed, rollback failed, synced with rule failed, not parsed." },
+    lost:      { issues: 3, rows: ["Connection lost", "80 transactions need attention", "Revenue recognition incomplete"], desc: "Failed, rollback failed, synced with rule failed, not parsed." },
   };
   await page.click("#vs-attention");
   await page.click("#vv-1");
@@ -235,7 +235,7 @@ const EXPECT = {
   const V2 = {
     attention: { req: ["Review 80 transactions that need attention"], next: ["Run Transaction reconciliation"] },
     clear:     { req: [], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
-    lost:      { req: ["Reconnect lost connections", "Turn on Auto-import and Auto-sync", "Review 80 transactions that need attention", "Complete revenue recognition"], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
+    lost:      { req: ["Reconnect lost connections", "Review 80 transactions that need attention", "Complete revenue recognition"], next: ["Sync 30 ready transactions", "Run Transaction reconciliation"] },
   };
   for (const key of Object.keys(V2)) {
     const e = V2[key];
@@ -280,7 +280,7 @@ const EXPECT = {
   await page.goto(target.split("#")[0] + "#v2-attention");
   await page.waitForSelector("#p-trouble");
   ok("[v2] no Links switch group", (await page.locator("[id^=vl-]").count()) === 0);
-  const TP = { attention: { n: 1, rows: ["80 transactions need attention"], more: 0 }, clear: { n: 0 }, lost: { n: 4, rows: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention"], more: 1 } };
+  const TP = { attention: { n: 1, rows: ["80 transactions need attention"], more: 0 }, clear: { n: 0 }, lost: { n: 3, rows: ["Connection lost", "80 transactions need attention", "Revenue recognition incomplete"], more: 0 } };
   for (const key of Object.keys(TP)) {
     const e = TP[key];
     await page.click(`#vs-${key}`);
@@ -375,7 +375,7 @@ const EXPECT = {
   /* ---------- Var 6: tabs between KPI band and blocks ---------- */
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.click("#vv-6");
-  const T6 = { attention: ["80 transactions need attention"], clear: [], lost: ["Connection lost", "Auto-import and Auto-sync are off", "80 transactions need attention", "Revenue recognition incomplete"] };
+  const T6 = { attention: ["80 transactions need attention"], clear: [], lost: ["Connection lost", "80 transactions need attention", "Revenue recognition incomplete"] };
   for (const key of Object.keys(T6)) {
     const want = T6[key];
     await page.click(`#vs-${key}`);
@@ -580,50 +580,37 @@ const EXPECT = {
     ok(`[ts 1280] ${t}: no horizontal overflow`, await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth));
   }
 
-  /* ---------- Accounting card: action + status tooltip ---------- */
+  /* ---------- Accounting card: action + status tooltip (status comes from the state) ---------- */
   await page.setViewportSize({ width: 1440, height: 1000 });
-  for (const [key, def] of [["attention", "ok"], ["clear", "ok"], ["lost", "lost"]]) {
+  ok("[acct] no Accounting switch", (await page.locator("[id^=va-]").count()) === 0);
+  for (const [key, a] of [["attention", "ok"], ["clear", "ok"], ["lost", "lost"]]) {
     await page.goto(target.split("#")[0] + "" + "#" + key);
     await page.waitForSelector("#acct-action");
-    ok(`[acct ${key}] default status = ${def}`, await page.locator(`#va-${def}.on`).isVisible());
-    for (const [a, chip, since] of [["ok", "Connected", null], ["lost", "Connection lost", "Oct 2, 2026 05:58"], ["disc", "Disconnected", "Oct 5, 2026 14:20"]]) {
-      await page.click(`#va-${a}`);
-      const t = `[acct ${key} ${a}]`;
-      ok(`${t} switch on`, await page.locator(`#va-${a}.on`).isVisible());
-      ok(`${t} chip "${chip}"`, (await page.locator("#p-accounting .item-chips .status").innerText()) === chip);
-      const act = page.locator("#acct-action");
-      ok(`${t} action is ${a === "ok" ? "Manage" : "Reconnect"}`, (await act.innerText()).trim() === (a === "ok" ? "Manage" : "Reconnect") && await act.isVisible());
-      ok(`${t} only one action on the card`, (await page.locator("#p-accounting .item-h .lnk").count()) === 1);
-      ok(`${t} action stays top-right of the card`, await page.evaluate(() => { const c = document.querySelector("#p-accounting .item").getBoundingClientRect(), b = document.getElementById("acct-action").getBoundingClientRect(); return c.right - b.right < 20 && b.top - c.top < 20; }));
-      await act.click();
-      ok(`${t} action bridges`, (await page.locator("#toast").innerText()).includes(a === "ok" ? "Manage accounting connection" : "Reconnect · My lovely money (QuickBooks Online)"));
-      if (since) {
-        const tip = page.locator("#acct-status .tip-card");
-        ok(`${t} tooltip hidden until hover`, !(await tip.isVisible()));
-        await page.hover("#acct-status");
-        ok(`${t} tooltip opens on hover`, await tip.isVisible());
-        ok(`${t} tooltip copy`, (await tip.innerText()).trim() === `No transactions were synced to your books since ${since}.`, await tip.innerText());
-        ok(`${t} tooltip fits on screen`, await tip.evaluate((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }));
-        ok(`${t} tooltip sits right under its chip`, await page.evaluate(() => { const c = document.querySelector("#acct-status .status").getBoundingClientRect(), t = document.querySelector("#acct-status .tip-card").getBoundingClientRect(); return Math.abs(t.top - c.bottom) < 4 && Math.abs(t.left - c.left) < 16; }));
-        ok(`${t} tooltip is on top (not covered)`, await page.evaluate(() => { const t = document.querySelector("#acct-status .tip-text").getBoundingClientRect(); const el = document.elementFromPoint(t.left + 10, t.top + 8); return !!el && !!el.closest("#acct-status"); }));
-        await page.locator("#page-dash h1").hover();
-        await page.focus("#acct-status");
-        ok(`${t} tooltip opens on keyboard focus`, await tip.isVisible());
-        await page.locator("#page-dash h1").click();
-        ok(`${t} card tinted red`, (await page.locator("#p-accounting .item.bad").count()) === 1);
-      } else {
-        ok(`${t} no status tooltip when connected`, (await page.locator("#acct-status").count()) === 0);
-        ok(`${t} card not tinted`, (await page.locator("#p-accounting .item.bad").count()) === 0);
-      }
+    const t = `[acct ${key}]`;
+    ok(`${t} chip`, (await page.locator("#p-accounting .item-chips .status").innerText()) === (a === "ok" ? "Connected" : "Connection lost"));
+    const act = page.locator("#acct-action");
+    ok(`${t} action is ${a === "ok" ? "Manage" : "Reconnect"}`, (await act.innerText()).trim() === (a === "ok" ? "Manage" : "Reconnect") && await act.isVisible());
+    ok(`${t} only one action on the card`, (await page.locator("#p-accounting .item-h .lnk").count()) === 1);
+    await act.click();
+    ok(`${t} action bridges`, (await page.locator("#toast").innerText()).includes(a === "ok" ? "Manage accounting connection" : "Reconnect · My lovely money (QuickBooks Online)"));
+    if (a === "lost") {
+      const tip = page.locator("#acct-status .tip-card");
+      ok(`${t} tooltip hidden until hover`, !(await tip.isVisible()));
+      await page.hover("#acct-status");
+      ok(`${t} tooltip opens on hover`, await tip.isVisible());
+      ok(`${t} tooltip copy`, (await tip.innerText()).trim() === "No transactions were synced to your books since Oct 2, 2026 05:58.", await tip.innerText());
+      ok(`${t} tooltip fits on screen`, await tip.evaluate((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }));
+      ok(`${t} tooltip sits right under its chip`, await page.evaluate(() => { const c = document.querySelector("#acct-status .status").getBoundingClientRect(), t = document.querySelector("#acct-status .tip-card").getBoundingClientRect(); return Math.abs(t.top - c.bottom) < 4 && Math.abs(t.left - c.left) < 16; }));
+      ok(`${t} tooltip is on top (not covered)`, await page.evaluate(() => { const t = document.querySelector("#acct-status .tip-text").getBoundingClientRect(); const el = document.elementFromPoint(t.left + 10, t.top + 8); return !!el && !!el.closest("#acct-status"); }));
+      await page.locator("#page-dash h1").hover();
+      await page.focus("#acct-status");
+      ok(`${t} tooltip opens on keyboard focus`, await tip.isVisible());
+      await page.locator("#page-dash h1").click();
+    } else {
+      ok(`${t} no status tooltip when connected`, (await page.locator("#acct-status").count()) === 0);
     }
-    await page.click(key === "lost" ? "#vs-attention" : "#vs-lost");
-    ok(`[acct ${key}] state change resets the Accounting switch to the state's default`, await page.locator(key === "lost" ? "#va-ok.on" : "#va-lost.on").isVisible());
-  }
-  ok("[acct] Needs attention card has no Troubleshooting link in any state", true);
-  for (const key of ["attention", "clear", "lost"]) {
-    await page.goto(target.split("#")[0] + "" + "#" + key);
-    await page.waitForSelector("#kpis .kpi");
-    ok(`[acct ${key}] no Troubleshooting link on Needs attention`, (await page.locator("#kpi-attn .lnk", { hasText: "Troubleshooting" }).count()) === 0);
+    ok(`${t} no Troubleshooting link on Needs attention`, (await page.locator("#kpi-attn .lnk", { hasText: "Troubleshooting" }).count()) === 0);
+    ok(`${t} at most 2 integrations`, (await page.locator("#p-integrations .item").count()) <= 2);
   }
 
   ok("no JS errors", errors.length === 0, errors.join(" | "));
