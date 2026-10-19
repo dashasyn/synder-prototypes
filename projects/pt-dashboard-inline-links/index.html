@@ -113,6 +113,9 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
 .help-card:hover .tip-card, .help-card:focus-within .tip-card { display: block; }
 .tip-text { display: block; padding: 10px 12px 4px; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--text-primary); white-space: normal; }
 .tip-link { margin: 0 12px 10px; font-weight: 400; }
+.tip-text.tip-only { padding-bottom: 10px; }
+.acct-tip { position: relative; display: inline-flex; cursor: default; color: inherit; }
+.acct-tip .tip-card { width: 280px; }
 
 /* row menu */
 .menu-wrap { position: relative; display: inline-flex; }
@@ -263,6 +266,13 @@ body { margin: 0; background: var(--bg-surface); color: var(--text-primary); fon
     <button id="vs-attention" class="on" onclick="setState('attention')">1 · Needs attention</button>
     <button id="vs-clear" onclick="setState('clear')">2 · All clear</button>
     <button id="vs-lost" onclick="setState('lost')">3 · Connection lost</button>
+  </div>
+  <span class="vs-sep"></span>
+  <span class="vs-label">Accounting</span>
+  <div class="vs-opts">
+    <button id="va-ok" onclick="setAcct('ok')">Connected</button>
+    <button id="va-lost" onclick="setAcct('lost')">Connection lost</button>
+    <button id="va-disc" onclick="setAcct('disc')">Disconnected</button>
   </div>
 </div>
 
@@ -443,7 +453,7 @@ function rowMenu() {
 function issuesFor(s) {
   var out = [];
   var lostInts = s.integrations.filter(function (it) { return it.chips.some(function (c) { return c[0] === 'Connection lost'; }); });
-  if (s.accounting === 'lost' || lostInts.length) out.push({ id: 'conn',
+  if (s.accounting !== 'ok' || lostInts.length) out.push({ id: 'conn',
     title: 'Connection lost',
     desc: 'One or more of your integrations have lost connection. Please reconnect to continue syncing.',   /* live copy, production banner */
     action: 'Organization settings', go: 'Organization settings' });
@@ -622,15 +632,22 @@ function renderDashTabBody(s) {
     + (list.length ? '<div class="dt-list">' + rows + '</div>' : '') + '</section>';
 }
 
+/* Accounting status: defaults to the state's value, the Accounting switch overrides it
+   until the state changes. */
+var acctOverride = null;
+var ACCT_SINCE = { lost: 'Oct 2, 2026 05:58', disc: 'Oct 5, 2026 14:20' };   /* mock: when it was lost / disconnected */
+function acctNow() { return acctOverride || STATES[current].accounting; }
+function setAcct(a) { acctOverride = a === STATES[current].accounting ? null : a; sync(); }
+
 function render(key) {
-  var s = STATES[key];
+  var s = Object.assign({}, STATES[key], { accounting: acctNow() });
   menuSeq = 0;
 
   var fx = variant === 4 ? findingsFor(s) : null, nIssues = issuesFor(s).length;
   /* every variant (1-6) must link to Troubleshooting, Sync issues and Import activity log.
      Troubleshooting goes on the Needs attention card wherever the variant's own entry
      (red block, Troubleshooting block, header button, Issues tab) isn't on screen. */
-  var troubleInCard = variant === 3 || variant === 5 || (variant === 1 && !nIssues);
+  var troubleInCard = false;   /* Ignat 2026-10-19: no Troubleshooting link on the Needs attention card, any variant */
   document.getElementById('hdr-extra').innerHTML = variant === 4
     ? '<button type="button" class="btn btn-outlined btn-sm" id="hdr-trouble"' + go('Troubleshooting') + '>Troubleshooting'
       + (nIssues ? ' <span class="status status-red">' + nIssues + '</span>' : '') + '</button>' : '';
@@ -676,12 +693,18 @@ function render(key) {
     + '<div class="box" id="sync-rows">' + s.sync.map(function (r) { return statusRow(r[0], r[1], 'Platform transactions · Status'); }).join('') + '</div></section>';
 
   /* right: Accounting + Integrations */
-  var acctLost = s.accounting === 'lost';
+  var acctLost = s.accounting !== 'ok';
+  /* 1. Connected → Manage; Connection lost / Disconnected → Reconnect in the same place.
+     2. Lost / Disconnected status chip carries a tooltip with the time syncing stopped. */
+  var acctChip = s.accounting === 'ok' ? '<span class="status status-green">Connected</span>'
+    : '<span class="help-card acct-tip" tabindex="0" id="acct-status"><span class="status status-red">' + (s.accounting === 'disc' ? 'Disconnected' : 'Connection lost') + '</span>'
+      + '<span class="tip-card" role="tooltip"><span class="tip-text tip-only">No transactions were synced to your books since ' + ACCT_SINCE[s.accounting] + '.</span></span></span>';
   var right = (variant === 2 ? renderTroublePanel(s) : '') + '<section class="panel" id="p-accounting"><div class="panel-t">Accounting' + help() + '</div>'
     + '<div class="items"><div class="item' + (acctLost ? ' bad' : '') + '">'
     + '<div class="item-h">' + ICON.qbo + '<span class="nm">My lovely money (QuickBooks Online)</span>'
-    + '<button type="button" class="lnk"' + go('Manage accounting connection') + '>Manage</button></div>'
-    + '<div class="item-chips"><span class="status ' + (acctLost ? 'status-red">Connection lost' : 'status-green">Connected') + '</span></div>'
+    + (acctLost ? '<button type="button" class="lnk" id="acct-action"' + go('Reconnect · My lovely money (QuickBooks Online)') + '>Reconnect</button></div>'
+                : '<button type="button" class="lnk" id="acct-action"' + go('Manage accounting connection') + '>Manage</button></div>')
+    + '<div class="item-chips">' + acctChip + '</div>'
     + '</div></div></section>';
   right += '<section class="panel" id="p-integrations"><div class="panel-t">Integrations' + help() + '</div><div class="items">'
     + s.integrations.map(function (it, idx) {
@@ -906,6 +929,7 @@ function sync() {
   ['attention','clear','lost'].forEach(function (k) {
     document.getElementById('vs-' + k).classList.toggle('on', k === current);
   });
+  ['ok','lost','disc'].forEach(function (a) { document.getElementById('va-' + a).classList.toggle('on', a === acctNow()); });
   render(current);
   if (page === 'trouble') renderTrouble();
   writeHash();
@@ -913,7 +937,7 @@ function sync() {
 function writeHash() {
   try { history.replaceState(null, '', '#' + current + (page === 'trouble' ? '/' + tsTab : '')); } catch (e) {}
 }
-function setState(key) { current = key; ignored = {}; resetTsFilters(); sync(); }
+function setState(key) { current = key; acctOverride = null; ignored = {}; resetTsFilters(); sync(); }
 function setVariant(v) { variant = v; sync(); }
 
 /* ---- interactions ---- */

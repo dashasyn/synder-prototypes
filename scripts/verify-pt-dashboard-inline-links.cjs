@@ -29,7 +29,7 @@ const ST = {
   await page.waitForSelector("#sync-rows .row");
 
   ok("switcher is first element in body", await page.evaluate(() => document.body.firstElementChild.classList.contains("variant-switch")));
-  ok("only the State group — no Variant switch", (await page.locator("[id^=vv-]").count()) === 0 && (await page.locator(".variant-switch .vs-opts").count()) === 1);
+  ok("no Variant switch — only State + Accounting", (await page.locator("[id^=vv-]").count()) === 0 && (await page.locator(".variant-switch .vs-opts").count()) === 2);
   ok("title", (await page.title()).includes("Inline links"));
 
   for (const w of [1440, 1280]) {
@@ -45,7 +45,7 @@ const ST = {
       ok(`${t} production banner ${e.banner ? "shown" : "absent"}`, (await page.locator("#lost-banner").count()) === (e.banner ? 1 : 0));
       ok(`${t} revrec ${e.revrec ? "shown" : "absent"}`, (await page.locator("#p-revrec").count()) === (e.revrec ? 1 : 0));
       ok(`${t} nothing from other variants`, (await page.locator("#issues, #p-trouble, #acts, .xf, #hdr-trouble, .dash-tabs").count()) === 0);
-      for (const [id, panel, tab] of [["#lnk-import", "#p-import .panel-t", "import"], ["#lnk-sync", "#p-sync .panel-t", "sync"], ["#lnk-trouble", "#kpi-attn .kpi-t", "sync"]]) {
+      for (const [id, panel, tab] of [["#lnk-import", "#p-import .panel-t", "import"], ["#lnk-sync", "#p-sync .panel-t", "sync"]]) {
         ok(`${t} ${id} visible in its header`, await page.locator(id).isVisible() && (await page.locator(`${panel} ${id}`).count()) === 1);
         ok(`${t} ${id} right-aligned`, await page.evaluate(([i, h]) => Math.abs(document.querySelector(h).getBoundingClientRect().right - document.querySelector(i).getBoundingClientRect().right) < 2, [id, panel]));
         await page.click(id);
@@ -77,6 +77,7 @@ const ST = {
     ok(`${id} tooltip text`, (await card.locator(".tip-text").innerText()) === text, await card.locator(".tip-text").innerText());
     const r = await card.evaluate((e) => { const b = e.getBoundingClientRect(); return { w: b.width, right: b.right, vw: innerWidth }; });
     ok(`${id} tooltip fits on screen`, r.right <= r.vw);
+    ok(`${id} tooltip sits under its icon`, await page.evaluate((i) => { const h = document.querySelector(i + " .help").getBoundingClientRect(), t = document.querySelector(i + " .tip-card").getBoundingClientRect(); return t.top >= h.bottom - 2 && t.top - h.bottom < 10 && t.left >= 0; }, id));
     await page.hover(`${id} .tip-link`);
     ok(`${id} tooltip stays open while moving into it`, await card.isVisible() && await card.locator(".tip-link").isVisible());
     await page.click(`${id} .tip-link`);
@@ -89,6 +90,52 @@ const ST = {
   }
   const smallTip = await page.evaluate(() => [...document.querySelectorAll(".tip-card *")].filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && parseFloat(getComputedStyle(el).fontSize) < 14).length);
   ok("tooltip text ≥14px", smallTip === 0);
+
+  /* ---------- Accounting card: action + status tooltip ---------- */
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const [key, def] of [["attention", "ok"], ["clear", "ok"], ["lost", "lost"]]) {
+    await page.goto(base + "#" + key);
+    await page.waitForSelector("#acct-action");
+    ok(`[acct ${key}] default status = ${def}`, await page.locator(`#va-${def}.on`).isVisible());
+    for (const [a, chip, since] of [["ok", "Connected", null], ["lost", "Connection lost", "Oct 2, 2026 05:58"], ["disc", "Disconnected", "Oct 5, 2026 14:20"]]) {
+      await page.click(`#va-${a}`);
+      const t = `[acct ${key} ${a}]`;
+      ok(`${t} switch on`, await page.locator(`#va-${a}.on`).isVisible());
+      ok(`${t} chip "${chip}"`, (await page.locator("#p-accounting .item-chips .status").innerText()) === chip);
+      const act = page.locator("#acct-action");
+      ok(`${t} action is ${a === "ok" ? "Manage" : "Reconnect"}`, (await act.innerText()).trim() === (a === "ok" ? "Manage" : "Reconnect") && await act.isVisible());
+      ok(`${t} only one action on the card`, (await page.locator("#p-accounting .item-h .lnk").count()) === 1);
+      ok(`${t} action stays top-right of the card`, await page.evaluate(() => { const c = document.querySelector("#p-accounting .item").getBoundingClientRect(), b = document.getElementById("acct-action").getBoundingClientRect(); return c.right - b.right < 20 && b.top - c.top < 20; }));
+      await act.click();
+      ok(`${t} action bridges`, (await page.locator("#toast").innerText()).includes(a === "ok" ? "Manage accounting connection" : "Reconnect · My lovely money (QuickBooks Online)"));
+      if (since) {
+        const tip = page.locator("#acct-status .tip-card");
+        ok(`${t} tooltip hidden until hover`, !(await tip.isVisible()));
+        await page.hover("#acct-status");
+        ok(`${t} tooltip opens on hover`, await tip.isVisible());
+        ok(`${t} tooltip copy`, (await tip.innerText()).trim() === `No transactions were synced to your books since ${since}.`, await tip.innerText());
+        ok(`${t} tooltip fits on screen`, await tip.evaluate((e) => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth && r.bottom <= innerHeight; }));
+        ok(`${t} tooltip sits right under its chip`, await page.evaluate(() => { const c = document.querySelector("#acct-status .status").getBoundingClientRect(), t = document.querySelector("#acct-status .tip-card").getBoundingClientRect(); return Math.abs(t.top - c.bottom) < 4 && Math.abs(t.left - c.left) < 16; }));
+        ok(`${t} tooltip is on top (not covered)`, await page.evaluate(() => { const t = document.querySelector("#acct-status .tip-text").getBoundingClientRect(); const el = document.elementFromPoint(t.left + 10, t.top + 8); return !!el && !!el.closest("#acct-status"); }));
+        await page.locator("#page-dash h1").hover();
+        await page.focus("#acct-status");
+        ok(`${t} tooltip opens on keyboard focus`, await tip.isVisible());
+        await page.locator("#page-dash h1").click();
+        ok(`${t} card tinted red`, (await page.locator("#p-accounting .item.bad").count()) === 1);
+      } else {
+        ok(`${t} no status tooltip when connected`, (await page.locator("#acct-status").count()) === 0);
+        ok(`${t} card not tinted`, (await page.locator("#p-accounting .item.bad").count()) === 0);
+      }
+    }
+    await page.click(key === "lost" ? "#vs-attention" : "#vs-lost");
+    ok(`[acct ${key}] state change resets the Accounting switch to the state's default`, await page.locator(key === "lost" ? "#va-ok.on" : "#va-lost.on").isVisible());
+  }
+  ok("[acct] Needs attention card has no Troubleshooting link in any state", true);
+  for (const key of ["attention", "clear", "lost"]) {
+    await page.goto(base + "#" + key);
+    await page.waitForSelector("#kpis .kpi");
+    ok(`[acct ${key}] no Troubleshooting link on Needs attention`, (await page.locator("#kpi-attn .lnk", { hasText: "Troubleshooting" }).count()) === 0);
+  }
 
   /* Troubleshooting page still works end to end */
   await page.setViewportSize({ width: 1440, height: 1000 });
