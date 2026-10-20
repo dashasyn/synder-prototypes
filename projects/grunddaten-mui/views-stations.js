@@ -455,14 +455,15 @@ function StationDetailView() {
           <${Typography} variant="subtitle2" sx=${{ fontWeight: 500, mt: 3, mb: 1 }}>${t('transferFiles')}<//>
           ${/* one collapsible section per direction; opened, the same table as before */ ''}
           ${/* grouped like Fahrtrichtungen: one block per line, then Richtung 1 / 2 (2026-10-16) */ ''}
-          <${Box} id="dirXfers" sx=${{ border: '1px solid #E7E7E7', borderRadius: 1 }}>
+          ${/* Ignat, 2026-10-20: no box around the tables — just the line, then one table per direction */ ''}
+          <${Box} id="dirXfers">
             ${dirs.map((dir, di) => {
               const colHead = (di === 0 || dirs[di - 1].line !== dir.line) ? html`<${Box} key=${'h' + dir.line} className="dir-line-head" data-line=${dir.line}
-                sx=${{ px: 2, py: 1, bgcolor: '#F4F4F4', borderTop: di ? '1px solid #E7E7E7' : 'none' }}><${LineBadge} line=${dir.line} /><//>` : null;
+                sx=${{ pt: di ? 2 : 0, pb: 1 }}><${LineBadge} line=${dir.line} /><//>` : null;
               const L = d.dirXfers[dir.key] || [];
               // Ignat, 2026-10-19: no accordions — every direction's table is visible, like the exit fields
               return html`${colHead}<${Box} key=${dir.key} id=${'dir-' + di} className="dir-section" data-dir=${dir.key}
-                  sx=${{ borderTop: '1px solid #E7E7E7', px: 2, pt: 1.5, pb: 2 }}>
+                  sx=${{ pb: 1.5 }}>
                 <${Typography} variant="body2" sx=${{ fontWeight: 500, mb: 1 }} className="dir-name">
                   ${t('direction')} ${dir.col + 1}<${Box} component="span" sx=${{ color: 'text.secondary', fontWeight: 400 }}> · ${dir.dest}<//><//>
                 ${L.length ? html`<${XferTable} list=${L} de=${de} t=${t}
