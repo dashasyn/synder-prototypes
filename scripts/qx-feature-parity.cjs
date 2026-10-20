@@ -115,6 +115,8 @@ const PRODUCTION_SPEC = {
   'report-fa':    'Übersicht/Tabelle tabs, parameter grid, flow chart, one-row header — production 2026-10-06',
   'ausfallmaske': 'cause pie with filtering legend, editable Ersatzverkehr — production 2026-10-06',
   'chart-fa':     'three rates per child, grouped — production 2026-10-06',
+  'report-connection': 'parameter grid, 8-option breakdown, two calculation checkboxes, one header row — production 2026-10-20',
+  'chart-connection':  'four connection rates per child — production 2026-10-20',
 };
 
 const uniq = a => [...new Set(a.filter(Boolean))];

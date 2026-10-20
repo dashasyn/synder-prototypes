@@ -1569,44 +1569,62 @@ const fs = require('fs');
     JSON.stringify(dqi) === JSON.stringify(dqiWant), { dqi, dqiWant });
   await goBack();
 
+  /* ── Connection punctuality, rebuilt 2026-10-20 from production ── */
   await openByName(await nameOf('connection'));
-  /* Gesamt comes FIRST in the vanilla's renderConnectionReport(), and a null
-     reads "n/a" through fmtVal(), not an em dash. */
-  const rpt = await page.$$eval('#rpt-table tbody tr:first-child td',
-    c => c.map(x => x.textContent.trim()).slice(1, 4));
-  const rptWant = await page.evaluate(() =>
-    RPT_DATA.gesamt.slice(0, 3).map(v => v === null ? 'n/a' : v.toFixed(2) + '%'));
-  /* The read-only parameter chips — three expandable summaries the port had
-     no equivalent for, and the "and other" in Ignat's message. */
-  const chipCount = await page.$$eval('#rpt-param-row [role="button"]', e => e.length);
-  const chipWant = await page.evaluate(() => CONNECTION_CHIPS.length);
-  ok('the Connection report carries its parameter chips',
-    chipCount === chipWant && chipCount === 3, { chipCount, chipWant });
-  await page.click('#chip-0');
-  await page.waitForTimeout(350);
-  ok('a chip expands into its membership list',
-    (await page.$$eval('.rpt-chip-dropdown', e => e.length)) === 1);
-  ok('the dropdown says it is read-only rather than pretending to filter',
-    (await page.textContent('.rpt-chip-dropdown')).length > 20);
-  ok('the expanded chip reports its state',
-    (await page.getAttribute('#chip-0', 'aria-expanded')) === 'true');
-  await page.click('#chip-0');
-  await page.waitForTimeout(300);
-  ok('clicking the chip again closes it',
-    (await page.$$eval('.rpt-chip-dropdown', e => e.length)) === 0);
-
-  const subInline = await page.evaluate(() => {
-    const h = document.getElementById('page-header');
-    const title = h.querySelector('h6');
-    const p2 = h.querySelector('h6 + p');
-    if (!p2) return null;
-    return Math.abs(title.getBoundingClientRect().top - p2.getBoundingClientRect().top);
-  });
-  ok('a header subtitle shares the title line rather than taking a third row',
-    subInline !== null && subInline < 12, subInline);
-
-  ok('Connection totals equal RPT_DATA.gesamt',
-    JSON.stringify(rpt) === JSON.stringify(rptWant), { rpt, rptWant });
+  const cn = await page.evaluate(() => ({
+    params: document.querySelectorAll('#conn-params .MuiCardContent-root > div > div').length,
+    heads: [...document.querySelectorAll('#rpt-table thead tr')].map(r => r.querySelectorAll('th').length),
+    gesamt: [...document.querySelectorAll('#rpt-table tbody tr:first-child td')].slice(1, 4).map(c => c.textContent.trim()),
+    rows: document.querySelectorAll('#rpt-table tbody tr').length,
+    dims: [1, 2, 3].map(i => document.querySelector(`#rpt-auf-${i} .MuiSelect-select`).textContent) }));
+  const cnWant = await page.evaluate(() => RPT_DATA.gesamt.slice(0, 3).map(v => v === null ? 'n/a' : v.toFixed(2).replace('.', ',') + '%'));
+  ok('Connection opens with the ten-field parameter grid', cn.params === 10, cn.params);
+  ok('one header row: name, seven metrics, actions', cn.heads.length === 1 && cn.heads[0] === 9, cn.heads);
+  ok('Gesamt comes first and equals RPT_DATA.gesamt', JSON.stringify(cn.gesamt) === JSON.stringify(cnWant), { got: cn.gesamt, cnWant });
+  ok('Gesamt is open with its stops under it', cn.rows > 1, cn.rows);
+  ok('the breakdown defaults to stop, feeder line, connector line', cn.dims.every(Boolean), cn.dims);
+  const cnBefore = cn.gesamt[0];
+  await page.click('#conn-reduce');
+  await page.waitForTimeout(200);
+  const cnAfter = await page.$eval('#rpt-table tbody tr:first-child td:nth-child(2)', c => c.textContent.trim());
+  ok('reducing connection time by 25% recalculates the rates', cnAfter !== cnBefore, { cnBefore, cnAfter });
+  await page.click('#conn-reduce');
+  const redCells = await page.$$eval('#rpt-table tbody td span', s => s.filter(x => /%/.test(x.textContent))
+    .map(x => [parseFloat(x.textContent.replace(',', '.')), getComputedStyle(x).color]));
+  ok('values below 95% are red, the rest are not', redCells.length > 0 && redCells.every(([v, c]) =>
+    (v < 95) === (c === 'rgb(211, 47, 47)')), redCells.slice(0, 4));
+  const cnEnds = await page.$eval('#rpt-table tbody tr:nth-child(2)', tr => [...tr.querySelectorAll('td')].pop()
+    .querySelectorAll('button').length);
+  ok('row icons sit at the end of the row', cnEnds >= 1);
+  // a leaf row has no chart icon
+  await page.click('#rpt-table tbody tr:nth-child(2) .conn-expand');
+  await page.waitForTimeout(200);
+  await page.click('#rpt-table tbody tr:nth-child(3) .conn-expand');
+  await page.waitForTimeout(200);
+  const leaf = await page.$eval('#rpt-table tbody tr[data-depth="3"]', tr => ({
+    chart: !!tr.querySelector('.conn-chart-btn'), rows: !!tr.querySelector('.conn-rows-btn') }));
+  ok('a row with nothing under it offers the connections but no chart', !leaf.chart && leaf.rows, leaf);
+  await page.click('#rpt-table tbody tr:nth-child(2) .conn-chart-btn');
+  await page.waitForTimeout(400);
+  const cc = await page.evaluate(() => ({ groups: document.querySelectorAll('.conn-chart-group').length,
+    bars: document.querySelectorAll('.conn-chart-bar').length, legend: document.querySelectorAll('#conn-chart-legend > div').length }));
+  ok('the chart draws four connection rates per child', cc.groups > 0 && cc.bars === cc.groups * 4 && cc.legend === 4, cc);
+  await page.click('.MuiBreadcrumbs-root a >> nth=1');   // back to the report
+  await page.waitForTimeout(500);
+  await page.click('#rpt-table tbody tr:nth-child(2) .conn-rows-btn');
+  await page.waitForTimeout(400);
+  const cr = await page.evaluate(() => ({ cols: document.querySelectorAll('#conn-rows-table thead tr:first-child th').length,
+    rows: document.querySelectorAll('#conn-rows-table tbody tr').length,
+    hot: [...document.querySelectorAll('#conn-rows-params .conn-hot')].map(x => x.textContent) }));
+  ok('the table icon opens the individual connections: 13 columns, 10 per page', cr.cols === 13 && cr.rows === 10, cr);
+  ok('the row you came from is highlighted in the parameters', cr.hot.length === 1, cr.hot);
+  await page.click('#conn-f-11');
+  await page.waitForTimeout(200);
+  await page.click('.MuiMenu-list li:nth-child(3)');
+  await page.waitForTimeout(250);
+  const nein = await page.$$eval('#conn-rows-table tbody tr td:nth-child(12)', c => c.map(x => x.textContent));
+  ok('the "connection made" filter narrows to "nein"', nein.length > 0 && nein.every(x => x === 'nein'), nein);
+  ok('the connection pages have no untranslated keys', (await rawKeys(page)).length === 0, await rawKeys(page));
   await goBack();
 
   // Raw data: per-column filtering and paging over the real 4 950 rows.

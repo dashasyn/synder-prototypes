@@ -1524,224 +1524,274 @@ function ReportPunctuality({ go, row }) {
    over RPT_RECORDS, both from data.js. The value columns come from
    RPT_DATA.gesamt's own length, so adding a metric upstream adds a column
    here rather than silently dropping one. */
-function RptRow({ node, depth, t, val, onChart, onRaw }) {
-  // collapsed on arrival, as the vanilla's .rpt-hidden / .rpt-collapsed do
-  const [open, setOpen] = useState(false);
-  const kids = node.children || [];
-  // a row with nothing in it says so once, rather than seven silent n/a cells
-  const allNull = node.v.every(v => v === null || v === undefined);
+/* ── Screen: Connection punctuality (Anschlusspünktlichkeit) ───────────
+   Rebuilt 2026-10-20 from nine production screens (reference/production-
+   2026-10-20-ap/, local only), simplified as agreed: parameter grid; one
+   control card with the three-level breakdown (production's eight options,
+   default Haltestelle → Linie Zubringer → Linie Abbringer) and the two
+   calculation checkboxes, which really move the figures; one header row of
+   seven named columns, tinted 4 + 3; Gesamt as the open root; red below 95%
+   as production colours it; chart only where a row has children, the
+   individual connections on every row, both at the row end. */
+const CONN_DIMS = ['tu_abb', 'haltestelle_abb', 'verkehrsmittel_abb', 'linienbuendel_abb',
+                   'linie_abb', 'linie_zub', 'betriebstag', 'kw'];
+const CONN_RED = 95;   // read off production: 95.83 black, 94.53 red
+const CONN_TINT = ['rgba(33,150,243,0.07)', 'rgba(139,195,74,0.12)'];
+const CONN_COLS = ['rpt_time_all_day', 'rpt_time_hvz_morning', 'rpt_time_hvz_evening', 'rpt_time_last_trip',
+                   'rpt_time_all_day', 'rpt_time_hvz_morning', 'rpt_time_hvz_evening'];
+// the two checkboxes act on the connection rates (the first four columns)
+const connAdjust = (v, reduce, strict) => v.map((x, i) => {
+  if (x === null || x === undefined || i > 3) return x;
+  let y = x;
+  if (reduce) y = Math.min(100, y + (100 - y) * 0.3);
+  if (strict) y = y * 0.985;
+  return y;
+});
+const connTree = (recs, dims, path = []) => {
+  if (!dims.length) return [];
+  const [dim, ...rest] = dims;
+  const map = new Map();
+  recs.forEach(r => { if (!map.has(r[dim])) map.set(r[dim], []); map.get(r[dim]).push(r); });
+  return [...map.entries()].map(([label, g]) => {
+    const p = [...path, [dim, label]];
+    return { label, path: p, recs: g, v: rptAggregate(g), kids: connTree(g, rest, p) };
+  });
+};
+// mock individual connections behind a row: as many "nein" as its rate implies
+const connRows = node => {
+  const seed = node.path.map(p => String(p[1])).join('|');
+  let h = 0; for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const rate = (node.v[0] === null || node.v[0] === undefined ? 95 : node.v[0]) / 100;
+  const pick = dim => (node.path.find(p => p[0] === dim) || [])[1];
+  const r0 = node.recs[0] || {};
+  const stop = pick('haltestelle_abb') || r0.haltestelle_abb || 'Aarau';
+  const zub = (pick('linie_zub') || r0.linie_zub || '').match(/^(\S+)/);
+  const abb = (pick('linie_abb') || r0.linie_abb || '').match(/\(([^)]+)\)/);
+  const n = 24 + h % 30;
+  return Array.from({ length: n }, (_, k) => {
+    const rnd = laRand(h + k * 7);
+    const made = rnd < rate;
+    const def = 120 + (h % 3) * 60;
+    const meas = made ? def + Math.round(laRand(h + k) * 200) : Math.round(def * (0.5 + laRand(h + k + 1) * 0.45));
+    const arr = 360 + k * 45 + (h % 20);
+    const sec = s => `${String(Math.floor(s / 3600) % 24).padStart(2, '0')}:${String(Math.floor(s / 60) % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+    const day = `${String(30 - (k % 14 > 0 ? 0 : 0)).padStart(2, '0')}.09.2026`;
+    return [`${String(((k % 14) + 30 - 1) % 30 + 1).padStart(2, '0')}.${k % 14 < 1 ? '09' : '10'}.2026`.replace(/^30\.10/, '30.09'),
+      zub ? (/^\d+$/.test(zub[1]) ? '50.' + zub[1].padStart(3, '0') : zub[1]) : '50.201', `(85${String(h % 100000).padStart(5, '0')}) ${stop}`,
+      abb ? abb[1] : '5.IR37', `(85${String((h + 7) % 100000).padStart(5, '0')}) ${stop}`,
+      sec(arr * 60), sec(arr * 60 + Math.round((laRand(h + k + 3) - .3) * 120)),
+      sec(arr * 60 + def + 240), sec(arr * 60 + def + 240 + Math.round(laRand(h + k + 4) * 90)),
+      sec(meas), sec(def), made ? 'ja' : 'nein', made || meas >= def * 0.75 ? 'ja' : 'nein'];
+  });
+};
+
+function ConnRow({ node, depth, t, val, adj, onChart, onRows, open0 }) {
+  const [open, setOpen] = useState(!!open0);
+  const kids = node.kids || [];
+  const v = adj(node.v);
   return html`
     <${React.Fragment}>
-      <${TableRow} hover sx=${allNull ? { opacity: .7 } : undefined}>
-        <${TableCell} sx=${{ pl: `${16 + depth * 20}px` }}>
-          ${kids.length > 0 ? html`
-            <${IconButton} onClick=${() => setOpen(o => !o)}
-              aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open} sx=${{ mr: .5 }}>
-              <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//>
-            <//>` : html`<${Box} component="span" sx=${{ display: 'inline-block', width: 22 }} />`}
+      <${TableRow} hover data-depth=${depth} className="conn-row">
+        <${TableCell} sx=${{ pl: `${8 + depth * 20}px`, whiteSpace: 'nowrap', fontWeight: depth === 0 ? 500 : 400 }}>
+          ${kids.length ? html`<${IconButton} className="conn-expand" onClick=${() => setOpen(o => !o)}
+              aria-label=${open ? 'collapse' : 'expand'} aria-expanded=${open}>
+              <${Icon} sx=${{ fontSize: 18 }}>${open ? 'expand_more' : 'chevron_right'}<//><//>`
+            : html`<${Box} component="span" sx=${{ display: 'inline-block', width: 30 }} />`}
           ${node.label}
-          ${allNull && html`
-            <${Chip} size="small" variant="outlined" sx=${{ ml: 1 }}
-              icon=${html`<${Icon} sx=${{ fontSize: 11 }}>block<//>`}
-              label=${t('rpt_no_data')} />`}
         <//>
-        ${node.v.map((_, i) => html`
-          <${TableCell} key=${i} align="right">${val(node.v[i])}<//>`)}
-        <${TableCell} align="right">
-          <${Tooltip} title=${t('rpt_action_chart')}>
-            <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(node)}>
-              <${Icon}>bar_chart<//><//>
-          <//>
+        ${v.map((x, i) => html`<${TableCell} key=${i} align="right" sx=${{ bgcolor: CONN_TINT[i < 4 ? 0 : 1] }}>${val(x)}<//>`)}
+        <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
+          ${kids.length > 0 && html`<${Tooltip} title=${t('rpt_action_chart')}>
+            <${IconButton} aria-label="chart" className="conn-chart-btn" onClick=${() => onChart(node)}><${Icon}>bar_chart<//><//><//>`}
           <${Tooltip} title=${t('rpt_action_raw')}>
-            <${IconButton} aria-label="raw" onClick=${() => onRaw && onRaw(node)}>
-              <${Icon}>table_chart<//><//>
-          <//>
+            <${IconButton} aria-label="raw" className="conn-rows-btn" onClick=${() => onRows(node)}><${Icon}>table_chart<//><//><//>
         <//>
       <//>
-      ${open && kids.map((k, i) => html`
-        <${RptRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t} val=${val}
-          onChart=${onChart} onRaw=${onRaw} />`)}
+      ${open && kids.map((k, i) => html`<${ConnRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t}
+        val=${val} adj=${adj} onChart=${onChart} onRows=${onRows} />`)}
     <//>`;
 }
 
-/**
- * The Connection report's parameter chips.
- *
- * Read-only by design: they carry a caret and a pointer cursor, so they read
- * as filters, and the vanilla answers that with a "read-only" footer inside
- * each dropdown rather than by removing the affordance. Reproduced, footer
- * and all — dropping the footer would leave the misleading half.
- */
-function ParamChips() {
-  const { t } = useT();
-  const [open, setOpen] = useState(null);
-  return html`
-    <${Stack} direction="row" spacing=${1} sx=${{ mb: 2, flexWrap: 'wrap', gap: 1 }}
-              id="rpt-param-row">
-      ${CONNECTION_CHIPS.map((c, i) => html`
-        <${Box} key=${i} sx=${{ position: 'relative' }}>
-          <${Chip} size="small" variant="outlined" clickable
-            id=${'chip-' + i} role="button" aria-expanded=${open === i}
-            title=${t('chip_readonly_title')}
-            onClick=${() => setOpen(o => (o === i ? null : i))}
-            icon=${html`<${Icon} sx=${{ fontSize: 14 }}>${c.icon}<//>`}
-            label=${c.label}
-            deleteIcon=${html`<${Icon} sx=${{ fontSize: 14,
-                                transition: 'transform .15s',
-                                transform: open === i ? 'rotate(180deg)' : 'none' }}>expand_more<//>`}
-            onDelete=${() => setOpen(o => (o === i ? null : i))} />
-          ${open === i && html`
-            <${Paper} variant="outlined" className="rpt-chip-dropdown"
-              sx=${{ position: 'absolute', zIndex: 10, mt: .5, minWidth: 220,
-                      maxHeight: 280, overflow: 'auto', borderColor: '#E7E7E7' }}>
-              <${Typography} variant="caption" sx=${{ display: 'block', px: 1.5, pt: 1,
-                               color: 'text.secondary', fontWeight: 500 }}>
-                ${t(c.headerKey)}<//>
-              ${c.items.map((it, k) => html`
-                <${Typography} key=${k} variant="body2" sx=${{ px: 1.5, py: .5 }}>${it}<//>`)}
-              <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: .75, px: 1.5, py: 1,
-                              borderTop: '1px solid #E7E7E7', color: 'text.secondary' }}>
-                <${Icon} sx=${{ fontSize: 14 }}>visibility<//>
-                <${Typography} variant="caption">${t('chip_readonly')}<//>
-              <//>
-            <//>`}
-        <//>`)}
-    <//>`;
-}
-
-/**
- * Screen: Connection punctuality.
- *
- * Rebuilt 2026-09-22 against renderConnectionReport(). What was wrong:
- *   · the header is TWO rows — "Connection punctuality rate" spanning four
- *     columns and "Feeder punctuality" spanning three — and I had generated
- *     "Feeder punctuality 1…6", which named nothing
- *   · the Gesamt row was missing; it comes FIRST, from RPT_DATA.gesamt
- *   · renderKpiGrid() puts four figures above the table; there were none
- *   · rows arrive collapsed, and a row whose values are all null carries a
- *     "no data" badge rather than seven silent n/a cells
- *   · fmtVal() colours each value against RPT_THRESHOLD
- */
 function ReportConnection({ go, row }) {
-  const { t } = useT();
-  const DIMS = Object.keys(RPT_DIM_LABELS);
-  const [dims, setDims] = useState(['linienbuendel_abb', '', '']);
+  const { t, lang } = useT();
+  const [dims, setDims] = useState(['haltestelle_abb', 'linie_zub', 'linie_abb']);
+  const [reduce, setReduce] = useState(false);
+  const [strict, setStrict] = useState(false);
   const active = dims.filter(Boolean);
-  const tree = useMemo(
-    () => rptBuildTree(RPT_RECORDS, active.length ? active : ['linienbuendel_abb']),
-    [dims.join('|')]);
-
-  const setLevel = (i, v) => setDims(d => {
-    const n = [...d]; n[i] = v;
-    for (let j = i + 1; j < n.length; j++) n[j] = '';
-    return n;
-  });
-
-  // fmtVal(): n/a, or two decimals with a % and a colour against the threshold
-  const val = v => v === null || v === undefined || v === ''
-    ? html`<${Typography} variant="body2" component="span" color="text.disabled">n/a<//>`
-    : html`<${Typography} variant="body2" component="span"
-             color=${v >= RPT_THRESHOLD ? 'success.main' : 'error.main'}>
-             ${v.toFixed(2)}%<//>`;
-
-  const KPI_KEYS = ['rpt_time_all_day', 'rpt_time_hvz_morning',
-                    'rpt_time_hvz_evening', 'rpt_time_last_trip'];
-
+  const kids = useMemo(() => connTree(RPT_RECORDS, active.length ? active : ['haltestelle_abb']), [dims.join('|')]);
+  const root = { label: t('rpt_gesamt'), path: [], recs: RPT_RECORDS, v: RPT_DATA.gesamt, kids };
+  const adj = v => connAdjust(v, reduce, strict);
+  const setLevel = (i, v) => setDims(d => { const n = [...d]; n[i] = v; for (let j = i + 1; j < 3; j++) n[j] = ''; return n; });
+  const val = v => v === null || v === undefined
+    ? html`<${Typography} variant="body2" component="span" color="text.secondary">n/a<//>`
+    : html`<${Typography} variant="body2" component="span" color=${v < CONN_RED ? 'error.main' : 'text.primary'}>
+        ${v.toFixed(2).replace('.', ',')}%<//>`;
+  const fields = faParamFields(t, lang, row);
+  fields[3] = [t('fa_mask_rpv'), 'RPV + OV'];
+  fields[4] = [t('fa_mask_vm'), t('fa_mask_unlimited'), true];
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                  { label: row ? row.name : t('type_connection') }]}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: row ? row.name : t('type_connection') }]}
         title=${row ? row.name : t('type_connection')} subtitle=${t('type_connection')}
-        action=${html`<${Button} variant="outlined"
-                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+        action=${html`<${Stack} direction="row" spacing=${1} alignItems="center">
+          <${Tooltip} title=${t('fa_infoblatt')}><${IconButton} aria-label=${t('fa_infoblatt')} id="conn-infoblatt">
+            <${Icon}>description<//><//><//>
+          <${Button} variant="outlined" startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//><//>`} />
       <${Box} sx=${{ p: 3 }}>
-        <${ParamChips} />
-
-        ${/* renderKpiGrid(): the first four metrics, against RPT_THRESHOLD */''}
-        <${KpiRow} cards=${RPT_DATA.gesamt.slice(0, 4).map((v, i) => ({
-          label: t(KPI_KEYS[i]),
-          value: v === null ? 'n/a' : v.toFixed(2).replace('.', ',') + '%',
-          tone: v === null ? '' : v >= RPT_THRESHOLD ? 'good' : 'bad',
-          icon: v === null ? '' : v >= RPT_THRESHOLD ? 'check_circle' : 'warning',
-          foot: `${t('rpt_threshold_label')}: ${RPT_THRESHOLD}%`,
-        }))} />
-
-        <${Card} sx=${{ mb: 3 }}><${CardContent}>
-          <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('punct_aufschluss_label')}<//>
-          <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
-            ${[0, 1, 2].map(i => html`
-              <${FilterSelect} key=${i} id=${'rpt-auf-' + (i + 1)}
-                label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
-                value=${dims[i]} onChange=${v => setLevel(i, v)} minWidth=${210}
-                options=${DIMS.filter(d => !dims.some((x, j) => x === d && j !== i))
-                  .map(d => ({ value: d, label: t(RPT_DIM_LABELS[d]) }))} />`)}
+        <${ParamGrid} id="conn-params" fields=${fields} />
+        <${Card} sx=${{ mb: 2 }} id="conn-controls"><${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
+          <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+            <${Box}>
+              <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('fa_aufschluss_label')}<//>
+              <${Stack} direction="row" spacing=${1}>
+                ${[0, 1, 2].map(i => html`<${FilterSelect} key=${i} id=${'rpt-auf-' + (i + 1)} minWidth=${220}
+                  label=${t(['sel_breakdown_1', 'sel_breakdown_2', 'sel_breakdown_3'][i])}
+                  value=${dims[i]} onChange=${v => setLevel(i, i === 0 ? (v || 'haltestelle_abb') : v)}
+                  options=${CONN_DIMS.filter(d => !dims.some((x, j) => x === d && j !== i))
+                    .map(d => ({ value: d, label: t(RPT_DIM_LABELS[d]) }))} />`)}
+              <//>
+            <//>
+            <${Box}>
+              <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('conn_calc')}<//>
+              <${Stack}>
+                <${FormControlLabel} control=${html`<${Checkbox} id="conn-reduce" checked=${reduce}
+                  onChange=${e => setReduce(e.target.checked)} />`} label=${t('conn_reduce')} />
+                <${FormControlLabel} control=${html`<${Checkbox} id="conn-strict" checked=${strict}
+                  onChange=${e => setStrict(e.target.checked)} />`} label=${t('conn_strict')} />
+              <//>
+            <//>
           <//>
         <//><//>
-
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
           <${Table} id="rpt-table">
-            <${TableHead}>
-              ${/* the grouped header row: 4 columns of connection punctuality,
-                    3 of feeder punctuality */''}
-              <${TableRow}>
-                <${TableCell} />
-                <${TableCell} colSpan=${4} align="center">${t('rpt_col_apcq')}<//>
-                <${TableCell} colSpan=${3} align="center">${t('rpt_col_punct_zub')}<//>
-                <${TableCell} />
-              <//>
-              <${TableRow}>
-                ${/* The vanilla writes the dimension label into the FIRST th of
-                      the whole thead — which is the top row's spacer cell, and
-                      that cell is color:transparent. So the visible heading
-                      never changes: it stays "Name / Line bundle". Matching
-                      what is on screen rather than what the code intends. */''}
-                <${TableCell}>${t('rpt_col_name')}<//>
-                ${['rpt_time_all_day', 'rpt_time_hvz_morning', 'rpt_time_hvz_evening',
-                   'rpt_time_last_trip', 'rpt_time_all_day', 'rpt_time_hvz_morning',
-                   'rpt_time_hvz_evening'].map((k, i) => html`
-                  <${TableCell} key=${i} align="right">${t(k)}<//>`)}
-                <${TableCell} align="right">${t('col_actions')}<//>
-              <//>
-            <//>
+            <${TableHead}><${TableRow}>
+              <${TableCell}>${t(RPT_DIM_LABELS[active[0] || 'haltestelle_abb'])}<//>
+              ${CONN_COLS.map((k, i) => html`<${TableCell} key=${i} align="right" sx=${{ bgcolor: CONN_TINT[i < 4 ? 0 : 1] }}>
+                ${t(i < 4 ? 'rpt_col_apcq' : 'rpt_col_punct_zub')} ${t(k)}<//>`)}
+              <${TableCell} align="right">${t('col_actions')}<//>
+            <//><//>
             <${TableBody}>
-              ${/* Gesamt first, network-wide, from RPT_DATA.gesamt */''}
-              <${TableRow} sx=${{ '& td': { fontWeight: 700, bgcolor: '#FAFAFA',
-                                             borderBottom: '2px solid #E7E7E7' } }}>
-                <${TableCell}>
-                  ${t('rpt_gesamt') + ' '}
-                  <${Typography} variant="caption" color="text.secondary" sx=${{ ml: .75 }}>
-                    ${t('punct_gesamt_scope')}<//>
-                <//>
-                ${RPT_DATA.gesamt.map((v, i) => html`
-                  <${TableCell} key=${i} align="right">${val(v)}<//>`)}
-                <${TableCell} align="right">
-                  <${Tooltip} title=${t('rpt_action_chart')}>
-                    <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
-                      title: t('rpt_gesamt'), backLabel: t('type_connection'),
-                      format: v => v.toFixed(2) + '%',
-                      items: RPT_DATA.gesamt.map((v2, i) => ({
-                        label: t(['rpt_time_all_day', 'rpt_time_hvz_morning', 'rpt_time_hvz_evening',
-                                  'rpt_time_last_trip', 'rpt_time_all_day', 'rpt_time_hvz_morning',
-                                  'rpt_time_hvz_evening'][i]), value: v2 || 0 })),
-                    } })}><${Icon}>bar_chart<//><//>
-                  <//>
-                  <${Tooltip} title=${t('rpt_action_raw')}>
-                    <${IconButton} aria-label="raw" onClick=${() => go('raw', row)}>
-                      <${Icon}>table_chart<//><//>
-                  <//>
-                <//>
-              <//>
-              ${tree.map((n, i) => html`
-                <${RptRow} key=${n.label + i} node=${n} depth=${0} t=${t} val=${val}
-                  onChart=${node => go('chart', row, { chart: {
-                    title: node.label, backLabel: t('type_connection'),
-                    format: v => v.toFixed(2) + '%',
-                    items: node.v.map((v, k) => ({ label: String(k + 1), value: v || 0 })),
-                  } })}
-                  onRaw=${() => go('raw', row)} />`)}
+              <${ConnRow} node=${root} depth=${0} t=${t} val=${val} adj=${adj} open0
+                onChart=${node => go('conn-chart', row, { node, reduce, strict })}
+                onRows=${node => go('conn-rows', row, { node, reduce })} />
             <//>
           <//>
+        <//>
+      <//>
+    <//>`;
+}
+
+function ConnChart({ go, row, node, reduce, strict }) {
+  const { t, lang } = useT();
+  const p = rowPeriod({ dataset: { von: (row && row.von) || '', bis: (row && row.bis) || '', period: (row && row.periodKey) || '' } });
+  const kids = node.kids.length ? node.kids : [node];
+  const SER = ['#3B78B5', '#6A9F38', '#B5452A', '#F28E2B'];
+  const W = 900, H = 360, L = 80, B = 70, plotH = H - B - 20, plotW = W - L - 20;
+  const gw = plotW / kids.length, bw = Math.min(22, gw / 5);
+  const pct = n => n.toFixed(2).replace('.', lang === 'de' ? ',' : '.') + '%';
+  const sub = node.path.length ? node.path.map(x => x[1]).join(', ') : t('rpt_gesamt');
+  return html`
+    <${Box}>
+      <${PageHeader} crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+          { label: row ? row.name : t('type_connection'), onClick: () => go('report', row) }, { label: t('rpt_action_chart') }]}
+        title=${t('rpt_action_chart')} subtitle=${sub} />
+      <${Box} sx=${{ p: 3 }}><${Card}><${CardContent}>
+        <${Typography} variant="h6" align="center" id="conn-chart-title">${t('fa_chart_period')}: ${fmtDate(p.von, lang)} - ${fmtDate(p.bis, lang)}<//>
+        <${Typography} variant="body1" align="center" sx=${{ mb: 2 }}>${sub}<//>
+        <${Box} sx=${{ display: 'flex', gap: 3 }}>
+          <svg viewBox=${`0 0 ${W} ${H}`} width="100%" id="conn-chart-svg" style=${{ flex: 1 }}>
+            ${[0, .2, .4, .6, .8, 1].map(f => html`<g key=${f}>
+              <line x1=${L} x2=${W - 20} y1=${20 + plotH * (1 - f)} y2=${20 + plotH * (1 - f)} stroke="#E7E7E7" />
+              <text x=${L - 8} y=${20 + plotH * (1 - f)} text-anchor="end" dominant-baseline="middle" font-size="14" fill="rgba(0,0,0,0.6)">${pct(100 * f)}</text></g>`)}
+            ${kids.map((k, i) => { const v = connAdjust(k.v, reduce, strict); return html`<g key=${i} className="conn-chart-group">
+              ${[0, 1, 2, 3].map(j => { const h = plotH * (v[j] || 0) / 100;
+                return html`<rect key=${j} className="conn-chart-bar" x=${L + gw * i + gw / 2 - bw * 2 + bw * j} y=${20 + plotH - h}
+                  width=${bw - 2} height=${h} fill=${SER[j]}><title>${pct(v[j] || 0)}</title></rect>`; })}
+              <text x=${L + gw * i + gw / 2} y=${H - B + 22} text-anchor="middle" font-size="14" fill="rgba(0,0,0,0.87)">
+                ${String(k.label).slice(0, 26)}</text></g>`; })}
+          </svg>
+          <${Stack} spacing=${1} id="conn-chart-legend" sx=${{ minWidth: 260, pt: 2 }}>
+            ${[0, 1, 2, 3].map(j => html`<${Stack} key=${j} direction="row" spacing=${1} alignItems="center">
+              <${Box} sx=${{ width: 14, height: 14, bgcolor: SER[j] }} />
+              <${Typography} variant="body2">${t('rpt_col_apcq')} ${t(CONN_COLS[j])}<//><//>`)}
+          <//>
+        <//>
+      <//><//><//>
+    <//>`;
+}
+
+const CONN_ROW_COLS = ['rpt_raw_col_trip_date', 'rpt_raw_col_feeder_line', 'rpt_raw_col_feeder_stop',
+  'rpt_raw_col_conn_line', 'rpt_raw_col_conn_stop', 'rpt_raw_col_sched_arr', 'rpt_raw_col_actual_arr',
+  'rpt_raw_col_sched_dep', 'rpt_raw_col_actual_dep', 'rpt_raw_col_measured', 'rpt_raw_col_defined',
+  'rpt_raw_col_conn_made', 'rpt_raw_col_reduced'];
+
+/* The table icon's page: the individual connections behind a row. The row
+   you came from is the highlighted field in the parameter grid — production
+   frames it in red; here it is primary, the selection colour. */
+function ConnRows({ go, row, node, reduce }) {
+  const { t, lang } = useT();
+  const all = useMemo(() => connRows(node), [node]);
+  const [f, setF] = useState(Array(13).fill(''));
+  const [pp, setPp] = useState(10);
+  const [page, setPage] = useState(1);
+  const rows = all.filter(r => r.every((c, i) => !f[i] || (i >= 11 ? c === f[i] : String(c).toLowerCase().includes(f[i].toLowerCase()))));
+  const pages = Math.max(1, Math.ceil(rows.length / pp));
+  const shown = rows.slice((page - 1) * pp, page * pp);
+  const setFilter = (i, v) => { setF(x => { const n = [...x]; n[i] = v; return n; }); setPage(1); };
+  const base = faParamFields(t, lang, row);
+  base[3] = [t('fa_mask_rpv'), 'RPV + OV'];
+  base[4] = [t('fa_mask_vm'), t('fa_mask_unlimited'), true];
+  const sel = node.path.map(([d, v]) => [t(RPT_DIM_LABELS[d]), v, false, true]);
+  const fields = [...base.slice(0, 7), ...sel];
+  return html`
+    <${Box}>
+      <${PageHeader} crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+          { label: row ? row.name : t('type_connection'), onClick: () => go('report', row) }, { label: t('conn_rows_title') }]}
+        title=${t('conn_rows_title')} subtitle=${node.path.length ? node.path.map(x => x[1]).join(' · ') : t('rpt_gesamt')} />
+      <${Box} sx=${{ p: 3 }}>
+        <${Card} sx=${{ mb: 2 }} id="conn-rows-params"><${CardContent} sx=${{ py: 1.5, '&:last-child': { pb: 1.5 } }}>
+          <${Box} sx=${{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            ${fields.map(([label, value, dim, hot], i) => html`<${Box} key=${i} className=${hot ? 'conn-hot' : ''}
+              sx=${{ px: 1.5, py: .5, minWidth: 120, border: '1px solid', borderRadius: 1,
+                     borderColor: hot ? 'primary.main' : 'transparent', bgcolor: hot ? 'rgba(33,150,243,0.06)' : 'transparent' }}>
+              <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${label}<//>
+              <${Typography} variant="body2" color=${dim ? 'text.secondary' : 'text.primary'}>${value}<//>
+            <//>`)}
+          <//>
+        <//><//>
+        <${Stack} direction="row" alignItems="center" sx=${{ mb: 1 }}>
+          <${LaSelect} id="conn-rows-pp" label=${t('fa_mask_entries')} value=${pp} minWidth=${170}
+            onChange=${v => { setPp(v); setPage(1); }} options=${[10, 25, 50, 100].map(n => ({ value: n, label: String(n) }))} />
+        <//>
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+          <${Table} id="conn-rows-table">
+            <${TableHead}>
+              <${TableRow}>${CONN_ROW_COLS.map((k, i) => html`<${TableCell} key=${k} align=${i >= 5 ? 'right' : 'left'}
+                sx=${i === 12 && reduce ? { color: 'primary.main' } : undefined}>${t(k)}<//>`)}<//>
+              <${TableRow} className="conn-filter-row">${CONN_ROW_COLS.map((k, i) => html`<${TableCell} key=${k} sx=${{ py: .5 }}>
+                ${i >= 11 ? html`<${Select} variant="standard" fullWidth value=${f[i]} displayEmpty id=${'conn-f-' + i}
+                    onChange=${e => setFilter(i, e.target.value)} inputProps=${{ 'aria-label': t(k) }}>
+                    <${MenuItem} value="">${t('la_all')}<//><${MenuItem} value="ja">ja<//><${MenuItem} value="nein">nein<//><//>`
+                  : html`<${TextField} variant="standard" size="small" fullWidth value=${f[i]} id=${'conn-f-' + i}
+                    inputProps=${{ 'aria-label': t(k) }} onChange=${e => setFilter(i, e.target.value)} />`}
+              <//>`)}<//>
+            <//>
+            <${TableBody}>
+              ${shown.map((r, k) => html`<${TableRow} key=${k} hover>
+                ${r.map((c, i) => html`<${TableCell} key=${i} align=${i >= 5 ? 'right' : 'left'}
+                  sx=${(i === 11 || i === 12) && c === 'nein' ? { color: 'error.main' } : undefined}>${i === 0 ? fmtDate(c, lang) : c}<//>`)}
+              <//>`)}
+            <//>
+          <//>
+        <//>
+        <${Stack} direction="row" alignItems="center" sx=${{ mt: 2 }}>
+          <${Typography} variant="body2" color="text.secondary" id="conn-rows-info">
+            ${t('fa_pager_info').replace('{start}', rows.length ? (page - 1) * pp + 1 : 0)
+              .replace('{end}', Math.min(page * pp, rows.length)).replace('{total}', rows.length)}<//>
+          <${Box} sx=${{ flex: 1 }} />
+          <${Pagination} count=${pages} page=${Math.min(page, pages)} onChange=${(e, v) => setPage(v)}
+            showFirstButton showLastButton shape="rounded" id="conn-rows-pager" />
         <//>
       <//>
     <//>`;
@@ -3499,6 +3549,8 @@ function App() {
                                    onBack=${() => go('report', route.row)} />` :
     route.name === 'mask'      ? html`<${Ausfallmaske} go=${go} row=${route.row} tuId=${route.tuId} day=${route.day} />` :
     route.name === 'fa-chart'  ? html`<${FaChart} go=${go} row=${route.row} node=${route.node} />` :
+    route.name === 'conn-chart' ? html`<${ConnChart} go=${go} row=${route.row} node=${route.node} reduce=${route.reduce} strict=${route.strict} />` :
+    route.name === 'conn-rows' ? html`<${ConnRows} go=${go} row=${route.row} node=${route.node} reduce=${route.reduce} />` :
     route.name === 'raw'       ? html`<${RawDataTable} go=${go} row=${route.row} rows=${PUNCT_RAW}
                                         title=${t('rpt_action_raw')}
                                         backLabel=${route.row ? route.row.name : ''}
