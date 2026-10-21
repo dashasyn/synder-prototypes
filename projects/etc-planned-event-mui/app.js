@@ -39,6 +39,7 @@ const theme = createTheme({
     MuiPaper:       { defaultProps: { elevation: 0 }, styleOverrides: { root: { border: '1px solid #E0E0E0' } } },
     MuiTableCell:   { styleOverrides: { root: { fontSize: 14 } } },
     MuiFormHelperText: { styleOverrides: { root: { fontSize: 14 } } },
+    MuiTooltip:     { styleOverrides: { tooltip: { fontSize: 14 } } },
   },
 });
 
@@ -251,10 +252,36 @@ function App() {
   const [sheet, setSheet] = useState(null);       // message being edited / created
   const [del, setDel] = useState(null);
   const [toast, setToast] = useState('');
+  /* Copy mode (Ignat, 2026-10-21): the copy icon on a row turns the table itself into the
+     target list — checkboxes on the other rows of the same tab, the source marked,
+     quick picks per type, then "n Meldungen überschreiben". */
+  const [copySrc, setCopySrc] = useState(null);   // id of the source announcement
+  const [copySel, setCopySel] = useState([]);     // target ids
+  const [flash, setFlash] = useState([]);         // rows just overwritten
+  React.useEffect(() => {
+    const esc = e => { if (e.key === 'Escape' && copySrc) { setCopySrc(null); setCopySel([]); } };
+    window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc);
+  }, [copySrc]);
 
   const count = p => msgs.filter(m => m.phase === p).length;
   const list = msgs.filter(m => m.phase === tab);
   const groups = [['AKTIV', list.filter(m => m.active)], ['PAUSIERT', list.filter(m => !m.active)]].filter(g => g[1].length);
+  const src = copySrc ? msgs.find(m => m.id === copySrc) : null;
+  const startCopy = m => { setCopySrc(m.id); setCopySel([]); };
+  const cancelCopy = () => { setCopySrc(null); setCopySel([]); };
+  const toggleSel = id => setCopySel(L => L.includes(id) ? L.filter(x => x !== id) : [...L, id]);
+  const targets = src ? list.filter(m => m.id !== src.id) : [];
+  const typeCounts = TYPES.map(t => [t, targets.filter(m => m.type === t)]).filter(x => x[1].length);
+  // the line prefix follows the target's line: "U2: …" becomes "U5: …" on a U5 announcement
+  const relabel = (text, line) => (text || '').replace(/^U\d+:/, line + ':');
+  const applyCopy = () => {
+    const ids = copySel.slice();
+    setMsgs(L => L.map(x => ids.includes(x.id) ? { ...x, daisy: relabel(src.daisy, x.line), de: relabel(src.de, x.line), en: relabel(src.en, x.line),
+      daisyInterval: src.daisyInterval, elaInterval: src.elaInterval, source: src.source } : x));
+    setFlash(ids); setTimeout(() => setFlash([]), 2500);
+    setToast(ids.length === 1 ? 'Text in 1 Meldung übernommen.' : `Text in ${ids.length} Meldungen übernommen.`);
+    cancelCopy();
+  };
   const newMsg = () => ({ id: null, phase: tab, active: true, type: '', line: 'U2', stations: '', tracks: '--',
                           daisy: '', de: '', en: '', daisyInterval: 'endlos', elaInterval: '5', source: 'standard' });
   const saveMsg = m => {
@@ -285,7 +312,8 @@ function App() {
         <${Button} variant="contained" id="btnSaveEvent" onClick=${() => setToast('Ereignis gespeichert.')}>Ereignis speichern<//>
       <//>
 
-      <${Box} sx=${{ maxWidth: 1400, mx: 'auto', p: 3 }}>
+      ${/* Ignat, 2026-10-21: content full width */ ''}
+      <${Box} sx=${{ p: 3 }}>
         <${Diagram} />
 
         ${/* ── event settings ── */ ''}
@@ -341,21 +369,51 @@ function App() {
         ${/* ── announcements ── */ ''}
         <${Paper} id="messages" sx=${{ mb: 4 }}>
           <${Box} sx=${{ display: 'flex', alignItems: 'center', borderBottom: '1px solid #E0E0E0', pr: 2 }}>
-            <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} sx=${{ flex: 1 }}>
+            <${Tabs} value=${tab} onChange=${(e, v) => { cancelCopy(); setTab(v); }} sx=${{ flex: 1 }}>
               ${PHASES.map(([v, l]) => html`<${Tab} key=${v} value=${v} data-phase=${v} label=${count(v) ? `${l} (${count(v)})` : l} />`)}
             <//>
-            <${Button} variant="outlined" id="btnNewMsg" onClick=${() => setSheet(newMsg())}>Meldung erstellen<//>
+            <${Button} variant="outlined" id="btnNewMsg" disabled=${!!src} onClick=${() => setSheet(newMsg())}>Meldung erstellen<//>
           <//>
+          ${src ? html`<${Box} id="copyBar" sx=${{ position: 'sticky', top: 54, zIndex: 5, bgcolor: '#E3F2FD', borderBottom: '1px solid #BBDEFB',
+                px: 2, py: 1.25, display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+            <${Icon} sx=${{ color: '#1769AA' }}>content_copy<//>
+            <${Typography} sx=${{ fontWeight: 500 }} id="copyTitle">Text kopieren von ${src.type} · ${src.line} · ${src.stations}<//>
+            <${Stack} direction="row" spacing=${1} id="copyQuick">
+              ${typeCounts.map(([t, rows]) => {
+                const all = rows.every(r => copySel.includes(r.id));
+                return html`<${Chip} key=${t} clickable label=${`Alle ${t} (${rows.length})`} data-type=${t} sx=${{ fontSize: 14 }}
+                  color=${all ? 'primary' : 'default'} variant=${all ? 'filled' : 'outlined'}
+                  onClick=${() => setCopySel(L => all ? L.filter(id => !rows.some(r => r.id === id)) : [...new Set([...L, ...rows.map(r => r.id)])])} />`; })}
+            <//>
+            <${Box} sx=${{ flex: 1 }} />
+            <${Button} onClick=${cancelCopy} id="copyCancel">Abbrechen<//>
+            <${Button} variant="contained" id="copyApply" disabled=${!copySel.length} onClick=${applyCopy}>
+              ${copySel.length === 1 ? '1 Meldung überschreiben' : `${copySel.length} Meldungen überschreiben`}<//>
+          <//>` : null}
           <${TableContainer}>
             <${Table} id="msgTable">
               <${TableHead}><${TableRow}>
+                ${src ? html`<${TableCell} padding="checkbox">
+                  <${Checkbox} id="copyAll" checked=${targets.length > 0 && copySel.length === targets.length}
+                    indeterminate=${copySel.length > 0 && copySel.length < targets.length}
+                    inputProps=${{ 'aria-label': 'Alle auswählen' }}
+                    onChange=${e => setCopySel(e.target.checked ? targets.map(t => t.id) : [])} /><//>` : null}
                 ${['Mitteilungen', 'Linie', 'Stationen', 'Gleise', 'Text'].map(h => html`<${TableCell} key=${h} sx=${{ fontWeight: 500 }}>${h}<//>`)}
                 <${TableCell} />
               <//><//>
               ${groups.length ? groups.map(([g, rows]) => html`<${TableBody} key=${g} className="msg-group" data-group=${g}>
-                <${TableRow}><${TableCell} colSpan=${6} sx=${{ fontWeight: 500, py: 1, pl: 3, bgcolor: '#FAFAFA' }}>${g}<//><//>
-                ${rows.map(m => html`<${TableRow} key=${m.id} className="msg-row" data-id=${m.id} data-type=${m.type} hover
-                    sx=${{ opacity: m.active ? 1 : .6 }}>
+                <${TableRow}><${TableCell} colSpan=${src ? 7 : 6} sx=${{ fontWeight: 500, py: 1, pl: 3, bgcolor: '#FAFAFA' }}>${g}<//><//>
+                ${rows.map(m => {
+                  const isSrc = src && m.id === src.id, sel = copySel.includes(m.id);
+                  return html`<${TableRow} key=${m.id} className=${'msg-row' + (isSrc ? ' copy-src' : '') + (flash.includes(m.id) ? ' flash' : '')}
+                    data-id=${m.id} data-type=${m.type} hover=${!src} selected=${sel}
+                    onClick=${src && !isSrc ? () => toggleSel(m.id) : undefined}
+                    sx=${{ opacity: m.active || src ? 1 : .6, cursor: src && !isSrc ? 'pointer' : 'default',
+                           bgcolor: isSrc ? '#FFF8E1' : flash.includes(m.id) ? '#E8F5E9' : undefined, transition: 'background-color .6s' }}>
+                  ${src ? html`<${TableCell} padding="checkbox">
+                    ${isSrc ? html`<${Chip} size="small" label="Quelle" color="warning" sx=${{ fontSize: 14, ml: .5 }} />`
+                      : html`<${Checkbox} checked=${sel} inputProps=${{ 'aria-label': 'Ziel: ' + m.type + ' ' + m.stations }}
+                          onClick=${e => e.stopPropagation()} onChange=${() => toggleSel(m.id)} />`}<//>` : null}
                   <${TableCell} sx=${{ borderLeft: '4px solid', borderLeftColor: TYPE_COLOR[m.type] || '#9E9E9E', width: 120 }}>${m.type}<//>
                   <${TableCell} sx=${{ width: 70 }}><${LineBadge} line=${m.line} /><//>
                   <${TableCell} sx=${{ width: 140, whiteSpace: 'pre-line' }}>${m.stations.replace(/; /g, ';\n')}<//>
@@ -365,7 +423,12 @@ function App() {
                     ${m.de ? html`<div><b>ELA (DEU)</b>: ${m.de}</div>` : null}
                     ${m.en ? html`<div><b>ELA (ENG)</b>: ${m.en}</div>` : null}
                   <//>
-                  <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap', width: 130 }}>
+                  <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap', width: 170 }}>
+                    ${src ? null : html`<${React.Fragment}>
+                    <${Tooltip} title="Text kopieren nach …">
+                      <${IconButton} aria-label=${'Kopieren: ' + m.type + ' ' + m.stations} onClick=${() => startCopy(m)}
+                        disabled=${list.length < 2}><${Icon}>content_copy<//><//>
+                    <//>
                     <${Tooltip} title=${m.active ? 'Pausieren' : 'Fortsetzen'}>
                       <${IconButton} aria-label=${(m.active ? 'Pausieren' : 'Fortsetzen') + ': ' + m.type + ' ' + m.stations}
                         onClick=${() => setMsgs(L => L.map(x => x.id === m.id ? { ...x, active: !x.active } : x))}>
@@ -377,9 +440,10 @@ function App() {
                     <${Tooltip} title="Löschen">
                       <${IconButton} aria-label=${'Löschen: ' + m.type + ' ' + m.stations} onClick=${() => setDel(m)}><${Icon}>delete<//><//>
                     <//>
+                    <//>`}
                   <//>
-                <//>`)}
-              <//>`) : html`<${TableBody}><${TableRow}><${TableCell} colSpan=${6} sx=${{ color: 'text.secondary', py: 3, textAlign: 'center' }}
+                <//>`; })}
+              <//>`) : html`<${TableBody}><${TableRow}><${TableCell} colSpan=${src ? 7 : 6} sx=${{ color: 'text.secondary', py: 3, textAlign: 'center' }}
                   id="noMsgs">Keine Meldungen<//><//><//>`}
             <//>
           <//>
