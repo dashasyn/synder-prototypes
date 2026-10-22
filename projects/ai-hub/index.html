@@ -841,6 +841,7 @@ function updateHero(){
 /* ---------- connect drawer ---------- */
 var APPS = { web: ['Claude', 'claude', 'Web, desktop, mobile'], chatgpt: ['ChatGPT', 'openai', 'Web'], code: ['Claude Code', 'claude', 'Terminal'],
   cursor: ['Cursor', 'cursor', 'Code editor'], other: ['Other', null, 'Any other AI tool'] };
+function appTitle(k){ return k === 'other' ? 'another app' : APPS[k][0]; }
 var SIGNIN = { web: 'In Claude, open <b>Settings → Connectors → Add custom connector</b>, paste the address and click <b>Add</b>, then sign in.',
   chatgpt: 'In ChatGPT, open <b>Settings → Apps &amp; Connectors → Developer mode → Create</b>, paste the address, choose authentication <b>OAuth</b> (sign-in), click <b>Create</b>, then sign in.' };
 function isSignin(k){ return k === 'other' ? dr.route === 'signin' : !!SIGNIN[k]; }
@@ -857,7 +858,7 @@ function openDrawer(trigger, app, asModal){
 }
 function renderDrawer(){
   var b = document.getElementById('dr-body'), f = document.getElementById('dr-foot');
-  document.getElementById('dr-note').hidden = dr.step === 'pick';
+  document.getElementById('dr-note').hidden = dr.step === 'pick' || (dr.app && !isSignin(dr.app));
   document.getElementById('dr-note').textContent = isSignin(dr.app)
     ? 'It does only what you allow on the Synder page. Disconnect it any time on this page.'
     : 'It does only what the token allows. Revoke it any time on this page.';
@@ -871,7 +872,7 @@ function renderDrawer(){
     document.getElementById('dr-note').hidden = true;
   } else if (dr.step === 'setup' && isSignin(dr.app)){
     b.innerHTML = '<button class="dr-back" id="dr-back" onclick="dr.step=\'pick\';renderDrawer();focusSoon(\'dr-app-' + dr.app + '\')"><span class="mi" style="font-size:18px">chevron_left</span>Choose another app</button>'
-      + '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + APPS[dr.app][0] + '</div>'
+      + '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + appTitle(dr.app) + '</div>'
       + '<p class="intro">Copy the address and add it in ' + (dr.app === 'other' ? 'the app' : APPS[dr.app][0]) + ' as a connector.</p>'
       + codeBlock('dr-signin-url', MCP)
       + '<ol class="steps" style="margin-top:16px"><li>' + SIGNIN[dr.app] + '</li></ol>'
@@ -885,7 +886,7 @@ function renderDrawer(){
       + '<dt>Read only</dt><dd>The app can look things up and explain them: why a sync failed, what a report shows, how the settings are set. It cannot change anything.</dd>'
       + '<dt>Full access</dt><dd>The app can also act: sync, roll back and resync transactions, start imports, change settings and manage Smart Rules. It gets a preview of every change from Synder before making it, so it can check with you first.</dd>'
       + '<dt>Custom</dt><dd>You pick the permissions one by one, for example everything in Read only plus running syncs. For when you know exactly what the app should be able to do.</dd></dl>'
-      + '<p class="scope-line" id="dr-scope" style="margin-top:16px"><span class="mi">info</span><span>' + SCOPE_TXT + '</span></p>';
+      ;
     f.innerHTML = '<button class="btn" id="dr-signin-done" onclick="drSigninDone()">Done</button>';
   } else if (dr.step === 'pick'){
     if (dr.modal){
@@ -900,17 +901,17 @@ function renderDrawer(){
     f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button>';
   } else if (dr.step === 'setup'){
     b.innerHTML = '<button class="dr-back" id="dr-back" onclick="dr.step=\'pick\';renderDrawer();focusSoon(\'dr-app-' + dr.app + '\')"><span class="mi" style="font-size:18px">chevron_left</span>Choose another app</button>'
-      + '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + APPS[dr.app][0] + '</div>'
+      + '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + appTitle(dr.app) + '</div>'
       + '<p class="intro" id="dr-token-intro">' + APPS[dr.app][0].replace('Other', 'Your tool') + ' connects with an access token instead of signing in. Create one here and paste the snippet into the tool. The token does not expire on its own; revoke it on this page when it is no longer needed.</p>'
       + '<div class="form-field"><label class="form-label" for="dr-name">Token name</label>'
-      + '<input class="input" id="dr-name" autocomplete="off" value="' + esc(APPS[dr.app][0]) + '" oninput="document.getElementById(\'dr-name-err\').hidden=true">'
+      + '<input class="input" id="dr-name" autocomplete="off" value="' + esc(dr.app === 'other' ? 'My AI tool' : APPS[dr.app][0]) + '" oninput="document.getElementById(\'dr-name-err\').hidden=true">'
       + '<div class="form-error-msg" id="dr-name-err" hidden>Enter a token name</div></div>'
       + '<p class="scope-line" id="dr-scope"><span class="mi">info</span><span>' + SCOPE_TXT + '</span></p>'
       + accessFields();
     f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button><button class="btn" id="dr-generate" onclick="drGenerate()">Generate access token</button>';
   } else {
     var k = dr.app;
-    b.innerHTML = '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + APPS[dr.app][0] + '</div>'
+    b.innerHTML = '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + appTitle(dr.app) + '</div>'
       + '<div class="alert alert-success" id="dr-issued"><span class="mi">check_circle</span><span><b>Token created:</b> ' + esc(dr.name) + ' · ' + esc(dr.label) + '</span></div>'
       + '<div class="alert alert-warning"><span class="mi">key</span><span><b>Copy it now: the full token is shown only once.</b> Keep it to yourself, like a password.</span></div>'
       + clientHTML(k, dr.token).replace(/(['"])(snip-url|snip)/g, '$1dr-$2');
