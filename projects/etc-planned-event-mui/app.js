@@ -69,23 +69,20 @@ const LINES_WITH_MSG = new Set(['U2', 'U5', 'U6', 'U8']);
 /* ── The event's announcements, verbatim from the screenshots ─────── */
 const TYPE_COLOR = { 'Ortspunkt': '#66BB6A', 'Umstieg': '#FFA726', 'Kein Zugverkehr': '#EF5350', 'Zulauf': '#1A35B8' };
 const TYPES = Object.keys(TYPE_COLOR);
-const txt = place => ({
-  daisy: `U2: Umsteigen nötig aufgrund in ${place}.***`,
-  de: `U2: Umsteigen nötig aufgrund in ${place}.`,
-  en: `U2: Due to a change is required in ${place}.`,
-});
-const AWA = 'Anton-Wilhelm-Amo-Straße', KL = 'Klosterstraße';
+/* Ignat, 2026-10-22: a new event starts with every announcement in place but no text yet —
+   the demo for devs is "write one, copy it to the rest". */
+const NO_TXT = { daisy: '', de: '', en: '' };
 let nextId = 10;
 const SEED = [
-  { type: 'Ortspunkt',       line: 'U2', stations: 'Mk - Hv',            tracks: '--',  ...txt(AWA) },
-  { type: 'Umstieg',         line: 'U2', stations: 'MH',                 tracks: '1,2', ...txt(AWA) },
-  { type: 'Umstieg',         line: 'U2', stations: 'Ko',                 tracks: '1,2', ...txt(KL) },
-  { type: 'Kein Zugverkehr', line: 'U2', stations: 'Hv - Mk',            tracks: '--',  daisy: 'kein Zugverkehr', de: '', en: '' },
-  { type: 'Zulauf',          line: 'U2', stations: 'Rl - Pd',            tracks: '--',  ...txt(AWA) },
-  { type: 'Zulauf',          line: 'U2', stations: 'PA - A',             tracks: '--',  ...txt(KL) },
-  { type: 'Zulauf',          line: 'U5', stations: 'MUI - Al; Ff - Al',  tracks: '--',  ...txt(KL) },
-  { type: 'Zulauf',          line: 'U6', stations: 'Ri - Mic; Ts - Mic', tracks: '--',  ...txt(AWA) },
-  { type: 'Zulauf',          line: 'U8', stations: 'Pk - Ap; Mr - Ap',   tracks: '--',  ...txt(KL) },
+  { type: 'Ortspunkt',       line: 'U2', stations: 'Mk - Hv',            tracks: '--',  ...NO_TXT },
+  { type: 'Umstieg',         line: 'U2', stations: 'MH',                 tracks: '1,2', ...NO_TXT },
+  { type: 'Umstieg',         line: 'U2', stations: 'Ko',                 tracks: '1,2', ...NO_TXT },
+  { type: 'Kein Zugverkehr', line: 'U2', stations: 'Hv - Mk',            tracks: '--',  ...NO_TXT },
+  { type: 'Zulauf',          line: 'U2', stations: 'Rl - Pd',            tracks: '--',  ...NO_TXT },
+  { type: 'Zulauf',          line: 'U2', stations: 'PA - A',             tracks: '--',  ...NO_TXT },
+  { type: 'Zulauf',          line: 'U5', stations: 'MUI - Al; Ff - Al',  tracks: '--',  ...NO_TXT },
+  { type: 'Zulauf',          line: 'U6', stations: 'Ri - Mic; Ts - Mic', tracks: '--',  ...NO_TXT },
+  { type: 'Zulauf',          line: 'U8', stations: 'Pk - Ap; Mr - Ap',   tracks: '--',  ...NO_TXT },
 ].map((m, i) => ({ id: i + 1, phase: 'haupt', active: true, daisyInterval: 'endlos', elaInterval: '5', source: 'standard', ...m }));
 
 const DAYS = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
@@ -648,15 +645,16 @@ function App() {
                   <${TableCell} sx=${{ width: 140, whiteSpace: 'pre-line' }}>${m.stations.replace(/; /g, ';\n')}<//>
                   <${TableCell} sx=${{ width: 80 }}>${m.tracks}<//>
                   <${TableCell} className="msg-text">
+                    ${!m.daisy && !m.de && !m.en ? html`<${Box} component="span" className="msg-none">Kein Text<//>` : null}
                     ${m.daisy ? html`<div><b>DAISY</b>: ${m.daisy}</div>` : null}
                     ${m.de ? html`<div><b>ELA (DEU)</b>: ${m.de}</div>` : null}
                     ${m.en ? html`<div><b>ELA (ENG)</b>: ${m.en}</div>` : null}
                   <//>
                   <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap', width: 170 }}>
                     ${src ? null : html`<${React.Fragment}>
-                    <${Tooltip} title="Text kopieren nach …">
+                    <${Tooltip} title=${m.daisy || m.de || m.en ? 'Text kopieren nach …' : 'Kein Text zum Kopieren'}>
                       <${IconButton} aria-label=${'Kopieren: ' + m.type + ' ' + m.stations} onClick=${() => startCopy(m)}
-                        disabled=${list.length < 2}><${Icon}>content_copy<//><//>
+                        disabled=${list.length < 2 || !(m.daisy || m.de || m.en)}><${Icon}>content_copy<//><//>
                     <//>
                     <${Tooltip} title=${m.active ? 'Pausieren' : 'Fortsetzen'}>
                       <${IconButton} aria-label=${(m.active ? 'Pausieren' : 'Fortsetzen') + ': ' + m.type + ' ' + m.stations}
