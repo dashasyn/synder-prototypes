@@ -244,7 +244,7 @@ function saveWarnings() {
   return w;
 }
 /* Ignat, 2026-10-14: SPEICHERN generates the audio itself when there is none
-   for the current text and voice (Filipa is predictable, so no need to have
+   for the current text and voice (Philippa is predictable, so no need to have
    listened first). Audio that is current — e.g. made by ANHÖREN — is reused.
    The only stop: an ELA field emptied by hand. */
 function save() {
@@ -350,8 +350,8 @@ function MessageBox({ l }) {
         inputProps=${{ 'data-warn': s.warned ? 'true' : 'false' }}
         error=${!!(S.emptyErr && S.emptyErr.includes(l) && !m.text.trim())}
         helperText=${S.emptyErr && S.emptyErr.includes(l) && !m.text.trim() ? t('emptyErr') : null} />
-      ${/* Ignat, 2026-09-29: no green "all fine" lines under the inputs — only states that need attention */ ''}
-      ${s.cls === 'g' ? null : html`<${StateLine} id=${'state-' + l} cls=${s.cls} icon=${s.icon}>
+      ${/* Ignat, 2026-09-29: no green "all fine" lines under the inputs — only states that need attention; 2026-10-22: no "Kein Text" either */ ''}
+      ${s.cls === 'g' || (s.txt === t('stNone') && !s.warned) ? null : html`<${StateLine} id=${'state-' + l} cls=${s.cls} icon=${s.icon}>
         ${s.txt}${s.extra}${s.retry ? html` <${Link} component="button" variant="caption" onClick=${generate}>${t('retry')}<//>` : null}
       <//>`}
     <//>`;
@@ -473,7 +473,7 @@ function Sheet() {
               <${Pick} id="emotion" label=${t('emotion')} value=${S.emotion} width=${180} onChange=${v => { S.emotion = v; rerender(); }}
                 options=${[{ value: 'funny', label: t('emoFunny') }, { value: 'serious', label: t('emoSerious') }, { value: 'neutral', label: t('emoNeutral') }]} />
               <${Pick} id="voice" label=${t('voice')} value=${S.voice} width=${200} onChange=${onVoice}
-                options=${[{ value: 'filipa', label: 'Filipa' }, { value: 'ai', label: t('voiceAi') }]} />
+                options=${[{ value: 'filipa', label: 'Philippa' }, { value: 'ai', label: t('voiceAi') }]} />
             <//>
             <${Stack} direction="row" spacing=${1.5} alignItems="center" sx=${{ mt: 1.5 }} id="genRow">
               <${Button} variant="outlined" id="btnGen" disabled=${S.msg.de.state === 'loading' || S.msg.en.state === 'loading'} onClick=${generate}>

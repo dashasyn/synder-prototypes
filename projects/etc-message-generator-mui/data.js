@@ -117,9 +117,9 @@ const I18N = {
 
 const SOURCES = [
   { id: 'standard',   de: 'Standard',   en: 'Standard'   },
-  { id: 'library',    de: 'Bibliothek', en: 'Library'    },
+  { id: 'empathetic', de: 'Empathisch', en: 'Empathetic' },   // Ignat, 2026-10-22: Empathisch second, Bibliothek last
   { id: 'record',     de: 'Aufnahme',   en: 'Record'     },
-  { id: 'empathetic', de: 'Empathisch', en: 'Empathetic' }
+  { id: 'library',    de: 'Bibliothek', en: 'Library'    }
 ];
 
 const TEXTS = {
