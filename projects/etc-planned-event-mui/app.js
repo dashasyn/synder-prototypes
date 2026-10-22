@@ -19,7 +19,7 @@ const M = MaterialUI;
 const {
   ThemeProvider, createTheme, CssBaseline, Box, Button, IconButton, Typography, TextField, Chip,
   FormControl, InputLabel, Select, MenuItem, Drawer, Divider, Checkbox, FormControlLabel,
-  ToggleButton, ToggleButtonGroup, Snackbar, Stack, Tabs, Tab, Paper, Tooltip,
+  ToggleButton, ToggleButtonGroup, Snackbar, Stack, Tabs, Tab, Paper, Tooltip, Switch, Badge,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions,
 } = M;
@@ -234,8 +234,178 @@ function MessageSheet({ open, msg, onClose, onSave, dates }) {
   <//>`;
 }
 
+/* ══ Variant 2 (Ignat, 2026-10-22: "Yes I like the ideas. Please implement them") ══
+   · Typ and the fields that depend on it sit together in one "Ereignis" block
+   · Vorab / Haupt / Alternative are one table — the same row for each phase:
+     Aktiv · Zeitraum · Tage & Zeiten (as text, no fake buttons) · ✎ → side sheet
+   · Interne Kommunikation leaves the page: 💬 with a count in the top bar → side sheet */
+const TYP_OPTIONS = ['Kein Halt - einseitig', 'Kein Halt - beidseitig', 'Kein Zugverkehr', 'Unterbrechung', 'Pendelverkehr'];
+const DAY_LONG = { So: 'Sonntag', Mo: 'Montag', Di: 'Dienstag', Mi: 'Mittwoch', Do: 'Donnerstag', Fr: 'Freitag', Sa: 'Samstag' };
+const WEEK = DAYS;   // the summary follows production's week, Sunday first (So–Do · Fr–Sa)
+const mkDays = (start, end, on, override) => Object.fromEntries(DAYS.map(d => [d, { on, start, end, ...((override || {})[d] || {}) }]));
+const PHASE_SEED = {
+  vorab: { active: false, from: '2026-10-21', to: '2026-10-28', days: mkDays('04:30', '02:30', true, { Fr: { end: '04:29' }, Sa: { end: '04:29' } }) },
+  haupt: { active: true,  from: '2026-10-21', to: '2026-11-04', days: mkDays('00:00', '23:59', true) },
+  alt:   { active: false, from: '', to: '', days: mkDays('00:00', '23:59', false) },
+};
+/** "So–Do 04:30–02:30 · Fr–Sa 04:30–04:29", or "Täglich 00:00–23:59" */
+function schedSummary(days) {
+  const on = WEEK.filter(d => days[d].on);
+  if (!on.length) return '–';
+  const t = d => days[d].start + '–' + days[d].end;
+  if (on.length === 7 && WEEK.every(d => t(d) === t('Mo'))) return 'Täglich ' + t('Mo');
+  const runs = [];
+  WEEK.forEach((d, i) => {
+    if (!days[d].on) return;
+    const last = runs[runs.length - 1];
+    if (last && last.t === t(d) && WEEK.indexOf(last.to) === i - 1) last.to = d;
+    else runs.push({ from: d, to: d, t: t(d) });
+  });
+  return runs.map(r => (r.from === r.to ? r.from : r.from + '–' + r.to) + ' ' + r.t).join(' · ');
+}
+const STATION_TRACKS = ['MH', 'Mi', 'Hv', 'Sp', 'Mk', 'Ko'];
+const TRACK_OPTS = ['1', '2', '1, 2', '2, 1'];
+function TypeFields({ typ, vals, setVals, showErr }) {
+  const sel = (key, label, opts, w) => {
+    const err = showErr && !vals[key];
+    return html`<${FormControl} key=${key} sx=${{ minWidth: w || 110 }} error=${err}>
+      <${InputLabel} id=${key + '-label'}>${label}<//>
+      <${Select} labelId=${key + '-label'} id=${key} value=${vals[key] || ''} label=${label} onChange=${e => setVals(v => ({ ...v, [key]: e.target.value }))}>
+        ${opts.map(o => html`<${MenuItem} key=${o} value=${o}>${o}<//>`)}
+      <//>
+      ${err ? html`<${M.FormHelperText}>Gleis wählen<//>` : null}
+    <//>`;
+  };
+  if (typ === 'Pendelverkehr') return html`<${Stack} direction="row" spacing=${1.5} useFlexGap flexWrap="wrap" className="type-fields" data-typ=${typ}>
+    ${sel('pMenge', 'Menge', ['1', '2', '3'], 90)}${sel('pTakt', 'Pendel 1 Takt', ['5', '10', '15', '20'], 120)}
+    ${STATION_TRACKS.map(st => sel('pG' + st, 'Gleis ' + st, TRACK_OPTS))}<//>`;
+  if (typ === 'Unterbrechung') return html`<${Stack} direction="row" spacing=${1.5} className="type-fields" data-typ=${typ}>
+    ${sel('kMH', 'Gleis MH', TRACK_OPTS)}${sel('kKo', 'Gleis Ko', TRACK_OPTS)}<//>`;
+  return null;
+}
+const TYPE_FIELDS_TITLE = { Pendelverkehr: 'Daten Pendelverkehr', Unterbrechung: 'Kehre in Gleis/en' };
+const typeFieldsMissing = (typ, vals) => typ === 'Pendelverkehr' ? ['pMenge', 'pTakt', ...STATION_TRACKS.map(s => 'pG' + s)].some(k => !vals[k])
+  : typ === 'Unterbrechung' ? ['kMH', 'kKo'].some(k => !vals[k]) : false;
+
+function ScheduleTable({ phases, setPhases, onEdit }) {
+  return html`<${TableContainer} id="schedTable">
+    <${Table}>
+      <${TableHead}><${TableRow}>
+        ${['Phase', 'Aktiv', 'Zeitraum', 'Tage & Zeiten'].map(h => html`<${TableCell} key=${h} sx=${{ fontWeight: 500 }}>${h}<//>`)}<${TableCell} />
+      <//><//>
+      <${TableBody}>
+        ${['vorab', 'haupt', 'alt'].map(k => { const p = phases[k], fixed = k === 'haupt';
+          return html`<${TableRow} key=${k} className="sched-row" data-phase=${k} sx=${{ opacity: p.active ? 1 : .55 }}>
+            <${TableCell} sx=${{ fontWeight: 500, width: 220 }}>${PHASE_LABEL[k]}<//>
+            <${TableCell} sx=${{ width: 90 }}>
+              <${Switch} checked=${p.active} disabled=${fixed} inputProps=${{ 'aria-label': PHASE_LABEL[k] + ' aktiv' }}
+                onChange=${e => setPhases(x => ({ ...x, [k]: { ...x[k], active: e.target.checked } }))} /><//>
+            <${TableCell} className="sched-range" sx=${{ width: 240, whiteSpace: 'nowrap' }}>${p.from || p.to ? fmtDate(p.from) + ' – ' + fmtDate(p.to) : '–'}<//>
+            <${TableCell} className="sched-days">${schedSummary(p.days)}<//>
+            <${TableCell} align="right" sx=${{ width: 60 }}>
+              <${Tooltip} title="Zeiträume bearbeiten"><${IconButton} aria-label=${'Zeiträume bearbeiten: ' + PHASE_LABEL[k]} onClick=${() => onEdit(k)}><${Icon}>edit<//><//><//>
+            <//>
+          <//>`; })}
+      <//>
+    <//>
+  <//>`;
+}
+
+function ScheduleSheet({ phaseKey, phase, onClose, onSave }) {
+  const [d, setD] = useState(phase);
+  React.useEffect(() => { setD(phase); }, [phase]);
+  if (!d) return html`<${Drawer} anchor="right" open=${false} />`;
+  const setDay = (day, k, v) => setD(x => ({ ...x, days: { ...x.days, [day]: { ...x.days[day], [k]: v } } }));
+  const bad = d.from && d.to && d.to < d.from;
+  return html`<${Drawer} anchor="right" open=${!!phaseKey} onClose=${onClose} id="schedSheet"
+    PaperProps=${{ sx: { width: 480, display: 'flex', flexDirection: 'column' } }}>
+    <${Box} sx=${{ display: 'flex', alignItems: 'center', px: 3, py: 2, borderBottom: '1px solid #E0E0E0' }}>
+      <${Typography} variant="h6" sx=${{ flex: 1, fontWeight: 500 }}>${PHASE_LABEL[phaseKey]}<//>
+      <${IconButton} aria-label="Schließen" onClick=${onClose}><${Icon}>close<//><//>
+    <//>
+    <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: 2.5 }}>
+      <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }}>
+        <${TextField} id="sFrom" type="date" label="Datum von" value=${d.from} InputLabelProps=${{ shrink: true }} sx=${{ flex: 1 }}
+          onChange=${e => setD(x => ({ ...x, from: e.target.value }))} />
+        <${TextField} id="sTo" type="date" label="Datum bis" value=${d.to} InputLabelProps=${{ shrink: true }} sx=${{ flex: 1 }}
+          error=${bad} helperText=${bad ? '„Datum bis“ liegt vor „Datum von“.' : ''} onChange=${e => setD(x => ({ ...x, to: e.target.value }))} />
+      <//>
+      <${Box} sx=${{ display: 'grid', gridTemplateColumns: '1fr 48px 110px 110px', alignItems: 'center', columnGap: 1.5, rowGap: 1 }} id="schedDays">
+        <${Typography} sx=${{ fontWeight: 500 }}>Tage<//><span /><${Typography} sx=${{ fontWeight: 500 }}>Start<//><${Typography} sx=${{ fontWeight: 500 }}>Ende<//>
+        ${DAYS.map(day => html`<${React.Fragment} key=${day}>
+          <${Typography}>${DAY_LONG[day]}<//>
+          <${Checkbox} checked=${d.days[day].on} inputProps=${{ 'aria-label': DAY_LONG[day] }} onChange=${e => setDay(day, 'on', e.target.checked)} />
+          <${TextField} type="time" hiddenLabel value=${d.days[day].start} disabled=${!d.days[day].on} inputProps=${{ 'aria-label': DAY_LONG[day] + ' Start' }}
+            onChange=${e => setDay(day, 'start', e.target.value)} />
+          <${TextField} type="time" hiddenLabel value=${d.days[day].end} disabled=${!d.days[day].on} inputProps=${{ 'aria-label': DAY_LONG[day] + ' Ende' }}
+            onChange=${e => setDay(day, 'end', e.target.value)} />
+        <//>`)}
+      <//>
+      <${Button} sx=${{ mt: 2 }} disabled>Ausnahmeregelung hinzufügen<//>
+    <//>
+    <${Box} sx=${{ display: 'flex', justifyContent: 'flex-end', gap: 1, px: 3, py: 1.5, borderTop: '1px solid #E0E0E0' }}>
+      <${Button} variant="outlined" onClick=${onClose}>Abbrechen<//>
+      <${Button} variant="contained" id="schedSave" disabled=${bad} onClick=${() => onSave(d)}>Speichern<//>
+    <//>
+  <//>`;
+}
+
+const ME = 'M. Krüger';   // sample user
+const COMMENTS_SEED = [
+  { who: 'S. Weber', at: '21.10.2026 23:42', text: 'SEV-Busse ab Hv bestellt, Abfahrt Bussteig 2.' },
+  { who: 'T. Yilmaz', at: '21.10.2026 22:15', text: 'Kehre in MH auf Gleis 1 bestätigt.' },
+  { who: 'S. Weber', at: '21.10.2026 21:03', text: 'Ereignis angelegt.' },
+];
+function CommentsSheet({ open, onClose, comments, onAdd }) {
+  const [txt, setTxt] = useState('');
+  const send = () => { if (!txt.trim()) return; onAdd(txt.trim()); setTxt(''); };
+  return html`<${Drawer} anchor="right" open=${open} onClose=${onClose} id="commentsSheet"
+    PaperProps=${{ sx: { width: 420, display: 'flex', flexDirection: 'column' } }}>
+    <${Box} sx=${{ display: 'flex', alignItems: 'center', px: 3, py: 2, borderBottom: '1px solid #E0E0E0' }}>
+      <${Typography} variant="h6" sx=${{ flex: 1, fontWeight: 500 }}>Interne Kommunikation<//>
+      <${IconButton} aria-label="Schließen" onClick=${onClose}><${Icon}>close<//><//>
+    <//>
+    <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: 1 }} id="commentList">
+      ${comments.length ? comments.map((c, i) => html`<${Box} key=${i} className="comment" sx=${{ py: 1.5, borderBottom: '1px solid #EEE' }}>
+          <${Stack} direction="row" spacing=${1} alignItems="baseline">
+            <${Typography} sx=${{ fontWeight: 500 }}>${c.who}<//>
+            <${Typography} color="text.secondary">${c.at}<//>
+          <//>
+          <${Typography} sx=${{ mt: .5 }}>${c.text}<//>
+        <//>`) : html`<${Typography} color="text.secondary" sx=${{ py: 2 }}>Keine Einträge<//>`}
+    <//>
+    <${Box} sx=${{ display: 'flex', gap: 1, alignItems: 'center', px: 3, py: 1.5, borderTop: '1px solid #E0E0E0' }}>
+      <${TextField} id="commentInput" hiddenLabel placeholder="Nachricht" fullWidth value=${txt} onChange=${e => setTxt(e.target.value)}
+        onKeyDown=${e => { if (e.key === 'Enter') send(); }} inputProps=${{ 'aria-label': 'Nachricht' }} />
+      <${Button} variant="contained" id="commentSend" disabled=${!txt.trim()} onClick=${send}>Senden<//>
+    <//>
+  <//>`;
+}
+
+/* The variant switcher — the house pattern: first in <body>, full width, dark bar, not product chrome. */
+function VariantSwitch({ v, setV }) {
+  const notes = { 1: 'Wie Produktion', 2: 'Ereignis-Block · Zeitplan-Tabelle · Kommunikation im Seitenblatt' };
+  return html`<${Box} className="variant-switch" sx=${{ display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: '#2B2B2B', color: '#fff', px: 2.5, py: 1, fontSize: 14 }}>
+    <${Box} component="span" sx=${{ fontWeight: 500, opacity: .75, textTransform: 'uppercase', fontSize: 14 }}>Struktur<//>
+    <${Box} sx=${{ display: 'flex', gap: .5, bgcolor: 'rgba(255,255,255,.1)', borderRadius: '6px', p: '3px' }}>
+      ${[[1, '1 · Aktuell'], [2, '2 · Neu strukturiert']].map(([n, l]) => html`<${Box} key=${n} component="button" id=${'vs-' + n} onClick=${() => setV(n)}
+        sx=${{ all: 'unset', cursor: 'pointer', px: 1.5, py: .6, borderRadius: '4px', fontSize: 14,
+               color: v === n ? '#2B2B2B' : 'rgba(255,255,255,.75)', bgcolor: v === n ? '#fff' : 'transparent' }}>${l}<//>`)}
+    <//>
+    <${Box} component="span" id="vs-note" sx=${{ opacity: .75 }}>${notes[v]}<//>
+  <//>`;
+}
+
 /* ── The page ─────────────────────────────────────────────────────── */
 function App() {
+  const [variant, setVariantRaw] = useState(() => location.hash === '#v1' ? 1 : 2);
+  const setVariant = n => { setVariantRaw(n); history.replaceState(null, '', '#v' + n); };
+  const [phases, setPhases] = useState(PHASE_SEED);
+  const [schedEdit, setSchedEdit] = useState(null);   // phase key in the side sheet
+  const [typeVals, setTypeVals] = useState({ kMH: '1', kKo: '1, 2' });
+  const [showTypeErr, setShowTypeErr] = useState(false);
+  const [feed, setFeed] = useState(COMMENTS_SEED);
+  const [feedOpen, setFeedOpen] = useState(false);
   const [status, setStatus] = useState('Aktiv');
   const [typ, setTyp] = useState('Kein Halt - einseitig');
   const [dano, setDano] = useState('');
@@ -294,6 +464,7 @@ function App() {
 
   return html`
     <${Box} sx=${{ minHeight: '100vh', bgcolor: 'background.default' }}>
+      <${VariantSwitch} v=${variant} setV=${setVariant} />
       ${/* ── top bar ── */ ''}
       <${Box} id="topBar" sx=${{ position: 'sticky', top: 0, zIndex: 1100, bgcolor: '#fff', borderBottom: '1px solid #E0E0E0',
                      display: 'flex', alignItems: 'center', gap: 1.5, px: 2, py: 1 }}>
@@ -309,13 +480,40 @@ function App() {
         <${Tooltip} title="Stoppen"><span><${IconButton} aria-label="Stoppen" disabled=${status === 'Beendet'} onClick=${() => setStatus('Beendet')}><${Icon}>stop_circle<//><//></span><//>
         <${Button} variant="outlined" id="btnReport" onClick=${() => setToast('Bericht wird erstellt.')}>Bericht generieren<//>
         <${Button} variant="outlined" color="error" id="btnEnd" disabled=${status === 'Beendet'} onClick=${() => setStatus('Beendet')}>Beenden<//>
-        <${Button} variant="contained" id="btnSaveEvent" onClick=${() => setToast('Ereignis gespeichert.')}>Ereignis speichern<//>
+        ${variant === 2 ? html`<${Tooltip} title="Interne Kommunikation"><${IconButton} id="btnFeed" aria-label=${'Interne Kommunikation (' + feed.length + ')'} onClick=${() => setFeedOpen(true)}>
+          <${Badge} badgeContent=${feed.length} color="primary" sx=${{ '& .MuiBadge-badge': { fontSize: 14 } }}><${Icon}>chat_bubble_outline<//><//><//><//>` : null}
+        <${Button} variant="contained" id="btnSaveEvent" onClick=${() => {
+          if (typeFieldsMissing(typ, typeVals)) { setShowTypeErr(true); setToast('Bitte die markierten Felder ausfüllen.'); return; }
+          setShowTypeErr(false); setToast('Ereignis gespeichert.'); }}>Ereignis speichern<//>
       <//>
 
       ${/* Ignat, 2026-10-21: content full width */ ''}
       <${Box} sx=${{ p: 3 }}>
         <${Diagram} />
 
+        ${variant === 2 ? html`
+        ${/* ── v2: Ereignis — Typ with its own fields ── */ ''}
+        <${Paper} id="eventBlock" sx=${{ p: 2, mb: 2 }}>
+          <${Typography} sx=${{ fontWeight: 500, mb: 1.5 }}>Ereignis<//>
+          <${Stack} direction="row" spacing=${2} alignItems="flex-start" useFlexGap flexWrap="wrap">
+            <${FormControl} sx=${{ width: 240 }}>
+              <${InputLabel} id="typ2-label">Typ<//>
+              <${Select} labelId="typ2-label" id="typ" value=${typ} label="Typ" onChange=${e => { setTyp(e.target.value); setShowTypeErr(false); }}>
+                ${TYP_OPTIONS.map(o => html`<${MenuItem} key=${o} value=${o}>${o}<//>`)}
+              <//>
+            <//>
+            <${TextField} id="dano" label="Dano / Name" value=${dano} sx=${{ width: 240 }} onChange=${e => setDano(e.target.value)} />
+          <//>
+          ${TYPE_FIELDS_TITLE[typ] ? html`<${Box} sx=${{ mt: 2 }} id="typeFields">
+            <${Typography} sx=${{ mb: 1 }}>${TYPE_FIELDS_TITLE[typ]}<//>
+            <${TypeFields} typ=${typ} vals=${typeVals} setVals=${setTypeVals} showErr=${showTypeErr} />
+          <//>` : null}
+        <//>
+        ${/* ── v2: Zeitplan — one row per phase ── */ ''}
+        <${Paper} id="scheduleBlock" sx=${{ mb: 2 }}>
+          <${Typography} sx=${{ fontWeight: 500, px: 2, pt: 2 }}>Zeitplan<//>
+          <${ScheduleTable} phases=${phases} setPhases=${setPhases} onEdit=${setSchedEdit} />
+        <//>` : html`
         ${/* ── event settings ── */ ''}
         <${Paper} id="settings" sx=${{ p: 2, mb: 2 }}>
           <${Box} sx=${{ display: 'grid', gridTemplateColumns: '220px 1fr 1fr', columnGap: 3 }}>
@@ -323,7 +521,7 @@ function App() {
               <${FormControl}>
                 <${InputLabel} id="typ-label">Typ<//>
                 <${Select} labelId="typ-label" id="typ" value=${typ} label="Typ" onChange=${e => setTyp(e.target.value)}>
-                  ${['Kein Halt - einseitig', 'Kein Halt - beidseitig', 'Kein Zugverkehr', 'Pendelverkehr'].map(o => html`<${MenuItem} key=${o} value=${o}>${o}<//>`)}
+                  ${TYP_OPTIONS.map(o => html`<${MenuItem} key=${o} value=${o}>${o}<//>`)}
                 <//>
               <//>
               <${TextField} id="dano" label="Dano / Name" value=${dano} onChange=${e => setDano(e.target.value)} />
@@ -355,6 +553,10 @@ function App() {
           <${Typography} sx=${{ fontWeight: 500, mt: 3, mb: 1 }}>Alternative Hauptmeldung<//>
           <${DayChips} value=${[]} onChange=${() => {}} disabled idPrefix="ad" />
         <//>
+        ${TYPE_FIELDS_TITLE[typ] ? html`<${Paper} id="typeFields" sx=${{ p: 2, mb: 2 }}>
+          <${Typography} sx=${{ fontWeight: 500, mb: 1.5 }}>${TYPE_FIELDS_TITLE[typ]}<//>
+          <${TypeFields} typ=${typ} vals=${typeVals} setVals=${setTypeVals} showErr=${showTypeErr} />
+        <//>` : null}
 
         ${/* ── internal communication ── */ ''}
         <${Paper} id="comms" sx=${{ p: 2, mb: 2 }}>
@@ -364,7 +566,7 @@ function App() {
               onClick=${() => { setComments(c => [...c, comment.trim()]); setComment(''); }}>Hinzufügen<//>
             <${Button} variant="outlined" id="btnAllComments" onClick=${() => setShowComments(true)}>Alles sehen (${comments.length})<//>
           <//>
-        <//>
+        <//>`}
 
         ${/* ── announcements ── */ ''}
         <${Paper} id="messages" sx=${{ mb: 4 }}>
@@ -450,6 +652,11 @@ function App() {
         <//>
       <//>
 
+      <${ScheduleSheet} phaseKey=${schedEdit} phase=${schedEdit ? phases[schedEdit] : null} onClose=${() => setSchedEdit(null)}
+        onSave=${d => { setPhases(x => ({ ...x, [schedEdit]: d })); setSchedEdit(null); setToast('Zeitplan übernommen.'); }} />
+      <${CommentsSheet} open=${feedOpen} onClose=${() => setFeedOpen(false)} comments=${feed}
+        onAdd=${t => setFeed(f => [{ who: ME, at: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' '
+          + new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }), text: t }, ...f])} />
       <${MessageSheet} open=${!!sheet} msg=${sheet} onClose=${() => setSheet(null)} onSave=${saveMsg}
         dates=${tab === 'vorab' ? vorabDates : haupt} />
 
