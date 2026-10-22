@@ -260,10 +260,10 @@ function periodWords(from, to) {
   return `${d1}. ${MONTHS[m1 - 1]} ${y1} – ${d2}. ${MONTHS[m2 - 1]} ${y2}`;
 }
 /** "So–Do 04:30–02:30 · Fr–Sa 04:30–04:29", or "Täglich 00:00–23:59" */
-function schedSummary(days, startOnly) {
+function schedSummary(days, endFrom) {
   const on = WEEK.filter(d => days[d].on);
   if (!on.length) return null;
-  const t = d => startOnly ? 'ab ' + days[d].start : days[d].start + '–' + days[d].end;   // Alt. Hauptmeldung has a Start only
+  const t = d => days[d].start + '–' + (endFrom ? endFrom[d].start : days[d].end);   // Alt. Hauptmeldung runs from its Start until the Hauptmeldung starts
   if (on.length === 7 && WEEK.every(d => t(d) === t('Mo'))) return 'Täglich ' + t('Mo');
   const runs = [];
   WEEK.forEach((d, i) => {
@@ -312,7 +312,7 @@ function ScheduleTable({ phases, onEdit }) {
       <//><//>
       <${TableBody}>
         ${rows.map(([k, from, to, days, sheet]) => {
-          const sum = schedSummary(days, k === 'alt'), per = periodWords(from, to);
+          const sum = schedSummary(days, k === 'alt' ? phases.haupt.days : null), per = periodWords(from, to);
           return html`<${TableRow} key=${k} className="sched-row" data-phase=${k} data-has=${!!(sum && per)}>
             <${TableCell} sx=${{ fontWeight: 500, width: 220 }}>${PHASE_LABEL[k]}<//>
             <${TableCell} className="sched-range" sx=${{ width: 260, whiteSpace: 'nowrap' }}>${per || none('Kein Zeitraum')}<//>
