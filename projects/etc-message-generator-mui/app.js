@@ -116,10 +116,10 @@ function runGenerate() {
     const base = set[S.variant];
     const extra = S.zusatz.trim();
     const known = extra ? KNOWN.find(k => k.de === extra || k.en === extra) : null;
-    S.zusatzTranslated = !extra || !!known;
+    S.zusatzTranslated = true;   // additional details always go into both languages
     ['de', 'en'].forEach(l => {
       const m = S.msg[l]; let txt = base[l];
-      if (extra) { if (known) txt += ' ' + known[l]; else if (l === 'de') txt += ' ' + extra; }
+      if (extra) txt += ' ' + (known ? known[l] : l === 'de' ? extra : '[EN: ' + extra + ']');
       m.text = txt; m.state = 'generated'; m.variant = S.variant + 1;
     });
     S.enOutdated = false; S.pairOff = false;

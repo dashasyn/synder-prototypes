@@ -150,13 +150,15 @@ const TEXTS = {
     ]
   }
 };
-/* Phrases stored bilingually. Anything else typed into Additional
-   details lands in German only, and the EN state line says so. */
+/* Ignat, 2026-10-22: Additional details go into both languages — the generator translates them.
+   The prototype can't translate, so these sample phrases carry an EN version; any other text
+   lands in EN as a marked placeholder "[EN: …]". */
 
 const KNOWN = [
   { de: 'Viel Spaß beim Konzert!',                  en: 'Enjoy the concert!' },
   { de: 'Bitte vorsichtig — draußen ist es glatt.', en: 'Please take care — it is slippery outside.' },
-  { de: 'Wir danken für Ihre Geduld.',              en: 'Thank you for your patience.' }
+  { de: 'Wir danken für Ihre Geduld.',              en: 'Thank you for your patience.' },
+  { de: 'Heute ist Markttag.',                      en: 'Today is market day.' }
 ];
 
 const LIBRARY = [
