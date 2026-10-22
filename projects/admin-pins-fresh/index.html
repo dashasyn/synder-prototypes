@@ -58,6 +58,9 @@
   .sb-sub .mi{font-size:18px}
   .sb-new{color:#1F8940;background:#E3F3E7;border-radius:10px;padding:0 8px;font-size:14px;line-height:20px;font-weight:400}
   /* pinned admin pages: unpin on hover */
+  /* the whole pinned row navigates (icon + padding + label); only Unpin is a separate target */
+  .sb-item.sb-pin{padding-left:0}
+  .sb-pin-link{display:flex;align-items:center;gap:12px;flex:1;min-width:0;align-self:stretch;padding-left:10px;color:inherit;text-decoration:none}
   .sb-pin .unpin{display:none;align-items:center;justify-content:center;width:28px;height:28px;border:none;
     border-radius:6px;background:none;color:var(--sb-ic);cursor:pointer;padding:0;flex-shrink:0}
   .sb-pin:hover .unpin,.sb-pin:focus-within .unpin{display:inline-flex}
@@ -285,7 +288,7 @@ function togglePin(key, fromPage){
   else { pins.push(key); announce(PAGES[key].label + ' pinned to the sidebar'); }
   savePins(); renderSidebar(); if (route === 'admin') renderContent(fromPage ? key : null);
   if (!fromPage) {   // unpinned from the sidebar: keep focus in the sidebar
-    var t = next && document.querySelector('.sb-pin[data-pin="' + next + '"] .unpin');
+    var t = next && document.querySelector('.sb-pin[data-pin="' + next + '"] .sb-pin-link');
     (t || document.getElementById('sb-admin')).focus();
   }
 }
@@ -313,8 +316,8 @@ function renderSidebar(){
     var p = PAGES[k], r = pageHref(k), curPinned = pins.indexOf('current-org') >= 0,
         on = route === r || (k === 'organizations' && /^org\//.test(route) && !(curPinned && route === 'org/' + current));
     return '<div class="sb-item sb-pin' + (on ? ' on' : '') + '" role="listitem" data-pin="' + k + '">'
-         + '<span class="mi">' + p.icon + '</span>'
-         + '<a class="lb" href="#' + r + '" style="color:inherit;text-decoration:none"' + (on ? ' aria-current="page"' : '') + '>' + esc(p.label) + '</a>'
+         + '<a class="sb-pin-link" href="#' + r + '"' + (on ? ' aria-current="page"' : '') + '>'
+         +   '<span class="mi">' + p.icon + '</span><span class="lb">' + esc(p.label) + '</span></a>'
          + '<button class="unpin" title="Unpin" aria-label="Unpin ' + esc(p.label) + '" onclick="togglePin(\'' + k + '\')"><span class="mf">push_pin</span></button></div>';
   }).join('') + '</div></div>';
   else h += '<div id="sb-pins" hidden></div>';
@@ -374,11 +377,11 @@ function renderSwitch(){
   var rest = ORGS.filter(function(o){ return o.id !== current && (!q || o.name.toLowerCase().indexOf(q) >= 0); });
   if (!q) rest = rest.slice().sort(function(a, b){ return a.name.localeCompare(b.name); });
   shown = rec.concat(rest);
-  hl = 0;
+  hl = q ? 0 : -1;   // empty field: no default pick, so a stray Enter never switches org
   function opt(o, i, pre){
     var nm = esc(o.name);
     if (q) { var at = o.name.toLowerCase().indexOf(q); nm = esc(o.name.slice(0, at)) + '<mark>' + esc(o.name.slice(at, at + q.length)) + '</mark>' + esc(o.name.slice(at + q.length)); }
-    return '<div class="sw-opt' + (i === 0 ? ' hl' : '') + '" role="option" id="opt-' + pre + o.id + '" aria-selected="' + (i === 0) + '" data-id="' + o.id + '" onmousedown="event.preventDefault()" onclick="selectOrg(\'' + o.id + '\')" onmousemove="setHl(' + i + ')">'
+    return '<div class="sw-opt' + (i === hl ? ' hl' : '') + '" role="option" id="opt-' + pre + o.id + '" aria-selected="' + (i === hl) + '" data-id="' + o.id + '" onmousedown="event.preventDefault()" onclick="selectOrg(\'' + o.id + '\')" onmousemove="setHl(' + i + ')">'
          + avatar(o).replace('<span style', '<span class="av" style') + '<span class="nm">' + nm + '</span></div>';
   }
   var h = '';
@@ -388,7 +391,7 @@ function renderSwitch(){
   h += q ? all : '<div role="group" aria-labelledby="sw-all-l" id="sw-all"><div class="sw-label" id="sw-all-l">All organizations</div>' + all + '</div>';
   document.getElementById('sw-list').innerHTML = shown.length ? h
     : '<div class="sw-empty" id="sw-empty">' + (q ? 'No organizations found' : 'No recently viewed organizations') + '</div>';
-  var first = document.querySelector('#sw-list .sw-opt');
+  var first = hl >= 0 && document.querySelector('#sw-list .sw-opt');
   document.getElementById('sw-q').setAttribute('aria-activedescendant', first ? first.id : '');
 }
 function setHl(i){
@@ -405,7 +408,7 @@ document.getElementById('sw-q').addEventListener('input', function(){
 });
 document.getElementById('sw-q').addEventListener('keydown', function(e){
   if (e.key === 'ArrowDown') { e.preventDefault(); setHl(hl + 1); }
-  else if (e.key === 'ArrowUp') { e.preventDefault(); setHl(hl - 1); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); setHl(hl < 0 ? -1 : hl - 1); }
   else if (e.key === 'Enter') {
     e.preventDefault();
     if (searching) return;
