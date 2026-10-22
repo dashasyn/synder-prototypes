@@ -32,7 +32,7 @@ const I18N = {
   erst:       { de: 'Erstmeldung',             en: 'First notice' },
   haupt:      { de: 'Hauptmeldung',            en: 'Main notice' },
   ortspunkt:  { de: 'Ortspunkt',               en: 'Location point' },
-  genEla:     { de: 'ELA GENERIEREN',          en: 'GENERATE ELA' },
+  genEla:     { de: 'ELA-TEXT GENERIEREN',     en: 'GENERATE ELA TEXT' },   // Ignat, 2026-10-22
   genAudio:   { de: 'AUDIO ERZEUGEN',          en: 'GENERATE AUDIO' },
   listen:     { de: 'ANHÖREN',                 en: 'LISTEN GENERATED' },
   stop:       { de: 'STOP',                    en: 'STOP' },
