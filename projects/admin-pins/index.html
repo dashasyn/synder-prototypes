@@ -79,6 +79,10 @@
   .sw-opt .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .sw-opt.hl{background:var(--color-primary-5)}
   .sw-opt mark{background:none;color:inherit;font-weight:500}
+  .sw-spin{display:inline-block;width:16px;height:16px;border:2px solid var(--border-default);border-top-color:var(--color-primary);
+    border-radius:50%;animation:swspin .7s linear infinite;vertical-align:-3px;margin-right:8px}
+  @keyframes swspin{to{transform:rotate(360deg)}}
+  .row-selected-lbl{color:var(--text-secondary);padding:0 16px;display:inline-block}
   .sw-empty{padding:12px 14px;color:var(--text-secondary)}
   #sw-all{border-top:1px solid var(--border-default);margin-top:4px;padding-top:4px}
   .sw-label{padding:8px 14px 4px;font-weight:500;color:var(--text-secondary)}
@@ -334,7 +338,7 @@ var hl = 0, shown = [];
 function openSwitcher(){
   var sw = document.getElementById('sw'), q = document.getElementById('sw-q');
   sw.hidden = false; document.getElementById('org-btn').setAttribute('aria-expanded', 'true');
-  q.value = ''; renderSwitch(); q.focus();
+  q.value = ''; searched = ''; searching = false; renderSwitch(); q.focus();
 }
 function closeSwitcher(refocus){
   document.getElementById('sw').hidden = true; document.getElementById('org-btn').setAttribute('aria-expanded', 'false');
@@ -345,8 +349,18 @@ var recent = (function(){
   try { var r = JSON.parse(localStorage.getItem(RECENT_KEY)); if (Array.isArray(r)) return r.filter(byId); } catch(e){}
   return ['c4','c1','c6','c9','c11'];   // mock history so the section is populated on first open
 })();
+// Search runs on Enter only (no search-as-you-type: too heavy for the backend); a spinner stands in for the request.
+var searched = '', searching = false, searchTimer;
+function runSearch(q){
+  searching = true; clearTimeout(searchTimer);
+  document.getElementById('sw-list').innerHTML = '<div class="sw-empty" id="sw-loading" role="status"><span class="sw-spin" aria-hidden="true"></span>Searching…</div>';
+  document.getElementById('sw-q').setAttribute('aria-busy', 'true');
+  searchTimer = setTimeout(function(){
+    searching = false; searched = q; document.getElementById('sw-q').removeAttribute('aria-busy'); renderSwitch();
+  }, 700);
+}
 function renderSwitch(){
-  var q = document.getElementById('sw-q').value.trim().toLowerCase();
+  var q = searched;
   // empty query → 5 Recently viewed, then All organizations (A–Z); typed query → every organization, by name
   var rec = q ? [] : recent.filter(function(id){ return id !== current; }).slice(0, RECENT_MAX).map(byId);
   var rest = ORGS.filter(function(o){ return o.id !== current && (!q || o.name.toLowerCase().indexOf(q) >= 0); });
@@ -377,11 +391,20 @@ function setHl(i){
   opts[hl].scrollIntoView({ block: 'nearest' });
   document.getElementById('sw-q').setAttribute('aria-activedescendant', opts[hl].id);
 }
-document.getElementById('sw-q').addEventListener('input', renderSwitch);
+document.getElementById('sw-q').addEventListener('input', function(){
+  // clearing the field brings back Recently viewed + All organizations straight away
+  if (!this.value.trim() && (searched || searching)) { clearTimeout(searchTimer); searching = false; searched = ''; renderSwitch(); }
+});
 document.getElementById('sw-q').addEventListener('keydown', function(e){
   if (e.key === 'ArrowDown') { e.preventDefault(); setHl(hl + 1); }
   else if (e.key === 'ArrowUp') { e.preventDefault(); setHl(hl - 1); }
-  else if (e.key === 'Enter') { e.preventDefault(); if (shown[hl]) selectOrg(shown[hl].id); }
+  else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (searching) return;
+    var q = this.value.trim().toLowerCase();
+    if (q !== searched) runSearch(q);          // new text → search
+    else if (shown[hl]) selectOrg(shown[hl].id);   // same text → pick the highlighted result
+  }
   else if (e.key === 'Escape') { e.preventDefault(); closeSwitcher(true); }
 });
 document.addEventListener('mousedown', function(e){
@@ -455,7 +478,8 @@ function pageOrgs(){
          return '<tr data-id="' + o.id + '"><td><a href="#org/' + o.id + '">' + esc(o.name) + '</a></td><td>' + o.country + '</td><td>' + o.industry + '</td>'
               + '<td class="num">' + o.gp + '</td><td>' + o.rev + '</td><td class="multi">' + esc(o.plan) + '</td><td class="multi">' + esc(o.providers) + '</td>'
               + '<td>' + esc(o.cc) + '</td><td class="num">' + o.syncs + '</td><td>' + o.created + '</td><td>' + o.onb + '</td>'
-              + '<td class="act"><button class="btn-outlined row-select" aria-label="Select ' + esc(o.name) + '" onclick="selectOrg(\'' + o.id + '\', \'tx/list\')">Select</button></td></tr>';
+              + '<td class="act">' + (o.id === current ? '<span class="row-selected-lbl">Selected</span>'
+              :  '<button class="btn-outlined row-select" aria-label="Select ' + esc(o.name) + '" onclick="selectOrg(\'' + o.id + '\', \'tx/list\')">Select</button>') + '</td></tr>';
        }).join('') : '<tr><td colspan="12">No organizations found</td></tr>') + '</tbody></table></div>';
 }
 function pageOrg(id){
