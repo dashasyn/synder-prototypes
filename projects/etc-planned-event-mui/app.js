@@ -243,15 +243,26 @@ const TYP_OPTIONS = ['Kein Halt - einseitig', 'Kein Halt - beidseitig', 'Kein Zu
 const DAY_LONG = { So: 'Sonntag', Mo: 'Montag', Di: 'Dienstag', Mi: 'Mittwoch', Do: 'Donnerstag', Fr: 'Freitag', Sa: 'Samstag' };
 const WEEK = DAYS;   // the summary follows production's week, Sunday first (So–Do · Fr–Sa)
 const mkDays = (start, end, on, override) => Object.fromEntries(DAYS.map(d => [d, { on, start, end, ...((override || {})[d] || {}) }]));
+/* Ignat, 2026-10-22 (2nd pass): no Aktiv column — a phase either has a schedule or says it has none.
+   Alternative runs in the Hauptmeldung's period, only at other hours, so the two share one sheet. */
 const PHASE_SEED = {
-  vorab: { active: false, from: '2026-10-21', to: '2026-10-28', days: mkDays('04:30', '02:30', true, { Fr: { end: '04:29' }, Sa: { end: '04:29' } }) },
-  haupt: { active: true,  from: '2026-10-21', to: '2026-11-04', days: mkDays('00:00', '23:59', true) },
-  alt:   { active: false, from: '', to: '', days: mkDays('00:00', '23:59', false) },
+  vorab: { from: '', to: '', days: mkDays('04:30', '02:30', false) },
+  haupt: { from: '2026-10-21', to: '2026-11-04', days: mkDays('04:30', '02:30', true, { Fr: { end: '04:29' }, Sa: { end: '04:29' } }) },
+  alt:   { days: mkDays('22:00', '04:29', false) },
 };
+const MONTHS = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
+/** "21.–28. Okt 2026" · "21. Okt – 4. Nov 2026" · "28. Dez 2026 – 3. Jan 2027" */
+function periodWords(from, to) {
+  if (!from || !to) return null;
+  const [y1, m1, d1] = from.split('-').map(Number), [y2, m2, d2] = to.split('-').map(Number);
+  if (y1 === y2 && m1 === m2) return d1 === d2 ? `${d1}. ${MONTHS[m1 - 1]} ${y1}` : `${d1}.–${d2}. ${MONTHS[m1 - 1]} ${y1}`;
+  if (y1 === y2) return `${d1}. ${MONTHS[m1 - 1]} – ${d2}. ${MONTHS[m2 - 1]} ${y1}`;
+  return `${d1}. ${MONTHS[m1 - 1]} ${y1} – ${d2}. ${MONTHS[m2 - 1]} ${y2}`;
+}
 /** "So–Do 04:30–02:30 · Fr–Sa 04:30–04:29", or "Täglich 00:00–23:59" */
 function schedSummary(days) {
   const on = WEEK.filter(d => days[d].on);
-  if (!on.length) return '–';
+  if (!on.length) return null;
   const t = d => days[d].start + '–' + days[d].end;
   if (on.length === 7 && WEEK.every(d => t(d) === t('Mo'))) return 'Täglich ' + t('Mo');
   const runs = [];
@@ -287,23 +298,27 @@ const TYPE_FIELDS_TITLE = { Pendelverkehr: 'Daten Pendelverkehr', Unterbrechung:
 const typeFieldsMissing = (typ, vals) => typ === 'Pendelverkehr' ? ['pMenge', 'pTakt', ...STATION_TRACKS.map(s => 'pG' + s)].some(k => !vals[k])
   : typ === 'Unterbrechung' ? ['kMH', 'kKo'].some(k => !vals[k]) : false;
 
-function ScheduleTable({ phases, setPhases, onEdit }) {
+function ScheduleTable({ phases, onEdit }) {
+  const none = t => html`<${Box} component="span" className="sched-none">${t}<//>`;
+  const rows = [
+    ['vorab', phases.vorab.from, phases.vorab.to, phases.vorab.days, 'vorab'],
+    ['haupt', phases.haupt.from, phases.haupt.to, phases.haupt.days, 'haupt'],
+    ['alt',   phases.haupt.from, phases.haupt.to, phases.alt.days,  'haupt'],   // same period as Haupt
+  ];
   return html`<${TableContainer} id="schedTable">
-    <${Table}>
+    <${Table} size="small" sx=${{ '& td, & th': { color: '#000' } }}>
       <${TableHead}><${TableRow}>
-        ${['Phase', 'Aktiv', 'Zeitraum', 'Tage & Zeiten'].map(h => html`<${TableCell} key=${h} sx=${{ fontWeight: 500 }}>${h}<//>`)}<${TableCell} />
+        ${['Phase', 'Zeitraum', 'Tage & Zeiten'].map(h => html`<${TableCell} key=${h} sx=${{ fontWeight: 500 }}>${h}<//>`)}<${TableCell} />
       <//><//>
       <${TableBody}>
-        ${['vorab', 'haupt', 'alt'].map(k => { const p = phases[k], fixed = k === 'haupt';
-          return html`<${TableRow} key=${k} className="sched-row" data-phase=${k} sx=${{ opacity: p.active ? 1 : .55 }}>
+        ${rows.map(([k, from, to, days, sheet]) => {
+          const sum = schedSummary(days), per = periodWords(from, to);
+          return html`<${TableRow} key=${k} className="sched-row" data-phase=${k} data-has=${!!(sum && per)}>
             <${TableCell} sx=${{ fontWeight: 500, width: 220 }}>${PHASE_LABEL[k]}<//>
-            <${TableCell} sx=${{ width: 90 }}>
-              <${Switch} checked=${p.active} disabled=${fixed} inputProps=${{ 'aria-label': PHASE_LABEL[k] + ' aktiv' }}
-                onChange=${e => setPhases(x => ({ ...x, [k]: { ...x[k], active: e.target.checked } }))} /><//>
-            <${TableCell} className="sched-range" sx=${{ width: 240, whiteSpace: 'nowrap' }}>${p.from || p.to ? fmtDate(p.from) + ' – ' + fmtDate(p.to) : '–'}<//>
-            <${TableCell} className="sched-days">${schedSummary(p.days)}<//>
+            <${TableCell} className="sched-range" sx=${{ width: 260, whiteSpace: 'nowrap' }}>${per || none('Kein Zeitraum')}<//>
+            <${TableCell} className="sched-days">${sum || none('Kein Zeitplan')}<//>
             <${TableCell} align="right" sx=${{ width: 60 }}>
-              <${Tooltip} title="Zeiträume bearbeiten"><${IconButton} aria-label=${'Zeiträume bearbeiten: ' + PHASE_LABEL[k]} onClick=${() => onEdit(k)}><${Icon}>edit<//><//><//>
+              <${Tooltip} title="Zeiträume bearbeiten"><${IconButton} aria-label=${'Zeiträume bearbeiten: ' + PHASE_LABEL[k]} onClick=${() => onEdit(sheet)}><${Icon}>edit<//><//><//>
             <//>
           <//>`; })}
       <//>
@@ -311,34 +326,45 @@ function ScheduleTable({ phases, setPhases, onEdit }) {
   <//>`;
 }
 
-function ScheduleSheet({ phaseKey, phase, onClose, onSave }) {
-  const [d, setD] = useState(phase);
-  React.useEffect(() => { setD(phase); }, [phase]);
-  if (!d) return html`<${Drawer} anchor="right" open=${false} />`;
-  const setDay = (day, k, v) => setD(x => ({ ...x, days: { ...x.days, [day]: { ...x.days[day], [k]: v } } }));
-  const bad = d.from && d.to && d.to < d.from;
-  return html`<${Drawer} anchor="right" open=${!!phaseKey} onClose=${onClose} id="schedSheet"
-    PaperProps=${{ sx: { width: 480, display: 'flex', flexDirection: 'column' } }}>
+/* One sheet per period, as production's dialog: Vorabmeldung alone; Hauptmeldung with
+   Alternative next to it — same days, same period, its own hours. */
+function ScheduleSheet({ sheet, phases, onClose, onSave }) {
+  const [d, setD] = useState(null);
+  React.useEffect(() => { setD(sheet ? JSON.parse(JSON.stringify(phases)) : null); }, [sheet]);
+  if (!sheet || !d) return html`<${Drawer} anchor="right" open=${false} />`;
+  const cols = sheet === 'vorab' ? ['vorab'] : ['haupt', 'alt'];
+  const dateKey = sheet;   // Vorab has its own period, Alternative uses Haupt's
+  const setDay = (k, day, f, v) => setD(x => ({ ...x, [k]: { ...x[k], days: { ...x[k].days, [day]: { ...x[k].days[day], [f]: v } } } }));
+  const per = d[dateKey], bad = per.from && per.to && per.to < per.from;
+  const COLW = '40px 104px 104px';
+  return html`<${Drawer} anchor="right" open=${true} onClose=${onClose} id="schedSheet"
+    PaperProps=${{ sx: { width: cols.length === 2 ? 760 : 480, display: 'flex', flexDirection: 'column' } }}>
     <${Box} sx=${{ display: 'flex', alignItems: 'center', px: 3, py: 2, borderBottom: '1px solid #E0E0E0' }}>
-      <${Typography} variant="h6" sx=${{ flex: 1, fontWeight: 500 }}>${PHASE_LABEL[phaseKey]}<//>
+      <${Typography} variant="h6" sx=${{ flex: 1, fontWeight: 500 }} id="schedTitle">${sheet === 'vorab' ? 'Vorabmeldung' : 'Hauptmeldung & Alternative'}<//>
       <${IconButton} aria-label="Schließen" onClick=${onClose}><${Icon}>close<//><//>
     <//>
     <${Box} sx=${{ flex: 1, overflowY: 'auto', px: 3, py: 2.5 }}>
-      <${Stack} direction="row" spacing=${2} sx=${{ mb: 3 }}>
-        <${TextField} id="sFrom" type="date" label="Datum von" value=${d.from} InputLabelProps=${{ shrink: true }} sx=${{ flex: 1 }}
-          onChange=${e => setD(x => ({ ...x, from: e.target.value }))} />
-        <${TextField} id="sTo" type="date" label="Datum bis" value=${d.to} InputLabelProps=${{ shrink: true }} sx=${{ flex: 1 }}
-          error=${bad} helperText=${bad ? '„Datum bis“ liegt vor „Datum von“.' : ''} onChange=${e => setD(x => ({ ...x, to: e.target.value }))} />
+      <${Stack} direction="row" spacing=${2} sx=${{ mb: 3, maxWidth: 440 }}>
+        <${TextField} id="sFrom" type="date" label="Datum von" value=${per.from} InputLabelProps=${{ shrink: true }} sx=${{ flex: 1 }}
+          onChange=${e => setD(x => ({ ...x, [dateKey]: { ...x[dateKey], from: e.target.value } }))} />
+        <${TextField} id="sTo" type="date" label="Datum bis" value=${per.to} InputLabelProps=${{ shrink: true }} sx=${{ flex: 1 }}
+          error=${bad} helperText=${bad ? '„Datum bis“ liegt vor „Datum von“.' : ''}
+          onChange=${e => setD(x => ({ ...x, [dateKey]: { ...x[dateKey], to: e.target.value } }))} />
       <//>
-      <${Box} sx=${{ display: 'grid', gridTemplateColumns: '1fr 48px 110px 110px', alignItems: 'center', columnGap: 1.5, rowGap: 1 }} id="schedDays">
-        <${Typography} sx=${{ fontWeight: 500 }}>Tage<//><span /><${Typography} sx=${{ fontWeight: 500 }}>Start<//><${Typography} sx=${{ fontWeight: 500 }}>Ende<//>
+      <${Box} id="schedDays" sx=${{ display: 'grid', gridTemplateColumns: `140px ${cols.map(() => COLW).join(' 24px ')}`, alignItems: 'center', columnGap: 1, rowGap: 1 }}>
+        <${Typography} sx=${{ fontWeight: 500 }}>Tage<//>
+        ${cols.map((k, i) => html`<${React.Fragment} key=${k}>${i ? html`<span />` : null}
+          <${Typography} sx=${{ fontWeight: 500, gridColumn: 'span 3', textAlign: 'center' }}>${PHASE_LABEL[k]}<//><//>`)}
+        <span />
+        ${cols.map((k, i) => html`<${React.Fragment} key=${k}>${i ? html`<span />` : null}<span /><${Typography} sx=${{ fontWeight: 500 }}>Start<//><${Typography} sx=${{ fontWeight: 500 }}>Ende<//><//>`)}
         ${DAYS.map(day => html`<${React.Fragment} key=${day}>
           <${Typography}>${DAY_LONG[day]}<//>
-          <${Checkbox} checked=${d.days[day].on} inputProps=${{ 'aria-label': DAY_LONG[day] }} onChange=${e => setDay(day, 'on', e.target.checked)} />
-          <${TextField} type="time" hiddenLabel value=${d.days[day].start} disabled=${!d.days[day].on} inputProps=${{ 'aria-label': DAY_LONG[day] + ' Start' }}
-            onChange=${e => setDay(day, 'start', e.target.value)} />
-          <${TextField} type="time" hiddenLabel value=${d.days[day].end} disabled=${!d.days[day].on} inputProps=${{ 'aria-label': DAY_LONG[day] + ' Ende' }}
-            onChange=${e => setDay(day, 'end', e.target.value)} />
+          ${cols.map((k, i) => { const v = d[k].days[day], lbl = DAY_LONG[day] + (k === 'alt' ? ' Alternative' : '');
+            return html`<${React.Fragment} key=${k}>${i ? html`<span />` : null}
+              <${Checkbox} checked=${v.on} data-col=${k} inputProps=${{ 'aria-label': lbl }} onChange=${e => setDay(k, day, 'on', e.target.checked)} />
+              <${TextField} type="time" hiddenLabel value=${v.start} disabled=${!v.on} inputProps=${{ 'aria-label': lbl + ' Start' }} onChange=${e => setDay(k, day, 'start', e.target.value)} />
+              <${TextField} type="time" hiddenLabel value=${v.end} disabled=${!v.on} inputProps=${{ 'aria-label': lbl + ' Ende' }} onChange=${e => setDay(k, day, 'end', e.target.value)} />
+            <//>`; })}
         <//>`)}
       <//>
       <${Button} sx=${{ mt: 2 }} disabled>Ausnahmeregelung hinzufügen<//>
@@ -512,7 +538,7 @@ function App() {
         ${/* ── v2: Zeitplan — one row per phase ── */ ''}
         <${Paper} id="scheduleBlock" sx=${{ mb: 2 }}>
           <${Typography} sx=${{ fontWeight: 500, px: 2, pt: 2 }}>Zeitplan<//>
-          <${ScheduleTable} phases=${phases} setPhases=${setPhases} onEdit=${setSchedEdit} />
+          <${ScheduleTable} phases=${phases} onEdit=${setSchedEdit} />
         <//>` : html`
         ${/* ── event settings ── */ ''}
         <${Paper} id="settings" sx=${{ p: 2, mb: 2 }}>
@@ -652,8 +678,8 @@ function App() {
         <//>
       <//>
 
-      <${ScheduleSheet} phaseKey=${schedEdit} phase=${schedEdit ? phases[schedEdit] : null} onClose=${() => setSchedEdit(null)}
-        onSave=${d => { setPhases(x => ({ ...x, [schedEdit]: d })); setSchedEdit(null); setToast('Zeitplan übernommen.'); }} />
+      <${ScheduleSheet} sheet=${schedEdit} phases=${phases} onClose=${() => setSchedEdit(null)}
+        onSave=${d => { setPhases(d); setSchedEdit(null); setToast('Zeitplan übernommen.'); }} />
       <${CommentsSheet} open=${feedOpen} onClose=${() => setFeedOpen(false)} comments=${feed}
         onAdd=${t => setFeed(f => [{ who: ME, at: new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }) + ' '
           + new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }), text: t }, ...f])} />
