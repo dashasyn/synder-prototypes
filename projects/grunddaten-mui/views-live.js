@@ -60,10 +60,12 @@
   const ELA_TYPE_LABEL = { planned: ['Geplantes Ereignis', 'Planned event'], unplanned: ['Ungeplantes Ereignis', 'Unplanned event'],
     playlist: ['Playlist', 'Playlist'], single: ['Einzeltitel', 'Single track'], radio: ['Radio', 'Radio'],
     muted: ['Stumm', 'Muted'], none: ['Keine', 'None'] };
-  // Ignat, 2026-10-23: every type has its colour; the two events keep the Netzplan's
-  const ELA_TYPE_CHIP = { planned: { bgcolor: '#7C4DFF', color: '#fff' }, unplanned: { bgcolor: '#63A3A6', color: '#fff' },
-    playlist: { bgcolor: '#1976D2', color: '#fff' }, single: { bgcolor: '#00897B', color: '#fff' },
-    radio: { bgcolor: '#EF6C00', color: '#fff' }, muted: { bgcolor: '#C62828', color: '#fff' }, none: { bgcolor: '#E0E0E0', color: '#000' } };
+  // Ignat, 2026-10-23: the pastel status palette used on the other ETC pages (Erstellt, Beendet,
+  // Aktiv, Gestoppt, Entwurf) — fewer colours: music sources share the "Aktiv" green
+  const PASTEL = { purple: { bgcolor: '#DCC6E8', color: '#4A1D8F' }, blue: { bgcolor: '#BEE3F7', color: '#1F5A9E' },
+    green: { bgcolor: '#CDE6CB', color: '#2E6930' }, orange: { bgcolor: '#F9DEB6', color: '#D2601A' }, grey: { bgcolor: '#E0E0E0', color: '#212121' } };
+  const ELA_TYPE_CHIP = { planned: PASTEL.purple, unplanned: PASTEL.blue,
+    playlist: PASTEL.green, single: PASTEL.green, radio: PASTEL.green, muted: PASTEL.orange, none: PASTEL.grey };
 
   /* ── One row per station AND line, each with its own short code ──── */
   // sample codes: the first line keeps the station's code in BVG style ("Al");
