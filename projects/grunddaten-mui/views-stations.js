@@ -158,6 +158,12 @@ function XferTable({ list, de, t, onMove, onMain, onSched, onRemove }) {
                   || html`<${Chip} size="small" color="warning" variant="outlined" label=${t('schedMissing')} />`}
               <//>
               <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
+                ${/* Ignat, 2026-10-23: ✎ ☆ 🗑 — no blank placeholder; the main row is just ★ 🗑, right-aligned */ ''}
+                ${ann.isMain ? null : html`
+                  <${Tooltip} title=${t('editSchedule')}>
+                    <${IconButton} aria-label=${t('editSchedule') + ': ' + nm} onClick=${() => onSched(i)}>
+                      <${Icon} sx=${{ fontSize: 20 }}>edit<//><//>
+                  <//>`}
                 ${ann.isMain ? html`
                   <${Tooltip} title=${de ? 'Hauptansage – läuft immer, niedrigste Priorität' : 'Main announcement – always on, lowest priority'}>
                     <span><${IconButton} disabled aria-label=${(de ? 'Hauptansage' : 'Main announcement') + ': ' + nm}
@@ -166,11 +172,6 @@ function XferTable({ list, de, t, onMove, onMain, onSched, onRemove }) {
                   <${Tooltip} title=${t('setAsMain')}>
                     <${IconButton} aria-label=${t('setAsMain') + ': ' + nm} onClick=${() => onMain(i)}>
                       <${Icon} sx=${{ fontSize: 20 }}>star_border<//><//>
-                  <//>`}
-                ${ann.isMain ? html`<${Box} component="span" sx=${{ display: 'inline-block', width: 40 }} />` : html`
-                  <${Tooltip} title=${t('editSchedule')}>
-                    <${IconButton} aria-label=${t('editSchedule') + ': ' + nm} onClick=${() => onSched(i)}>
-                      <${Icon} sx=${{ fontSize: 20 }}>edit<//><//>
                   <//>`}
                 <${DeleteAction} remove name=${`${de ? 'Umstiegsansage' : 'transfer announcement'} ${nm}`}
                   onClick=${() => onRemove(i)} />
