@@ -325,7 +325,8 @@
         <${Typography} ...${label} className="map-label">ELA<//>
         <${Box} className="map-ela">
           ${nd.ela ? noData : !v.ela ? none : v.ela.kind === 'music'
-            ? html`<${Typography} variant="body2">${de ? 'Musik' : 'Music'}: ${v.ela.name()}<//>` : two(v.ela)}
+            ? html`<${Typography} variant="body2">${de ? 'Musik' : 'Music'}: ${v.ela.name()}<//>`
+            : v.ela.kind === 'muted' ? html`<${Typography} variant="body2">${de ? 'Stumm' : 'Muted'}: ${v.ela.reason}<//>` : two(v.ela)}
         <//>
         ${v.daisy.map((m, k) => html`
           <${Box} key=${k} className="map-track">

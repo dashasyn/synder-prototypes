@@ -87,18 +87,20 @@ function Shell() {
         <${Toolbar} sx=${{ minHeight: BAR_H, height: BAR_H, px: 2 }}>
           <${BvgHeart} />
           <${Stack} direction="row" sx=${{ height: BAR_H, alignItems: 'stretch' }}>
-            ${['Incidents', 'Line view', 'Messages view'].map(l => html`
+            ${['Incidents', 'Line view'].map(l => html`
               <${Button} key=${l} color="inherit" disabled
                 sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14 }}>${l}<//>`)}
-            ${/* Ignat, 2026-10-07/08: what each station plays and shows right now —
-                  "another point in an expandable menu for live data": table + map */ ''}
-            <${NavMenu} id="live" label=${state.lang === 'de' ? 'Live-Daten' : 'Live data'}
-              active=${s.view === 'live' || s.view === 'liveMap'}>
-              ${close => [
-                item('live',    state.lang === 'de' ? 'Stationssicht' : 'Station view', () => { close(); nav('live'); }),
-                item('liveMap', state.lang === 'de' ? 'Netzplan' : 'Network map',     () => { close(); nav('liveMap'); }),
-              ]}
+            ${/* Ignat, 2026-10-23: the station view moves into the Messages view menu as "ELA live";
+                  Live-Daten keeps only the Netzplan, so it becomes a plain top-bar item */ ''}
+            <${NavMenu} id="msgs" label="Messages view" active=${s.view === 'live'}>
+              ${close => [item('live', 'ELA live', () => { close(); nav('live'); })]}
             <//>
+            <${Button} color="inherit" data-nav="liveMap" onClick=${() => nav('liveMap')}
+              sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
+                     fontWeight: s.view === 'liveMap' ? 500 : 400,
+                     borderBottom: '3px solid', borderColor: s.view === 'liveMap' ? 'primary.main' : 'transparent',
+                     color: s.view === 'liveMap' ? 'primary.main' : 'inherit' }}>
+              ${state.lang === 'de' ? 'Netzplan' : 'Network map'}<//>
 
             <${NavMenu} id="evr" label=${t('evrMenu')} active=${EVR_VIEWS.includes(s.view)}>
               ${close => [
