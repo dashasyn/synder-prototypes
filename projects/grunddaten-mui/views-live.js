@@ -60,8 +60,10 @@
   const ELA_TYPE_LABEL = { planned: ['Geplantes Ereignis', 'Planned event'], unplanned: ['Ungeplantes Ereignis', 'Unplanned event'],
     playlist: ['Playlist', 'Playlist'], single: ['Einzeltitel', 'Single track'], radio: ['Radio', 'Radio'],
     muted: ['Stumm', 'Muted'], none: ['Keine', 'None'] };
-  // the two event types use the Netzplan event colours; the rest stay neutral
-  const ELA_TYPE_CHIP = { planned: { bgcolor: '#7C4DFF', color: '#fff' }, unplanned: { bgcolor: '#63A3A6', color: '#fff' } };
+  // Ignat, 2026-10-23: every type has its colour; the two events keep the Netzplan's
+  const ELA_TYPE_CHIP = { planned: { bgcolor: '#7C4DFF', color: '#fff' }, unplanned: { bgcolor: '#63A3A6', color: '#fff' },
+    playlist: { bgcolor: '#1976D2', color: '#fff' }, single: { bgcolor: '#00897B', color: '#fff' },
+    radio: { bgcolor: '#EF6C00', color: '#fff' }, muted: { bgcolor: '#C62828', color: '#fff' }, none: { bgcolor: '#E0E0E0', color: '#000' } };
 
   /* ── One row per station AND line, each with its own short code ──── */
   // sample codes: the first line keeps the station's code in BVG style ("Al");
@@ -96,7 +98,7 @@
         return DAISY_POOL[(i + k) % DAISY_POOL.length];
       });
       const e = i % 5;
-      return { daisy, ela: e === 0 || e === 3 ? null : ELA_POOL[(i * 3) % ELA_POOL.length], changed: 0, since: SEED_T0 - ((i * 17) % 180) * 60000 };
+      return { daisy, ela: e === 0 || e === 3 ? null : ELA_POOL[(i * 3) % ELA_POOL.length], changed: 0, since: SEED_T0 - ((i * 37) % 4000) * 60000 };
   };
   const seedState = rows => {
     const out = {};
@@ -108,7 +110,7 @@
         return DAISY_POOL[(i + k) % DAISY_POOL.length];
       });
       const e = i % 5;
-      out[r.key] = { daisy, ela: e === 0 ? null : ELA_POOL[(i * 3) % ELA_POOL.length], changed: 0, since: SEED_T0 - ((i * 17) % 180) * 60000 };
+      out[r.key] = { daisy, ela: e === 0 ? null : ELA_POOL[(i * 3) % ELA_POOL.length], changed: 0, since: SEED_T0 - ((i * 37) % 4000) * 60000 };
     });
     return out;
   };
@@ -166,7 +168,8 @@
   };
   setInterval(() => { if (LIVE.listeners.size) liveTick(); }, 10000);
 
-  const hhmm = ts => { const d = new Date(ts); return [d.getHours(), d.getMinutes()].map(x => String(x).padStart(2, '0')).join(':'); };
+  const p2 = x => String(x).padStart(2, '0');
+  const dateTime = ts => { const d = new Date(ts); return `${p2(d.getDate())}.${p2(d.getMonth() + 1)}.${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`; };
   const hhmmss = d => [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':');
 
   /* identical texts once: "Gleis 1, 2" … ; every track the same → "Alle Gleise" */
@@ -222,8 +225,6 @@
       if (e.kind === 'ann') return html`
         <${Box} className="ela-ann">
           <${TwoLang} de=${e.de} en=${e.en} />
-          <${Link} component="button" variant="body2" className="ela-event" sx=${{ mt: .5 }}
-            onClick=${() => {}}>${e.event} →<//>
         <//>`;
       if (e.kind === 'muted') return html`
         <${Box} className="ela-muted">
@@ -273,7 +274,8 @@
                 <${TableCell} sx=${{ width: 80 }}>${t('colLine')}<//>
                 <${TableCell} sx=${{ width: 200 }}>${de ? 'Typ' : 'Type'}<//>
                 <${TableCell}>${de ? 'Inhalt' : 'Content'}<//>
-                <${TableCell} sx=${{ width: 90 }}>${de ? 'Seit' : 'Since'}<//>
+                <${TableCell} sx=${{ width: 160 }}>${de ? 'Seit' : 'Since'}<//>
+                <${TableCell} sx=${{ width: 170 }} />
               <//><//>
               <${TableBody}>
                 ${rows.length ? rows.map(r => {
@@ -290,10 +292,15 @@
                       <//>
                       <${TableCell} className="ela">${ty ? content(L, ty) : html`<${NoData} />`}<//>
                       <${TableCell} className="ela-since">
-                        ${ty && ty !== 'none' ? html`<${Typography} variant="body2">${hhmm(L.since)}<//>` : html`<${Dash} />`}
+                        ${ty && ty !== 'none' ? html`<${Typography} variant="body2" sx=${{ whiteSpace: 'nowrap' }}>${dateTime(L.since)}<//>` : html`<${Dash} />`}
+                      <//>
+                      <${TableCell} align="right" className="ela-actions">
+                        ${ty === 'planned' || ty === 'unplanned' ? html`<${Button} variant="outlined" className="ela-view-event"
+                          aria-label=${(de ? 'Ereignis ansehen: ' : 'View event: ') + L.ela.event} sx=${{ whiteSpace: 'nowrap' }}
+                          onClick=${() => {}}>${de ? 'Ereignis ansehen' : 'View event'}<//>` : null}
                       <//>
                     <//>`;
-                }) : html`<${EmptyRow} colSpan=${5} />`}
+                }) : html`<${EmptyRow} colSpan=${6} />`}
               <//>
             <//>
           <//>
