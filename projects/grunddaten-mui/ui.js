@@ -264,7 +264,7 @@ function SectionCard({ title, subtitle, action, children, disablePadding, sx }) 
         <${Box} sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                        gap: 2, px: 3, py: 2, borderBottom: '1px solid #E7E7E7' }}>
           <${Stack} direction="row" spacing=${1.5} alignItems="baseline">
-            <${Typography} variant="subtitle2" sx=${{ fontWeight: 500 }}>${title}<//>
+            <${Typography} variant="subtitle1" className="section-title" sx=${{ fontSize: 16, fontWeight: 700 }}>${title}<//>
             ${subtitle ? html`<${Typography} variant="caption" color="text.secondary">${subtitle}<//>` : null}
           <//>
           ${action}

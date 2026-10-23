@@ -452,7 +452,7 @@ function StationDetailView() {
             ${text('stDestTts', d.destTtsText, v => patch(n => { n.destTtsText = v; }), { placeholder: d.name || st.name })}
           <//>
 
-          <${Typography} variant="subtitle2" sx=${{ fontWeight: 500, mt: 3, mb: 1 }}>${t('transferFiles')}<//>
+          <${Typography} variant="subtitle1" className="section-title" sx=${{ fontSize: 16, fontWeight: 700, mt: 3, mb: 1 }}>${t('transferFiles')}<//>
           ${/* one collapsible section per direction; opened, the same table as before */ ''}
           ${/* grouped like Fahrtrichtungen: one block per line, then Richtung 1 / 2 (2026-10-16) */ ''}
           ${/* Ignat, 2026-10-20: no box around the tables — just the line, then one table per direction */ ''}
