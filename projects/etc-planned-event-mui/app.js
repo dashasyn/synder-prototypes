@@ -645,10 +645,9 @@ function App() {
                   <${TableCell} sx=${{ width: 140, whiteSpace: 'pre-line' }}>${m.stations.replace(/; /g, ';\n')}<//>
                   <${TableCell} sx=${{ width: 80 }}>${m.tracks}<//>
                   <${TableCell} className="msg-text">
-                    ${!m.daisy && !m.de && !m.en ? html`<${Box} component="span" className="msg-none">Kein Text<//>` : null}
-                    ${m.daisy ? html`<div><b>DAISY</b>: ${m.daisy}</div>` : null}
-                    ${m.de ? html`<div><b>ELA (DEU)</b>: ${m.de}</div>` : null}
-                    ${m.en ? html`<div><b>ELA (ENG)</b>: ${m.en}</div>` : null}
+                    ${/* Ignat, 2026-10-23: always the three labels; an empty one says "Kein Text" */ ''}
+                    ${[['DAISY', m.daisy], ['ELA (DEU)', m.de], ['ELA (ENG)', m.en]].map(([k, v]) =>
+                      html`<div key=${k}><b>${k}</b>: ${v || 'Kein Text'}</div>`)}
                   <//>
                   <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap', width: 170 }}>
                     ${src ? null : html`<${React.Fragment}>
