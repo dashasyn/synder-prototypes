@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review · Stripe invoice date prototype · round 1</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+  body{margin:0;background:var(--color-white);font-size:14px;color:var(--text-primary)}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 24px 64px}
+  h1{font-size:24px;font-weight:500;margin:0 0 4px}
+  h2{font-size:18px;font-weight:500;margin:32px 0 8px}
+  .meta{color:var(--text-secondary);margin:0 0 16px}
+  .verdict{background:var(--color-primary-5);border-left:3px solid var(--color-primary);padding:12px 16px;margin:16px 0;line-height:20px}
+  table.synder-table td{vertical-align:top;line-height:20px;padding-top:12px;padding-bottom:12px;height:auto}
+  .q{color:var(--text-secondary)}
+  ul{line-height:22px;padding-left:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Stripe invoice date: review, round 1</h1>
+  <p class="meta">Target: <a class="text-link" href="https://dashasyn.github.io/synder-ux-prototypes/prototypes/stripe-invoice-date/">synder-ux-prototypes/prototypes/stripe-invoice-date</a> ·
+    2026-10-06 · Lenses: UX ×3, Domain (accountant), Clarity (business owner). Trust, A11Y and Fidelity were not run (default lens set; no Figma reference) ·
+    the state map was recorded in real Chromium · <code>validator-check.js verify</code> PASS, 20 findings</p>
+
+  <div class="verdict"><strong>Verdict:</strong> covers 3 of the FDD's 4 surfaces, and the RevRec confirmation is well written.
+    Two interactions contradict the spec, and both affect the books: confirming a new Schedule start re-dates an existing schedule,
+    and the RevRec lock never lifts. The Sync details drilldown (S1.5) is missing.</div>
+
+  <h2>Critical and High</h2>
+  <div class="table-wrap"><table class="synder-table">
+    <thead><tr><th style="width:24%">Where</th><th>Problem</th><th style="width:28%">Fix</th><th style="width:12%">Lenses</th></tr></thead>
+    <tbody>
+      <tr><td>RevRec · Schedule details table</td>
+        <td>After Confirm, the existing row <code>sub_after_release_3c1b</code> changes its Schedule start from 28 Dec 2025 → 6 Jan 2026, and then to the text “Payment date”. The modal just said <span class="q">“Existing recognition schedules keep their current dates.”</span> On the FDD's worked example, that moves $10,000 of recognition out of a possibly closed December.</td>
+        <td>Leave existing rows unchanged on Confirm. Show only dates in a date column, never an option name.</td>
+        <td>UX ×3, Domain (Critical), Clarity (Critical)</td></tr>
+      <tr><td>PT · RevRec lock</td>
+        <td>Following <span class="q">“Change Schedule start date instead →”</span> and setting Payment date doesn't unlock Invoice date: the select is still disabled and the message is still shown, because the lock is a fixed variant. The locked select also always shows Created date, whatever value is actually in effect.</td>
+        <td>Derive the lock from the current Schedule start, and show the value actually in effect.</td>
+        <td>UX ×3, Domain</td></tr>
+      <tr><td>PT · Sales tab · “Payment posting date”</td>
+        <td>“Payment” is too narrow. This setting dates every cash-side (balance-transaction) entry: sales receipts, refund receipts and expenses. It also clashes with the Summary option “Payment date” (when the customer paid). vocabulary.md also replaces “post” with “sync”.</td>
+        <td>A label that covers all balance transactions, without “posting”. Decide together with the FDD author.</td>
+        <td>Domain</td></tr>
+      <tr><td>PT · Invoice date help</td>
+        <td>It says what the two dates are, but not what the choice changes: which month the invoice and its revenue land in. To an owner, “created” and “issued” read as the same thing.</td>
+        <td>One plain line on the effect. Use “Date of issue” (the wording on the Stripe PDF) to anchor “issued”.</td>
+        <td>Clarity</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Medium (polish)</h2>
+  <ul>
+    <li><strong>Two save models on one tab.</strong> The select auto-saves with a “Saved” toast, and an Update button on the same tab shows “Settings updated”. The same happens on the Sales tab. (UX ×3)</li>
+    <li><strong>Invoice date row is overloaded.</strong> It has a New badge, a help sentence, a defaults caption and a blue callout, about 70 words for a two-option select. The caption says existing connections stay on Created, while the select opens on Issued, and nothing says which kind of connection this is. (UX ×3)</li>
+    <li><strong>Prototype notes rendered as product UI:</strong> “invented chrome (not live in demo)”, “Sync lock:”, “Issued date column”, “Was ‘Posting date’…”, the “Plan state:” switch inside the Summary card, and “Datasource dating matches Per Transaction rules.” (UX, Clarity)</li>
+    <li><strong>RevRec:</strong> “Schedule start date” appears twice (heading + row label), each with its own description. (UX)</li>
+  </ul>
+
+  <h2>Automatic checks</h2>
+  <ul>
+    <li>27 text elements under 14px: badges “New”, “Renamed” and “Upgrade to use” (11–12px), the lock message and its link, the defaults caption, “This feature is available on higher plans”, the Sync mode switch and the variant bar (13px).</li>
+    <li>Button radii are within 4px. The fonts are Roboto and Material Icons Outlined (loaded).</li>
+  </ul>
+
+  <h2>Not covered by the prototype</h2>
+  <ul>
+    <li><strong>Sync details / transaction drilldown (FDD S1.5).</strong> Missing. This is the only place a user can see that the books date differs from the created date in the table.</li>
+    <li><strong>Trial and new-connection states.</strong> No variant for either.</li>
+    <li><strong>Summary below Pro.</strong> The whole select is disabled, so below-Pro users lose Invoice created date and Payment date, which they can pick today. The FDD contradicts itself here (§2 gates only the new values; S2.3 gates the control).</li>
+    <li><strong>Escape doesn't close the RevRec modal.</strong> Only × or Cancel do. The A11Y lens wasn't run, so this was recorded during recon only.</li>
+    <li><strong>Invoice date is the first row on the tab,</strong> above the existing toggles. The FDD doesn't specify a position.</li>
+    <li>Upgrade plan, Learn more → and How to change mode links go nowhere (<code>href="#"</code>).</li>
+  </ul>
+
+  <h2>Files</h2>
+  <p class="meta">State map, validator payloads, manifest: <code>reports/stripe-invoice-date-ux/round-1/</code> · recon: <code>recon.cjs</code> · auto checks: <code>auto.cjs</code></p>
+</div>
+</body>
+</html>

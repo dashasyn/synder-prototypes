@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stripe invoice date — settings</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+<style>
+  body{margin:0;display:flex;flex-direction:column;min-height:100vh;background:var(--color-grey-5);
+    font-size:14px}
+
+  /* switcher — deliberately not product chrome */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 16px;flex-shrink:0;font-size:14px;flex-wrap:wrap;column-gap:8px;row-gap:6px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;
+    text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+    border-radius:6px;padding:3px;flex-wrap:wrap}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+    font-family:inherit;font-size:14px;padding:5px 9px;border-radius:4px;cursor:pointer;
+    white-space:nowrap}
+  .variant-switch .vs-opts[hidden]{display:none}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+  .variant-switch button:disabled{opacity:.3;cursor:not-allowed}
+  .vs-sep{width:1px;height:22px;background:rgba(255,255,255,.2)}
+
+  /* live app shell — measured against Ignat's screenshot of Settings → Invoices, 2026-10-06 */
+  .mi{font-family:'Material Icons Outlined';font-weight:normal;font-style:normal;font-size:20px;
+    line-height:1;display:inline-block;-webkit-font-smoothing:antialiased;font-feature-settings:'liga'}
+  .app{flex:1;display:flex;min-height:0;background:var(--color-white)}
+  .sb{width:208px;flex-shrink:0;border-right:1px solid var(--border-default);background:var(--color-white);
+    display:flex;flex-direction:column}
+  .sb-org{display:flex;align-items:center;gap:10px;height:56px;padding:0 14px;
+    border-bottom:1px solid var(--border-default);font-weight:500}
+  .sb-av{width:28px;height:28px;border-radius:50%;background:#F5C6CB;color:#B23B4B;display:flex;
+    align-items:center;justify-content:center;font-size:14px}
+  .sb-org .mi{margin-left:auto;color:var(--text-secondary)}
+  .sb-item{display:flex;align-items:center;gap:10px;height:40px;padding:0 14px;color:var(--text-primary);
+    border-bottom:1px solid var(--border-default);font-size:14px}
+  .sb-item .mi{color:var(--color-primary);font-size:20px}
+  .sb-item .chev{margin-left:auto;color:var(--text-secondary)}
+  .sb-beta{color:var(--color-primary);border:1px solid var(--color-primary-50);border-radius:4px;
+    padding:0 4px;font-size:14px;line-height:18px}
+  .sb-gap{height:40px;border-bottom:1px solid var(--border-default)}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:24px;
+    padding:0 24px;border-bottom:1px solid var(--border-default)}
+  .syncs{color:var(--text-secondary);border-bottom:3px solid var(--color-primary);padding:6px 0}
+  .syncs b{color:var(--color-primary);font-weight:500;font-size:16px}
+  .top .mi{color:var(--color-primary);font-size:24px}
+  .content{flex:1;padding:16px 16px 32px;overflow:auto}
+  .back-btn{display:inline-flex;align-items:center;gap:4px;background:var(--color-grey-5);
+    border:1px solid var(--border-default);border-radius:4px;padding:6px 12px;font-size:14px;
+    color:var(--text-primary);margin-bottom:20px}
+  .pick{display:flex;gap:24px;margin-bottom:24px}
+  .pick > div{flex:1}
+  .pick h3{font-size:16px;font-weight:500;margin:0 0 8px}
+  .int-sel{display:flex;align-items:center;gap:8px;width:300px;height:32px;border:1px solid var(--border-default);
+    border-radius:4px;padding:0 8px;color:var(--text-primary)}
+  .int-sel .s-logo{width:18px;height:18px;border-radius:3px;background:#635BFF;color:#fff;font-weight:700;
+    display:flex;align-items:center;justify-content:center;font-size:14px}
+  .int-sel .mi{margin-left:auto;color:var(--text-secondary)}
+  .add-int{display:inline-block;margin-top:8px}
+  .radio{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .radio .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--color-primary);display:flex;
+    align-items:center;justify-content:center}
+  .radio .dot::after{content:'';width:9px;height:9px;border-radius:50%;background:var(--color-primary)}
+  .radio.off .dot{border-color:var(--border-default)} .radio.off .dot::after{display:none}
+  .radio.off span{color:var(--text-muted)}
+  .types{display:flex;border-bottom:1px solid var(--border-default);overflow-x:auto}
+  .type{padding:9px 12px;border:1px solid var(--border-default);border-bottom:none;margin-right:-1px;
+    color:var(--text-secondary);background:var(--color-grey-5);white-space:nowrap;font-size:14px}
+  .type.on{background:var(--color-white);color:var(--text-primary);border-top:2px solid var(--color-primary);
+    display:flex;align-items:center;gap:6px}
+  .type.on .mi{font-size:18px}
+  .set-frame{border:1px solid var(--border-default);border-top:none;padding:12px}
+  .set-inner{display:flex;border:1px solid var(--border-default);min-height:420px}
+  .vnav{width:150px;flex-shrink:0;background:var(--color-grey-5);border-right:1px solid var(--border-default)}
+  .vnav .set-tab{display:block;width:100%;text-align:left;padding:8px 12px;border:none;
+    border-bottom:1px solid var(--border-default);background:none;color:var(--text-secondary);
+    font-family:inherit;font-size:14px;cursor:default}
+  .vnav .set-tab.link{cursor:pointer}
+  .vnav .set-tab.link:hover{color:var(--color-primary)}
+  .vnav .set-tab.on{background:var(--color-white);color:var(--text-primary);box-shadow:inset 3px 0 0 var(--color-primary);
+    margin-right:-1px;width:calc(100% + 1px)}
+  .live-toggle{display:inline-flex;align-items:stretch;height:26px;border:1px solid #C9CDD3;border-radius:3px;
+    background:var(--color-white);margin-left:4px;vertical-align:middle;cursor:default}
+  .live-toggle::before{content:'';width:18px;border-right:1px solid #C9CDD3}
+  .live-toggle span{padding:0 10px;display:flex;align-items:center;color:var(--text-secondary)}
+  .update-btn{margin-top:16px;display:inline-flex;align-items:center;gap:6px}
+  .update-btn .mi{font-size:18px}
+  .update-btn:disabled{background:#B9BEC6;border-color:#B9BEC6;color:var(--color-white);cursor:default}
+  .stub{max-width:1000px}
+  .app.fullscreen .sb,.app.fullscreen .top{display:none}
+  .app.fullscreen .content{padding:0;background:var(--color-grey-5)}
+  .rr-head{height:56px;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--color-white);
+    border-bottom:1px solid var(--border-default);font-weight:500}
+  .rr-head .mi{color:var(--text-secondary);font-size:24px}
+  .rr-head .sep{width:1px;height:32px;background:var(--border-default)}
+  .rr-wrap{display:flex;min-height:calc(100vh - 160px)}
+  .rr-nav{width:236px;flex-shrink:0;padding:20px 16px}
+  .rr-int{display:flex;align-items:center;gap:8px;height:36px;padding:0 10px;background:var(--color-white);
+    border:1px solid var(--border-default);border-radius:4px;margin-bottom:12px}
+  .rr-int .mi{margin-left:auto;color:var(--text-secondary)}
+  .rr-nav .it{padding:9px 12px;border-radius:4px;color:var(--text-primary);font-size:16px}
+  .rr-nav .it.on{background:var(--color-primary-10)}
+  .rr-nav .gap{height:32px}
+  .rr-main{flex:1;padding:20px 24px 40px;max-width:720px}
+  .rr-main h1{font-size:30px;font-weight:400;margin:0 0 0;padding-bottom:16px;border-bottom:1px solid var(--border-default)}
+  .rr-card{background:var(--color-white);border:1px solid var(--border-default);border-radius:4px;margin-top:24px}
+  .rr-sec{display:flex;align-items:center;gap:24px;padding:16px 24px;border-bottom:1px solid var(--border-default)}
+  .rr-sec:last-child{border-bottom:none}
+  .rr-sec b{display:block;font-weight:500;margin-bottom:4px}
+  .rr-sec .push{margin-left:auto}
+  .q{font-size:18px;color:var(--color-grey-50);vertical-align:-3px;margin-left:4px}
+  .rr-pad{padding:16px 18px}
+  .rr-banner{background:var(--color-primary-10);color:var(--color-primary);padding:12px 16px;border-radius:4px;
+    line-height:22px;margin-bottom:16px}
+  .rr-field{margin-bottom:16px}
+  .rr-field label{display:block;font-weight:500;margin-bottom:6px}
+  .rr-field label a{font-weight:400;margin-left:6px;text-decoration:none}
+  .rr-field .req{color:var(--color-red);margin-left:4px}
+  .rr-field select{width:100%}
+  .rr-field.is-new{background:var(--color-primary-5);margin:0 -18px 16px;padding:10px 18px 12px 15px;
+    border-left:3px solid var(--color-primary)}
+  .rr-toggle-row{display:flex;align-items:center;font-weight:500}
+  .rr-toggle-row .toggle{margin-left:auto}
+  .rr-excl{display:flex;gap:16px;margin-top:12px}
+  .rr-excl input{flex:1}
+  .rr-hint{color:var(--text-secondary);margin-top:6px}
+  /* Summary Sync settings overlay — from Ignat's screenshots of DS_test_with_AI, 2026-10-07 */
+  .ss-wrap{display:flex;justify-content:center;gap:56px;padding:16px 24px 48px}
+  .ss-nav{width:166px;flex-shrink:0}
+  .ss-nav .it{padding:8px;border-radius:4px;color:var(--text-primary)}
+  .ss-nav .it.on{background:var(--color-primary-10)}
+  .ss-nav .gap{height:40px}
+  .ss-main{width:430px}
+  .ss-main h2{font-size:18px;font-weight:400;margin:4px 0 0;padding-bottom:12px;border-bottom:1px solid var(--border-default)}
+  .ss-card{background:var(--color-white);border:1px solid var(--border-default);border-radius:4px;margin-top:12px}
+  .ss-hd{padding:12px 16px;border-bottom:1px solid var(--border-default)}
+  .ss-hd b{display:flex;align-items:center;gap:6px;font-weight:500}
+  .ss-hd p{margin:2px 0 0;color:var(--text-secondary);line-height:20px}
+  .ss-hd a{text-decoration:none}
+  .ss-row{display:flex;align-items:center;gap:12px;padding:8px 16px}
+  .ss-row select{margin-left:auto;width:120px}
+  .ss-row select.wide{width:200px}
+  .ss-int{display:flex;align-items:center;gap:8px}
+  .ss-int .s-logo{width:18px;height:18px;border-radius:3px;background:#635BFF;color:#fff;font-weight:700;
+    display:flex;align-items:center;justify-content:center}
+  .ss-radios{padding:8px 16px}
+  .ss-radios .radio{align-items:flex-start;margin:8px 0}
+  .ss-radios .radio .dot{margin-top:1px;flex-shrink:0}
+  .radio.off-sel .dot{border-color:var(--color-grey-50)}
+  .radio.off-sel .dot::after{display:none}
+  .ss-radios small{display:block;font-size:14px;color:var(--text-secondary)}
+  .ss-card.is-new{border-left:3px solid var(--color-primary)}
+  .ss-card.is-new .ss-hd,.ss-card.is-new .ss-row{background:var(--color-primary-5)}
+  .ss-gate{padding:0 16px 10px;background:var(--color-primary-5)}
+  .sb-sub{display:flex;align-items:center;gap:10px;height:38px;padding:0 14px 0 34px;color:var(--text-primary)}
+  .sb-sub .mi{font-size:18px;color:var(--color-primary)}
+  .sb-sub.on{background:var(--color-primary);color:var(--color-white)}
+  .sb-sub.on .mi{color:var(--color-white)}
+  .sb-open{background:var(--color-grey-5)}
+  .sb-new{background:var(--color-status-green-bg);color:var(--color-green);border-radius:4px;padding:0 4px}
+  .live-toggle.on{background:var(--color-primary);border-color:var(--color-primary);flex-direction:row-reverse}
+  .live-toggle.on::before{border-right:none;border-left:1px solid var(--color-primary);background:var(--color-white)}
+  .live-toggle.on span{color:var(--color-white)}
+  .set-body.has-side{display:flex;gap:24px}
+  .set-rows{flex:1;min-width:0}
+  .set-body:not(.has-side) .set-rows{width:100%}
+  .set-side{width:42%;flex-shrink:0;padding-top:14px}
+  .tx-head{margin-bottom:16px}
+  .tx-bar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .tx-search{width:128px;color:var(--text-muted)}
+  .tx-green{background:var(--color-green);border-color:var(--color-green)}
+  #tx-table th{text-align:center;vertical-align:top;padding-top:10px;height:auto}
+  #tx-table td,#tx-table th{white-space:normal;padding-left:8px;padding-right:8px}
+  #tx-table td a{word-break:break-all}
+  .th-f{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--border-default);border-radius:4px;
+    padding:2px 6px;margin:6px 0 8px;color:var(--text-muted);font-weight:400;text-align:left}
+  .th-f .mi{font-size:18px}
+  .cb{display:inline-block;width:16px;height:16px;border:1px solid var(--border-default);border-radius:3px;background:var(--color-grey-5)}
+  .dots{display:inline-block;border:1px solid var(--border-default);border-radius:4px;padding:0 6px;line-height:20px}
+  .pg{border:1px solid var(--border-default);padding:4px 10px;color:var(--text-secondary)}
+  .pg.on{background:var(--color-primary);color:var(--color-white);border-color:var(--color-primary)}
+  .app{position:relative}
+  #toasts{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;width:520px}
+  .toast-err{position:relative;display:flex;align-items:flex-start;gap:12px;background:var(--color-red);color:var(--color-white);
+    border-radius:4px;padding:14px 40px 16px 16px;box-shadow:var(--shadow-modal,0 8px 24px rgba(0,0,0,.2));overflow:hidden;font-size:16px;line-height:24px}
+  .toast-err > .mi{font-size:24px}
+  .toast-x{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--color-white);cursor:pointer;padding:2px}
+  .toast-x .mi{font-size:20px}
+  .toast-bar{position:absolute;left:0;bottom:0;height:4px;width:100%;background:rgba(255,255,255,.45);animation:tbar 8s linear forwards}
+  @keyframes tbar{to{width:0}}
+  .setup{max-width:440px;margin:24px auto}
+  .setup .rr-field{margin-bottom:14px}
+  .setup .rr-field.is-new{margin:0 -18px 14px}
+  .log-child td{background:var(--color-primary-5)}
+  .qb{display:inline-flex;width:20px;height:20px;border-radius:50%;background:#2CA01C;color:#fff;font-weight:700;align-items:center;justify-content:center;vertical-align:-4px}
+  .sub-filters{display:grid;grid-template-columns:repeat(6,1fr);gap:12px 16px;background:var(--color-grey-5);
+    padding:16px;border-radius:4px;margin-bottom:16px}
+  .sf-l{font-weight:500;margin-bottom:6px}
+  .sf-c{height:32px;border:1px solid var(--border-default);border-radius:4px;background:var(--color-white);padding:5px 8px}
+  .sf-btns{grid-column:1 / -1;display:flex;gap:12px}
+  .sd-wrap{max-width:1180px;margin:0 auto;padding:24px 24px 48px}
+  .sd-h{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .sd-strip{display:flex;flex-wrap:wrap;gap:28px;background:var(--color-grey-5);padding:14px 12px;border-radius:4px}
+  .sd-strip b{font-weight:500}
+  .sd-tabs{display:flex;border-bottom:1px solid var(--border-default);margin-top:20px}
+  .sd-tabs button{background:none;border:none;border-bottom:2px solid transparent;padding:10px 12px;font-family:inherit;
+    font-size:14px;color:var(--text-primary);cursor:pointer}
+  .sd-tabs button.on{color:var(--color-primary);border-bottom-color:var(--color-primary)}
+  .rs-iss{background:var(--color-primary-5);color:var(--text-primary);padding:0 4px;border-radius:4px}
+  #tl-table td,#tl-table th,#rs-table td,#rs-table th{padding-left:8px;padding-right:8px;white-space:normal}
+  #tl-table td a{word-break:break-all}
+  .rts{white-space:nowrap;display:inline-block;background:var(--color-primary);color:var(--color-white);border-radius:4px;padding:0 6px;line-height:20px}
+  .spec-tag{display:inline-block;border:1px dashed var(--color-grey-50);color:var(--text-secondary);
+    border-radius:4px;padding:2px 8px;margin-bottom:12px}
+
+  .ctx{color:var(--text-secondary);margin:0 0 12px}
+  .marker{color:var(--color-grey-50);font-style:italic;margin:0 0 12px}
+
+  .set-card{background:var(--color-white);border-radius:var(--radius-sm);
+    box-shadow:var(--shadow-card);overflow:hidden}
+  .set-body{padding:4px 20px 8px;flex:1;min-width:0}
+  .set-title{font-size:16px;font-weight:500;color:var(--text-primary);padding:16px 0 4px}
+
+  .row{display:flex;align-items:flex-start;gap:24px;padding:16px 0;
+    border-bottom:1px solid var(--border-default)}
+  .row:last-child{border-bottom:none}
+  .lrow{padding:10px 0}
+  .lrow .row-label{font-weight:400}
+  .lrow .row-help{display:flex;gap:6px;margin-top:6px;max-width:640px}
+  .lrow .row-help .mi{font-size:16px;color:var(--text-secondary);margin-top:2px}
+  .lrow .lctl{margin-top:8px}
+  .lrow .lctl select{width:100%}
+  .chip-up{display:inline-block;background:var(--color-status-purple-bg);color:var(--color-purple);
+    text-decoration:underline;padding:0 6px;border-radius:4px;line-height:24px;margin-left:4px}
+  .gate-msg{margin-top:6px;color:var(--color-red)}
+  .gate-msg a{color:var(--color-primary);text-decoration:none}
+  .lrow.is-new{background:var(--color-primary-5);margin:0 -20px;padding:12px 20px 12px 17px;
+    border-left:3px solid var(--color-primary)}
+  .row-main{flex:1;min-width:0}
+  .row-label{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-primary);
+    font-weight:500;flex-wrap:wrap}
+  .row-help{font-size:14px;color:var(--text-secondary);line-height:20px;margin-top:4px}
+  .row-ctl{flex-shrink:0;padding-top:2px}
+  .row-ctl select{width:260px}
+  .row.is-new{background:var(--color-primary-5);margin:0 -20px;padding-left:17px;
+    padding-right:20px;border-left:3px solid var(--color-primary)}
+  .lock-note{margin-top:8px;font-size:14px;color:var(--text-primary)}
+
+  /* sync details */
+  .back{display:inline-block;margin-bottom:12px}
+  .sd-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .sd-title{font-size:20px;font-weight:500;color:var(--text-primary)}
+  .sd-sub{color:var(--text-secondary);margin-bottom:16px}
+  .kv{display:grid;grid-template-columns:200px 1fr;column-gap:16px}
+  .kv > div{padding:10px 0;border-bottom:1px solid var(--border-default)}
+  .kv .k{color:var(--text-secondary)}
+  .kv .k.is-new,.kv .v.is-new{background:var(--color-primary-5)}
+  .kv .k.is-new{border-left:3px solid var(--color-primary);padding-left:8px;margin-left:-11px}
+  .v-note{color:var(--text-secondary)}
+
+  .table-block{margin-top:24px}
+  th.is-new,td.is-new{background:var(--color-primary-5)}
+  tr.row-built td{background:var(--color-primary-5)}
+  tr.row-built td:first-child{box-shadow:inset 3px 0 0 var(--color-primary)}
+</style>
+</head>
+<body>
+
+<div class="variant-switch">
+  <span class="vs-label">Screen</span>
+  <div class="vs-opts">
+    <button id="sc-1" class="on" onclick="setScreen(1)">1 · Invoices</button>
+    <button id="sc-2" onclick="setScreen(2)">2 · Sales</button>
+    <button id="sc-5" onclick="setScreen(5)">3 · Sync details</button>
+    <button id="sc-3" onclick="setScreen(3)">4 · Summary</button>
+    <button id="sc-8" onclick="setScreen(8)">5 · RevRec setup</button>
+    <button id="sc-4" onclick="setScreen(4)">6 · RevRec settings</button>
+    <button id="sc-6" onclick="setScreen(6)">7 · RevRec subscriptions</button>
+  </div>
+  <span class="vs-label" id="grp-label" style="margin-left:12px">Org</span>
+  <div class="vs-opts" id="grp-org">
+    <button id="st-pro" onclick="setState('pro')">Pro+ existing</button>
+    <button id="st-new" onclick="setState('new')">Pro+ new</button>
+    <button id="st-below" onclick="setState('below')">Below Pro</button>
+    <button id="st-rrinv" onclick="setState('rrinv')">RevRec · invoice</button>
+    <button id="st-rrpay" onclick="setState('rrpay')">RevRec · payment</button>
+  </div>
+  <div class="vs-opts" id="grp-ex" hidden>
+    <button id="ex-issued" onclick="setExample('issued')">A · Synced on issued</button>
+    <button id="ex-created" onclick="setExample('created')">B · Synced on created</button>
+  </div>
+  <div class="vs-opts" id="grp-setup" hidden>
+    <button id="so-on" onclick="setSetup('openInv', true)">Open invoices On</button>
+    <button id="so-off" onclick="setSetup('openInv', false)">Open invoices Off</button>
+    <button id="sid-created" onclick="setSetup('invDate', 'created')">Invoice date: created</button>
+    <button id="sid-issued" onclick="setSetup('invDate', 'issued')">Invoice date: issued</button>
+  </div>
+  <div class="vs-opts" id="grp-var" hidden>
+    <button id="var-tl" onclick="setIssuedIn('timeline')">A · Transaction timeline</button>
+    <button id="var-rs" onclick="setIssuedIn('schedule')">B · Revenue schedule</button>
+  </div>
+</div>
+
+<div class="app">
+  <div id="toasts" aria-live="assertive"></div>
+  <nav class="sb" aria-label="Main" id="sb"></nav>
+  <div class="main">
+    <div class="top">
+      <span class="syncs">Syncs left : <b>10000</b></span>
+      <a class="text-link" href="#" style="text-decoration:none">How it works?</a>
+      <span class="mi">notifications</span>
+      <span class="mi">help_outline</span>
+      <span class="mi">person</span>
+    </div>
+    <div class="content" id="screen"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="confirm">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="dlg-title" style="max-width:480px">
+    <div class="synder-modal-header" id="dlg-title">Change schedule start date?</div>
+    <div class="synder-modal-body" id="dlg-body"></div>
+    <div class="synder-modal-footer">
+      <button class="btn btn-text" id="dlg-cancel" onclick="closeConfirm(false)">Cancel</button>
+      <button class="btn" id="dlg-ok" onclick="closeConfirm(true)">Change</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* Copy provenance — every string is one of:
+   captured   live strings, Per Transaction settings, demo org, 2 Sep 2026
+              (.synder-state/pt-settings-2026-09-02/live/capture.json) and the
+              sync details page (reports/sync-details-rethink, demo.synderapp.com)
+   FDD        setting and value names from FDD: [Stripe] Invoice date setting
+   proposed   mine, for the thing being designed — Invoice date help, lock note,
+              confirmation text, "Payment posting date", "Issued date"/"Date in books" rows
+   uncaptured shown as [live copy not captured]                                   */
+
+var MARK = '[live copy not captured]';
+var screen = 1, state = 'pro', example = 'issued';
+var issuedIn = 'timeline', subView = 'list', subTab = 'schedule', tlOpen = { 0: true, 1: true };
+var v = {};   // per-state values, reset on state change
+
+var STATES = {
+  pro:   'Pro+ · existing connection', new: 'Pro+ · new connection', below: 'Below Pro',
+  rrinv: 'RevRec · invoice date', rrpay: 'RevRec · payment date'
+};
+var VALID = {                     // which org states change anything on a screen
+  1: ['pro','new','below','rrinv','rrpay'],
+  2: [],
+  3: ['pro','new','below','rrinv','rrpay'],
+  4: ['rrinv','rrpay'],
+  5: [],
+  6: [],
+  7: [],
+  8: []
+};
+
+function resetValues(){
+  v.sync     = (state === 'new') ? 'issued' : 'created';
+  v.syncSaved = v.sync;
+  v.post     = 'balance';
+  v.postSaved = v.post;
+  v.summary  = (state === 'new') ? 'issued' : 'created';
+  v.schedule = (state === 'rrpay') ? 'payment' : 'created';
+  v.built    = [];
+}
+
+/* schedules built after a Schedule start change — they use the value in effect when built */
+var NEW_INVOICES = [
+  { inv: 'in_1QD9wTE4pygkgelb', cust: 'Contoso Ltd', created: 'Sep 29, 2026', issued: 'Oct 5, 2026', paid: 'Oct 12, 2026', amt: '$18,000.00' },
+  { inv: 'in_1QDb3uE4pygkgelb', cust: 'Fabrikam Inc', created: 'Sep 30, 2026', issued: 'Oct 6, 2026', paid: 'Oct 14, 2026', amt: '$7,200.00' },
+  { inv: 'in_1QDcQ1E4pygkgelb', cust: 'Tailspin Toys', created: 'Oct 1, 2026', issued: 'Oct 2, 2026', paid: 'Oct 9, 2026', amt: '$2,400.00' }
+];
+function buildAfterChange(){
+  var src = NEW_INVOICES[v.built.length % NEW_INVOICES.length];
+  var start = { created: src.created, issued: src.issued, payment: src.paid }[v.schedule];
+  v.built.push({ inv: src.inv, cust: src.cust, created: src.created, issued: src.issued, start: start, amt: src.amt, built: true });
+}
+
+/* ---- shared bits -------------------------------------------------------- */
+function row(r){
+  return '<div class="row' + (r.isNew ? ' is-new' : '') + '"' + (r.id ? ' id="' + r.id + '"' : '') + '>'
+       +   '<div class="row-main"><div class="row-label">' + r.label + (r.chip || '') + '</div>'
+       +     (r.help ? '<div class="row-help"' + (r.helpId ? ' id="' + r.helpId + '"' : '') + '>' + r.help + '</div>' : '')
+       +     (r.extra || '')
+       +   '</div>'
+       +   '<div class="row-ctl">' + r.ctl + '</div>'
+       + '</div>';
+}
+function select(id, opts, value, disabled, label){
+  return '<select class="select" id="' + id + '" aria-label="' + label + '"'
+       + (disabled ? ' disabled' : '') + '>'
+       + opts.map(function(o){
+           return '<option value="' + o.v + '"' + (o.v === value ? ' selected' : '')
+                + (o.disabled ? ' disabled' : '') + '>' + o.t + '</option>'; }).join('')
+       + '</select>';
+}
+var UPGRADE = ' <a class="chip-up" href="#" id="chip-upgrade">Upgrade to use</a>';
+/* plan gate: control disabled + live "Upgrade to use" chip, nothing else (Ignat 2026-10-08) */
+
+/* live settings rows: label + inline Off switch, then ℹ + description */
+function liveToggle(label, on){
+  return '<span class="live-toggle' + (on ? ' on' : '') + '" role="switch" aria-checked="' + !!on + '" aria-label="'
+       + label.replace(/"/g,'&quot;') + '"><span>' + (on ? 'On' : 'Off') + '</span></span>';
+}
+function lrow(r){
+  return '<div class="lrow' + (r.isNew ? ' is-new' : '') + '"' + (r.id ? ' id="' + r.id + '"' : '') + '>'
+       +   '<div class="row-label">' + r.label + (r.chip || '') + (r.toggle ? liveToggle(r.label, r.on) : '') + '</div>'
+       +   (r.ctl ? '<div class="lctl">' + r.ctl + '</div>' : '')
+       +   (r.underCtl || '')
+       +   (r.help ? '<div class="row-help"><span class="mi">info</span><div' + (r.helpId ? ' id="' + r.helpId + '"' : '')
+       +     '>' + r.help + '</div></div>' : '')
+       +   (r.extra || '')
+       + '</div>';
+}
+/* sidebar: PT_3 (Ignat's screenshots 2026-10-06/08); RevRec_test org for RevRec states (screenshot 2026-10-08) */
+function isRR(){ return state === 'rrinv' || state === 'rrpay'; }
+function sidebar(){
+  var rr = (isRR() && (screen === 1 || screen === 3)) || screen === 8, tx = false;
+  function it(icon, label, extra){ return '<div class="sb-item"><span class="mi">' + icon + '</span>' + label + (extra || '') + '</div>'; }
+  var chev = '<span class="mi chev">expand_more</span>';
+  return '<div class="sb-org"><span class="sb-av">' + (rr ? 'RE' : 'PT') + '</span>' + (rr ? 'RevRec_test' : 'PT_3') + '<span class="mi">expand_more</span></div>'
+       + it('dashboard', 'Dashboard')
+       + (tx ? '<div class="sb-item sb-open"><span class="mi">swap_horiz</span>Transactions<span class="mi chev">expand_less</span></div>'
+             + '<div class="sb-sub on"><span class="mi">table_view</span>Transactions list</div>'
+             + '<div class="sb-sub"><span class="mi">download_for_offline</span>Import activity log</div>'
+             + '<div class="sb-sub"><span class="mi">description</span>Transaction reconciliation <span class="sb-new">New</span></div>'
+           : it('swap_horiz', 'Transactions', chev))
+       + (rr ? '' : it('storefront', 'Inventory sync <span class="sb-beta">Beta</span>'))
+       + it('account_tree', 'Smart rules', chev) + it('shopping_cart', 'Invoicing', chev) + it('trending_up', 'Analytics', chev)
+       + (rr ? (screen === 8 ? '<div class="sb-sub on" style="padding-left:14px"><span class="mi">price_check</span>Revenue recognition</div>' : it('price_check', 'Revenue recognition', chev)) : '')
+       + '<div class="sb-gap"></div>'
+       + it('settings', 'Settings') + it('hub', 'AI Hub') + it('stars', 'What\'s New') + it('grid_view', 'Custom development');
+}
+
+function dirty(){ return v.sync !== v.syncSaved || v.post !== v.postSaved; }
+
+function ptPage(active, body, side){
+  var types = (isRR() && active === 'Invoices') ? ['Payment'] : ['Adjustment','Advance','Application fee','Balance transfer inbound','Chargeback',
+               'Collection transfer','Contribution','Issuing transaction','Financing paydown','Invoice'];
+  return '<span class="back-btn"><span class="mi" style="font-size:18px">chevron_left</span>Go to Organization settings</span>'
+       + '<div class="pick"><div><h3>Select integration</h3>'
+       +   '<div class="int-sel"><span class="s-logo">S</span>mzkt.by (Stripe)<span class="mi">expand_more</span></div>'
+       +   '<a class="text-link add-int" href="#" style="text-decoration:none">+ Add integration</a></div>'
+       + '<div><h3>Select synchronization mode</h3>'
+       +   '<div class="radio"><span class="dot"></span><span>Per transaction</span></div>'
+       +   '<div class="radio off"><span class="dot"></span><span>Summary</span> '
+       +     '<a class="text-link" href="#">How to change mode</a></div></div></div>'
+       + '<div class="types"><span class="type on"><span class="mi">home</span>Default</span>'
+       +   types.map(function(t){ return '<span class="type">' + t + '</span>'; }).join('') + '</div>'
+       + '<div class="set-frame"><div class="set-inner">' + tabs(active)
+       +   '<div class="set-body' + (side ? ' has-side' : '') + '"><div class="set-rows">' + body + '</div>' + (side || '') + '</div></div></div>'
+       + '<button class="btn update-btn" id="btn-update"' + (dirty() ? '' : ' disabled')
+       +   ' onclick="saveSettings()"><span class="mi">save</span>Update</button>';
+}
+var lastEdited = null;   // the disabled Update button can't hold focus, so it returns to the edited field
+function saveSettings(){ v.syncSaved = v.sync; v.postSaved = v.post; render(); focusSoon(lastEdited); }
+
+function tabs(active){
+  var all = ['General','Sales','Invoices','Products/Services','Product mapping','Taxes','Fees',
+             'Application Fees','Expenses','Payouts','Multicurrency'];
+  return '<div class="vnav" role="tablist" aria-orientation="vertical">' + all.map(function(t){
+    var link = (t === 'Sales' || t === 'Invoices');
+    return '<button class="set-tab' + (t === active ? ' on' : '') + (link ? ' link' : '') + '"'
+         + ' role="tab" aria-selected="' + (t === active) + '"'
+         + (link ? ' onclick="setScreen(' + (t === 'Sales' ? 2 : 1) + ')"' : ' tabindex="-1"')
+         + ' id="tab-' + t.replace(/\W+/g,'') + '">' + t + '</button>';
+  }).join('') + '</div>';
+}
+
+/* ---- 1 · Stripe settings → Invoices ------------------------------------ */
+function rrLock(){ return (state === 'rrinv' || state === 'rrpay') && v.schedule !== 'payment'; }
+
+function screen1(){
+  var gated = state === 'below', locked = rrLock();
+  var value = gated ? 'created' : (locked ? v.syncSaved : v.sync);
+  var extra = '';
+  var underCtl = '';
+  if (locked) underCtl = '<div class="lock-note" id="inv-lock">Locked while Synder RevRec starts schedules from the '
+      + SCHED_LABEL[v.schedule].toLowerCase() + '. To change it, change '
+      + '<a class="text-link" href="#" id="go-schedule" onclick="setScreen(4);return false">Schedule start date</a>.</div>';
+
+  var rows = [
+    { label: 'Apply payments to unpaid Invoice transactions', toggle: true,
+      help: 'Payment will be applied to the matching unpaid Invoice transaction.' },
+    { label: 'Cancel sync if there is no matching open invoice found for a payment', toggle: true,
+      help: 'If you enable this setting, Synder will search across the existing invoices in your books '
+          + 'and if the matching invoice doesn’t exist, it will cancel synchronization.' },
+    { label: 'Sync unpaid (open) invoices', toggle: true, on: isRR(),
+      help: 'This setting allows you to sync open invoices with your accounting system. Once received, '
+          + 'the payment will be automatically attached to the corresponding invoice and the invoice '
+          + 'will be marked as paid. <a class="text-link" href="#">Learn more &gt;&gt;</a>' },
+    { isNew: true, id: 'inv-row', label: '<label for="inv-date">Invoice date</label>',
+      chip: gated ? UPGRADE : '', helpId: 'inv-help',
+      help: 'The date Synder puts on Stripe invoices in your books: when the invoice was created, '
+          + 'or when it was issued to your customer. Applies to invoices synced from now on.',
+      extra: extra, underCtl: underCtl,
+      ctl: select('inv-date', [{v:'created',t:'Invoice created date'},{v:'issued',t:'Invoice issued date (recommended)'}],
+                  value, locked || gated, 'Invoice date') },
+    { label: 'Sync zero invoices', toggle: true,
+      help: 'Enable this setting to import and sync invoices where all line amounts are 0 and the '
+          + 'totals are 0. <a class="text-link" href="#">Learn more &gt;&gt;</a>' }
+  ];
+  var side = isRR() ? '<div class="set-side" id="bad-debt"><div class="sf-l" style="font-weight:400">Category</div>'
+      + '<div style="display:flex;gap:8px;align-items:center">' + select('bad-debt-cat', [{v:'b',t:'Bad Debts'}], 'b', false, 'Category')
+      + '<span class="mi" style="color:var(--text-secondary)">settings</span></div>'
+      + '<div class="row-help" style="display:flex;gap:6px;margin-top:6px"><span class="mi" style="font-size:16px;margin-top:2px">info</span>'
+      + '<div>If open invoice is marked as voided or uncollectible it will be written off to a bad debt in the corresponding period.</div></div></div>' : '';
+  return ptPage('Invoices', rows.map(lrow).join(''), side);
+}
+
+/* ---- 2 · Stripe settings → Sales (rename only) -------------------------- */
+function screen2(){
+  var rows = [
+    { label: 'Clearing account', ctl: select('s-clear', [{v:'a',t:'Stripe mzkt.by (required for Synder)'}], 'a', false, 'Clearing account'),
+      help: 'Clearing account represents the payment processor in your books. All synced transactions '
+          + 'will be deposited here. <a class="text-link" href="#">Learn more &gt;&gt;</a>' },
+    { label: 'Payment Method', ctl: select('s-pm', [{v:'a',t:'Stripe'}], 'a', false, 'Payment Method'),
+      help: 'This Payment Method will be set for QuickBooks Sales Receipts, Refund Receipts, Payments and Expenses.' },
+    { isNew: true, id: 'post-row', label: '<label for="post-date" id="post-label">Payment posting date</label>',
+      helpId: 'post-help',
+      help: 'The date Synder uses for payments, refunds and other Stripe balance transactions: '
+          + 'Balance date, when the money reaches your Stripe balance, or Created date, when Stripe created '
+          + 'the transaction. Invoices follow the Invoice date setting on the Invoices tab.',
+      ctl: select('post-date', [{v:'created',t:'Created date'},{v:'balance',t:'Balance date (recommended)'}],
+                  v.post, false, 'Payment posting date') },
+    { label: 'Applied Balance Account', ctl: select('s-ab', [{v:'a',t:'Stripe sales'}], 'a', false, 'Applied Balance Account'),
+      help: 'Used to record Stripe customer applied balances when they reduce an invoice or payment total. '
+          + 'Synder uses this account to create and map the \'Stripe applied balance\' item.' },
+    { label: 'Enable QuickBooks Doc Numbers', toggle: true,
+      help: 'By enabling this configuration your transactions will follow the standard QuickBooks Doc Number sequence.' },
+    { label: 'Apply generic customer', toggle: true,
+      help: 'It is an option to assign a generic customer instead of sending over each customer on sales transaction individually.' },
+    { label: 'Sync discounts as products', chip: ' <a class="chip-up" href="#">Upgrade to use</a>', toggle: true,
+      help: 'Any discount will be synced as an additional product with default “Stripe discount” name '
+          + 'or discount name from the integration (if any).' }
+  ];
+  return ptPage('Sales', rows.map(lrow).join(''));
+}
+
+/* ---- 3 · Summary Sync → Sales recording date ---------------------------- */
+function screen3(){
+  var gated = state === 'below';
+  var value = (gated && v.summary === 'issued') ? 'created' : v.summary;
+  var LM = ' <a class="text-link" href="#">Learn more</a>';
+  function card(title, desc, body, extra){
+    return '<div class="ss-card' + (extra && extra.isNew ? ' is-new' : '') + '"' + (extra && extra.id ? ' id="' + extra.id + '"' : '') + '>'
+         + '<div class="ss-hd"><b>' + title + '</b>' + (desc ? '<p>' + desc + '</p>' : '') + '</div>' + body + '</div>';
+  }
+  function radio(on, label, sub){
+    return '<div class="radio' + (on ? '' : ' off-sel') + '"><span class="dot"></span><div>' + label + '<small>' + sub + '</small></div></div>';
+  }
+  var INT = '<span class="ss-int"><span class="s-logo">S</span>mzkt.by</span>';
+  return '<div class="rr-head"><span class="mi">close</span><span class="sep"></span>Settings (DS_test_with_AI)</div>'
+       + '<div class="ss-wrap"><div class="ss-nav"><div class="it on">General</div><div class="it">Mapping</div>'
+       +   '<div class="it">Products and services</div><div class="gap"></div>'
+       +   '<div class="it">Go to Organization settings <span class="mi q">help</span></div></div>'
+       + '<div class="ss-main"><h2>General</h2>'
+       + card('Synchronization frequency', 'Select the way you want to synchronize transactions to your books.' + LM,
+           '<div class="ss-radios">'
+           + radio(false, 'Every day auto-sync', 'Synder will synchronize summaries automatically on the next day.')
+           + radio(false, 'Fully fetched auto-sync <span class="status status-green">Recommended</span>', 'Synder will synchronize summaries automatically when all data is collected.')
+           + radio(true, 'Manual', 'You will need to sync summaries manually to your books.') + '</div>')
+       + card('Summary period', 'Determine the timeframe for which transactions will be aggregated into a summary.' + LM,
+           '<div class="ss-row">' + INT + select('ss-period', [{v:'d',t:'Daily'}], 'd', false, 'Summary period') + '</div>')
+       + card('Timezone', 'The transactions will be imported and reconciled in this timezone. Make sure it matches the integration timezone for smooth reconciliation.',
+           '<div class="ss-row">' + INT + select('ss-tz', [{v:'m',t:'Europe/Minsk'}], 'm', false, 'Timezone') + '</div>')
+       + card('Sales recording date' + (gated ? UPGRADE : ''),
+           'The date summaries record sales on: when the invoice was created, when it was issued to your customer, '
+           + 'or when it was paid. With Payment date, summaries don’t show Accounts Receivable (money customers still owe you).',
+           '<div class="ss-row"><label for="sum-date">Sales recording date</label>'
+           + select('sum-date', [
+               {v:'created', t:'Invoice created date'},
+               {v:'issued',  t:'Invoice issued date'},
+               {v:'payment', t:'Payment date'}], value, gated, 'Sales recording date').replace('class="select"', 'class="select wide"')
+           + '</div>',
+           { isNew: true, id: 'sum-row' })
+       + card('Sync mode', 'Select the synchronization mode',
+           '<div class="ss-radios">'
+           + radio(true, 'Summary', 'Synder will combine all of your transactions for one day into one entry and synchronize it to your books.')
+           + radio(false, 'Per transaction <a class="text-link" href="#" style="text-decoration:none">How to change</a>', 'Synder will synchronize each transaction individually.') + '</div>')
+       + card('Sync open invoices', 'Choose if you want the app to account for unpaid (open) invoices.',
+           '<div class="ss-row">' + INT + select('ss-open', [{v:'d',t:'Disabled'}], 'd', false, 'Sync open invoices') + '</div>')
+       + card('QuickBooks Online JE number sequence', 'When enabled, journal entries will follow the standard QuickBooks Online number sequence. '
+           + 'The integration source and the summary period are added to the memo so traceability is preserved.' + LM,
+           '<div class="ss-row">Enable QuickBooks Online JE number sequence'
+           + '<div class="toggle" role="switch" aria-checked="false" aria-label="Enable QuickBooks Online JE number sequence" style="margin-left:auto"></div></div>')
+       + '</div></div>';
+}
+
+/* ---- 4 · RevRec → Schedule start date + schedule details ---------------- */
+var SCHED_LABEL = { created: 'Invoice created date', issued: 'Invoice issued date', payment: 'Payment date' };
+
+function screen4(){
+  var LM = '<a class="text-link" href="#">Learn more</a>';
+  function field(lbl, id, opts, val, isNew){
+    return '<div class="rr-field' + (isNew ? ' is-new' : '') + '"' + (isNew ? ' id="sched-row"' : '') + '>'
+         + '<label for="' + id + '">' + lbl + LM + '<span class="req">*</span></label>'
+         + select(id, opts, val, false, lbl) + '</div>';
+  }
+  return '<div class="rr-head"><span class="mi">close</span><span class="sep"></span>Configuration</div>'
+       + '<div class="rr-wrap"><div class="rr-nav">'
+       +   '<div class="rr-int"><span class="s-logo" style="width:18px;height:18px;border-radius:3px;background:#635BFF;color:#fff;'
+       +     'font-weight:700;display:flex;align-items:center;justify-content:center">S</span>mzkt.by<span class="mi">expand_more</span></div>'
+       +   '<div class="it">Plan mapping</div><div class="it">Discounts mapping</div><div class="it">One-time invoices</div>'
+       +   '<div class="gap"></div><div class="it on">Recognition settings</div></div>'
+       + '<div class="rr-main"><h1>Recognition settings</h1>'
+       +   '<div class="rr-card">'
+       +     '<div class="rr-sec"><div><b>Start date:<span class="mi q">help</span></b>May 1, 2024</div>'
+       +       '<div style="margin-left:80px"><b>Enabled on:<span class="mi q">help</span></b>Oct 1, 2024</div></div>'
+       +     '<div class="rr-sec"><div><b>Recognition method:</b>Daily ratable revenue</div>'
+       +       '<a class="text-link push" href="#">How to change the method?</a></div>'
+       +     '<div class="rr-sec"><div><b>Revenue recognition home currency:</b>USD</div>'
+       +       '<a class="text-link push" href="#">Learn more</a></div>'
+       +   '</div>'
+       +   '<div class="rr-card rr-pad">'
+       +     '<div class="rr-banner">New settings will apply to all future transactions. To update previously '
+       +       'imported transactions contact support for help.</div>'
+       +     field('Discounts recognition mode', 'rr-disc', [{v:'a',t:'Gross and discounts'}], 'a')
+       +     field('Schedule start date', 'sched-date', [
+               {v:'created', t:'Invoice created date'},
+               {v:'issued',  t:'Invoice issued date'},
+               {v:'payment', t:'Payment date'}], v.schedule, true)
+       +     field('Group revrec entries', 'rr-group', [{v:'a',t:'Per subscription'}], 'a')
+       +     field('Monthly subscriptions in revenue recognition', 'rr-monthly', [{v:'a',t:'Included'}], 'a')
+       +     '<div class="rr-toggle-row">Attach csv to Recognition entry<span class="mi q">help</span>'
+       +       '<div class="toggle on" role="switch" aria-checked="true" aria-label="Attach csv to Recognition entry"></div></div>'
+       +   '</div>'
+       +   '<div class="rr-card rr-pad">'
+       +     '<div class="rr-toggle-row">Exclude products from recognition&nbsp;<a class="text-link" href="#" style="font-weight:400;text-decoration:none">Learn more</a>'
+       +       '<span class="mi q">help</span><div class="toggle on" role="switch" aria-checked="true" aria-label="Exclude products from recognition"></div></div>'
+       +     '<div class="rr-excl"><input class="input" value="Tax, discount, taxation" aria-label="Excluded products">'
+       +       '<button class="btn" disabled>Update</button></div>'
+       +     '<div class="rr-hint">Type item names separated by comma</div>'
+       +   '</div>'
+       +   '<div class="rr-card rr-pad"><div class="rr-toggle-row">Disable RevRec'
+       +     '<div class="toggle on" role="switch" aria-checked="true" aria-disabled="true" aria-label="Disable RevRec" style="opacity:.5"></div></div>'
+       +     '<div style="margin-top:6px">To disable RevRec you need to create a <a class="text-link" href="#">new organization</a>.</div></div>'
+       + '</div></div>';
+}
+
+/* ---- 6 · RevRec → Subscriptions list + Subscription details (live layout, Ignat's screenshots 2026-10-08).
+   New: an "Issued date" for invoices — variant A as a Transaction timeline column, variant B inline in Revenue schedule.
+   Invoices synced before the release have no issued date (FDD Q4). ---- */
+function mmdd(d){ var m = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+  var p = d.replace(',', '').split(' '); return m[p[0]] + '/' + ('0' + p[1]).slice(-2) + '/' + p[2]; }
+var SUBS = [
+  { cust: 'Pamela Andersen', id: 'sub_1T84YME4pygkgelbRyg5IDpQ', start: '03/06/2026', cancel: '06/04/2026', src: 'External', integ: 'mzkt.by', link: true },
+  { cust: 'Anna Karenina', id: 'sub_1Q59p3E4pygkgelbGSDKY1Xw', start: '10/01/2024', cancel: '11/05/2024', src: 'External', integ: 'mzkt.by' },
+  { cust: 'Pamela Andersen', id: 'sub_1Q59jHE4pygkgelbDGDwlyeF', start: '10/01/2024', cancel: '12/30/2024', src: 'External', integ: 'mzkt.by' },
+  { cust: 'Jane Ayre', id: 'sub_1Q59BWE4pygkgelbplQXiYp', start: '10/01/2024', cancel: '12/30/2024', src: 'External', integ: 'mzkt.by' },
+  { cust: 'Pamela Andersen', id: 'syn_sub_pujmcg02-xee1-s7z7', start: '09/11/2024', cancel: '01/12/2025', src: 'Internal', integ: 'mzkt.by', plain: true }
+];
+var TL = [
+  { n: '0222', ch: 'ch_3TcXY9E4pygkgelb0kpZJVJj', inv: 'in_1TcWbYE4pygkgelbZnIlV9dj', d: '05/29/2026', iss: '05/29/2026' },
+  { n: '0221', ch: 'ch_3Ta0FOE4pygkgelb0tewpp3b', inv: 'in_1TZzHZE4pygkgelbYkghNmeR', d: '05/22/2026', iss: '05/24/2026' },
+  { n: '0220', ch: 'ch_3TXSu5E4pygkgelb0ur8Tkrt', inv: 'in_1TXRvyE4pygkgelbVYGmjtyQ', d: '05/15/2026', iss: '05/15/2026' },
+  { n: '0219', ch: 'ch_3TUvXdE4pygkgelb1c7d5yJ6', inv: 'in_1TUuaFE4pygkgelbBt7JdzXV', d: '05/08/2026', iss: '' },
+  { n: '0217', ch: 'ch_3TSOC6E4pygkgelb0jlenyqR', inv: 'in_1TSNFSE4pygkgelb6oz2Vo9j', d: '05/01/2026', iss: '' },
+  { n: '0216', ch: 'ch_3TPqrKE4pygkgelb18N3joO2', inv: 'in_1TPprKE4pygkgelb3gC8vXq1', d: '04/24/2026', iss: '' },
+  { n: '0215', ch: 'ch_3TNJVrE4pygkgelb1lxL8F6C', inv: 'in_1TNIVrE4pygkgelbQ7xLm2pA', d: '04/17/2026', iss: '' }
+];
+var RS = [  // Revenue schedule, May 2026 (live values)
+  { inv: 'in_1TcWbYE4pygkgelbZnIlV9dj', per: 'May 29, 2026 — May 31, 2026', iss: 'May 29, 2026', days: 3, rec: '$12.86' },
+  { inv: 'in_1TZzHZE4pygkgelbYkghNmeR', per: 'May 22, 2026 — May 29, 2026', iss: 'May 24, 2026', days: 7, rec: '$30.00' },
+  { inv: 'in_1TXRvyE4pygkgelbVYGmjtyQ', per: 'May 15, 2026 — May 22, 2026', iss: 'May 15, 2026', days: 7, rec: '$30.00' },
+  { inv: 'in_1TUuaFE4pygkgelbBt7JdzXV', per: 'May 8, 2026 — May 15, 2026', iss: '', days: 7, rec: '$30.00' },
+  { inv: 'in_1TSNFSE4pygkgelb6oz2Vo9j', per: 'May 1, 2026 — May 8, 2026', iss: '', days: 7, rec: '$30.00' }
+];
+
+function screen6(){ return subView === 'details' ? subDetails() : subList(); }
+
+function subList(){
+  var built = v.built.map(function(r, i){
+    return { cust: r.cust, id: r.inv.replace('in_', 'sub_'), start: mmdd(r.start), cancel: '-', src: 'External', integ: 'mzkt.by', built: true };
+  });
+  var rows = built.slice().reverse().concat(SUBS);
+  return '<div style="max-width:1160px">'
+       + '<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px"><h1 style="font-size:28px;font-weight:400;margin:0">Subscriptions</h1>'
+       +   '<span style="margin-left:auto">RevRec balance: <span style="color:var(--color-primary)">1000/1000</span></span>'
+       +   '<button class="btn btn-outlined">Import data <span class="mi" style="font-size:18px;vertical-align:-4px">expand_more</span></button></div>'
+       + '<div class="sub-filters">'
+       +   ['Search','Start date','Cancelation date','Source','Integration','Period','Status'].map(function(f){
+             return '<div><div class="sf-l">' + f + '</div><div class="sf-c">' + (f === 'Search' ? '<span style="color:var(--text-muted)">Search by ID or customer…</span>' : (f === 'Integration' || f === 'Period' ? 'All' : '')) + '</div></div>'; }).join('')
+       +   '<div class="sf-btns"><button class="btn">Apply</button><button class="btn btn-outlined">Reset filters</button></div>'
+       + '</div>'
+       + '<div class="table-wrap"><table class="synder-table" id="subs-table"><thead><tr>'
+       +   '<th>Customer / Subscription ID</th><th>Start date</th><th>Cancelation date</th><th>Source</th><th>Integration</th><th>Period</th><th>Status</th><th>Actions</th>'
+       + '</tr></thead><tbody>'
+       + rows.map(function(r){
+           return '<tr' + (r.built ? ' class="row-built"' : '') + '><td>' + r.cust + '<br>'
+             + (r.plain ? '<span>' + r.id + '</span>' : '<a class="text-link" href="#">' + r.id + '</a>') + '</td>'
+             + '<td class="sub-start">' + r.start + '</td><td>' + r.cancel + '</td>'
+             + '<td><span class="status ' + (r.src === 'Internal' ? 'status-blue' : 'status-green') + '">' + r.src + '</span></td>'
+             + '<td><span class="ss-int"><span class="s-logo">S</span>' + r.integ + '</span></td><td>Custom</td>'
+             + '<td><span class="status status-green">Ready</span></td>'
+             + '<td>' + (r.link ? '<a class="text-link" href="#" id="see-details" onclick="openSub();return false">See details</a>' : '<a class="text-link" href="#" onclick="return false">See details</a>') + '</td></tr>';
+         }).join('')
+       + '</tbody></table></div></div>';
+}
+
+function subDetails(){
+  var tabs = [['schedule','Revenue schedule'],['timeline','Transaction timeline'],['rrtx','Revenue recognition transactions']];
+  var body = subTab === 'schedule' ? revSchedule() : (subTab === 'timeline' ? txTimeline() : rrTx());
+  return '<div class="rr-head"><a href="#" onclick="closeSub();return false" aria-label="Close" style="display:flex"><span class="mi">close</span></a>'
+       +   '<span class="sep"></span>Subscription details</div>'
+       + '<div class="sd-wrap">'
+       +   '<div class="sd-h"><span style="font-size:24px">Subscription</span> <a class="text-link" href="#" style="font-size:24px">sub_1T84YME4pygkgelbRyg5IDpQ</a>'
+       +     '<span class="mi" style="color:var(--text-secondary)">content_copy</span></div>'
+       +   '<div class="sd-strip"><span><b>Organization name:</b> RevRec_test</span><span><b>Status:</b> <span class="status status-green">Ready</span></span>'
+       +     '<span><b>Customer:</b> Pamela Andersen</span><span><b>Canceled at:</b> 06/04/2026</span>'
+       +     '<span><b>Transactions imported:</b> - <span class="mi q">help</span></span></div>'
+       +   '<div class="sd-tabs" role="tablist">' + tabs.map(function(t){
+             return '<button role="tab" id="subtab-' + t[0] + '" class="' + (subTab === t[0] ? 'on' : '') + '" aria-selected="' + (subTab === t[0])
+                  + '" onclick="setSubTab(\'' + t[0] + '\')">' + t[1] + '</button>'; }).join('') + '</div>'
+       +   body
+       + '</div>';
+}
+
+function revSchedule(){
+  var inline = issuedIn === 'schedule';
+  return '<div style="margin:16px 0 12px">Last updated Jun 4, 2026 22:10 <span class="mi q">help</span></div>'
+       + '<div class="table-wrap"><table class="synder-table" id="rs-table"><thead><tr><th style="width:40px"></th>'
+       +   '<th>Recognition period/product</th><th>Days in period</th><th>Billed amount</th><th>Recognized revenue</th>'
+       +   '<th>Cumulative revenue recognized</th><th>Deferred revenue balance</th></tr></thead><tbody>'
+       + '<tr><td colspan="7" style="text-align:center"><a class="text-link" href="#" style="text-decoration:none">Show older billing periods</a></td></tr>'
+       + '<tr><td><span class="mi" style="font-size:18px">expand_less</span></td><td>May, 2026</td><td></td><td>$150.00 USD</td><td>$132.86 USD</td><td>$372.86 USD</td><td>$17.14 USD</td></tr>'
+       + RS.map(function(r, i){
+           return '<tr class="rs-inv"><td></td><td>Invoice <a class="text-link" href="#">' + r.inv + '</a> <span class="v-note">' + r.per + '</span>'
+             + (inline ? ' <span class="rs-iss' + (r.iss ? '' : ' empty') + '" id="rs-iss-' + i + '">· Issued ' + (r.iss || '—') + '</span>' : '') + '</td>'
+             + '<td></td><td>$30.00 USD</td><td></td><td></td><td></td></tr>'
+             + '<tr><td></td><td style="padding-left:28px">1 × Subscription_year (at $30.00 / week)</td><td>' + r.days + '</td><td></td><td>' + r.rec + ' USD</td><td></td><td></td></tr>';
+         }).join('')
+       + '</tbody></table></div>';
+}
+
+function txTimeline(){
+  var col = issuedIn === 'timeline';
+  return '<div class="table-wrap" style="margin-top:16px"><table class="synder-table" id="tl-table"><thead><tr><th style="width:36px"></th>'
+       +   '<th>Transaction type</th><th>Invoice status</th><th>Transaction number</th><th>Transaction ID</th><th>Amount</th><th>Transaction date</th>'
+       +   (col ? '<th class="is-new" id="th-issued">Issued date</th>' : '') + '<th>Status</th><th>Actions</th></tr></thead><tbody>'
+       + TL.map(function(r, i){
+           var open = !!tlOpen[i];
+           var parent = '<tr><td><a href="#" onclick="toggleTl(' + i + ');return false" aria-expanded="' + open + '" aria-label="Show invoice" id="tl-tg-' + i + '" style="display:flex">'
+             + '<span class="mi" style="font-size:20px;color:var(--text-secondary)">' + (open ? 'expand_less' : 'expand_more') + '</span></a></td>'
+             + '<td>Invoice payment</td><td>—</td><td>26EC8A01-' + r.n + '</td><td><a class="text-link" href="#">' + r.ch + '</a></td>'
+             + '<td>$30.00 USD</td><td>' + r.d + '</td>' + (col ? '<td class="is-new">—</td>' : '')
+             + '<td><span class="rts">Ready to Sync</span></td><td><a class="text-link" href="#" style="text-decoration:none">See sync log</a></td></tr>';
+           var child = open ? '<tr class="tl-inv" id="tl-inv-' + i + '"><td></td><td>Invoice</td><td><span class="status status-green">Paid</span></td><td>26EC8A01-' + r.n + '</td>'
+             + '<td><a class="text-link" href="#">' + r.inv + '</a></td><td>$30.00 USD</td><td>' + r.d + '</td>'
+             + (col ? '<td class="is-new tl-iss" id="tl-iss-' + i + '">' + r.iss + '</td>' : '')
+             + '<td>—</td><td><span class="mi" style="color:var(--text-secondary)">more_horiz</span></td></tr>' : '';
+           return parent + child;
+         }).join('')
+       + '</tbody></table></div>';
+}
+
+function rrTx(){
+  return '<div style="margin:16px 0;color:var(--text-secondary);display:flex;gap:8px;align-items:center"><span class="mi" style="font-size:20px">info</span>'
+       + 'You’ll see your revenue recognition transactions once they are ready for syncing (usually at the beginning of the upcoming month)</div>'
+       + '<div class="table-wrap"><table class="synder-table"><thead><tr><th>Transaction number</th><th>Transaction date</th><th>Period revenue</th><th>Status</th><th style="text-align:right">Actions</th></tr></thead>'
+       + '<tbody><tr><td colspan="5" style="text-align:center;height:140px;color:var(--text-secondary)">No data</td></tr></tbody></table></div>'
+       + '<div style="display:flex;justify-content:flex-end;gap:32px;margin-top:16px;color:var(--text-secondary)"><span>Rows per page: 25</span><span>0-0 of 0</span></div>';
+}
+
+/* ---- 8 · Revenue recognition set up ---- */
+var setup = { openInv: false, invDate: 'created', sched: 'payment' };
+function setSetup(k, val){ setup[k] = val; clearToasts(); render(); }
+function screen8(){
+  var LM = '<a class="text-link" href="#" style="text-decoration:none;font-weight:400;margin-left:6px">Learn more</a>';
+  function f(label, id, opts, val){
+    return '<div class="rr-field' + (id === 'setup-sched' ? ' is-new' : '') + '"><label for="' + id + '">' + label + LM + '<span class="mi q">help</span><span class="req">*</span></label>'
+         + select(id, opts, val, false, label) + '</div>';
+  }
+  return '<div class="setup">'
+       + '<h1 style="font-size:28px;font-weight:400;margin:0 0 16px">Revenue recognition set up</h1>'
+       + '<div style="margin-bottom:16px">The settings cannot be changed later.</div>'
+       + f('Revenue Recognition method', 'setup-method', [{v:'a',t:'Daily ratable'}], 'a')
+       + f('Discounts recognition mode', 'setup-disc', [{v:'a',t:'Gross and discounts'}], 'a')
+       + f('Schedule start date', 'setup-sched', [{v:'created',t:'Invoice created date'},{v:'issued',t:'Invoice issued date'},{v:'payment',t:'Payment date'}], setup.sched)
+       + f('Group revenue recognition entries', 'setup-group', [{v:'a',t:'Per subscription'}], 'a')
+       + f('Monthly subscriptions in revenue recognition', 'setup-monthly', [{v:'a',t:'Included'}], 'a')
+       + '<div class="rr-toggle-row" style="margin:20px 0">Exclude products from recognition' + LM + '<span class="mi q">help</span>'
+       +   '<div class="toggle" role="switch" aria-checked="false" aria-label="Exclude products from recognition"></div></div>'
+       + '<div class="rr-field"><label for="setup-onetime">Recognize one-time invoices' + LM + '<span class="mi q">help</span></label>'
+       +   select('setup-onetime', [{v:'a',t:'Disabled'}], 'a', false, 'Recognize one-time invoices') + '</div>'
+       + '<button class="btn" style="width:100%;margin-top:8px">Finish onboarding and start import</button>'
+       + '</div>';
+}
+/* picking an invoice-based start checks the Synder settings it depends on; one toast per failed check */
+function setupChecks(next){
+  var fails = [];
+  if (next === 'payment') return fails;
+  if (!setup.openInv) fails.push('Enable sync open invoices in Synder Settings first, if you want to recognize revenue since invoice date');
+  if (next === 'issued' && setup.invDate !== 'issued')
+    fails.push('Set Invoice date to Invoice issued date in Synder Settings first, if you want to recognize revenue since invoice issued date');
+  return fails;
+}
+
+/* ---- 5 · Sync details --------------------------------------------------- */
+function screen5(){
+  var issuedEx = example === 'issued';
+  var kv = [
+    ['Sync ID', '604112'],
+    ['From integration', 'mzkt.by (Stripe)'],
+    ['To accounting company', 'Sandbox Company_US_1 (QuickBooks Online)'],
+    ['Status', '<span class="status status-green">Synced</span>'],
+    ['Sync started', 'Oct 6, 2026 · 14:20 UTC'],
+    ['Sync completed', 'Oct 6, 2026 · 14:20 UTC'],
+    ['Transaction date', 'Dec 28, 2025 · 10:12 (Europe/Minsk)'],
+    ['Amount', '$60,000.00 USD'], ['Transaction ID', 'in_1QBa7FE4pygkgelb ↗']
+  ];
+  var QB = '<a class="text-link" href="#" style="text-decoration:none">Show in <span class="qb">qb</span></a>';
+  var log = [
+    ['<span class="mi" style="font-size:18px;color:var(--color-primary);vertical-align:-4px">arrow_drop_down</span>Invoice', '26EC8A01-0301', QB,
+     'Invoice was created. <span id="log-why">Invoice date: ' + (issuedEx ? 'Jan 6, 2026 (issued date in Stripe' : 'Dec 28, 2025 (created date in Stripe')
+       + ', per your Invoice date setting).</span>', '', 'log-inv'],
+    ['Product or Service', 'Annual plan (USD)', QB, 'This product is part of your sale.', 'child'],
+    ['Account', 'Stripe sales', QB, 'Your sale was mapped to this income account. <a class="text-link" href="#" style="text-decoration:none">Check this guide to learn more.</a>', 'child'],
+    ['Payment', 'oGRE4pygkgelb0SCaapSY', QB, 'Payment was created.'],
+    ['Expense', 'oGRE4pygkgelb0SCaapSY', QB, 'Expense was created.']
+  ];
+
+  return '<div class="stub"><a class="text-link back" href="#" id="sd-back" onclick="return false">← Platform transactions</a>'
+       + '<div class="set-card"><div class="set-body" style="padding:20px">'
+       +   '<div class="sd-head"><span class="sd-title">Sync #604112</span>'
+       +     '<span class="status status-green">Synced</span></div>'
+       +   '<div class="sd-sub">Stripe · mzkt.by · Northwind Labs · $60,000.00 USD</div>'
+       +   '<div class="set-title">Sync details</div>'
+       +   '<div class="kv" id="kv">' + kv.map(function(p){
+             var n = p[2] === 'new' ? ' is-new' : '';
+             return '<div class="k' + n + '"' + (p[3] ? ' id="' + p[3] + '-k"' : '') + '>' + p[0] + '</div>'
+                  + '<div class="v' + n + '"' + (p[3] ? ' id="' + p[3] + '"' : '') + '>' + p[1] + '</div>';
+           }).join('') + '</div>'
+       +   '<div class="set-title" style="margin-top:20px;font-size:20px">Sync log</div>'
+       +   '<div style="margin-bottom:8px">If the sync results are not as expected, review your <a class="text-link" href="#" style="text-decoration:none">Settings</a> '
+       +     'to adjust the configuration.You can also use <a class="text-link" href="#" style="text-decoration:none">Smart Rules Recipes</a> '
+       +     'to automatically modify transactions based on custom conditions.</div>'
+       +   '<div class="table-wrap"><table class="synder-table" id="log-table"><thead><tr><th>Object type</th><th>Object info</th><th>Object</th><th>Message</th></tr></thead><tbody>'
+       +   log.map(function(r){ return '<tr' + (r[4] ? ' class="log-' + r[4] + '"' : '') + (r[5] ? ' id="' + r[5] + '"' : '') + '><td>' + r[0] + '</td><td>' + r[1] + '</td><td>' + r[2] + '</td><td>' + r[3] + '</td></tr>'; }).join('')
+       +   '</tbody></table></div>'
+       + '</div></div></div>';
+}
+
+/* ---- render ------------------------------------------------------------- */
+function render(){
+  var el = document.getElementById('screen');
+  el.innerHTML = [null, screen1, screen2, screen3, screen4, screen5, screen6, null, screen8][screen]();
+  document.getElementById('sb').innerHTML = sidebar();
+  document.querySelector('.app').classList.toggle('fullscreen', screen === 3 || screen === 4 || (screen === 6 && subView === 'details'));
+  for (var i = 1; i <= 8; i++) { var sb = document.getElementById('sc-' + i); if (sb) sb.classList.toggle('on', i === screen); }
+
+  var valid = VALID[screen];
+  Object.keys(STATES).forEach(function(k){
+    var b = document.getElementById('st-' + k);
+    b.classList.toggle('on', state === k && valid.indexOf(k) > -1);
+    b.disabled = valid.indexOf(k) === -1;
+  });
+  document.getElementById('grp-org').hidden = screen === 5 || screen === 6 || screen === 7 || screen === 8;
+  document.getElementById('grp-setup').hidden = screen !== 8;
+  document.getElementById('so-on').classList.toggle('on', setup.openInv);
+  document.getElementById('so-off').classList.toggle('on', !setup.openInv);
+  document.getElementById('sid-created').classList.toggle('on', setup.invDate === 'created');
+  document.getElementById('sid-issued').classList.toggle('on', setup.invDate === 'issued');
+  document.getElementById('grp-ex').hidden = screen !== 5;
+  document.getElementById('grp-var').hidden = screen !== 6;
+  document.getElementById('grp-label').textContent = screen === 5 ? 'Example' : (screen === 6 ? 'Issued date in' : (screen === 8 ? 'Synder settings' : 'Org'));
+  document.getElementById('var-tl').classList.toggle('on', issuedIn === 'timeline');
+  document.getElementById('var-rs').classList.toggle('on', issuedIn === 'schedule');
+  document.getElementById('ex-issued').classList.toggle('on', example === 'issued');
+  document.getElementById('ex-created').classList.toggle('on', example === 'created');
+  wire();
+}
+
+function wire(){
+  var inv = document.getElementById('inv-date');
+  var gated = state === 'below';
+  if (inv) {
+    inv.onchange = function(){ v.sync = inv.value; lastEdited = 'inv-date'; render(); focusSoon('inv-date'); };
+  }
+  var post = document.getElementById('post-date');
+  if (post) post.onchange = function(){ v.post = post.value; lastEdited = 'post-date'; render(); focusSoon('post-date'); };
+  var sum = document.getElementById('sum-date');
+  if (sum) sum.onchange = function(){
+    var next = sum.value;
+    if (rrLock()) {                       // RevRec recognizes by an invoice date: refuse, like live Sync open invoices
+      sum.value = v.summary;
+      toast('You cannot change this setting, as revenue recognition is set to recognize invoices since '
+          + SCHED_LABEL[v.schedule].toLowerCase());
+      return;
+    }
+    if (next === 'payment' && v.summary !== 'payment') { sum.value = v.summary; openConfirm(next, 'sum'); return; }
+    v.summary = next; render(); focusSoon('sum-date'); };
+  var ss = document.getElementById('setup-sched');
+  if (ss) ss.onchange = function(){
+    var next = ss.value, fails = setupChecks(next);
+    clearToasts();
+    if (fails.length) { ss.value = setup.sched; fails.forEach(toast); return; }
+    setup.sched = next; render(); focusSoon('setup-sched'); };
+  var sch = document.getElementById('sched-date');
+  if (sch) sch.onchange = function(){
+    var next = sch.value;
+    sch.value = v.schedule;               // nothing changes until confirmed
+    openConfirm(next);
+  };
+}
+var toastSeq = 0;
+function toast(msg){
+  var box = document.getElementById('toasts'), id = 'toast-' + (++toastSeq);
+  var el = document.createElement('div');
+  el.className = 'toast-err'; el.id = id; el.setAttribute('role', 'alert');
+  el.innerHTML = '<span class="mi">error</span><div class="toast-msg">' + msg + '</div>'
+               + '<button class="toast-x" aria-label="Close" onclick="this.parentNode.remove()"><span class="mi">close</span></button><span class="toast-bar"></span>';
+  box.appendChild(el);
+  setTimeout(function(){ if (el.parentNode) el.remove(); }, 8000);
+  return el;
+}
+function clearToasts(){ document.getElementById('toasts').innerHTML = ''; }
+function focusSoon(id){ var e = document.getElementById(id); if (e) e.focus(); }
+
+function setScreen(n){
+  screen = n;
+  var valid = VALID[n];
+  if (valid.length && valid.indexOf(state) === -1) { state = valid[0]; resetValues(); }
+  render();
+}
+function setState(s){ state = s; resetValues(); render(); }
+function setExample(e){ example = e; render(); }
+function setIssuedIn(x){ issuedIn = x; render(); }
+function openSub(){ subView = 'details'; subTab = 'schedule'; render(); }
+function closeSub(){ subView = 'list'; render(); }
+function setSubTab(t){ subTab = t; render(); }
+function toggleTl(i){ tlOpen[i] = !tlOpen[i]; render(); }
+
+/* ---- confirmations: RevRec Schedule start (FDD), Summary → Payment date (review consensus 2026-10-07).
+        Stripe settings save on Update with no confirmation (FDD). ---- */
+var pending = null, pendingKind = null;
+function openConfirm(next, kind){
+  pending = next; pendingKind = kind || 'sched';
+  var sum = pendingKind === 'sum';
+  document.getElementById('dlg-title').textContent = sum ? 'Record sales on the payment date?' : 'Change schedule start date?';
+  document.getElementById('dlg-ok').textContent = sum ? 'Use Payment date' : 'Change';
+  document.getElementById('dlg-body').innerHTML = sum
+    ? 'Summaries will record sales when customers pay. They won’t show <strong>Accounts Receivable</strong> '
+      + '(money customers still owe you).'
+    : 'New schedules will start from the <strong>' + SCHED_LABEL[next].toLowerCase() + '</strong>. '
+    + 'Existing schedules keep their current dates until they’re rebuilt — contact support to rebuild them.';
+  document.getElementById('confirm').classList.add('show');
+  document.getElementById('dlg-cancel').focus();
+}
+function closeConfirm(apply){
+  var m = document.getElementById('confirm');
+  if (!m.classList.contains('show')) return;
+  m.classList.remove('show');
+  var kind = pendingKind;
+  if (apply && pending) {
+    if (kind === 'sum') v.summary = pending;
+    else { v.schedule = pending; buildAfterChange(); }
+  }
+  pending = null; pendingKind = null;
+  render();
+  focusSoon(kind === 'sum' ? 'sum-date' : 'sched-date');
+}
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeConfirm(false); });
+
+resetValues();
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reconciliation setup — concepts grounded in the real logic</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{--blue:#0053CC;--ink:#1A1B24;--grey:#6B778C;--line:#DFE4EC;--bg:#F7F8FA;
+        --red:#CC2929;--amber:#CB7515;--green:#1F8940}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:Roboto,Arial,sans-serif;color:var(--ink);background:var(--bg);
+       font-size:14px;line-height:1.55}
+  .wrap{max-width:920px;margin:0 auto;padding:40px 24px 80px}
+  h1{font-size:24px;font-weight:500;margin:0 0 6px}
+  .sub{color:var(--grey);margin:0 0 4px}
+  h2{font-size:17px;font-weight:500;margin:44px 0 12px;padding-bottom:8px;
+     border-bottom:1px solid var(--line)}
+  h3{font-size:15px;font-weight:500;margin:0 0 8px}
+  .box{background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px;margin:0 0 16px}
+  .box.warn{border-left:3px solid var(--amber)}
+  .box.stop{border-left:3px solid var(--red)}
+  .box.go{border-left:3px solid var(--green)}
+  .idea-head{display:flex;align-items:baseline;gap:12px;margin-bottom:10px}
+  .n{font-size:20px;font-weight:500;color:var(--grey);min-width:22px}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--grey);
+       font-weight:500;display:block;margin-bottom:2px}
+  p{margin:0 0 10px}
+  .ev{background:var(--bg);border-left:2px solid var(--line);padding:10px 14px;margin-top:12px;
+      font-size:13px;color:var(--grey)}
+  .ev a{color:var(--blue)}
+  code{background:var(--bg);padding:1px 5px;border-radius:3px;font-size:12.5px}
+  ul{margin:0 0 12px;padding-left:20px}li{margin-bottom:7px}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:0 0 12px;background:#fff}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--grey);font-weight:500}
+  .tag{display:inline-block;font-size:11px;border-radius:3px;padding:1px 7px;margin-right:6px;
+       border:1px solid var(--line);background:#fff;color:var(--grey)}
+  .tag.ok{color:var(--green);border-color:var(--green)}
+  .tag.no{color:var(--red);border-color:var(--red)}
+  .tag.part{color:var(--amber);border-color:var(--amber)}
+  .sketch{background:#fff;border:1px solid var(--line);border-radius:6px;padding:0;overflow:hidden;margin:16px 0}
+  .sk-bar{background:#fff;border-bottom:1px solid var(--line);padding:12px 18px;display:flex;
+          align-items:center;gap:12px;font-size:13px}
+  .sk-bar .t{font-weight:500}
+  .sk-bar .sp{flex:1}
+  .sk-btn{background:var(--blue);color:#fff;border-radius:4px;padding:7px 14px;font-size:13px}
+  .sk-body{padding:18px}
+  .sk-sentence{font-size:17px;line-height:1.7;margin-bottom:6px}
+  .sk-sentence b{border-bottom:1px dashed var(--blue);color:var(--blue);font-weight:500;cursor:pointer}
+  .sk-note{color:var(--grey);font-size:13px;margin-bottom:18px}
+  .strip{display:flex;gap:3px;margin:10px 0 6px}
+  .mo{flex:1;text-align:center;font-size:11px;padding:7px 2px;border-radius:3px;
+      border:1px solid var(--line);background:#fff;color:var(--grey)}
+  .mo.done{background:#ECFDDC;border-color:#1F8940;color:#1F8940}
+  .mo.gap{background:#FFF1DD;border-color:#CB7515;color:#CB7515;font-weight:500}
+  .mo.next{background:#E0EBFD;border-color:var(--blue);color:var(--blue);font-weight:500}
+  .mo.soon{color:#B4BBCB}
+  .ready{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border-radius:4px;
+         background:#FFF1DD;font-size:13px;margin-bottom:8px}
+  .ready.ok{background:#ECFDDC}
+  .foot{color:var(--grey);font-size:12px;margin-top:44px;padding-top:16px;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Reconciliation setup — six concepts, and one premise that has to change</h1>
+  <p class="sub">Grounded in Synder's help docs, the Confluence functional specs, and the captured production API. Every idea below traces to a rule; where something is an assumption, it says so.</p>
+
+  <h2>First: the number we wanted to show doesn't exist</h2>
+
+  <div class="box stop">
+    <p><b>"1,200 transactions are ready to reconcile" would be invented.</b> There is no per-transaction reconciliation-readiness state and no such counter anywhere in Synder — not in the help docs, not in the functional specs, not in any captured API response. Reconciliation is <em>run-scoped over a date range</em>, not queue-scoped over a set of transactions. The only counts Synder produces are <strong>after</strong> a run: Matched, Discrepancy, Not matched (Missing in accounting / Missing in platform), Ignored.</p>
+    <p>This matters beyond accuracy. A headline volume number is a vanity metric — it tells the user how much data exists, which they already assume, and gives them no decision. We have shipped this mistake before: the "your most active integration last month" hint asserted something about the user that wasn't checked.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      Sync statuses are defined per transaction (<em>Ready to Sync, Pending, Delayed, Synced, Not parsed…</em>) with no reconciliation-readiness member —
+      <a href="https://synder.com/help/transaction-management-per-transaction-sync-statuses-and-what-they-mean/">Synder sync statuses</a>.
+      Post-run counts only: <code>matchedCount · discrepancyCount · notMatchedCount · ignoredCount · missingInAccountingCount · missingInPaymentPlatformCount</code> — captured <code>results/summary</code> response, <code>.synder-state/recon-preview/api-summary.json</code>.
+    </div>
+  </div>
+
+  <div class="box go">
+    <h3>But there is a better number, and it is available</h3>
+    <p>The quantity that actually changes a decision is <strong>how many transactions in this period are imported but not yet synced</strong>. Synder documents that state — "Ready to Sync" — and documents exactly what happens if you reconcile anyway: <em>"Reconciling beyond your last sync will surface false 'Missing source' rows."</em></p>
+    <p>So instead of <em>"1,200 transactions ready to reconcile"</em> (flattering, meaningless), the screen says <em>"12 transactions in August aren't synced yet. Reconcile now and they'll come back as missing."</em> That is a gate, not a badge. It's the difference between a number the user reads and a number the user acts on.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      Prerequisite: <em>"Transactions already synced for the period you want to reconcile"</em> —
+      <a href="https://synder.com/help/transaction-reconciliation-how-to-compare-your-payment-platform-data-with-your-accounting-records/">Transaction Reconciliation guide</a>.
+      Consequence stated explicitly —
+      <a href="https://synder.com/help/per-transaction-how-to-use-transaction-reconciliation-with-xero/">TR with Xero</a>.
+    </div>
+  </div>
+
+  <h2>Second: what's actually true about "most users pick Stripe + Automated + the clearing account"</h2>
+
+  <table>
+    <tr><th>Claim</th><th>Status</th><th>Source</th></tr>
+    <tr>
+      <td><b>Automated</b> is the default import method</td>
+      <td><span class="tag ok">Evidenced</span></td>
+      <td>Prefilled with a "Recommended" badge in production v11.7.79; mode defaults are set per pairing (platform+QBO → Automated, platform+Xero → Assisted, platform+QBD → Manual only) — Confluence functional spec</td>
+    </tr>
+    <tr>
+      <td>The clearing account is preselected</td>
+      <td><span class="tag part">Spec'd, not shipped</span></td>
+      <td>Spec: <em>"If only one clearing account exists for the integration, it is preselected automatically."</em> In production it is the one empty required field, and the list is unscoped — 167 chart-of-accounts entries including Cost of Goods Sold</td>
+    </tr>
+    <tr>
+      <td><b>Stripe</b> is what most users reconcile</td>
+      <td><span class="tag no">Not evidenced</span></td>
+      <td>No telemetry on chosen integration exists. Stripe dominates our captures only because it is the only integration connected in the demo orgs. We have session funnel counts, not per-field selection distributions</td>
+    </tr>
+    <tr>
+      <td>Period defaults to last full month</td>
+      <td><span class="tag ok">Evidenced</span></td>
+      <td>Prefilled in production; the product's own Get-started panel states <em>"Monthly reconciliation is the most common approach."</em></td>
+    </tr>
+  </table>
+
+  <p>So two of the four are real. The design consequence: <strong>defaults must explain where they came from, and must never assert a fact about the user we haven't measured.</strong> "Only clearing account for this connection" is a defensible default label. "Your most-used integration" is not — we'd be making it up.</p>
+
+  <h2>The six concepts</h2>
+
+  <div class="box">
+    <div class="idea-head"><span class="n">1</span><h3>Stop asking for a period. The next one is computable.</h3></div>
+    <p>A reconciliation is keyed by account + integration + date range, and <strong>periods cannot overlap for the same clearing account</strong> — gaps are allowed, overlaps are refused with a modal. Which means Synder already knows, exactly, which periods are done and which are open for any given account.</p>
+    <p>Asking the user to type two dates and then rejecting them is backwards. Replace the date picker with a <strong>coverage timeline</strong>: months rendered as blocks — reconciled, gap, next up, not settled yet. You pick a gap; you cannot express an overlap, so the overlap error becomes unreachable rather than caught.</p>
+    <p>This also surfaces the backlog for free. Today a user has no way to see that March and May were never reconciled.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      <em>"Reconciliation periods cannot overlap for the same clearing account"</em> — help docs and Confluence spec, which also specifies the refusal modal and confirms gaps are legal and deleted runs don't block.
+      Today's date cannot be selected at all (<em>"the payment platform may not have finalized today's transactions"</em>).
+      Day-level coverage is derivable from the run list — each record carries its own range.
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="idea-head"><span class="n">2</span><h3>A readiness verdict instead of a volume number.</h3></div>
+    <p>One strip above the primary action, answering only: <em>can this run produce a trustworthy result?</em> Four inputs, all of them things Synder already knows:</p>
+    <ul>
+      <li><b>Unsynced transactions in the period</b> — the real version of the count we wanted (see above).</li>
+      <li><b>Connection health</b> — a disconnected platform still appears in the picker today and simply fails during retrieval.</li>
+      <li><b>Period settled?</b> — today is excluded by rule; platforms hold funds 1–3 business days; Stripe pays out ~2 days after the charge.</li>
+      <li><b>Overlap</b> — which concept 1 makes structurally impossible.</li>
+    </ul>
+    <p>Green means go. Anything else names the blocker and the fix. This is the same lesson as the run-button work: the value isn't the validation, it's that the user sees it before they commit to something that takes hours.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      Required error copy for a lost connection is specified verbatim in the Confluence spec.
+      Settlement timings and the today-exclusion from the help docs.
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="idea-head"><span class="n">3</span><h3>Pre-declare the transactions that can never match.</h3></div>
+    <p>Part of every Stripe result is <em>guaranteed</em> noise, and the spec says so: <strong>Balance transfers in/out are never synced</strong> (status <code>NOT PARSED</code>) so they always land in Missing in accounting, and <strong>Reserve transactions cannot be matched at all</strong> — not a bug, not fixable this iteration. PayPal Currency Conversion and Account Holds are excluded during normalization. Amazon pre-converted-currency payouts surface as unmatched and the docs call this <em>"expected behavior, not an error."</em></p>
+    <p>A period only becomes <strong>Reconciled</strong> when the Discrepancy and Missing tabs are empty — so today the user has to manually Ignore a pile of rows that were never going to match, with no indication that this was inevitable. Say it up front, and pre-classify them on arrival: <em>"Stripe reserves and balance transfers can't be matched — we'll mark them Ignored so they don't block completion."</em></p>
+    <p>This is the biggest available reduction in <em>total</em> time to reconciled, because the slow part isn't the form — it's the resolve loop afterwards.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      Stripe balance-transfer and reserve behaviour, and the PayPal exclusion list, from the Confluence functional spec; Amazon note from the
+      <a href="https://synder.com/help/transaction-reconciliation-how-to-compare-your-payment-platform-data-with-your-accounting-records/">TR guide</a>.
+      Completion rule (<em>"Resolve all transactions in Not matched and Discrepancy to finish reconciliation"</em>) from production copy.
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="idea-head"><span class="n">4</span><h3>Start from the account, not the integration — there's already a ticket for this.</h3></div>
+    <p><strong>DIS-387 · [TxnRecon] Redesign configuration screen</strong> (status "One Pager Building") argues exactly this, and also notes that "Automation mode" is really <em>file ingestion mode</em>. Worth reconciling our direction with it rather than proposing in parallel.</p>
+    <p>The evidence supports the flip, with one caveat. One run = one clearing account. Clearing accounts carry unique connection identity — <code>Stripe mzkt.by (required for Synder)</code> — so picking the account <em>determines</em> the integration, and two fields collapse into one. The caveat: <code>Stripe fees</code> / <code>Stripe sales</code> are shared across all Stripe connections, so the inference only works for clearing accounts. Which is an argument for scoping the list to clearing accounts anyway — something the domain review already flagged as Critical, since a wrong pick produces a meaningless reconciliation with no warning.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      DIS-387 in Confluence (please confirm current status).
+      <em>"One reconciliation run = one clearing account"</em> — DIS-362.
+      Shared-account identity verified against the real 167-account chart of accounts.
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="idea-head"><span class="n">5</span><h3>Don't offer a choice that isn't one.</h3></div>
+    <p>Only <strong>Stripe, Shopify and Amazon</strong> support Automated retrieval. PayPal is Assisted only. <em>Every other platform</em> — Square, WooCommerce, eBay, Etsy, Clover and the rest of the ~30 — is Manual: upload any file, map the columns yourself. The method is not a preference, it is a consequence of what the user connected.</p>
+    <p>So don't render a method selector. Render <strong>what Synder is going to do</strong>, in a sentence, with one "do it differently" escape. For the Manual-only majority, open directly on the upload with the named report and its steps — never show a dropdown whose other options don't exist for them. For the Automated minority, the sentence is the whole section.</p>
+    <p>This also fixes something the review caught twice: "Assisted" sits between "Automated" and "Manual" with no explanation, and asks for <em>two</em> files where Manual asks for one — the middle option is more work than the manual one.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      Per-platform capability matrix published in the
+      <a href="https://synder.com/help/transaction-reconciliation-how-to-compare-your-payment-platform-data-with-your-accounting-records/">TR guide</a>
+      and repeated for Summary Sync. Assisted is Stripe and PayPal only per the Confluence spec, with exact file-retrieval steps.
+    </div>
+  </div>
+
+  <div class="box">
+    <div class="idea-head"><span class="n">6</span><h3>Queue the backlog instead of speeding up one form.</h3></div>
+    <p>A run takes <em>minutes to hours</em> — Stripe "may require up to one hour for large date ranges", and the one real run we captured took about 17 minutes. Meanwhile one run covers one period and one integration, so a user with four unreconciled months and two platforms is looking at eight sequential runs, each configured by hand.</p>
+    <p>Shaving fields off the form saves seconds against a job measured in hours. The real saving is <strong>"You have 4 unreconciled months on this account. Queue all 4."</strong> — the coverage timeline from concept 1 makes the set explicit, and the constraints make it safe: the periods are non-overlapping by construction and each produces its own record.</p>
+    <p>And since the commitment is hours, the button should say so. Not "Run reconciliation" but what it costs and what happens next — the product already emails on completion.</p>
+    <div class="ev"><span class="lbl">Evidence</span>
+      Runtime from the <a href="https://synder.com/help/transaction-reconciliation-how-to-compare-your-payment-platform-data-with-your-accounting-records/">TR guide</a>;
+      real run <code>createdAt 11:13:48 → lastTransition 11:31:08</code> in the captured record.
+      The Refresh flow already carries a "Keep existing file" checkbox specifically because Stripe downloads take hours.
+    </div>
+  </div>
+
+  <h2>What that looks like as a layout</h2>
+  <p class="sub">One proposed run stated as a sentence, a readiness verdict, and the coverage timeline doing double duty as period picker and backlog. Sketch only — not a prototype.</p>
+
+  <div class="sketch">
+    <div class="sk-bar">
+      <span class="t">New reconciliation</span>
+      <span class="sp"></span>
+      <span style="color:var(--grey)">Read-only — nothing in your books changes</span>
+      <span class="sk-btn">Start · ~20 min</span>
+    </div>
+    <div class="sk-body">
+      <p class="sk-sentence">Reconcile <b>Stripe mzkt.by · USD</b> against <b>mzkt.by (Stripe)</b> for <b>August 2026</b>, importing <b>both sides automatically</b>.</p>
+      <p class="sk-note">Only clearing account for this connection · next unreconciled month · Stripe supports automatic import</p>
+
+      <div class="ready"><b>⚠</b><div><b>12 transactions in August aren't synced yet.</b> Reconcile now and they'll come back as missing in accounting. <a href="#" style="color:var(--blue)">Sync them first</a> · or run anyway.</div></div>
+      <div class="ready ok"><b>✓</b><div>Stripe connected · August settled since Sep 3 · no overlapping reconciliation</div></div>
+
+      <p class="lbl" style="margin-top:18px">Coverage · Stripe mzkt.by</p>
+      <div class="strip">
+        <div class="mo done">Mar</div>
+        <div class="mo gap">Apr</div>
+        <div class="mo done">May</div>
+        <div class="mo done">Jun</div>
+        <div class="mo gap">Jul</div>
+        <div class="mo next">Aug</div>
+        <div class="mo soon">Sep</div>
+      </div>
+      <p class="sk-note" style="margin:6px 0 0">2 earlier gaps — April and July. <a href="#" style="color:var(--blue)">Queue all three</a></p>
+
+      <p class="sk-note" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+        Stripe reserves and balance transfers can't be matched — we'll mark them Ignored so they don't block completion.
+        Matching is by transaction ID and amount; dates aren't compared. <a href="#" style="color:var(--blue)">Change how data is imported</a>
+      </p>
+    </div>
+  </div>
+
+  <h2>Two things worth resolving before any of this gets built</h2>
+  <ul>
+    <li><b>Matched % contradiction.</b> The SET acceptance test (TC-POS-01) expects Matched % on the reconciliations list row, and the spec defines the formula. Our own notes record the Matched % column as removed and shipped. One of those is stale — and it matters, because "how done am I" is the signal that brings people back to finish a period.</li>
+    <li><b>Can Synder's own imported transactions stand in for the platform report?</b> For the ~27 Manual-only platforms the user leaves Synder, exports a file, and maps columns by hand — yet Synder already imported those platform transactions in order to sync them. Whether they can serve as the platform side is an engineering question, not a design one, but it's the one answer that would remove the most work from the most users. Worth asking before we design around the file upload.</li>
+  </ul>
+
+  <h2>Where the evidence is thin</h2>
+  <ul>
+    <li><b>No telemetry on what users actually select</b> — integration, account, period or method. Session funnel counts exist; per-field distributions don't. Every "most users…" statement in this document would be an assumption, so none are made.</li>
+    <li><b>Closed accounting periods</b> appear nowhere in any reconciliation doc or spec, despite being a top cause of sync failure generally. Unknown whether reconciliation interacts with a locked book at all.</li>
+    <li><b>Re-running a period</b> — duplicate or update? Strong indirect evidence for duplicate (the Refresh tooltip says "Create a new reconciliation for the same time period and same accounts", and a <code>clonedFromReconciliationId</code> field exists) but never confirmed by a live re-run. Logged as open three separate times.</li>
+    <li><b>"Data is settled" has no product rule.</b> Concept 2 needs one. The settled-month gate currently exists only in our own recon-checks prototype, as a proposal.</li>
+    <li><b>PayPal and Shopify capability in our prototypes is placeholder data</b>, flagged as such in the files. The published help-doc matrix is the better source and is used here.</li>
+  </ul>
+
+  <p class="foot">
+    Sources: Synder help centre (linked inline), Confluence functional specs in the SET and BP spaces
+    (Functional Specification: Transaction Reconciliation, Iteration 1, and the per-increment FDDs),
+    the captured production API under <code>.synder-state/recon-preview/</code>, and the LogRocket funnel
+    data in <code>.synder-state/reconciliation-dropoff-findings.md</code>.
+    Claims not traceable to one of those are marked as assumptions or listed as unknown.
+  </p>
+</div>
+</body>
+</html>

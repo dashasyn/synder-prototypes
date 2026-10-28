@@ -1,0 +1,2007 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transaction Reconciliation — Prototype</title>
+<style>
+  :root {
+    --primary: #0053CC;
+    --primary-10: #E0EBFD;
+    --primary-5:  #F2F6FC;
+    --white: #fff;
+    --g5:  #F7F8FA;
+    --g10: #EFF1F5;
+    --g20: #DFE4EC;
+    --g30: #B4BBCB;
+    --g50: #6B778C;
+    --g90: #1A1B24;
+    --green: #1F8940;
+    --green-l: #ECFDDC;
+    --red:   #CC2929;
+    --red-l: #FFECE8;
+    --yellow: #CB7515;
+    --yellow-l: #FFF1DD;
+    --blue: #3C4EAC;
+    --blue-l: #D6EBFF;
+    --purple: #310BB0;
+    --purple-l: #E2D7FF;
+    --radius: 4px;
+    --shadow-1: 0 1px 3px rgba(26,27,36,.08), 0 1px 2px rgba(26,27,36,.04);
+    --shadow-2: 0 4px 12px rgba(26,27,36,.10), 0 2px 4px rgba(26,27,36,.04);
+  }
+  * { box-sizing: border-box; }
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+  html, body { margin: 0; padding: 0; background: var(--white); color: var(--g90); font-family: 'Roboto', -apple-system, system-ui, sans-serif; font-size: 14px; line-height: 20px; letter-spacing: 0.15px; -webkit-font-smoothing: antialiased; }
+  button, input, select { font-family: 'Roboto', -apple-system, system-ui, sans-serif; }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button { font-family: inherit; font-size: 14px; cursor: pointer; }
+
+  /* TOP MODE SWITCHER (prototype only) */
+  .proto-bar { position: sticky; top: 0; z-index: 100; background: #1a1b24; color: #fff; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+  .proto-bar h1 { font-size: 14px; font-weight: 700; margin: 0; letter-spacing: .3px; }
+  .proto-bar h1 span { color: var(--g30); font-weight: 400; }
+  .proto-bar .spacer { flex: 1; }
+  .proto-bar .seg { display: inline-flex; background: rgba(255,255,255,.08); border-radius: 6px; padding: 3px; }
+  .proto-bar .seg button { background: transparent; color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; font-size: 14px; font-weight: 500; transition: all .15s; }
+  .proto-bar .seg button:hover { background: rgba(255,255,255,.08); }
+  .proto-bar .seg button.active { background: var(--primary); color: #fff; box-shadow: var(--shadow-1); }
+  .proto-bar .tag { background: rgba(255,255,255,.12); padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* SYNDER PAGE CHROME */
+  .page { margin: 0 32px; padding: 0 0 48px; min-width: 0; }
+  .topbar-wrap { background: var(--white); border-bottom: 1px solid var(--g20); width: 100%; }
+  .topbar-wrap .app-topbar { padding: 16px 32px; }
+
+  .app-topbar { display: flex; align-items: center; gap: 16px; }
+  .app-topbar .close { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; cursor: pointer; color: var(--g50); }
+  .app-topbar .close:hover { background: var(--g10); }
+  .app-topbar .crumb { font-size: 14px; font-weight: 500; color: var(--g90); }
+  .app-topbar .spacer { flex: 1; }
+  .app-topbar .btn-outline { background: var(--white); border: 1px solid var(--g20); color: var(--primary); padding: 6px 16px; border-radius: 4px; font-weight: 500; }
+  .app-topbar .btn-outline:hover { background: var(--primary-5); border-color: var(--primary); }
+
+  .page-header { padding: 24px 0 20px; }
+  .page-header h1 { font-size: 24px; line-height: 32px; font-weight: 700; margin: 0; display: inline-flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .page-header .sub { color: var(--g50); margin-top: 6px; font-size: 14px; }
+  .page-header .actions { float: right; display: flex; gap: 12px; }
+  .page-header .actions button { background: var(--white); border: 1px solid var(--g20); color: var(--primary); padding: 6px 16px; border-radius: 4px; font-weight: 500; }
+  .page-header .actions button:hover { background: var(--primary-5); border-color: var(--primary); }
+
+  .badge { display: inline-flex; align-items: center; padding: 2px 10px; font-size: 12px; font-weight: 500; border-radius: 12px; }
+  .badge-green { background: var(--green-l); color: var(--green); }
+  .badge-yellow { background: var(--yellow-l); color: var(--yellow); }
+  .badge-red { background: var(--red-l); color: var(--red); }
+  .badge-blue { background: var(--blue-l); color: var(--blue); }
+  .badge-purple { background: var(--purple-l); color: var(--purple); }
+
+  .warning-bar { background: var(--yellow-l); border: 1px solid #F4C876; border-radius: 4px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; margin-bottom: 20px; font-size: 14px; }
+  .warning-bar .icon { color: var(--yellow); flex-shrink: 0; }
+  .warning-bar .msg { flex: 1; }
+  .warning-bar .close-x { color: var(--g50); cursor: pointer; padding: 4px; }
+
+  .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--g20); margin-bottom: 24px; }
+  .tabs button { background: none; border: 0; padding: 12px 24px 14px; color: var(--g50); font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .tabs button:hover { color: var(--g90); }
+  .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
+  .tabs button .count { display: inline-flex; align-items: center; padding: 1px 8px; background: var(--g10); color: var(--g50); border-radius: 10px; font-size: 14px; font-weight: 500; }
+  .tabs button.active .count { background: var(--primary-10); color: var(--primary); }
+  .tabs button.has-alert .count { background: var(--red-l); color: var(--red); }
+
+  /* PANELS */
+  .panels { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+  .panels.current-mode { gap: 24px; }
+  .panel { min-width: 0; }
+
+  .panel h2 { font-size: 16px; line-height: 24px; font-weight: 700; margin: 0 0 12px; color: var(--g90); display: flex; align-items: center; gap: 8px; }
+  .panel h2 .count-pill { font-size: 14px; color: var(--g50); font-weight: 500; background: var(--g10); padding: 2px 10px; border-radius: 10px; }
+
+  /* FILTERS */
+  .filter-bar { background: var(--white); border: 1px solid var(--g20); border-radius: 4px; padding: 16px; margin-bottom: 12px; }
+  .filter-bar .row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.9fr); gap: 12px; margin-bottom: 12px; }
+  .filter-bar .row > div { min-width: 0; }
+  .filter-bar label { display: block; font-size: 14px; font-weight: 700; color: var(--g90); margin-bottom: 4px; letter-spacing: .2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .filter-bar input { width: 100%; padding: 6px 10px; border: 1px solid var(--g20); border-radius: 4px; font-size: 14px; font-family: inherit; background: var(--white); min-width: 0; }
+  .filter-bar input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-10); }
+  .filter-bar input::placeholder { color: var(--g30); }
+  .filter-bar .dates { display: flex; align-items: center; gap: 6px; }
+  .filter-bar .dates input { flex: 1; min-width: 0; }
+  .filter-bar .actions { display: flex; gap: 12px; }
+  .filter-bar .btn-primary { background: var(--primary); color: #fff; border: 0; padding: 7px 24px; border-radius: 4px; font-weight: 500; }
+  .filter-bar .btn-primary:hover { background: #0044A8; }
+  .filter-bar .btn-outline { background: var(--white); border: 1px solid var(--g20); color: var(--primary); padding: 6px 16px; border-radius: 4px; font-weight: 500; }
+
+  /* TABLE */
+  .tbl-wrap { background: var(--white); border: 1px solid var(--g20); border-radius: 4px; overflow: hidden; min-width: 0; }
+  .tbl-wrap .tbl-scroll { overflow-x: auto; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 14px; font-family: 'Roboto', sans-serif; letter-spacing: 0.15px; }
+  .tbl thead th { background: var(--g5); color: var(--g50); font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--g20); white-space: nowrap; }
+  .tbl thead th.num { text-align: right; }
+  .tbl thead th.sort::after { content: " ↓"; color: var(--g30); font-size: 10px; }
+  .tbl tbody td { padding: 9px 8px; border-bottom: 1px solid var(--g10); vertical-align: middle; white-space: nowrap; font-weight: 400; letter-spacing: 0.15px; }
+  .tbl tbody tr:last-child td { border-bottom: 0; }
+  .tbl tbody tr:hover { background: var(--primary-5); }
+  .tbl tbody tr.selected { background: var(--primary-10); }
+  .tbl td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .tbl td.neg { color: var(--red); }
+
+  /* Fixed-width columns */
+  .tbl th.col-check, .tbl td.col-check { width: 40px; min-width: 40px; max-width: 40px; padding-right: 0; }
+  .tbl th.col-date,  .tbl td.col-date  { width: 92px; min-width: 92px; }
+  .tbl th.col-desc,  .tbl td.col-desc  { width: 36px; min-width: 36px; max-width: 36px; text-align: center; padding-left: 4px; padding-right: 4px; }
+  .tbl th.col-act,   .tbl td.col-act   { width: 64px; min-width: 64px; max-width: 64px; text-align: right; padding-right: 4px; }
+  .tbl th.col-id,    .tbl td.col-id    { width: 160px; min-width: 130px; }
+  .tbl th.col-type,  .tbl td.col-type  { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+  .tbl th.col-amt,   .tbl td.col-amt   { width: 110px; min-width: 90px; text-align: right; }
+
+  /* ID cell — fixed width, copy overlays the right edge on row hover */
+  .id-cell { position: relative; display: inline-block; width: 100%; font-family: 'Roboto Mono', 'SF Mono', Menlo, Consolas, monospace; font-size: 13px; color: var(--g90); white-space: nowrap; overflow: hidden; }
+  .id-cell .id-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 0; }
+  /* Full-ID tooltip shown on hover */
+  .id-cell .id-full-tip { display: none; position: absolute; bottom: calc(100% + 6px); left: 0; background: var(--g90); color: #fff; font-size: 12px; font-family: 'Roboto Mono', 'SF Mono', Menlo, Consolas, monospace; white-space: nowrap; padding: 5px 10px; border-radius: 4px; pointer-events: none; z-index: 100; box-shadow: var(--shadow-2); letter-spacing: 0; }
+  .id-cell .id-full-tip::after { content: ''; position: absolute; top: 100%; left: 12px; border: 5px solid transparent; border-top-color: var(--g90); }
+  .id-cell:hover .id-full-tip { display: block; }
+  /* Gradient + copy button overlaid at right edge, hidden by default */
+  /* Default row = white background */
+  .id-cell .id-copy-wrap { display: none; position: absolute; right: 0; top: 50%; transform: translateY(-50%); align-items: center; background: linear-gradient(to right, transparent 0%, var(--white) 30%); padding-left: 20px; }
+  /* Hovered row = --primary-5 (#F2F6FC) background */
+  .tbl tbody tr:hover .id-cell .id-copy-wrap { background: linear-gradient(to right, transparent 0%, var(--primary-5) 30%); }
+  .id-cell .id-copy-wrap button { display: flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 0; background: transparent; cursor: pointer; color: var(--g50); padding: 0; border-radius: 3px; }
+  .id-cell .id-copy-wrap button:hover { color: var(--primary); background: var(--primary-10); }
+  .id-cell .id-copy-wrap button svg { width: 13px; height: 13px; }
+  .tbl tbody tr:hover .id-cell .id-copy-wrap { display: flex; }
+
+  .tbl .check-col { width: 40px; padding-right: 0; }
+  .tbl .check-col input[type=checkbox] { cursor: pointer; }
+  .tbl .ignore-btn { color: var(--primary); background: none; border: 0; padding: 4px 6px; font-size: 14px; font-weight: 500; border-radius: 4px; font-family: 'Roboto', sans-serif; white-space: nowrap; }
+  .tbl .ignore-btn:hover { background: var(--primary-5); }
+
+  /* Description (i) icon in desc column */
+  .info-ic { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--g30); color: var(--g50); font-size: 11px; line-height: 1; font-family: 'Roboto', serif; font-style: italic; font-weight: 700; cursor: default; vertical-align: middle; }
+  .info-ic:hover { border-color: var(--primary); color: var(--primary); }
+  .info-ic .tip { display: none; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 6px; background: var(--g90); color: #fff; font-size: 13px; font-family: 'Roboto', sans-serif; font-style: normal; font-weight: 400; white-space: nowrap; padding: 5px 10px; border-radius: 4px; pointer-events: none; z-index: 50; letter-spacing: 0.15px; }
+  .info-ic:hover .tip { display: block; }
+
+  /* Bulk action row — replaces table header */
+  .tbl-bulk-hdr { display: none; background: var(--primary-10); border-bottom: 1px solid var(--primary-20, #CCDDF5); }
+  .tbl-bulk-hdr.visible { display: table-row-group; }
+  .tbl-bulk-hdr tr td { padding: 8px 12px; border-bottom: 0; background: transparent; white-space: nowrap; }
+  .tbl-bulk-hdr .bulk-info { font-size: 14px; font-weight: 500; color: var(--primary); }
+  .tbl-bulk-hdr .bulk-actions { display: flex; gap: 4px; }
+  .tbl-bulk-hdr .bulk-actions button { background: none; border: 1px solid var(--primary); color: var(--primary); padding: 4px 12px; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: 'Roboto', sans-serif; }
+  .tbl-bulk-hdr .bulk-actions button:hover { background: var(--primary-10); }
+  .tbl-bulk-hdr .bulk-actions button.prim { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .tbl-bulk-hdr .bulk-actions button.prim:hover { background: #0044A8; }
+  .tbl-bulk-hdr .bulk-actions .sp { flex: 1; }
+  .tbl-bulk-hdr .bulk-actions .close-x { background: none; border: 0; color: var(--g50); padding: 4px 8px; font-size: 16px; cursor: pointer; }
+  .tbl-bulk-hdr .bulk-actions .close-x:hover { color: var(--g90); }
+  /* Hide real thead when bulk active */
+  .tbl.bulk-active > thead { display: none; }
+
+  .tbl tfoot td { background: var(--g5); font-weight: 700; padding: 10px 12px; border-top: 2px solid var(--g20); font-size: 14px; }
+  .tbl tfoot td.num { font-variant-numeric: tabular-nums; }
+
+  .tbl-footer { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--white); border-top: 1px solid var(--g10); font-size: 14px; color: var(--g50); }
+  .tbl-footer .range { display: flex; align-items: center; gap: 16px; }
+  .tbl-footer .per-page select { border: 1px solid var(--g20); border-radius: 4px; padding: 4px 8px; font-size: 14px; background: var(--white); }
+  .tbl-footer .pager { display: flex; gap: 4px; }
+  .tbl-footer .pager button { width: 28px; height: 28px; background: none; border: 0; border-radius: 4px; color: var(--g50); }
+  .tbl-footer .pager button:hover:not(:disabled) { background: var(--g10); }
+  .tbl-footer .pager button:disabled { color: var(--g30); cursor: not-allowed; }
+  .tbl-footer .pager button.current { background: var(--primary); color: #fff; }
+
+  /* IMPROVED MODE: smart banner + clusters + shared filter + bulk actions */
+  .smart-banner { background: linear-gradient(90deg, var(--red-l) 0%, #FFF8F6 100%); border: 1px solid #F4C2C2; border-radius: 6px; padding: 16px 20px; display: flex; gap: 16px; align-items: flex-start; margin-bottom: 20px; box-shadow: var(--shadow-1); }
+  .smart-banner .icon { width: 40px; height: 40px; background: var(--red); color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex-shrink: 0; }
+  .smart-banner .content { flex: 1; }
+  .smart-banner h3 { margin: 0 0 4px; font-size: 15px; font-weight: 700; color: var(--g90); }
+  .smart-banner p { margin: 0; color: var(--g50); font-size: 14px; }
+  .smart-banner .cta { display: flex; gap: 8px; margin-top: 12px; }
+  .smart-banner .btn-primary { background: var(--primary); color: #fff; border: 0; padding: 8px 20px; border-radius: 4px; font-weight: 500; font-size: 14px; }
+  .smart-banner .btn-primary:hover { background: #0044A8; }
+  .smart-banner .btn-text { background: none; border: 0; color: var(--primary); padding: 8px 12px; font-weight: 500; font-size: 14px; }
+  .smart-banner .btn-text:hover { background: var(--primary-5); border-radius: 4px; }
+
+  .progress-bar { display: flex; gap: 16px; background: var(--white); border: 1px solid var(--g20); border-radius: 6px; padding: 16px 20px; margin-bottom: 16px; align-items: center; }
+  .progress-bar .metric { flex: 1; }
+  .progress-bar .metric .label { font-size: 12px; color: var(--g50); text-transform: uppercase; font-weight: 500; letter-spacing: .4px; }
+  .progress-bar .metric .value { font-size: 22px; font-weight: 700; color: var(--g90); line-height: 28px; margin-top: 2px; }
+  .progress-bar .metric.warn .value { color: var(--red); }
+  .progress-bar .metric.ok .value { color: var(--green); }
+  .progress-bar .divider { width: 1px; height: 40px; background: var(--g10); }
+  .progress-bar .progress { flex: 2; }
+  .progress-bar .progress .track { height: 8px; background: var(--g10); border-radius: 4px; overflow: hidden; display: flex; }
+  .progress-bar .progress .seg-matched { background: var(--green); }
+  .progress-bar .progress .seg-discr { background: var(--yellow); }
+  .progress-bar .progress .seg-notmatched { background: var(--red); }
+  .progress-bar .progress .seg-ignored { background: var(--g30); }
+  .progress-bar .progress .legend { display: flex; gap: 12px; margin-top: 8px; font-size: 14px; color: var(--g50); }
+  .progress-bar .progress .legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+  .bulk-bar { display: flex; align-items: center; gap: 12px; background: var(--primary); color: #fff; padding: 10px 16px; border-radius: 6px; margin-bottom: 12px; box-shadow: var(--shadow-1); }
+  .bulk-bar .count { font-weight: 700; font-size: 14px; }
+  .bulk-bar .spacer { flex: 1; }
+  .bulk-bar button { background: rgba(255,255,255,.15); color: #fff; border: 0; padding: 6px 14px; border-radius: 4px; font-weight: 500; font-size: 14px; }
+  .bulk-bar button:hover { background: rgba(255,255,255,.25); }
+  .bulk-bar button.primary { background: #fff; color: var(--primary); }
+  .bulk-bar button.primary:hover { background: #f0f0f0; }
+  .bulk-bar .close { background: none; padding: 6px; }
+
+  /* Shared filter (single, not duplicated) */
+  .shared-filter { background: var(--white); border: 1px solid var(--g20); border-radius: 6px; padding: 16px; margin-bottom: 16px; display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+  .shared-filter .field { flex: 1 1 200px; min-width: 180px; }
+  .shared-filter .field.wide { flex: 2; }
+  .shared-filter label { display: block; font-size: 12px; font-weight: 700; color: var(--g50); text-transform: uppercase; margin-bottom: 6px; letter-spacing: .3px; }
+  .shared-filter input, .shared-filter select { width: 100%; padding: 7px 10px; border: 1px solid var(--g20); border-radius: 4px; font-size: 14px; font-family: inherit; background: var(--white); }
+  .shared-filter input:focus, .shared-filter select:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-10); }
+  .shared-filter .chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .shared-filter .chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; background: var(--g10); border-radius: 12px; font-size: 14px; color: var(--g90); cursor: pointer; }
+  .shared-filter .chip.active { background: var(--primary-10); color: var(--primary); font-weight: 500; }
+  .shared-filter .actions { display: flex; gap: 8px; }
+  .shared-filter .btn-primary { background: var(--primary); color: #fff; border: 0; padding: 8px 20px; border-radius: 4px; font-weight: 500; }
+  .shared-filter .btn-ghost { background: none; border: 0; color: var(--g50); padding: 8px 12px; font-weight: 500; }
+  .shared-filter .btn-ghost:hover { color: var(--primary); }
+
+  /* Cluster grouping */
+  .cluster { background: var(--white); border: 1px solid var(--g20); border-radius: 6px; margin-bottom: 8px; overflow: hidden; }
+  .cluster-header { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; transition: background .15s; }
+  .cluster-header:hover { background: var(--primary-5); }
+  .cluster-header .chevron { transition: transform .2s; color: var(--g50); font-size: 10px; }
+  .cluster.expanded .chevron { transform: rotate(90deg); }
+  .cluster-header input[type=checkbox] { cursor: pointer; }
+  .cluster-header .summary { flex: 1; }
+  .cluster-header .summary .title { font-weight: 500; font-size: 14px; color: var(--g90); }
+  .cluster-header .summary .meta { font-size: 14px; color: var(--g50); margin-top: 2px; }
+  .cluster-header .total { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cluster-header .total.neg { color: var(--red); }
+  .cluster-header .actions { display: flex; gap: 4px; }
+  .cluster-header .actions button { background: none; border: 1px solid var(--g20); color: var(--primary); padding: 4px 10px; font-size: 14px; border-radius: 4px; font-weight: 500; }
+  .cluster-header .actions button:hover { background: var(--primary-5); border-color: var(--primary); }
+  .cluster-body { border-top: 1px solid var(--g10); display: none; }
+  .cluster.expanded .cluster-body { display: block; }
+  .cluster-body .tbl { border: 0; }
+  .cluster-body .tbl thead { display: none; }
+  .cluster-body .tbl td { padding-left: 40px; font-size: 14px; }
+
+  /* Empty / error rows in broken mapping detection */
+  .row-error { background: var(--red-l) !important; }
+  .row-error td { color: var(--red); }
+  .row-error .null-cell { color: var(--red); font-style: italic; font-weight: 500; }
+  .null-cell::before { content: "—"; }
+
+  /* Legend */
+  .proto-notes { background: #fffce8; border: 1px solid #f6d66f; border-radius: 6px; padding: 16px 20px; margin-top: 32px; font-size: 14px; color: #6b5e00; }
+  .proto-notes h4 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #3a3400; }
+  .proto-notes ul { margin: 0; padding-left: 20px; }
+  .proto-notes li { margin-bottom: 4px; }
+
+  /* Keep panels side-by-side at all widths — inner scroll handles overflow */
+  .panels { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 24px; }
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <h1>🔍 Dasha · Reconciliation Preview Prototype <span>— Transaction Reconciliation / Not matched tab</span></h1>
+  <div class="spacer"></div>
+  <div class="tag" id="modeTag">CURRENT</div>
+  <div class="seg" role="tablist">
+    <button id="mode-current" class="active" onclick="setMode('current')">📸 Current</button>
+    <button id="mode-improved" onclick="setMode('improved')">✨ Improved</button>
+    <button id="mode-side" onclick="setMode('side')">⇔ Side by side</button>
+  </div>
+</div>
+
+<div id="pageRoot"></div>
+
+<script>
+/* ============================================================
+   REAL DATA — captured from rec_7487e8c9c991416684cdb375859c1761
+   (Stripe mzkt.by, Jan 1–31 2026, DS_test_2 org)
+   ============================================================ */
+const DATA = {
+  "meta": {
+    "reconciliationId": "rec_7487e8c9c991416684cdb375859c1761",
+    "title": "Stripe mzkt.by",
+    "dateFrom": "2026-01-01",
+    "dateTo": "2026-01-31",
+    "accountingName": "DS_test_2 (Synder)",
+    "integrationName": "mzkt.by (Stripe)",
+    "currency": "USD",
+    "status": "FINISHED",
+    "integrationTimezone": "Europe/Minsk",
+    "headerMappings": [
+      {
+        "sourceColumnName": "balance_transaction_id",
+        "targetColumn": "PRIMARY_ID"
+      },
+      {
+        "sourceColumnName": "gross",
+        "targetColumn": "SECONDARY_ID"
+      },
+      {
+        "sourceColumnName": "created",
+        "targetColumn": "AMOUNT"
+      },
+      {
+        "sourceColumnName": "currency",
+        "targetColumn": "CURRENCY"
+      },
+      {
+        "sourceColumnName": "reporting_category",
+        "targetColumn": "DATE"
+      },
+      {
+        "sourceColumnName": "description",
+        "targetColumn": "TYPE"
+      }
+    ],
+    "sourceFile": "Itemized_balance_change_from_activity_USD_2026_01_01_to_2026---4b27bea4-8408-4832-b4ca-ccdb702c7ba9.csv"
+  },
+  "summary": {
+    "matchedCount": 0,
+    "discrepancyCount": 0,
+    "notMatchedCount": 50,
+    "ignoredCount": 0,
+    "missingInAccountingCount": 44,
+    "missingInPaymentPlatformCount": 6
+  },
+  "missingInAcc": [
+    {
+      "primaryId": "po_1Sv5SEE4pygkgelblv7pgtxg",
+      "secondaryId": "txn_1Sv5SFE4pygkgelbkIZXPJZX",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-30",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1Suj0DE4pygkgelbmyG9R9xH",
+      "secondaryId": "txn_1Suj0EE4pygkgelb1T8BoDsJ",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-29",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SuMhHE4pygkgelbNjgbpFce",
+      "secondaryId": "txn_1SuMhIE4pygkgelbtGb9nUes",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-28",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1Su0DzE4pygkgelbxyZI1u0H",
+      "secondaryId": "txn_1Su0E0E4pygkgelbyJ7zNoA6",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-27",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1StdtCE4pygkgelbQwePWSta",
+      "secondaryId": "txn_1StdtDE4pygkgelbc6DvremI",
+      "amount": -64.83,
+      "currency": "USD",
+      "date": "2026-01-26",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3St8n0E4pygkgelb0NSim7zc",
+      "secondaryId": "txn_3St8n0E4pygkgelb0iwpXyBx",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-24",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SsYWwE4pygkgelbFIQRLhNh",
+      "secondaryId": "txn_1SsYWxE4pygkgelb7pQM1pvo",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-23",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SsmJfE4pygkgelb09nENSPW",
+      "secondaryId": "txn_3SsmJfE4pygkgelb0QqS1Wwi",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-23",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SsPqKE4pygkgelb1OiVjnTj",
+      "secondaryId": "txn_3SsPqKE4pygkgelb13efZQCT",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-22",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SsC7QE4pygkgelb12gDYkvn",
+      "secondaryId": "txn_1SsC7XE4pygkgelb6gvyKWIi",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-22",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SrpNIE4pygkgelbePbE9QUk",
+      "secondaryId": "txn_1SrpNIE4pygkgelbyp2UqWEK",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-21",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3Ss3MWE4pygkgelb03WZ36yU",
+      "secondaryId": "txn_3Ss3MWE4pygkgelb0O0BpQEO",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-21",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SrT3uE4pygkgelbDUwSJjXx",
+      "secondaryId": "txn_1SrT3vE4pygkgelb3wXpmUXe",
+      "amount": -86.44,
+      "currency": "USD",
+      "date": "2026-01-20",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SrgsdE4pygkgelb05PxB0Os",
+      "secondaryId": "txn_3SrgsdE4pygkgelb06vZT72m",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-20",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SrKPvE4pygkgelb1HOdWR1D",
+      "secondaryId": "txn_3SrKPvE4pygkgelb1VMDNb6D",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-19",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SqxvrE4pygkgelb1kRIyRIx",
+      "secondaryId": "txn_3SqxvrE4pygkgelb1w0k0MD7",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-18",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SqbSmE4pygkgelb13bQzvWf",
+      "secondaryId": "txn_3SqbSmE4pygkgelb12rhxUmG",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-17",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1Sq19cE4pygkgelb5DkzoazF",
+      "secondaryId": "txn_1Sq19dE4pygkgelbMI5AUCjt",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-16",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SqEyHE4pygkgelb0AQDvZTJ",
+      "secondaryId": "txn_3SqEyHE4pygkgelb0POig6KS",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-16",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SpsVpE4pygkgelb0ub8Fy2i",
+      "secondaryId": "txn_3SpsVpE4pygkgelb0y4zlKsm",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-15",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SpeoUE4pygkgelb3hAytCH8",
+      "secondaryId": "txn_1SpeoVE4pygkgelbRMfHDtFY",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-15",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SpW1kE4pygkgelb1NCLndKd",
+      "secondaryId": "txn_3SpW1kE4pygkgelb10IeD4E0",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-14",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SpIGWE4pygkgelbHsGw2h3N",
+      "secondaryId": "txn_1SpIGXE4pygkgelbBIP7WJ1m",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-14",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3Sp9YsE4pygkgelb0Wdv6FTt",
+      "secondaryId": "txn_3Sp9YsE4pygkgelb0AFtI8nY",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-13",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1Sovn3E4pygkgelbkjewZtaG",
+      "secondaryId": "txn_1Sovn3E4pygkgelbeLcgV1qJ",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-13",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3Son5CE4pygkgelb1Jxz6IeP",
+      "secondaryId": "txn_3Son5CE4pygkgelb1nXqIVxL",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-12",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SoZR7E4pygkgelbr9girc11",
+      "secondaryId": "txn_1SoZR7E4pygkgelbfVlLZAbA",
+      "amount": -64.83,
+      "currency": "USD",
+      "date": "2026-01-12",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SoQbaE4pygkgelb13MqrVHC",
+      "secondaryId": "txn_3SoQbaE4pygkgelb1XaXBFTM",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-11",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3So47NE4pygkgelb1lJlepuQ",
+      "secondaryId": "txn_3So47NE4pygkgelb13b4akTk",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-10",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SnhdzE4pygkgelb1bSgzVFQ",
+      "secondaryId": "txn_3SnhdzE4pygkgelb1gNVzLqj",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-09",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SnTdBE4pygkgelbr3xA9LzU",
+      "secondaryId": "txn_1SnTdCE4pygkgelbvnSqMaRt",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-09",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1Sn7LGE4pygkgelbekIpeJlh",
+      "secondaryId": "txn_1Sn7LGE4pygkgelbtrD6oaKu",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-08",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SnLAwE4pygkgelb0gY62Z6b",
+      "secondaryId": "txn_3SnLAwE4pygkgelb0l8t3kas",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-08",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SmkyAE4pygkgelbSou3NmTj",
+      "secondaryId": "txn_1SmkyAE4pygkgelbr9gs6q8n",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-07",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SmygcE4pygkgelb1KcBGwpj",
+      "secondaryId": "txn_3SmygcE4pygkgelb1bfWQkQW",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-07",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SmOJdE4pygkgelbdJUlhLto",
+      "secondaryId": "txn_1SmOJeE4pygkgelbHia2WItL",
+      "amount": -21.61,
+      "currency": "USD",
+      "date": "2026-01-06",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SmcDhE4pygkgelb14Ds8s6B",
+      "secondaryId": "txn_3SmcDhE4pygkgelb1btjbd7h",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-06",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SmFkIE4pygkgelb0tBF1JFD",
+      "secondaryId": "txn_3SmFkIE4pygkgelb02HAkrox",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-05",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1Sm1l6E4pygkgelblGA7NWfy",
+      "secondaryId": "txn_1Sm1l6E4pygkgelbq84mPVHP",
+      "amount": -64.83,
+      "currency": "USD",
+      "date": "2026-01-05",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SltGNE4pygkgelb0XbIpvFP",
+      "secondaryId": "txn_3SltGNE4pygkgelb0ab9tRqo",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-04",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SlWmxE4pygkgelb0yNsbTYx",
+      "secondaryId": "txn_3SlWmxE4pygkgelb0jtamAoK",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-03",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "po_1SkwXeE4pygkgelbxMAmrVy8",
+      "secondaryId": "txn_1SkwXfE4pygkgelb0X9cLAYp",
+      "amount": -43.22,
+      "currency": "USD",
+      "date": "2026-01-02",
+      "type": "payout",
+      "description": "STRIPE PAYOUT",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SlAIpE4pygkgelb0ZnLKVuO",
+      "secondaryId": "txn_3SlAIpE4pygkgelb0Q42e3nb",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-02",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "ch_3SknpME4pygkgelb1p2vr8KK",
+      "secondaryId": "txn_3SknpME4pygkgelb1FOArJCe",
+      "amount": 21.61,
+      "currency": "USD",
+      "date": "2026-01-01",
+      "type": "charge",
+      "description": "Subscription update",
+      "isEmpty": false
+    }
+  ],
+  "missingInPp": [
+    {
+      "primaryId": "txn_3Ss2XO7QSl16uhjV1NjoU1E5",
+      "secondaryId": "20.00",
+      "amount": null,
+      "currency": "USD",
+      "date": null,
+      "type": "(created by Stripe CLI)",
+      "description": "",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "txn_3SpPWh7QSl16uhjV0XGrjXrU",
+      "secondaryId": "300.00",
+      "amount": null,
+      "currency": "USD",
+      "date": null,
+      "type": "Subscription creation",
+      "description": "",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "txn_3SpPhv7QSl16uhjV0qzAtwno",
+      "secondaryId": "130.00",
+      "amount": null,
+      "currency": "USD",
+      "date": null,
+      "type": "Subscription creation",
+      "description": "",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "txn_3Ss23C7QSl16uhjV0kQH8M9a",
+      "secondaryId": "300.00",
+      "amount": null,
+      "currency": "USD",
+      "date": null,
+      "type": "Payment for Invoice",
+      "description": "",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "txn_3SpPi07QSl16uhjV0XSw78Bz",
+      "secondaryId": "200.00",
+      "amount": null,
+      "currency": "USD",
+      "date": null,
+      "type": "Subscription creation",
+      "description": "",
+      "isEmpty": false
+    },
+    {
+      "primaryId": "txn_3Ss2KJ7QSl16uhjV0PD8Hy6I",
+      "secondaryId": "20.00",
+      "amount": null,
+      "currency": "USD",
+      "date": null,
+      "type": "(created by Stripe CLI)",
+      "description": "",
+      "isEmpty": false
+    }
+  ],
+  "accClusters": [
+    {
+      "key": "charge|21.61|Subscription update",
+      "count": 24,
+      "sample": {
+        "primaryId": "ch_3St8n0E4pygkgelb0NSim7zc",
+        "secondaryId": "txn_3St8n0E4pygkgelb0iwpXyBx",
+        "amount": 21.61,
+        "currency": "USD",
+        "date": "2026-01-24",
+        "type": "charge",
+        "description": "Subscription update",
+        "isEmpty": false
+      },
+      "total": 518.6400000000002,
+      "rows": [
+        {
+          "primaryId": "ch_3St8n0E4pygkgelb0NSim7zc",
+          "secondaryId": "txn_3St8n0E4pygkgelb0iwpXyBx",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-24",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SsmJfE4pygkgelb09nENSPW",
+          "secondaryId": "txn_3SsmJfE4pygkgelb0QqS1Wwi",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-23",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SsPqKE4pygkgelb1OiVjnTj",
+          "secondaryId": "txn_3SsPqKE4pygkgelb13efZQCT",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-22",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3Ss3MWE4pygkgelb03WZ36yU",
+          "secondaryId": "txn_3Ss3MWE4pygkgelb0O0BpQEO",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-21",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SrgsdE4pygkgelb05PxB0Os",
+          "secondaryId": "txn_3SrgsdE4pygkgelb06vZT72m",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-20",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SrKPvE4pygkgelb1HOdWR1D",
+          "secondaryId": "txn_3SrKPvE4pygkgelb1VMDNb6D",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-19",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SqxvrE4pygkgelb1kRIyRIx",
+          "secondaryId": "txn_3SqxvrE4pygkgelb1w0k0MD7",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-18",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SqbSmE4pygkgelb13bQzvWf",
+          "secondaryId": "txn_3SqbSmE4pygkgelb12rhxUmG",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-17",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SqEyHE4pygkgelb0AQDvZTJ",
+          "secondaryId": "txn_3SqEyHE4pygkgelb0POig6KS",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-16",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SpsVpE4pygkgelb0ub8Fy2i",
+          "secondaryId": "txn_3SpsVpE4pygkgelb0y4zlKsm",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-15",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SpW1kE4pygkgelb1NCLndKd",
+          "secondaryId": "txn_3SpW1kE4pygkgelb10IeD4E0",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-14",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3Sp9YsE4pygkgelb0Wdv6FTt",
+          "secondaryId": "txn_3Sp9YsE4pygkgelb0AFtI8nY",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-13",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3Son5CE4pygkgelb1Jxz6IeP",
+          "secondaryId": "txn_3Son5CE4pygkgelb1nXqIVxL",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-12",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SoQbaE4pygkgelb13MqrVHC",
+          "secondaryId": "txn_3SoQbaE4pygkgelb1XaXBFTM",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-11",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3So47NE4pygkgelb1lJlepuQ",
+          "secondaryId": "txn_3So47NE4pygkgelb13b4akTk",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-10",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SnhdzE4pygkgelb1bSgzVFQ",
+          "secondaryId": "txn_3SnhdzE4pygkgelb1gNVzLqj",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-09",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SnLAwE4pygkgelb0gY62Z6b",
+          "secondaryId": "txn_3SnLAwE4pygkgelb0l8t3kas",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-08",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SmygcE4pygkgelb1KcBGwpj",
+          "secondaryId": "txn_3SmygcE4pygkgelb1bfWQkQW",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-07",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SmcDhE4pygkgelb14Ds8s6B",
+          "secondaryId": "txn_3SmcDhE4pygkgelb1btjbd7h",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-06",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SmFkIE4pygkgelb0tBF1JFD",
+          "secondaryId": "txn_3SmFkIE4pygkgelb02HAkrox",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-05",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SltGNE4pygkgelb0XbIpvFP",
+          "secondaryId": "txn_3SltGNE4pygkgelb0ab9tRqo",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-04",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SlWmxE4pygkgelb0yNsbTYx",
+          "secondaryId": "txn_3SlWmxE4pygkgelb0jtamAoK",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-03",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SlAIpE4pygkgelb0ZnLKVuO",
+          "secondaryId": "txn_3SlAIpE4pygkgelb0Q42e3nb",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-02",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "ch_3SknpME4pygkgelb1p2vr8KK",
+          "secondaryId": "txn_3SknpME4pygkgelb1FOArJCe",
+          "amount": 21.61,
+          "currency": "USD",
+          "date": "2026-01-01",
+          "type": "charge",
+          "description": "Subscription update",
+          "isEmpty": false
+        }
+      ]
+    },
+    {
+      "key": "payout|-21.61|STRIPE PAYOUT",
+      "count": 15,
+      "sample": {
+        "primaryId": "po_1Sv5SEE4pygkgelblv7pgtxg",
+        "secondaryId": "txn_1Sv5SFE4pygkgelbkIZXPJZX",
+        "amount": -21.61,
+        "currency": "USD",
+        "date": "2026-01-30",
+        "type": "payout",
+        "description": "STRIPE PAYOUT",
+        "isEmpty": false
+      },
+      "total": -324.1500000000001,
+      "rows": [
+        {
+          "primaryId": "po_1Sv5SEE4pygkgelblv7pgtxg",
+          "secondaryId": "txn_1Sv5SFE4pygkgelbkIZXPJZX",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-30",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1Suj0DE4pygkgelbmyG9R9xH",
+          "secondaryId": "txn_1Suj0EE4pygkgelb1T8BoDsJ",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-29",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SuMhHE4pygkgelbNjgbpFce",
+          "secondaryId": "txn_1SuMhIE4pygkgelbtGb9nUes",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-28",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1Su0DzE4pygkgelbxyZI1u0H",
+          "secondaryId": "txn_1Su0E0E4pygkgelbyJ7zNoA6",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-27",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SsYWwE4pygkgelbFIQRLhNh",
+          "secondaryId": "txn_1SsYWxE4pygkgelb7pQM1pvo",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-23",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SsC7QE4pygkgelb12gDYkvn",
+          "secondaryId": "txn_1SsC7XE4pygkgelb6gvyKWIi",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-22",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SrpNIE4pygkgelbePbE9QUk",
+          "secondaryId": "txn_1SrpNIE4pygkgelbyp2UqWEK",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-21",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1Sq19cE4pygkgelb5DkzoazF",
+          "secondaryId": "txn_1Sq19dE4pygkgelbMI5AUCjt",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-16",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SpeoUE4pygkgelb3hAytCH8",
+          "secondaryId": "txn_1SpeoVE4pygkgelbRMfHDtFY",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-15",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SpIGWE4pygkgelbHsGw2h3N",
+          "secondaryId": "txn_1SpIGXE4pygkgelbBIP7WJ1m",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-14",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1Sovn3E4pygkgelbkjewZtaG",
+          "secondaryId": "txn_1Sovn3E4pygkgelbeLcgV1qJ",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-13",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SnTdBE4pygkgelbr3xA9LzU",
+          "secondaryId": "txn_1SnTdCE4pygkgelbvnSqMaRt",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-09",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1Sn7LGE4pygkgelbekIpeJlh",
+          "secondaryId": "txn_1Sn7LGE4pygkgelbtrD6oaKu",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-08",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SmkyAE4pygkgelbSou3NmTj",
+          "secondaryId": "txn_1SmkyAE4pygkgelbr9gs6q8n",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-07",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SmOJdE4pygkgelbdJUlhLto",
+          "secondaryId": "txn_1SmOJeE4pygkgelbHia2WItL",
+          "amount": -21.61,
+          "currency": "USD",
+          "date": "2026-01-06",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        }
+      ]
+    },
+    {
+      "key": "payout|-64.83|STRIPE PAYOUT",
+      "count": 3,
+      "sample": {
+        "primaryId": "po_1StdtCE4pygkgelbQwePWSta",
+        "secondaryId": "txn_1StdtDE4pygkgelbc6DvremI",
+        "amount": -64.83,
+        "currency": "USD",
+        "date": "2026-01-26",
+        "type": "payout",
+        "description": "STRIPE PAYOUT",
+        "isEmpty": false
+      },
+      "total": -194.49,
+      "rows": [
+        {
+          "primaryId": "po_1StdtCE4pygkgelbQwePWSta",
+          "secondaryId": "txn_1StdtDE4pygkgelbc6DvremI",
+          "amount": -64.83,
+          "currency": "USD",
+          "date": "2026-01-26",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1SoZR7E4pygkgelbr9girc11",
+          "secondaryId": "txn_1SoZR7E4pygkgelbfVlLZAbA",
+          "amount": -64.83,
+          "currency": "USD",
+          "date": "2026-01-12",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        },
+        {
+          "primaryId": "po_1Sm1l6E4pygkgelblGA7NWfy",
+          "secondaryId": "txn_1Sm1l6E4pygkgelbq84mPVHP",
+          "amount": -64.83,
+          "currency": "USD",
+          "date": "2026-01-05",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        }
+      ]
+    },
+    {
+      "key": "payout|-86.44|STRIPE PAYOUT",
+      "count": 1,
+      "sample": {
+        "primaryId": "po_1SrT3uE4pygkgelbDUwSJjXx",
+        "secondaryId": "txn_1SrT3vE4pygkgelb3wXpmUXe",
+        "amount": -86.44,
+        "currency": "USD",
+        "date": "2026-01-20",
+        "type": "payout",
+        "description": "STRIPE PAYOUT",
+        "isEmpty": false
+      },
+      "total": -86.44,
+      "rows": [
+        {
+          "primaryId": "po_1SrT3uE4pygkgelbDUwSJjXx",
+          "secondaryId": "txn_1SrT3vE4pygkgelb3wXpmUXe",
+          "amount": -86.44,
+          "currency": "USD",
+          "date": "2026-01-20",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        }
+      ]
+    },
+    {
+      "key": "payout|-43.22|STRIPE PAYOUT",
+      "count": 1,
+      "sample": {
+        "primaryId": "po_1SkwXeE4pygkgelbxMAmrVy8",
+        "secondaryId": "txn_1SkwXfE4pygkgelb0X9cLAYp",
+        "amount": -43.22,
+        "currency": "USD",
+        "date": "2026-01-02",
+        "type": "payout",
+        "description": "STRIPE PAYOUT",
+        "isEmpty": false
+      },
+      "total": -43.22,
+      "rows": [
+        {
+          "primaryId": "po_1SkwXeE4pygkgelbxMAmrVy8",
+          "secondaryId": "txn_1SkwXfE4pygkgelb0X9cLAYp",
+          "amount": -43.22,
+          "currency": "USD",
+          "date": "2026-01-02",
+          "type": "payout",
+          "description": "STRIPE PAYOUT",
+          "isEmpty": false
+        }
+      ]
+    }
+  ],
+  "mappingBroken": true,
+  "brokenCount": 6
+};
+
+/* Pattern cluster the 44 missing-in-acc items by type+amount */
+function clusterRows(rows) {
+  const groups = {};
+  for (const r of rows) {
+    const key = r.type + '|' + r.amount + '|' + (r.description || '');
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(r);
+  }
+  return Object.entries(groups)
+    .map(([k, rs]) => ({ key: k, rows: rs, total: rs.reduce((s, r) => s + (r.amount || 0), 0), sample: rs[0], count: rs.length }))
+    .sort((a, b) => b.count - a.count);
+}
+
+function fmtAmount(n, currency) {
+  if (n === null || n === undefined) return '<span class="null-cell"></span>';
+  const formatted = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const sign = n < 0 ? '-' : '';
+  return sign + formatted + ' ' + (currency || '');
+}
+
+function fmtDate(d) {
+  if (!d) return '<span class="null-cell"></span>';
+  // "2026-01-30" → "Jan 30, 2026"
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : (s || ''); }
+
+function sumAmounts(rows) {
+  return rows.reduce((s, r) => s + (r.amount || 0), 0);
+}
+
+/* ============================================================
+   CURRENT VIEW — accurate recreation of Synder's current design
+   ============================================================ */
+function renderCurrent() {
+  const m = DATA.meta;
+  const s = DATA.summary;
+  const accRows = DATA.missingInAcc.slice(0, 25);
+  const ppRows = DATA.missingInPp;
+
+  return `
+  <div class="topbar-wrap">
+    <div class="app-topbar">
+      <span class="close">✕</span>
+      <span class="crumb">Reconciliation results</span>
+      <div class="spacer"></div>
+      <button class="btn-outline">Refresh data</button>
+    </div>
+  </div>
+
+  <div class="page">
+  <div class="page-header">
+    <div class="actions">
+      <button>Process log</button>
+      <button>Export ▾</button>
+    </div>
+    <h1>${m.title}
+      <span class="badge badge-green">Finished</span>
+      <span class="badge badge-yellow">Not reconciled</span>
+    </h1>
+    <div class="sub">${m.integrationName} / ${fmtDate(m.dateFrom)} – ${fmtDate(m.dateTo)}</div>
+    <div style="clear:both"></div>
+  </div>
+
+  <div class="warning-bar">
+    <span class="icon">⚠</span>
+    <div class="msg">Resolve all transactions in Not matched and Discrepancy to finish reconciliation.</div>
+    <span class="close-x">✕</span>
+  </div>
+
+  <div class="tabs">
+    <button>Matched <span class="count">${s.matchedCount}</span></button>
+    <button>Discrepancy <span class="count">${s.discrepancyCount}</span></button>
+    <button class="active">Not matched <span class="count">${s.notMatchedCount}</span></button>
+    <button>Ignored <span class="count">${s.ignoredCount}</span></button>
+  </div>
+
+  <div class="panels current-mode">
+    <div class="panel">
+      <h2>Missing in accounting</h2>
+      <div class="filter-bar">
+        <div class="row">
+          <div><label>Search</label><input placeholder="Search..."></div>
+          <div><label>Date from</label><input placeholder="📅 mm/dd/yyyy"></div>
+          <div><label>Date to</label><input placeholder="📅 mm/dd/yyyy"></div>
+          <div><label>Amount</label><input placeholder="Amount"></div>
+        </div>
+        <div class="actions">
+          <button class="btn-primary">Apply</button>
+          <button class="btn-outline">Reset filters</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <div class="tbl-scroll">
+        <table class="tbl" id="accTbl">
+          <thead id="accThead"><tr>
+            <th class="col-check"><input type="checkbox" onchange="toggleAllPanel('acc',this)"></th>
+            <th class="col-date sort">Date</th>
+            <th class="col-id sort">Primary ID</th>
+            <th class="col-id sort">Secondary ID</th>
+            <th class="col-type sort">Type</th>
+            <th class="col-amt sort num">Amount</th>
+            <th class="col-desc" title="Description">i</th>
+            <th class="col-act"></th>
+          </tr></thead>
+          <!-- Bulk action row — replaces header when rows selected -->
+          <tbody class="tbl-bulk-hdr" id="accBulkHdr">
+            <tr>
+              <td colspan="8">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" checked onchange="toggleAllPanel('acc',this)" style="flex-shrink:0">
+                  <span class="bulk-info"><span id="accBulkCnt">0</span> selected</span>
+                  <div class="bulk-actions" style="margin-left:8px">
+                    <button class="prim">⇄ Match selected</button>
+                    <button>Mark as expected</button>
+                    <button>Ignore selected</button>
+                    <button class="close-x" onclick="clearBulkPanel('acc')">×</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+          <tbody id="accBody">
+            ${accRows.map(r => `
+              <tr>
+                <td class="col-check"><input type="checkbox" class="acc-row-check" onchange="updateBulkPanel('acc')"></td>
+                <td class="col-date">${fmtDate(r.date)}</td>
+                <td class="col-id">${renderIdCell(r.primaryId)}</td>
+                <td class="col-id">${renderIdCell(r.secondaryId)}</td>
+                <td class="col-type">${r.type}</td>
+                <td class="col-amt num ${r.amount < 0 ? 'neg' : ''}">${fmtAmount(r.amount, r.currency)}</td>
+                <td class="col-desc">${r.description ? `<span class="info-ic" tabindex="0">i<span class="tip">${r.description}</span></span>` : ''}</td>
+                <td class="col-act"><button class="ignore-btn">Ignore</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        </div><!-- /tbl-scroll -->
+        <div class="tbl-footer">
+          <div class="range">
+            <div class="per-page">Rows per page: <select><option>25</option><option>50</option></select></div>
+            <div>1–25 of 44</div>
+          </div>
+          <div class="pager">
+            <button disabled>|◁</button><button disabled>◁</button>
+            <button class="current">1</button><button>2</button>
+            <button>▷</button><button>▷|</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Missing in integration</h2>
+      <div class="filter-bar">
+        <div class="row">
+          <div><label>Search</label><input placeholder="Search..."></div>
+          <div><label>Date from</label><input placeholder="📅 mm/dd/yyyy"></div>
+          <div><label>Date to</label><input placeholder="📅 mm/dd/yyyy"></div>
+          <div><label>Amount</label><input placeholder="Amount"></div>
+        </div>
+        <div class="actions">
+          <button class="btn-primary">Apply</button>
+          <button class="btn-outline">Reset filters</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <div class="tbl-scroll">
+        <table class="tbl" id="ppTbl">
+          <thead id="ppThead"><tr>
+            <th class="col-check"><input type="checkbox" onchange="toggleAllPanel('pp',this)"></th>
+            <th class="col-date sort">Date</th>
+            <th class="col-id sort">Primary ID</th>
+            <th class="col-id sort">Secondary ID</th>
+            <th class="col-type sort">Type</th>
+            <th class="col-amt sort num">Amount</th>
+            <th class="col-desc" title="Description">i</th>
+            <th class="col-act"></th>
+          </tr></thead>
+          <tbody class="tbl-bulk-hdr" id="ppBulkHdr">
+            <tr>
+              <td colspan="8">
+                <div style="display:flex;align-items:center;gap:8px">
+                  <input type="checkbox" checked onchange="toggleAllPanel('pp',this)" style="flex-shrink:0">
+                  <span class="bulk-info"><span id="ppBulkCnt">0</span> selected</span>
+                  <div class="bulk-actions" style="margin-left:8px">
+                    <button class="prim">⇄ Match selected</button>
+                    <button>Ignore selected</button>
+                    <button class="close-x" onclick="clearBulkPanel('pp')">×</button>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+          <tbody id="ppBody">
+            ${ppRows.map(r => `
+              <tr style="${!r.date && r.amount===null ? 'background:var(--red-l)' : ''}">
+                <td class="col-check"><input type="checkbox" class="pp-row-check" onchange="updateBulkPanel('pp')"></td>
+                <td class="col-date">${fmtDate(r.date)}</td>
+                <td class="col-id">${renderIdCell(r.primaryId)}</td>
+                <td class="col-id">${r.secondaryId ? renderIdCell(r.secondaryId) : '—'}</td>
+                <td class="col-type">${r.type}</td>
+                <td class="col-amt num">${r.amount !== null ? fmtAmount(r.amount, r.currency) : (r.secondaryId ? '<span style="color:var(--g50)" title="Amount landed in Secondary ID due to column mapping error">' + r.secondaryId + ' ' + r.currency + '</span>' : '—')}</td>
+                <td class="col-desc">${r.description ? `<span class="info-ic" tabindex="0">i<span class="tip">${r.description}</span></span>` : ''}</td>
+                <td class="col-act"><button class="ignore-btn">Ignore</button></td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+        </div><!-- /tbl-scroll -->
+        <div class="tbl-footer">
+          <div class="range">
+            <div class="per-page">Rows per page: <select><option>25</option></select></div>
+            <div>1–6 of 6</div>
+          </div>
+          <div class="pager">
+            <button disabled>|◁</button><button disabled>◁</button>
+            <button class="current">1</button>
+            <button disabled>▷</button><button disabled>▷|</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-notes">
+    <h4>🔍 Dasha's notes on the current view</h4>
+    <ul>
+      <li><b>Duplicated filter bars</b> — left and right panels have identical filters that can't share state. Users filter twice for every action.</li>
+      <li><b>Scary warning with no path</b> — "Resolve all transactions" but with no bulk tools, no grouping, no way to see patterns. 44 items feels infinite.</li>
+      <li><b>The 6 broken rows on the right are invisible</b> — they have null dates and null amounts because of a column mapping error, but the UI shows them as if they're legitimate unmatched items. The user will never know their mapping was wrong.</li>
+      <li><b>Ignore is the only bulk action</b> — users can select checkboxes but there's no bulk button.</li>
+      <li><b>No totals anywhere</b> — users can't see the dollar impact of unmatched items at a glance.</li>
+      <li><b>Primary/Secondary ID columns are narrow</b> — all IDs truncated to "po_1Sv5SEE…" with no hover copy button. Useless for investigation.</li>
+      <li><b>No way to manually match</b> across panels — you can see $21.61 on both sides but can't say "these are the same".</li>
+    </ul>
+  </div>
+  </div><!-- /page -->
+  `;
+}
+
+/* ============================================================
+   IMPROVED VIEW — proposed prototype
+   ============================================================ */
+function renderImproved() {
+  const m = DATA.meta;
+  const s = DATA.summary;
+  const clusters = clusterRows(DATA.missingInAcc);
+  const brokenRows = DATA.missingInPp.filter(r => r.amount === null);
+  const validPpRows = DATA.missingInPp.filter(r => r.amount !== null);
+
+  const totalAcc = sumAmounts(DATA.missingInAcc);
+  const totalPp = sumAmounts(DATA.missingInPp.filter(r => r.amount !== null));
+
+  const totalTx = s.matchedCount + s.discrepancyCount + s.notMatchedCount + s.ignoredCount;
+  const pct = n => totalTx > 0 ? (n / totalTx * 100) : 0;
+
+  return `
+  <div class="topbar-wrap">
+    <div class="app-topbar">
+      <span class="close">✕</span>
+      <span class="crumb">Reconciliation results</span>
+      <div class="spacer"></div>
+      <button class="btn-outline">Refresh data</button>
+    </div>
+  </div>
+
+  <div class="page">
+  <div class="page-header">
+    <div class="actions">
+      <button>Process log</button>
+      <button>Export ▾</button>
+    </div>
+    <h1>${m.title}
+      <span class="badge badge-green">Finished</span>
+      <span class="badge badge-yellow">50 to resolve</span>
+    </h1>
+    <div class="sub">${m.integrationName} / ${fmtDate(m.dateFrom)} – ${fmtDate(m.dateTo)} · ${m.currency}</div>
+    <div style="clear:both"></div>
+  </div>
+
+  <!-- 💡 Smart banner: auto-detected column mapping issue -->
+  <div class="smart-banner">
+    <div class="icon">!</div>
+    <div class="content">
+      <h3>Your accounting file has a column mapping problem</h3>
+      <p>6 transactions from your accounting file are missing dates and amounts — the <code>created</code> column was mapped to <b>Amount</b> and <code>reporting_category</code> was mapped to <b>Date</b>. Synder can't match them until the mapping is fixed.</p>
+      <div class="cta">
+        <button class="btn-primary">Fix column mapping</button>
+        <button class="btn-text">See which rows →</button>
+        <button class="btn-text">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Progress snapshot -->
+  <div class="progress-bar">
+    <div class="metric ok">
+      <div class="label">Matched</div>
+      <div class="value">${s.matchedCount}</div>
+    </div>
+    <div class="divider"></div>
+    <div class="metric">
+      <div class="label">Discrepancy</div>
+      <div class="value">${s.discrepancyCount}</div>
+    </div>
+    <div class="divider"></div>
+    <div class="metric warn">
+      <div class="label">Not matched</div>
+      <div class="value">${s.notMatchedCount}</div>
+    </div>
+    <div class="divider"></div>
+    <div class="metric">
+      <div class="label">Ignored</div>
+      <div class="value">${s.ignoredCount}</div>
+    </div>
+    <div class="divider"></div>
+    <div class="progress">
+      <div class="label" style="font-size:11px;color:var(--g50);text-transform:uppercase;font-weight:500;letter-spacing:.4px;margin-bottom:8px;">Reconciliation progress</div>
+      <div class="track">
+        <div class="seg-matched" style="width:${pct(s.matchedCount)}%"></div>
+        <div class="seg-discr" style="width:${pct(s.discrepancyCount)}%"></div>
+        <div class="seg-notmatched" style="width:${pct(s.notMatchedCount)}%"></div>
+        <div class="seg-ignored" style="width:${pct(s.ignoredCount)}%"></div>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--green)"></span>${s.matchedCount}</span>
+        <span><span class="dot" style="background:var(--yellow)"></span>${s.discrepancyCount}</span>
+        <span><span class="dot" style="background:var(--red)"></span>${s.notMatchedCount}</span>
+        <span><span class="dot" style="background:var(--g30)"></span>${s.ignoredCount}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button>Matched <span class="count">${s.matchedCount}</span></button>
+    <button>Discrepancy <span class="count">${s.discrepancyCount}</span></button>
+    <button class="active has-alert">Not matched <span class="count">${s.notMatchedCount}</span></button>
+    <button>Ignored <span class="count">${s.ignoredCount}</span></button>
+  </div>
+
+  <!-- SHARED single filter bar with chip-based type filter -->
+  <div class="shared-filter">
+    <div class="field"><label>Search</label><input placeholder="Search by ID, amount, description..."></div>
+    <div class="field"><label>Date range</label><input type="date" value="2026-01-01"></div>
+    <div class="field"><label>to</label><input type="date" value="2026-01-31"></div>
+    <div class="field"><label>Amount</label><input placeholder="e.g. 21.61 or >100"></div>
+    <div class="actions">
+      <button class="btn-primary">Apply</button>
+      <button class="btn-ghost">Reset</button>
+    </div>
+  </div>
+  <div class="shared-filter" style="margin-top:-12px;">
+    <div class="field wide">
+      <label>Quick filters</label>
+      <div class="chips">
+        <span class="chip active">All types</span>
+        <span class="chip">Charges (24)</span>
+        <span class="chip">Payouts (20)</span>
+        <span class="chip">⚠ Broken rows (6)</span>
+        <span class="chip">Negative only</span>
+        <span class="chip">Over $100</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bulk selection bar (hidden by default, shown when items are checked) -->
+  <div class="bulk-bar" id="bulkBar" style="display:none;">
+    <span class="count"><span id="bulkCount">0</span> selected</span>
+    <div class="spacer"></div>
+    <button class="primary">⇄ Match selected</button>
+    <button>Mark as expected</button>
+    <button>Ignore selected</button>
+    <button class="close" onclick="clearBulk()">✕</button>
+  </div>
+
+  <div class="panels">
+    <!-- LEFT: Missing in accounting (clustered) -->
+    <div class="panel">
+      <h2>Missing in accounting <span class="count-pill">${DATA.missingInAcc.length} items · ${totalAcc < 0 ? '-' : ''}${Math.abs(totalAcc).toFixed(2)} ${m.currency}</span></h2>
+
+      ${clusters.map((c, idx) => `
+        <div class="cluster ${idx === 0 ? 'expanded' : ''}" id="cluster-${idx}">
+          <div class="cluster-header" onclick="toggleCluster(${idx}, event)">
+            <span class="chevron">▶</span>
+            <input type="checkbox" onclick="event.stopPropagation();toggleBulk()">
+            <div class="summary">
+              <div class="title">${c.count}× ${c.sample.type} of ${fmtAmount(c.sample.amount, c.sample.currency)}${c.sample.description ? ' — ' + c.sample.description : ''}</div>
+              <div class="meta">${fmtDate(c.rows[c.rows.length-1].date)} → ${fmtDate(c.rows[0].date)} · looks like recurring subscription pattern</div>
+            </div>
+            <div class="total ${c.total < 0 ? 'neg' : ''}">${c.total < 0 ? '-' : ''}${Math.abs(c.total).toFixed(2)} ${m.currency}</div>
+            <div class="actions" onclick="event.stopPropagation()">
+              <button>Match all →</button>
+              <button>Ignore all</button>
+            </div>
+          </div>
+          <div class="cluster-body">
+            <table class="tbl">
+              <thead><tr><th class="check-col"></th><th>Date</th><th>Primary ID</th><th>Secondary ID</th><th class="num">Amount</th></tr></thead>
+              <tbody>
+                ${c.rows.slice(0, 6).map(r => `
+                  <tr>
+                    <td class="check-col"><input type="checkbox" onclick="toggleBulk()"></td>
+                    <td>${fmtDate(r.date)}</td>
+                    <td class="id" title="${r.primaryId}">${truncate(r.primaryId, 24)}</td>
+                    <td class="id" title="${r.secondaryId}">${truncate(r.secondaryId, 24)}</td>
+                    <td class="num ${r.amount < 0 ? 'neg' : ''}">${fmtAmount(r.amount, r.currency)}</td>
+                  </tr>`).join('')}
+                ${c.rows.length > 6 ? `<tr><td colspan="5" style="text-align:center;padding:12px;color:var(--g50);"><a href="#" onclick="return false;">Show all ${c.rows.length} rows</a></td></tr>` : ''}
+              </tbody>
+            </table>
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <!-- RIGHT: Missing in integration -->
+    <div class="panel">
+      <h2>Missing in integration <span class="count-pill">${DATA.missingInPp.length} items</span></h2>
+
+      ${brokenRows.length > 0 ? `
+      <div class="cluster expanded" style="border-color:#F4C2C2;">
+        <div class="cluster-header" style="background:var(--red-l);">
+          <span class="chevron">▼</span>
+          <input type="checkbox" onclick="event.stopPropagation();toggleBulk()">
+          <div class="summary">
+            <div class="title" style="color:var(--red);">⚠ ${brokenRows.length} rows with broken column mapping</div>
+            <div class="meta">Dates and amounts are missing. Fix the column mapping to resolve these automatically.</div>
+          </div>
+          <div class="actions" onclick="event.stopPropagation()">
+            <button style="border-color:var(--red);color:var(--red);">Fix mapping →</button>
+          </div>
+        </div>
+        <div class="cluster-body">
+          <table class="tbl">
+            <thead><tr><th class="check-col"></th><th>Date</th><th>Primary ID</th><th>Secondary ID</th><th>Type</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+              ${brokenRows.map(r => `
+                <tr class="row-error">
+                  <td class="check-col"><input type="checkbox" onclick="toggleBulk()"></td>
+                  <td><span class="null-cell"></span></td>
+                  <td class="id" title="${r.primaryId}">${truncate(r.primaryId, 24)}</td>
+                  <td class="id">${r.secondaryId}</td>
+                  <td>${r.type}</td>
+                  <td class="num"><span class="null-cell"></span></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      ${validPpRows.length > 0 ? `
+      <div class="cluster expanded">
+        <div class="cluster-header">
+          <span class="chevron">▼</span>
+          <input type="checkbox" onclick="event.stopPropagation();toggleBulk()">
+          <div class="summary">
+            <div class="title">${validPpRows.length} valid unmatched items</div>
+            <div class="meta">Review individually</div>
+          </div>
+        </div>
+        <div class="cluster-body">
+          <table class="tbl">
+            <thead><tr><th class="check-col"></th><th>Date</th><th>Primary ID</th><th>Type</th><th class="num">Amount</th></tr></thead>
+            <tbody>
+              ${validPpRows.map(r => `
+                <tr>
+                  <td class="check-col"><input type="checkbox" onclick="toggleBulk()"></td>
+                  <td>${fmtDate(r.date)}</td>
+                  <td class="id" title="${r.primaryId}">${truncate(r.primaryId, 24)}</td>
+                  <td>${r.type}</td>
+                  <td class="num ${(r.amount||0) < 0 ? 'neg' : ''}">${fmtAmount(r.amount, r.currency)}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      <div style="background:var(--primary-5);border:1px dashed var(--primary);border-radius:6px;padding:16px;text-align:center;margin-top:16px;color:var(--g50);font-size:13px;">
+        💡 <b>Reconciliation insight:</b> The 44 items on the left appear to be a single recurring Stripe subscription ($21.61/day).<br>
+        Once you fix the column mapping on the right, Synder will likely match all 44 automatically.
+      </div>
+    </div>
+  </div>
+
+  <div class="proto-notes">
+    <h4>✨ What changed in the improved view</h4>
+    <ul>
+      <li><b>Auto-detected root cause</b> — the column mapping error that caused 6 broken rows is surfaced as an actionable banner with a one-click fix.</li>
+      <li><b>Pattern clustering</b> — the 44 left-side items collapse into 5 clusters (24× charge $21.61, 15× payout -$21.61, etc.) so users see the <i>story</i> instead of 44 lookalike rows.</li>
+      <li><b>Bulk actions per cluster</b> — Match all / Ignore all at the cluster level. One click resolves the whole recurring subscription pattern.</li>
+      <li><b>Progress snapshot</b> replaces the scary warning banner with a calm visualization of what's done / to do.</li>
+      <li><b>Single shared filter bar</b> — no more duplicated search/date/amount fields. Chips for quick type filtering.</li>
+      <li><b>Bulk selection bar</b> appears when items are selected, with Match / Mark expected / Ignore actions (matches existing Match modal pattern if it exists).</li>
+      <li><b>Totals in panel headers</b> — users see the dollar impact at a glance.</li>
+      <li><b>Broken rows visually distinct</b> — red tint, italic dashes for null fields, dedicated cluster with "Fix mapping" CTA.</li>
+      <li><b>Insight footer</b> — helps users connect the two sides ("44 items look like a recurring pattern — fixing mapping will likely auto-match them").</li>
+    </ul>
+  </div>
+  </div><!-- /page -->
+  `;
+}
+
+/* ============================================================
+   SIDE-BY-SIDE VIEW
+   ============================================================ */
+function renderSide() {
+  return `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding-top:20px;">
+      <div style="border:2px solid var(--g20);border-radius:8px;overflow:hidden;background:var(--white);">
+        <div style="background:var(--g10);padding:10px 16px;font-weight:700;font-size:13px;border-bottom:1px solid var(--g20);">📸 CURRENT (Synder v11.6.85)</div>
+        <div style="transform:scale(.58);transform-origin:top left;width:172.4%;height:820px;overflow:hidden;">
+          ${renderCurrent()}
+        </div>
+      </div>
+      <div style="border:2px solid var(--primary);border-radius:8px;overflow:hidden;background:var(--white);">
+        <div style="background:var(--primary-10);padding:10px 16px;font-weight:700;font-size:13px;border-bottom:1px solid var(--primary);color:var(--primary);">✨ PROPOSED</div>
+        <div style="transform:scale(.58);transform-origin:top left;width:172.4%;height:820px;overflow:hidden;">
+          ${renderImproved()}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* Mode switcher */
+function setMode(mode) {
+  const root = document.getElementById('pageRoot');
+  document.querySelectorAll('.proto-bar .seg button').forEach(b => b.classList.remove('active'));
+  document.getElementById('mode-' + mode).classList.add('active');
+  const tag = document.getElementById('modeTag');
+  if (mode === 'current') {
+    root.innerHTML = renderCurrent();
+    tag.textContent = 'CURRENT';
+    tag.style.background = 'rgba(180,187,203,.3)';
+  } else if (mode === 'side') {
+    root.innerHTML = renderSide();
+    tag.textContent = 'SIDE BY SIDE';
+    tag.style.background = 'rgba(123,97,255,.3)';
+  } else {
+    root.innerHTML = renderImproved();
+    tag.textContent = 'IMPROVED';
+    tag.style.background = 'rgba(31,137,64,.4)';
+  }
+  window.scrollTo(0, 0);
+}
+
+/* Middle-truncate IDs: show first N and last M chars */
+const COPY_ICON = `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="8" height="9" rx="1"/><path d="M3 11V3a1 1 0 0 1 1-1h8"/></svg>`;
+
+function midTruncate(id, totalLen) {
+  if (!id) return '—';
+  if (id.length <= totalLen) return id;
+  const half = Math.floor((totalLen - 3) / 2);
+  return id.slice(0, half) + '…' + id.slice(-half);
+}
+
+function renderIdCell(id) {
+  if (!id) return '<span style="color:var(--g30)">—</span>';
+  const display = midTruncate(id, 22);
+  const esc = id.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+  return `<span class="id-cell"><span class="id-text">${display}</span><span class="id-full-tip">${id}</span><span class="id-copy-wrap"><button title="Copy full ID" onclick="event.stopPropagation();navigator.clipboard.writeText('${esc}').then(()=>showCopied(this))">${COPY_ICON}</button></span></span>`;
+}
+
+function showCopied(el) {
+  el.style.color = 'var(--green)';
+  setTimeout(() => { el.style.color = ''; }, 1000);
+}
+
+/* Bulk action bar — replaces table header */
+function updateBulkPanel(panel) {
+  const cls = panel === 'acc' ? 'acc-row-check' : 'pp-row-check';
+  const bulkHdr = document.getElementById(panel + 'BulkHdr');
+  const realHdr = document.getElementById(panel + 'Thead');
+  const tbl = document.getElementById(panel + 'Tbl');
+  const cnt = document.getElementById(panel + 'BulkCnt');
+  const checked = document.querySelectorAll('.' + cls + ':checked').length;
+  if (bulkHdr) bulkHdr.classList.toggle('visible', checked > 0);
+  if (realHdr) realHdr.style.display = checked > 0 ? 'none' : '';
+  if (cnt) cnt.textContent = checked;
+}
+function toggleAllPanel(panel, cb) {
+  const cls = panel === 'acc' ? 'acc-row-check' : 'pp-row-check';
+  document.querySelectorAll('.' + cls).forEach(c => c.checked = cb.checked);
+  updateBulkPanel(panel);
+}
+function clearBulkPanel(panel) {
+  const cls = panel === 'acc' ? 'acc-row-check' : 'pp-row-check';
+  document.querySelectorAll('.' + cls).forEach(c => c.checked = false);
+  // Also uncheck header checkboxes in this panel
+  const hdrId = panel === 'acc' ? 'accThead' : 'ppThead';
+  const bulkId = panel === 'acc' ? 'accBulkHdr' : 'ppBulkHdr';
+  [hdrId, bulkId].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+  });
+  updateBulkPanel(panel);
+}
+
+function toggleCluster(idx, event) {
+  if (event && (event.target.closest('.actions') || event.target.closest('input'))) return;
+  document.getElementById('cluster-' + idx).classList.toggle('expanded');
+}
+
+function toggleBulk() {
+  const checked = document.querySelectorAll('.tbl input[type=checkbox]:checked, .cluster-header input[type=checkbox]:checked').length;
+  const bar = document.getElementById('bulkBar');
+  if (bar) {
+    bar.style.display = checked > 0 ? 'flex' : 'none';
+    const cnt = document.getElementById('bulkCount');
+    if (cnt) cnt.textContent = checked;
+  }
+}
+
+function clearBulk() {
+  document.querySelectorAll('input[type=checkbox]:checked').forEach(c => c.checked = false);
+  toggleBulk();
+}
+
+// Initial render — Current first by default
+setMode('current');
+</script>
+</body>
+</html>

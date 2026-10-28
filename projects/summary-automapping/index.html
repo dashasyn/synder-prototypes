@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary — automapping on first visit</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+<style>
+/* Two decisions on one dataset (Ignat, 2026-10-27, topic "Mapping page"):
+     1 · Premapped — suggestions are filled in but not saved; grouped Needs attention / Suggested / Mapped
+     2 · Fully saved — suggestions are saved; one plain list, as production
+   Both: bank accounts and unsure groups stay empty. Every text is ≥14px. */
+body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--color-white);
+  font-family:var(--font-family);font-size:14px;color:var(--text-primary)}
+.mi{font-family:'Material Icons Outlined';font-weight:normal;font-style:normal;font-size:22px;line-height:1;
+  display:inline-block;-webkit-font-smoothing:antialiased;font-feature-settings:'liga';text-transform:none;
+  letter-spacing:normal;white-space:nowrap}
+
+/* ── prototype switch — not product chrome ── */
+.variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);color:var(--color-white);
+  padding:8px 20px;flex-shrink:0;font-size:14px}
+.variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;text-transform:uppercase}
+.variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+.variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);font-family:inherit;font-size:14px;
+  padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.variant-switch button:hover{color:var(--color-white)}
+.variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+.variant-switch .vs-sep{width:1px;align-self:stretch;background:rgba(255,255,255,.2);margin:0 8px}
+
+.screen{flex:1;min-height:0;display:none}
+.screen.on{display:flex}
+
+/* ── Onboarding (copy of reports/onboarding-sync-mode, preview removed) ── */
+#scr-onb{flex-direction:column;overflow-y:auto}
+.ob-top{height:59px;flex-shrink:0;display:flex;align-items:center;gap:8px;padding:0 24px;
+  border-bottom:1px solid var(--border-default);background:var(--bg-surface)}
+.ob-logo{font-weight:500;font-size:var(--font-subtitle1);color:var(--color-primary)}
+.ob-wrap{max-width:900px;width:100%;margin:0 auto;padding:40px 24px 64px;box-sizing:border-box}
+.ob-sub{font-size:var(--font-body1);line-height:var(--font-body1-line-height);
+  letter-spacing:var(--font-body1-letter-spacing);color:var(--text-secondary);margin:4px 0 28px}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+.mode{position:relative;display:block;border:1px solid var(--border-default);
+  border-radius:var(--radius-md);background:var(--bg-surface);padding:20px;cursor:pointer;
+  transition:border-color .12s,box-shadow .12s}
+.mode:hover{border-color:var(--border-strong)}
+.mode.sel{border-color:var(--color-primary);box-shadow:inset 0 0 0 1px var(--color-primary)}
+.mode-head{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.mode .rec-chip{margin-left:auto}
+.mode-name{font-size:var(--font-subtitle1);font-weight:var(--font-subtitle1-weight);
+  letter-spacing:var(--font-subtitle1-letter-spacing);cursor:pointer}
+.mode-body{margin-left:28px}
+.mode-desc{font-size:var(--font-body2);line-height:var(--font-body2-line-height);
+  letter-spacing:var(--font-body2-letter-spacing);color:var(--text-secondary);margin:0 0 14px}
+.mode-lines{list-style:none;padding:0;margin:0;font-size:var(--font-body2);line-height:var(--font-body2-line-height);
+  letter-spacing:var(--font-body2-letter-spacing)}
+.mode-lines li{padding:4px 0;display:flex;gap:8px;align-items:flex-start;color:var(--text-primary)}
+.mode-lines li .material-icons{font-size:18px;color:var(--color-green);flex-shrink:0}
+.mode-down{margin:12px 0 0;padding-top:10px;border-top:1px solid var(--border-light);
+  font-size:var(--font-body2);line-height:var(--font-body2-line-height);
+  letter-spacing:var(--font-body2-letter-spacing);color:var(--text-secondary);display:flex;gap:8px}
+.mode-down .material-icons{font-size:18px;color:var(--text-muted);flex-shrink:0}
+/* the new control: directly under the Summary description */
+.automap{display:flex;align-items:center;gap:6px;margin:12px 0 0;padding-top:12px;border-top:1px solid var(--border-light)}
+.automap.off{opacity:.5}
+.tip{position:relative;display:inline-flex}
+.tip-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;background:none;
+  padding:0;border-radius:50%;color:var(--text-secondary);cursor:help}
+.tip-btn:hover,.tip-btn:focus-visible{color:var(--color-primary);background:var(--color-primary-5);outline:none}
+.tip-btn .material-icons{font-size:18px}
+.tip-pop{display:none;position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:300px;
+  background:var(--color-grey);color:#fff;font-size:14px;line-height:20px;padding:8px 12px;border-radius:4px;z-index:5;
+  box-shadow:0 2px 8px rgba(0,0,0,.2);cursor:default}
+.tip:hover .tip-pop,.tip-btn:focus + .tip-pop{display:block}
+.ob-actions{display:flex;justify-content:space-between;margin-top:28px}
+
+/* ── App shell: live Summary sidebar (structure from demo.synderapp.com capture) ── */
+#scr-map{flex-direction:row}
+.sb{--sb-bg:#F5F5F5;--sb-fg:#424242;--sb-ic:#1E73E8;--sb-div:#DADADA;--sb-hover:#EBEBEB;--sb-on:#3B82F6;--sb-open:#E3E3E3;
+  width:224px;flex-shrink:0;border-right:1px solid var(--sb-div);display:flex;flex-direction:column;
+  background:var(--sb-bg);color:var(--sb-fg);overflow-y:auto}
+.sb-org{display:flex;align-items:center;gap:10px;height:56px;padding:0 12px 0 14px;flex-shrink:0;
+  border-bottom:1px solid var(--sb-div);color:var(--text-primary)}
+.sb-org .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-av{width:28px;height:28px;border-radius:50%;background:#C2185B;font-size:14px;color:#fff;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0}
+.sb-item{display:flex;align-items:center;gap:12px;min-height:40px;padding:0 8px 0 12px;color:var(--sb-fg);
+  border-bottom:1px solid var(--sb-div);text-decoration:none;flex-shrink:0;cursor:pointer}
+.sb-item:hover{background:var(--sb-hover)}
+.sb-item .mi{color:var(--sb-ic);flex-shrink:0}
+.sb-item .lb{flex:1;min-width:0;line-height:20px;padding:10px 0}
+.sb-item.open{background:var(--sb-open)}
+.sb-item.sub{padding-left:36px;border-bottom:none}
+.sb-item.on{background:var(--sb-on);color:#fff}
+.sb-item.on .mi{color:#fff}
+.sb-subs{border-bottom:1px solid var(--sb-div)}
+.sb-gap{margin-top:40px;border-top:1px solid var(--sb-div)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar-x{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:16px;
+  padding:0 24px;border-bottom:1px solid var(--border-default)}
+.topbar-x .mi{color:var(--text-secondary)}
+/* live top bar (Ignat's screenshot 2026-10-28): Balance with blue underline, How it works?, blue bell, ? and user with chevrons */
+.topbar-x{gap:24px}
+.tb-bal{display:inline-flex;align-items:baseline;gap:6px;padding:6px 0;border-bottom:3px solid #3B82F6;border-radius:2px;
+  text-decoration:none;font-size:16px}
+.tb-bal .lbl{color:#6B778C}
+.tb-bal .num{color:#1E73E8;font-weight:500;font-size:18px}
+.tb-link{color:#1E73E8;text-decoration:none;font-size:16px}
+.tb-link:hover{text-decoration:underline}
+.tb-ic{color:#1E73E8;font-size:26px;cursor:pointer}
+.tb-help{font-size:28px}
+.tb-dd{display:inline-flex;align-items:center;gap:2px;cursor:pointer}
+.tb-chev{color:#1E73E8;font-size:20px}
+.page{flex:1;overflow-y:auto;padding:24px}
+
+/* Measured on live demo (DS_test_2_dasha, 2026-10-27 20:40):
+   filters panel #EFF1F5, padding 16, labels 14/600, Reset filters only (no Apply) + Enable locations/classes toggles;
+   tabs, table and pager sit in one card with a 1px #DFE4EC border, square corners;
+   header row 52 + 1px #E0E0E0, header text 14px weight 900, black;
+   body rows 52 + 1px #E0E0E0, cell padding 0 10px, text black; unmapped rows tinted #FFF1DD;
+   Account combobox 241×32, 1px #DFE4EC, radius 4. Columns 40/221/221/180/221/261. */
+.filters{background:#EFF1F5;padding:16px;margin-bottom:16px}
+.f-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.f-row label{display:block;font-weight:600;color:#000;margin-bottom:4px}
+.f-act{display:flex;align-items:center;gap:24px;margin-top:12px}
+.f-tog{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.f-tog .mi{font-size:16px;color:var(--text-muted)}
+
+.map-card{border:1px solid #DFE4EC;background:#fff}
+.tabs-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 14px 0 8px;border-bottom:1px solid #E0E0E0}
+.tabs-row .tabs{border-bottom:none;margin-bottom:0;padding:0;gap:0;min-width:0}
+.tabs-row .tab{height:48px;box-sizing:border-box;padding:12px 16px;font-weight:500;gap:6px}
+.tab-act{display:flex;gap:8px}
+.tab-act .btn .material-icons{font-size:20px;margin-right:-6px}
+.pi{width:20px;height:20px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
+.pi-st{background:#635bff}.pi-sh{background:#5c8c3e}.pi-am{background:#232F3E}.pi-pp{background:#003087}
+
+.table-wrap.map{box-shadow:none;border-radius:0;overflow:visible}
+.map table.synder-table thead th{position:sticky;top:-24px;z-index:2;height:53px;padding:0 10px;font-weight:900;color:#000;
+  border-bottom:1px solid #E0E0E0}   /* .page has 24px top padding */
+.map table.synder-table tbody td{height:53px;padding:0 10px;color:#000;border-bottom:1px solid #E0E0E0}
+.map .c-sel{width:40px;text-align:center;padding:0 5px!important}
+.map .c-acc{width:261px}
+.map .acc{display:flex;align-items:center;gap:8px}
+.map .acc select{width:241px;height:32px;flex-shrink:0;border-color:#DFE4EC}
+.map .acc select.empty{color:var(--text-placeholder)}
+/* live: unsaved row → select narrows, orange outlined Save (64×34) in the same cell */
+.map .acc.has-save select{width:169px}
+.map .row-save{height:34px;width:64px;padding:0;flex-shrink:0;background:var(--color-white)}
+.map .sub{display:inline-flex;align-items:center;gap:4px}
+.map .sub .hlp{font-size:16px;color:#B0B7C3}
+.map .integ{display:flex;align-items:center;gap:8px}
+.map tbody tr.unmapped td{background:#FFF1DD}
+.map tbody tr.unmapped:hover td{background:#FFEAC9}
+/* section rows (variant 1 only) */
+.map tr.sec td{height:44px!important;background:var(--color-grey-10)}
+.map tr.sec:hover td{background:var(--color-grey-10)}
+.sec-in{display:flex;align-items:center;gap:10px}
+.sec-in .ttl{font-weight:700}
+.sec-in .mi{font-size:20px}
+.sec-att .mi{color:var(--color-yellow)}
+.sec-sug .mi{color:var(--color-primary)}
+.sec-map .mi{color:var(--color-green)}
+.sec-in .sp{flex:1}
+.map tbody tr:last-child td{border-bottom:none}
+.pagination{justify-content:flex-end;height:52px;box-sizing:border-box;border-top:1px solid #E0E0E0}
+.pagination select{width:auto;height:32px}
+
+/* ── V2 automapping alert (3 treatments) ── */
+body.v1 .vs-ai{display:none}
+.ai-alert{display:none;position:relative;align-items:center;gap:14px;padding:12px 16px;margin-bottom:16px;border-radius:8px;
+  background:#fff;border:1px solid var(--border-default);color:var(--text-primary)}
+body.v2 .ai-alert{display:flex}
+.ai-txt{flex:1;min-width:0;line-height:20px}
+.ai-txt strong{font-weight:700;margin-right:6px}
+.ai-sw{display:inline-flex;align-items:center;gap:12px;cursor:pointer;white-space:nowrap;font-weight:500}
+.ai-sw .toggle{border:none;padding:0}
+.ai-mark{position:relative;width:32px;height:32px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.ai-mark svg{width:24px;height:24px;position:relative;z-index:1}
+.ai-ring{display:none}
+@property --aia{syntax:'<angle>';initial-value:0deg;inherits:false}
+/* A · glow border: rotating gradient outline + faint tinted inside */
+.ai-alert[data-style="a"]{border:2px solid transparent;
+  background:linear-gradient(#fff,#fff) padding-box,conic-gradient(from var(--aia),#3B82F6,#8B5CF6,#EC4899,#F59E0B,#3B82F6) border-box;
+  animation:aiSpin 4s linear infinite;box-shadow:0 0 0 4px rgba(139,92,246,.06)}
+@keyframes aiSpin{to{--aia:360deg}}
+/* B · shimmer: soft tinted background with a light sweep; star twinkles */
+.ai-alert[data-style="b"]{border-color:#DCD6FB;overflow:hidden;
+  background:linear-gradient(90deg,#EEF4FF,#F4EEFF 50%,#FDF0F7)}
+.ai-alert[data-style="b"]::after{content:'';position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.75) 50%,transparent 70%);
+  transform:translateX(-100%);animation:aiSweep 3.2s ease-in-out infinite}
+@keyframes aiSweep{60%,100%{transform:translateX(100%)}}
+.ai-alert[data-style="b"] .ai-mark svg{animation:aiTwinkle 1.8s ease-in-out infinite}
+@keyframes aiTwinkle{50%{transform:scale(.82) rotate(12deg);opacity:.75}}
+.ai-alert[data-style="b"] .ai-sw{position:relative;z-index:1}
+/* C · spinner: multicolour ring turning around the star, plain card */
+.ai-alert[data-style="c"] .ai-ring{display:block;position:absolute;inset:0;border-radius:50%;
+  background:conic-gradient(#3B82F6,#8B5CF6,#EC4899,#F59E0B,#3B82F6);
+  -webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));
+          mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));
+  animation:aiRot 1.6s linear infinite}
+.ai-alert[data-style="c"] .ai-mark svg{width:18px;height:18px}
+@keyframes aiRot{to{transform:rotate(360deg)}}
+/* Off: everything stops and goes grey, in every treatment */
+.ai-alert[data-on="0"]{animation:none;border:1px solid var(--border-default);background:#F7F8FA;box-shadow:none}
+.ai-alert[data-on="0"]::after,.ai-alert[data-on="0"] .ai-ring{display:none}
+.ai-alert[data-on="0"] .ai-mark svg{animation:none;filter:grayscale(1);opacity:.5}
+@media (prefers-reduced-motion:reduce){.ai-alert,.ai-alert::after,.ai-alert *{animation:none!important}}
+
+/* toast: bottom-right, 320px, 5s (DESIGN_RULES) — no Undo */
+.toast{position:fixed;right:24px;bottom:24px;width:320px;box-sizing:border-box;background:#323232;color:#fff;
+  padding:14px 16px;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:50;font-size:14px}
+.toast.on{display:block}
+</style>
+</head>
+<body class="v1">
+
+<div class="variant-switch" role="toolbar" aria-label="Prototype controls">
+  <span class="vs-label">Mapping on first visit</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Premapped</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Fully saved</button>
+  </div>
+  <span class="vs-sep"></span>
+  <span class="vs-label">Screen</span>
+  <div class="vs-opts">
+    <button id="sc-onb" onclick="go('onboarding')">Onboarding</button>
+    <button id="sc-map" class="on" onclick="go('mapping')">Mappings list</button>
+  </div>
+  <span class="vs-sep vs-ai"></span>
+  <span class="vs-label vs-ai">AI alert</span>
+  <div class="vs-opts vs-ai">
+    <button id="ai-a" class="on" onclick="setAiStyle('a')">A · Glow border</button>
+    <button id="ai-b" onclick="setAiStyle('b')">B · Shimmer</button>
+    <button id="ai-c" onclick="setAiStyle('c')">C · Spinner</button>
+  </div>
+</div>
+
+<!-- ═══════════ ONBOARDING ═══════════ -->
+<div class="screen" id="scr-onb">
+  <div class="ob-top"><span class="ob-logo">Synder</span></div>
+  <div class="ob-wrap">
+    <h1 class="page-title">Choose how Synder organizes your transactions</h1>
+    <p class="ob-sub">Synder can record every transaction individually, or group them into summary entries.</p>
+    <div class="modes">
+      <div class="mode" id="mode-pt" onclick="pick('pt')">
+        <div class="mode-head">
+          <input type="radio" class="radio" name="syncmode" id="r-pt" onchange="pick('pt')" onclick="event.stopPropagation()">
+          <label class="mode-name" for="r-pt">Per transaction</label>
+          <span class="status status-green rec-chip">Recommended</span>
+        </div>
+        <div class="mode-body">
+          <p class="mode-desc">Every order, refund and fee is recorded as its own entry.</p>
+          <ul class="mode-lines">
+            <li><span class="material-icons">check</span><span>Each order is a separate entry, under the customer's name.</span></li>
+            <li><span class="material-icons">check</span><span>You can search your books by customer, order number or product.</span></li>
+            <li><span class="material-icons">check</span><span>Sales tax is recorded order by order, by tax code — down to county or city.</span></li>
+          </ul>
+          <p class="mode-down"><span class="material-icons">info</span>
+            <span>Your books <strong>grow with your order volume</strong> — one entry per sale, refund and fee.</span></p>
+        </div>
+      </div>
+      <div class="mode sel" id="mode-sum" onclick="pick('sum')">
+        <div class="mode-head">
+          <input type="radio" class="radio" name="syncmode" id="r-sum" checked onchange="pick('sum')" onclick="event.stopPropagation()">
+          <label class="mode-name" for="r-sum">Summary</label>
+        </div>
+        <div class="mode-body">
+          <p class="mode-desc">Your sales are grouped into one summarized entry — daily, or per payout.</p>
+          <ul class="mode-lines">
+            <li><span class="material-icons">check</span><span>One entry per day or per payout, however many orders it covers.</span></li>
+            <li><span class="material-icons">check</span><span>Totals are split into income, shipping, tax, discounts and fees.</span></li>
+          </ul>
+          <p class="mode-down"><span class="material-icons">info</span>
+            <span>Customer and order names <strong>stay on each transaction in Synder</strong> — summary entries show totals only.</span></p>
+          <div class="automap" id="automap-row" onclick="event.stopPropagation()">
+            <label class="synder-checkbox"><input type="checkbox" id="automap" checked onchange="setAutomap(this.checked)"> Allow automapping</label>
+            <span class="tip"><button type="button" class="tip-btn" aria-label="About automapping" aria-describedby="tip-automap"><span class="material-icons">help_outline</span></button>
+              <span class="tip-pop" role="tooltip" id="tip-automap"></span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ob-actions">
+      <button type="button" class="btn btn-outlined">Back</button>
+      <button type="button" class="btn" id="ob-continue" onclick="obContinue()">Continue</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ MAPPINGS LIST ═══════════ -->
+<div class="screen on" id="scr-map">
+  <nav class="sb" aria-label="Main">
+    <div class="sb-org"><span class="sb-av">SU</span><span class="nm">Summary_test</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">dashboard</span><span class="lb">Dashboard</span></div>
+    <div class="sb-item open"><span class="mi">sync</span><span class="lb">Mapping</span><span class="mi">expand_less</span></div>
+    <div class="sb-subs">
+      <a class="sb-item sub on" href="#mapping"><span class="mi">compare_arrows</span><span class="lb">Mappings list</span></a>
+      <a class="sb-item sub"><span class="mi">apps</span><span class="lb">Groups</span></a>
+    </div>
+    <div class="sb-item"><span class="mi">sync_alt</span><span class="lb">Summaries</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">vertical_split</span><span class="lb">Reconciliation</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">shopping_cart</span><span class="lb">Products and services</span></div>
+    <div class="sb-item"><span class="mi">trending_up</span><span class="lb">Analytics</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">event_note</span><span class="lb">Revenue recognition</span></div>
+    <div class="sb-gap"></div>
+    <div class="sb-item"><span class="mi">hub</span><span class="lb">AI Hub</span></div>
+    <div class="sb-item"><span class="mi">stars</span><span class="lb">What's New</span></div>
+    <div class="sb-item"><span class="mi">settings</span><span class="lb">Settings</span></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar-x">
+      <a class="tb-bal" href="#mapping"><span class="lbl">Balance :</span> <span class="num">1000</span></a>
+      <a class="tb-link" href="#mapping">How it works?</a>
+      <span class="material-icons tb-ic tb-bell">notifications</span>
+      <span class="tb-dd"><span class="material-icons tb-ic tb-help">help_outline</span><span class="material-icons tb-chev">expand_more</span></span>
+      <span class="tb-dd"><span class="material-icons tb-ic">person</span><span class="material-icons tb-chev">expand_more</span></span></div>
+    <div class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1 class="page-title">Mappings list</h1>
+          <p class="page-subtitle">Create mappings between transactions and your Chart of Accounts.</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-text btn-sm">Full screen<span class="material-icons" style="font-size:18px">fullscreen</span></button>
+          <button class="btn btn-outlined btn-sm">Export CSV</button>
+        </div>
+      </div>
+
+      <div class="alert alert-info" id="premap-alert" role="status">
+        <span class="material-icons">info</span>
+        <span id="premap-text"></span>
+      </div>
+
+      <!-- variant 2: automapping status, proposed copy; 3 visual treatments via the AI alert switch -->
+      <div class="ai-alert" id="ai-alert" data-style="a" data-on="1" role="status">
+        <span class="ai-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><defs><linearGradient id="aig" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#3B82F6"/><stop offset=".55" stop-color="#8B5CF6"/><stop offset="1" stop-color="#EC4899"/></linearGradient></defs>
+            <path fill="url(#aig)" d="M11 2.5l1.9 5.2a3 3 0 0 0 1.9 1.9L20 11.5l-5.2 1.9a3 3 0 0 0-1.9 1.9L11 20.5l-1.9-5.2a3 3 0 0 0-1.9-1.9L2 11.5l5.2-1.9a3 3 0 0 0 1.9-1.9z"/>
+            <path fill="url(#aig)" d="M19 1.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/></svg>
+          <span class="ai-ring"></span>
+        </span>
+        <span class="ai-txt">
+          <strong id="ai-title"></strong>
+          <span id="ai-body"></span>
+        </span>
+        <label class="ai-sw"><span id="ai-sw-lbl">Automapping</span>
+          <button type="button" class="toggle" id="ai-toggle" role="switch" aria-checked="true" aria-labelledby="ai-sw-lbl" onclick="toggleAuto()"></button></label>
+      </div>
+
+      <div class="filters">
+        <div class="f-row">
+          <div><label for="f-group">Groups</label><select id="f-group" class="select"><option>All</option></select></div>
+          <div><label for="f-gw">Payment gateway</label><select id="f-gw" class="select"><option>All</option><option>Online Sales</option></select></div>
+          <div><label for="f-acc">Account</label><select id="f-acc" class="select"><option>All</option></select></div>
+          <div><label for="f-status">Mapping status</label><select id="f-status" class="select" onchange="applyFilters()"></select></div>
+        </div>
+        <button class="btn btn-outlined btn-sm" id="f-reset" onclick="resetFilters()" style="margin-top:12px">Reset filters</button>
+        <div class="f-act">
+          <label class="f-tog"><span class="toggle"></span>Enable locations<span class="mi">help</span></label>
+          <label class="f-tog"><span class="toggle"></span>Enable classes<span class="mi">help</span></label>
+        </div>
+      </div>
+
+      <div class="map-card">
+      <div class="tabs-row">
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div class="tab-act">
+          <button class="btn btn-outlined btn-sm">Add group<span class="material-icons">expand_more</span></button>
+          <button class="btn btn-sm" id="save" onclick="saveDirty()" disabled>Save mappings<span class="material-icons">expand_more</span></button>
+        </div>
+      </div>
+
+      <div class="table-wrap map">
+        <table class="synder-table" id="tbl">
+          <thead><tr>
+            <th class="c-sel"><input type="checkbox" class="checkbox" id="sel-all" aria-label="Select all on page" onchange="selectPage(this.checked)"></th>
+            <th>Group</th><th>Account subtype</th><th>Payment gateway</th><th>Integration</th><th class="c-acc">Account</th>
+          </tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pager"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ───────── data: one org, 4 integrations, 120 groups ───────── */
+var INTEG = {
+  st:{name:'Flowers (Stripe)', l:'S'},
+  sh:{name:'Plates (Shopify)',  l:'S'},
+  am:{name:'Bakery (Amazon)',      l:'a'},
+  pp:{name:'Tea shop (PayPal)',       l:'P'}
+};
+var ACCOUNTS = [
+  'Chase Business Checking','Chase Savings','Wise EUR account','Mercury Operating',
+  'Stripe clearing (Synder)','Shopify clearing (Synder)','Amazon clearing (Synder)','PayPal clearing (Synder)',
+  'Accounts Receivable (A/R)','Customer prepayments','Discounts given','Merchant fees','Amazon seller fees',
+  'Advertising','Sales','Sales — Flowers','Sales — Plates','Sales — Bread','Sales — Tea','Shipping income',
+  'Sales tax payable','Refunds','Gift card liability','Tips payable','Chargebacks','Loan payable — Shopify Capital',
+  'Exchange gain or loss','Reserve held by Amazon','Inventory reimbursements','Other income','Bank charges',
+  'Uncategorized expense'
+];
+var SALES = {st:'Sales — Flowers', sh:'Sales — Plates', am:'Sales — Bread', pp:'Sales — Tea'};
+var CLEAR = {st:'Stripe clearing (Synder)', sh:'Shopify clearing (Synder)', am:'Amazon clearing (Synder)', pp:'PayPal clearing (Synder)'};
+
+var ROWS = [];
+function add(group, subtype, integ, kind, sug){ ROWS.push({id:ROWS.length, group:group, subtype:subtype, integ:integ, kind:kind, sug:sug||''}); }
+
+// bank — always manual (4)
+add('Bank','Bank','st','bank'); add('Bank','Bank','sh','bank'); add('Bank','Bank','am','bank'); add('Bank','Bank','pp','bank');
+// unsure — no confident match (2)
+add('Chargebacks','Other expense','st','unsure'); add('Reserve balance','Other current assets','am','unsure');
+// confident system groups (39)
+['st','sh','am','pp'].forEach(function(k){
+  add('Clearing','Clearing',k,'sure',CLEAR[k]);
+  add('Customer balance','Accounts receivable',k,'sure','Customer prepayments');
+  add('Discounts','Discounts',k,'sure','Discounts given');
+  add('Platform fees','Commissions and fees',k,'sure', k==='am'?'Amazon seller fees':'Merchant fees');
+  add('Sales','Income',k,'sure',SALES[k]);
+  add('Taxes','Taxes payable',k,'sure','Sales tax payable');
+  add('Refunds','Income',k,'sure','Refunds');
+  add('Shipping','Income',k,'sure','Shipping income');
+  add('Invoices','Accounts receivable',k,'sure','Accounts Receivable (A/R)');
+});
+add('FBA fees','Commissions and fees','am','sure','Amazon seller fees');
+add('Referral fees','Commissions and fees','am','sure','Amazon seller fees');
+add('Advertising fees','Advertising','am','sure','Advertising');
+// confident product groups by SKU (75)
+var PROD = {
+  st:['Peony bouquet','Tulip box','Rose dozen','Seasonal wreath','Orchid pot','Dried lavender','Sunflower bunch','Wedding arch set','Bridal posy','Gift card bouquet','Succulent trio','Lily stems','Hydrangea vase','Monthly flower plan','Funeral spray','Ranunculus bunch','Anemone bunch','Eucalyptus stems','Protea stem'],
+  sh:['Stoneware dinner plate','Side plate','Pasta bowl','Serving platter','Mug — speckled','Mug — matte black','Espresso cup','Salad bowl','Butter dish','Teapot','Dessert plate','Oval tray','Ramen bowl','Pitcher','Gravy boat','Cake stand','Saucer','Dip bowls set','Soup tureen','Egg cups'],
+  am:['Sourdough loaf','Rye loaf','Baguette 2-pack','Focaccia','Brioche','Cinnamon rolls','Seeded bagels','Croissant 6-pack','Banana bread','Gluten-free loaf','Ciabatta','Pretzel rolls','Challah','Bread starter kit','Muffin 4-pack','Pita 10-pack','Spelt loaf','Olive bread'],
+  pp:['Sencha 100g','Earl Grey 100g','Chamomile 50g','Matcha 30g','Oolong 100g','Rooibos 100g','Chai blend','Jasmine pearls','Tea sampler','Cast-iron teapot','Gaiwan','Tea strainer','Mint blend','Pu-erh cake','Hojicha 100g','Gift box','Genmaicha 100g','Darjeeling 100g']
+};
+var PFX = {st:'FL',sh:'PL',am:'BR',pp:'TE'};
+Object.keys(PROD).forEach(function(k){
+  PROD[k].forEach(function(n,i){ add('SKU '+PFX[k]+'-'+(1001+i)+' · '+n,'Income',k,'sure',SALES[k]); });
+});
+
+/* ───────── state ───────── */
+var S = {v:1, automap:true, screen:'mapping', tab:'all', status:'all', page:1, per:25, sel:{}};
+function reset(){
+  ROWS.forEach(function(r){
+    var sure = r.kind==='sure' && S.automap;
+    r.saved = (S.v===2 && sure) ? r.sug : '';
+    r.value = sure ? r.sug : '';
+    r.pending = (S.v===1 && sure);        // a filled-in suggestion that isn't saved
+  });
+  S.sel = {}; S.page = 1;
+}
+function grouped(){ return S.v===1 && S.automap; }
+function section(r){ return r.saved ? 'map' : (r.pending ? 'sug' : 'att'); }
+function dirty(r){ return !!r.value && r.value !== r.saved; }
+function edited(r){ return r.pending && r.value && r.value!==r.sug; }
+
+/* ───────── render ───────── */
+var SEC = {
+  att:{t:'Needs attention', ic:'error_outline'},
+  sug:{t:'Suggested',       ic:'auto_awesome'},
+  map:{t:'Mapped',          ic:'check_circle'}
+};
+function visible(){
+  return ROWS.filter(function(r){
+    if (S.tab!=='all' && r.integ!==S.tab) return false;
+    var s = section(r);
+    if (S.status==='mapped' && s!=='map') return false;
+    if (S.status==='suggested' && s!=='sug') return false;
+    if (S.status==='not' && s!=='att') return false;
+    return true;
+  }).sort(function(a,b){
+    var o = {att:0,sug:1,map:2}, io = {st:0,sh:1,am:2,pp:3};
+    var sa = grouped()? o[section(a)] : 0, sb = grouped()? o[section(b)] : 0;   // v2: one plain list, production order
+    return sa-sb || io[a.integ]-io[b.integ] || a.id-b.id;
+  });
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function opts(v){
+  var h = '<option value=""'+(v?'':' selected')+'>Search or start typing…</option>';
+  ACCOUNTS.forEach(function(a){ h += '<option'+(a===v?' selected':'')+'>'+esc(a)+'</option>'; });
+  return h;
+}
+function count(sec){ return ROWS.filter(function(r){ return (S.tab==='all'||r.integ===S.tab) && section(r)===sec; }).length; }
+
+function secRow(sec){
+  var n = count(sec), act = '';
+  if (sec==='sug'){
+    var nsel = selectedSug().length;
+    act = nsel
+      ? '<button class="btn btn-sm" id="approve" onclick="approve(true)">Approve selected ('+nsel+')</button>'
+      : '<button class="btn btn-sm" id="approve" onclick="approve(false)">Approve all suggested</button>';
+  }
+  return '<tr class="sec sec-'+sec+'"><td colspan="6"><div class="sec-in"><span class="mi">'+SEC[sec].ic+'</span>'+
+    '<span class="ttl">'+SEC[sec].t+'</span><span class="tab-count">'+n+'</span><span class="sp"></span>'+act+'</div></td></tr>';
+}
+function render(){
+  var list = visible(), pages = Math.max(1, Math.ceil(list.length/S.per));
+  if (S.page>pages) S.page = pages;
+  var slice = list.slice((S.page-1)*S.per, S.page*S.per), h = '', last = null;
+  slice.forEach(function(r){
+    var sec = section(r);
+    if (grouped() && sec!==last){ h += secRow(sec); last = sec; }
+    var I = INTEG[r.integ],
+        rs = dirty(r) ? '<button type="button" class="btn btn-outlined-warning btn-sm row-save" onclick="saveRow('+r.id+')">Save</button>' : '';
+    h += '<tr data-id="'+r.id+'" data-sec="'+sec+'"'+(r.value?'':' class="unmapped"')+'>'+
+      '<td class="c-sel"><input type="checkbox" class="checkbox" aria-label="Select '+esc(r.group)+'"'+(S.sel[r.id]?' checked':'')+' onchange="sel('+r.id+',this.checked)"></td>'+
+      '<td class="grp">'+esc(r.group)+'</td><td><span class="sub">'+esc(r.subtype)+'<span class="material-icons hlp" aria-hidden="true">help</span></span></td><td>Online Sales</td>'+
+      '<td><span class="integ"><span class="pi pi-'+r.integ+'">'+I.l+'</span>'+esc(I.name)+'</span></td>'+
+      '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'" onchange="setVal('+r.id+',this.value)">'+opts(r.value)+'</select>'+rs+'</div></td></tr>';
+  });
+  if (!slice.length) h = '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary)">No groups match these filters</td></tr>';
+  document.getElementById('tb').innerHTML = h;
+  var ids = slice.map(function(r){return r.id;}), sa = document.getElementById('sel-all');
+  sa.checked = ids.length>0 && ids.every(function(i){return S.sel[i];});
+  document.getElementById('save').disabled = !ROWS.some(dirty);
+  // variant 1: premap alert — counts across all integrations, gone once nothing is waiting for approval
+  var nSug = ROWS.filter(function(r){return section(r)==='sug';}).length,
+      nAtt = ROWS.filter(function(r){return section(r)==='att';}).length,
+      al = document.getElementById('premap-alert');
+  al.style.display = (grouped() && nSug) ? '' : 'none';
+  document.getElementById('premap-text').innerHTML = '<strong>'+nSug+' groups are premapped.</strong> '+
+    'Approve them to sync your summaries.'+(nAtt ? ' '+nAtt+(nAtt===1?' group needs':' groups need')+' an account.' : '');
+  renderPager(list.length, pages);
+  renderTabs();
+}
+function renderPager(total, pages){
+  var from = total ? (S.page-1)*S.per+1 : 0, to = Math.min(total, S.page*S.per);
+  var h = '<span class="page-info">Rows per page:</span><select class="select" id="per" onchange="S.per=+this.value;S.page=1;render()">'+
+    [25,50,100].map(function(n){return '<option'+(n===S.per?' selected':'')+'>'+n+'</option>';}).join('')+'</select>'+
+    '<span class="page-info" id="range">'+from+'–'+to+' of '+total+'</span>'+
+    '<button class="page-btn" aria-label="Previous page" '+(S.page<=1?'disabled':'')+' onclick="S.page--;render()"><span class="material-icons">chevron_left</span></button>';
+  for (var p=1;p<=pages;p++) h += '<button class="page-btn'+(p===S.page?' active':'')+'" onclick="S.page='+p+';render()">'+p+'</button>';
+  h += '<button class="page-btn" aria-label="Next page" '+(S.page>=pages?'disabled':'')+' onclick="S.page++;render()"><span class="material-icons">chevron_right</span></button>';
+  document.getElementById('pager').innerHTML = h;
+}
+function renderTabs(){
+  var h = '<div class="tab'+(S.tab==='all'?' active':'')+'" role="tab" onclick="setTab(\'all\')">All</div>';
+  Object.keys(INTEG).forEach(function(k){
+    h += '<div class="tab'+(S.tab===k?' active':'')+'" role="tab" onclick="setTab(\''+k+'\')"><span class="pi pi-'+k+'">'+INTEG[k].l+'</span>'+esc(INTEG[k].name)+'</div>';
+  });
+  document.getElementById('tabs').innerHTML = h;
+}
+function renderStatusFilter(){
+  var o = grouped()
+    ? [['all','All'],['not','Needs attention'],['suggested','Suggested'],['mapped','Mapped']]
+    : [['all','All'],['mapped','Mapped'],['not','Not mapped']];
+  document.getElementById('f-status').innerHTML = o.map(function(x){return '<option value="'+x[0]+'">'+x[1]+'</option>';}).join('');
+}
+
+/* ───────── actions ───────── */
+function setVal(id, v){ ROWS[id].value = v; render(); }
+function sel(id, on){ if (on) S.sel[id]=1; else delete S.sel[id]; render(); }
+function selectPage(on){
+  var list = visible().slice((S.page-1)*S.per, S.page*S.per);
+  list.forEach(function(r){ if (on) S.sel[r.id]=1; else delete S.sel[r.id]; }); render();
+}
+function selectedSug(){ return ROWS.filter(function(r){ return S.sel[r.id] && section(r)==='sug'; }); }
+function commit(rows){
+  rows.forEach(function(r){ r.saved = r.value; r.pending = false; delete S.sel[r.id]; });
+  toast(rows.length===1 ? '1 mapping saved' : rows.length+' mappings saved'); render();
+}
+function approve(onlySel){
+  var rows = onlySel ? selectedSug() : ROWS.filter(function(r){ return section(r)==='sug' && (S.tab==='all'||r.integ===S.tab) && r.value; });
+  commit(rows.filter(function(r){return r.value;}));
+}
+function saveDirty(){ commit(ROWS.filter(dirty)); }
+function saveRow(id){ commit([ROWS[id]]); }
+function setTab(k){ S.tab = k; S.page = 1; render(); }
+function applyFilters(){ S.status = document.getElementById('f-status').value; S.page = 1; render(); }
+function resetFilters(){ S.status = 'all'; document.getElementById('f-status').value = 'all'; S.tab='all'; S.page = 1; render(); }
+
+var tt;
+function toast(m){ var t = document.getElementById('toast'); t.textContent = m; t.classList.add('on');
+  clearTimeout(tt); tt = setTimeout(function(){ t.classList.remove('on'); }, 5000); }
+
+/* ───────── onboarding ───────── */
+function pick(w){
+  document.getElementById(w==='pt'?'r-pt':'r-sum').checked = true;
+  document.getElementById('mode-pt').classList.toggle('sel', w==='pt');
+  document.getElementById('mode-sum').classList.toggle('sel', w==='sum');
+  var cb = document.getElementById('automap');
+  cb.disabled = (w==='pt');
+  document.getElementById('automap-row').classList.toggle('off', w==='pt');
+}
+function setAutomap(on){ S.automap = on; reset(); renderStatusFilter(); S.status='all'; render(); }
+function obContinue(){
+  if (document.getElementById('r-pt').checked){ toast('Per transaction setup isn’t part of this prototype'); return; }
+  go('mapping');
+}
+
+/* ───────── prototype switch ───────── */
+var TIP = {
+  1:'Synder suggests an account for each group from your chart of accounts. You review and approve them on the Mappings list. Bank accounts you choose yourself.',
+  2:'Synder maps each group to an account from your chart of accounts. You can change any mapping later on the Mappings list. Bank accounts you choose yourself.'
+};
+S.autoOn = true; S.aiStyle = 'a';
+function renderAi(){
+  var a = document.getElementById('ai-alert'), on = S.autoOn;
+  a.dataset.on = on ? '1' : '0'; a.dataset.style = S.aiStyle;
+  document.getElementById('ai-toggle').classList.toggle('on', on);
+  document.getElementById('ai-toggle').setAttribute('aria-checked', on ? 'true' : 'false');
+  document.getElementById('ai-title').textContent = on ? 'Automapping is on' : 'Automapping is off';
+  document.getElementById('ai-body').textContent = on
+    ? 'Synder maps new groups to your accounts automatically. You can change any mapping.'
+    : 'New groups will appear unmapped. You map them yourself.';
+}
+function toggleAuto(){ S.autoOn = !S.autoOn; renderAi(); toast(S.autoOn ? 'Automapping turned on' : 'Automapping turned off'); }
+function setAiStyle(k){ S.aiStyle = k; ['a','b','c'].forEach(function(x){ document.getElementById('ai-'+x).classList.toggle('on', x===k); }); renderAi(); }
+function setVariant(n){
+  S.v = n; document.body.className = 'v'+n;
+  document.getElementById('tip-automap').textContent = TIP[n];
+  document.getElementById('vs-1').classList.toggle('on', n===1);
+  document.getElementById('vs-2').classList.toggle('on', n===2);
+  reset(); renderStatusFilter(); S.status='all'; render(); S.autoOn = S.automap; renderAi(); syncUrl();
+}
+function go(s){
+  S.screen = s;
+  document.getElementById('scr-onb').classList.toggle('on', s==='onboarding');
+  document.getElementById('scr-map').classList.toggle('on', s==='mapping');
+  document.getElementById('sc-onb').classList.toggle('on', s==='onboarding');
+  document.getElementById('sc-map').classList.toggle('on', s==='mapping');
+  syncUrl();
+}
+function syncUrl(){ history.replaceState(null,'', '?v='+S.v+'#'+S.screen); }
+
+(function init(){
+  var v = /[?&]v=2/.test(location.search) ? 2 : 1;
+  S.screen = location.hash==='#onboarding' ? 'onboarding' : 'mapping';
+  setVariant(v);
+  go(S.screen);
+})();
+window.addEventListener('hashchange', function(){ go(location.hash==='#onboarding' ? 'onboarding' : 'mapping'); });
+</script>
+</body>
+</html>

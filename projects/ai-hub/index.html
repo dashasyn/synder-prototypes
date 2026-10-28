@@ -1,0 +1,1212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Hub</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+<style>
+  body{margin:0;display:flex;flex-direction:column;min-height:100vh;background:var(--color-grey-5);font-size:14px}
+
+  /* switcher — deliberately not product chrome */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:14px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);font-family:inherit;
+    font-size:14px;padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+
+  .variant-switch .vs-gap{width:24px}
+  .hub.summary [data-conn]{display:none !important}
+  .hub:not(.summary) [data-sum]{display:none !important}
+  .sum-note{margin:16px 0 0;color:var(--text-secondary)}
+  .cmd .sum-note{color:rgba(255,255,255,.8)}
+  .hub.summary .hero-cards{grid-template-columns:1fr}
+  .hub.summary .cmd-grid{grid-template-columns:1fr}
+
+  /* live app shell — from Ignat's AI Hub screenshot, 2026-10-08 (PT_QBO_test_2) */
+  .mi{font-family:'Material Icons Outlined';font-weight:normal;font-style:normal;font-size:20px;
+    line-height:1;display:inline-block;-webkit-font-smoothing:antialiased;font-feature-settings:'liga'}
+  .app{flex:1;display:flex;min-height:0;background:var(--color-white)}
+  .sb{width:208px;flex-shrink:0;border-right:1px solid var(--border-default);background:var(--color-white);
+    display:flex;flex-direction:column}
+  .sb-org{display:flex;align-items:center;gap:10px;height:56px;padding:0 14px;
+    border-bottom:1px solid var(--border-default);font-weight:500}
+  .sb-av{width:28px;height:28px;border-radius:50%;background:#F5C6CB;color:#B23B4B;display:flex;
+    align-items:center;justify-content:center;font-size:14px}
+  .sb-org .mi{margin-left:auto;color:var(--text-secondary)}
+  .sb-item{position:relative;display:flex;align-items:center;gap:10px;height:40px;padding:0 14px;
+    color:var(--text-primary);border-bottom:1px solid var(--border-default);font-size:14px}
+  .sb-item .mi{color:var(--color-primary);font-size:20px}
+  .sb-item .chev{margin-left:auto;color:var(--text-secondary)}
+  .sb-item.on{background:var(--color-primary);color:var(--color-white)}
+  .sb-item.on .mi{color:var(--color-white)}
+  .sb-item.on::after{content:'';position:absolute;right:-9px;top:50%;margin-top:-8px;border:8px solid transparent;
+    border-left-color:var(--color-primary);border-right:0}
+  .sb-gap{height:40px;border-bottom:1px solid var(--border-default)}
+  .sb-promo[hidden]{display:none}
+  .sb-promo{margin:16px 8px;background:var(--color-primary-5);border-radius:6px;padding:14px 12px;text-align:center;font-size:14px}
+  .sb-promo b{display:block;margin-bottom:6px}
+  .sb-promo p{margin:0 0 10px;color:var(--text-primary)}
+  .sb-promo .btn{width:100%}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;position:relative}
+  .top{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:24px;
+    padding:0 24px;border-bottom:1px solid var(--border-default)}
+  .syncs{color:var(--text-secondary);border-bottom:3px solid var(--color-primary);padding:6px 0}
+  .syncs b{color:var(--color-primary);font-weight:500;font-size:16px}
+  .top .mi{color:var(--color-primary);font-size:24px}
+  .content{flex:1;padding:24px 32px 48px;overflow:auto;background:var(--color-grey-5)}
+
+  /* AI Hub page */
+  .hub{max-width:1040px}
+  .hub h1{font-size:24px;font-weight:400;margin:0 0 4px;color:var(--text-primary)}
+  .hub .lede{margin:0 0 24px;color:var(--text-secondary);font-size:16px}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:32px}
+  .ai-card{background:var(--color-white);border-radius:var(--radius-md);box-shadow:var(--shadow-card);
+    padding:24px;display:flex;flex-direction:column;gap:12px}
+  .ai-card .ic{width:40px;height:40px;border-radius:8px;background:var(--color-primary-10);color:var(--color-primary);
+    display:flex;align-items:center;justify-content:center}
+  .ai-card .ic .mi{font-size:24px}
+  .ai-card h2{font-size:18px;font-weight:500;margin:0;display:flex;align-items:center;gap:8px;color:var(--text-primary)}
+  .ai-card p{margin:0;color:var(--text-primary);line-height:20px;flex:1}
+  .ai-card .clients{color:var(--text-secondary)}
+  .ai-card .acts{margin-top:4px}
+
+  .sec-head{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
+  .sec-head[hidden]{display:none}
+  .sec-desc{margin:-4px 0 12px;color:var(--text-secondary)}
+  .sec-desc[hidden]{display:none}
+  .sec-head h2{font-size:18px;font-weight:500;margin:0;color:var(--text-primary)}
+  .tok-empty{background:var(--color-white);border-radius:var(--radius-md);box-shadow:var(--shadow-card);
+    padding:24px;color:var(--text-secondary)}
+  .synder-table .muted{color:var(--text-secondary)}
+  .synder-table td.act{text-align:right;width:1%;white-space:nowrap}
+  .revoke{background:none;border:none;color:var(--color-red);font:inherit;font-weight:500;cursor:pointer;padding:6px 8px;border-radius:4px}
+  .revoke:hover{background:var(--color-red-light)}
+  .revoke:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+  tr.fresh td{background:var(--color-primary-5)}
+  .tok-pre{font-family:'Roboto Mono',monospace;font-size:14px;color:var(--text-secondary);margin-left:6px}
+
+  /* modals */
+  /* modal never taller than the screen: header + footer fixed, body scrolls */
+  .modal-bg{align-items:center;padding:24px 16px}
+  .synder-modal{display:flex;flex-direction:column;max-height:calc(100vh - 48px)}
+  .synder-modal-header,.synder-modal-footer{flex-shrink:0}
+  .synder-modal-body{flex:1;min-height:0;overflow-y:auto}
+  .mc-step{display:flex;flex-direction:column;flex:1;min-height:0}
+  .mc-step[hidden]{display:none}
+  .synder-modal-header{display:flex;align-items:center;gap:8px;font-size:18px}
+  .synder-modal-header .x{margin-left:auto;background:none;border:none;cursor:pointer;color:var(--text-secondary);
+    width:32px;height:32px;border-radius:4px;display:flex;align-items:center;justify-content:center}
+  .synder-modal-header .x:hover{background:var(--color-grey-5)}
+  .synder-modal-body{color:var(--text-primary)}
+  .synder-modal-body .form-field{margin-bottom:20px}
+  .synder-modal-body .form-field:last-child{margin-bottom:0}
+  .form-field .form-label{margin-bottom:6px}
+  .scope{color:var(--text-secondary);margin:0 0 20px}
+  .access{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+  .access label{display:flex;align-items:flex-start;gap:10px;cursor:pointer}
+  .access label input{margin-top:0}
+  .access .an{font-weight:500}
+  .access .ad{color:var(--text-secondary)}
+  .perm{margin-top:16px;border:1px solid var(--border-default);border-radius:4px;padding:16px;
+    display:grid;grid-template-columns:1fr;gap:16px}
+  .perm[hidden]{display:none}
+  .perm h4{margin:0 0 6px;font-size:14px;font-weight:500}
+  .perm .synder-checkbox{align-items:flex-start;display:flex;margin:6px 0}
+  .perm .synder-checkbox input{margin-top:1px}
+  .perm .pd{color:var(--text-secondary)}
+  .warn-line{display:flex;gap:8px;align-items:center;margin:12px 0 0}
+  .warn-line[hidden]{display:none}
+  .alert{margin-bottom:12px}
+  .alert .mi{font-size:20px}
+  .alert code{background:rgba(255,255,255,.6);padding:0 4px;border-radius:3px;font-family:'Roboto Mono',monospace}
+  .tabs{padding:0;margin:20px 0 16px}
+  .tab{background:none;border:none;border-bottom:2px solid transparent;font-family:inherit}
+  .tab:focus-visible{outline:2px solid var(--border-focus);outline-offset:-2px}
+  .steps{margin:0 0 12px;padding-left:20px;line-height:22px}
+  .steps li{margin-bottom:4px}
+  .intro{margin:0 0 12px;line-height:22px}
+  code.k{font-family:'Roboto Mono',monospace;background:var(--color-grey-5);border:1px solid var(--border-default);
+    border-radius:3px;padding:0 4px;font-size:14px}
+  .code{position:relative;background:var(--color-grey-5);border:1px solid var(--border-default);border-radius:4px}
+  .code pre{margin:0;padding:12px 96px 12px 12px;font-family:'Roboto Mono',monospace;font-size:14px;line-height:20px;
+    white-space:pre-wrap;word-break:break-all;color:var(--text-primary)}
+  .copy{position:absolute;top:6px;right:6px;display:inline-flex;align-items:center;gap:4px;height:28px;padding:0 10px;
+    background:var(--color-white);border:1px solid var(--border-default);border-radius:4px;cursor:pointer;
+    font:inherit;font-size:14px;color:var(--color-primary);font-weight:500}
+  .copy .mi{font-size:16px}
+  .copy.done{color:var(--color-green);border-color:var(--color-green)}
+  .copy:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+  .code-label{font-weight:500;margin:12px 0 6px}
+  .code + .extra{margin-top:8px}
+  .expander{margin-top:16px;border:1px solid var(--border-default);border-radius:4px}
+  .expander summary{cursor:pointer;padding:10px 12px;font-weight:500;color:var(--color-primary);list-style:none;display:flex;align-items:center;gap:6px}
+  .expander summary::-webkit-details-marker{display:none}
+  .expander[open] summary .mi{transform:rotate(180deg)}
+  .expander .ex-body{padding:0 12px 12px}
+  .uncap{display:inline-block;background:#FFF4D6;color:#7A4B00;border:1px dashed #CB7515;border-radius:3px;padding:0 6px}
+  .count{display:flex;justify-content:flex-end;color:var(--text-secondary);margin-top:4px}
+  .count.ok{color:var(--color-green)}
+  .money{position:relative}
+  .money span{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-secondary)}
+  .money input{padding-left:22px}
+  .form-hint.soft{color:var(--text-secondary);margin-top:4px}
+  .form-error-msg{margin-top:4px}
+  .form-error-msg[hidden]{display:none}
+
+  .vs-sep{width:1px;height:22px;background:rgba(255,255,255,.2)}
+
+  /* Variant 2 · AI style — hero band + real client logos */
+  .hub .hero{position:relative;overflow:hidden;border-radius:16px;padding:32px;margin-bottom:32px;border:1px solid #DCE3F7;
+    background:radial-gradient(640px 320px at 0% 0%,rgba(0,83,204,.16),transparent 60%),
+      radial-gradient(560px 320px at 100% 100%,rgba(49,11,176,.14),transparent 60%),
+      linear-gradient(120deg,#EEF4FF 0%,#F2EDFF 100%)}
+  .hub.v2{margin:0 auto}
+  .content.white{background:var(--color-white)}
+  .hero-top{display:flex;align-items:center;gap:16px;margin-bottom:24px}
+  .spark{width:52px;height:52px;border-radius:14px;flex-shrink:0;background:linear-gradient(135deg,#0053CC,#310BB0);color:#fff;
+    display:flex;align-items:center;justify-content:center;box-shadow:0 8px 20px rgba(49,11,176,.25)}
+  .spark .mi{font-size:30px}
+  .hub .hero h1{font-size:32px;line-height:40px;font-weight:500;margin:0;letter-spacing:-.01em;
+    background:linear-gradient(90deg,#0053CC,#310BB0);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hub .hero .lede{margin:0;font-size:16px}
+  .hero-cards{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .glass{background:rgba(255,255,255,.8);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.95);border-radius:12px;
+    padding:24px;display:flex;flex-direction:column;gap:14px;box-shadow:0 2px 12px rgba(26,27,36,.06)}
+  .glass h2{font-size:18px;font-weight:500;margin:0;display:flex;align-items:center;gap:8px;color:var(--text-primary)}
+  .glass p{margin:0;line-height:20px;flex:1}
+  .glass .ic{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+    background:var(--color-primary-10);color:var(--color-primary)}
+  .logo-stack{display:flex;height:56px;align-items:center}
+  .logo-stack .lg{width:56px;height:56px;border-radius:50%;background:#fff;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(26,27,36,.14);border:2px solid #fff}
+  .logo-stack .lg + .lg{margin-left:-12px}
+  .logo-stack svg{width:30px;height:30px}
+  .glass .ic .mi{font-size:32px}
+  .logos{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .logo{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px 0 10px;background:#fff;
+    border:1px solid var(--border-default);border-radius:18px;font-weight:500;color:var(--text-primary)}
+  .logo svg{width:20px;height:20px;flex-shrink:0}
+  .logos .more{color:var(--text-secondary);padding:0 4px}
+  .tab svg{width:16px;height:16px;flex-shrink:0}
+
+  #toasts{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:1100;display:flex;flex-direction:column;gap:8px;width:420px}
+  .toast{display:flex;align-items:center;gap:12px;background:var(--color-green);color:var(--color-white);
+    border-radius:4px;padding:12px 16px;box-shadow:0 8px 24px rgba(0,0,0,.2);font-size:16px;line-height:24px}
+
+  /* shared for variants 3–5 */
+  .hub.wide{max-width:1040px;margin:0 auto}
+  [data-logo]{display:inline-flex}
+  [data-logo] svg{width:100%;height:100%}
+  .lg-c{width:48px;height:48px;border-radius:50%;background:#fff;display:inline-flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(26,27,36,.14)}
+  .lg-c [data-logo]{width:26px;height:26px}
+  .req-row{display:flex;align-items:center;gap:16px;border:1px solid var(--border-default);border-radius:12px;padding:16px 20px;margin-bottom:32px;background:#fff}
+  .req-row .ic{width:48px;height:48px;border-radius:12px;background:var(--color-primary-10);color:var(--color-primary);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .req-row .ic .mi{font-size:28px}
+  .req-row .rt{flex:1}
+  .req-row b{display:block;font-size:16px;font-weight:500;margin-bottom:2px}
+  .req-row span.d{color:var(--text-secondary)}
+  @media (prefers-reduced-motion: reduce){ .aurora i, .flow, .pulse, .caret, .bar-fill{animation:none !important;transition:none !important} }
+
+  /* Variant 3 · Command hero */
+  .cmd{position:relative;overflow:hidden;border-radius:20px;padding:40px;margin-bottom:32px;color:#fff;
+    background:linear-gradient(135deg,#0A1033 0%,#141A55 45%,#2A0F6B 100%)}
+  .aurora{position:absolute;inset:0;pointer-events:none}
+  .aurora i{position:absolute;width:520px;height:520px;border-radius:50%;filter:blur(80px);opacity:.55}
+  .aurora i:nth-child(1){background:#2F6BFF;top:-260px;left:-120px;animation:drift1 14s ease-in-out infinite alternate}
+  .aurora i:nth-child(2){background:#8B3DFF;bottom:-300px;right:-140px;animation:drift2 18s ease-in-out infinite alternate}
+  .aurora i:nth-child(3){background:#00C2FF;width:320px;height:320px;top:40%;left:45%;opacity:.25;animation:drift1 22s ease-in-out infinite alternate-reverse}
+  @keyframes drift1{to{transform:translate(160px,90px) scale(1.15)}}
+  @keyframes drift2{to{transform:translate(-180px,-80px) scale(1.1)}}
+  .cmd > *:not(.aurora){position:relative}
+  .cmd-grid{display:grid;grid-template-columns:1fr 1.1fr;gap:40px;align-items:center}
+  .eyebrow{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;background:rgba(255,255,255,.12);
+    border:1px solid rgba(255,255,255,.2);font-size:14px;margin-bottom:16px}
+  .eyebrow .mi{font-size:16px;color:#B9A4FF}
+  .cmd h1{font-size:36px;line-height:44px;font-weight:500;margin:0 0 12px;color:#fff;letter-spacing:-.01em}
+  .cmd p.l{margin:0 0 24px;font-size:16px;line-height:24px;color:rgba(255,255,255,.78)}
+  .cmd .acts{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .btn-glow{background:#fff;color:#1A1B5C;border:none;border-radius:6px;height:40px;padding:0 20px;font:inherit;font-weight:500;font-size:15px;
+    cursor:pointer;box-shadow:0 0 0 0 rgba(139,61,255,.6);animation:glow 3s ease-in-out infinite}
+  .btn-glow:hover{background:#EEF1FF}
+  .btn-glow:focus-visible{outline:2px solid #B9A4FF;outline-offset:3px}
+  @keyframes glow{50%{box-shadow:0 0 24px 2px rgba(139,61,255,.55)}}
+  .link-w{background:none;border:none;color:#fff;font:inherit;font-weight:500;cursor:pointer;padding:8px 4px;display:inline-flex;align-items:center;gap:4px;opacity:.9}
+  .link-w:hover{opacity:1;text-decoration:underline}
+  .link-w:focus-visible{outline:2px solid #B9A4FF;outline-offset:2px}
+  .works{display:flex;align-items:center;gap:10px;margin-top:28px;color:rgba(255,255,255,.7)}
+  .works .stack{display:flex}
+  .works .lg-c{width:40px;height:40px;border:2px solid #141A55}
+  .works .lg-c + .lg-c{margin-left:-10px}
+  .works .lg-c [data-logo]{width:22px;height:22px}
+  .term{background:rgba(5,8,30,.72);border:1px solid rgba(255,255,255,.14);border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.35);overflow:hidden}
+  .term-bar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.55);font-size:14px}
+  .term-bar i{width:11px;height:11px;border-radius:50%;background:#FF5F57}
+  .term-bar i:nth-child(2){background:#FEBC2E} .term-bar i:nth-child(3){background:#28C840}
+  .term-bar span{margin-left:8px}
+  .term pre{margin:0;padding:18px 18px 22px;min-height:132px;font-family:'Roboto Mono',monospace;font-size:14px;line-height:22px;color:#E6E9FF;white-space:pre-wrap;overflow-wrap:anywhere}
+  .term .pr{color:#7CFFB2}
+  .term .tok{color:#B9A4FF}
+  .caret{display:inline-block;width:8px;height:18px;background:#E6E9FF;vertical-align:-3px;margin-left:2px;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* Variant 4 · Connection map */
+  .map-hero{text-align:center;padding:40px 24px 8px;margin-bottom:24px;border-radius:20px;
+    background:radial-gradient(700px 260px at 50% 0%,rgba(0,83,204,.08),transparent 70%)}
+  .map-hero h1{font-size:36px;line-height:44px;font-weight:500;margin:0 0 8px;letter-spacing:-.01em;
+    background:linear-gradient(90deg,#0053CC,#5B2BE0,#310BB0);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .map-hero p.l{margin:0 auto 8px;max-width:620px;font-size:16px;line-height:24px;color:var(--text-secondary)}
+  .diagram{position:relative;width:820px;height:290px;margin:8px auto 8px}
+  .diagram svg.wires{position:absolute;inset:0}
+  .wire{fill:none;stroke:#D5DCF0;stroke-width:2}
+  .flow{fill:none;stroke-width:2.5;stroke-linecap:round;stroke-dasharray:6 14;animation:flow 1.6s linear infinite}
+  .flow.in{stroke:#7B3DFF} .flow.back{stroke:#4F8DE7;stroke-width:2;stroke-dasharray:4 16;stroke-dashoffset:10;animation-direction:reverse} .flow.out{stroke:url(#gOut)}
+  .wl{font-size:14px;fill:#6B778C;font-family:inherit}
+  .hubcard{position:relative;width:230px;border-radius:16px;color:var(--text-primary);padding:14px 18px 16px;text-align:left;
+    border:1.5px solid transparent;background:linear-gradient(#fff,#fff) padding-box,linear-gradient(135deg,#0053CC,#7B3DFF) border-box;
+    box-shadow:0 8px 24px rgba(49,11,176,.10)}
+  .hubcard .ht .mi{color:#5B2BE0}
+  .hubcard li .mi{color:#5B2BE0}
+  .hubcard .ht{display:flex;align-items:center;gap:8px;font-size:18px;font-weight:500;margin-bottom:10px}
+  .hubcard ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .hubcard li{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-primary)}
+  .hubcard li .mi{font-size:18px;opacity:.85}
+  @keyframes flow{to{stroke-dashoffset:-40}}
+  .node{position:absolute;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;font-size:14px;color:var(--text-secondary)}
+  .node .lg-c{width:52px;height:52px}
+  .node .lg-c [data-logo]{width:28px;height:28px}
+  .hubnode{width:132px;height:64px;border-radius:16px;background:linear-gradient(135deg,#0053CC,#310BB0);color:#fff;display:flex;align-items:center;
+    justify-content:center;gap:8px;font-size:18px;font-weight:500;box-shadow:0 10px 30px rgba(49,11,176,.3)}
+  .hubnode .mi{font-size:22px}
+  .pulse{position:absolute;inset:-8px;border-radius:22px;border:2px solid rgba(91,43,224,.35);animation:pulse 2.4s ease-out infinite}
+  @keyframes pulse{from{transform:scale(.92);opacity:1}to{transform:scale(1.18);opacity:0}}
+  .map-cta{display:flex;justify-content:center;margin:8px 0 32px}
+  .map-cta .btn{height:40px;padding:0 24px;font-size:15px}
+  .caps{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+  .cap{border:1px solid var(--border-default);border-radius:12px;padding:18px;background:#fff;transition:transform .2s, box-shadow .2s}
+  .cap:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(26,27,36,.08)}
+  .cap .ci{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;
+    background:linear-gradient(135deg,var(--color-primary-10),var(--color-purple-light));color:#3A1FC2}
+  .cap b{display:block;font-weight:500;font-size:16px;margin-bottom:4px}
+  .cap span{color:var(--text-secondary);line-height:20px}
+
+
+  /* Variant 3 · action cards */
+  .acards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .acard{position:relative;overflow:hidden;display:flex;gap:12px;align-items:flex-start;padding:16px;border-radius:14px;
+    background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);backdrop-filter:blur(6px);color:rgba(255,255,255,.75);line-height:20px}
+  .acard:nth-child(2n){transform:translateY(18px)}
+  .acard b{display:block;color:#fff;font-weight:500;font-size:16px;margin-bottom:2px}
+  .acard .ai{width:36px;height:36px;flex-shrink:0;border-radius:10px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,rgba(47,107,255,.5),rgba(139,61,255,.5));color:#fff}
+  .acard .ai .mi{font-size:20px}
+  .acard::after{content:'';position:absolute;top:0;bottom:0;left:-60%;width:40%;
+    background:linear-gradient(100deg,transparent,rgba(255,255,255,.10),transparent);animation:sheen 8s ease-in-out infinite}
+  .acard:nth-child(2)::after{animation-delay:2s} .acard:nth-child(3)::after{animation-delay:4s} .acard:nth-child(4)::after{animation-delay:6s}
+  @keyframes sheen{0%,70%{left:-60%}100%{left:130%}}
+
+  /* Variant 5 · orbit */
+  .orbit-wrap{position:relative;width:320px;height:320px;margin:0 auto}
+  .ring{position:absolute;border-radius:50%;border:1px dashed rgba(255,255,255,.22);left:50%;top:50%;transform:translate(-50%,-50%)}
+  .ring.r1{width:280px;height:280px} .ring.r2{width:180px;height:180px;border-style:solid;border-color:rgba(255,255,255,.08)}
+  .orbit{position:absolute;inset:0;animation:spin 60s linear infinite}
+  .sat{position:absolute;left:50%;top:50%;transform:rotate(var(--a)) translateX(140px) rotate(calc(-1 * var(--a)))}
+  .sat .up{display:block;transform:translate(-50%,-50%)}
+  .sat .up .lg-c{width:56px;height:56px;animation:spin 60s linear infinite reverse;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+  .sat .up .lg-c [data-logo]{width:30px;height:30px}
+  .core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;align-items:center;gap:8px;padding:14px 20px;border-radius:16px;
+    background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(6px);color:#fff;font-size:18px;font-weight:500;
+    box-shadow:0 0 40px rgba(139,61,255,.35)}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){ .orbit, .sat .up .lg-c, .acard::after{animation:none !important} }
+
+  .hdr-c{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin:0 0 24px}
+  .hdr-c h1{font-size:24px;font-weight:400;margin:0 0 4px;color:var(--text-primary)}
+  .hdr-c p{margin:0;font-size:16px;color:var(--text-secondary)}
+  .hdr-c[hidden]{display:none}
+  .hdr-acts{display:flex;gap:8px;flex-shrink:0}
+  .req-intro{display:flex;align-items:flex-start;gap:8px;margin:0 0 24px;padding:20px 16px;border-radius:12px;
+    background:radial-gradient(400px 160px at 0% 0%,rgba(0,83,204,.10),transparent 70%),linear-gradient(120deg,#F3F7FF,#F6F2FF);border:1px solid #DCE3F7}
+  .ri-step{flex:1;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px;line-height:20px}
+  .ri-step b{font-weight:500;color:var(--text-primary)} .ri-step span:last-child{color:var(--text-secondary)}
+  .ri-ic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:4px;
+    background:linear-gradient(135deg,#0053CC,#7B3DFF);color:#fff;box-shadow:0 6px 16px rgba(91,43,224,.25)}
+  .ri-arrow{color:#B4BBCB;margin-top:12px}
+  .faq{margin:8px 0 32px}
+  .drawer .faq{margin:28px 0 0}
+  .scope-line{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;color:var(--text-primary);line-height:22px}
+  .scope-line .mi{color:var(--text-secondary);font-size:20px;margin-top:1px}
+  .warn-line.full{align-items:flex-start}
+  .warn-line ul{margin:6px 0 0;padding-left:18px;line-height:22px}
+  .faq[hidden]{display:none}
+  .faq h2{font-size:18px;font-weight:500;margin:0 0 12px;color:var(--text-primary)}
+  .faq details{border:1px solid var(--border-default);border-radius:10px;margin-bottom:8px;background:#fff}
+  .faq summary{list-style:none;cursor:pointer;padding:14px 16px;font-weight:500;display:flex;align-items:center;justify-content:space-between;color:var(--text-primary)}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary:focus-visible{outline:2px solid var(--border-focus);outline-offset:-2px;border-radius:10px}
+  .faq summary .mi{color:var(--text-secondary);transition:transform .2s}
+  .faq details[open] summary .mi{transform:rotate(180deg)}
+  .faq details p{margin:0;padding:0 16px 16px;color:var(--text-secondary);line-height:22px}
+  .faq details p b{color:var(--text-primary);font-weight:500}
+  .link-inline{background:none;border:none;padding:0;font:inherit;color:var(--color-primary);cursor:pointer;text-decoration:underline}
+
+  /* Variant 5 · Pick your app (dark band + app tiles + drawer) */
+  .cmd.pick{text-align:center;padding:48px 40px 36px}
+  .cmd.pick h1{max-width:760px;margin:0 auto 12px}
+  .cmd.pick p.l{margin:0 auto 28px}
+  .app-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;max-width:860px;margin:0 auto 24px}
+  .app-tile{display:flex;flex-direction:column;align-items:center;gap:8px;padding:20px 8px 16px;border-radius:14px;cursor:pointer;font:inherit;
+    background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);color:#fff;backdrop-filter:blur(6px);transition:transform .15s, background .15s, border-color .15s}
+  .app-tile:hover{transform:translateY(-3px);background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4)}
+  .app-tile:focus-visible{outline:2px solid #B9A4FF;outline-offset:3px}
+  .app-tile .lg-c{width:52px;height:52px} .app-tile .lg-c [data-logo]{width:28px;height:28px}
+  .app-tile .an{font-size:16px;font-weight:500} .app-tile .as{font-size:14px;color:rgba(255,255,255,.65)}
+  .drawer-bg{justify-content:flex-end;align-items:stretch !important;padding:0 !important}
+  .drawer{width:560px;max-width:100%;height:100vh;background:#fff;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,.18);animation:slidein .2s ease-out}
+  @keyframes slidein{from{transform:translateX(40px);opacity:.6}}
+  .drawer .synder-modal-header{display:flex;align-items:center;gap:8px;font-size:18px}
+  .drawer .synder-modal-body{flex:1;overflow-y:auto}
+  .dr-note[hidden]{display:none}
+  .dr-note{padding:12px 24px;border-top:1px solid var(--border-default);color:var(--text-secondary);background:var(--color-grey-5);line-height:20px}
+  .dr-apps{display:flex;flex-direction:column;gap:8px}
+  .dr-app{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--border-default);border-radius:10px;background:#fff;cursor:pointer;font:inherit;text-align:left}
+  .dr-app:hover{border-color:#7B3DFF;background:#FAF8FF}
+  .dr-app:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+  .dr-app .lg-c{width:40px;height:40px} .dr-app .lg-c [data-logo]{width:22px;height:22px}
+  .dr-app b{display:block;font-weight:500} .dr-app span.s{color:var(--text-secondary)}
+  .dr-app .mi.go{margin-left:auto;color:var(--text-secondary)}
+  .dr-back{display:inline-flex;align-items:center;gap:4px;background:none;border:none;color:var(--color-primary);font:inherit;cursor:pointer;padding:4px 0;margin-bottom:12px}
+  .dr-h{display:flex;align-items:center;gap:12px;font-size:18px;font-weight:500;margin-bottom:20px}
+  .dr-h .lg-c{width:40px;height:40px} .dr-h .lg-c [data-logo]{width:22px;height:22px}
+
+  /* Variant 5 · Pick your app — light (like AI style / external proto B) */
+  .pick-light{position:relative;overflow:hidden;text-align:center;border-radius:20px;padding:44px 40px 32px;margin-bottom:32px;border:1px solid #DCE3F7;
+    background:radial-gradient(700px 320px at 0% 0%,rgba(0,83,204,.12),transparent 60%),radial-gradient(640px 320px at 100% 100%,rgba(123,61,255,.12),transparent 60%),
+      linear-gradient(120deg,#F3F7FF 0%,#F6F2FF 100%)}
+  .pick-light .eyebrow{background:#fff;border-color:#DCE3F7;color:var(--text-primary)}
+  .pick-light .eyebrow .mi{color:#5B2BE0}
+  .pick-light h1{max-width:760px;margin:0 auto 12px;font-size:34px;line-height:42px;font-weight:500;letter-spacing:-.01em;
+    background:linear-gradient(90deg,#0053CC,#5B2BE0);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .pick-light p.l{margin:0 auto 28px;font-size:16px;color:var(--text-secondary)}
+  .pick-light .app-grid{margin-bottom:20px}
+  .pick-light .app-tile{background:#fff;border:1px solid var(--border-default);color:var(--text-primary);backdrop-filter:none;box-shadow:0 1px 3px rgba(26,27,36,.06)}
+  .pick-light .app-tile:hover{background:#fff;border-color:#7B3DFF;box-shadow:0 8px 24px rgba(91,43,224,.14)}
+  .pick-light .app-tile:focus-visible{outline:2px solid var(--border-focus)}
+  .pick-light .app-tile .lg-c{background:var(--color-grey-5);box-shadow:none}
+  .pick-light .app-tile .as{color:var(--text-secondary)}
+  .link-p{background:none;border:none;color:var(--color-primary);font:inherit;font-weight:500;cursor:pointer;padding:8px 4px;display:inline-flex;align-items:center;gap:4px}
+  .link-p:hover{text-decoration:underline}
+  .link-p:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+
+  .not-copied{margin:0 12px 0 0;align-self:center}
+  .wait{display:flex;align-items:center;gap:10px;margin-top:16px;padding:12px 14px;border-radius:8px;background:var(--color-grey-5);color:var(--text-secondary)}
+  .wait.ok{background:var(--color-green-light);color:var(--color-green)}
+  .spin{width:16px;height:16px;border-radius:50%;border:2px solid #C9D3E6;border-top-color:var(--color-primary);animation:spin 1s linear infinite;flex-shrink:0}
+  .st-wait{gap:6px} .st-wait .dot{width:8px;height:8px;border-radius:50%;background:#8C97B1;animation:blinkdot 1.6s ease-in-out infinite}
+  @keyframes blinkdot{50%{opacity:.3}}
+  .edit-acc{background:none;border:none;color:var(--color-primary);font:inherit;font-weight:500;cursor:pointer;padding:6px 8px;border-radius:4px;margin-right:4px}
+  .edit-acc:hover{background:var(--color-primary-5)}
+  .edit-acc:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+
+  .mc-sec{font-size:16px;font-weight:500;margin:0 0 6px;color:var(--text-primary)}
+  .mc-sec2{margin-top:24px;padding-top:20px;border-top:1px solid var(--border-default)}
+  .mc-lines{margin:12px 0;padding-left:20px;line-height:22px;color:var(--text-primary)}
+  .mc-lines li{margin-bottom:6px}
+
+  /* Variant 2 · Dark · Actions: Connect opens a centered popup that starts with the app picker */
+  #m-drawer.as-modal{justify-content:center !important;align-items:center !important;padding:24px !important}
+  #m-drawer.as-modal .drawer{width:680px;height:auto;max-height:calc(100vh - 48px);border-radius:var(--radius-md);animation:none;box-shadow:var(--shadow-modal)}
+  .pick-q{margin:0 0 16px;font-size:16px;color:var(--text-primary)}
+  .pick-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+  .pick-tile{display:flex;flex-direction:column;align-items:center;gap:6px;padding:18px 6px 14px;border:1px solid var(--border-default);border-radius:12px;background:#fff;
+    cursor:pointer;font:inherit;color:var(--text-primary);transition:transform .15s,border-color .15s,box-shadow .15s}
+  .pick-tile:hover{transform:translateY(-2px);border-color:#7B3DFF;box-shadow:0 8px 20px rgba(91,43,224,.12)}
+  .pick-tile:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+  .pick-tile .lg-c{width:52px;height:52px;background:var(--color-grey-5);box-shadow:none} .pick-tile .lg-c [data-logo]{width:28px;height:28px}
+  .pick-tile b{font-weight:500} .pick-tile span:last-child{color:var(--text-secondary);text-align:center;line-height:18px}
+  .ri-step .ri-ic .mi{color:#fff}
+
+  /* Variant 1 · Pick your app: Synder palette (blue + white, no purple) */
+  body.v6 .pick-light{background:linear-gradient(180deg,var(--color-primary-5) 0%,#fff 100%);border-color:var(--color-primary-20)}
+  body.v6 .pick-light .eyebrow{border-color:var(--color-primary-20)}
+  body.v6 .pick-light .eyebrow .mi{color:var(--color-primary)}
+  body.v6 .pick-light h1{background:none;-webkit-background-clip:border-box;background-clip:border-box;color:var(--text-primary)}
+  body.v6 .pick-light .app-tile:hover{border-color:var(--color-primary);box-shadow:0 8px 24px rgba(0,83,204,.12)}
+  body.v6 .pick-light .app-tile .lg-c{background:var(--color-primary-5)}
+  body.v6 .ic-other{color:var(--color-primary) !important}
+  body.v6 .dr-app:hover{border-color:var(--color-primary);background:var(--color-primary-5)}
+  body.v6 .req-intro{background:var(--color-primary-5);border-color:var(--color-primary-20)}
+  body.v6 .ri-ic{background:var(--color-primary);box-shadow:none}
+  /* Questions: Subtitle1 / Body2, both black (kit tokens) */
+  .faq summary{font-size:var(--font-subtitle1-bold);font-weight:var(--font-subtitle1-bold-weight);line-height:24px;letter-spacing:var(--font-subtitle1-bold-letter-spacing);color:var(--text-primary)}
+  .faq details p{font-size:var(--font-body2);font-weight:var(--font-body2-weight);line-height:var(--font-body2-line-height);letter-spacing:var(--font-body2-letter-spacing);color:var(--text-primary)}
+  .dr-sub{font-size:16px;font-weight:600;margin:24px 0 12px;color:var(--text-primary)}
+  .next li{margin-bottom:8px;line-height:20px;color:var(--text-primary)}
+  .next li b{font-weight:600}
+  .acc-help{margin:0}
+  .acc-help dt{font-weight:600;color:var(--text-primary);margin-top:10px}
+  .acc-help dd{margin:2px 0 0;color:var(--text-primary);line-height:20px}
+  .rq-hint{font-size:14px;color:var(--text-secondary);margin-top:4px;line-height:20px}
+  .rq-done[hidden],#rq-form[hidden],#rq-foot[hidden],#rq-done-foot[hidden]{display:none}
+  .rq-done{text-align:center;padding:40px 24px}
+  .rq-done-ic{font-size:48px;color:var(--color-green)}
+  .rq-done h3{font-size:20px;font-weight:600;margin:12px 0 8px}
+  .rq-done p{margin:0;color:var(--text-primary)}
+</style>
+</head>
+<body>
+
+<div class="variant-switch">
+  <span class="vs-label">Variant</span>
+  <div class="vs-opts">
+    <button id="vv-6" onclick="setVariant(6)">1 · Pick your app</button>
+    <button id="vv-2" onclick="setVariant(2)">2 · AI style</button>
+    <button id="vv-3" onclick="setVariant(3)">3 · Dark · Actions</button>
+  </div>
+  <span class="vs-gap"></span>
+  <span class="vs-label">Organization</span>
+  <div class="vs-opts">
+    <button id="om-txn" onclick="setOrgMode('txn')">Per transaction</button>
+    <button id="om-sum" onclick="setOrgMode('sum')">Summary</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+
+<div class="app">
+  <nav class="sb" aria-label="Main">
+    <div class="sb-org"><span class="sb-av">PT</span>PT_QBO_test_2<span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">dashboard</span>Dashboard</div>
+    <div class="sb-item"><span class="mi">swap_horiz</span>Transactions<span class="mi chev">expand_more</span></div>
+    <div class="sb-item"><span class="mi">account_tree</span>Smart rules<span class="mi chev">expand_more</span></div>
+    <div class="sb-item"><span class="mi">shopping_cart</span>Invoicing<span class="mi chev">expand_more</span></div>
+    <div class="sb-item"><span class="mi">trending_up</span>Analytics<span class="mi chev">expand_more</span></div>
+    <div class="sb-gap"></div>
+    <div class="sb-item"><span class="mi">settings</span>Settings</div>
+    <div class="sb-item on" aria-current="page"><span class="mi">hub</span>AI Hub</div>
+    <div class="sb-item"><span class="mi">stars</span>What's New</div>
+    <div class="sb-item"><span class="mi">grid_view</span>Custom development</div>
+    <div class="sb-promo" hidden>
+      <b>Missed any transactions?</b>
+      <p>Compare your accounting records to your payment platform — find any transaction that's missing, mismatched, or didn't sync.</p>
+      <span class="btn">Check now</span>
+    </div>
+  </nav>
+
+  <div class="main">
+    <div class="top">
+      <span class="syncs">Syncs left : <b>1000</b></span>
+      <a class="text-link" href="#" style="text-decoration:none">How it works?</a>
+      <span class="mi">notifications</span>
+      <span class="mi">help_outline</span>
+      <span class="mi">person</span>
+    </div>
+    <div id="toasts" aria-live="polite"></div>
+    <main class="content">
+      <div class="hub">
+        <div id="v2-head" hidden>
+          <section class="hero" aria-labelledby="h-hero">
+            <div class="hero-top">
+              <span class="spark" aria-hidden="true"><span class="mi">auto_awesome</span></span>
+              <div><h1 id="h-hero">AI Hub</h1>
+                <p class="lede">Automate your accounting workflows with AI-powered agents</p></div>
+            </div>
+            <div class="hero-cards">
+              <div class="glass" id="card-connect-2" data-conn>
+                <div class="logo-stack" id="logos" role="img" aria-label="Works with Cursor, ChatGPT and Claude">
+                  <span class="lg" title="Cursor"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#000000" d="M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23"/></svg></span>
+                  <span class="lg" title="ChatGPT"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#000000" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg></span>
+                  <span class="lg" title="Claude"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#D97757" d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span>
+                </div>
+                <h2>Connect Claude, ChatGPT or Cursor <span class="status status-blue">Beta</span></h2>
+                <p>Your AI assistant checks syncs, explains failures, reviews and changes integration settings and re-syncs transactions on your behalf.</p>
+                <div><button class="btn" id="btn-connect-2" data-connect onclick="openConnect(this)">Connect your AI agent</button></div>
+              </div>
+              <div class="glass" id="card-request-2">
+                <span class="ic" id="req-ic"><span class="mi">smart_toy</span></span>
+                <h2>Request a custom agent</h2>
+                <p>Describe a task you do by hand today, and we automate it with an agent built for your workflow. Typical agents cost $20 to $200 a month.</p>
+                <div><button class="btn-outlined" id="btn-request-2" data-conn onclick="openRequest(this)">Request a custom agent</button><button class="btn" id="btn-request-2s" data-sum onclick="openRequest(this)">Request a custom agent</button></div>
+                <p class="sum-note" data-sum>Connecting your own AI assistant is not available for organizations with Daily Summary yet.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+
+
+        <div id="v3-head" hidden>
+          <section class="cmd" aria-labelledby="h-cmd">
+            <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
+            <div class="cmd-grid">
+              <div>
+                <span class="eyebrow"><span class="mi">auto_awesome</span>AI Hub · Beta</span>
+                <h1 id="h-cmd"><span data-conn>Run Synder from your AI assistant</span><span data-sum>Automate your accounting workflows with AI-powered agents</span></h1>
+                <p class="l" id="cmd-lede" data-conn>Connect Claude, ChatGPT or Cursor. It works with exactly the access you give it.</p>
+                <div class="acts">
+                  <button class="btn-glow" id="btn-connect-3" data-conn data-connect onclick="openDrawer(this, null, true)">Connect your AI agent</button>
+                  <button class="btn-glow" id="btn-request-3s" data-sum onclick="openRequest(this)">Request a custom agent</button>
+                  <button class="link-w" id="btn-request-3" data-conn onclick="openRequest(this)">Request a custom agent <span class="mi" style="font-size:18px">arrow_forward</span></button>
+                </div>
+                <p class="sum-note" data-sum>Connecting your own AI assistant is not available for organizations with Daily Summary yet.</p>
+                <div class="works" data-conn><span class="stack" role="img" aria-label="Works with Cursor, ChatGPT and Claude"><span class="lg-c" title="Cursor"><span data-logo="cursor"></span></span><span class="lg-c" title="ChatGPT"><span data-logo="openai"></span></span><span class="lg-c" title="Claude"><span data-logo="claude"></span></span></span>and other AI tools</div>
+              </div>
+              <div class="acards" data-conn aria-label="What your assistant can do in Synder">
+                <div class="acard"><span class="ai"><span class="mi">account_tree</span></span><span><b>Creates smart rules</b>Enables them only with Full access</span></div>
+                <div class="acard"><span class="ai"><span class="mi">fact_check</span></span><span><b>Runs reconciliations</b>Starts them and reads the results</span></div>
+                <div class="acard"><span class="ai"><span class="mi">tune</span></span><span><b>Changes settings</b>Integration and per transaction type</span></div>
+                <div class="acard"><span class="ai"><span class="mi">replay</span></span><span><b>Checks and re-syncs</b>Explains failures, re-syncs to your books</span></div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="v6-head" hidden>
+          <section class="pick-light" aria-labelledby="h-pick">
+            <span class="eyebrow"><span class="mi">auto_awesome</span>AI Hub · Beta</span>
+            <h1 id="h-pick"><span data-conn>Connect your AI assistant to handle settings, rules, syncs and reconciliation</span><span data-sum>Automate your accounting workflows with AI-powered agents</span></h1>
+            <p class="l" data-conn>Pick your app. It works with exactly the access you give it.</p>
+            <div class="app-grid" data-conn role="group" aria-label="Pick your app">
+                <button class="app-tile" id="app-web" data-connect onclick="openDrawer(this,'web')"><span class="lg-c"><span data-logo="claude"></span></span><span class="an">Claude</span><span class="as">Web, desktop, mobile</span></button>
+                <button class="app-tile" id="app-chatgpt" onclick="openDrawer(this,'chatgpt')"><span class="lg-c"><span data-logo="openai"></span></span><span class="an">ChatGPT</span><span class="as">Web</span></button>
+                <button class="app-tile" id="app-code" onclick="openDrawer(this,'code')"><span class="lg-c"><span data-logo="claude"></span></span><span class="an">Claude Code</span><span class="as">Terminal</span></button>
+                <button class="app-tile" id="app-cursor" onclick="openDrawer(this,'cursor')"><span class="lg-c"><span data-logo="cursor"></span></span><span class="an">Cursor</span><span class="as">Code editor</span></button>
+                <button class="app-tile" id="app-other" onclick="openDrawer(this,'other')"><span class="lg-c"><span class="mi ic-other" style="color:#5B2BE0">extension</span></span><span class="an">Other</span><span class="as">Any other AI tool</span></button>
+            </div>
+            <button class="btn" id="btn-request-6s" data-sum onclick="openRequest(this)">Request a custom agent</button>
+            <p class="sum-note" data-sum>Connecting your own AI assistant is not available for organizations with Daily Summary yet.</p>
+            <button class="link-p" id="btn-request-6" data-conn onclick="openRequest(this)">Want something built for you? Request a custom agent <span class="mi" style="font-size:18px">arrow_forward</span></button>
+          </section>
+        </div>
+
+        <div class="hdr-c" id="hdr-compact" hidden>
+          <div><h1>AI Hub</h1><p>Run Synder from Claude, ChatGPT or Cursor.</p></div>
+          <div class="hdr-acts">
+            <button class="btn-outlined" id="btn-request-c" onclick="openRequest(this)">Request a custom agent</button>
+            <button class="btn" id="btn-connect-c" onclick="connectEntry(this)">Connect your AI agent</button>
+          </div>
+        </div>
+        <div class="sec-head"><h2 id="h-tokens">Your connections and tokens</h2></div>
+        <p class="sec-desc" id="tok-desc">Apps that signed in and tokens you issued. Revoke what is no longer in use: the app or tool stops working at once.</p>
+        <div id="tokens"></div>
+        <div id="faq-page"></div>
+        <template id="faq-tpl"><section class="faq" id="faq" aria-labelledby="h-faq">
+          <h2 id="h-faq">Questions</h2>
+          <details><summary>What can my assistant do in Synder?<span class="mi">expand_more</span></summary>
+            <p>Check syncs and what needs attention, explain why a transaction didn't sync, change integration settings, create smart rules, run reconciliations, and sync or resync transactions. Exactly which of these depends on the access you give it.</p></details>
+          <details><summary>Which apps can I connect?<span class="mi">expand_more</span></summary>
+            <p><b>Claude</b> (web, desktop, mobile) and <b>ChatGPT</b> connect by signing in to Synder, with no token to copy. <b>Claude Code</b>, <b>Cursor</b> and other tools that can't sign in use an access token.</p></details>
+          <details><summary>What access does it get?<span class="mi">expand_more</span></summary>
+            <p>Apps that sign in: you choose on the Synder page. Tools with a token: you choose when you create it. <b>Read only</b> sees syncs, transactions, settings, reports and billing. <b>Full access</b> can also change settings, sync, roll back, resync and import. <b>Custom</b> lets you tick permissions one by one. It works in the organizations you belong to.</p></details>
+          <details><summary>How do I disconnect it?<span class="mi">expand_more</span></summary>
+            <p>Revoke it on this page: the app or tool stops working at once. Tokens don't expire on their own, so revoke any you no longer use.</p></details>
+          <details><summary>Does it use syncs from my plan?<span class="mi">expand_more</span></summary>
+            <p>Importing historical transactions does. Reading data doesn't.</p></details>
+          <details><summary>What is a custom agent?<span class="mi">expand_more</span></summary>
+            <p>An automation we set up for a task you do by hand today. Describe it in <button class="link-inline" onclick="openRequest(this)">Request a custom agent</button> and we'll email you.</p></details>
+        </section></template>
+      </div>
+    </main>
+  </div>
+</div>
+
+
+<!-- Connect your AI agent -->
+<div class="modal-bg" id="m-connect" onclick="if(event.target===this)closeModal()">
+  <div class="synder-modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="mc-title">
+    <div class="synder-modal-header">
+      <span id="mc-title">Connect your AI agent</span> <span class="status status-blue">Beta</span>
+      <button class="x" aria-label="Close" onclick="closeModal()"><span class="mi">close</span></button>
+    </div>
+
+    <!-- step 1: create -->
+    <div class="mc-step" id="mc-step1">
+      <div class="synder-modal-body">
+        <h3 class="mc-sec">Claude, ChatGPT and other apps</h3>
+        <p class="scope">Add Synder as a custom connector with this address. The app opens a Synder page where you sign in and choose what it may do; no token to copy.</p>
+        <div class="code"><pre id="mc-url">https://demo-mcp.synderapp.com/mcp</pre><button class="copy" id="mc-url-copy" onclick="copyText('mc-url', this)"><span class="mi">content_copy</span>Copy</button></div>
+        <ul class="mc-lines">
+          <li><b>Claude</b> (web, desktop, mobile): Settings → Connectors → Add custom connector → paste the address → Add, then sign in.</li>
+          <li><b>ChatGPT</b> (web): Settings → Apps &amp; Connectors → Developer mode → Create → paste the address, authentication OAuth (sign-in) → Create, then sign in.</li>
+        </ul>
+        <p class="scope-line"><span class="mi">info</span><span>On the Synder page you choose what it may do. It works with your Synder data in the organizations you belong to. Disconnect it any time on this page.</span></p>
+        <h3 class="mc-sec mc-sec2">Claude Code, Cursor and other tools</h3>
+        <p class="scope">Tools that cannot sign in take an access token. Keep it to yourself, like a password: it does not expire on its own, revoke it on this page when the tool no longer needs it.</p>
+        <div class="form-field">
+          <label class="form-label" for="tok-name">Token name</label>
+          <input class="input" id="tok-name" placeholder="e.g. Claude Code on my laptop" autocomplete="off"
+            oninput="clearErr('tok-name')">
+          <div class="form-error-msg" id="tok-name-err" hidden>Enter a token name</div>
+        </div>
+        <p class="scope-line" id="mc-scope"><span class="mi">info</span><span>It works with your Synder data in the organizations you belong to.</span></p>
+        <div class="form-field" role="radiogroup" aria-labelledby="acc-label">
+          <div class="form-label" id="acc-label">Access</div>
+          <div class="access">
+            <label class="radio-wrap"><input type="radio" name="acc" value="read" checked onchange="accChange()">
+              <span><span class="an">Read only</span> <span class="ad">see syncs, transactions, settings, reports and billing</span></span></label>
+            <label class="radio-wrap"><input type="radio" name="acc" value="full" onchange="accChange()">
+              <span><span class="an">Full access</span> <span class="ad">also change settings, sync, roll back, resync and import</span></span></label>
+            <label class="radio-wrap"><input type="radio" name="acc" value="custom" onchange="accChange()">
+              <span><span class="an">Custom</span> <span class="ad">tick the permissions below one by one</span></span></label>
+          </div>
+          <div class="alert alert-warning warn-line full" id="full-warn" hidden>
+            <span class="mi">warning_amber</span>
+            <span id="full-warn-t"></span>
+          </div>
+          <div class="perm" id="perm" hidden></div>
+          <div class="form-error-msg" id="perm-err" hidden>Pick at least one permission</div>
+        </div>
+      </div>
+      <div class="synder-modal-footer">
+        <button class="btn-outlined" onclick="closeModal()">Cancel</button>
+        <button class="btn" id="btn-generate" onclick="generate()">Generate access token</button>
+      </div>
+    </div>
+
+    <!-- step 2: token issued -->
+    <div class="mc-step" id="mc-step2" hidden>
+      <div class="synder-modal-body">
+        <div class="alert alert-success" id="issued"></div>
+        <div class="alert alert-warning">
+          <span class="mi">key</span>
+          <span><b>Copy it now: the full token is shown only once.</b> Keep it to yourself, like a password. It does not expire on its own; revoke it on this page when the agent no longer needs it.</span>
+        </div>
+        <div class="tabs" role="tablist" aria-label="AI client" id="client-tabs"></div>
+        <div id="client-panel" role="tabpanel"></div>
+      </div>
+      <div class="synder-modal-footer">
+        <button class="btn-outlined" id="btn-another" onclick="another()">Generate another token</button>
+        <button class="btn" id="btn-done" onclick="guardDone(this, done)">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Request a custom agent -->
+<div class="modal-bg" id="m-request" onclick="if(event.target===this)closeModal()">
+  <div class="synder-modal modal-lg" role="dialog" aria-modal="true" aria-labelledby="mr-title">
+    <div class="synder-modal-header">
+      <span id="mr-title">Request a custom agent</span>
+      <button class="x" aria-label="Close" onclick="closeModal()"><span class="mi">close</span></button>
+    </div>
+    <div class="synder-modal-body rq-done" id="rq-done" hidden>
+      <span class="mi rq-done-ic">check_circle</span>
+      <h3>Request Submitted!</h3>
+      <p>Thank you! We've received your AI Agent request and will get back to you soon.</p>
+    </div>
+    <div class="synder-modal-footer" id="rq-done-foot" hidden><button class="btn" id="rq-close" onclick="closeModal()">Close</button></div>
+    <div class="synder-modal-body" id="rq-form">
+      <div class="req-intro" id="req-intro">
+        <div class="ri-step"><span class="ri-ic"><span class="mi">edit_note</span></span><b>Describe the task</b><span>The more detail, the better the agent</span></div>
+        <span class="ri-arrow mi" aria-hidden="true">arrow_forward</span>
+        <div class="ri-step"><span class="ri-ic"><span class="mi">auto_awesome</span></span><b>We set it up</b><span>We email you if we need details</span></div>
+        <span class="ri-arrow mi" aria-hidden="true">arrow_forward</span>
+        <div class="ri-step"><span class="ri-ic"><span class="mi">rocket_launch</span></span><b>It runs for you</b><span>We email you when it's ready</span></div>
+      </div>
+      <div class="form-field">
+        <label class="form-label form-label-required" for="rq-name">Name</label>
+        <input class="input" id="rq-name" autocomplete="off">
+        <div class="form-hint rq-hint">Give your agent a short, descriptive name. Examples: "Invoice Categorizer", "Weekly P&amp;L Reporter", "Stripe Reconciliation Bot".</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label form-label-required" for="rq-purpose">Purpose</label>
+        <input class="input" id="rq-purpose" autocomplete="off">
+        <div class="form-hint rq-hint">A one-line summary of what the agent should achieve. Examples: "Automatically categorize incoming Stripe transactions", "Generate and email weekly financial reports to stakeholders".</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label form-label-required" for="rq-desc">Detailed task description</label>
+        <textarea class="textarea" id="rq-desc" rows="5" oninput="countDesc()"></textarea>
+        <div class="form-hint rq-hint">Minimum 100 characters. Describe the step-by-step workflow. Include data sources, rules, and expected output. Example: "Pull all new Stripe transactions daily. Match each against open invoices in QuickBooks by amount and customer name. Auto-categorize matched transactions as 'Sales Revenue'. Flag unmatched transactions for manual review and send a summary email."</div>
+        <div class="form-error-msg" id="rq-desc-err" hidden></div>
+        <div class="count" id="rq-count">0 / 100 characters minimum</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label form-label-required" for="rq-freq">How often</label>
+        <select class="select" id="rq-freq">
+          <option value="">Select frequency...</option>
+          <option>Real-time (as events occur)</option>
+          <option>Hourly</option>
+          <option>Daily</option>
+          <option>Weekly</option>
+          <option>Monthly</option>
+          <option>On demand</option>
+        </select>
+        <div class="form-hint rq-hint">How frequently should the agent run? "Real-time" means it triggers immediately when new data arrives. "On demand" means you trigger it manually when needed.</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label form-label-required" for="rq-now">How are you doing it now</label>
+        <textarea class="textarea" id="rq-now" rows="4"></textarea>
+        <div class="form-hint rq-hint">Tell us your current manual process so we can automate it effectively. Example: "Every Monday I export Stripe transactions to CSV, open QuickBooks, manually match each transaction by customer name, then create journal entries. It takes about 3 hours per week and is error-prone."</div>
+      </div>
+      <div class="form-field">
+        <label class="form-label form-label-required" for="rq-budget">Monthly budget (USD)</label>
+        <div class="money"><span>$</span><input class="input" id="rq-budget" type="number" min="0" step="0.01" inputmode="decimal" placeholder="50"></div>
+        <div class="form-hint rq-hint">How much would you pay monthly for this automation? Consider the time and cost of doing it manually. Typical agents range from $20 to $200/month depending on complexity.</div>
+      </div>
+    </div>
+    <div class="synder-modal-footer" id="rq-foot">
+      <button class="btn-outlined" onclick="closeModal()">Cancel</button>
+      <button class="btn" id="btn-submit" onclick="submitRequest()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- Connect drawer (variant 3 · Pick your app; centered popup in variant 2 · Dark · Actions) -->
+<div class="modal-bg drawer-bg" id="m-drawer" onclick="if(event.target===this)closeModal()">
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="dr-title">
+    <div class="synder-modal-header"><span id="dr-title">Connect your AI assistant</span> <span class="status status-blue">Beta</span>
+      <button class="x" aria-label="Close" onclick="closeModal()"><span class="mi">close</span></button></div>
+    <div class="synder-modal-body" id="dr-body"></div>
+    <div class="synder-modal-footer" id="dr-foot"></div>
+    <div class="dr-note" id="dr-note">It does only what the token allows. Revoke it any time on this page.</div>
+  </aside>
+</div>
+
+<!-- Revoke confirmation -->
+<div class="modal-bg" id="m-revoke" onclick="if(event.target===this)closeModal()">
+  <div class="synder-modal" role="alertdialog" aria-modal="true" aria-labelledby="rv-title" aria-describedby="rv-body">
+    <div class="synder-modal-header"><span id="rv-title">Revoke token?</span>
+      <button class="x" aria-label="Close" onclick="closeModal()"><span class="mi">close</span></button></div>
+    <div class="synder-modal-body" id="rv-body"></div>
+    <div class="synder-modal-footer">
+      <button class="btn-outlined" id="rv-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-error" id="rv-confirm" onclick="confirmRevoke()">Revoke</button>
+    </div>
+  </div>
+</div>
+
+<script>
+var MCP = 'https://demo-mcp.synderapp.com/mcp';
+var PERMS = [
+  ['Settings', [['view','View','See integration settings, accounts and tax codes',1],['change','Change','Change integration settings, including per transaction type',0]]],
+  ['Transactions', [['view','View','Search transactions, see their status and links',1]]],
+  ['Syncs', [['view','View','See syncs, their details and what needs attention',1],['run','Run','Sync and resync transactions',0],['rollback','Roll back','Remove what a sync created from the books',0]]],
+  ['Imports', [['view','View','See import runs and their results',1],['run','Run','Import historical transactions; uses syncs of the plan',0]]],
+  ['Reports', [['view','View','Sales, expenses, profit and loss and balance sheet reports',1]]],
+  ['Billing', [['view','View','Plan, syncs left, add-ons, renewal and linked card',1]]],
+  ['Reconciliation', [['view','View','See reconciliations and their results',1],['run','Run','Start a reconciliation',0]]],
+  ['Smart Rules', [['view','View','See rules, what they did, and what a rule can be written from',1],['change','Change','Create rules (always disabled), change, disable and archive them',0],['enable','Enable','Enable a rule: from then on it changes the books',0]]],
+  ['Accounting firm', [['view','View','The accounting firm you work at: its clients, licenses, subscription and billing',1]]],
+  ['Access', [['view','View tokens','See your own API tokens: label, permissions, expiry and last use; never the token itself',1]]]
+];
+var ACC = { read: 'Read only', full: 'Full access' };
+var SCOPE_TXT = 'It works with your Synder data in the organizations you belong to.';
+var FULL_WARN = '<b>Full access changes your books.</b> On top of Read only, it can:<ul>'
+  + '<li>Change integration settings, including per transaction type</li>'
+  + '<li>Sync and resync transactions</li>'
+  + '<li>Roll back syncs: remove what a sync created from the books</li>'
+  + '<li>Import historical transactions: uses syncs of the plan</li>'
+  + '<li>Enable smart rules: from then on they change the books</li></ul>It gets a preview of every change from Synder before making it, so it can check with you first. Start with Read only if you are not sure.';
+var TODAY = new Date().toLocaleDateString('en-US');
+var SEED = [
+  { name: 'Claude', prefix: null, access: 'Read only', created: '10/12/2026', used: '10/21/2026' },
+  { name: 'Claude Code on my laptop', prefix: 'sat_K7wQ2mPa', access: 'Read only', created: '9/28/2026', used: '10/8/2026' },
+  { name: 'Cursor · revrec repo', prefix: 'sat_Tz81LbXe', access: 'Custom · 12 permissions', created: '10/2/2026', used: 'Never' }
+];
+var LOGO = {
+  claude: ['#D97757', 'm4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z'],
+  openai: ['#000000', 'M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z'],
+  cursor: ['#000000', 'M11.503.131 1.891 5.678a.84.84 0 0 0-.42.726v11.188c0 .3.162.575.42.724l9.609 5.55a1 1 0 0 0 .998 0l9.61-5.55a.84.84 0 0 0 .42-.724V6.404a.84.84 0 0 0-.42-.726L12.497.131a1.01 1.01 0 0 0-.996 0M2.657 6.338h18.55c.263 0 .43.287.297.515L12.23 22.918c-.062.107-.229.064-.229-.06V12.335a.59.59 0 0 0-.295-.51l-9.11-5.257c-.109-.063-.064-.23.061-.23']
+};
+LOGO.quickbooks = ['#2CA01C', 'M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm.642 4.1335c.9554 0 1.7296.776 1.7296 1.7332v9.0667h1.6c1.614 0 2.9275-1.3156 2.9275-2.933 0-1.6173-1.3136-2.9333-2.9276-2.9333h-.6654V7.3334h.6654c2.5722 0 4.6577 2.0897 4.6577 4.667 0 2.5774-2.0855 4.6666-4.6577 4.6666H12.642zM7.9837 7.333h3.3291v12.533c-.9555 0-1.73-.7759-1.73-1.7332V9.0662H7.9837c-1.6146 0-2.9277 1.316-2.9277 2.9334 0 1.6175 1.3131 2.9333 2.9277 2.9333h.6654v1.7332h-.6654c-2.5725 0-4.6577-2.0892-4.6577-4.6665 0-2.5771 2.0852-4.6666 4.6577-4.6666Z'];
+LOGO.xero = ['#13B5EA', 'M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm6.585 14.655c-1.485 0-2.69-1.206-2.69-2.689 0-1.485 1.207-2.691 2.69-2.691 1.485 0 2.69 1.207 2.69 2.691s-1.207 2.689-2.69 2.689zM7.53 14.644c-.099 0-.192-.041-.267-.116l-2.043-2.04-2.052 2.047c-.069.068-.16.108-.258.108-.202 0-.368-.166-.368-.368 0-.099.04-.191.111-.263l2.04-2.05-2.038-2.047c-.075-.069-.113-.162-.113-.261 0-.203.166-.366.368-.366.098 0 .188.037.258.105l2.055 2.048 2.048-2.045c.069-.071.162-.108.26-.108.211 0 .375.165.375.366 0 .098-.029.188-.104.258l-2.056 2.055 2.055 2.051c.068.069.104.16.104.258 0 .202-.165.368-.365.368h-.01zm8.017-4.591c-.796.101-.882.476-.882 1.404v2.787c0 .202-.165.366-.366.366-.203 0-.367-.165-.368-.366v-4.53c0-.204.16-.366.362-.366.166 0 .316.125.346.289.27-.209.6-.317.93-.317h.105c.195 0 .359.165.359.368 0 .201-.164.352-.375.359 0 0-.09 0-.164.008l.053-.002zm-3.091 2.205H8.625c0 .019.003.037.006.057.02.105.045.211.083.31.194.531.765 1.275 1.829 1.29.33-.003.631-.086.9-.229.21-.12.391-.271.525-.428.045-.058.09-.112.12-.168.18-.229.405-.186.54-.083.164.135.18.391.045.57l-.016.016c-.21.27-.435.495-.689.66-.255.164-.525.284-.811.345-.33.09-.645.104-.975.06-1.095-.135-2.01-.93-2.28-2.01-.06-.21-.09-.42-.09-.645 0-.855.421-1.695 1.125-2.205.885-.615 2.085-.66 3-.075.63.405 1.035 1.021 1.185 1.771.075.419-.21.794-.734.81l.068-.046zm6.129-2.223c-1.064 0-1.931.865-1.931 1.931 0 1.064.866 1.931 1.931 1.931s1.931-.867 1.931-1.931c0-1.065-.866-1.933-1.931-1.933v.002zm0 2.595c-.367 0-.666-.297-.666-.666 0-.367.3-.665.666-.665.367 0 .667.299.667.665 0 .369-.3.667-.667.666zm-8.04-2.603c-.91 0-1.672.623-1.886 1.466v.03h3.776c-.203-.855-.973-1.494-1.891-1.494v-.002z'];
+function logo(n){ return '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="' + LOGO[n][0] + '" d="' + LOGO[n][1] + '"/></svg>'; }
+var variant = 6, curState = 'empty', orgMode = 'txn';
+/* Daily Summary organizations can't connect an assistant: Request only */
+function setOrgMode(m){
+  orgMode = m;
+  document.getElementById('om-txn').classList.toggle('on', m === 'txn');
+  document.getElementById('om-sum').classList.toggle('on', m === 'sum');
+  document.querySelector('.hub').classList.toggle('summary', m === 'sum');
+  setHash(); renderTokens();
+}
+function setHash(){ history.replaceState(null, '', '#v' + variant + '-' + curState + (orgMode === 'sum' ? '-sum' : '')); }
+function setVariant(n){
+  variant = n;
+  document.body.classList.toggle('v6', n === 6);
+  [2, 3, 6].forEach(function(i){ var b = document.getElementById('vv-' + i); if (b) b.classList.toggle('on', n === i); });
+  document.querySelector('.hub').classList.toggle('v2', n === 2);
+  document.querySelector('.hub').classList.toggle('wide', n >= 3);
+  setHash();
+  renderTokens();
+}
+/* returning users (token exists): no banner, a normal page header */
+function updateHero(){
+  var compact = tokens.length > 0 && orgMode !== 'sum';
+  [2, 3, 6].forEach(function(i){ var h = document.getElementById('v' + i + '-head'); if (h) h.hidden = compact || variant !== i; });
+  document.getElementById('hdr-compact').hidden = !compact;
+}
+
+/* ---------- connect drawer ---------- */
+var APPS = { web: ['Claude', 'claude', 'Web, desktop, mobile'], chatgpt: ['ChatGPT', 'openai', 'Web'], code: ['Claude Code', 'claude', 'Terminal'],
+  cursor: ['Cursor', 'cursor', 'Code editor'], other: ['Other', null, 'Any other AI tool'] };
+function appTitle(k){ return k === 'other' ? 'another app' : APPS[k][0]; }
+var SIGNIN = { web: 'In Claude, open <b>Settings → Connectors → Add custom connector</b>, paste the address and click <b>Add</b>, then sign in.',
+  chatgpt: 'In ChatGPT, open <b>Settings → Apps &amp; Connectors → Developer mode → Create</b>, paste the address, choose authentication <b>OAuth</b> (sign-in), click <b>Create</b>, then sign in.' };
+function isSignin(k){ return k === 'other' ? dr.route === 'signin' : !!SIGNIN[k]; }
+SIGNIN.other = 'In your app, add a custom connector (or MCP server) with this address and choose sign-in (OAuth) if it asks how to connect.';
+var dr = { step: 'pick', app: null, acc: 'read' };
+function appMark(k){ return APPS[k][1] ? '<span class="lg-c"><span data-logo="' + APPS[k][1] + '"></span></span>'
+  : '<span class="lg-c"><span class="mi ic-other" style="color:#5B2BE0">extension</span></span>'; }
+function connectEntry(btn){ if (variant === 6) openDrawer(btn, null); else if (variant === 3) openDrawer(btn, null, true); else openConnect(btn); }
+function openDrawer(trigger, app, asModal){
+  dr = { step: app === 'other' ? 'route' : app ? 'setup' : 'pick', app: app, acc: 'read', modal: !!asModal, route: null };
+  document.getElementById('m-drawer').classList.toggle('as-modal', !!asModal);
+  renderDrawer(); openModal('m-drawer', trigger);
+  focusSoon(app === 'other' ? 'dr-route-signin' : isSignin(app) ? 'dr-signin-done' : app ? 'dr-name' : 'dr-app-web');
+}
+function renderDrawer(){
+  var b = document.getElementById('dr-body'), f = document.getElementById('dr-foot');
+  document.getElementById('dr-note').hidden = dr.step === 'pick' || (dr.app && !isSignin(dr.app));
+  document.getElementById('dr-note').textContent = isSignin(dr.app)
+    ? 'It does only what you allow on the Synder page. Disconnect it any time on this page.'
+    : 'It does only what the token allows. Revoke it any time on this page.';
+  if (dr.step === 'route'){
+    b.innerHTML = '<button class="dr-back" id="dr-back" onclick="dr.step=\'pick\';renderDrawer();focusSoon(\'dr-app-other\')"><span class="mi" style="font-size:18px">chevron_left</span>Choose another app</button>'
+      + '<div class="dr-h">' + appMark('other') + 'Connect another app</div>'
+      + '<p class="pick-q" id="route-q">How does your app connect?</p><div class="dr-apps" role="group" aria-labelledby="route-q">'
+      + '<button class="dr-app" id="dr-route-signin" onclick="drRoute(\'signin\')"><span class="lg-c"><span class="mi ic-other" style="color:#5B2BE0">login</span></span><span><b>It signs in with a link</b><span class="s">Most chat apps: you add a connector and sign in to Synder</span></span><span class="mi go">chevron_right</span></button>'
+      + '<button class="dr-app" id="dr-route-token" onclick="drRoute(\'token\')"><span class="lg-c"><span class="mi ic-other" style="color:#5B2BE0">key</span></span><span><b>It uses a token</b><span class="s">Developer tools: you paste a token into a settings file</span></span><span class="mi go">chevron_right</span></button></div>';
+    f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button>';
+    document.getElementById('dr-note').hidden = true;
+  } else if (dr.step === 'setup' && isSignin(dr.app)){
+    b.innerHTML = '<button class="dr-back" id="dr-back" onclick="dr.step=\'pick\';renderDrawer();focusSoon(\'dr-app-' + dr.app + '\')"><span class="mi" style="font-size:18px">chevron_left</span>Choose another app</button>'
+      + '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + appTitle(dr.app) + '</div>'
+      + '<p class="intro">Copy the address and add it in ' + (dr.app === 'other' ? 'the app' : APPS[dr.app][0]) + ' as a connector.</p>'
+      + codeBlock('dr-signin-url', MCP)
+      + '<ol class="steps" style="margin-top:16px"><li>' + SIGNIN[dr.app] + '</li></ol>'
+      + '<h3 class="dr-sub">What happens next</h3>'
+      + '<ol class="steps next" id="dr-next">'
+      + '<li><b>Synder opens in your browser.</b>The app takes you to a Synder page. Sign in if you are not signed in yet.</li>'
+      + '<li><b>You choose the access.</b>Read only, Full access or Custom, see below. Read only is a good start, you can always reconnect with more.</li>'
+      + '<li><b>You press Allow.</b>You are back in the app, and it can work with your Synder data in the organizations you belong to.</li></ol>'
+      + '<h3 class="dr-sub">Which access to choose</h3>'
+      + '<dl class="acc-help" id="dr-acc-help">'
+      + '<dt>Read only</dt><dd>The app can look things up and explain them: why a sync failed, what a report shows, how the settings are set. It cannot change anything.</dd>'
+      + '<dt>Full access</dt><dd>The app can also act: sync, roll back and resync transactions, start imports, change settings and manage Smart Rules. It gets a preview of every change from Synder before making it, so it can check with you first.</dd>'
+      + '<dt>Custom</dt><dd>You pick the permissions one by one, for example everything in Read only plus running syncs. For when you know exactly what the app should be able to do.</dd></dl>'
+      ;
+    f.innerHTML = '<button class="btn" id="dr-signin-done" onclick="drSigninDone()">Done</button>';
+  } else if (dr.step === 'pick'){
+    if (dr.modal){
+      b.innerHTML = '<p class="pick-q" id="pick-q">Which app do you want to connect?</p><div class="pick-grid" role="group" aria-labelledby="pick-q">' + Object.keys(APPS).map(function(k){
+        return '<button class="pick-tile" id="dr-app-' + k + '" onclick="drPick(\'' + k + '\')">' + appMark(k) + '<b>' + APPS[k][0] + '</b><span>' + APPS[k][2] + '</span></button>'; }).join('') + '</div>';
+      f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button>';
+      fillLogos(document.getElementById('m-drawer')); return;
+    }
+    b.innerHTML = '<div class="dr-apps" role="group" aria-label="Pick your app">' + Object.keys(APPS).map(function(k){
+      return '<button class="dr-app" id="dr-app-' + k + '" onclick="drPick(\'' + k + '\')">' + appMark(k)
+        + '<span><b>' + APPS[k][0] + '</b><span class="s">' + APPS[k][2] + '</span></span><span class="mi go">chevron_right</span></button>'; }).join('') + '</div>';
+    f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button>';
+  } else if (dr.step === 'setup'){
+    b.innerHTML = '<button class="dr-back" id="dr-back" onclick="dr.step=\'pick\';renderDrawer();focusSoon(\'dr-app-' + dr.app + '\')"><span class="mi" style="font-size:18px">chevron_left</span>Choose another app</button>'
+      + '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + appTitle(dr.app) + '</div>'
+      + '<p class="intro" id="dr-token-intro">' + APPS[dr.app][0].replace('Other', 'Your tool') + ' connects with an access token instead of signing in. Create one here and paste the snippet into the tool. The token does not expire on its own; revoke it on this page when it is no longer needed.</p>'
+      + '<div class="form-field"><label class="form-label" for="dr-name">Token name</label>'
+      + '<input class="input" id="dr-name" autocomplete="off" value="' + esc(dr.app === 'other' ? 'My AI tool' : APPS[dr.app][0]) + '" oninput="document.getElementById(\'dr-name-err\').hidden=true">'
+      + '<div class="form-error-msg" id="dr-name-err" hidden>Enter a token name</div></div>'
+      + '<p class="scope-line" id="dr-scope"><span class="mi">info</span><span>' + SCOPE_TXT + '</span></p>'
+      + accessFields();
+    f.innerHTML = '<button class="btn-outlined" onclick="closeModal()">Cancel</button><button class="btn" id="dr-generate" onclick="drGenerate()">Generate access token</button>';
+  } else {
+    var k = dr.app;
+    b.innerHTML = '<div class="dr-h">' + appMark(dr.app) + 'Connect ' + appTitle(dr.app) + '</div>'
+      + '<div class="alert alert-success" id="dr-issued"><span class="mi">check_circle</span><span><b>Token created:</b> ' + esc(dr.name) + ' · ' + esc(dr.label) + '</span></div>'
+      + '<div class="alert alert-warning"><span class="mi">key</span><span><b>Copy it now: the full token is shown only once.</b> Keep it to yourself, like a password.</span></div>'
+      + clientHTML(k, dr.token).replace(/(['"])(snip-url|snip)/g, '$1dr-$2');
+    f.innerHTML = '<button class="btn-outlined" id="dr-another" onclick="drAnother()">Generate another token</button><button class="btn" id="dr-done" onclick="guardDone(this, drDone)">Done</button>';
+  }
+  fillLogos(document.getElementById('m-drawer'));
+}
+
+function drPick(k){ dr.app = k; dr.route = null; dr.step = k === 'other' ? 'route' : 'setup'; renderDrawer(); focusSoon(k === 'other' ? 'dr-route-signin' : isSignin(k) ? 'dr-signin-done' : 'dr-name'); }
+function drRoute(r){ dr.route = r; dr.step = 'setup'; renderDrawer(); focusSoon(r === 'signin' ? 'dr-signin-done' : 'dr-name'); }
+function accessFields(){
+  return '<div class="form-field" role="radiogroup" aria-labelledby="dr-acc-l"><div class="form-label" id="dr-acc-l">Access</div><div class="access">'
+    + [['read','Read only','see syncs, transactions, settings, reports and billing'],['full','Full access','also change settings, sync, roll back, resync and import'],['custom','Custom','tick the permissions below one by one']].map(function(o){
+        return '<label class="radio-wrap"><input type="radio" name="dracc" value="' + o[0] + '"' + (dr.acc === o[0] ? ' checked' : '') + ' onchange="drAcc(this.value)">'
+          + '<span><span class="an">' + o[1] + '</span> <span class="ad">' + o[2] + '</span></span></label>'; }).join('')
+    + '</div><div class="alert alert-warning warn-line full" id="dr-full-warn"' + (dr.acc === 'full' ? '' : ' hidden') + '><span class="mi">warning_amber</span><span>' + FULL_WARN + '</span></div>'
+    + '<div class="perm" id="dr-perm"' + (dr.acc === 'custom' ? '' : ' hidden') + '>' + PERMS.map(function(g, gi){ return '<div><h4>' + g[0] + '</h4>' + g[1].map(function(q){
+        var id = 'dp-' + gi + '-' + q[0]; return '<label class="synder-checkbox" for="' + id + '"><input type="checkbox" id="' + id + '"' + (q[3] ? ' checked' : '') + ' onchange="drPermChange()"><span><b>' + q[1] + '</b> <span class="pd">' + q[2] + '</span></span></label>'; }).join('') + '</div>'; }).join('')
+    + '<div class="alert alert-warning warn-line" id="dr-enable-warn" hidden><span class="mi">warning_amber</span><span><b>Enable a rule</b> lets the app turn smart rules on. From then on they change the books.</span></div>'
+    + '</div><div class="form-error-msg" id="dr-perm-err" hidden>Pick at least one permission</div></div>';
+}
+function drPermChange(){ var e = document.getElementById('dp-7-enable'); document.getElementById('dr-enable-warn').hidden = !(e && e.checked); document.getElementById('dr-perm-err').hidden = true; }
+function accLabel(){
+  if (dr.acc !== 'custom') return ACC[dr.acc];
+  var c = document.querySelectorAll('#dr-perm input:checked').length;
+  if (!c){ document.getElementById('dr-perm-err').hidden = false; return null; }
+  return 'Custom · ' + c + ' permission' + (c === 1 ? '' : 's');
+}
+/* nothing is connected yet: the app appears in the table only after the user signs in on the Synder page */
+function drSigninDone(){
+  var n = dr.app === 'other' ? 'Your app' : APPS[dr.app][0]; closeModal();
+  toast(n + ' appears under Your connections and tokens after you sign in');
+}
+function statusChip(t){ return '<span class="status status-green">Active</span>'; }
+function accessChip(a){ return a === 'Full access' ? '<span class="status status-yellow">Full access</span>' : esc(a); }
+function drAcc(v){ dr.acc = v;
+  document.getElementById('dr-perm').hidden = v !== 'custom'; document.getElementById('dr-full-warn').hidden = v !== 'full';
+  document.getElementById('dr-perm-err').hidden = true; }
+function drGenerate(){
+  var n = document.getElementById('dr-name').value.trim();
+  if (!n){ document.getElementById('dr-name-err').hidden = false; document.getElementById('dr-name').focus(); return; }
+  var label = accLabel(); if (!label) return;
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', t = 'sat_';
+  for (var i = 0; i < 40; i++) t += chars[Math.floor(Math.random() * chars.length)];
+  dr.name = n; dr.label = label; dr.token = t; dr.step = 'done';
+  tokCopied = false;
+  dr.obj = { name: n, prefix: t.slice(0, 12), access: label, created: TODAY, used: 'Never' };
+  renderDrawer(); focusSoon('dr-done');
+}
+function drAnother(){ tokens.unshift(dr.obj); freshName = dr.name; renderTokens(); var a = dr.app; dr = { step: 'setup', app: a, acc: 'read', modal: dr.modal, route: dr.route }; renderDrawer(); focusSoon('dr-name'); }
+function drDone(){
+  tokens.unshift(dr.obj); freshName = dr.name; renderTokens(); closeModal();
+}
+function fillLogos(root){ (root || document).querySelectorAll('[data-logo]').forEach(function(el){ if (!el.firstChild) el.innerHTML = logo(el.getAttribute('data-logo')); }); }
+var tokens = [], freshName = null, lastTrigger = null, openId = null, issued = null, client = 'code', revokeIdx = -1;
+
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+
+/* ---------- state switcher ---------- */
+function setState(s){
+  curState = s;
+  setHash();
+  tokens = s === 'tokens' ? SEED.slice() : [];
+  freshName = null;
+  renderTokens();
+}
+
+function renderTokens(){
+  var el = document.getElementById('tokens');
+  updateHero();
+  var none = !tokens.length || orgMode === 'sum';
+  document.getElementById('h-tokens').parentNode.hidden = none; el.hidden = none; document.getElementById('tok-desc').hidden = none;
+  var fp = document.getElementById('faq-page');
+  fp.innerHTML = none && orgMode !== 'sum' ? document.getElementById('faq-tpl').innerHTML : '';
+  if (none){ el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="table-wrap"><table class="synder-table" id="tok-table" aria-labelledby="h-tokens"><thead><tr>'
+    + '<th>Name</th><th>Kind</th><th>Created</th><th>Last used</th><th>Access</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>'
+    + tokens.map(function(t, i){
+        return '<tr' + (t.name === freshName ? ' class="fresh"' : '') + '><td>' + esc(t.name) + (t.prefix ? ' <code class="tok-pre">' + t.prefix + '…</code>' : '') + '</td><td>' + (t.prefix ? 'Access token' : 'Signed-in app') + '</td>'
+          + '<td>' + t.created + '</td><td' + (t.used === 'Never' ? ' class="muted"' : '') + '>' + t.used + '</td>'
+          + '<td>' + accessChip(t.access) + '</td><td>' + statusChip(t) + '</td>'
+          + '<td class="act"><button class="revoke" data-i="' + i + '" onclick="askRevoke(' + i + ', this)">Revoke</button></td></tr>';
+      }).join('') + '</tbody></table></div>';
+}
+
+/* ---------- modal plumbing ---------- */
+function openModal(id, trigger){
+  closeModal(true);
+  lastTrigger = trigger || null; openId = id;
+  document.getElementById(id).classList.add('show');
+}
+function closeModal(silent){
+  if (!openId) return;
+  document.getElementById(openId).classList.remove('show');
+  openId = null;
+  if (!silent && lastTrigger && document.body.contains(lastTrigger)){
+    if (lastTrigger.offsetParent === null) lastTrigger = tokens.length ? document.getElementById('btn-connect-c') : document.querySelector('#v' + variant + '-head [data-connect]');
+    lastTrigger.focus();
+  }
+}
+document.addEventListener('keydown', function(e){ if (e.key === 'Escape') closeModal(); });
+function focusSoon(id){ setTimeout(function(){ var el = document.getElementById(id); if (el) el.focus(); }, 30); }
+function clearErr(id){ document.getElementById(id + '-err').hidden = true; document.getElementById(id).removeAttribute('aria-invalid'); }
+
+function toast(msg){
+  var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status');
+  t.innerHTML = '<span class="mi">check_circle</span><span>' + esc(msg) + '</span>';
+  var box = document.getElementById('toasts'); box.innerHTML = ''; box.appendChild(t);
+  setTimeout(function(){ t.remove(); }, 4000);
+}
+
+/* ---------- connect: step 1 ---------- */
+function openConnect(trigger){
+  document.getElementById('tok-name').value = '';
+  clearErr('tok-name');
+  document.querySelector('input[name=acc][value=read]').checked = true;
+  renderPerms(); accChange();
+  document.getElementById('mc-step1').hidden = false;
+  document.getElementById('mc-step2').hidden = true;
+  openModal('m-connect', trigger);
+  focusSoon('tok-name');
+}
+function renderPerms(){
+  document.getElementById('perm').innerHTML = PERMS.map(function(g, gi){
+    return '<div><h4>' + g[0] + '</h4>' + g[1].map(function(p){
+      var id = 'p-' + gi + '-' + p[0];
+      return '<label class="synder-checkbox" for="' + id + '"><input type="checkbox" id="' + id + '"' + (p[3] ? ' checked' : '')
+        + ' onchange="document.getElementById(\'perm-err\').hidden=true"><span><b>' + p[1] + '</b> <span class="pd">' + p[2] + '</span></span></label>';
+    }).join('') + '</div>';
+  }).join('');
+}
+function acc(){ return document.querySelector('input[name=acc]:checked').value; }
+function accChange(){
+  var a = acc();
+  document.getElementById('perm').hidden = a !== 'custom';
+  document.getElementById('full-warn').hidden = a !== 'full';
+  document.getElementById('full-warn-t').innerHTML = FULL_WARN;
+  document.getElementById('perm-err').hidden = true;
+}
+function generate(){
+  var name = document.getElementById('tok-name').value.trim(), a = acc(), label = ACC[a];
+  if (!name){
+    document.getElementById('tok-name-err').hidden = false;
+    document.getElementById('tok-name').setAttribute('aria-invalid', 'true');
+    document.getElementById('tok-name').focus(); return;
+  }
+  if (a === 'custom'){
+    var n = document.querySelectorAll('#perm input:checked').length;
+    if (!n){ document.getElementById('perm-err').hidden = false; return; }
+    label = 'Custom · ' + n + ' permission' + (n === 1 ? '' : 's');
+  }
+  var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', tok = 'sat_';
+  for (var i = 0; i < 40; i++) tok += chars[Math.floor(Math.random() * chars.length)];
+  issued = { name: name, access: label, token: tok };
+  tokCopied = false; var bd = document.getElementById('btn-done'); delete bd.dataset.armed; bd.textContent = 'Done';
+  var ow = document.getElementById('btn-done-warn'); if (ow) ow.remove();
+  document.getElementById('issued').innerHTML = '<span class="mi">check_circle</span><span><b>Token created:</b> '
+    + esc(name) + ' · ' + esc(label) + '</span>';
+  document.getElementById('mc-step1').hidden = true;
+  document.getElementById('mc-step2').hidden = false;
+  client = 'code'; renderClient();
+  focusSoon('tab-code');
+}
+
+/* ---------- token result ---------- */
+var CLIENTS = [['code','Claude Code','claude'],['cursor','Cursor and others','cursor']];
+
+function codeBlock(id, text, label){
+  return (label ? '<div class="code-label" id="' + id + '-l">' + label + '</div>' : '')
+    + '<div class="code"><pre id="' + id + '"' + (label ? ' aria-labelledby="' + id + '-l"' : '') + '>' + esc(text) + '</pre>'
+    + '<button class="copy" id="' + id + '-copy" onclick="copyText(\'' + id + '\', this)"><span class="mi">content_copy</span>Copy</button></div>';
+}
+function renderClient(){
+  var t = issued.token;
+  document.getElementById('client-tabs').innerHTML = CLIENTS.map(function(c){
+    var on = c[0] === client;
+    return '<button class="tab' + (on ? ' active' : '') + '" role="tab" id="tab-' + c[0] + '" aria-selected="' + on + '"'
+      + ' tabindex="' + (on ? 0 : -1) + '" onclick="pickClient(\'' + c[0] + '\')" onkeydown="tabKey(event)">' + (variant >= 2 ? logo(c[2]) : '') + c[1] + '</button>';
+  }).join('');
+  var p = document.getElementById('client-panel');
+  p.setAttribute('aria-labelledby', 'tab-' + client);
+  p.innerHTML = clientHTML(client, t);
+}
+function clientHTML(client, t){
+  if (client === 'code')
+    return '<p class="intro">Paste this line into a terminal and press Enter. Then start <code class="k">claude</code> and ask: "Why did my last Stripe sync fail?"</p>'
+      + codeBlock('snip', 'claude mcp add --transport http synder ' + MCP + ' --header "Authorization: Bearer ' + t + '"');
+  var cj = '{\n  "mcpServers": {\n    "synder": {\n      "url": "' + MCP + '",\n      "headers": {\n        "Authorization": "Bearer ' + t + '"\n      }\n    }\n  }\n}';
+  return (client === 'cursor'
+    ? '<p class="intro">Paste this into Cursor\'s settings file <code class="k">.cursor/mcp.json</code> and save it. Then ask Cursor: "Why did my last Stripe sync fail?"</p>'
+    : '<p class="intro">Paste this into your tool\'s settings file, in the section for connected servers (often called MCP servers), and save it.</p>')
+    + codeBlock('snip', cj);
+}
+function pickClient(c){ client = c; renderClient(); document.getElementById('tab-' + c).focus(); }
+function tabKey(e){
+  var i = CLIENTS.findIndex(function(c){ return c[0] === client; });
+  if (e.key === 'ArrowRight') i = (i + 1) % CLIENTS.length;
+  else if (e.key === 'ArrowLeft') i = (i + CLIENTS.length - 1) % CLIENTS.length;
+  else if (e.key === 'Home') i = 0; else if (e.key === 'End') i = CLIENTS.length - 1; else return;
+  e.preventDefault(); pickClient(CLIENTS[i][0]);
+}
+function flash(btn){
+  btn.classList.add('done'); var old = btn.innerHTML;
+  btn.innerHTML = '<span class="mi">check</span>Copied';
+  setTimeout(function(){ if (document.body.contains(btn)){ btn.classList.remove('done'); btn.innerHTML = old; } }, 1800);
+}
+function clip(text){ try { navigator.clipboard && navigator.clipboard.writeText(text).catch(function(){}); } catch (e) {} }
+var tokCopied = false;
+function copyText(id, btn){ clip(document.getElementById(id).textContent); flash(btn); if (/snip$/.test(id)) tokCopied = true; }
+/* shown-once token: first Done without Copy asks; second click closes */
+function guardDone(btn, go){
+  if (tokCopied || btn.dataset.armed){ go(); return; }
+  btn.dataset.armed = '1'; btn.textContent = 'Close anyway';
+  var w = document.createElement('div'); w.className = 'form-error-msg not-copied'; w.id = btn.id + '-warn';
+  w.textContent = "You haven't copied the token. It won't be shown again.";
+  btn.parentNode.insertBefore(w, btn);
+}
+
+function another(){
+  addIssued();
+  openConnect(lastTrigger);
+}
+function addIssued(){
+  if (!issued) return;
+  var o = { name: issued.name, prefix: issued.token.slice(0, 12), access: issued.access, created: TODAY, used: 'Never' };
+  tokens.unshift(o); freshName = issued.name; issued = null; renderTokens();
+}
+function done(){ addIssued(); closeModal(); }
+
+/* ---------- request ---------- */
+function openRequest(trigger){
+  ['rq-name','rq-purpose','rq-desc','rq-now','rq-budget'].forEach(function(id){ document.getElementById(id).value = ''; });
+  document.getElementById('rq-freq').value = '';
+  document.getElementById('rq-desc-err').hidden = true;
+  document.getElementById('rq-desc').removeAttribute('aria-invalid');
+  RQ.forEach(function(id){ if (document.getElementById(id + '-req')) rqErr(id, false); });
+  countDesc(); rqDone(false);
+  openModal('m-request', trigger);
+  focusSoon('rq-name');
+}
+function countDesc(){
+  var n = document.getElementById('rq-desc').value.trim().length, c = document.getElementById('rq-count');
+  c.textContent = n >= 100 ? n + ' characters' : n + ' / 100 characters minimum';
+  c.classList.toggle('ok', n >= 100);
+  if (n >= 100){ document.getElementById('rq-desc-err').hidden = true; document.getElementById('rq-desc').removeAttribute('aria-invalid'); }
+}
+var RQ = ['rq-name','rq-purpose','rq-desc','rq-freq','rq-now','rq-budget'];
+function rqErr(id, show){
+  var f = document.getElementById(id), e = document.getElementById(id + '-req');
+  if (!e){ e = document.createElement('div'); e.className = 'form-error-msg'; e.id = id + '-req'; e.textContent = 'Required';
+    (f.closest('.money') || f).insertAdjacentElement('afterend', e); f.addEventListener('input', function(){ rqErr(id, false); }); f.addEventListener('change', function(){ rqErr(id, false); }); }
+  e.hidden = !show; if (show) f.setAttribute('aria-invalid', 'true'); else f.removeAttribute('aria-invalid');
+}
+function submitRequest(){
+  var first = null;
+  RQ.forEach(function(id){ var empty = !document.getElementById(id).value.trim(); if (id !== 'rq-desc') rqErr(id, empty); if (empty && !first) first = id; });
+  if (first && first !== 'rq-desc'){ document.getElementById(first).focus(); return; }
+  var n = document.getElementById('rq-desc').value.trim().length;
+  if (n < 100){
+    var e = document.getElementById('rq-desc-err');
+    e.textContent = 'Describe the task in at least 100 characters (' + n + ' now)';
+    e.hidden = false;
+    document.getElementById('rq-desc').setAttribute('aria-invalid', 'true');
+    document.getElementById('rq-desc').focus(); return;
+  }
+  rqDone(true); focusSoon('rq-close');
+}
+function rqDone(on){ ['rq-done','rq-done-foot'].forEach(function(id){ document.getElementById(id).hidden = !on; }); ['rq-form','rq-foot'].forEach(function(id){ document.getElementById(id).hidden = on; }); }
+
+/* ---------- revoke ---------- */
+function askRevoke(i, btn){
+  revokeIdx = i;
+  var signin = !tokens[i].prefix;
+  document.getElementById('rv-title').textContent = signin ? 'Disconnect ' + tokens[i].name + '?' : 'Revoke token?';
+  document.getElementById('rv-confirm').textContent = signin ? 'Disconnect' : 'Revoke';
+  document.getElementById('rv-body').innerHTML = signin
+    ? '<b>' + esc(tokens[i].name) + '</b> stops working right away and loses access to Synder. Changes it already made stay. You can connect it again later.'
+    : '<b>' + esc(tokens[i].name) + '</b> stops working right away. The agent using it loses access to Synder. Changes it already made stay.';
+  openModal('m-revoke', btn);
+  focusSoon('rv-cancel');
+}
+function confirmRevoke(){
+  var name = tokens[revokeIdx].name, signin = !tokens[revokeIdx].prefix;
+  tokens.splice(revokeIdx, 1); renderTokens();
+  closeModal(true);
+  toast(signin ? name + ' disconnected' : 'Token revoked: ' + name);
+  setTimeout(function(){ (document.querySelector('.revoke') || document.querySelector('#v' + variant + '-head [data-connect]')).focus(); }, 30);
+}
+
+fillLogos();
+document.querySelector('.content').classList.add('white');
+(function(){ var m = /^#v([236])-(empty|tokens)(-sum)?$/.exec(location.hash) || [];
+  variant = m[1] && document.getElementById('v' + m[1] + '-head') ? +m[1] : 6; orgMode = m[3] ? 'sum' : 'txn'; setState(m[2] || 'empty'); setVariant(variant); setOrgMode(orgMode); })();
+</script>
+</body>
+</html>

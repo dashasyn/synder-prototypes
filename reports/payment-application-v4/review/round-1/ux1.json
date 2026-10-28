@@ -1,0 +1,52 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "projects/payment-application-v4/ (gsp.html + overlay.html)",
+  "checked": [
+    { "zone": "layout & hierarchy", "item": "top bar: Close (X), title, subtitle, message text, status chip, Update button" },
+    { "zone": "layout & hierarchy", "item": "page: H1 + lede, two-column layout — rule controls (left) vs sticky 'In plain terms' read-out (right)" },
+    { "zone": "layout & hierarchy", "item": "[how to match] the two mode cards (Use default matching rules / Use custom rules) and how the custom card's body nests the rule rows inside it" },
+    { "zone": "interaction & task completion", "item": "[how to match] Use default matching rules radio" },
+    { "zone": "interaction & task completion", "item": "[how to match] Use custom rules radio" },
+    { "zone": "interaction & task completion", "item": "[narrow the search] Customer checkbox" },
+    { "zone": "interaction & task completion", "item": "[narrow the search] Invoice date checkbox (locked) and the days-either-side number field" },
+    { "zone": "interaction & task completion", "item": "[narrow the search] Invoice number checkbox, source select, comparison select, and Stripe-field text input" },
+    { "zone": "states", "item": "top bar status chip and message text as the how-to-match mode is switched, before Update is ever pressed" },
+    { "zone": "states", "item": "days field's two auto-correction paths: out-of-range clamp vs. cleared-field revert" },
+    { "zone": "states", "item": "locked/disabled state of the Invoice-date row for an org without the admin no-limit setting" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "High",
+      "confidence": 82,
+      "element": "Top bar status chip (\"Synder default\" → \"Custom rules\") and the message text next to it, both directly beside the Update button",
+      "finding": "Selecting \"Use custom rules\" immediately turns the status chip green and reads \"Custom rules,\" and switches the adjacent message to \"Applies to mzkt.by (Stripe) only\" — before Update has ever been pressed and while the change is still unsaved.",
+      "user_impact": "A user can read the chip and message, next to the save button, as confirmation that the rule is already active, and close or navigate away without pressing Update — leaving the integration silently on unsaved default matching while believing their custom rule is live.",
+      "suggested_fix": "Keep the chip and message in a visibly unsaved state (e.g. \"Custom rules (unsaved)\") until Update actually succeeds, so the two indicators next to the save button agree with the \"Nothing changes until you press Update\" note shown elsewhere on the same screen.",
+      "evidence": {
+        "action": "Selected the \"Use custom rules\" radio (checked false → true).",
+        "observed": "The panel re-rendered into the custom-rule layout, and in that same render the top-bar chip switched to green \"Custom rules\" and the message switched to \"Applies to mzkt.by (Stripe) only\" — with nothing in that immediate area indicating the change is unsaved, even though a separate line further down the right-column summary states changes take effect only after Update."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "Medium",
+      "confidence": 76,
+      "element": "\"Invoice date is within ___ days\" number field, narrow-the-search row",
+      "finding": "Clearing the days field causes it to silently snap back to the last valid number with no explanation, while typing an out-of-range number (e.g. 99999) is corrected with an on-screen note explaining what happened and why.",
+      "user_impact": "A user who clears the field intending to type a new day count instead sees their edit disappear with no feedback, and may conclude the field ignored their input or is broken, rather than understanding it reverted on purpose.",
+      "suggested_fix": "Show the same kind of inline note used for the min/max clamp (e.g. \"Changed back to 365 — the field can't be left blank\") whenever the cleared field reverts, so every automatic correction explains itself the same way.",
+      "evidence": {
+        "action": "Typed 99999 into the days field (out of the 1–365 range), then cleared the field entirely.",
+        "observed": "99999 was corrected to 365 with a visible note explaining the value was changed to the widest allowed window; clearing the field afterward reverted it to 365 as well, but with no note or explanation shown for that correction."
+      }
+    }
+  ],
+  "gaps": [
+    "Update: the save/validation commit path (error banner and per-field errors on submit, and what the screen shows after a valid save) was not exercised in this recon slice — I cannot confirm whether the premature-looking chip/message described in UX-1 is ever followed by a clearer post-save confirmation, or whether it's the only signal a user ever gets.",
+    "Close without saving: the discard-confirmation dialog was not exercised in this recon slice — cannot confirm whether \"Keep editing\" and \"Discard changes\" behave as expected from the source.",
+    "Then refine (add/remove condition rows, the AND/OR combinator control, and each row's source/operand/target selects) was not part of this slice's recorded interactions — no gap can be confirmed there, including whether the combinator control's appearing/disappearing as active-row count changes is noticeable or confusing.",
+    "Outcome switches (Apply as overpayment, Cancel sync) were not part of this slice — their state clarity was not checked here."
+  ]
+}

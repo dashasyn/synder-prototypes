@@ -1,0 +1,76 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "Ignat's prototype v2.6 (single file)",
+  "checked": [
+    { "zone": "Invoices settings panel", "item": "Toggle rows (Apply payments, Cancel sync if no match, Sync unpaid, Sync zero) and the page-level Update button/hint" },
+    { "zone": "Matching rules overlay header", "item": "Sheet chrome title, Close (×), and overlay Update button, and its placement relative to the page-level Update button" },
+    { "zone": "Matching rules overlay body", "item": "Mode radios (default vs custom), 'Narrow the search' and 'Then refine' sections, and the 'In plain terms' rail" },
+    { "zone": "how to match", "item": "Use default matching rules / Use custom rules radios" },
+    { "zone": "narrow the search", "item": "Scope row enable checkbox and source select (per recorded interaction)" },
+    { "zone": "then refine", "item": "Refine condition rows, the per-row AND/OR select, + Add condition, and row remove (×)" },
+    { "zone": "overlay footer", "item": "Update (save) button and its validation/error handling" },
+    { "zone": "GSP page footer", "item": "Update button that saves the page-level toggles (Cancel sync, Sync unpaid, Sync zero)" },
+    { "zone": "validation states", "item": "Metadata Key required-field error and the scope-requirement error, before vs after a save attempt" },
+    { "zone": "saved-state indicator", "item": "'Using defaults' / 'Custom rules' status label and the transient save toasts" },
+    { "zone": "refine section empty state", "item": "'No extra conditions' text vs the condition rows present the first time custom mode is opened" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "High",
+      "confidence": 88,
+      "element": "\"Then refine\" section, first time \"Use custom rules\" is selected",
+      "finding": "Switching to \"Use custom rules\" auto-populates two already-enabled \"Then refine\" conditions (Invoice note contains…, Payment note contains…) that the user never added, even though the mode is described as narrowing first and then \"optionally\" refining.",
+      "user_impact": "A user assumes no extra narrowing is active, since the refine list looks like an ordinary empty-by-default builder, and saves a matching rule that is silently stricter than intended — invoices that should match the payment can fail to match.",
+      "suggested_fix": "Start \"Then refine\" empty on first-time custom setup and let the user add conditions explicitly, or visibly badge the two auto-seeded rows as suggested/unconfirmed defaults rather than rendering them identically to user-added ones.",
+      "evidence": {
+        "action": "Selected \"Use custom rules\" for the first time (per the recorded radio interaction) and traced the resulting state through seedCustomRows()/renderRows() in the prototype.",
+        "observed": "Two removable condition rows render as enabled/active in \"Then refine\" and the \"No extra conditions\" empty-state text never appears, even though \"+ Add condition\" was never clicked."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Metadata \"Key\" input and the \"keep Customer or invoice-number on\" scope requirement",
+      "finding": "Required-field state — a missing metadata Key, or a scope with neither Customer nor invoice-number matching enabled — is only revealed after the user clicks Update and the save fails; there is no indication while the field is being filled in.",
+      "user_impact": "A user who picks \"Payment metadata\" or \"Invoice metadata\" as a match source, or disables both scope conditions, gets no warning until the end of setup, discovers the problem only on a failed save, and must hunt for what to fix.",
+      "suggested_fix": "Surface the required-key and scope-requirement messaging as soon as the offending state occurs (e.g., on blur or immediately on selection), not only after a failed submit.",
+      "evidence": {
+        "action": "Set a scope row's source to \"Payment metadata\" without entering a key, then reviewed applyFieldErrors()/validation(), which only run their error-display path when submitAttempted is true.",
+        "observed": "No red border or \"Required\" text appears while editing the Key field; both appear only after Update is clicked once and the save fails."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "High",
+      "confidence": 78,
+      "element": "\"Update\" button — one inside the matching-rules overlay (sheet-chrome), one on the Invoices panel footer (gsp-foot)",
+      "finding": "Two same-label, same-style primary \"Update\" buttons exist in the same flow, saving different, non-overlapping sets of settings — the overlay's Update never commits the page-level toggles, and the page's Update never touches the matching rule.",
+      "user_impact": "A user who toggles \"Cancel sync if there is no matching open invoice found\" and then opens, configures, and saves the matching-rules overlay sees a success toast (\"Matching rules updated\") and reasonably assumes everything is saved; the Cancel-sync change is silently lost until the separate outer Update is also clicked.",
+      "suggested_fix": "Give the two buttons distinct labels (e.g., \"Save rules\" inside the overlay) or have the overlay's save also commit any pending page-level toggle changes.",
+      "evidence": {
+        "action": "Toggled \"Cancel sync if there is no matching open invoice found\" on the Invoices panel, opened the matching-rules overlay, changed a rule, and clicked the overlay's Update (saveBtn).",
+        "observed": "saveBtn's handler only clones draft into saved and closes the overlay with a toast; the Cancel-sync checkbox is committed solely by the separate #gspUpdate handler, which the user was never prompted to use."
+      }
+    },
+    {
+      "id": "UX-4",
+      "severity": "High",
+      "confidence": 82,
+      "element": "Per-row AND/OR select shown next to every \"Then refine\" condition row",
+      "finding": "Each refine condition row renders its own AND/OR dropdown, implying independent per-row logic, but changing any one of them instantly forces every other row's dropdown to the same value — there is effectively one shared setting rendered as many separate-looking controls.",
+      "user_impact": "A user trying to mix logic (e.g., treat one pair of conditions as AND and another as OR) changes one dropdown, sees all the others silently flip to match, and cannot tell why their other selection changed or reproduce the combination they wanted.",
+      "suggested_fix": "Show a single AND/OR control for the whole refine list (as the underlying model already is) instead of one per row, or implement true per-row/segment logic if mixed combinations are meant to be supported.",
+      "evidence": {
+        "action": "Added a second refine condition and inspected the join select's onchange handler (setRefineMode), which is wired to every \".nl-join-select\" in the list.",
+        "observed": "setRefineMode() sets draft.refineAny and then forces document.querySelectorAll('#refineRows .nl-join-select') to the same value, so all rows' dropdowns change together regardless of which one was edited."
+      }
+    }
+  ],
+  "gaps": [
+    "Close and Update commit paths were marked \"not exercised\" in this recon's slice of the state map; the behaviors cited above (UX-1 through UX-4) were confirmed by reading the prototype's deterministic JS rather than by a live interaction pass, since the state map didn't record them.",
+    "Whether changing the Integration selector (mzkt.by vs another-shop) while the overlay is open actually switches to a separate per-integration matching rule, or only relabels one shared global draft/saved state, was never exercised in recon — source inspection suggests the state is global (not keyed by integration), but this was not confirmed through a live multi-integration interaction, so it is reported here as a gap rather than a finding."
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "validator": "trust",
+  "round": 1,
+  "target": "reports/transactions-prototype/index.html (variant 1)",
+  "gaps": [
+    "Tab counts were never observed with a Status chip applied. Recon recorded only the unfiltered row (All 31 / Needs attention 8 / Ready to sync 7 / In progress 6 / Successful 8 / Deleted 2, which sums to 31). I verified the documented mitigation by reading recGroupCount() in index.html instead: it does recompute from runFilters(state.rec) plus search, so the counts themselves are honest. That claim is source-verified, not browser-verified.",
+    "No zero-row state was reached in recon, so the empty state was never seen on screen; TRU-3 is derived from the hardcoded markup at index.html:2325-2334 plus renderRows() showing that same node for every empty result.",
+    "Recon did not record what the bulk bar count read after switching tabs or filters while a selection was live. TRU-1 is derived from source: the tab click handler calls renderRec()/renderRecResults() and never calls updateBulkBar() or clearSelection().",
+    "Bulk Sync / Archive / Rollback have no server in the prototype, so no failure or partial-failure state exists to observe. Whether a real failure path is designed at all is unknown from both the state map and the markup.",
+    "Recon records 'uncheck restored header row=false; recheck re-armed=true' but not the number the bulk bar displayed at that moment, so the '6 selected' readout in TRU-2 is computed from the code, not read off the screen.",
+    "The Status chip's commit was exercised, but no case was recorded where the chip and the tab were set to contradictory groups, so the on-screen behaviour of a deliberately empty AND was never observed."
+  ],
+  "checked": [
+    { "zone": "status segments / filter bar", "item": "Segmented status tabs vs. Status filter chip (same dimension, ANDed, no stated precedence) — the KF-7 / FLT-2 pair" },
+    { "zone": "status segments", "item": "Per-tab counts: do they recompute with the Status chip applied, as the design claims" },
+    { "zone": "filter bar", "item": "Date range chip vs. the 90-day default applied on load (is the default visible?)" },
+    { "zone": "filter bar", "item": "'Clear filters' vs. the tab row — does clearing also reset the tab, or leave a filter running invisibly" },
+    { "zone": "filter bar", "item": "Dashboard drill-through chips (Date range: Last 90 days, Platform, Status: Failed) vs. the tab that is active on arrival" },
+    { "zone": "filter bar", "item": "Search input (commits on input, not Enter) vs. tab counts and row count" },
+    { "zone": "bulk action bar", "item": "'N selected' count vs. the rows actually held in the selection set" },
+    { "zone": "bulk action bar", "item": "Bulk-bar master checkbox vs. per-row checkboxes vs. the header select-all it replaced" },
+    { "zone": "bulk action bar", "item": "'Select all 31' scope escalation vs. what the following bulk action operates on" },
+    { "zone": "bulk action bar", "item": "Selection persistence across a tab switch, a filter change and a page change" },
+    { "zone": "bulk action bar", "item": "Confirm-dialog counts (Archive / Rollback / Cancel / Unarchive) vs. the bulk-bar count" },
+    { "zone": "bulk action bar", "item": "'Syncing N transactions…' dialog — completion path, failure path, per-row acknowledgement" },
+    { "zone": "bulk action bar", "item": "'N transactions archived.' confirmation vs. the rows and tab counts after it closes" },
+    { "zone": "bulk action bar", "item": "Export menu counts ('Export all 31 matching', 'Export pending') vs. the current filter scope" },
+    { "zone": "table", "item": "Sync status badge vs. the tab and chip that claim to have filtered on it" },
+    { "zone": "table", "item": "Empty state text and its 'View all time' remedy vs. the filter that actually produced zero rows" },
+    { "zone": "table", "item": "Transaction info cell — 3 of 25 rows show only a raw ID (is anything claimed that isn't there?)" },
+    { "zone": "pagination", "item": "'Showing 1–25 of 31' vs. the tab count and the selection scope" },
+    { "zone": "pagination", "item": "Rows-per-page select value vs. rows rendered (already an AUTO- finding; checked for a selection-scope side effect)" },
+    { "zone": "row actions", "item": "Row 'Actions' verb (Retry / View sync / Sync) vs. the row's status badge" },
+    { "zone": "row actions", "item": "Row ⋯ menu items fire directly with no confirm — does anything acknowledge them" },
+    { "zone": "header", "item": "'Import historical data' — click produces no dialog and no state change" }
+  ],
+  "findings": [
+    {
+      "id": "TRU-1",
+      "severity": "Critical",
+      "confidence": 92,
+      "element": "Bulk action bar 'N selected' count + the Archive/Rollback/Cancel confirm dialogs, after a status tab or filter chip changes",
+      "claims": "The bar keeps reading the count from before the filter changed (e.g. '31 selected'), and the bulk buttons stay armed as if that selection still describes the list.",
+      "actual": "The tab click re-renders the table and replaces currentRows, but never calls updateBulkBar() or clearSelection(). The count text is stale, the held ids are the old ones, and because allSelected is still true the next bulk action computes its scope as currentRows.length — the NEW tab's row count.",
+      "finding": "Switching a status tab while a selection is live silently re-scopes what the bulk actions will operate on without resetting the bar that reports the selection — the exact FLT-2 shape, moved from filters to selection.",
+      "user_impact": "A user who selects all 31 matching transactions, then clicks a tab to double-check something, and hits Rollback gets a dialog naming a number that matches neither their selection nor the visible rows, and destroys records in QuickBooks on a scope they never chose.",
+      "suggested_fix": "Have every filter, tab, search and page change call clearSelection() (or re-derive the selection against the new result set and re-render the bar), and compute bulk-action scope from the selected ids rather than from currentRows.length.",
+      "evidence": {
+        "action": "Select the header checkbox (25 selected) → click 'Select all 31' in the scope message → click the 'Deleted 2' tab → click Rollback.",
+        "observed": "The bulk bar still reads 31 while the table shows 2 rows, and both Deleted rows render unchecked (renderRows draws each checkbox from selectedIds, which holds 31 unrelated ids). The confirm then reads 'Rollback 2 transactions? The records created in your accounting platform will be deleted.' — three different numbers for one action: 31 on the bar, 0 visibly checked, 2 in the dialog. Source: index.html:3749-3754 (tab handler, no selection reset), :2682 and :2659 (n = allSelected ? currentRows.length : selectedIds.size), :2591 (checkbox state from selectedIds)."
+      }
+    },
+    {
+      "id": "TRU-2",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "Bulk-bar master checkbox (chk-all-bulk) after the 'Select all 31' scope escalation",
+      "claims": "After unchecking the master checkbox every row is visibly unselected and no row is checked anywhere on screen.",
+      "actual": "toggleAllOnPage() removes only the 25 rows on the current page from a 31-row selection, so 6 ids survive. selectedIds.size is 6, so updateBulkBar() keeps the bulk bar mounted and the normal header row hidden — which is exactly what recon recorded as 'uncheck restored header row=false'.",
+      "finding": "Unchecking select-all leaves 6 invisible transactions selected while every checkbox on screen reads unchecked, and the bulk bar stays armed over that invisible selection.",
+      "user_impact": "A user who deselects everything and then clicks Archive or Rollback destroys or hides 6 transactions they believe they deselected, and cannot identify which ones — they sit on page 2, which the pagination bug cannot reach.",
+      "suggested_fix": "When the master checkbox is unchecked while allSelected is true, clear the entire selection (not just the page), and never leave the bulk bar mounted with a count the user cannot account for on screen.",
+      "evidence": {
+        "action": "Header checkbox → 'Select all 31' → uncheck the master checkbox in the bulk bar → read the bar, then click Archive.",
+        "observed": "Recon: 'page select=25; scope prompt \"Select all 31\" -> after click count=31 | uncheck restored header row=false'. The header row does not come back because 6 ids remain (index.html:2638-2648 deletes only currentRows.slice(0,25); :2710 gates the bar on selectedIds.size > 0). The Archive confirm would then read 'Archive 6 transactions?' with zero rows checked on screen."
+      }
+    },
+    {
+      "id": "TRU-3",
+      "severity": "High",
+      "confidence": 85,
+      "element": "Empty state ('No transactions in the last 90 days' + 'View all time' primary button) when the Status chip and the status tab contradict",
+      "claims": "The list is empty because of the date range, the most recent transaction was Apr 11 2026, and widening the date range will fix it.",
+      "actual": "There is one hardcoded empty state, shown for every zero-row result (renderRows() at index.html:2571-2577 toggles the same node regardless of cause). When zero rows come from tab AND chip disagreeing, the date range is not the cause and 'View all time' will still return zero.",
+      "finding": "The screen's only zero-row explanation names the one filter that is not responsible whenever the two status controls contradict each other, and its primary remedy cannot resolve it.",
+      "user_impact": "A user arriving from the Dashboard on 'Status: Failed' who clicks the 'Ready to sync' tab is told there is no recent activity, widens the date range, still sees nothing, and concludes there is nothing to act on — while failed transactions sit unhandled behind the other control.",
+      "suggested_fix": "Make the empty state name the filters actually applied and offer the specific one to relax ('No transactions match Status: Failed + Ready to sync — clear the Status filter'), rather than a fixed date-range message with a hardcoded 'most recent transaction' date.",
+      "evidence": {
+        "action": "Dashboard → drill through 'Failed' (chips: Date range: Last 90 days, Platform, Status: Failed; 1 row) → click the 'Successful' tab.",
+        "observed": "Zero rows, and the table zone renders 'No transactions in the last 90 days / Your most recent transaction was on Apr 11, 2026. Try expanding the date range or check your connected integrations.' with 'View all time' as the primary button — while the filter-bar chip still reads 'Status: Failed' and the tab counts (correctly computed with the chip applied) already read 0. The count is honest; the explanation is not. Cross-zone: the lie is in the table zone about a control in the filter bar."
+      }
+    },
+    {
+      "id": "TRU-4",
+      "severity": "High",
+      "confidence": 76,
+      "element": "Bulk 'Sync now' dialog ('Syncing N transactions…') and the bulk success alerts ('N transactions archived.' / 'rolled back.' / 'cancelled.')",
+      "claims": "Sync now: an operation is in progress. Archive/Rollback/Cancel: the operation has already completed successfully.",
+      "actual": "bulkSync() fires the message and immediately calls clearSelection(); the other three assert a past-tense success synchronously inside the click handler. In every case the rows keep their old Sync status badge and the tab counts are unchanged, and there is no branch anywhere for a failure or a partial failure.",
+      "finding": "Bulk actions announce an in-progress or completed state that nothing else on the screen reflects, and the design defines no path for the operation failing or half-succeeding.",
+      "user_impact": "A user who bulk-syncs 31 transactions to QuickBooks sees an in-progress message, loses their selection, and is left with no way to tell which ones actually synced — so they either re-sync (risking duplicates in the books) or assume it worked.",
+      "suggested_fix": "Move each row to a real pending badge on submit and resolve it per row to synced or failed, with a persistent result summary ('28 synced, 3 failed — review') instead of a fire-and-forget dialog.",
+      "evidence": {
+        "action": "Select a Ready-to-sync row → 'Sync now' in the bulk bar; separately, select a row → Archive → confirm.",
+        "observed": "Recon: Sync now → dialog 'Syncing 1 transaction…' and nothing further; Archive → confirm, then 'Archive 1 transaction? They will be removed from the default view but can be restored later.' Source (index.html:2674-2678, :2658-2663): the sync message is followed only by clearSelection(), and the archive alert 'transaction archived.' fires before/without any change to the row, its badge, or the tab counts. Cross-zone: the bulk bar claims an outcome the table and the tab counts contradict."
+      }
+    }
+  ]
+}

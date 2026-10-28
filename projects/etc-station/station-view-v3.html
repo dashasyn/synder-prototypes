@@ -1,0 +1,1035 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Station View – Hybrid</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Roboto, Arial, sans-serif; background: #f5f5f5; color: #333; font-size: 14px; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── Header ── */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: white;
+  border-bottom: 1px solid #e0e0e0;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+.header-title { font-weight: 500; font-size: 15px; white-space: nowrap; margin-right: 4px; }
+.station-select {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border: 1px solid #e0e0e0; border-radius: 4px;
+  background: white; cursor: pointer; font-size: 13px; min-width: 170px; color: #333;
+}
+.station-select span { flex: 1; }
+.station-select .chevron { color: #888; font-size: 11px; }
+.search-box {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border: 1px solid #e0e0e0; border-radius: 4px;
+  background: white; font-size: 13px; color: #888; cursor: pointer; min-width: 160px;
+}
+.btn-add {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 14px; background: #0053CC; color: white;
+  border: none; border-radius: 4px; cursor: pointer; font-size: 13px;
+  white-space: nowrap; font-family: inherit;
+}
+.btn-add:hover { background: #0046b0; }
+.filter-badge {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border: 1px solid #e0e0e0; border-radius: 4px;
+  background: white; cursor: pointer; font-size: 13px; font-weight: 600;
+  color: #0053CC; position: relative;
+}
+.filter-badge::after {
+  content: '4'; position: absolute; top: -6px; right: -6px;
+  background: #0053CC; color: white; border-radius: 50%;
+  width: 16px; height: 16px; font-size: 10px;
+  display: flex; align-items: center; justify-content: center;
+}
+.toggle-wrap { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap; }
+.toggle-switch {
+  width: 36px; height: 20px; border-radius: 10px; background: #0053CC;
+  position: relative; flex-shrink: 0; transition: background 0.2s;
+}
+.toggle-switch::after {
+  content: ''; position: absolute; width: 16px; height: 16px;
+  border-radius: 50%; background: white; top: 2px; right: 2px;
+  transition: right 0.2s, left 0.2s;
+}
+.toggle-switch.off { background: #ccc; }
+.toggle-switch.off::after { right: auto; left: 2px; }
+.spacer { flex: 1; }
+.now-btn {
+  padding: 5px 10px; border: 1px solid #e0e0e0; border-radius: 4px;
+  background: white; cursor: pointer; font-size: 13px; font-family: inherit;
+}
+.now-btn:hover { background: #f5f5f5; }
+.date-picker {
+  display: flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border: 1px solid #e0e0e0; border-radius: 4px;
+  background: white; cursor: pointer; font-size: 13px; white-space: nowrap;
+}
+.time-picker-wrap {
+  display: flex; align-items: center;
+  padding: 5px 10px; border: 1px solid #e0e0e0; border-radius: 4px;
+  background: white; font-size: 13px;
+}
+.time-picker-wrap input[type="time"] {
+  border: none; outline: none; font-family: inherit; font-size: 13px;
+  color: #333; background: transparent; cursor: pointer; width: 86px; padding: 0;
+}
+.zoom-controls { display: flex; align-items: center; gap: 2px; }
+.zoom-btn {
+  width: 30px; height: 30px; border: 1px solid #e0e0e0; border-radius: 4px;
+  background: white; cursor: pointer; display: flex; align-items: center;
+  justify-content: center; font-size: 18px; font-family: inherit; color: #555; line-height: 1;
+}
+.zoom-btn:hover { background: #f5f5f5; }
+
+/* ── Top navigation bar ── */
+.top-bar {
+  background: #1a1f2e;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  height: 38px;
+  flex-shrink: 0;
+}
+
+/* ── View switcher ── */
+.view-switcher { display: flex; gap: 2px; }
+.view-btn {
+  padding: 5px 14px; font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.5); background: transparent;
+  text-decoration: none; cursor: pointer; white-space: nowrap;
+  border: none; font-family: inherit; border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+.view-btn.active { background: rgba(255,255,255,0.14); color: white; }
+.view-btn:not(.active):hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.8); }
+
+/* ── Main timeline area ── */
+.timeline-wrapper { flex: 1; background: white; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+.timeline-layout { display: flex; flex: 1; overflow: hidden; }
+.row-labels-col {
+  flex-shrink: 0; width: 42px; display: flex; flex-direction: column;
+  border-right: 1px solid #e0e0e0; z-index: 20; background: white;
+}
+.row-labels-col .label-header { height: 32px; border-bottom: 1px solid #e0e0e0; flex-shrink: 0; }
+.row-label {
+  height: 108px; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 500; color: #555;
+  border-bottom: 1px solid #f0f0f0; flex-shrink: 0;
+}
+.scroll-area { flex: 1; overflow-x: scroll; overflow-y: hidden; cursor: default; }
+.scroll-area::-webkit-scrollbar { height: 8px; }
+.scroll-area::-webkit-scrollbar-track { background: #f0f0f0; }
+.scroll-area::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+.scroll-area::-webkit-scrollbar-thumb:hover { background: #aaa; }
+.timeline-canvas { position: relative; }
+.time-header {
+  height: 32px; position: sticky; top: 0;
+  background: white; border-bottom: 1px solid #e0e0e0; z-index: 15;
+  cursor: crosshair;
+}
+.time-tick {
+  position: absolute; top: 0; height: 100%;
+  display: flex; align-items: center; font-size: 11px; color: #888;
+  transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+}
+.time-tick.major { color: #555; font-weight: 500; }
+.grid-layer { position: absolute; top: 32px; left: 0; right: 0; bottom: 0; pointer-events: none; }
+.grid-line-v { position: absolute; top: 0; bottom: 0; width: 1px; background: #f0f0f0; }
+.grid-line-v.major { background: #e8e8e8; }
+.platform-rows { position: relative; }
+.platform-row {
+  height: 108px; border-bottom: 1px solid #f0f0f0;
+  position: relative; transition: background 0.1s;
+}
+.platform-row.drag-over {
+  background: rgba(0, 83, 204, 0.06);
+  outline: 2px dashed rgba(0, 83, 204, 0.4);
+  outline-offset: -2px;
+}
+.now-line {
+  position: absolute; top: 32px; bottom: 0; width: 2px;
+  background: #90D8A4; z-index: 17; pointer-events: none;
+}
+
+/* Manual time marker */
+.marker-line {
+  position: absolute; top: 32px; bottom: 0; width: 2px;
+  background: #FFB300; z-index: 19; cursor: ew-resize;
+}
+.marker-line::before {
+  content: ''; position: absolute; top: -5px; left: -4px;
+  width: 10px; height: 10px; background: #FFB300; border-radius: 50%;
+}
+.marker-line.hidden { display: none; }
+.marker-label {
+  position: absolute; top: -26px; left: 50%; transform: translateX(-50%);
+  background: #FFB300; color: white; font-size: 11px; font-weight: 700;
+  padding: 2px 6px; border-radius: 3px; white-space: nowrap;
+}
+
+/* ── Train block — proportional, fixed height, overflow:hidden ── */
+.train-block {
+  position: absolute;
+  height: 44px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  padding: 2px 6px;
+  color: white;
+  cursor: grab;
+  z-index: 5;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+  user-select: none;
+  /* NO width transition — content reveals via zoom, not hover */
+}
+.train-block:hover { box-shadow: 0 2px 10px rgba(0,0,0,0.22); z-index: 10; }
+.train-block.dragging {
+  opacity: 0.85; cursor: grabbing; z-index: 1000;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3); pointer-events: none;
+}
+.train-block.on-time     { background: #4CAF50; }
+.train-block.ahead       { background: #2196F3; }
+.train-block.delay-minor { background: #FF9800; }
+.train-block.delay-major { background: #F44336; }
+.train-block.cancelled   { background: #9E9E9E; }
+
+.train-inner { display: flex; flex-direction: column; gap: 1px; min-width: 0; overflow: hidden; }
+.train-route { font-size: 14px; font-weight: 700; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.train-time  { font-size: 12px; font-weight: 400; opacity: 0.90; line-height: 1.3; white-space: nowrap; }
+
+/* ── Legend ── */
+.legend {
+  display: flex; align-items: center; gap: 20px;
+  padding: 7px 16px 7px 58px; background: white;
+  border-top: 1px solid #e0e0e0; flex-shrink: 0; font-size: 12px; color: #555;
+}
+.legend-item { display: flex; align-items: center; gap: 5px; }
+.legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+/* ── Confirmation modal ── */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+  z-index: 2000; display: flex; align-items: center; justify-content: center;
+}
+.modal-backdrop.hidden { display: none; }
+.modal { background: white; border-radius: 12px; width: 420px; max-width: 90vw; box-shadow: 0 8px 32px rgba(0,0,0,0.22); overflow: hidden; }
+.modal-title { font-size: 16px; font-weight: 700; padding: 20px 24px 16px; border-bottom: 1px solid #e0e0e0; }
+.modal-body { padding: 20px 24px; display: flex; flex-direction: column; gap: 14px; }
+.modal-row { font-size: 15px; color: #333; line-height: 1.4; }
+.modal-row strong { font-weight: 600; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid #e0e0e0; }
+.btn-cancel {
+  padding: 8px 18px; background: none; border: none; color: #0053CC;
+  font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+  border-radius: 4px; letter-spacing: 0.03em;
+}
+.btn-cancel:hover { background: rgba(0,83,204,0.06); }
+.btn-confirm {
+  padding: 8px 20px; background: #0053CC; color: white; border: none;
+  border-radius: 6px; font-size: 14px; font-weight: 600; font-family: inherit;
+  cursor: pointer; letter-spacing: 0.03em;
+}
+.btn-confirm:hover { background: #0046b0; }
+
+/* ── Drag ghost ── */
+#drag-ghost {
+  position: fixed; pointer-events: none; z-index: 9999; display: none;
+  border-radius: 5px; font-family: Roboto, Arial, sans-serif;
+  font-size: 14px; font-weight: 500; color: white;
+  padding: 2px 6px; align-items: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.3); opacity: 0.85;
+  height: 44px;
+}
+
+/* ── Train detail card ── */
+.train-detail-card {
+  position: fixed; background: white; border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.18); width: 230px;
+  z-index: 3000; overflow: hidden;
+}
+.train-detail-card.hidden { display: none; }
+.tdc-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 10px; }
+.tdc-title { display: flex; align-items: center; gap: 8px; }
+.tdc-icon { font-size: 18px; line-height: 1; }
+.tdc-route { font-size: 22px; font-weight: 700; color: #0053CC; line-height: 1; }
+.tdc-delay-badge { color: white; font-size: 13px; font-weight: 700; padding: 4px 10px; border-radius: 6px; white-space: nowrap; }
+.tdc-delay-badge.on-time     { background: #4CAF50; }
+.tdc-delay-badge.ahead       { background: #2196F3; }
+.tdc-delay-badge.delay-minor { background: #FF9800; }
+.tdc-delay-badge.delay-major { background: #F44336; }
+.tdc-delay-badge.cancelled   { background: #9E9E9E; }
+.tdc-stops { background: #f5f5f5; padding: 10px 14px 14px; }
+.tdc-stop-row { display: flex; gap: 10px; align-items: flex-start; }
+.tdc-dot-col { display: flex; flex-direction: column; align-items: center; padding-top: 4px; flex-shrink: 0; }
+.tdc-dot { width: 8px; height: 8px; border-radius: 50%; background: #555; }
+.tdc-vline { width: 2px; height: 20px; background: #ccc; margin: 3px 0; }
+.tdc-stop-name { font-size: 14px; font-weight: 500; color: #222; line-height: 1.3; }
+.tdc-stop-time { font-size: 12px; color: #777; margin-top: 2px; margin-bottom: 6px; }
+.tdc-actions { display: flex; gap: 8px; padding: 10px 14px 12px; background: white; border-top: 1px solid #eee; }
+.tdc-btn { flex: 1; padding: 7px 0; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .15s; }
+.tdc-btn:hover { opacity: .85; }
+.tdc-btn-primary { background: #0053CC; color: white; }
+.tdc-btn-secondary { background: #f0f0f0; color: #444; }
+</style>
+</head>
+<body>
+
+<!-- Top navigation bar -->
+<div class="top-bar">
+  <div class="view-switcher">
+    <a href="station-view.html" class="view-btn">Content</a>
+    <a href="station-view-proportional.html" class="view-btn">Timeline</a>
+    <span class="view-btn active">Tooltip</span>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title">Station view</div>
+  <div class="station-select">
+    <span>TM – TA Savidor C.</span>
+    <span class="chevron">▾</span>
+  </div>
+  <div class="search-box"><span>🔍</span><span>Journey details</span></div>
+  <button class="btn-add">+ ADD EVENT</button>
+  <div class="filter-badge" title="4 active filters" style="font-size:11px;letter-spacing:-0.5px;">⊞</div>
+  <div class="toggle-wrap"><div class="toggle-switch" id="toggle-announcements"></div><span>Announcements</span></div>
+  <div class="toggle-wrap"><div class="toggle-switch" id="toggle-displays"></div><span>Displays</span></div>
+  <div class="spacer"></div>
+  <button class="now-btn" id="goto-now">Now</button>
+  <div class="date-picker"><span id="date-display">06/24/2026</span><span>📅</span></div>
+
+  <div class="time-picker-wrap">
+    <input type="time" id="time-picker">
+  </div>
+
+  <div class="zoom-controls">
+    <button class="zoom-btn" id="zoom-out">−</button>
+    <button class="zoom-btn" id="zoom-in">+</button>
+  </div>
+</div>
+
+<!-- Timeline layout -->
+<div class="timeline-wrapper">
+  <div class="timeline-layout">
+    <div class="row-labels-col" id="row-labels-col">
+      <div class="label-header"></div>
+    </div>
+    <div class="scroll-area" id="scroll-area">
+      <div class="timeline-canvas" id="timeline-canvas">
+        <div class="time-header" id="time-header"></div>
+        <div class="grid-layer" id="grid-layer"></div>
+        <div class="now-line" id="now-line"></div>
+
+        <!-- manual time marker -->
+        <div class="marker-line hidden" id="marker-line">
+          <div class="marker-label" id="marker-label"></div>
+        </div>
+        <div class="platform-rows" id="platform-rows"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#4CAF50"></div> On time</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#2196F3"></div> Ahead of schedule</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#FF9800"></div> Delay &lt;5 min</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#F44336"></div> Delay ≥5 min</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#9E9E9E"></div> Cancelled</div>
+</div>
+
+<!-- Confirmation modal -->
+<div class="modal-backdrop hidden" id="modal-backdrop">
+  <div class="modal">
+    <div class="modal-title">Change Planned Platform</div>
+    <div class="modal-body">
+      <div class="modal-row"><strong>Train:</strong> <span id="modal-train"></span></div>
+      <div class="modal-row"><strong>Planned Platform:</strong> <span id="modal-from"></span></div>
+      <div class="modal-row"><strong>Updated Platform:</strong> <span id="modal-to"></span></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="modal-cancel">CANCEL</button>
+      <button class="btn-confirm" id="modal-confirm">CHANGE</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drag ghost -->
+<div id="drag-ghost"></div>
+
+<!-- Train detail card -->
+<div class="train-detail-card hidden" id="train-detail-card">
+  <div class="tdc-header">
+    <div class="tdc-title">
+      <span class="tdc-icon">🚆</span>
+      <span class="tdc-route" id="tdc-route"></span>
+    </div>
+    <div class="tdc-delay-badge" id="tdc-delay-badge"></div>
+  </div>
+  <div class="tdc-stops">
+    <div class="tdc-stop-row">
+      <div class="tdc-dot-col">
+        <div class="tdc-dot"></div>
+        <div class="tdc-vline"></div>
+      </div>
+      <div>
+        <div class="tdc-stop-name" id="tdc-origin"></div>
+        <div class="tdc-stop-time" id="tdc-arrival"></div>
+      </div>
+    </div>
+    <div class="tdc-stop-row">
+      <div class="tdc-dot-col"><div class="tdc-dot"></div></div>
+      <div>
+        <div class="tdc-stop-name" id="tdc-dest"></div>
+        <div class="tdc-stop-time" id="tdc-departure"></div>
+      </div>
+    </div>
+  </div>
+  <div class="tdc-actions">
+    <button class="tdc-btn tdc-btn-primary" id="tdc-btn-assign">Assign platform</button>
+    <button class="tdc-btn tdc-btn-secondary" id="tdc-btn-delay">Set delay</button>
+  </div>
+</div>
+
+<script>
+// ── Config ──────────────────────────────────────────────
+const START_HOUR = 6;
+const END_HOUR   = 24;
+let PX_PER_HOUR  = 300; // 5px/min — proportional default
+const NUM_PLATFORMS = 7;
+const MIN_BLOCK_PX    = 8;   // minimum visible width
+const CONTENT_FULL_PX = 85;  // full content (route + time) at ≥ 85px
+const CONTENT_ROUTE_PX = 40; // route number only at ≥ 40px
+
+// Lane layout constants (row = 108px)
+const LANE_HEIGHT = 44;
+const LANE_GAP    = 8;
+const LANE_PAD    = 8; // padding from row top/bottom when 2 lanes
+
+function pxPerMin() { return PX_PER_HOUR / 60; }
+function totalWidth() { return (END_HOUR - START_HOUR) * PX_PER_HOUR; }
+function timeToX(h, m) { return (h - START_HOUR + m / 60) * PX_PER_HOUR; }
+function parseTime(str) { const [h, m] = str.split(':').map(Number); return { h, m }; }
+function timeToMinutes(str) { const [h, m] = str.split(':').map(Number); return h * 60 + m; }
+
+// ── Sample data ──────────────────────────────────────────
+let trains = [
+  // Platform 1
+  { id:1,  platform:1, route:'201', name:'Tel Aviv – Netanya',        arrival:'06:30', departure:'06:34', status:'on-time',     delay:  0 },
+  { id:2,  platform:1, route:'966', name:'Netanya – Bet Shemesh',     arrival:'14:00', departure:'14:04', status:'on-time',     delay:  0 },
+  { id:3,  platform:1, route:'312', name:'Haifa – Jerusalem',         arrival:'17:30', departure:'17:33', status:'ahead',       delay: -2 },
+  { id:4,  platform:1, route:'115', name:'Tel Aviv – Be\'er Sheva',   arrival:'21:00', departure:'21:05', status:'on-time',     delay:  0 },
+  // Platform 2
+  { id:5,  platform:2, route:'966', name:'Netanya – Bet Shemesh',     arrival:'10:55', departure:'10:58', status:'delay-major', delay:  8 },
+  { id:6,  platform:2, route:'145', name:'Herzliya – Ashdod',         arrival:'14:20', departure:'14:24', status:'delay-minor', delay:  3 },
+  { id:7,  platform:2, route:'966', name:'Netanya – Bet Shemesh',     arrival:'15:45', departure:'15:48', status:'on-time',     delay:  0 },
+  // Platform 3
+  { id:8,  platform:3, route:'720', name:'Rishon LeZion – Hadera',    arrival:'12:00', departure:'12:04', status:'on-time',     delay:  0 },
+  { id:9,  platform:3, route:'966', name:'Netanya – Bet Shemesh',     arrival:'14:05', departure:'14:08', status:'ahead',       delay: -3 },
+  { id:10, platform:3, route:'503', name:'Modiin – Tel Aviv',         arrival:'14:50', departure:'14:53', status:'delay-minor', delay:  4 },
+  { id:11, platform:3, route:'201', name:'Tel Aviv – Netanya',        arrival:'23:30', departure:'23:33', status:'on-time',     delay:  0 },
+  // Platform 4 — sparse (intentionally)
+  // Platform 5
+  { id:12, platform:5, route:'99',  name:'Lod – Kfar Saba',           arrival:'06:55', departure:'06:59', status:'on-time',     delay:  0 },
+  { id:13, platform:5, route:'211', name:'Akko – Tel Aviv',           arrival:'11:10', departure:'11:14', status:'on-time',     delay:  0 },
+  { id:14, platform:5, route:'966', name:'Netanya – Bet Shemesh',     arrival:'14:10', departure:'14:13', status:'delay-minor', delay:  2 },
+  { id:15, platform:5, route:'88',  name:'Dimona – Jerusalem',        arrival:'15:40', departure:'15:43', status:'cancelled',   delay:  0 },
+  { id:16, platform:5, route:'312', name:'Haifa – Jerusalem',         arrival:'20:50', departure:'20:55', status:'on-time',     delay:  0 },
+  // Platform 6 — sparse (intentionally)
+  // Platform 7
+  { id:17, platform:7, route:'403', name:'Rehovot – Nahariya',        arrival:'07:40', departure:'07:44', status:'delay-minor', delay:  3 },
+  { id:18, platform:7, route:'711', name:'Ashkelon – Haifa',          arrival:'11:20', departure:'11:24', status:'on-time',     delay:  0 },
+  { id:19, platform:7, route:'966', name:'Netanya – Bet Shemesh',     arrival:'13:50', departure:'13:53', status:'delay-major', delay: 11 },
+  { id:20, platform:7, route:'503', name:'Modiin – Tel Aviv',         arrival:'14:30', departure:'14:33', status:'ahead',       delay: -1 },
+  { id:21, platform:7, route:'201', name:'Tel Aviv – Netanya',        arrival:'17:00', departure:'17:04', status:'delay-minor', delay:  4 },
+  { id:22, platform:7, route:'88',  name:'Dimona – Jerusalem',        arrival:'20:50', departure:'20:53', status:'cancelled',   delay:  0 },
+];
+
+// ── DOM refs ─────────────────────────────────────────────
+const scrollArea   = document.getElementById('scroll-area');
+const canvas       = document.getElementById('timeline-canvas');
+const timeHeader   = document.getElementById('time-header');
+const gridLayer    = document.getElementById('grid-layer');
+const nowLine      = document.getElementById('now-line');
+const platformRows = document.getElementById('platform-rows');
+const rowLabelsCol = document.getElementById('row-labels-col');
+const dragGhost    = document.getElementById('drag-ghost');
+
+// ── Lane assignment: detect overlapping trains per platform ──
+function assignLanes() {
+  const byPlatform = {};
+  for (const train of trains) {
+    if (!byPlatform[train.platform]) byPlatform[train.platform] = [];
+    byPlatform[train.platform].push(train);
+  }
+
+  const laneMap = new Map(); // trainId → { lane, totalLanes }
+
+  for (const platformTrains of Object.values(byPlatform)) {
+    const sorted = [...platformTrains].sort((a, b) =>
+      timeToMinutes(a.arrival) - timeToMinutes(b.arrival));
+
+    const laneEndTimes = []; // departure minute for each active lane
+    const trainLanes = new Map();
+
+    for (const train of sorted) {
+      const arrMin = timeToMinutes(train.arrival);
+      const depMin = timeToMinutes(train.departure);
+      let laneIdx = laneEndTimes.findIndex(end => arrMin >= end);
+      if (laneIdx === -1) {
+        laneIdx = laneEndTimes.length;
+        laneEndTimes.push(depMin);
+      } else {
+        laneEndTimes[laneIdx] = depMin;
+      }
+      trainLanes.set(train.id, laneIdx);
+    }
+
+    const totalLanes = laneEndTimes.length;
+    for (const [id, lane] of trainLanes) {
+      laneMap.set(id, { lane, totalLanes });
+    }
+  }
+
+  return laneMap;
+}
+
+// ── Build UI ─────────────────────────────────────────────
+function buildTimeline() {
+  const w = totalWidth();
+  canvas.style.width = w + 'px';
+
+  timeHeader.innerHTML = '';
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const x = (h - START_HOUR) * PX_PER_HOUR;
+    const tick = document.createElement('div');
+    tick.className = 'time-tick major';
+    tick.style.left = x + 'px';
+    tick.textContent = `${String(h % 24).padStart(2,'0')}:00`;
+    timeHeader.appendChild(tick);
+    if (h < END_HOUR) {
+      const t30 = document.createElement('div');
+      t30.className = 'time-tick';
+      t30.style.left = (x + PX_PER_HOUR / 2) + 'px';
+      t30.textContent = `${String(h % 24).padStart(2,'0')}:30`;
+      timeHeader.appendChild(t30);
+    }
+  }
+
+  gridLayer.innerHTML = '';
+  for (let h = START_HOUR; h <= END_HOUR; h++) {
+    const x = (h - START_HOUR) * PX_PER_HOUR;
+    const line = document.createElement('div');
+    line.className = 'grid-line-v major';
+    line.style.left = x + 'px';
+    gridLayer.appendChild(line);
+    if (h < END_HOUR) {
+      const l30 = document.createElement('div');
+      l30.className = 'grid-line-v';
+      l30.style.left = (x + PX_PER_HOUR / 2) + 'px';
+      gridLayer.appendChild(l30);
+    }
+  }
+
+  platformRows.innerHTML = '';
+  rowLabelsCol.innerHTML = '<div class="label-header"></div>';
+
+  for (let p = 1; p <= NUM_PLATFORMS; p++) {
+    const lbl = document.createElement('div');
+    lbl.className = 'row-label';
+    lbl.textContent = p;
+    rowLabelsCol.appendChild(lbl);
+
+    const row = document.createElement('div');
+    row.className = 'platform-row';
+    row.dataset.platform = p;
+    row.style.width = w + 'px';
+    platformRows.appendChild(row);
+  }
+
+  renderTrains();
+  updateNowLine();
+  updateMarkerPosition();
+}
+
+function renderTrains() {
+  document.querySelectorAll('.train-block').forEach(el => el.remove());
+
+  const laneMap = assignLanes();
+
+  trains.forEach(train => {
+    const row = platformRows.querySelector(`.platform-row[data-platform="${train.platform}"]`);
+    if (!row) return;
+
+    const a = parseTime(train.arrival);
+    const arrMin = timeToMinutes(train.arrival);
+    const depMin = timeToMinutes(train.departure);
+    const dwellMin = Math.max(depMin - arrMin, 0);
+    const blockW = Math.max(dwellMin * pxPerMin(), MIN_BLOCK_PX);
+    const x = timeToX(a.h, a.m);
+
+    const { lane, totalLanes } = laneMap.get(train.id) || { lane: 0, totalLanes: 1 };
+
+    // Vertical position: center single trains, stack overlapping ones
+    let topPx;
+    if (totalLanes === 1) {
+      topPx = (108 - LANE_HEIGHT) / 2; // vertically centered
+    } else {
+      topPx = LANE_PAD + lane * (LANE_HEIGHT + LANE_GAP);
+    }
+
+    const el = document.createElement('div');
+    el.className = `train-block ${train.status}`;
+    el.dataset.id = train.id;
+    el.style.left  = x + 'px';
+    el.style.width = blockW + 'px';
+    el.style.top   = topPx + 'px';
+
+    // Zoom-aware content: reveal more as block gets wider
+    const delayStr = delayLabel(train.delay, train.status);
+    const cancelled = train.status === 'cancelled';
+
+    if (blockW >= CONTENT_FULL_PX) {
+      el.innerHTML = cancelled
+        ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
+        : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+    } else if (blockW >= CONTENT_ROUTE_PX) {
+      el.innerHTML = `<div class="train-inner"><div class="train-route">${train.route}</div></div>`;
+    }
+    // else: pure colored bar — click for detail
+
+    setupTrainDrag(el, train);
+    setupTrainTooltip(el, train);
+    row.appendChild(el);
+  });
+}
+
+function statusLabel(s) {
+  return { 'on-time':'On time', 'ahead':'Ahead of schedule', 'delay-minor':'Delay <5 min', 'delay-major':'Delay ≥5 min', 'cancelled':'Cancelled' }[s] || s;
+}
+
+function delayLabel(delay, status) {
+  if (status === 'cancelled') return '(––)';
+  if (!delay || delay === 0) return '(+0)';
+  return delay > 0 ? `(+${delay})` : `(${delay})`;
+}
+
+function updateNowLine() {
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  if (h < START_HOUR || h >= END_HOUR) { nowLine.style.display = 'none'; return; }
+  nowLine.style.display = 'block';
+  nowLine.style.left = timeToX(h, m) + 'px';
+}
+
+// ── Manual time marker ────────────────────────────────────
+let markerTimeMin = null;
+
+timeHeader.addEventListener('click', e => {
+  const x = e.clientX - scrollArea.getBoundingClientRect().left + scrollArea.scrollLeft;
+  markerTimeMin = Math.max(0, Math.min(x / PX_PER_HOUR * 60, (END_HOUR - START_HOUR) * 60));
+  updateMarkerPosition();
+});
+
+function updateMarkerPosition() {
+  if (markerTimeMin === null) return;
+  const markerLine  = document.getElementById('marker-line');
+  const markerLabel = document.getElementById('marker-label');
+  const x = markerTimeMin / 60 * PX_PER_HOUR;
+  markerLine.style.left = x + 'px';
+  markerLine.classList.remove('hidden');
+  const absMin = START_HOUR * 60 + markerTimeMin;
+  const h = Math.floor(absMin / 60) % 24;
+  const m = Math.floor(absMin % 60);
+  const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+  markerLabel.textContent = timeStr;
+  const tp = document.getElementById('time-picker');
+  if (tp) tp.value = timeStr;
+}
+
+// ── Drag & Drop ───────────────────────────────────────────
+let dragging = null;
+let dragStartX = 0, dragStartY = 0, didDrag = false;
+const DRAG_THRESHOLD = 5;
+
+function setupTrainDrag(el, train) {
+  el.addEventListener('mousedown', e => startDrag(e, el, train));
+  el.addEventListener('touchstart', e => startDragTouch(e, el, train), { passive: false });
+}
+
+function startDrag(e, el, train) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+  e.stopPropagation();
+  closeDetailCard();
+
+  const rect = el.getBoundingClientRect();
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+  didDrag = false;
+
+  dragging = {
+    train, el, origPlatform: train.platform,
+    offsetX: e.clientX - rect.left,
+    offsetY: e.clientY - rect.top,
+  };
+
+  document.addEventListener('mousemove', onDragMove);
+  document.addEventListener('mouseup', onDragEnd);
+}
+
+function startDragTouch(e, el, train) {
+  e.preventDefault();
+  const touch = e.touches[0];
+  const rect = el.getBoundingClientRect();
+  dragStartX = touch.clientX;
+  dragStartY = touch.clientY;
+  didDrag = false;
+
+  dragging = {
+    train, el, origPlatform: train.platform,
+    offsetX: touch.clientX - rect.left,
+    offsetY: touch.clientY - rect.top,
+  };
+  document.addEventListener('touchmove', onDragMoveTouch, { passive: false });
+  document.addEventListener('touchend', onDragEndTouch);
+}
+
+function showGhost(el, train, cx, cy) {
+  const rect = el.getBoundingClientRect();
+  dragGhost.style.display = 'inline-flex';
+  dragGhost.style.width   = rect.width + 'px';
+  dragGhost.style.background = getComputedStyle(el).background;
+  dragGhost.style.left = (cx - dragging.offsetX) + 'px';
+  dragGhost.style.top  = (cy - dragging.offsetY) + 'px';
+
+  const blockW = rect.width;
+  const delayStr = delayLabel(train.delay, train.status);
+  const cancelled = train.status === 'cancelled';
+  if (blockW >= CONTENT_FULL_PX) {
+    dragGhost.innerHTML = cancelled
+      ? `<div class="train-inner"><div class="train-route">${train.route}</div></div>`
+      : `<div class="train-inner"><div class="train-route">→ ${train.route}</div><div class="train-time">${train.arrival} ${delayStr}</div></div>`;
+  } else if (blockW >= CONTENT_ROUTE_PX) {
+    dragGhost.innerHTML = `<div class="train-inner"><div class="train-route">${train.route}</div></div>`;
+  } else {
+    dragGhost.innerHTML = '';
+  }
+}
+
+function onDragMove(e) {
+  if (!dragging) return;
+  if (!didDrag) {
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+    didDrag = true;
+    dragging.el.classList.add('dragging');
+    showGhost(dragging.el, dragging.train, e.clientX, e.clientY);
+  }
+  moveGhost(e.clientX, e.clientY);
+  highlightRow(e.clientX, e.clientY);
+}
+
+function onDragMoveTouch(e) {
+  if (!dragging) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  if (!didDrag) {
+    const dx = t.clientX - dragStartX;
+    const dy = t.clientY - dragStartY;
+    if (dx * dx + dy * dy < DRAG_THRESHOLD * DRAG_THRESHOLD) return;
+    didDrag = true;
+    dragging.el.classList.add('dragging');
+    showGhost(dragging.el, dragging.train, t.clientX, t.clientY);
+  }
+  moveGhost(t.clientX, t.clientY);
+  highlightRow(t.clientX, t.clientY);
+}
+
+function moveGhost(cx, cy) {
+  dragGhost.style.left = (cx - dragging.offsetX) + 'px';
+  dragGhost.style.top  = (cy - dragging.offsetY) + 'px';
+}
+
+function highlightRow(cx, cy) {
+  document.querySelectorAll('.platform-row').forEach(r => r.classList.remove('drag-over'));
+  const target = getRowAt(cx, cy);
+  if (target) target.classList.add('drag-over');
+}
+
+function getRowAt(cx, cy) {
+  for (const row of document.querySelectorAll('.platform-row')) {
+    const rect = row.getBoundingClientRect();
+    if (cy >= rect.top && cy <= rect.bottom) return row;
+  }
+  return null;
+}
+
+function onDragEnd(e) {
+  finishDrag(e.clientX, e.clientY);
+  document.removeEventListener('mousemove', onDragMove);
+  document.removeEventListener('mouseup', onDragEnd);
+}
+
+function onDragEndTouch(e) {
+  const t = e.changedTouches[0];
+  finishDrag(t.clientX, t.clientY);
+  document.removeEventListener('touchmove', onDragMoveTouch);
+  document.removeEventListener('touchend', onDragEndTouch);
+}
+
+function finishDrag(cx, cy) {
+  if (!dragging) return;
+  dragging.el.classList.remove('dragging');
+  dragGhost.style.display = 'none';
+  document.querySelectorAll('.platform-row').forEach(r => r.classList.remove('drag-over'));
+
+  if (!didDrag) {
+    const train = dragging.train;
+    dragging = null;
+    showDetailCard(train, cx, cy);
+    return;
+  }
+
+  const targetRow = getRowAt(cx, cy);
+  if (targetRow) {
+    const newPlatform = parseInt(targetRow.dataset.platform);
+    if (newPlatform !== dragging.train.platform) {
+      showConfirmModal(dragging.train, dragging.train.platform, newPlatform);
+      dragging = null;
+      return;
+    }
+  }
+
+  dragging = null;
+}
+
+// ── Platform change modal ─────────────────────────────────
+const modalBackdrop = document.getElementById('modal-backdrop');
+const modalTrain    = document.getElementById('modal-train');
+const modalFrom     = document.getElementById('modal-from');
+const modalTo       = document.getElementById('modal-to');
+let pendingChange   = null;
+
+function showConfirmModal(train, fromPlatform, toPlatform) {
+  modalTrain.textContent = train.name ? `${train.route}, ${train.name}` : train.route;
+  modalFrom.textContent  = fromPlatform;
+  modalTo.textContent    = toPlatform;
+  pendingChange = { train, newPlatform: toPlatform };
+  modalBackdrop.classList.remove('hidden');
+}
+
+document.getElementById('modal-confirm').addEventListener('click', () => {
+  if (pendingChange) { pendingChange.train.platform = pendingChange.newPlatform; renderTrains(); }
+  closeModal();
+});
+document.getElementById('modal-cancel').addEventListener('click', closeModal);
+modalBackdrop.addEventListener('click', e => { if (e.target === modalBackdrop) closeModal(); });
+
+function closeModal() { modalBackdrop.classList.add('hidden'); pendingChange = null; }
+
+// ── Train detail card ─────────────────────────────────────
+function populateDetailCard(train) {
+  const parts = (train.name || '').split(/\s[–\-]\s/);
+  document.getElementById('tdc-route').textContent     = train.route;
+  document.getElementById('tdc-origin').textContent    = parts[0] || '';
+  document.getElementById('tdc-dest').textContent      = parts[1] || '';
+  document.getElementById('tdc-arrival').textContent   = train.arrival;
+  document.getElementById('tdc-departure').textContent = train.departure;
+  const badge = document.getElementById('tdc-delay-badge');
+  badge.className = 'tdc-delay-badge ' + train.status;
+  if (train.status === 'cancelled') {
+    badge.textContent = 'CANC';
+  } else if (!train.delay || train.delay === 0) {
+    badge.textContent = '+0 min';
+  } else {
+    badge.textContent = (train.delay > 0 ? '+' : '') + train.delay + ' min';
+  }
+}
+
+function showDetailCard(train, cx, cy) {
+  populateDetailCard(train);
+  const card = document.getElementById('train-detail-card');
+  card.classList.remove('hidden');
+  const cardW = 230, cardH = 170;
+  let left = cx + 14, top = cy - 24;
+  if (left + cardW > window.innerWidth - 8)  left = cx - cardW - 14;
+  if (top + cardH > window.innerHeight - 8)  top  = window.innerHeight - cardH - 8;
+  if (top < 8) top = 8;
+  card.style.left = left + 'px';
+  card.style.top  = top  + 'px';
+}
+
+function closeDetailCard() {
+  document.getElementById('train-detail-card').classList.add('hidden');
+}
+
+// ── Hover tooltip ──────────────────────────────────────────
+let cardLeaveTimer = null;
+const _tooltipCard = document.getElementById('train-detail-card');
+_tooltipCard.addEventListener('mouseenter', () => clearTimeout(cardLeaveTimer));
+_tooltipCard.addEventListener('mouseleave', () => {
+  cardLeaveTimer = setTimeout(closeDetailCard, 100);
+});
+
+let _tooltipTrain = null;
+
+document.getElementById('tdc-btn-assign').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!_tooltipTrain) return;
+  const plat = prompt(`Assign platform for route ${_tooltipTrain.route}:`, _tooltipTrain.platform);
+  if (plat && plat.trim()) {
+    _tooltipTrain.platform = plat.trim();
+    closeDetailCard();
+    buildTimeline();
+  }
+});
+
+document.getElementById('tdc-btn-delay').addEventListener('click', e => {
+  e.stopPropagation();
+  if (!_tooltipTrain) return;
+  const val = prompt(`Set delay in minutes for route ${_tooltipTrain.route} (negative = ahead):`, _tooltipTrain.delay || 0);
+  if (val !== null) {
+    const n = parseInt(val, 10);
+    if (!isNaN(n)) {
+      _tooltipTrain.delay = n;
+      _tooltipTrain.status = n === 0 ? 'on-time' : n > 0 ? (n <= 5 ? 'delay-minor' : 'delay-major') : 'ahead';
+      closeDetailCard();
+      buildTimeline();
+    }
+  }
+});
+
+function setupTrainTooltip(el, train) {
+  el.addEventListener('mouseenter', () => {
+    clearTimeout(cardLeaveTimer);
+    _tooltipTrain = train;
+    populateDetailCard(train);
+    const card = document.getElementById('train-detail-card');
+    const rect = el.getBoundingClientRect();
+    const cardW = 230, cardH = 215;
+    let left = rect.left;
+    let top  = rect.bottom + 10;
+    if (left + cardW > window.innerWidth - 8)  left = window.innerWidth - cardW - 8;
+    if (top  + cardH > window.innerHeight - 8) top  = rect.top - cardH - 10;
+    if (top < 8) top = 8;
+    card.style.left = left + 'px';
+    card.style.top  = top  + 'px';
+    card.classList.remove('hidden');
+  });
+  el.addEventListener('mouseleave', () => {
+    cardLeaveTimer = setTimeout(() => {
+      if (!_tooltipCard.matches(':hover')) closeDetailCard();
+    }, 100);
+  });
+}
+
+document.addEventListener('click', e => {
+  const card = document.getElementById('train-detail-card');
+  if (!card.classList.contains('hidden') && !card.contains(e.target) && !e.target.closest('.train-block')) {
+    closeDetailCard();
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    closeDetailCard();
+    if (!modalBackdrop.classList.contains('hidden')) closeModal();
+  }
+});
+
+// ── Horizontal scroll on wheel ────────────────────────────
+scrollArea.addEventListener('wheel', e => {
+  e.preventDefault();
+  const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+  scrollArea.scrollLeft += delta;
+}, { passive: false });
+
+// ── Zoom ─────────────────────────────────────────────────
+document.getElementById('zoom-in').addEventListener('click', () => {
+  const mid = scrollArea.scrollLeft + scrollArea.clientWidth / 2;
+  const ratio = mid / totalWidth();
+  PX_PER_HOUR = Math.min(PX_PER_HOUR * 1.25, 720);
+  buildTimeline();
+  scrollArea.scrollLeft = ratio * totalWidth() - scrollArea.clientWidth / 2;
+});
+
+document.getElementById('zoom-out').addEventListener('click', () => {
+  const mid = scrollArea.scrollLeft + scrollArea.clientWidth / 2;
+  const ratio = mid / totalWidth();
+  PX_PER_HOUR = Math.max(PX_PER_HOUR / 1.25, 60);
+  buildTimeline();
+  scrollArea.scrollLeft = ratio * totalWidth() - scrollArea.clientWidth / 2;
+});
+
+// ── Now button ────────────────────────────────────────────
+document.getElementById('goto-now').addEventListener('click', () => {
+  const now = new Date();
+  scrollArea.scrollLeft = timeToX(now.getHours(), now.getMinutes()) - scrollArea.clientWidth / 2;
+  markerTimeMin = (now.getHours() - START_HOUR) * 60 + now.getMinutes();
+  updateMarkerPosition();
+});
+
+// ── Amber marker drag ──────────────────────────────────────
+let markerDragging = false;
+document.getElementById('marker-line').addEventListener('mousedown', e => {
+  if (e.button !== 0) return;
+  markerDragging = true;
+  e.stopPropagation();
+  e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+  if (!markerDragging) return;
+  const x = e.clientX - scrollArea.getBoundingClientRect().left + scrollArea.scrollLeft;
+  markerTimeMin = Math.max(0, Math.min(x / PX_PER_HOUR * 60, (END_HOUR - START_HOUR) * 60));
+  updateMarkerPosition();
+});
+document.addEventListener('mouseup', () => { markerDragging = false; });
+
+// ── Toggles ───────────────────────────────────────────────
+document.querySelectorAll('.toggle-switch').forEach(t => {
+  t.addEventListener('click', () => t.classList.toggle('off'));
+});
+
+// ── Auto-update now line every minute ─────────────────────
+setInterval(updateNowLine, 60000);
+
+// ── Time picker ───────────────────────────────────────────
+const timePicker = document.getElementById('time-picker');
+
+timePicker.addEventListener('change', () => {
+  const [h, m] = timePicker.value.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return;
+  scrollArea.scrollLeft = Math.max(0, timeToX(h, m) - scrollArea.clientWidth / 2);
+  const mins = (h - START_HOUR) * 60 + m;
+  if (mins >= 0 && mins <= (END_HOUR - START_HOUR) * 60) {
+    markerTimeMin = mins;
+    updateMarkerPosition();
+  }
+});
+
+// ── Init ──────────────────────────────────────────────────
+buildTimeline();
+
+requestAnimationFrame(() => {
+  const now = new Date();
+  timePicker.value = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  scrollArea.scrollLeft = Math.max(0, timeToX(now.getHours(), now.getMinutes()) - scrollArea.clientWidth / 3);
+});
+</script>
+</body>
+</html>

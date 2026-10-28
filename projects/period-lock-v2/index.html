@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Period lock v2 — Synder</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined">
+<style>
+  /* Every text is >= 14px. Shell = v1 (live chrome from projects/stripe-invoice-date); tables = kit table.synder-table;
+     statuses = kit .status. Desktop only (min 1280). */
+  html,body{height:100%}
+  input,select,textarea,button{font-family:inherit;font-size:14px}
+  body{display:flex;flex-direction:column;min-width:1280px;font-size:14px;color:var(--text-primary);
+    background:var(--color-white);overflow:hidden}
+
+  /* demo control — deliberately not product chrome (AGENTS.md variant-switch bar) */
+  .demo-bar{position:relative;z-index:1300;display:flex;align-items:center;gap:12px;background:var(--color-grey);color:var(--color-white);
+    padding:8px 20px;flex-shrink:0;font-size:14px;flex-wrap:wrap}
+  .demo-bar .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;text-transform:uppercase;font-size:14px}
+  .demo-bar label{opacity:.85;font-size:14px}
+  .demo-bar input[type=date]{width:150px;height:28px;padding:2px 8px;border:none;border-radius:4px;font-size:14px}
+  .demo-bar .sep{width:1px;height:20px;background:rgba(255,255,255,.2)}
+  .demo-bar .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+  .demo-bar button{background:none;border:none;color:rgba(255,255,255,.75);font-family:inherit;
+    font-size:14px;padding:4px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+  .demo-bar button:hover{color:var(--color-white)}
+  .demo-bar button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+  .demo-bar .plain{background:rgba(255,255,255,.1)}
+
+  .mi{font-family:'Material Icons Outlined';font-weight:normal;font-style:normal;font-size:20px;line-height:1;
+    display:inline-block;-webkit-font-smoothing:antialiased;font-feature-settings:'liga';text-transform:none;
+    letter-spacing:normal;white-space:nowrap;vertical-align:middle}
+
+  /* live app shell (v1) */
+  .app{flex:1;display:flex;min-height:0;background:var(--color-white);position:relative}
+  .sb{width:208px;flex-shrink:0;border-right:1px solid var(--border-default);background:var(--color-white);
+    display:flex;flex-direction:column;overflow-y:auto;position:relative}
+  .sb-org{display:flex;align-items:center;gap:10px;height:56px;padding:0 14px;flex-shrink:0;width:100%;
+    border:none;border-bottom:1px solid var(--border-default);background:none;font:inherit;font-size:14px;
+    font-weight:500;color:var(--text-primary);cursor:pointer;text-align:left}
+  .sb-org:hover{background:var(--color-grey-5)}
+  .sb-av{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+  .sb-av.pt{background:#F5C6CB;color:#B23B4B} .sb-av.sm{background:var(--color-status-green-bg);color:var(--color-green)}
+  .sb-org .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sb-org .mi{color:var(--text-secondary)}
+  .sb-item{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 14px;color:var(--text-primary);
+    border-bottom:1px solid var(--border-default);font-size:14px;text-decoration:none;flex-shrink:0}
+  .sb-item .mi{color:var(--color-primary);font-size:20px}
+  .sb-item .chev{margin-left:auto;color:var(--text-secondary)}
+  a.sb-item:hover{background:var(--color-grey-5)}
+  .sb-item.on{background:var(--color-primary);color:var(--color-white)} .sb-item.on .mi{color:var(--color-white)}
+  .sb-beta{color:var(--color-primary);border:1px solid var(--color-primary-50);border-radius:4px;padding:0 4px;font-size:14px;line-height:18px}
+  .sb-gap{height:40px;border-bottom:1px solid var(--border-default);flex-shrink:0}
+  .sb-open{background:var(--color-grey-5)}
+  .sb-sub{display:flex;align-items:center;gap:10px;min-height:38px;padding:0 14px 0 34px;color:var(--text-primary);
+    text-decoration:none;font-size:14px;flex-shrink:0}
+  .sb-sub .mi{font-size:18px;color:var(--color-primary)}
+  a.sb-sub:hover{background:var(--color-grey-5)}
+  .sb-sub.on{background:var(--color-primary);color:var(--color-white)} .sb-sub.on .mi{color:var(--color-white)}
+  .sb-new{background:var(--color-status-green-bg);color:var(--color-green);border-radius:4px;padding:0 4px}
+  .org-menu{position:absolute;top:58px;left:8px;right:8px;z-index:50;background:var(--color-white);
+    border:1px solid var(--border-default);border-radius:var(--radius-md);box-shadow:var(--shadow-dropdown);padding:4px 0}
+  .org-menu button{display:flex;align-items:center;gap:10px;width:100%;padding:8px 12px;border:none;background:none;
+    font:inherit;font-size:14px;color:var(--text-primary);cursor:pointer;text-align:left}
+  .org-menu button:hover{background:var(--bg-hover)}
+  .org-menu .sub{color:var(--text-secondary)}
+
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:24px;padding:0 24px;
+    border-bottom:1px solid var(--border-default);position:relative}
+  .syncs{color:var(--text-secondary);border-bottom:3px solid var(--color-primary);padding:6px 0}
+  .syncs b{color:var(--color-primary);font-weight:500;font-size:16px}
+  .top .mi{color:var(--color-primary);font-size:24px}
+  .top .how{color:var(--color-primary)}
+  .icon-btn{background:none;border:none;padding:0;cursor:pointer;display:flex}
+  .user-menu{position:absolute;right:16px;top:52px;z-index:50}
+  .user-menu .dropdown-item{border:none;background:none;width:100%;font-family:inherit;text-align:left}
+  .content{flex:1;overflow:auto;padding:16px 24px 32px;position:relative}
+
+  /* page pieces */
+  .page-header{margin-bottom:16px}
+  .title-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .narrow{max-width:960px}
+  .ilogo{width:24px;height:24px;border-radius:4px;color:#fff;font-weight:700;font-size:14px;display:inline-flex;
+    align-items:center;justify-content:center;flex-shrink:0}
+  .integ{display:inline-flex;align-items:center;gap:8px}
+  .chips{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .status .mi{font-size:16px;margin-right:2px}
+  a.status{text-decoration:none;cursor:pointer}
+  a.status:hover{filter:brightness(.96)}
+  .lock-chip{gap:2px}
+  .muted{color:var(--text-secondary)}
+  .err{color:var(--color-red);font-size:14px;margin-top:4px}
+  .table-wrap{margin-bottom:8px}
+  .synder-table td.num,.synder-table th.num{text-align:right}
+  .synder-table tr.total td{font-weight:500}
+  .back{display:inline-block;margin-bottom:12px}
+  .back-btn{display:inline-flex;align-items:center;gap:4px;background:var(--color-grey-5);border:1px solid var(--border-default);
+    border-radius:4px;padding:6px 12px;font-family:inherit;font-size:14px;color:var(--text-primary);margin-bottom:20px;cursor:pointer;text-decoration:none}
+  .back-btn .mi{font-size:18px}
+
+  /* organization settings */
+  .os-card{background:var(--color-white);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:20px 24px;margin-bottom:16px}
+  .os-card > h2{font-size:20px;font-weight:500;margin:0 0 12px;line-height:28px}
+  .os-head{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:12px}
+  .os-head h2{font-size:20px;font-weight:500;margin:0;line-height:28px}
+  .kv{display:grid;grid-template-columns:200px 1fr;column-gap:16px}
+  .kv > div{padding:10px 0;border-bottom:1px solid var(--border-default)}
+  .kv > div:nth-last-child(-n+2){border-bottom:none}
+  .kv .k{color:var(--text-secondary)}
+  .irow{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border-default)}
+  .irow:last-of-type{border-bottom:none}
+  .irow .tz{margin-left:auto;color:var(--text-secondary)}
+  .ofields{display:grid;grid-template-columns:1fr 1fr;gap:12px 16px;max-width:720px;margin-bottom:16px}
+  .ofields label{display:block;color:var(--text-secondary);margin-bottom:4px}
+  .ofields input,.ofields select{width:100%}
+  .nrow{display:flex;align-items:center;gap:16px;padding:8px 0}
+  .nrow .nl{width:240px}
+  .tabs{padding:0}
+  .tabs .tab{border:none;background:none;font-family:inherit;border-bottom:2px solid transparent}
+  .tabs .tab.active{border-bottom-color:var(--color-primary)}
+
+  /* period lock section */
+  #period-lock{scroll-margin-top:16px;transition:box-shadow .3s}
+  #period-lock.flash{box-shadow:0 0 0 2px var(--color-primary)}
+  .pl-line{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0}
+  .pl-line .k{width:160px;color:var(--text-secondary);flex-shrink:0}
+  .pl-big{font-size:16px;font-weight:500}
+  .pl-sub{font-size:16px;font-weight:500;margin:20px 0 8px}
+  .alert{flex-wrap:wrap}
+  .alert .grow{flex:1;min-width:0}
+  .alert .btn{flex-shrink:0}
+  .alert.mismatch{margin:12px 0 0}
+  #sheet-mismatch{align-items:flex-start;row-gap:8px}
+  #sheet-mismatch .grow{flex-basis:calc(100% - 40px)}
+  #sheet-mismatch .btn{margin-left:28px}
+
+  /* side sheet (DESIGN_RULES: 480px, from the right, #000 40%) */
+  .sheet-bg{position:fixed;inset:0;top:var(--demo-h,0px);z-index:1200;background:rgba(0,0,0,.4);display:flex;justify-content:flex-end}
+  .sheet{width:480px;height:100%;background:var(--color-white);display:flex;flex-direction:column;box-shadow:var(--shadow-modal);
+    animation:slidein .18s ease-out}
+  @keyframes slidein{from{transform:translateX(40px);opacity:.4}to{transform:none;opacity:1}}
+  .sheet-h{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border-default)}
+  .sheet-h .t{font-size:20px;font-weight:500}
+  .sheet-b{flex:1;overflow:auto;padding:20px 24px}
+  .sheet-f{border-top:1px solid var(--border-default);padding:12px 24px;display:flex;align-items:center;gap:8px}
+  .sheet-f .res{margin-right:auto;min-width:0}
+  .sheet-f .res.warn{color:var(--color-yellow);font-weight:500}
+  .grp{margin-bottom:24px}
+  .grp-t{font-weight:500;margin-bottom:8px}
+  .opt{display:flex;align-items:flex-start;gap:10px;padding:8px 0;cursor:pointer}
+  .opt.dis{cursor:not-allowed;color:var(--text-secondary)}
+  .opt input{margin-top:2px;flex-shrink:0}
+  .opt .ol{display:flex;flex-direction:column;gap:2px}
+  .nest{margin:4px 0 4px 28px}
+  .nest label.fl{display:block;margin-bottom:4px}
+  .nest input[type=date]{width:200px}
+  .chk{display:flex;align-items:center;gap:8px;margin-top:12px;cursor:pointer}
+  .chk input[type=number]{width:64px;text-align:center}
+  .switch-row{display:flex;align-items:center;justify-content:space-between;padding:4px 0 16px;border-bottom:1px solid var(--border-default);margin-bottom:20px}
+  .switch-row .grp-t{margin:0}
+  input[aria-invalid=true]{border-color:var(--border-error)}
+
+  /* transactions */
+  .tx-bar{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .tx-bar .search{width:200px}
+  .tx-bar .stsel{width:200px}
+  .tx-green{background:var(--color-green)} .tx-green:hover{background:var(--color-success-hover)}
+  .clear-x{display:inline-flex;align-items:center;gap:4px;height:24px;padding:0 4px 0 8px;border-radius:12px;background:var(--color-grey-10);font-size:14px}
+  .clear-x button{border:none;background:none;cursor:pointer;display:flex;padding:0;color:var(--text-secondary)}
+  .clear-x .mi{font-size:18px}
+  .st-col{display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:8px 0}
+  .bulk-bar{display:flex;align-items:center;gap:12px;min-height:44px;padding:4px 0 12px;flex-wrap:wrap}
+  .bulk-bar .cnt{font-weight:500}
+  .menu-fixed{position:fixed;z-index:900;display:block;min-width:260px}
+  .menu-fixed .dropdown-item{border:none;background:none;width:100%;font-family:inherit;text-align:left}
+  .menu-fixed .dropdown-item.off{color:var(--text-muted);cursor:not-allowed;flex-direction:column;align-items:flex-start;gap:2px}
+  .menu-fixed .dropdown-item.off:hover{background:none}
+  .menu-fixed .why-row{cursor:default}
+  .menu-fixed .why-row:hover{background:none}
+
+  /* sync info */
+  .stub{max-width:1100px}
+  .set-card{background:var(--color-white);border-radius:var(--radius-sm);box-shadow:var(--shadow-card);overflow:hidden}
+  .set-body{padding:20px}
+  .set-title{font-size:16px;font-weight:500;color:var(--text-primary);padding:16px 0 4px}
+  .sd-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+  .sd-title{font-size:20px;font-weight:500;color:var(--text-primary)}
+  .sd-actions{margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .sd-sub{color:var(--text-secondary);margin-bottom:16px}
+  .lock-why{display:inline-flex;align-items:center;gap:4px}
+  .lock-why .mi{font-size:18px;color:var(--text-secondary)}
+  .qb{display:inline-flex;width:20px;height:20px;border-radius:50%;background:#2CA01C;color:#fff;font-weight:700;
+    align-items:center;justify-content:center;vertical-align:-4px;font-size:14px}
+  .hl{background:var(--color-status-yellow-bg);padding:0 3px;border-radius:2px}
+  tr.log-detail td{height:auto;padding:10px 12px 12px 52px}
+  .dl-grid{display:flex;flex-wrap:wrap;gap:6px 24px}
+
+  /* filters, dashboard, summaries */
+  .filters{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end;background:var(--color-grey-5);padding:16px;border-radius:4px;margin-bottom:16px}
+  .filters .fl{font-weight:500;margin-bottom:6px}
+  .filters select,.filters input{width:180px}
+  .filters .dr{display:flex;gap:6px} .filters .dr input{width:150px}
+  .amount-big{font-size:20px;font-weight:500}
+  .sum-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;margin-bottom:16px}
+  .sum-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:20px}
+  .held-block{border:1px solid var(--border-default);border-radius:var(--radius-md);margin-bottom:16px}
+  .held-block .alert{margin:0;border-radius:var(--radius-md) var(--radius-md) 0 0}
+  .held-block .hb-body{padding:0 16px 8px}
+
+  /* toasts (live error-toast layout, v1) — no Undo */
+  #toasts{position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;width:520px}
+  .toast{position:relative;display:flex;align-items:flex-start;gap:12px;color:var(--color-white);border-radius:4px;
+    padding:14px 40px 16px 16px;box-shadow:var(--shadow-modal);overflow:hidden;font-size:16px;line-height:24px}
+  .toast.err{background:var(--color-red)} .toast.ok{background:var(--color-green)}
+  .toast > .mi{font-size:24px}
+  .toast-x{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--color-white);cursor:pointer;padding:2px}
+  .modal-bg{z-index:1500}
+  .modal .synder-modal-body{color:var(--text-primary)}
+  .modal .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+  .modal .form-row label{display:block;font-weight:500;margin-bottom:4px}
+  .modal .form-row input{width:100%}
+</style>
+</head>
+<body>
+
+<div class="demo-bar" id="demo-bar">
+  <span class="vs-label">Demo</span>
+  <label for="demo-today">Today (demo)</label>
+  <input type="date" id="demo-today" aria-label="Today (demo)">
+  <span class="sep"></span>
+  <span>Role</span>
+  <div class="vs-opts" role="group" aria-label="Role">
+    <button type="button" id="role-admin" data-c="role" data-a="admin">Admin</button>
+    <button type="button" id="role-member" data-c="role" data-a="member">Member</button>
+  </div>
+  <span class="sep"></span>
+  <label for="demo-books">Books closing date (demo)</label>
+  <input type="date" id="demo-books" aria-label="Books closing date (demo)">
+  <button type="button" class="plain" id="demo-books-none" data-c="booksNone">None</button>
+  <button type="button" class="plain" id="demo-reset" data-c="demoReset" style="margin-left:auto">Reset</button>
+</div>
+
+<div class="app">
+  <nav class="sb" aria-label="Main" id="sb"></nav>
+  <div class="main">
+    <div class="top" id="top"></div>
+    <div class="content" id="screen"></div>
+  </div>
+</div>
+<div id="sheet-root"></div>
+<div id="toasts" aria-live="assertive"></div>
+<div id="menu-root"></div>
+<div id="modal-root"></div>
+
+<script>
+/* Copy provenance
+   captured   shell, sidebar, top bar, user menu, Transactions list chrome, Sync details labels + Sync log paragraph,
+              Summaries list chrome, Dashboard issues table, Activity Log page (all via v1 / projects/stripe-invoice-date);
+              Organization settings sections + strings from .synder-state/settings-rework/inventory.json (live capture).
+   proposed   all period-lock copy (section, sheet, chips, held queue, reasons, modals, toasts, history).
+   uncaptured shown as [live copy not captured]. */
+var MARK = '[live copy not captured]';
+var TODAY_DEFAULT = '2026-10-06', BOOKS_DEFAULT = '2026-09-30', ME = 'Viacheslav Tarabarov';
+
+var INTEG = {
+  stripe:  { id:'stripe',  name:'Stripe Test (sandbox)', src:'Stripe',  logo:'S', color:'#635BFF', tz:'Europe/Belgrade' },
+  shopify: { id:'shopify', name:'Changolivia (Shopify)', src:'Shopify', logo:'C', color:'#96BF48', tz:'Europe/Belgrade' },
+  paypal:  { id:'paypal',  name:'PayPal (sandbox)',      src:'PayPal',  logo:'P', color:'#003087', tz:'Europe/Belgrade' }
+};
+var ORGS = {
+  pt: { name:'Buddy QA (PT)', av:'PT', books:'Buddy QA (PT) (QuickBooks Online)', mode:'Per Transaction' },
+  sm: { name:'Green Leaf (SM)', av:'SM', books:'Green Leaf (SM) (QuickBooks Online)', mode:'Summary mode' }
+};
+
+/* ---------- dates ---------- */
+var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function pd(iso){ var p = iso.split('-').map(Number); return { y:p[0], m:p[1], d:p[2] }; }
+function isoOf(t){ return t.toISOString().slice(0,10); }
+function addDays(iso, n){ var p = pd(iso); return isoOf(new Date(Date.UTC(p.y, p.m-1, p.d+n))); }
+function nextDay(iso){ return addDays(iso, 1); }
+function fmt(iso){ if(!iso) return ''; var p = pd(iso); return MON[p.m-1] + ' ' + p.d + ', ' + p.y; }
+function fmtMD(iso){ var p = pd(iso); return MON[p.m-1] + ' ' + p.d; }
+function range(a, b){ return pd(a).y === pd(b).y ? fmtMD(a) + ' – ' + fmt(b) : fmt(a) + ' – ' + fmt(b); }
+function arrow(a, b){ return pd(a).y === pd(b).y ? fmtMD(a) + ' → ' + fmt(b) : fmt(a) + ' → ' + fmt(b); }
+function validIso(v){ return /^\d{4}-\d{2}-\d{2}$/.test(v || ''); }
+function maxIso(a, b){ return !a ? b : (!b ? a : (a > b ? a : b)); }
+/* move forward every month: on day N, lock through the end of the previous month */
+function lastRun(today, day){ var t = pd(today);
+  return t.d >= day ? isoOf(new Date(Date.UTC(t.y, t.m-1, day))) : isoOf(new Date(Date.UTC(t.y, t.m-2, day))); }
+function lockFromRun(run){ var p = pd(run); return isoOf(new Date(Date.UTC(p.y, p.m-1, 0))); }
+function nowHM(){ var d = new Date(); return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0'); }
+
+/* ---------- state ---------- */
+function initialLock(){ return { on:true, source:'qbo', synderDate:'2026-09-30', auto:false, day:5, late:'hold', qboLast:'2026-09-30' }; }
+var S = {
+  org:'pt', route:'settings', hash:'settings', today:TODAY_DEFAULT, role:'admin',
+  books:{ date:BOOKS_DEFAULT, checked:'Oct 6, 2026 09:12' },
+  lock:{ pt:initialLock(), sm:initialLock() },
+  draft:null, modal:null, menu:null, orgMenu:false, userMenu:false, allowNav:false,
+  txTab:'all', txFilter:{ status:'All statuses', q:'' }, sel:{}, smSel:{},
+  bulk:{ from:'2026-09-15', to:'2026-10-05' },
+  act:{ type:'All', action:'All', initiator:'All', q:'' },
+  logOpen:{}, dashTab:'sync-issues', userTab:'users', smHeld:'held', smHeldOpen:true, adjSeq:1002
+};
+var HISTORY = {
+  pt: [
+    { ts:'Oct 5, 2026 16:38', who:ME, change:'Late transactions: Post → Hold' },
+    { ts:'Oct 1, 2026 06:00', who:'System', change:'Aug 31 → Sep 30, 2026' },
+    { ts:'Sep 28, 2026 13:00', who:'Maya Chen', change:'Source: Set in Synder → QuickBooks closing date' },
+    { ts:'Sep 5, 2026 00:00', who:'System', change:'Jul 31 → Aug 31, 2026' },
+    { ts:'Aug 5, 2026 00:00', who:'System', change:'Jun 30 → Jul 31, 2026' },
+    { ts:'Jul 2, 2026 11:20', who:'Maya Chen', change:'Period lock on · Locked through Jun 30, 2026' }
+  ],
+  sm: [
+    { ts:'Oct 5, 2026 16:40', who:ME, change:'Late transactions: Post → Hold' },
+    { ts:'Oct 1, 2026 06:00', who:'System', change:'Aug 31 → Sep 30, 2026' },
+    { ts:'Sep 12, 2026 10:05', who:'Maya Chen', change:'Period lock on · Locked through Aug 31, 2026' }
+  ]
+};
+var OTHER_ACTIVITY = [
+  { ts:'Oct 5, 2026 14:10', who:'Support', action:'Entered', type:'User management', details:'Entered organization' },
+  { ts:'Oct 4, 2026 10:22', who:'System', action:'Reconnected', type:'Integration', details:'Reconnected Stripe Test (sandbox)' }
+];
+
+/* ---------- the lock: one per organization ---------- */
+function lockThrough(org, c){
+  c = c || S.lock[org];
+  if (!c.on) return null;
+  if (c.source === 'qbo') return S.books.date || c.qboLast;
+  return c.auto && dayValid(c.day) ? maxIso(c.synderDate, lockFromRun(lastRun(S.today, +c.day))) : c.synderDate;
+}
+function firstOpen(org){ var lt = lockThrough(org); return lt ? nextDay(lt) : null; }
+function isLocked(org, iso){ var lt = lockThrough(org); return !!lt && iso <= lt; }
+function srcName(s){ return s === 'qbo' ? 'QuickBooks closing date' : 'Set in Synder'; }
+function lateName(l){ return l === 'post' ? 'Post on the first open day' : 'Hold for review'; }
+function lateShort(l){ return l === 'post' ? 'Post' : 'Hold'; }
+function dayValid(v){ return /^\d+$/.test(String(v).trim()) && +v >= 1 && +v <= 28; }
+function mismatch(org){
+  var c = S.lock[org], lt = lockThrough(org);
+  return c.on && c.source === 'synder' && S.books.date && lt !== S.books.date ? { books:S.books.date, synder:lt } : null;
+}
+function lockText(org){ var lt = lockThrough(org); return lt ? 'Locked through ' + fmt(lt) : ''; }
+function lockLink(org, cls){ return '<a class="text-link' + (cls ? ' ' + cls : '') + '" href="#settings?focus=lock" data-lock-link>' + lockText(org) + '</a>'; }
+function lockChip(org){
+  return lockThrough(org) ? '<a class="status status-grey lock-chip" id="lock-chip" href="#settings?focus=lock" data-lock-link><span class="mi">lock</span>' + lockText(org) + '</a>' : '';
+}
+function addHistory(org, who, change){
+  HISTORY[org].unshift({ ts:fmt(S.today) + ' ' + nowHM(), who:who, change:change });
+}
+
+/* ---------- mock data (v1 rows + 6 held across Stripe/Shopify/PayPal) ---------- */
+var TXNS = [
+  { id:'po_1U9E', info:'po_1U9E2I7QSI16uhjVmN5b1ly2', type:'Payout', amount:'304.02 USD', date:'2026-10-04', time:'00:00', status:'synced', integ:'stripe' },
+  { id:'buddy_ch', info:'Buddy QA Customer', type:'Invoice payment', amount:'128.00 USD', date:'2026-10-03', time:'14:22', status:'synced', integ:'stripe' },
+  { id:'re_3P8mXy9kL2', info:'Refund · re_3P8mXy9kL2', type:'Refund', amount:'-42.50 USD', date:'2026-10-01', time:'00:00', status:'synced', integ:'stripe', redated:['2026-09-29','2026-10-01'] },
+  { id:'je_rr_104', info:'RevRec JE · Deferred → Revenue', type:'Journal entry', amount:'480.00 USD', date:'2026-10-01', time:'00:00', status:'synced', integ:'stripe', redated:['2026-09-30','2026-10-01'] },
+  { id:'h_pp_6', info:'PayPal refund · 9KD31207RX', type:'Refund', amount:'-12.50 USD', date:'2026-09-30', time:'17:40', status:'held', integ:'paypal', recv:'2026-10-06' },
+  { id:'h_sh_2121', info:'Changolivia · Order #2121', type:'Order', amount:'74.90 USD', date:'2026-09-30', time:'21:12', status:'held', integ:'shopify', recv:'2026-10-06' },
+  { id:'h_st_re', info:'Refund · re_3QkT8sLm1', type:'Refund', amount:'-18.00 USD', date:'2026-09-29', time:'11:05', status:'held', integ:'stripe', recv:'2026-10-06' },
+  { id:'h_pp_3', info:'PayPal payment · 5TY88412KQ', type:'Payment', amount:'36.00 USD', date:'2026-09-28', time:'15:31', status:'held', integ:'paypal', recv:'2026-10-06' },
+  { id:'h_sh_2117', info:'Changolivia · Order #2117', type:'Order', amount:'112.40 USD', date:'2026-09-28', time:'09:18', status:'held', integ:'shopify', recv:'2026-10-06' },
+  { id:'h_st_ch', info:'Payment · ch_3QhA2bVn7', type:'Payment', amount:'54.00 USD', date:'2026-09-27', time:'13:47', status:'held', integ:'stripe', recv:'2026-10-06' },
+  { id:'ch_3Q8k', info:'Payment · ch_3Q8kWp2Lm', type:'Payment', amount:'128.00 USD', date:'2026-09-28', time:'09:40', status:'synced', integ:'stripe' },
+  { id:'order_1043', info:'Changolivia · Order #1043', type:'Order', amount:'72.00 USD', date:'2026-09-28', time:'10:02', status:'synced', integ:'shopify' },
+  { id:'po_1U8V', info:'po_1U8V3Kq7QSl16uhjVxR2a', type:'Payout', amount:'161.26 USD', date:'2026-09-15', time:'00:00', status:'synced', integ:'stripe' }
+];
+function txn(id){ for (var i = 0; i < TXNS.length; i++) if (TXNS[i].id === id) return TXNS[i]; return null; }
+function heldTx(){ return TXNS.filter(function(t){ return t.status === 'held'; }); }
+
+var SI = {
+  po_1U9E:      { syncId:'812700', start:'Oct 4, 2026 00:05', srcId:'po_1U9E2I7QSI16uhjVmN5b1ly2', logs:[{ type:'Transfer', info:'po_1U9E…', msg:'Transfer was created.' }] },
+  buddy_ch:     { syncId:'812680', start:'Oct 3, 2026 14:25', srcId:'ch_3Q9kBuddy', logs:[
+                  { type:'Invoice', info:'1052', msg:'Invoice was created.' }, { type:'Payment', info:'ch_3Q9k…', msg:'Payment was created.' },
+                  { type:'Expense', info:'fee_3Q9k…', msg:'Expense was created.' }] },
+  re_3P8mXy9kL2:{ syncId:'812441', start:'Oct 1, 2026 00:12', srcId:'re_3P8mXy9kL2', logs:[
+                  { type:'Refund receipt', info:'re_3P8mXy9kL2', redate:true, open:true },
+                  { type:'Expense', info:'fee_re_3P8m…', redate:true }] },
+  je_rr_104:    { syncId:'812455', start:'Oct 1, 2026 00:20', srcId:'je_rr_104', logs:[{ type:'Journal entry', info:'JE-1048', redate:true, open:true }] },
+  ch_3Q8k:      { syncId:'812301', start:'Sep 28, 2026 09:41', srcId:'ch_3Q8kWp2Lm', logs:[
+                  { type:'Payment', info:'ch_3Q8k…', msg:'Payment was created.' }, { type:'Expense', info:'fee_3Q8k…', msg:'Expense was created.' }] },
+  order_1043:   { syncId:'812610', start:'Sep 28, 2026 10:02', srcId:'shopify_order_1043', logs:[{ type:'Order', info:'#1043', msg:'Sales receipt created.' }] },
+  po_1U8V:      { syncId:'812150', start:'Sep 15, 2026 00:06', srcId:'po_1U8V3Kq7QSl16uhjVxR2a', logs:[{ type:'Transfer', info:'po_1U8V…', msg:'Transfer was created.' }] }
+};
+var LOGTYPE = { Refund:'Refund receipt', Order:'Sales receipt', Payment:'Payment' };
+heldTx().forEach(function(t, i){ SI[t.id] = { syncId:String(812800 + i), start:'Oct 6, 2026 08:0' + i, srcId:t.info.split(' · ').pop(), logs:[] }; });
+
+/* SM: summaries + period-lock adjustment JEs (balanced: debits = credits) */
+var SUMS = [
+  { id:'oct3',  date:'2026-10-03', range:'Oct 3 - Oct 3, 2026',   integ:'shopify', amount:'1,539.82 USD', status:'synced',
+    lines:[['Sales · Online','','1,580.00'],['Fees','40.18',''],['Changolivia (Shopify) clearing','1,539.82','']], tot:'1,580.00' },
+  { id:'oct2',  date:'2026-10-02', range:'Oct 2 - Oct 2, 2026',   integ:'stripe',  amount:'640.00 USD',   status:'synced',
+    lines:[['Sales · Online','','660.00'],['Processing fees','20.00',''],['Stripe Test (sandbox) clearing','640.00','']], tot:'660.00' },
+  { id:'adj1001', adj:'JE-ADJ-1001', date:'2026-10-01', range:'Oct 1 - Oct 1, 2026', integ:'stripe', amount:'-42.50 USD', status:'synced',
+    late:'Refunds Sep 29 – Sep 30, 2026 · 2 transactions',
+    lines:[['Refunds','42.50',''],['Stripe Test (sandbox) clearing','','42.50']], tot:'42.50' },
+  { id:'oct1',  date:'2026-10-01', range:'Oct 1 - Oct 1, 2026',   integ:'stripe',  amount:'1,282.50 USD', status:'synced',
+    lines:[['Sales · Online','','1,320.00'],['Processing fees','37.50',''],['Stripe Test (sandbox) clearing','1,282.50','']], tot:'1,320.00' },
+  { id:'sep30', date:'2026-09-30', range:'Sep 30 - Sep 30, 2026', integ:'stripe',  amount:'890.40 USD',   status:'synced',
+    lines:[['Sales · Online','','920.00'],['Processing fees','29.60',''],['Stripe Test (sandbox) clearing','890.40','']], tot:'920.00' },
+  { id:'sep29', date:'2026-09-29', range:'Sep 29 - Sep 29, 2026', integ:'shopify', amount:'2,105.12 USD', status:'synced',
+    lines:[['Sales · Online','','2,180.00'],['Fees','74.88',''],['Changolivia (Shopify) clearing','2,105.12','']], tot:'2,180.00' }
+];
+function sum(id){ for (var i = 0; i < SUMS.length; i++) if (SUMS[i].id === id) return SUMS[i]; return null; }
+/* SM late data held by the lock (same six source transactions as the PT demo) */
+var SM_HELD = [
+  { info:'Payment · ch_3QhA2bVn7', integ:'stripe', type:'Payment', date:'2026-09-27', amt:54.00 },
+  { info:'Changolivia · Order #2117', integ:'shopify', type:'Order', date:'2026-09-28', amt:112.40 },
+  { info:'PayPal payment · 5TY88412KQ', integ:'paypal', type:'Payment', date:'2026-09-28', amt:36.00 },
+  { info:'Refund · re_3QkT8sLm1', integ:'stripe', type:'Refund', date:'2026-09-29', amt:-18.00 },
+  { info:'Changolivia · Order #2121', integ:'shopify', type:'Order', date:'2026-09-30', amt:74.90 },
+  { info:'PayPal refund · 9KD31207RX', integ:'paypal', type:'Refund', date:'2026-09-30', amt:-12.50 }
+];
+function money(n){ var s = Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); return (n < 0 ? '-' : '') + s; }
+
+/* ---------- small renderers ---------- */
+function esc(s){ return String(s).replace(/[&<>"]/g, function(c){ return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]; }); }
+function logo(id){ var i = INTEG[id]; return '<span class="ilogo" style="background:' + i.color + '">' + i.logo + '</span>'; }
+function integCell(id){ return '<span class="integ">' + logo(id) + INTEG[id].name + '</span>'; }
+var ST = { synced:['Synced','status-green'], held:['Held by period lock','status-yellow'], skipped:['Skipped','status-grey'],
+           rollback:['Rollback in progress','status-blue'], inprogress:['In progress','status-blue'] };
+function stChip(s){ return '<span class="status ' + ST[s][1] + '" data-status>' + ST[s][0] + '</span>'; }
+function outcomeChip(t){
+  if (t.redated && (t.status === 'synced')) return '<span class="status status-grey" data-outcome>Re-dated ' + fmtMD(t.redated[0]) + ' → ' + fmtMD(t.redated[1]) + '</span>';
+  return '';
+}
+function canRollback(t){ return t.status === 'synced'; }
+function whyOff(org){ return '<span class="lock-why" data-why><span class="mi">lock</span>' + lockLink(org) + '</span>'; }
+
+/* ---------- navigation + unsaved guard ---------- */
+function curHash(){ return (location.hash || '').replace(/^#/, '') || 'settings'; }
+function routeOf(h){ return (h || '').split('?')[0] || 'settings'; }
+function param(h, k){ return new URLSearchParams((h.split('?')[1]) || '').get(k); }
+function editing(){ return !!S.draft; }
+function go(h){
+  closeFloating();
+  if ('#' + h === location.hash) { render(); afterRender(h); return; }
+  S.allowNav = true; location.hash = h;
+}
+function nav(h){
+  if (editing() && isDirty()) { openUnsaved({ hash:h }); return; }
+  S.draft = null; renderSheet(); go(h);
+}
+window.addEventListener('hashchange', function(){
+  var h = curHash();
+  if (S.allowNav) { S.allowNav = false; render(); afterRender(h); return; }
+  if (editing() && isDirty()) { history.pushState(null, '', '#' + S.hash); openUnsaved({ hash:h }); return; }
+  S.draft = null; renderSheet(); render(); afterRender(h);
+});
+window.addEventListener('beforeunload', function(e){ if (editing() && isDirty()) { e.preventDefault(); e.returnValue = ''; } });
+function afterRender(h){
+  if (routeOf(h) === 'settings' && param(h, 'focus') === 'lock') {
+    var el = document.getElementById('period-lock');
+    if (el) { el.scrollIntoView({ block:'start' }); el.classList.add('flash'); setTimeout(function(){ el.classList.remove('flash'); }, 1600); }
+  }
+}
+function closeFloating(){ var r = S.menu || S.orgMenu || S.userMenu; S.menu = null; S.orgMenu = false; S.userMenu = false; if (r) { renderMenu(); renderShell(); } }
+function proceed(p){
+  if (!p) return;
+  S.draft = null; renderSheet();
+  if (p.org) { doSwitchOrg(p.org); return; }
+  if (p.role) { S.role = p.role; render(); return; }
+  if (p.hash) { go(p.hash); return; }
+  render();
+}
+
+/* ---------- draft (side sheet) ---------- */
+function openEdit(prefill){
+  if (S.role !== 'admin') return;
+  var c = S.lock[S.org];
+  S.draft = { on:c.on, source:c.source, synderDate:c.synderDate || lockThrough(S.org) || '', auto:c.auto, day:String(c.day), late:c.late };
+  if (!S.books.date && S.draft.source === 'qbo') S.draft.source = 'synder';
+  if (prefill) for (var k in prefill) S.draft[k] = prefill[k];
+  renderSheet();
+}
+function draftLock(d){ return d.on ? lockThrough(S.org, { on:true, source:d.source, synderDate:d.synderDate, auto:d.auto, day:d.day, qboLast:S.lock[S.org].qboLast }) : null; }
+function isDirty(){
+  var d = S.draft, c = S.lock[S.org]; if (!d) return false;
+  if (!d.on && !c.on) return false;
+  if (d.on !== c.on || d.source !== c.source || d.late !== c.late) return true;
+  if (d.source === 'synder') {
+    if (d.synderDate !== c.synderDate || d.auto !== c.auto) return true;
+    if (d.auto && String(d.day) !== String(c.day)) return true;
+  }
+  return false;
+}
+function errors(d){
+  var e = {};
+  if (!d.on) return e;
+  if (d.source === 'qbo' && !S.books.date) e.source = 'No closing date in QuickBooks';
+  if (d.source === 'synder') {
+    if (!validIso(d.synderDate)) e.synderDate = 'Required';
+    else if (d.synderDate > S.today) e.synderDate = "Can't lock a future date";
+    if (d.auto && !dayValid(d.day)) e.day = 'Enter a day from 1 to 28';
+  }
+  return e;
+}
+function setDraft(k, v){ if (!S.draft || S.draft[k] === v) return; S.draft[k] = v; renderSheet(); }
+
+/* save: moving the lock earlier or turning it off always names the reopened range */
+function attemptSave(after){
+  var d = S.draft; if (!d || !isDirty() || Object.keys(errors(d)).length) return;
+  var org = S.org, cur = lockThrough(org), nl = draftLock(d);
+  function doIt(){ applySave(); if (after) after(); }
+  if (cur && !nl) {
+    S.modal = { kind:'confirm', title:'Unlock everything through ' + fmt(cur) + '?', ok:'Turn off', danger:true, onOk:doIt }; renderModal(); return;
+  }
+  if (cur && nl && nl < cur) {
+    S.modal = { kind:'confirm', title:'Unlock ' + range(nextDay(nl), cur) + '?', ok:'Unlock', danger:true, onOk:doIt }; renderModal(); return;
+  }
+  doIt();
+}
+function applySave(){
+  var d = S.draft, org = S.org, c = S.lock[org], before = lockThrough(org), ch = [];
+  var next = { on:d.on, source:d.source, synderDate:d.synderDate, auto:d.auto, day:dayValid(d.day) ? +d.day : c.day, late:d.late, qboLast:c.qboLast };
+  var after = lockThrough(org, next);
+  if (!c.on && next.on) ch.push('Period lock on · Locked through ' + fmt(after));
+  else if (c.on && !next.on) ch.push('Period lock off · Unlocked through ' + fmt(before));
+  else {
+    if (before !== after) ch.push(arrow(before, after));
+    if (c.source !== next.source) ch.push('Source: ' + srcName(c.source) + ' → ' + srcName(next.source));
+    if (next.source === 'synder' && (c.auto !== next.auto || (next.auto && c.day !== next.day)))
+      ch.push('Move forward every month: ' + (next.auto ? 'on day ' + next.day : 'off'));
+    if (c.late !== next.late) ch.push('Late transactions: ' + lateShort(c.late) + ' → ' + lateShort(next.late));
+  }
+  S.lock[org] = next;
+  ch.reverse().forEach(function(x){ addHistory(org, ME, x); });
+  S.draft = null; renderSheet();
+  toast('ok', next.on ? 'Period lock saved' : 'Period lock turned off');
+  render();
+}
+/* one action to align Synder's date with the books */
+function alignToBooks(){
+  if (editing()) { setDraft('source', 'qbo'); return; }
+  openEdit({ source:'qbo' }); attemptSave();
+}
+
+/* ---------- modals ---------- */
+function openUnsaved(p){ S.modal = { kind:'unsaved', pending:p }; renderModal(); }
+function modalCancel(){ S.modal = null; renderModal(); }
+var modalBusy = false, modalAgain = false;
+function renderModal(){
+  if (modalBusy) { modalAgain = true; return; }
+  modalBusy = true;
+  try { doRenderModal(); } finally { modalBusy = false; }
+  if (modalAgain) { modalAgain = false; renderModal(); }
+}
+function doRenderModal(){
+  var root = document.getElementById('modal-root'), m = S.modal;
+  if (!m) { root.innerHTML = ''; return; }
+  var title = '', body = '', foot = '';
+  if (m.kind === 'unsaved') {
+    var canSave = !Object.keys(errors(S.draft)).length;
+    title = 'Save changes to period lock?';
+    foot = '<button class="btn btn-text" id="m-keep" data-c="modalCancel">Keep editing</button><button class="btn btn-outlined" id="m-discard" data-c="modalDiscard">Discard</button>'
+         + '<button class="btn" id="m-save" data-c="modalSave"' + (canSave ? '' : ' disabled') + '>Save</button>';
+  } else if (m.kind === 'confirm') {
+    title = m.title; body = m.body || '';
+    foot = '<button class="btn btn-text" id="m-cancel" data-c="modalCancel">Cancel</button><button class="btn' + (m.danger ? ' btn-error' : '') + '" id="m-ok" data-c="modalOk">' + m.ok + '</button>';
+  } else if (m.kind === 'bulk') {
+    var r = bulkCalc(m.org), k = r.n - r.m;
+    title = 'Rollback by date range';
+    body = '<div class="form-row"><div><label for="b-from">From</label><input type="date" id="b-from" value="' + S.bulk.from + '"></div>'
+         + '<div><label for="b-to">To</label><input type="date" id="b-to" value="' + S.bulk.to + '"></div></div>'
+         + (r.valid ? '<div id="b-sum">' + r.n + ' in range' + (r.m ? ' · ' + r.m + ' locked stay' : '') + '</div>'
+              + (r.m ? '<div style="margin-top:4px">' + whyOff(m.org) + '</div>' : '') : '')
+         + (!r.valid ? '<div class="err" id="b-err">Pick a range where From is on or before To</div>'
+            : r.n === 0 ? '<div class="err" id="b-err">Nothing to roll back in this range</div>'
+            : k === 0 ? '<div class="err" id="b-err">Everything in this range is locked</div>' : '');
+    foot = '<button class="btn btn-text" id="m-cancel" data-c="modalCancel">Cancel</button><button class="btn" id="m-ok" data-c="modalOk"' + (r.valid && k > 0 ? '' : ' disabled') + '>Roll back ' + (r.valid ? k : 0) + '</button>';
+  }
+  root.innerHTML = '<div class="modal-bg show" id="modal-bg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-title">'
+    + '<div class="synder-modal-header" id="m-title">' + title + '</div>'
+    + (body ? '<div class="synder-modal-body">' + body + '</div>' : '')
+    + '<div class="synder-modal-footer">' + foot + '</div></div></div>';
+  var bg = document.getElementById('modal-bg');
+  bg.onclick = function(e){ if (e.target === bg) modalCancel(); };
+  if (m.kind === 'bulk') {
+    document.getElementById('b-from').onchange = function(){ S.bulk.from = this.value; renderModal(); };
+    document.getElementById('b-to').onchange = function(){ S.bulk.to = this.value; renderModal(); };
+  } else { var first = root.querySelector('#m-keep, #m-cancel'); if (first) first.focus(); }
+}
+
+/* ---------- side sheet ---------- */
+var sheetBusy = false, sheetAgain = false;
+function renderSheet(){
+  if (sheetBusy) { sheetAgain = true; return; }
+  sheetBusy = true;
+  try { doRenderSheet(); } finally { sheetBusy = false; }
+  if (sheetAgain) { sheetAgain = false; renderSheet(); }
+}
+function doRenderSheet(){
+  var root = document.getElementById('sheet-root'), d = S.draft;
+  if (!d) { root.innerHTML = ''; return; }
+  var org = S.org, E = errors(d), dirty = isDirty(), hasErr = Object.keys(E).length > 0, cur = lockThrough(org), nl = hasErr ? null : draftLock(d);
+  var noBooks = !S.books.date;
+  function radio(name, val, label, extra, dis){
+    var on = d[name] === val;
+    return '<label class="opt' + (dis ? ' dis' : '') + '"><input type="radio" class="radio" name="' + name + '" value="' + val + '"' + (on ? ' checked' : '') + (dis ? ' disabled' : '') + '>'
+      + '<span class="ol"><span>' + label + '</span>' + (extra || '') + '</span></label>';
+  }
+  var b = '<div class="switch-row"><label class="grp-t" for="pl-on">Period lock</label><input type="checkbox" class="switch" id="pl-on" aria-label="Period lock"' + (d.on ? ' checked' : '') + '></div>';
+  if (d.on) {
+    var qboExtra = noBooks ? '<span class="muted" id="qbo-none">No closing date in QuickBooks</span>'
+      : '<span id="qbo-value"><b style="font-weight:500">' + fmt(S.books.date) + '</b> <span class="muted">· Last checked ' + S.books.checked + '</span></span>';
+    b += '<div class="grp" role="radiogroup" aria-label="Lock date"><div class="grp-t">Lock date</div>'
+      + radio('source', 'qbo', 'QuickBooks closing date', qboExtra, noBooks)
+      + (E.source ? '<div class="err" id="source-err">' + E.source + '</div>' : '')
+      + radio('source', 'synder', 'Set in Synder');
+    if (d.source === 'synder') {
+      b += '<div class="nest"><label class="fl" for="synder-date">Locked through</label>'
+        + '<input type="date" id="synder-date" max="' + S.today + '" value="' + esc(d.synderDate || '') + '"' + (E.synderDate ? ' aria-invalid="true" aria-describedby="synder-date-err"' : '') + '>'
+        + (E.synderDate ? '<div class="err" id="synder-date-err">' + E.synderDate + '</div>' : '')
+        + '<label class="chk"><input type="checkbox" class="synder-checkbox-input" id="auto"' + (d.auto ? ' checked' : '') + '>Move forward every month</label>';
+      if (d.auto) b += '<div class="chk" style="margin-left:28px"><label for="auto-day">on day</label><input type="number" id="auto-day" min="1" max="28" value="' + esc(d.day) + '"'
+        + (E.day ? ' aria-invalid="true" aria-describedby="auto-day-err"' : '') + '></div>' + (E.day ? '<div class="err" id="auto-day-err" style="margin-left:28px">' + E.day + '</div>' : '');
+      b += '</div>';
+      if (S.books.date && nl && nl !== S.books.date)
+        b += '<div class="alert alert-warning mismatch" id="sheet-mismatch"><span class="mi">warning_amber</span><div class="grow">QuickBooks closing date ' + fmt(S.books.date) + ' · Synder lock ' + fmt(nl) + '</div>'
+          + '<button class="btn btn-outlined btn-sm" data-c="align" id="sheet-align">Use QuickBooks closing date</button></div>';
+    }
+    b += '</div>';
+    var fo = nl ? fmt(nextDay(nl)) : '';
+    b += '<div class="grp" role="radiogroup" aria-label="Late transactions"><div class="grp-t">Late transactions</div>'
+      + radio('late', 'post', 'Post on the first open day', fo ? '<span class="muted" id="first-open">' + fo + '</span>' : '')
+      + radio('late', 'hold', 'Hold for review') + '</div>';
+  }
+  var res = '';
+  if (!hasErr) {
+    if (cur && !nl) res = '<span class="res warn" id="sheet-result">Unlocks everything through ' + fmt(cur) + '</span>';
+    else if (cur && nl && nl < cur) res = '<span class="res warn" id="sheet-result">Unlocks ' + range(nextDay(nl), cur) + '</span>';
+    else if (nl) res = '<span class="res" id="sheet-result">Locked through ' + fmt(nl) + '</span>';
+  }
+  if (!res) res = '<span class="res"></span>';
+  root.innerHTML = '<div class="sheet-bg" id="sheet-bg"><aside class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">'
+    + '<div class="sheet-h"><span class="t" id="sheet-title">Period lock</span><button class="btn-icon" id="sheet-x" data-c="sheetClose" aria-label="Close"><span class="mi">close</span></button></div>'
+    + '<div class="sheet-b" id="sheet-body">' + b + '</div>'
+    + '<div class="sheet-f">' + res + '<button class="btn btn-outlined" id="pl-cancel" data-c="sheetCancel">Cancel</button>'
+    + '<button class="btn" id="pl-save" data-c="sheetSave"' + (dirty && !hasErr ? '' : ' disabled') + '>Save</button></div></aside></div>';
+  var bg = document.getElementById('sheet-bg');
+  bg.onmousedown = function(e){ if (e.target === bg) sheetClose(); };
+  function on(id, ev, f){ var el = document.getElementById(id); if (el) el[ev] = f; }
+  on('pl-on', 'onchange', function(){ setDraft('on', this.checked); });
+  root.querySelectorAll('input[name=source]').forEach(function(r){ r.onchange = function(){ setDraft('source', r.value); }; });
+  root.querySelectorAll('input[name=late]').forEach(function(r){ r.onchange = function(){ setDraft('late', r.value); }; });
+  on('synder-date', 'onchange', function(){ setDraft('synderDate', this.value); });
+  on('auto', 'onchange', function(){ setDraft('auto', this.checked); });
+  on('auto-day', 'onchange', function(){ setDraft('day', this.value); });
+}
+function sheetClose(){ if (isDirty()) { openUnsaved({ close:true }); return; } S.draft = null; renderSheet(); }
+
+/* ---------- toasts (no Undo) ---------- */
+var toastSeq = 0;
+function toast(kind, msg){
+  var box = document.getElementById('toasts'), el = document.createElement('div');
+  el.className = 'toast ' + kind; el.id = 'toast-' + (++toastSeq); el.setAttribute('role', kind === 'err' ? 'alert' : 'status');
+  el.innerHTML = '<span class="mi">' + (kind === 'err' ? 'error' : 'check_circle') + '</span><div class="toast-msg">' + msg + '</div>'
+    + '<button class="toast-x" aria-label="Close" data-c="toastClose"><span class="mi">close</span></button>';
+  box.appendChild(el);
+  setTimeout(function(){ if (el.parentNode) el.remove(); }, 8000);
+}
+
+/* ---------- held queue (PT) ---------- */
+function postHeld(ids){
+  var fo = firstOpen('pt'), n = 0;
+  ids.forEach(function(id){
+    var t = txn(id); if (!t || t.status !== 'held') return;
+    if (isLocked('pt', t.date)) { t.redated = [t.date, fo]; t.date = fo; t.time = '00:00'; }
+    t.status = 'synced'; n++;
+    SI[id].logs = [{ type:LOGTYPE[t.type] || t.type, info:SI[id].srcId, redate:!!t.redated, open:true }];
+  });
+  S.sel = {};
+  toast('ok', n + ' transaction' + (n === 1 ? '' : 's') + ' posted on ' + fmt(fo));
+  render();
+}
+function skipHeld(ids){
+  var n = ids.length, t0 = txn(ids[0]);
+  S.modal = { kind:'confirm', title:n === 1 ? 'Skip ' + t0.info + '?' : 'Skip ' + n + ' transactions?', ok:n === 1 ? 'Skip' : 'Skip ' + n,
+    onOk:function(){ ids.forEach(function(id){ txn(id).status = 'skipped'; }); S.sel = {};
+      toast('ok', n + ' transaction' + (n === 1 ? '' : 's') + ' skipped'); render(); } };
+  renderModal();
+}
+function selIds(){ return Object.keys(S.sel).filter(function(k){ return S.sel[k] && txn(k) && txn(k).status === 'held'; }); }
+
+/* ---------- held late data (SM) ---------- */
+function smPost(){
+  var fo = firstOpen('sm'), by = {};
+  SM_HELD.forEach(function(h){ (by[h.integ] = by[h.integ] || []).push(h); });
+  var made = [];
+  ['stripe','shopify','paypal'].forEach(function(ig){
+    var rows = by[ig]; if (!rows) return;
+    var sales = 0, refunds = 0; rows.forEach(function(r){ if (r.amt >= 0) sales += r.amt; else refunds -= r.amt; });
+    var net = sales - refunds, no = 'JE-ADJ-' + S.adjSeq++, lines = [];
+    if (sales) lines.push(['Sales · Online', '', money(sales)]);
+    if (refunds) lines.push(['Refunds', money(refunds), '']);
+    lines.push([INTEG[ig].name + ' clearing', net >= 0 ? money(net) : '', net < 0 ? money(-net) : '']);
+    var ds = rows.map(function(r){ return r.date; }).sort();
+    SUMS.unshift({ id:'adj' + no.slice(-4), adj:no, date:fo, range:fmtMD(fo) + ' - ' + fmt(fo), integ:ig, amount:money(net) + ' USD', status:'synced',
+      late:range(ds[0], ds[ds.length-1]) + ' · ' + rows.length + ' transaction' + (rows.length === 1 ? '' : 's'), lines:lines, tot:money(sales || refunds) });
+    made.push(no);
+  });
+  SUMS.sort(function(a, b){ return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.adj ? -1 : 0) - (b.adj ? -1 : 0); });
+  S.smHeld = 'posted';
+  toast('ok', made.length + ' adjustment JEs posted on ' + fmt(fo));
+  render();
+}
+function smSkip(){
+  S.modal = { kind:'confirm', title:'Skip ' + SM_HELD.length + ' transactions?', ok:'Skip ' + SM_HELD.length,
+    onOk:function(){ S.smHeld = 'skipped'; toast('ok', SM_HELD.length + ' transactions skipped'); render(); } };
+  renderModal();
+}
+function heldCount(org){ return org === 'pt' ? heldTx().length : (S.smHeld === 'held' ? SM_HELD.length : 0); }
+
+/* ---------- rollback / resync ---------- */
+function rollbackTxn(id){
+  var t = txn(id); if (isLocked('pt', t.date)) return;
+  S.modal = { kind:'confirm', title:'Roll back ' + t.info + '?', ok:'Roll back',
+              onOk:function(){ t.status = 'rollback'; toast('ok', 'Rollback started'); render(); } };
+  renderModal();
+}
+function resyncTxn(id){ var t = txn(id); if (isLocked('pt', t.date)) return; t.status = 'inprogress'; toast('ok', 'Resync started'); render(); }
+function rollbackSum(id){
+  var s = sum(id); if (isLocked('sm', s.date)) return;
+  S.modal = { kind:'confirm', title:'Roll back summary ' + (s.adj || s.range) + '?', ok:'Roll back',
+              onOk:function(){ s.status = 'rollback'; toast('ok', 'Rollback started'); render(); } };
+  renderModal();
+}
+function resyncSum(id){ var s = sum(id); if (isLocked('sm', s.date)) return; s.status = 'inprogress'; toast('ok', 'Resync started'); render(); }
+function bulkCalc(org){
+  var f = S.bulk.from, to = S.bulk.to, valid = validIso(f) && validIso(to) && f <= to, n = 0, m = 0, ids = [];
+  var list = org === 'pt' ? TXNS : SUMS;
+  if (valid) list.forEach(function(t){
+    if (t.status !== 'synced' || t.date < f || t.date > to) return;
+    n++; if (isLocked(org, t.date)) m++; else ids.push(t.id);
+  });
+  return { valid:valid, n:n, m:m, ids:ids };
+}
+function openBulk(org){
+  closeFloating();
+  S.modal = { kind:'bulk', org:org, onOk:function(){
+    var r = bulkCalc(org); r.ids.forEach(function(id){ (org === 'pt' ? txn(id) : sum(id)).status = 'rollback'; });
+    toast('ok', 'Rollback started'); render(); } };
+  renderModal();
+}
+
+/* ---------- floating menus ---------- */
+function openMenu(kind, id, btn){
+  if (S.menu && S.menu.id === id && S.menu.kind === kind) { S.menu = null; renderMenu(); return; }
+  var r = btn.getBoundingClientRect();
+  S.menu = { kind:kind, id:id, x:r.right, y:r.bottom + 4, left:r.left };
+  renderMenu();
+}
+function renderMenu(){
+  var root = document.getElementById('menu-root'), m = S.menu;
+  if (!m) { root.innerHTML = ''; return; }
+  var items = '';
+  function item(c, a, label, id){ items += '<button class="dropdown-item" role="menuitem" data-c="' + c + '" data-a="' + (a || '') + '"' + (id ? ' id="' + id + '"' : '') + '>' + label + '</button>'; }
+  function off(label){ items += '<div class="dropdown-item off" role="menuitem" aria-disabled="true" data-off="' + label + '">' + label + '</div>'; }
+  function guarded(org, date, list){
+    var lk = isLocked(org, date);
+    list.forEach(function(x){ if (lk) off(x[0]); else item(x[1], x[2], x[0]); });
+    if (lk) items += '<div class="dropdown-divider"></div><div class="dropdown-item why-row" id="menu-why">' + whyOff(org) + '</div>';
+  }
+  if (m.kind === 'txn') {
+    var t = txn(m.id);
+    item('goSync', t.id, 'Show sync info');
+    if (t.status === 'held') {
+      item('postOne', t.id, isLocked('pt', t.date) ? 'Post on first open day (' + fmt(firstOpen('pt')) + ')' : 'Sync');
+      item('skipOne', t.id, 'Skip');
+    } else if (t.status === 'synced') guarded('pt', t.date, [['Rollback','rollbackTxn',t.id],['Resync','resyncTxn',t.id],['Delete','mark','']]);
+  } else if (m.kind === 'sum') {
+    var s = sum(m.id);
+    item('goSum', s.id, 'Open summary');
+    if (s.status === 'synced') guarded('sm', s.date, [['Rollback','rollbackSum',s.id],['Resync','resyncSum',s.id],['Delete','mark','']]);
+  } else if (m.kind === 'actions') {
+    item('mark', '', 'Sync', 'act-sync'); item('bulk', m.id, 'Rollback', 'act-rollback'); item('mark', '', 'Cancel', 'act-cancel'); item('mark', '', 'Archive', 'act-archive');
+  }
+  root.innerHTML = '<div class="dropdown-menu menu-fixed" role="menu" id="' + (m.kind === 'actions' ? 'actions-menu' : 'row-menu') + '">' + items + '</div>';
+  var el = root.firstChild, w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = (m.kind === 'actions' ? m.left : Math.max(8, m.x - w)) + 'px';
+  el.style.top = (m.y + h > window.innerHeight - 8 ? Math.max(8, m.y - h - 40) : m.y) + 'px';
+}
+
+/* ---------- click registry: every interactive element routes through here ---------- */
+var C = {
+  role:function(a){ if (a === S.role) return; if (a === 'member' && editing() && isDirty()) { openUnsaved({ role:a }); return; } if (a === 'member') { S.draft = null; renderSheet(); } S.role = a; render(); },
+  booksNone:function(){ setBooks(''); },
+  demoReset:function(){ location.hash = ''; location.reload(); },
+  orgBtn:function(){ S.orgMenu = !S.orgMenu; renderShell(); },
+  org:function(a){ S.orgMenu = false; renderShell(); if (a === S.org) return; if (editing() && isDirty()) { openUnsaved({ org:a }); return; } S.draft = null; renderSheet(); doSwitchOrg(a); },
+  userBtn:function(){ S.userMenu = !S.userMenu; renderShell(); },
+  um:function(a){ S.userMenu = false; renderShell(); if (a === 'settings') nav('settings'); else if (a === 'activity') nav('activity'); else toast('ok', MARK); },
+  mark:function(){ closeFloating(); toast('ok', MARK); },
+  edit:function(){ openEdit(); },
+  align:function(){ alignToBooks(); },
+  sheetClose:function(){ sheetClose(); },
+  sheetCancel:function(){ S.draft = null; renderSheet(); },
+  sheetSave:function(){ attemptSave(); },
+  modalCancel:function(){ modalCancel(); },
+  modalOk:function(){ var f = S.modal.onOk; S.modal = null; renderModal(); if (f) f(); },
+  modalDiscard:function(){ var p = S.modal.pending; S.modal = null; renderModal(); proceed(p); },
+  modalSave:function(){ var p = S.modal.pending; S.modal = null; renderModal(); attemptSave(function(){ proceed(p); }); },
+  toastClose:function(a, el){ el.closest('.toast').remove(); },
+  userTab:function(a){ S.userTab = a; render(); },
+  dtab:function(a){ S.dashTab = a; render(); },
+  txTab:function(a){ S.txTab = a; S.sel = {}; render(); },
+  clearStatus:function(){ S.txFilter.status = 'All statuses'; render(); },
+  resetFilters:function(){ S.txFilter = { status:'All statuses', q:'' }; render(); },
+  actions:function(a, el){ if (S.menu && S.menu.kind === 'actions') { S.menu = null; renderMenu(); return; } openMenu('actions', a, el); },
+  bulk:function(a){ openBulk(a); },
+  txMenu:function(a, el){ openMenu('txn', a, el); },
+  sumMenu:function(a, el){ openMenu('sum', a, el); },
+  goSync:function(a){ closeFloating(); nav('sync-info?id=' + a); },
+  goSum:function(a){ closeFloating(); nav('summary-detail?id=' + a); },
+  rollbackTxn:function(a){ closeFloating(); rollbackTxn(a); },
+  resyncTxn:function(a){ closeFloating(); resyncTxn(a); },
+  rollbackSum:function(a){ closeFloating(); rollbackSum(a); },
+  resyncSum:function(a){ closeFloating(); resyncSum(a); },
+  postOne:function(a){ closeFloating(); postHeld([a]); },
+  skipOne:function(a){ closeFloating(); skipHeld([a]); },
+  postSel:function(){ var ids = selIds(); if (ids.length) postHeld(ids); },
+  skipSel:function(){ var ids = selIds(); if (ids.length) skipHeld(ids); },
+  smPost:function(){ smPost(); },
+  smSkip:function(){ smSkip(); },
+  smToggle:function(){ S.smHeldOpen = !S.smHeldOpen; render(); },
+  log:function(a){ S.logOpen[a] = !(S.logOpen[a] !== undefined ? S.logOpen[a] : true); render(); },
+  actReset:function(){ S.act = { type:'All', action:'All', initiator:'All', q:'' }; render(); }
+};
+document.addEventListener('click', function(e){
+  var el = e.target.closest('[data-c]');
+  if (el) {
+    if (el.disabled) return;
+    e.preventDefault(); e.stopPropagation();
+    var c = el.dataset.c;
+    if (['txMenu','sumMenu','actions','orgBtn','userBtn'].indexOf(c) < 0 && !el.closest('.menu-fixed, .org-menu, .user-menu')) closeFloating();
+    if (c === 'txMenu' || c === 'sumMenu') { S.orgMenu = false; S.userMenu = false; }
+    var f = C[c]; if (f) f(el.dataset.a, el);
+    return;
+  }
+  var a = e.target.closest('a[href^="#"]');
+  if (a) { e.preventDefault(); closeFloating(); nav(a.getAttribute('href').slice(1)); return; }
+  if (S.menu && !e.target.closest('.menu-fixed')) { S.menu = null; renderMenu(); }
+  if (S.orgMenu && !e.target.closest('.org-menu')) { S.orgMenu = false; renderShell(); }
+  if (S.userMenu && !e.target.closest('.user-menu')) { S.userMenu = false; renderShell(); }
+}, true);
+document.addEventListener('keydown', function(e){
+  if (e.key !== 'Escape') return;
+  if (S.modal) { modalCancel(); return; }
+  if (S.menu || S.orgMenu || S.userMenu) { closeFloating(); return; }
+  if (S.draft) sheetClose();
+});
+function doSwitchOrg(org){
+  S.org = org;
+  if (org === 'sm' && (S.route === 'transactions' || S.route === 'sync-info')) { go('summaries'); return; }
+  if (org === 'pt' && (S.route === 'summaries' || S.route === 'summary-detail')) { go('transactions'); return; }
+  render();
+}
+
+/* ---------- shell ---------- */
+function renderShell(){
+  var r = S.route, pt = S.org === 'pt';
+  function a(href, icon, label, on, cls){ return '<a class="' + (cls || 'sb-item') + (on ? ' on' : '') + '" href="#' + href + '"' + (on ? ' aria-current="page"' : '') + '><span class="mi">' + icon + '</span>' + label + '</a>'; }
+  function d(icon, label, extra, cls){ return '<div class="' + (cls || 'sb-item') + '"><span class="mi">' + icon + '</span>' + label + (extra || '') + '</div>'; }
+  var chev = '<span class="mi chev">expand_more</span>';
+  var h = '<button class="sb-org" id="org-btn" data-c="orgBtn" aria-haspopup="menu" aria-expanded="' + S.orgMenu + '"><span class="sb-av ' + S.org + '">' + ORGS[S.org].av + '</span>'
+        + '<span class="nm">' + ORGS[S.org].name + '</span><span class="mi">expand_more</span></button>';
+  if (S.orgMenu) h += '<div class="org-menu" role="menu"><button role="menuitem" data-c="org" data-a="pt"><span class="sb-av pt">PT</span><span>Buddy QA (PT)<br><span class="sub">Per Transaction</span></span></button>'
+        + '<button role="menuitem" data-c="org" data-a="sm"><span class="sb-av sm">SM</span><span>Green Leaf (SM)<br><span class="sub">Summary mode</span></span></button></div>';
+  h += a('dashboard', 'dashboard', 'Dashboard', r === 'dashboard');
+  if (pt) {
+    h += '<div class="sb-item sb-open"><span class="mi">swap_horiz</span>Transactions<span class="mi chev">expand_less</span></div>'
+       + a('transactions', 'table_view', 'Transactions list', r === 'transactions' || r === 'sync-info', 'sb-sub')
+       + d('download_for_offline', 'Import activity log', '', 'sb-sub')
+       + d('description', 'Transaction reconciliation <span class="sb-new">New</span>', '', 'sb-sub')
+       + d('storefront', 'Inventory sync <span class="sb-beta">Beta</span>')
+       + d('account_tree', 'Smart rules', chev) + d('shopping_cart', 'Invoicing', chev) + d('trending_up', 'Analytics', chev);
+  } else {
+    h += d('map', 'Mapping', chev)
+       + '<div class="sb-item sb-open"><span class="mi">layers</span>Summaries<span class="mi chev">expand_less</span></div>'
+       + a('summaries', 'table_view', 'Summaries list', r === 'summaries' || r === 'summary-detail', 'sb-sub')
+       + d('receipt_long', 'Register', '', 'sb-sub') + d('list', 'Transactions list', '', 'sb-sub') + d('download_for_offline', 'Import activity log', '', 'sb-sub')
+       + d('balance', 'Reconciliation') + d('shopping_cart', 'Products and services') + d('trending_up', 'Analytics', chev) + d('price_check', 'Revenue recognition');
+  }
+  h += '<div class="sb-gap"></div>' + d('settings', 'Settings') + d('hub', 'AI Hub') + d('stars', 'What\'s New') + d('grid_view', 'Custom development');
+  document.getElementById('sb').innerHTML = h;
+
+  var top = '<span class="syncs">' + (pt ? 'Syncs left : <b>10000</b>' : 'Balance : <b>20000</b>') + '</span>'
+          + '<span class="how">How it works?</span><span class="mi">notifications</span><span class="mi">help_outline</span>'
+          + '<button class="icon-btn" id="user-btn" data-c="userBtn" aria-label="User menu" aria-haspopup="menu"><span class="mi">person</span></button>';
+  if (S.userMenu) top += '<div class="dropdown-menu show user-menu" role="menu">'
+          + [['settings','Organization settings','um-settings'],['activity','Activity log','um-activity'],['x','User profile'],['x','List of organizations'],['x','Firm'],['x','Log out']].map(function(x){
+              return '<button class="dropdown-item" role="menuitem" data-c="um" data-a="' + x[0] + '"' + (x[2] ? ' id="' + x[2] + '"' : '') + '>' + x[1] + '</button>'; }).join('') + '</div>';
+  document.getElementById('top').innerHTML = top;
+}
+
+/* ---------- Organization settings (live capture structure) + Period lock section ---------- */
+function screenSettings(){
+  var org = S.org, c = S.lock[org], lt = lockThrough(org), admin = S.role === 'admin', mm = mismatch(org), hc = heldCount(org);
+  var integ = Object.keys(INTEG).map(function(k){ return '<div class="irow">' + integCell(k) + '<span class="tz">' + INTEG[k].tz + '</span></div>'; }).join('');
+  /* Period lock (proposed) — placed right after Accounting company: the lock is a property of the books */
+  var status;
+  if (!lt) status = '<span class="pl-big" id="pl-status">Off</span>';
+  else status = '<span class="pl-big" id="pl-status">Locked through ' + fmt(lt) + ' · ' + srcName(c.source)
+    + (c.source === 'synder' && c.auto ? ' · Moves forward on day ' + c.day : '') + '</span>';
+  var pl = '<section class="os-card" id="period-lock" aria-labelledby="pl-h"><div class="os-head"><h2 id="pl-h">Period lock</h2>'
+    + (admin ? '<button class="btn btn-outlined" id="pl-edit" data-c="edit">Edit</button>' : '<span class="muted" id="pl-ro">Only admins can change the period lock</span>') + '</div>'
+    + '<div class="pl-line">' + status + '</div>';
+  if (lt) {
+    pl += '<div class="pl-line" id="pl-late"><span class="k">Late transactions</span><span>' + lateName(c.late) + '</span>'
+      + (hc ? '<span class="muted">·</span><a class="text-link" id="pl-held" href="#' + (org === 'pt' ? 'transactions?tab=held' : 'summaries') + '">' + hc + ' held</a>' : '') + '</div>';
+    if (c.source === 'qbo' && !S.books.date) pl += '<div class="alert alert-warning mismatch" id="pl-nobooks"><span class="mi">warning_amber</span><div class="grow">No closing date in QuickBooks · Locked through ' + fmt(lt) + '</div>'
+      + (admin ? '<button class="btn btn-outlined btn-sm" data-c="edit" id="pl-nobooks-edit">Set in Synder</button>' : '') + '</div>';
+  }
+  if (mm) pl += '<div class="alert alert-warning mismatch" id="pl-mismatch"><span class="mi">warning_amber</span><div class="grow">QuickBooks closing date ' + fmt(mm.books) + ' · Synder lock ' + fmt(mm.synder) + '</div>'
+    + (admin ? '<button class="btn btn-outlined btn-sm" data-c="align" id="pl-align">Use QuickBooks closing date</button>' : '') + '</div>';
+  var hist = HISTORY[org].slice(0, 5);
+  pl += '<div class="pl-sub">Lock history</div><div class="table-wrap"><table class="synder-table table--sm" id="pl-history"><thead><tr><th style="width:190px">Date</th><th style="width:220px">Changed by</th><th>Change</th></tr></thead><tbody>'
+    + hist.map(function(r){ return '<tr><td>' + r.ts + '</td><td>' + r.who + '</td><td>' + r.change + '</td></tr>'; }).join('')
+    + '</tbody></table></div><a class="text-link" id="pl-viewall" href="#activity?type=Period%20lock">View all</a></section>';
+
+  var users = '<div class="tabs" role="tablist"><button class="tab' + (S.userTab === 'users' ? ' active' : '') + '" role="tab" data-c="userTab" data-a="users">Users</button>'
+    + '<button class="tab' + (S.userTab === 'firm' ? ' active' : '') + '" role="tab" data-c="userTab" data-a="firm">Accounting firm</button></div>'
+    + (S.userTab === 'users'
+      ? '<div class="table-wrap"><table class="synder-table" id="users-table"><thead><tr><th>Name</th><th>Role</th><th>Status</th></tr></thead><tbody>'
+        + '<tr><td>You<span class="cell-subtext">viacheslav.tarabarov@synder.com</span></td><td>Manager<span class="cell-subtext">Payer</span></td><td><span class="status status-green">Active</span></td></tr>'
+        + '<tr><td>Maya Chen<span class="cell-subtext">maya.chen@synder.com</span></td><td>Manager</td><td><span class="status status-green">Active</span></td></tr>'
+        + '</tbody></table></div><button class="btn btn-text" data-c="mark">Add user</button>'
+      : '<p class="muted" id="firm-mark">' + MARK + '</p>');
+  function f(label, val){ return '<div><label>' + label + '</label><input type="text" value="' + esc(val) + '" aria-label="' + label + '"></div>'; }
+  return '<div class="narrow"><div class="page-header"><h1 class="page-title">Organization settings</h1></div>'
+    + '<div class="tabs" role="tablist"><span class="tab active" role="tab" aria-selected="true">Synder sync</span></div>'
+    + '<section class="os-card"><h2>Subscription</h2><div class="kv"><div class="k">Plan</div><div>Essential, yearly <span class="status status-green">Active</span></div>'
+    + '<div class="k">Active till</div><div>27 Jul 2027</div></div><button class="btn btn-text" data-c="mark" style="margin-top:8px">Manage subscription</button></section>'
+    + '<section class="os-card"><h2>Integrations</h2>' + integ + '<button class="btn btn-outlined" data-c="mark" style="margin-top:12px">Add integration</button></section>'
+    + '<section class="os-card"><h2>Accounting company</h2><div class="irow"><span class="qb">qb</span>' + ORGS[org].books + '</div>'
+    + '<div class="muted" style="margin-top:8px">If you need to connect another accounting company please <a class="text-link" data-c="mark" href="#">create a new organization</a></div></section>'
+    + pl
+    + '<section class="os-card"><h2>Users</h2><div class="muted" style="margin-bottom:8px">Users available for this organization: 2.</div>' + users + '</section>'
+    + '<section class="os-card"><h2>Organization details</h2><div class="ofields">' + f('Organization name', ORGS[org].name) + f('Address line 1', '123 Sierra Way')
+    + f('Address line 2', '') + '<div><label for="od-country">Country</label><select id="od-country"><option>United States</option></select></div>'
+    + f('State/Province', 'CA') + f('City', 'San Pablo') + f('ZIP/Postal code', '87999') + '</div><button class="btn btn-outlined" data-c="mark">Update</button></section>'
+    + '<section class="os-card"><h2>Notifications</h2><div class="nrow"><span class="nl">Notify about Synder activity</span><select aria-label="Notify about Synder activity" style="width:200px"><option>Weekly</option></select></div>'
+    + '<div class="nrow"><span class="nl">Reconciliation reminder</span><input type="checkbox" class="switch" checked aria-label="Reconciliation reminder"></div></section></div>';
+}
+
+/* ---------- Transactions list (PT) ---------- */
+function screenTransactions(){
+  var held = heldTx(), tab = S.txTab, f = S.txFilter, q = f.q.trim().toLowerCase(), lt = lockThrough('pt'), fo = firstOpen('pt');
+  var head = '<div class="page-header"><div class="page-header-text"><div class="title-row"><h1 class="page-title">Transactions list</h1>' + lockChip('pt') + '</div>'
+    + '<p class="page-subtitle">Transactions imported from connected integrations and their sync status to your books.</p></div></div>';
+  var tabs = '<div class="tabs" role="tablist"><button class="tab' + (tab === 'all' ? ' active' : '') + '" role="tab" id="tab-all" data-c="txTab" data-a="all">All</button>'
+    + '<button class="tab' + (tab === 'held' ? ' active' : '') + '" role="tab" id="tab-held" data-c="txTab" data-a="held">Held by period lock <span class="tab-count" id="held-count">' + held.length + '</span></button></div>';
+  if (tab === 'held') {
+    var ids = selIds(), allSel = held.length && ids.length === held.length;
+    var rows = held.map(function(t){
+      return '<tr data-txn="' + t.id + '"><td class="col-check"><label class="synder-checkbox"><input type="checkbox" data-sel="' + t.id + '"' + (S.sel[t.id] ? ' checked' : '') + ' aria-label="Select ' + esc(t.info) + '"></label></td>'
+        + '<td><a class="text-link" href="#sync-info?id=' + t.id + '">' + t.info + '</a><span class="cell-subtext">' + INTEG[t.integ].name + '</span></td>'
+        + '<td>' + t.type + '</td><td>' + t.amount + '</td><td>' + fmt(t.date) + ' ' + t.time + '</td><td>' + fmt(t.recv) + '</td>'
+        + '<td><button class="btn-icon" data-c="txMenu" data-a="' + t.id + '" data-txn-menu="' + t.id + '" aria-label="Actions for ' + esc(t.info) + '"><span class="mi">more_horiz</span></button></td></tr>';
+    }).join('');
+    var body = held.length
+      ? '<div class="bulk-bar" id="bulk-bar"><span class="cnt" id="sel-count">' + ids.length + ' selected</span>'
+        + '<button class="btn" id="bulk-post" data-c="postSel"' + (ids.length ? '' : ' disabled') + '>Post on first open day (' + (fo ? fmt(fo) : '—') + ')</button>'
+        + '<button class="btn btn-outlined" id="bulk-skip" data-c="skipSel"' + (ids.length ? '' : ' disabled') + '>Skip</button></div>'
+        + '<div class="table-wrap"><table class="synder-table" id="held-table"><thead><tr><th class="col-check"><label class="synder-checkbox"><input type="checkbox" id="sel-all"' + (allSel ? ' checked' : '') + ' aria-label="Select all held"></label></th>'
+        + '<th>Transaction info</th><th>Transaction type</th><th>Amount</th><th>Transaction date</th><th>Received</th><th>Action</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      : '<div class="empty-state" id="held-empty"><div class="empty-state-icon mi">task_alt</div><div class="empty-state-title">No transactions held by period lock</div>'
+        + '<a class="btn btn-outlined" href="#transactions?tab=all" style="text-decoration:none">All transactions</a></div>';
+    return head + tabs + body;
+  }
+  var list = TXNS.filter(function(t){
+    if (f.status !== 'All statuses' && ST[t.status][0] !== f.status) return false;
+    if (q && (t.info + ' ' + t.type + ' ' + t.amount + ' ' + t.id).toLowerCase().indexOf(q) < 0) return false;
+    return true;
+  });
+  var rowsAll = list.map(function(t){
+    var href = '#sync-info?id=' + t.id;
+    return '<tr data-txn="' + t.id + '"><td class="col-check"><label class="synder-checkbox"><input type="checkbox" aria-label="Select ' + esc(t.info) + '"></label></td>'
+      + '<td><a class="text-link" href="' + href + '">' + t.info + '</a><span class="cell-subtext">' + INTEG[t.integ].name + '</span></td>'
+      + '<td>' + t.type + '</td><td>' + t.amount + '</td><td>' + fmt(t.date) + ' ' + t.time + '</td>'
+      + '<td><div class="st-col"><span class="chips">' + stChip(t.status) + outcomeChip(t) + '</span><a class="text-link" href="' + href + '">Explain</a></div></td>'
+      + '<td><button class="btn-icon" data-c="txMenu" data-a="' + t.id + '" data-txn-menu="' + t.id + '" aria-label="Actions for ' + esc(t.info) + '"><span class="mi">more_horiz</span></button></td></tr>';
+  }).join('') || '<tr><td colspan="7" class="muted" style="text-align:center">No transactions</td></tr>';
+  var statuses = ['All statuses','Synced','Held by period lock','Skipped','Rollback in progress','In progress'];
+  return head + tabs
+    + '<div class="tx-bar"><button class="btn" id="actions-btn" data-c="actions" data-a="pt" aria-haspopup="menu">Actions <span class="mi" style="font-size:18px">expand_more</span></button>'
+    + '<button class="btn btn-outlined" data-c="mark">Select all transactions</button><button class="btn btn-outlined" id="reset-filters" data-c="resetFilters">Reset all filters</button>'
+    + '<input type="text" class="search input-search" id="tx-search" placeholder="Search" aria-label="Search" value="' + esc(f.q) + '">'
+    + '<select class="stsel" id="tx-status" aria-label="Sync status">' + statuses.map(function(s){ return '<option' + (s === f.status ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select>'
+    + (f.status !== 'All statuses' ? '<span class="clear-x" id="status-chip">Sync status: ' + f.status + '<button id="clear-status" data-c="clearStatus" aria-label="Clear sync status filter"><span class="mi">close</span></button></span>' : '')
+    + '<button class="btn btn-outlined" data-c="mark">Import historical data</button><button class="btn tx-green" data-c="mark">See transactions in books</button></div>'
+    + '<div class="table-wrap"><table class="synder-table" id="tx-table"><thead><tr><th class="col-check"></th><th>Transaction info</th><th>Transaction type</th><th>Amount</th><th>Transaction date</th><th>Sync status</th><th>Action</th></tr></thead><tbody>'
+    + rowsAll + '</tbody></table></div>';
+}
+function wireTransactions(){
+  var s = document.getElementById('tx-status'); if (s) s.onchange = function(){ S.txFilter.status = this.value; render(); };
+  var q = document.getElementById('tx-search');
+  if (q) q.oninput = function(){ S.txFilter.q = this.value; var pos = this.selectionStart; render(); var el = document.getElementById('tx-search'); el.focus(); el.setSelectionRange(pos, pos); };
+  document.querySelectorAll('[data-sel]').forEach(function(cb){ cb.onchange = function(){ S.sel[cb.dataset.sel] = cb.checked; render(); }; });
+  var all = document.getElementById('sel-all'); if (all) all.onchange = function(){ var v = this.checked; heldTx().forEach(function(t){ S.sel[t.id] = v; }); render(); };
+}
+
+/* ---------- Sync info (PT) ---------- */
+function screenSyncInfo(){
+  var id = param(S.hash, 'id') || 're_3P8mXy9kL2', t = txn(id), s = SI[id];
+  if (!t || !s) { history.replaceState(null, '', '#transactions'); return screenTransactions(); }
+  var I = INTEG[t.integ], locked = isLocked('pt', t.date), notice = '', actions = '', fo = firstOpen('pt');
+  if (t.status === 'held') {
+    notice = '<div class="alert alert-warning" id="si-notice"><span class="mi">pause_circle</span><div class="grow">Held by period lock · ' + fmt(t.date) + (locked ? ' · ' + lockLink('pt') : '') + '</div>'
+      + '<button class="btn btn-sm" data-c="postOne" data-a="' + id + '" id="si-post">' + (locked ? 'Post on first open day (' + fmt(fo) + ')' : 'Sync') + '</button>'
+      + '<button class="btn btn-outlined btn-sm" data-c="skipOne" data-a="' + id + '" id="si-skip">Skip</button></div>';
+  } else if (t.status === 'synced') {
+    actions = (locked ? whyOff('pt') : '')
+      + '<button class="btn btn-outlined" id="si-rollback" data-c="rollbackTxn" data-a="' + id + '"' + (locked ? ' disabled' : '') + '>Rollback sync</button>'
+      + '<button class="btn btn-outlined" id="si-resync" data-c="resyncTxn" data-a="' + id + '"' + (locked ? ' disabled' : '') + '>Resync</button>'
+      + '<button class="btn btn-outlined" id="si-delete" data-c="mark"' + (locked ? ' disabled' : '') + '>Delete</button>';
+  }
+  var QB = '<span class="text-link" style="text-decoration:none">Show in <span class="qb">qb</span></span>';
+  var rows = s.logs.map(function(l, i){
+    var k = id + '_' + i, open = S.logOpen[k] !== undefined ? S.logOpen[k] : !!l.open, exp = !!l.redate;
+    var msg = l.msg || (l.type + ' was created.' + (l.redate ? ' Date changed from <span class="hl">' + fmt(t.redated[0]) + '</span> to <span class="hl">' + fmt(t.redated[1]) + '</span> by period lock.' : ''));
+    var tr = '<tr><td style="width:40px">' + (exp ? '<button class="btn-icon" data-c="log" data-a="' + k + '" data-log="' + k + '" aria-expanded="' + open + '" aria-label="Details"><span class="mi">' + (open ? 'expand_less' : 'expand_more') + '</span></button>' : '') + '</td>'
+      + '<td>' + l.type + '</td><td>' + l.info + '</td><td>' + QB + '</td><td>' + msg + '</td></tr>';
+    if (exp && open) tr += '<tr class="log-detail" id="detail-' + k + '"><td colspan="5"><div class="dl-grid"><span><span class="muted">Original date:</span> ' + fmt(t.redated[0]) + '</span>'
+      + '<span><span class="muted">Posted date:</span> ' + fmt(t.redated[1]) + '</span><span><span class="muted">Late transactions:</span> Post on the first open day</span></div></td></tr>';
+    return tr;
+  }).join('');
+  var kv = [['Sync ID', s.syncId], ['From integration', I.name + ' (' + I.src + ')'], ['To accounting company', ORGS.pt.books],
+    ['Status', '<span class="chips">' + stChip(t.status) + outcomeChip(t) + '</span>'], ['Sync started', s.start + ' (' + I.tz + ')'],
+    ['Transaction date', fmt(t.date) + ' ' + t.time + ' (' + I.tz + ')'], ['Amount', t.amount], ['Transaction ID', '<span class="text-link" style="text-decoration:none">' + s.srcId + '</span>']];
+  return '<div class="stub"><a class="text-link back" href="#transactions' + (t.status === 'held' ? '?tab=held' : '') + '">← Transactions list</a>'
+    + '<div class="set-card"><div class="set-body">'
+    + '<div class="sd-head"><span class="sd-title">Sync #' + s.syncId + '</span><span class="chips">' + stChip(t.status) + outcomeChip(t) + '</span>'
+    + '<span class="sd-actions" id="si-actions">' + actions + '</span></div>'
+    + '<div class="sd-sub">' + I.src + ' · ' + I.name + ' · ' + t.type + ' · ' + t.amount + '</div>' + notice
+    + '<div class="set-title">Sync details</div><div class="kv">' + kv.map(function(p){ return '<div class="k">' + p[0] + '</div><div class="v">' + p[1] + '</div>'; }).join('') + '</div>'
+    + '<div class="set-title" style="margin-top:20px;font-size:20px">Sync log</div>'
+    + '<div style="margin-bottom:8px">If the sync results are not as expected, review your <span class="text-link" style="text-decoration:none">Settings</span> to adjust the configuration.You can also use <span class="text-link" style="text-decoration:none">Smart Rules Recipes</span> to automatically modify transactions based on custom conditions.</div>'
+    + '<div class="table-wrap"><table class="synder-table" id="log-table">' + (s.logs.length ? '<thead><tr><th></th><th>Object type</th><th>Object info</th><th>Object</th><th>Message</th></tr></thead><tbody>' + rows
+       : '<tbody><tr><td class="muted" style="text-align:center">' + MARK + '</td></tr>') + '</tbody></table></div>'
+    + '</div></div></div>';
+}
+
+/* ---------- Dashboard ---------- */
+function screenDashboard(){
+  var tabs = [['overview','Overview'],['sync-issues','Synchronization Issues'],['sync-speed','Sync speed']], org = S.org, hc = heldCount(org);
+  var th = '<div class="tabs" role="tablist">' + tabs.map(function(t){ return '<button class="tab' + (S.dashTab === t[0] ? ' active' : '') + '" role="tab" data-c="dtab" data-a="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
+  if (S.dashTab !== 'sync-issues') return '<div class="page-header"><h1 class="page-title">Dashboard</h1></div>' + th + '<p class="muted" id="dash-mark">' + MARK + '</p>';
+  var issues = [];
+  if (hc) issues.push('<tr id="issue-held"><td>' + hc + '</td><td><span class="status status-yellow">Held by period lock</span></td><td style="white-space:normal;padding:8px 12px">' + hc + ' transactions held by period lock</td>'
+    + '<td><a class="text-link" id="issue-held-link" href="#' + (org === 'pt' ? 'transactions?tab=held' : 'summaries') + '">See related transactions</a></td></tr>');
+  issues.push('<tr><td>1</td><td><span class="status status-red">Rollback failed</span></td><td style="white-space:normal;padding:8px 12px">Invoice has not been deleted. Business Validation Error: The action could not be completed because another user was creating, editing or deleting a transaction…</td><td><a class="text-link" href="#' + (org === 'pt' ? 'transactions' : 'summaries') + '">See related transactions</a></td></tr>');
+  issues.push('<tr><td>1</td><td><span class="status status-red">Failed</span></td><td style="white-space:normal;padding:8px 12px">Account has not been found for product mapping.</td><td><a class="text-link" href="#' + (org === 'pt' ? 'transactions' : 'summaries') + '">See related transactions</a></td></tr>');
+  return '<div class="page-header"><h1 class="page-title">Dashboard</h1></div>' + th
+    + '<div class="table-wrap"><table class="synder-table" id="issues"><thead><tr><th>Quantity</th><th>Status</th><th>Error message</th><th>Actions</th></tr></thead><tbody>' + issues.join('') + '</tbody></table></div>';
+}
+
+/* ---------- Activity log ---------- */
+function activityRows(){
+  return HISTORY[S.org].map(function(r){ return { ts:r.ts, who:r.who, action:'Period lock changed', type:'Period lock', details:r.change }; }).concat(OTHER_ACTIVITY)
+    .sort(function(a, b){ return new Date(b.ts) - new Date(a.ts); });
+}
+function screenActivity(){
+  var A = S.act, q = A.q.trim().toLowerCase();
+  var rows = activityRows().filter(function(r){
+    var init = r.who === 'System' ? 'System' : r.who === 'Support' ? 'Support' : 'User';
+    return (A.type === 'All' || r.type === A.type) && (A.action === 'All' || r.action === A.action)
+        && (A.initiator === 'All' || init === A.initiator) && (!q || r.details.toLowerCase().indexOf(q) >= 0);
+  });
+  function sel(id, label, opts, v){ return '<div><div class="fl">' + label + '</div><select id="' + id + '" aria-label="' + label + '">' + opts.map(function(o){ return '<option' + (o === v ? ' selected' : '') + '>' + o + '</option>'; }).join('') + '</select></div>'; }
+  return '<div class="page-header"><div class="page-header-text"><h1 class="page-title">Activity Log</h1>'
+    + '<p class="page-subtitle">A log of all key actions and changes in your organization, showing who did what and when. Activity tracking started on Apr 21, 2026.</p></div></div>'
+    + '<div class="filters">' + sel('f-init', 'Initiator type', ['All','User','System','Support'], A.initiator)
+    + sel('f-action', 'Action', ['All','Period lock changed','Entered','Reconnected'], A.action)
+    + sel('f-type', 'Type', ['All','Period lock','User management','Integration'], A.type)
+    + '<div><div class="fl">Details</div><input type="text" id="f-q" placeholder="Search" aria-label="Details" value="' + esc(A.q) + '"></div>'
+    + '<button class="btn btn-outlined" id="f-reset" data-c="actReset">Reset filters</button></div>'
+    + '<div class="table-wrap"><table class="synder-table" id="activity"><thead><tr><th>Timestamp</th><th>Initiator</th><th>Action</th><th>Type</th><th>Details</th></tr></thead><tbody>'
+    + (rows.map(function(r){ return '<tr><td>' + r.ts + '</td><td>' + r.who + '</td><td>' + r.action + '</td><td>' + r.type + '</td><td style="white-space:normal;padding:8px 12px">' + r.details + '</td></tr>'; }).join('')
+       || '<tr><td colspan="5" class="muted" style="text-align:center">No rows</td></tr>')
+    + '</tbody></table></div>';
+}
+function wireActivity(){
+  document.getElementById('f-type').onchange = function(){ S.act.type = this.value; render(); };
+  document.getElementById('f-action').onchange = function(){ S.act.action = this.value; render(); };
+  document.getElementById('f-init').onchange = function(){ S.act.initiator = this.value; render(); };
+  document.getElementById('f-q').oninput = function(){ S.act.q = this.value; var pos = this.selectionStart; render(); var el = document.getElementById('f-q'); el.focus(); el.setSelectionRange(pos, pos); };
+}
+
+/* ---------- Summaries (SM) ---------- */
+function sumChip(s){ return s.adj ? '<span class="status status-grey" data-outcome>Period lock adjustment</span>' : ''; }
+function screenSummaries(){
+  var fo = firstOpen('sm'), lt = lockThrough('sm');
+  var held = '';
+  if (S.smHeld === 'held') {
+    held = '<div class="held-block" id="sm-held"><div class="alert alert-warning"><span class="mi">pause_circle</span><div class="grow"><b style="font-weight:500">Held late data · ' + SM_HELD.length + ' transactions</b>'
+      + ' <span>· ' + range('2026-09-27', '2026-09-30') + '</span></div>'
+      + '<button class="btn btn-sm" id="sm-post" data-c="smPost"' + (fo ? '' : ' disabled') + '>Post on first open day (' + (fo ? fmt(fo) : '—') + ')</button>'
+      + '<button class="btn btn-outlined btn-sm" id="sm-skip" data-c="smSkip">Skip</button>'
+      + '<button class="btn-icon" id="sm-toggle" data-c="smToggle" aria-expanded="' + S.smHeldOpen + '" aria-label="' + (S.smHeldOpen ? 'Hide' : 'Show') + ' held transactions"><span class="mi">' + (S.smHeldOpen ? 'expand_less' : 'expand_more') + '</span></button></div>'
+      + (S.smHeldOpen ? '<div class="hb-body"><table class="synder-table table--sm" id="sm-held-table"><thead><tr><th>Transaction info</th><th>Integration</th><th>Transaction type</th><th>Transaction date</th><th class="num">Amount</th></tr></thead><tbody>'
+        + SM_HELD.map(function(h){ return '<tr><td>' + h.info + '</td><td>' + integCell(h.integ) + '</td><td>' + h.type + '</td><td>' + fmt(h.date) + '</td><td class="num">' + money(h.amt) + ' USD</td></tr>'; }).join('')
+        + '</tbody></table></div>' : '') + '</div>';
+  }
+  var body = SUMS.map(function(s){
+    return '<tr data-sum="' + s.id + '"><td class="col-check"><label class="synder-checkbox"><input type="checkbox" aria-label="Select ' + (s.adj || s.range) + '"></label></td>'
+      + '<td><a class="text-link" href="#summary-detail?id=' + s.id + '">' + (s.adj ? s.adj : s.range) + '</a>' + (s.adj ? '<span class="cell-subtext">' + fmt(s.date) + '</span>' : '') + '</td>'
+      + '<td>' + integCell(s.integ) + '</td><td>' + s.amount + '</td>'
+      + '<td>' + (s.adj ? '—' : '<span class="status status-green">Fully fetched</span>') + '</td><td><span class="chips">' + stChip(s.status) + sumChip(s) + '</span></td>'
+      + '<td><button class="btn-icon" data-c="sumMenu" data-a="' + s.id + '" data-sum-menu="' + s.id + '" aria-label="Actions for ' + (s.adj || s.range) + '"><span class="mi">more_horiz</span></button></td></tr>';
+  }).join('');
+  return '<div class="page-header"><div class="page-header-text"><div class="title-row"><h1 class="page-title">Summaries list</h1>' + lockChip('sm') + '</div>'
+    + '<p class="page-subtitle">View the list of summarized entries along with their sync status to your books.</p></div></div>'
+    + held
+    + '<div class="tx-bar"><button class="btn" id="actions-btn" data-c="actions" data-a="sm" aria-haspopup="menu">Actions <span class="mi" style="font-size:18px">expand_more</span></button>'
+    + '<button class="btn btn-outlined" data-c="mark">Import historical data</button><button class="btn btn-outlined" data-c="mark">Generate summary</button></div>'
+    + '<div class="table-wrap"><table class="synder-table" id="sum-table"><thead><tr><th class="col-check"></th><th>Date / Payout ID</th><th>Integration</th><th>Amount</th><th>Completeness status</th><th>Sync status</th><th>Actions</th></tr></thead><tbody>'
+    + body + '</tbody></table></div>';
+}
+function screenSummaryDetail(){
+  var s = sum(param(S.hash, 'id') || 'oct1');
+  if (!s) { history.replaceState(null, '', '#summaries'); return screenSummaries(); }
+  var locked = isLocked('sm', s.date), live = s.status === 'synced';
+  var actions = (live ? (locked ? whyOff('sm') : '')
+      + '<button class="btn btn-outlined" id="sd-rollback" data-c="rollbackSum" data-a="' + s.id + '"' + (locked ? ' disabled' : '') + '>Rollback</button>'
+      + '<button class="btn btn-outlined" id="sd-resync" data-c="resyncSum" data-a="' + s.id + '"' + (locked ? ' disabled' : '') + '>Resync</button>'
+      + '<button class="btn btn-outlined" id="sd-delete" data-c="mark"' + (locked ? ' disabled' : '') + '>Delete</button>' : '');
+  var lines = s.lines.map(function(l){ return '<tr><td>' + l[0] + '</td><td class="num">' + (l[1] || '—') + '</td><td class="num">' + (l[2] || '—') + '</td></tr>'; }).join('')
+    + '<tr class="total"><td>Total</td><td class="num" id="tot-dr">' + s.tot + '</td><td class="num" id="tot-cr">' + s.tot + '</td></tr>';
+  return '<div class="narrow"><a class="back-btn" href="#summaries"><span class="mi">chevron_left</span>Summaries list</a>'
+    + '<div class="sum-head"><div><h1 class="page-title">' + (s.adj ? 'Period lock adjustment' : 'Summary') + '</h1><div style="font-size:16px;font-weight:500;margin-top:4px" id="sd-range">' + (s.adj ? s.adj + ' · ' + fmt(s.date) : s.range) + '</div>'
+    + '<div class="chips" style="margin-top:8px">' + integCell(s.integ) + stChip(s.status) + sumChip(s) + '</div>'
+    + (s.late ? '<div style="margin-top:8px" id="sd-late"><span class="muted">Late data:</span> ' + s.late + '</div>' : '') + '</div>'
+    + '<div style="text-align:right"><div class="muted">Amount</div><div class="amount-big">' + s.amount + '</div></div></div>'
+    + '<div class="sum-actions" id="sd-actions">' + actions + '</div>'
+    + '<h2 style="font-size:16px;font-weight:500;margin-bottom:8px">' + (s.adj ? 'Journal entry lines' : 'Summary lines') + '</h2>'
+    + '<div class="table-wrap"><table class="synder-table" id="sum-lines"><thead><tr><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>' + lines + '</tbody></table></div></div>';
+}
+
+/* ---------- render ---------- */
+var rendering = false, renderAgain = false;
+function render(){
+  if (rendering) { renderAgain = true; return; }
+  rendering = true;
+  try { doRender(); } finally { rendering = false; }
+  if (renderAgain) { renderAgain = false; render(); }
+}
+function doRender(){
+  var h = curHash(), r = routeOf(h);
+  var known = ['settings','transactions','sync-info','dashboard','activity','summaries','summary-detail'];
+  if (known.indexOf(r) < 0) { history.replaceState(null, '', '#settings'); h = 'settings'; r = 'settings'; }
+  if (S.hash !== h) {
+    if (r === 'transactions' && param(h, 'tab')) S.txTab = param(h, 'tab') === 'held' ? 'held' : 'all';
+    if (r === 'activity' && param(h, 'type')) S.act = { type:param(h, 'type'), action:'All', initiator:'All', q:'' };
+  }
+  S.hash = h; S.route = r;
+  if (r === 'summaries' || r === 'summary-detail') S.org = 'sm';
+  if (r === 'transactions' || r === 'sync-info') S.org = 'pt';
+  renderShell();
+  var el = document.getElementById('screen'), html = '', wire = null;
+  switch (r) {
+    case 'settings': html = screenSettings(); break;
+    case 'transactions': html = screenTransactions(); wire = wireTransactions; break;
+    case 'sync-info': html = screenSyncInfo(); break;
+    case 'dashboard': html = screenDashboard(); break;
+    case 'activity': html = screenActivity(); wire = wireActivity; break;
+    case 'summaries': html = screenSummaries(); break;
+    case 'summary-detail': html = screenSummaryDetail(); break;
+  }
+  el.innerHTML = html;
+  if (wire) wire();
+  if (S.menu && S.menu.kind !== 'actions') renderMenu();
+  document.getElementById('demo-today').value = S.today;
+  document.getElementById('demo-books').value = S.books.date || '';
+  document.getElementById('role-admin').className = S.role === 'admin' ? 'on' : '';
+  document.getElementById('role-member').className = S.role === 'member' ? 'on' : '';
+  if (S.draft) renderSheet();
+}
+
+/* demo: the books' closing date — the lock follows it when the source is QuickBooks */
+function setBooks(v){
+  var prev = S.books.date;
+  if (v === prev) return;
+  ['pt','sm'].forEach(function(org){
+    var c = S.lock[org];
+    if (c.on && c.source === 'qbo' && v) {
+      var before = lockThrough(org);
+      if (before !== v) HISTORY[org].unshift({ ts:fmt(S.today) + ' 09:12', who:'System', change:arrow(before, v) });
+    }
+    if (v) c.qboLast = v;
+  });
+  S.books.date = v || null; S.books.checked = fmt(S.today) + ' 09:12';
+  render();
+}
+document.getElementById('demo-today').onchange = function(){ if (validIso(this.value)) { S.today = this.value; render(); } };
+document.getElementById('demo-books').onchange = function(){ if (validIso(this.value)) setBooks(this.value); };
+function syncDemoH(){ document.documentElement.style.setProperty('--demo-h', document.getElementById('demo-bar').offsetHeight + 'px'); }
+window.addEventListener('resize', syncDemoH); syncDemoH();
+if (!location.hash) history.replaceState(null, '', '#settings');
+render(); afterRender(curHash());
+</script>
+</body>
+</html>

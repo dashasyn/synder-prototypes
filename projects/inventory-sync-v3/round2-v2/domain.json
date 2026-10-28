@@ -1,0 +1,72 @@
+{
+  "validator": "domain",
+  "round": 2,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/inventory-sync-v3/?l=2 @ e781712 (Variant 2)",
+  "checked": [
+    { "zone": "empty state", "item": "\"Send stock changes from QuickBooks to your Shopify stores.\" headline (QuickBooks vs QuickBooks Online naming)" },
+    { "zone": "empty state", "item": "\"Shopify store\" select with \"Select…\" placeholder and \"Connect store\" button" },
+    { "zone": "empty state", "item": "\"Don't see your store here? Connect it first in Organization settings\"" },
+    { "zone": "2-step onboarding", "item": "Step 1 title \"Enable inventory tracking\" and its body \"set Created product should be to Inventory and click Update\"" },
+    { "zone": "2-step onboarding", "item": "Step 1 done line \"Created product should be: Inventory\"" },
+    { "zone": "2-step onboarding", "item": "Step 2 \"Choose location\" / \"Pick the Shopify location that receives stock changes.\" / \"Finish setup\"" },
+    { "zone": "2-step onboarding", "item": "Finish setup toast \"My ceramic plates is ready. Click Enable to start sending stock changes.\"" },
+    { "zone": "Overview top line", "item": "Tiles \"Held\", \"Failed\", \"Pending\", \"Applied in 24h\" and the \"–\" empty value before Enable" },
+    { "zone": "Overview Stock check block", "item": "\"No comparison yet. Connected stores are compared every night at 02:30 UTC.\"" },
+    { "zone": "Overview Stock check block", "item": "\"2 products have different stock in QuickBooks and Shopify.\" with \"QuickBooks 140 · Shopify 132\" rows" },
+    { "zone": "Overview Stock check block", "item": "State 3: failed-check alert for My good flowers next to \"Stock is the same in QuickBooks and Shopify.\"" },
+    { "zone": "Overview Shopify stores", "item": "State 2 card step \"Set Created product to Inventory\" vs onboarding \"Enable inventory tracking\" (same setting, two labels)" },
+    { "zone": "Stock check tab", "item": "Intro \"Synder compares QuickBooks quantity on hand with Shopify stock for every mapped product in each store.\"" },
+    { "zone": "Stock check tab", "item": "Columns QuickBooks · Shopify · Difference (\"+8\" for 140 vs 132) and Status \"Unresolved\"" },
+    { "zone": "Stock check tab", "item": "\"Latest comparison · My ceramic plates: Oct 2, 2026 02:30 · My good flowers: failed Oct 2, 2026 02:30\"" },
+    { "zone": "Stock check tab", "item": "Row/bulk actions \"Update Shopify qty\" and \"Ignore\"; confirmation dialog \"Update Shopify qty for 2 products?\" with stale-snapshot warning" },
+    { "zone": "Stock check tab", "item": "Toast \"2 Shopify quantities will be updated.\" and rows leaving the Unresolved view immediately" },
+    { "zone": "Stock check tab", "item": "Previous comparisons table: Started · Store · Trigger \"Nightly\" · Status \"Finished\" · Items compared · Differences · View rows" }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "High",
+      "confidence": 82,
+      "element": "Overview › Stock check block, State 3 (one nightly check failed)",
+      "finding": "The block states an unscoped \"Stock is the same in QuickBooks and Shopify.\" directly under an alert that My good flowers' stock was not compared, so the all-clear covers a store that was never checked.",
+      "user_impact": "A bookkeeper doing a periodic stock tie-out reads the green line as \"everything matches\" and signs off, while one store's quantities are unverified and may already differ from QuickBooks quantity on hand.",
+      "suggested_fix": "Scope the line to what was actually compared, for example \"My ceramic plates: stock is the same in QuickBooks and Shopify (Oct 2, 2026 02:30)\", and show no all-clear for a store whose last check failed.",
+      "evidence": {
+        "quote": "The last check of My good flowers failed (Oct 2, 2026 02:30), so its stock wasn't compared.\nCompare now\ncheck_circle\nStock is the same in QuickBooks and Shopify.",
+        "source": "Reconciliation/tie-out rule: a match can be asserted only for balances that were compared; an unperformed comparison is \"not compared\", never \"matched\"."
+      }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "High",
+      "confidence": 76,
+      "element": "Onboarding step 1 title \"Enable inventory tracking\" (and the State 2 store-card step \"Set Created product to Inventory\")",
+      "finding": "The step is titled with the name of QuickBooks Online's own inventory setting, but it actually changes Synder's \"Created product should be\" setting, which decides what item type Synder creates in the books. Nothing in the state map explains what that change does to the books, and the same setting appears under a second label on the store card.",
+      "user_impact": "A bookkeeper may think QuickBooks inventory tracking (quantity on hand) is now on when it is not, or may switch the setting without realising that items Synder creates from then on will be Inventory items. Sales of Inventory items post to Inventory Asset and Cost of Goods Sold, and existing Non-inventory items get no quantity on hand.",
+      "suggested_fix": "Give the step one label that names the real setting, such as \"Set Created product should be to Inventory\", and add helper text saying it applies to items Synder creates from now on and that Inventory items post to Inventory Asset and Cost of Goods Sold. Keep the precise setting name and explain it, rather than relabelling it.",
+      "evidence": {
+        "quote": "Enable inventory tracking\nIn Settings › Products/Services, set Created product should be to Inventory and click Update.",
+        "source": "QuickBooks Online: \"Track inventory quantity on hand\" is a separate company setting (Account and settings › Sales). Inventory-type items carry quantity on hand and post to Inventory Asset and Cost of Goods Sold. Round context says this Synder setting is \"Created product should be\", not inventory tracking."
+      }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "Medium",
+      "confidence": 72,
+      "element": "Stock check tab intro and the \"Shopify\" quantity column",
+      "finding": "The page compares QuickBooks \"quantity on hand\" with an undefined \"Shopify stock\". Shopify keeps separate On hand, Available and Committed quantities per location, and the state map has no source for which one is used.",
+      "user_impact": "If Available is compared, every unfulfilled order shows up as a difference against QuickBooks quantity on hand. \"Update Shopify qty\" would then send a +N that over-states sellable stock, so the bookkeeper cannot tell a real discrepancy from a timing difference.",
+      "suggested_fix": "Name the Shopify quantity being compared, for example \"Shopify on hand at Warehouse in California\", in the intro and the column header. Treat the choice as product logic that needs a source in the CSM guide.",
+      "evidence": {
+        "quote": "Synder compares QuickBooks quantity on hand with Shopify stock for every mapped product in each store.",
+        "source": "Shopify inventory states: On hand = Available + Committed (+ Unavailable), tracked per location. Domain-validator rule: unsourced product logic is reported as unverified."
+      }
+    }
+  ],
+  "gaps": [
+    "Bulk \"Update Shopify qty\" across stores was only exercised with differences from one store (My ceramic plates). The dialog wording and the deltas sent when stores have comparisons at different times are not recorded.",
+    "\"Ignore\" was never committed, and the status of rows after Update or Ignore is not recorded (the Unresolved filter hides them). So it is unknown whether the audit trail tells \"Shopify adjusted\" apart from \"reviewed, left different\".",
+    "After the bulk update the toast says \"will be updated\" (future tense) but the rows leave Unresolved straight away. What a row shows if the Shopify update later fails is not recorded.",
+    "No Failed sample events, so the Failed tile path and its Activity wording could not be checked."
+  ]
+}

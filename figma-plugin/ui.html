@@ -1,0 +1,122 @@
+<html>
+<head>
+<style>
+  body { font-family: Inter, sans-serif; padding: 16px; font-size: 13px; margin: 0; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  .status { padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-size: 12px; }
+  .ok { background: #E8F5E9; color: #2E7D32; }
+  .waiting { background: #FFF3E0; color: #E65100; }
+  .fail { background: #FFEBEE; color: #C62828; }
+  label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; }
+  input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; box-sizing: border-box; margin-bottom: 12px; }
+  button { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; margin-right: 8px; margin-bottom: 12px; }
+  .blue { background: #1976D2; color: white; }
+  .red { background: #F44336; color: white; }
+  .grey { background: #f5f5f5; color: #333; border: 1px solid #ddd; }
+  .log { background: #f9f9f9; border: 1px solid #eee; border-radius: 6px; padding: 8px; font-family: monospace; font-size: 11px; max-height: 200px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; }
+</style>
+</head>
+<body>
+<h2>Dasha Remote</h2>
+<div id="status" class="status waiting">Enter server URL and click Connect</div>
+
+<label>Server URL</label>
+<input type="text" id="url" placeholder="https://your-tunnel.trycloudflare.com">
+
+<button class="blue" id="connectBtn" onclick="startPolling()">Connect</button>
+<button class="red" id="stopBtn" onclick="stopPolling()" style="display:none">Stop</button>
+<button class="grey" onclick="testPing()">Test</button>
+
+<div class="log" id="log"></div>
+
+<script>
+var timer = null;
+var serverUrl = '';
+
+function log(msg) {
+  var el = document.getElementById('log');
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function setStatus(cls, text) {
+  var el = document.getElementById('status');
+  el.className = 'status ' + cls;
+  el.textContent = text;
+}
+
+function poll() {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', serverUrl + '/api/figma/poll');
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.timeout = 5000;
+  xhr.onload = function() {
+    if (xhr.status !== 200) return;
+    try {
+      var data = JSON.parse(xhr.responseText);
+      if (data.cmd) {
+        log('CMD: ' + data.cmd);
+        parent.postMessage({
+          pluginMessage: {
+            type: 'execute',
+            cmd: data.cmd,
+            args: data.args || {},
+            requestId: data.requestId
+          }
+        }, '*');
+      }
+    } catch(e) {}
+  };
+  xhr.send(JSON.stringify({ status: 'ready' }));
+}
+
+function sendResult(requestId, result) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('POST', serverUrl + '/api/figma/result');
+  xhr.setRequestHeader('Content-Type', 'application/json');
+  xhr.onload = function() { log('Result sent'); };
+  xhr.send(JSON.stringify({ requestId: requestId, result: result }));
+}
+
+window.onmessage = function(event) {
+  var msg = event.data.pluginMessage;
+  if (!msg) return;
+  if (msg.type === 'result') {
+    log('Result: ' + JSON.stringify(msg.result).substring(0, 100));
+    sendResult(msg.requestId, msg.result);
+  }
+};
+
+function startPolling() {
+  serverUrl = document.getElementById('url').value.replace(/\/+$/, '');
+  if (!serverUrl) { log('Enter URL first'); return; }
+  setStatus('ok', 'Connected: ' + serverUrl);
+  log('Polling started');
+  document.getElementById('connectBtn').style.display = 'none';
+  document.getElementById('stopBtn').style.display = '';
+  poll();
+  timer = setInterval(poll, 2000);
+}
+
+function stopPolling() {
+  if (timer) clearInterval(timer);
+  timer = null;
+  setStatus('waiting', 'Disconnected');
+  log('Stopped');
+  document.getElementById('connectBtn').style.display = '';
+  document.getElementById('stopBtn').style.display = 'none';
+}
+
+function testPing() {
+  serverUrl = document.getElementById('url').value.replace(/\/+$/, '');
+  if (!serverUrl) { log('Enter URL first'); return; }
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', serverUrl + '/api/figma/ping');
+  xhr.timeout = 5000;
+  xhr.onload = function() { log('Ping OK: ' + xhr.responseText); setStatus('ok', 'Server reachable'); };
+  xhr.onerror = function() { log('Ping failed'); setStatus('fail', 'Cannot reach server'); };
+  xhr.send();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synder Smart Rules – Shopify Flow Style</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Roboto,sans-serif;background:#F9FAFB;display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:14px;color:#1A1A2E}
+
+.header{background:#fff;border-bottom:1px solid #E0E0E0;padding:10px 20px;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.back-link{font-size:13px;color:#6B7280;cursor:pointer}
+.header-badge{font-size:11px;font-weight:700;background:#F3F4F6;color:#6B7280;border-radius:4px;padding:2px 8px}
+.rule-name-inp{border:none;outline:none;font-size:14px;color:#374151;width:240px;background:transparent}
+.btn{padding:7px 16px;border-radius:6px;font-size:13px;font-weight:500;cursor:pointer;border:none}
+.btn-primary{background:#0053CC;color:#fff}
+.btn-ghost{background:#fff;color:#616161;border:1px solid #E0E0E0}
+.ml-auto{margin-left:auto}
+.btn-row{display:flex;gap:8px}
+
+.workspace{display:flex;flex:1;overflow:hidden}
+.sidebar{width:300px;min-width:300px;background:#fff;border-right:1px solid #E0E0E0;overflow-y:auto;flex-shrink:0}
+.canvas-area{flex:1;overflow:auto;background-color:#ECEEF2;background-image:radial-gradient(circle,#C5C9D1 1px,transparent 1px);background-size:20px 20px}
+
+#canvasWrap{position:relative;padding:80px 60px 160px}
+
+.sf-card{
+  position:absolute;background:#fff;border:1.5px solid #E5E7EB;
+  border-radius:8px;width:260px;overflow:visible;
+  cursor:pointer;transition:box-shadow .15s,border-color .15s;
+  z-index:2; /* above SVG connectors */
+}
+.sf-card:hover{box-shadow:0 3px 14px rgba(0,0,0,.13)}
+.sf-card.sel{border-color:#1A73E8;box-shadow:0 0 0 3px rgba(26,115,232,.18)}
+.sf-card.trigger{border-left:4px solid #9E9E9E}
+.sf-card.condition{border-left:4px solid #1A73E8}
+.sf-card.action{border-left:4px solid #16A34A}
+
+.sf-body{padding:14px 14px 10px;position:relative}
+.sf-type-lbl{font-size:11px;color:#9E9E9E;text-transform:uppercase;letter-spacing:.3px;margin-bottom:5px}
+.sf-title{font-size:13px;font-weight:600;color:#111827;line-height:1.35}
+.sf-detail{font-size:12px;color:#6B7280;margin-top:3px}
+
+.sf-ports{border-top:1px solid #F3F4F6}
+.sf-port-row{display:flex;align-items:center;justify-content:space-between;padding:0 14px;height:36px;font-size:12px;color:#6B7280;position:relative}
+.sf-port-row+.sf-port-row{border-top:1px dashed #F3F4F6}
+.sf-port-row.then-lbl{color:#374151;font-weight:500}
+
+.pdot-out{
+  width:14px;height:14px;border-radius:50%;
+  background:#1A73E8;border:2.5px solid #fff;
+  box-shadow:0 0 0 1.5px #1A73E8;flex-shrink:0;margin-right:-8px;z-index:3;
+}
+.pdot-out.off{background:#CBD5E1;box-shadow:0 0 0 1.5px #CBD5E1}
+.pdot-in{
+  position:absolute;left:-8px;top:50%;transform:translateY(-50%);
+  width:14px;height:14px;border-radius:50%;
+  background:#1A73E8;border:2.5px solid #fff;
+  box-shadow:0 0 0 1.5px #1A73E8;z-index:4;
+}
+
+/* Blue "+" button inside port rows */
+.port-plus{
+  width:22px;height:22px;border-radius:50%;background:#1A73E8;border:none;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-right:-12px;z-index:5;transition:background .15s,transform .15s;
+}
+.port-plus:hover{background:#1557B0;transform:scale(1.12)}
+
+.conn-svg{position:absolute;top:0;left:0;pointer-events:none;overflow:visible;z-index:1}
+
+/* Block picker popup */
+.block-menu{position:fixed;z-index:1000;background:#fff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.18);padding:8px;min-width:160px}
+.block-menu-btn{display:block;width:100%;padding:14px 20px;border:none;background:none;cursor:pointer;border-radius:8px;font-size:17px;font-weight:500;color:#1A1A2E;text-align:left}
+.block-menu-btn:hover{background:#F3F4F6}
+
+.sb-section{padding:16px;border-bottom:1px solid #F5F5F5}
+.sb-label{font-size:11px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.sb-hint{font-size:13px;color:#9E9E9E;text-align:center;padding:28px 16px;line-height:1.6}
+.form-group{margin-bottom:12px}
+.form-label{font-size:12px;color:#616161;margin-bottom:4px;display:block}
+select,.ti{width:100%;padding:7px 10px;border:1px solid #E5E7EB;border-radius:4px;font-size:13px;color:#1A1A2E;background:#fff;outline:none;-webkit-appearance:none;appearance:none}
+select:focus,.ti:focus{border-color:#0053CC}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='%239E9E9E'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.del-lnk{font-size:12px;color:#DC2626;background:none;border:none;cursor:pointer;padding:0}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="back-link">← Back to rules</div>
+  <div class="header-badge">Template</div>
+  <input class="rule-name-inp" id="ruleName" type="text" value="New rule" />
+  <div class="ml-auto btn-row">
+    <button class="btn btn-ghost">Share</button>
+    <button class="btn btn-primary">Install</button>
+  </div>
+</div>
+
+<div class="workspace">
+  <div class="sidebar" id="sidebar"></div>
+  <div class="canvas-area">
+    <div id="canvasWrap"></div>
+  </div>
+</div>
+
+<script>
+// ── Domain data ───────────────────────────────────────────────────
+const ENTITIES=['Invoice','Bill','Payment','Bill Payment','Refund','Deposit','Contact','Bank Transfer','Item'];
+const EVENTS={
+  Invoice:['Created'],Bill:['Created'],Payment:['Created'],
+  'Bill Payment':['Created'],Refund:['Created'],Deposit:['Created'],
+  Contact:['Created','Updated'],'Bank Transfer':['Created'],Item:['Created','Updated'],
+};
+const INV_F={
+  'Total Amount':'number','Balance':'number','Reference':'text','Currency':'text',
+  'Txn Date':'date','Line: Amount':'number','Line: Description':'text',
+  'Line: Item':'text','Line: Tax Rate':'text',
+  'Line: TrackingCategory1':'text','Line: TrackingCategory2':'text','Contact':'text',
+};
+const ALL_FIELDS={
+  Invoice:INV_F,Bill:INV_F,Refund:INV_F,Deposit:INV_F,
+  Payment:{'Total Amount':'number','Currency':'text','Reference':'text','Contact':'text'},
+  'Bill Payment':{'Total Amount':'number','Currency':'text'},
+  Contact:{'Name':'text','Email':'text','Balance':'number'},
+  'Bank Transfer':{'Amount':'number','Txn Date':'date'},
+  Item:{'Name':'text','Code':'text','Sale Price':'number','Cost Price':'number'},
+};
+function getOps(entity,field){
+  const t=(ALL_FIELDS[entity]||{})[field];
+  return t==='number'?['Equals','Greater than','≥','Less than','≤','Not equals']:
+         t==='date'  ?['Equals','Before','After']:
+         ['Contains','Equals','Not equals','Is set','Is not set'];
+}
+const ACTION_TYPES=['Email','SMS','Xero action','Post to URL'];
+const RECIPIENTS=['Account owner','Contact','Other'];
+
+// ── State ─────────────────────────────────────────────────────────
+// conditions chain via otherwiseChild (vertical stack)
+// actions chain via thenChild (horizontal chain per condition row)
+// trigger.thenChild → first condition
+let S={nodes:{},rootId:null,sel:null,idc:1};
+
+function uid(){return 'n'+(S.idc++)}
+function mkN(type,ov={}){
+  const id=uid();
+  const n={id,type,thenChild:null};
+  if(type==='condition') n.otherwiseChild=null;
+  if(type==='trigger')   Object.assign(n,{entity:'Invoice',event:'Created'});
+  if(type==='condition') Object.assign(n,{field:'',op:'',value:''});
+  if(type==='action')    Object.assign(n,{actionType:'',recipient:'',detail:'',qbAction:'',customEmail:''});
+  Object.assign(n,ov);
+  S.nodes[id]=n;
+  return id;
+}
+
+// Returns ordered list of condition nodes (via otherwiseChild chain)
+function condChain(){
+  const ch=[];
+  let c=S.nodes[S.rootId]?.thenChild;
+  while(c && S.nodes[c]?.type==='condition'){
+    ch.push(c);
+    c=S.nodes[c]?.otherwiseChild;
+  }
+  return ch;
+}
+
+// Returns ordered list of action nodes starting from startId (via thenChild)
+function actionChain(startId){
+  const ch=[];
+  let c=startId;
+  while(c && S.nodes[c]?.type==='action'){
+    ch.push(c);
+    c=S.nodes[c]?.thenChild;
+  }
+  return ch;
+}
+
+// ── Layout constants ──────────────────────────────────────────────
+const CW=260, CGAP=80, CSTEP=CW+CGAP; // 340px per column — wider gap so connectors don't overlap cards
+const ROW_H=220; // vertical distance between condition rows
+
+// ── Render ────────────────────────────────────────────────────────
+function render(){
+  const wrap=document.getElementById('canvasWrap');
+  wrap.innerHTML='';
+
+  const conds=condChain();
+
+  // Trigger at column 0, row 0
+  addCard(wrap, S.nodes[S.rootId], 0, 0);
+
+  conds.forEach((condId, row)=>{
+    const y=row*ROW_H;
+    addCard(wrap, S.nodes[condId], CSTEP, y);
+    const condN=S.nodes[condId];
+    if(condN.thenChild){
+      const acts=actionChain(condN.thenChild);
+      acts.forEach((actId,col)=>{
+        addCard(wrap, S.nodes[actId], (2+col)*CSTEP, y);
+      });
+    }
+  });
+
+  // Canvas sizing
+  let maxCols=3;
+  conds.forEach(condId=>{
+    const condN=S.nodes[condId];
+    if(condN.thenChild){
+      const acts=actionChain(condN.thenChild);
+      maxCols=Math.max(maxCols, 2+acts.length+1);
+    }
+  });
+  wrap.style.minWidth=((maxCols)*CSTEP+200)+'px';
+  wrap.style.minHeight=((conds.length+1)*ROW_H+200)+'px';
+
+  requestAnimationFrame(()=>drawSVG(wrap, conds));
+  renderSidebar();
+}
+
+function addCard(wrap, n, x, y){
+  const isSel=S.sel?.nodeId===n.id;
+  const div=document.createElement('div');
+  div.className=`sf-card ${n.type}${isSel?' sel':''}`;
+  div.style.cssText=`left:${x}px;top:${y}px`;
+  div.dataset.nid=n.id;
+
+  let title='', detail='';
+  if(n.type==='trigger'){
+    title=`${n.entity||'—'} ${n.event||''}`;
+  } else if(n.type==='condition'){
+    if(n.field){
+      const v=n.value?` ${n.op} <strong>${n.value}</strong>`:(n.op?` ${n.op}`:'');
+      title=`${n.field}${v}`;
+    } else title='<span style="color:#BDBDBD;font-weight:400">Set condition…</span>';
+  } else {
+    title=n.actionType||'<span style="color:#BDBDBD;font-weight:400">Select action…</span>';
+    if(n.actionType==='Email'&&n.recipient) detail=`Send to ${n.recipient}`;
+    else if(n.actionType==='Post to URL'&&n.detail) detail=n.detail;
+    else if(n.actionType==='Xero action'&&n.qbAction) detail=n.qbAction;
+  }
+
+  // Input dot (left side, not on trigger)
+  const inputDot=n.type!=='trigger'
+    ?`<div class="pdot-in" data-nid="${n.id}" data-port="input"></div>`:'';
+
+  // Render port: blue dot if connected (for SVG), blue "+" button if not
+  function portEl(childKey, port){
+    const hasChild=n[childKey];
+    return hasChild
+      ?`<div class="pdot-out" data-nid="${n.id}" data-port="${port}"></div>`
+      :`<button class="port-plus" onclick="event.stopPropagation();openBlockMenu(this,'${n.id}','${port}')"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M6 1v10M1 6h10" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg></button>`;
+  }
+
+  // Port rows
+  let portRows='';
+  if(n.type==='trigger'){
+    portRows=`<div class="sf-port-row then-lbl">Output ${portEl('thenChild','then')}</div>`;
+  } else if(n.type==='condition'){
+    portRows=`
+      <div class="sf-port-row then-lbl">Then ${portEl('thenChild','then')}</div>
+      <div class="sf-port-row">Otherwise ${portEl('otherwiseChild','otherwise')}</div>`;
+  } else {
+    portRows=`<div class="sf-port-row then-lbl">Then ${portEl('thenChild','then')}</div>`;
+  }
+
+  div.innerHTML=`
+    ${inputDot}
+    <div class="sf-body">
+      <div class="sf-type-lbl">${n.type==='trigger'?'Start when…':n.type==='condition'?'Check if…':'Do this…'}</div>
+      <div class="sf-title">${title}</div>
+      ${detail?`<div class="sf-detail">${detail}</div>`:''}
+    </div>
+    <div class="sf-ports">${portRows}</div>`;
+
+  div.addEventListener('click',()=>{S.sel={nodeId:n.id};render();});
+  wrap.appendChild(div);
+}
+
+function openBlockMenu(anchor, parentId, port){
+  document.getElementById('blockMenu')?.remove();
+  const menu=document.createElement('div');
+  menu.id='blockMenu';
+  menu.className='block-menu';
+  const r=anchor.getBoundingClientRect();
+  menu.style.left=(r.right+12)+'px';
+  menu.style.top=(r.top-8)+'px';
+  menu.innerHTML=`
+    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','condition')">Condition</button>
+    <button class="block-menu-btn" onclick="addBlock('${parentId}','${port}','action')">Action</button>`;
+  document.body.appendChild(menu);
+  setTimeout(()=>document.addEventListener('click',()=>menu.remove(),{once:true}),0);
+}
+
+function addBlock(parentId, port, nodeType){
+  document.getElementById('blockMenu')?.remove();
+  const newId=mkN(nodeType);
+  if(port==='otherwise') S.nodes[parentId].otherwiseChild=newId;
+  else                    S.nodes[parentId].thenChild=newId;
+  S.sel={nodeId:newId};
+  render();
+}
+
+// ── SVG connections ───────────────────────────────────────────────
+function drawSVG(wrap, conds){
+  // Measure all port dot positions
+  const ports={};
+  const wr=wrap.getBoundingClientRect();
+  wrap.querySelectorAll('[data-port]').forEach(el=>{
+    const nid=el.dataset.nid, port=el.dataset.port;
+    if(!ports[nid]) ports[nid]={};
+    const r=el.getBoundingClientRect();
+    ports[nid][port]={x:r.left+r.width/2-wr.left, y:r.top+r.height/2-wr.top};
+  });
+
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.style.cssText='position:absolute;top:0;left:0;pointer-events:none;overflow:visible;z-index:2';
+  svg.setAttribute('width', wrap.offsetWidth+200);
+  svg.setAttribute('height', wrap.offsetHeight+200);
+  wrap.appendChild(svg); // LAST = on top of cards
+
+  function conn(fromNid, fromPort, toNid, toPort){
+    const src=ports[fromNid]?.[fromPort];
+    const dst=ports[toNid]?.[toPort];
+    if(!src||!dst) return;
+    drawConn(svg, src.x, src.y, dst.x, dst.y);
+  }
+
+  // Trigger → first condition
+  const firstCond=S.nodes[S.rootId]?.thenChild;
+  if(firstCond && S.nodes[firstCond]) conn(S.rootId,'then',firstCond,'input');
+
+  conds.forEach(condId=>{
+    const condN=S.nodes[condId];
+    // Condition → action chain
+    if(condN.thenChild){
+      conn(condId,'then',condN.thenChild,'input');
+      // Walk action chain
+      let cur=condN.thenChild;
+      while(S.nodes[cur]?.thenChild){
+        conn(cur,'then',S.nodes[cur].thenChild,'input');
+        cur=S.nodes[cur].thenChild;
+      }
+    }
+    // Condition → next condition (otherwise)
+    if(condN.otherwiseChild) conn(condId,'otherwise',condN.otherwiseChild,'input');
+  });
+}
+
+function drawConn(svg, x1, y1, x2, y2){
+  const dx=x2-x1;
+  let d, cx1, cy1, cx2, cy2;
+
+  if(dx>=20){
+    // Forward (going right): smooth horizontal bezier
+    const cp=Math.max(dx*0.5, 60);
+    cx1=x1+cp; cy1=y1; cx2=x2-cp; cy2=y2;
+  } else {
+    // Backward / downward (otherwise → next condition below): C-curve going right-and-around
+    const bump=90;
+    cx1=x1+bump; cy1=y1; cx2=x2-bump; cy2=y2;
+  }
+
+  d=`M${x1} ${y1} C${cx1} ${cy1},${cx2} ${cy2},${x2} ${y2}`;
+  const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d',d);
+  p.setAttribute('stroke','#1A73E8');
+  p.setAttribute('stroke-width','2.5');
+  p.setAttribute('fill','none');
+  svg.appendChild(p);
+
+  // Arrowhead at destination — approximate tangent from last control point to dest
+  const ax=x2-cx2, ay=y2-cy2;
+  const len=Math.sqrt(ax*ax+ay*ay)||1;
+  const ux=ax/len, uy=ay/len;
+  const l=9, h=5;
+  const pts=`${x2},${y2} ${x2-l*ux+h*uy},${y2-l*uy-h*ux} ${x2-l*ux-h*uy},${y2-l*uy+h*ux}`;
+  const poly=document.createElementNS('http://www.w3.org/2000/svg','polygon');
+  poly.setAttribute('points',pts);
+  poly.setAttribute('fill','#1A73E8');
+  svg.appendChild(poly);
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────
+function renderSidebar(){
+  const sb=document.getElementById('sidebar');
+  if(!S.sel){
+    sb.innerHTML=`<div class="sb-hint">Click any block to edit it.<br><br>
+      <strong>Check if…</strong> blocks chain via <em>Otherwise</em> (vertical)<br><br>
+      <strong>Do this…</strong> blocks chain via <em>Then</em> (horizontal)</div>`;
+    return;
+  }
+  const n=S.nodes[S.sel.nodeId];
+  if(!n){sb.innerHTML='';return;}
+
+  let html='';
+  if(n.type==='trigger'){
+    const evts=EVENTS[n.entity]||['Created'];
+    html=`<div class="sb-section"><div class="sb-label">Start When…</div>
+      <div class="form-group"><label class="form-label">Entity</label>
+        <select onchange="onTE('${n.id}',this.value)">
+          ${ENTITIES.map(e=>`<option${e===n.entity?' selected':''}>${e}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label class="form-label">Event</label>
+        <select onchange="S.nodes['${n.id}'].event=this.value;render()">
+          ${evts.map(ev=>`<option${ev===n.event?' selected':''}>${ev}</option>`).join('')}
+        </select></div>
+    </div>`;
+  } else if(n.type==='condition'){
+    const entity=S.nodes[S.rootId]?.entity||'Invoice';
+    const fields=Object.keys(ALL_FIELDS[entity]||{});
+    const ops=n.field?getOps(entity,n.field):[];
+    const noVal=['Is set','Is not set'].includes(n.op);
+    html=`<div class="sb-section"><div class="sb-label">Check If…</div>
+      <div class="form-group"><label class="form-label">Field</label>
+        <select onchange="onCF('${n.id}',this.value)">
+          <option value="">Select field…</option>
+          ${fields.map(f=>`<option${f===n.field?' selected':''}>${f}</option>`).join('')}
+        </select></div>
+      ${n.field?`<div class="form-group"><label class="form-label">Condition</label>
+        <select onchange="S.nodes['${n.id}'].op=this.value;render()">
+          <option value="">Select…</option>
+          ${ops.map(o=>`<option${o===n.op?' selected':''}>${o}</option>`).join('')}
+        </select></div>`:''}
+      ${n.op&&!noVal?`<div class="form-group"><label class="form-label">Value</label>
+        <input class="ti" type="text" value="${n.value||''}" placeholder="Enter value…" oninput="S.nodes['${n.id}'].value=this.value" /></div>`:''}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #F5F5F5">
+        <button class="del-lnk" onclick="delNode('${n.id}')">Delete</button>
+      </div></div>`;
+  } else {
+    html=`<div class="sb-section"><div class="sb-label">Do This…</div>
+      <div class="form-group"><label class="form-label">Action type</label>
+        <select onchange="onAT('${n.id}',this.value)">
+          <option value="">Select action…</option>
+          ${ACTION_TYPES.map(t=>`<option${t===n.actionType?' selected':''}>${t}</option>`).join('')}
+        </select></div>
+      ${(n.actionType==='Email'||n.actionType==='SMS')?`
+      <div class="form-group"><label class="form-label">Send to</label>
+        <select onchange="S.nodes['${n.id}'].recipient=this.value;render()">
+          <option value="">Select…</option>
+          ${RECIPIENTS.map(r=>`<option${r===n.recipient?' selected':''}>${r}</option>`).join('')}
+        </select></div>
+      ${n.recipient==='Other'?`<div class="form-group"><label class="form-label">Email address</label>
+        <input class="ti" type="text" value="${n.customEmail||''}" placeholder="email@example.com" oninput="S.nodes['${n.id}'].customEmail=this.value" /></div>`:''}`:''}
+      ${n.actionType==='Xero action'?`
+      <div class="form-group"><label class="form-label">Action</label>
+        <select onchange="S.nodes['${n.id}'].qbAction=this.value;render()">
+          <option value="">Select…</option>
+          <option${n.qbAction==='Update current'?' selected':''}>Update current</option>
+          <option${n.qbAction==='Update line'?' selected':''}>Update line</option>
+        </select></div>`:''}
+      ${n.actionType==='Post to URL'?`
+      <div class="form-group"><label class="form-label">URL</label>
+        <input class="ti" type="text" value="${n.detail||''}" placeholder="https://…" oninput="S.nodes['${n.id}'].detail=this.value" /></div>`:''}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #F5F5F5">
+        <button class="del-lnk" onclick="delNode('${n.id}')">Delete block</button>
+      </div></div>`;
+  }
+  sb.innerHTML=html;
+}
+
+// ── Event handlers ────────────────────────────────────────────────
+function onTE(id,val){
+  const n=S.nodes[id];n.entity=val;n.event=(EVENTS[val]||['Created'])[0];render();
+}
+function onCF(id,val){
+  const n=S.nodes[id];n.field=val;n.op='';n.value='';render();
+}
+function onAT(id,val){
+  const n=S.nodes[id];
+  Object.assign(n,{actionType:val,recipient:'',detail:'',qbAction:'',customEmail:''});render();
+}
+function delNode(id){
+  // Unlink from all parents
+  for(const k in S.nodes){
+    if(S.nodes[k].thenChild===id)      S.nodes[k].thenChild=null;
+    if(S.nodes[k].otherwiseChild===id) S.nodes[k].otherwiseChild=null;
+  }
+  // Delete subtree
+  (function del(nid){
+    const n=S.nodes[nid];if(!n)return;
+    if(n.thenChild) del(n.thenChild);
+    if(n.otherwiseChild) del(n.otherwiseChild);
+    delete S.nodes[nid];
+  })(id);
+  S.sel=null;render();
+}
+
+// ── Init ──────────────────────────────────────────────────────────
+(function init(){
+  const tid=mkN('trigger',{entity:'Invoice',event:'Created'});
+  S.rootId=tid;
+
+  // Branch 1: Currency = USD → Email + SMS
+  const c1=mkN('condition',{field:'Currency',op:'Equals',value:'USD'});
+  S.nodes[tid].thenChild=c1;
+  const a1=mkN('action',{actionType:'Email',recipient:'Contact'});
+  S.nodes[c1].thenChild=a1;
+  const a2=mkN('action',{actionType:'SMS',recipient:'Account owner'});
+  S.nodes[a1].thenChild=a2;
+
+  // Branch 2 (Otherwise): Amount > 1000 → Post to URL
+  const c2=mkN('condition',{field:'Total Amount',op:'Greater than',value:'1000'});
+  S.nodes[c1].otherwiseChild=c2;
+  const a3=mkN('action',{actionType:'Post to URL',detail:'https://webhook.site/…'});
+  S.nodes[c2].thenChild=a3;
+
+  S.sel={nodeId:tid};
+  render();
+})();
+</script>
+</body>
+</html>

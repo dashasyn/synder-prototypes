@@ -1,0 +1,55 @@
+{
+  "validator": "fidelity",
+  "round": 1,
+  "target": "projects/payment-application-v4/ (gsp.html + overlay.html)",
+  "checked": [
+    { "zone": "GSP · Payment application block", "item": "R1/R20/R21/R22/R23 — entry button, chip states (Synder default / Custom rule / Custom rule (inactive) / Pro plan and above), inert-prerequisite warning, plan gate" },
+    { "zone": "overlay · how to match", "item": "R1/R20 — 'Use default matching rules' (non-editable reference text) vs 'Use custom rules', override-no-fallback wording" },
+    { "zone": "overlay · narrow the search", "item": "R2 — exactly three scope rows (Customer, Invoice date, Invoice-number match), no locked Open-invoices-only/Balance>0 row" },
+    { "zone": "overlay · narrow the search / invoice-number row", "item": "R4/R6/R7 — 4-operand set (is equal to/contains/starts with/ends with), default 'is equal to', fixed DocNumber target, 7 selectable source fields" },
+    { "zone": "overlay · then refine", "item": "R5/R6/R12 — 10-operand set on condition rows, DocNumber/PrivateNote targets, single AND/OR combinator for the whole box, row order not a combinator" },
+    { "zone": "overlay · comparison semantics", "item": "R13 — case-insensitive, trimmed comparison; 21-character DocNumber truncation and its on-field disclosure" },
+    { "zone": "overlay · validation", "item": "R8/R9/R10 — scope guard (Customer + invoice-number both off), customer-inheritance-when-off, metadata-key-required blocking message" },
+    { "zone": "overlay · invoice date row", "item": "R11 — admin-gated off-switch, locked state copy, finite N bounds (1–365, default 30)" },
+    { "zone": "overlay · outcomes", "item": "R15/R16/R17/R19/R26 — apply-to-match + overpayment, empty-box-takes-first, no-candidate/no-match fall-through, snapshot tie-break" },
+    { "zone": "overlay + GSP · cancel-on-no-match", "item": "R18 — single shared stored value, identical label on both surfaces" },
+    { "zone": "overlay · Generic customer", "item": "R24 — Customer row narrowing note when Generic customer is enabled" },
+    { "zone": "overlay · right column", "item": "R25 — 'In plain terms' disclosure present on the configuration page" },
+    { "zone": "overlay · naming", "item": "R27 — FDD requires a marketable name but supplies none" },
+    { "zone": "reference document", "item": "reference.json — SD-16243 FDD Iteration 1, R1–R27, Q1–Q6, scope/out-of-scope lists" },
+    { "zone": "copy", "item": "vocabulary.md — canonical terms (Update, Enable/Disable, Integration/Books/Accounting company, toast patterns) against overlay/GSP copy" }
+  ],
+  "findings": [
+    {
+      "id": "FID-1",
+      "severity": "High",
+      "confidence": 90,
+      "element": "overlay.html — metadata-key validation error (scope-key and refine-row 'cond-i' error slots)",
+      "finding": "R10 specifies the blocking message for a metadata source with no key as 'Enter the metadata key to match on.', but the prototype shows 'Name the Stripe field that holds the reference.' in both the field-level error and the alert-banner summary.",
+      "user_impact": "The save-blocking reason a user reads does not match the wording the FDD requires, so the acceptance criterion for this validation message is not met even though the block itself fires correctly.",
+      "suggested_fix": "Replace 'Name the Stripe field that holds the reference.' with 'Enter the metadata key to match on.' in validate() (both the scope-key and cond-i branches) and in the SHORT lookup used for the alert banner and bar message.",
+      "evidence": { "quote": "Enter the metadata key to match on.", "source": "SD-16243 FDD, normative rule R10" }
+    },
+    {
+      "id": "FID-2",
+      "severity": "Medium",
+      "confidence": 75,
+      "element": "overlay.html — 'Then refine' row when 'On the invoice' is set to 'Invoice number in books'",
+      "finding": "R13 requires that the 21-character limit and truncation be stated on the field wherever a DocNumber comparison is made; the tip is rendered only under the scope invoice-number row (s.match.on) and never appears under a refine row whose target is doc_number.",
+      "user_impact": "A user who builds a refine condition against 'Invoice number in books' is not told that long values get truncated to 21 characters before comparing, so a rule that silently matches on a truncated string can look like a bug.",
+      "suggested_fix": "Render the same 21-character tip under any refine row where ct-i (\"on the invoice\") resolves to doc_number, not only under the scope match row.",
+      "evidence": { "quote": "the character limit and truncation must be stated on the field", "source": "SD-16243 FDD, normative rule R13" }
+    }
+  ],
+  "gaps": [
+    "Guard behaviour (R8): the state map exercised the Customer checkbox and the invoice-number-match checkbox independently (each true→false→true) but never both off at once, so the blocking-guard message was never actually observed on screen in this pass — only inferred from source.",
+    "Update/Close commit paths: 'Close without saving' and 'Update' are flagged in the state map itself as not exercised during recon (exercised in a dedicated pass), so the GSP-side result of a successful save — chip flip to 'Custom rule', rule-summary line, and R21's retain-configuration-after-disable behaviour — is unverified here.",
+    "Plan gate (R22) and Generic customer (R24): the presenter-bar plan selector and 'Generic customer' toggle were not exercised in this recon pass, so the Starter-plan block and the Generic-customer narrowing note are confirmed from source only, not from an observed interaction."
+  ],
+  "reference_gaps": [
+    "No Figma frames exist for this feature (reference.json note) — only a text FDD extract, so layout/spacing/visual-design fidelity cannot be judged against a design reference, only functional and copy presence against the normative rules.",
+    "R27 requires the feature to 'have a marketable name' but the FDD supplies none, so the working title 'Payment application' used throughout the prototype cannot be judged compliant or non-compliant.",
+    "Q3 (default finite N, self-serve maximum N, and the snapshot-page ceiling) is explicitly unresolved in the FDD; the prototype's values (default 30, max 365, no stated snapshot ceiling) are documented in-UI as assumption A3 and cannot be checked against a spec'd number.",
+    "Q1/Q2 (case-insensitivity and 21-character-truncation confirmation) are unresolved in the FDD; the prototype implements both as assumptions, so their correctness cannot be judged against a confirmed rule."
+  ]
+}

@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unsubscribe Flow Audit — Synder</title>
+<style>
+  :root {
+    --red: #e53935;
+    --orange: #f57c00;
+    --yellow: #fbc02d;
+    --green: #43a047;
+    --blue: #1565c0;
+    --gray: #546e7a;
+    --bg: #f5f7fa;
+    --card: #ffffff;
+    --border: #e0e6ed;
+    --text: #1a2332;
+    --text-light: #5a6a7e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+  
+  .header { background: #1a2332; color: white; padding: 40px 48px; }
+  .header h1 { font-size: 26px; font-weight: 700; margin-bottom: 6px; }
+  .header .meta { font-size: 14px; opacity: 0.6; }
+  .header .summary-pills { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+  .pill { padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .pill-critical { background: rgba(229,57,53,0.25); color: #ff8a80; }
+  .pill-high { background: rgba(245,124,0,0.25); color: #ffcc80; }
+  .pill-medium { background: rgba(251,192,45,0.2); color: #fff59d; }
+  .pill-low { background: rgba(67,160,71,0.2); color: #a5d6a7; }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px 24px; }
+
+  /* Flow Map */
+  .flow-map { background: var(--card); border-radius: 12px; border: 1px solid var(--border); padding: 32px; margin-bottom: 40px; }
+  .flow-map h2 { font-size: 18px; font-weight: 700; margin-bottom: 24px; color: var(--text); }
+  .flow-steps { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding-bottom: 8px; }
+  .flow-step { display: flex; flex-direction: column; align-items: center; min-width: 120px; }
+  .flow-step-box { background: #f0f4ff; border: 2px solid #c7d4f5; border-radius: 10px; padding: 12px 10px; text-align: center; font-size: 12px; font-weight: 600; color: #2d4aad; width: 110px; position: relative; }
+  .flow-step-box .step-num { font-size: 10px; font-weight: 700; color: #7c8dc8; margin-bottom: 4px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .flow-step-box .step-name { font-size: 11px; line-height: 1.4; }
+  .flow-arrow { color: #c7d4f5; font-size: 20px; padding: 0 4px; margin-top: 28px; flex-shrink: 0; }
+  .flow-step-url { font-size: 10px; color: var(--text-light); margin-top: 6px; max-width: 120px; text-align: center; word-break: break-all; line-height: 1.3; }
+  .badge-issues { position: absolute; top: -8px; right: -8px; background: var(--red); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+
+  /* Finding cards */
+  .section { margin-bottom: 48px; }
+  .section h2 { font-size: 20px; font-weight: 700; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 2px solid var(--border); }
+  
+  .screen-block { background: var(--card); border-radius: 12px; border: 1px solid var(--border); margin-bottom: 32px; overflow: hidden; }
+  .screen-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  .screen-header .screen-num { width: 32px; height: 32px; background: #1a2332; color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .screen-header .screen-title { font-size: 16px; font-weight: 700; }
+  .screen-header .screen-url { font-size: 12px; color: var(--text-light); font-family: monospace; background: #f0f4ff; padding: 2px 8px; border-radius: 4px; }
+  
+  .screen-body { display: grid; grid-template-columns: 360px 1fr; gap: 0; }
+  .screen-screenshot { padding: 20px; border-right: 1px solid var(--border); }
+  .screen-screenshot img { width: 100%; border-radius: 8px; border: 1px solid var(--border); cursor: zoom-in; }
+  .screen-findings { padding: 20px 24px; }
+  
+  .finding { margin-bottom: 16px; padding: 14px 16px; border-radius: 8px; border-left: 3px solid; }
+  .finding-critical { background: #fff5f5; border-color: var(--red); }
+  .finding-high { background: #fff8f0; border-color: var(--orange); }
+  .finding-medium { background: #fffbf0; border-color: var(--yellow); }
+  .finding-low { background: #f0fff4; border-color: var(--green); }
+  
+  .finding-header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .severity-badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .sev-critical { background: var(--red); color: white; }
+  .sev-high { background: var(--orange); color: white; }
+  .sev-medium { background: var(--yellow); color: #5a4000; }
+  .sev-low { background: var(--green); color: white; }
+  
+  .finding-title { font-size: 14px; font-weight: 700; }
+  .finding p { font-size: 14px; color: var(--text-light); line-height: 1.6; }
+  .finding .rec { margin-top: 8px; font-size: 13px; color: var(--blue); background: #f0f4ff; padding: 8px 12px; border-radius: 6px; }
+  .finding .rec::before { content: '→ '; font-weight: 700; }
+  
+  code { font-family: monospace; background: #f0f4ff; padding: 1px 5px; border-radius: 3px; font-size: 12px; color: var(--blue); }
+
+  /* Systemic findings */
+  .systemic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  .systemic-card { background: var(--card); border-radius: 10px; border: 1px solid var(--border); padding: 20px; }
+  .systemic-card h3 { font-size: 14px; font-weight: 700; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .systemic-card p { font-size: 13px; color: var(--text-light); line-height: 1.6; }
+
+  /* Copy table */
+  .copy-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .copy-table th { text-align: left; padding: 10px 14px; background: #f0f4ff; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-light); }
+  .copy-table td { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .copy-table tr:last-child td { border-bottom: none; }
+  .current-copy { color: var(--red); font-style: italic; }
+  .suggested-copy { color: var(--green); font-weight: 600; }
+
+  /* Stats */
+  .stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 40px; }
+  .stat-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; text-align: center; }
+  .stat-num { font-size: 32px; font-weight: 800; }
+  .stat-label { font-size: 13px; color: var(--text-light); margin-top: 4px; }
+  .stat-critical .stat-num { color: var(--red); }
+  .stat-high .stat-num { color: var(--orange); }
+  .stat-medium .stat-num { color: var(--yellow); }
+  .stat-total .stat-num { color: var(--blue); }
+
+  @media (max-width: 900px) {
+    .screen-body { grid-template-columns: 1fr; }
+    .screen-screenshot { border-right: none; border-bottom: 1px solid var(--border); }
+    .stats-row { grid-template-columns: repeat(2, 1fr); }
+    .flow-steps { flex-wrap: wrap; gap: 12px; }
+    .flow-arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Unsubscribe Flow Audit — Synder Sync</h1>
+  <div class="meta">Dasha · March 30, 2026 · demo.synderapp.com · Dasha Test Company (Essential plan, yearly)</div>
+  <div class="summary-pills">
+    <span class="pill pill-critical">2 Critical</span>
+    <span class="pill pill-high">4 High</span>
+    <span class="pill pill-medium">7 Medium</span>
+    <span class="pill pill-low">2 Low</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- Flow Map -->
+  <div class="flow-map">
+    <h2>Cancellation Flow Map</h2>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="flow-step-box">
+          <div class="badge-issues">2</div>
+          <div class="step-num">S1</div>
+          <div class="step-name">Manage Subscription</div>
+        </div>
+        <div class="flow-step-url">/settings/manageSubscription</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-box">
+          <div class="badge-issues">2</div>
+          <div class="step-num">S2</div>
+          <div class="step-name">Confirmation Modal</div>
+        </div>
+        <div class="flow-step-url">inline modal</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-box">
+          <div class="badge-issues">4</div>
+          <div class="step-num">S3</div>
+          <div class="step-name">Loss Aversion Page</div>
+        </div>
+        <div class="flow-step-url">?action=UNSUBSCRIBE</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-box">
+          <div class="badge-issues">3</div>
+          <div class="step-num">S4</div>
+          <div class="step-name">Main Reason Survey</div>
+        </div>
+        <div class="flow-step-url">?action=UNSUBSCRIBE</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-box">
+          <div class="badge-issues">3</div>
+          <div class="step-num">S5</div>
+          <div class="step-name">Sub-Reason Survey</div>
+        </div>
+        <div class="flow-step-url">?action=UNSUBSCRIBE</div>
+      </div>
+      <div class="flow-arrow">→</div>
+      <div class="flow-step">
+        <div class="flow-step-box">
+          <div class="badge-issues">3</div>
+          <div class="step-num">S6</div>
+          <div class="step-name">Confirmation</div>
+        </div>
+        <div class="flow-step-url">?action=UNSUBSCRIBE</div>
+      </div>
+    </div>
+    <div style="margin-top: 16px; font-size: 13px; color: var(--text-light);">
+      Entry: Organization Settings → Synder Sync section → <strong>"Manage subscription"</strong> button · Total: 5+ clicks to complete cancellation
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card stat-critical"><div class="stat-num">2</div><div class="stat-label">Critical</div></div>
+    <div class="stat-card stat-high"><div class="stat-num">4</div><div class="stat-label">High</div></div>
+    <div class="stat-card stat-medium"><div class="stat-num">7</div><div class="stat-label">Medium</div></div>
+    <div class="stat-card stat-total"><div class="stat-num">15</div><div class="stat-label">Total findings</div></div>
+  </div>
+
+  <!-- Screen-by-screen -->
+  <div class="section">
+    <h2>Screen-by-Screen Findings</h2>
+
+    <!-- S1 -->
+    <div class="screen-block">
+      <div class="screen-header">
+        <div class="screen-num">S1</div>
+        <div class="screen-title">Manage Subscription</div>
+        <div class="screen-url">/organizations/settings/manageSubscription</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-screenshot">
+          <img src="../S1-manage-subscription.png" alt="Manage Subscription page">
+        </div>
+        <div class="screen-findings">
+          <div class="finding finding-high">
+            <div class="finding-header">
+              <span class="severity-badge sev-high">High</span>
+              <span class="finding-title">Destructive action visually identical to routine links</span>
+            </div>
+            <p>"Cancel subscription" is a plain blue text link sitting between "Upgrade your plan" and "Get subscription invoices" — three links with wildly different consequences and zero visual differentiation.</p>
+            <div class="rec">Separate "Cancel subscription" into a distinct danger zone at the bottom of the page. Use red text or a bordered danger section.</div>
+          </div>
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">Ambiguous "Update plan" button</span>
+            </div>
+            <p>The "Update plan" ghost button sits below the transaction/user steppers with no clear context — does it change the plan tier, or save the add-on adjustments? It also visually competes with the filled "Purchase historical transactions" upsell button, inverting the hierarchy.</p>
+            <div class="rec">Rename to "Save changes" for add-on settings, and use a filled button style consistent with primary actions.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S2 -->
+    <div class="screen-block">
+      <div class="screen-header">
+        <div class="screen-num">S2</div>
+        <div class="screen-title">Confirmation Modal</div>
+        <div class="screen-url">inline modal overlay</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-screenshot">
+          <img src="../S2-cancel-confirmation-modal.png" alt="Confirmation modal">
+        </div>
+        <div class="screen-findings">
+          <div class="finding finding-critical">
+            <div class="finding-header">
+              <span class="severity-badge sev-critical">Critical</span>
+              <span class="finding-title">Inverted button hierarchy — textbook dark pattern</span>
+            </div>
+            <p>"I want to stay" is the primary filled blue button (left), while "Cancel subscription" is the secondary outlined button (right). In every standard modal pattern, the confirming action goes on the right and is primary. This inversion is applied across all three consecutive screens, making each step harder to complete than the last for a user who has explicitly stated intent to cancel.</p>
+            <div class="rec">Swap placement: "Keep subscription" (outlined, left) | "Cancel subscription" (primary or red, right).</div>
+          </div>
+          <div class="finding finding-high">
+            <div class="finding-header">
+              <span class="severity-badge sev-high">High</span>
+              <span class="finding-title">Zero information about consequences at decision point</span>
+            </div>
+            <p>"Are you sure you want to cancel subscription?" provides no information about when the cancellation takes effect, whether data will be deleted, or whether the billing stops immediately. This is the critical moment for informed consent — and it's blank.</p>
+            <div class="rec">Add one line: "Your plan stays active until MM/DD/YYYY. After that, data will be retained for 7 days."</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S3 -->
+    <div class="screen-block">
+      <div class="screen-header">
+        <div class="screen-num">S3</div>
+        <div class="screen-title">Loss Aversion Page — "What you are leaving behind"</div>
+        <div class="screen-url">/organizations/billing?action=UNSUBSCRIBE</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-screenshot">
+          <img src="../S3-loss-aversion.png" alt="Loss aversion page">
+        </div>
+        <div class="screen-findings">
+          <div class="finding finding-critical">
+            <div class="finding-header">
+              <span class="severity-badge sev-critical">Critical</span>
+              <span class="finding-title">Data deletion timeline contradiction — 7 days vs. 1+ year</span>
+            </div>
+            <p>This page says: <em>"In 7 days all your data will be permanently deleted from Synder."</em> But the final confirmation screen (S6) says: <em>"Your Synder account will remain accessible until 03.10.2027"</em> — over a year from now. These statements directly contradict each other. The small qualifier "Applies after your current subscription period ends" is easy to miss, and most users will read "In 7 days" as 7 days from right now.</p>
+            <div class="rec">Rewrite to: "After your subscription ends on Oct 3, 2027, your data will be retained for 7 more days and then permanently deleted."</div>
+          </div>
+          <div class="finding finding-high">
+            <div class="finding-header">
+              <span class="severity-badge sev-high">High</span>
+              <span class="finding-title">Condescending copy crosses the line</span>
+            </div>
+            <p>"You'll spend hours to find an alternative and adopt it" is not information — it's the product arguing with the user's decision. It's presumptuous, argumentative, and damages trust at a moment when the brand should be graceful.</p>
+            <div class="rec">Replace with a factual item: "Your custom settings, rules, and mappings will not transfer to another tool."</div>
+          </div>
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">Button hierarchy manipulated for 2nd consecutive screen</span>
+            </div>
+            <p>"Go back to Organization settings" is the large filled primary button. "I'm fine with this" (the actual continuation) is a small outlined secondary button far to the right. The user has now confirmed intent twice — continued friction is obstruction, not protection.</p>
+            <div class="rec">Make "Continue cancellation" the primary button; "Go back" can be a text link or smaller secondary.</div>
+          </div>
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">"I'm fine with this" is passive-aggressive</span>
+            </div>
+            <p>After showing scary loss items, making users affirm "I'm fine with this" is guilt-tripping. It forces the user to emotionally declare they don't care about their data, discounts, etc.</p>
+            <div class="rec">Change to neutral copy: "Continue cancellation" or "Proceed".</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S4 -->
+    <div class="screen-block">
+      <div class="screen-header">
+        <div class="screen-num">S4</div>
+        <div class="screen-title">Main Reason Survey — "We're sorry to see you leave!"</div>
+        <div class="screen-url">/organizations/billing?action=UNSUBSCRIBE</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-screenshot">
+          <img src="../S4-survey-main-reason.png" alt="Main reason survey">
+        </div>
+        <div class="screen-findings">
+          <div class="finding finding-high">
+            <div class="finding-header">
+              <span class="severity-badge sev-high">High</span>
+              <span class="finding-title">No retention offer — biggest missed opportunity in the flow</span>
+            </div>
+            <p>Every SaaS cancellation flow in this category uses the "Why are you leaving?" answer to trigger a contextual save offer. "Too expensive" → offer a discount or downgrade. "Missing features" → show the roadmap or route to support. "No longer need it" → offer a pause. Synder collects the data but does nothing with it.</p>
+            <div class="rec">After reason selection, show a contextual save card before proceeding: discount offer, plan downgrade, pause option, or support escalation.</div>
+          </div>
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">Selection state is nearly invisible</span>
+            </div>
+            <p>The only affordance for a selected reason is a blue border on the card. No fill, no checkmark, no radio dot. A user who quickly clicks and moves on may not notice their selection registered.</p>
+            <div class="rec">Add a light blue fill + a checkmark icon on the selected card.</div>
+          </div>
+          <div class="finding finding-low">
+            <div class="finding-header">
+              <span class="severity-badge sev-low">Low</span>
+              <span class="finding-title">Instructional text is redundant</span>
+            </div>
+            <p>"Click 'Next' to proceed with the cancellation" — users know how to use buttons. This text implies the reason is optional (you can click Next regardless), which contradicts the mandatory validation on S5.</p>
+            <div class="rec">Remove. If the reason is required, indicate it with a standard asterisk (*) or inline hint.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S5 -->
+    <div class="screen-block">
+      <div class="screen-header">
+        <div class="screen-num">S5</div>
+        <div class="screen-title">Sub-Reason Survey + Validation Error</div>
+        <div class="screen-url">/organizations/billing?action=UNSUBSCRIBE</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-screenshot">
+          <img src="../S5b-sub-reason-validation.png" alt="Sub-reason with validation error">
+        </div>
+        <div class="screen-findings">
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">No progress indicator in multi-step flow</span>
+            </div>
+            <p>Users have no idea they're in a multi-step survey. S4 says "Next," S5 suddenly says "Cancel subscription." There's no stepper, no "Step 2 of 2," no breadcrumb. Users can't gauge how long this will take.</p>
+            <div class="rec">Add a simple progress indicator: "Step 1 of 2" or a dot/line stepper at the top of the survey steps.</div>
+          </div>
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">Mandatory sub-reason with no skip option</span>
+            </div>
+            <p>The sub-reason is required (S5b shows validation error) but there's no "Prefer not to say" or "Skip" option. After already completing a mandatory main reason, forcing a granular mandatory sub-reason creates resentment and garbage data as users click anything to proceed.</p>
+            <div class="rec">Make sub-reason optional, or add "None of the above / Prefer not to say".</div>
+          </div>
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">No back navigation between survey steps</span>
+            </div>
+            <p>S5 has no way to return to S4. If a user picked the wrong reason, their only escape is "Back to Organization settings," which presumably abandons the entire cancellation flow.</p>
+            <div class="rec">Add a "← Back" text link to the previous survey step.</div>
+          </div>
+          <div class="finding finding-low">
+            <div class="finding-header">
+              <span class="severity-badge sev-low">Low</span>
+              <span class="finding-title">Validation error copy has a grammar issue</span>
+            </div>
+            <p>"Please, select an option" — the comma after "Please" is grammatically unusual in UI copy. Also uses color alone to indicate error (no ⚠ icon), which is an accessibility issue.</p>
+            <div class="rec">Change to: "Please select an option" and add a warning icon alongside the red text.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- S6 -->
+    <div class="screen-block">
+      <div class="screen-header">
+        <div class="screen-num">S6</div>
+        <div class="screen-title">Final Confirmation — "Subscription canceled"</div>
+        <div class="screen-url">/organizations/billing?action=UNSUBSCRIBE</div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-screenshot">
+          <img src="../S6-final.png" alt="Final confirmation">
+        </div>
+        <div class="screen-findings">
+          <div class="finding finding-high">
+            <div class="finding-header">
+              <span class="severity-badge sev-high">High</span>
+              <span class="finding-title">Dead end — no reactivation path, no CTA</span>
+            </div>
+            <p>The confirmation screen has zero buttons or links. If a user cancelled accidentally or changes their mind immediately, there's no "Resubscribe" option. No dashboard link. No next step at all. Dead end.</p>
+            <div class="rec">Add two CTAs: "Changed your mind? Resubscribe" (primary) and "Go to dashboard" (secondary).</div>
+          </div>
+          <div class="finding finding-high">
+            <div class="finding-header">
+              <span class="severity-badge sev-high">High</span>
+              <span class="finding-title">No data export prompt before erasure</span>
+            </div>
+            <p>The screen says all account data will be erased after the subscription period ends. For an accounting tool — where data has legal, tax, and audit implications — the user should be prompted to export their data before it's gone.</p>
+            <div class="rec">Add: "Before Oct 3, 2027, you can export all your data from the Reports section. [Export now →]"</div>
+          </div>
+          <div class="finding finding-medium">
+            <div class="finding-header">
+              <span class="severity-badge sev-medium">Medium</span>
+              <span class="finding-title">Ambiguous date format and unclear copy</span>
+            </div>
+            <p>"accessible until 03.10.2027" — DD.MM.YYYY format will read as March 10 for US users when it likely means October 3. Also: "We might contact you soon to gather more details" after a completed mandatory 2-step survey reads as a threat of more friction, not a reassurance. "After that date, all your account information will be erased" runs on without a line break.</p>
+            <div class="rec">Use unambiguous date format ("October 3, 2027"). Remove the "might contact you" line (or clarify why). Break the text into two sentences.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Copy Audit -->
+  <div class="section">
+    <h2>Copy Audit — Current vs. Suggested</h2>
+    <div style="background: var(--card); border-radius: 12px; border: 1px solid var(--border); overflow: hidden;">
+      <table class="copy-table">
+        <thead>
+          <tr>
+            <th>Screen</th>
+            <th>Current Copy</th>
+            <th>Issue</th>
+            <th>Suggested Copy</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>S2</td>
+            <td class="current-copy">"I want to stay"</td>
+            <td>Emotionally manipulative; forces the user to take an emotional stance</td>
+            <td class="suggested-copy">"Keep subscription"</td>
+          </tr>
+          <tr>
+            <td>S3</td>
+            <td class="current-copy">"In 7 days all your data will be permanently deleted"</td>
+            <td>Contradicts S6 which says account is accessible until Oct 2027. Misleading.</td>
+            <td class="suggested-copy">"After your plan ends (Oct 3, 2027), data is retained for 7 more days, then deleted."</td>
+          </tr>
+          <tr>
+            <td>S3</td>
+            <td class="current-copy">"You'll spend hours to find an alternative and adopt it"</td>
+            <td>Condescending; product is arguing with user's decision</td>
+            <td class="suggested-copy">"Your custom settings, rules, and mappings won't transfer to another tool."</td>
+          </tr>
+          <tr>
+            <td>S3</td>
+            <td class="current-copy">"I'm fine with this"</td>
+            <td>Passive-aggressive; forces emotional declaration</td>
+            <td class="suggested-copy">"Continue cancellation"</td>
+          </tr>
+          <tr>
+            <td>S4</td>
+            <td class="current-copy">"We're sorry to see you leave!"</td>
+            <td>Exclamation point reads as cheerful, not empathetic</td>
+            <td class="suggested-copy">"We're sorry to see you go."</td>
+          </tr>
+          <tr>
+            <td>S4</td>
+            <td class="current-copy">"Click 'Next' to proceed with the cancellation"</td>
+            <td>Redundant instructional text; implies reason is optional</td>
+            <td class="suggested-copy">Remove. Add asterisk (*) if required.</td>
+          </tr>
+          <tr>
+            <td>S5</td>
+            <td class="current-copy">"Please share one last detail"</td>
+            <td>Vague — doesn't contextualize the question</td>
+            <td class="suggested-copy">"You said it's too expensive — can you tell us more?"</td>
+          </tr>
+          <tr>
+            <td>S5</td>
+            <td class="current-copy">"Please, select an option"</td>
+            <td>Incorrect comma; color-only error (accessibility issue)</td>
+            <td class="suggested-copy">"⚠ Please select an option"</td>
+          </tr>
+          <tr>
+            <td>S6</td>
+            <td class="current-copy">"Subscription canceled"</td>
+            <td>Styled in red/orange — reads as error state, not success confirmation</td>
+            <td class="suggested-copy">Use neutral/dark color + ✓ icon</td>
+          </tr>
+          <tr>
+            <td>S6</td>
+            <td class="current-copy">"We might contact you soon to gather more details."</td>
+            <td>Implies more friction after completing a mandatory 2-step survey; vague</td>
+            <td class="suggested-copy">Remove, or: "Your cancellation has been processed."</td>
+          </tr>
+          <tr>
+            <td>S6</td>
+            <td class="current-copy">"accessible until 03.10.2027 After that date…"</td>
+            <td>Ambiguous date format (DD.MM vs MM.DD); run-on sentence</td>
+            <td class="suggested-copy">"Your account is accessible until October 3, 2027. After that, all data will be deleted."</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Systemic Issues -->
+  <div class="section">
+    <h2>Systemic Issues</h2>
+    <div class="systemic-grid">
+      <div class="systemic-card">
+        <h3><span class="severity-badge sev-critical">Critical</span> Roach Motel Pattern</h3>
+        <p>The flow applies inverted button hierarchy across 3 consecutive screens — S2, S3, and S5 all visually demote the cancellation action. After the user has confirmed intent twice, this ceases to be protection against accidental clicks and becomes deliberate obstruction. The FTC's 2024 "Click-to-Cancel" rule specifically prohibits making cancellation harder than subscription.</p>
+      </div>
+      <div class="systemic-card">
+        <h3><span class="severity-badge sev-high">High</span> Zero Retention Offers</h3>
+        <p>Every competitor (Stripe, HubSpot, Intercom, Mailchimp, Xero) uses churn survey answers to trigger contextual saves. "Too expensive" → discount/downgrade. "Missing features" → roadmap. "No longer need" → pause. Synder collects this data but does nothing with it — leaving money on the table at the most critical moment in the subscription lifecycle.</p>
+      </div>
+      <div class="systemic-card">
+        <h3><span class="severity-badge sev-high">High</span> No Progress Indicator in Multi-Step Flow</h3>
+        <p>The cancellation flow spans 6 distinct steps across multiple pages, but the user has zero indication of how far along they are. The step count is also hidden — the "Next" button on S4 becomes "Cancel subscription" on S5 with no transition context.</p>
+      </div>
+      <div class="systemic-card">
+        <h3><span class="severity-badge sev-high">High</span> No Exit Strategy on Confirmation Screen</h3>
+        <p>S6 is a dead end — no button to resubscribe, go to dashboard, or export data. For a product that handles users' accounting data (with tax and legal implications), leaving users with zero path forward after cancellation is both a UX and trust failure.</p>
+      </div>
+      <div class="systemic-card">
+        <h3><span class="severity-badge sev-medium">Medium</span> Destructive Button Always Styled Secondary</h3>
+        <p>Throughout the flow, "Cancel subscription" is always rendered as a ghost/outlined button (never filled, never red). While making destructive actions visually secondary is appropriate for preventing accidental first clicks, applying it across 3+ confirmation screens after repeated intent — and against industry-standard red/filled conventions — is a systematic style mismatch.</p>
+      </div>
+      <div class="systemic-card">
+        <h3><span class="severity-badge sev-medium">Medium</span> Emotional Manipulation via Emoji</h3>
+        <p>The flow uses a 🤔 emoji on S3 and 😢 on S6 to elicit guilt. Synder is a B2B accounting tool used by bookkeepers and business owners. The tone is wildly mismatched — and at the moment of cancellation specifically, emotional manipulation erodes trust instead of building goodwill.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Wins -->
+  <div class="section">
+    <h2>Priority Fixes</h2>
+    <div style="background: var(--card); border-radius: 12px; border: 1px solid var(--border); padding: 24px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div>
+          <h3 style="font-size: 14px; font-weight: 700; color: var(--red); margin-bottom: 12px;">🔴 Immediate (Critical/High)</h3>
+          <ol style="padding-left: 18px; font-size: 14px; line-height: 2;">
+            <li>Fix data deletion copy on S3 — contradicts S6, alarms users</li>
+            <li>Add reactivation CTA and data export prompt to S6</li>
+            <li>Insert contextual retention offer after S4 survey</li>
+            <li>Add consequences summary to S2 modal</li>
+            <li>Separate "Cancel subscription" visually on S1</li>
+          </ol>
+        </div>
+        <div>
+          <h3 style="font-size: 14px; font-weight: 700; color: var(--orange); margin-bottom: 12px;">🟠 Next Sprint (Medium)</h3>
+          <ol style="padding-left: 18px; font-size: 14px; line-height: 2;">
+            <li>Normalize button hierarchy across S2, S3, S5</li>
+            <li>Add progress stepper to the survey steps</li>
+            <li>Add back navigation between S4 and S5</li>
+            <li>Make sub-reason optional or add "Prefer not to say"</li>
+            <li>Rewrite S3 copy — remove "I'm fine with this" and aggressive cards</li>
+            <li>Fix date format and run-on sentence on S6</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="text-align: center; padding: 24px 0; font-size: 13px; color: var(--text-light);">
+    Dasha · Synder UX Audit · March 30, 2026 · <a href="../index.html" style="color: var(--blue);">← Back to UX Tools</a>
+  </div>
+
+</div>
+</body>
+</html>

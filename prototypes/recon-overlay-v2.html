@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Variant A: Full-Screen Overlay — Reconciliation v2</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; overflow: hidden; height: 100vh; }
+
+  /* ===== Sidebar ===== */
+  .sidebar {
+    position: fixed; left: 0; top: 0; bottom: 0; width: 240px;
+    background: #fff; border-right: 1px solid #e8ecf0; z-index: 10;
+    display: flex; flex-direction: column; padding: 16px 0; overflow-y: auto;
+  }
+  .sidebar-brand { display: flex; align-items: center; gap: 10px; padding: 4px 16px 20px; border-bottom: 1px solid #e8ecf0; margin-bottom: 12px; }
+  .sidebar-brand .avatar { width: 36px; height: 36px; border-radius: 50%; background: #4361ee; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; }
+  .sidebar-brand .name { font-size: 14px; font-weight: 500; color: #333; }
+  .nav-section { padding: 4px 0; }
+  .nav-section-title { font-size: 11px; font-weight: 600; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 20px 4px; }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 20px; font-size: 13.5px; color: #555; cursor: pointer; transition: all 0.15s; position: relative; }
+  .nav-item:hover { background: #f0f4ff; color: #4361ee; }
+  .nav-item.active { background: #eef2ff; color: #4361ee; font-weight: 600; }
+  .nav-item.active::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: #4361ee; border-radius: 0 3px 3px 0; }
+  .nav-icon { width: 18px; text-align: center; font-size: 15px; }
+  .beta-badge { font-size: 10px; background: #eef2ff; color: #4361ee; padding: 1px 6px; border-radius: 4px; border: 1px solid #c7d2fe; font-weight: 500; }
+
+  /* ===== Main ===== */
+  .main { margin-left: 240px; height: 100vh; display: flex; flex-direction: column; }
+  .topbar { height: 52px; min-height: 52px; background: #fff; border-bottom: 1px solid #e8ecf0; display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; gap: 16px; }
+  .topbar-balance { font-size: 13px; color: #666; }
+  .topbar-balance span { color: #4361ee; font-weight: 600; }
+  .topbar-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: #4361ee; cursor: pointer; font-size: 16px; }
+  .topbar-icon:hover { background: #f0f4ff; }
+
+  .page-scroll { flex: 1; overflow-y: auto; padding: 32px; }
+  .page-scroll h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .page-scroll .subtitle { font-size: 14px; color: #777; margin-bottom: 24px; }
+
+  /* ===== Balance Empty State ===== */
+  .balance-empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100vh - 120px); text-align: center; }
+  .balance-empty-illustration { margin-bottom: 24px; }
+  .balance-empty-heading { font-size: 24px; font-weight: 600; color: #111827; margin-bottom: 12px; }
+  .balance-empty-desc { font-size: 14px; color: #6b7280; line-height: 1.6; max-width: 380px; margin-bottom: 32px; }
+  .balance-empty-form { display: flex; flex-direction: column; align-items: center; width: 380px; }
+  .balance-empty-label { font-size: 14px; font-weight: 500; color: #374151; align-self: flex-start; margin-bottom: 6px; }
+  .balance-empty-select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; cursor: pointer; }
+
+  /* ===== Account selector ===== */
+  .account-row { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px; }
+  .account-selector { display: flex; flex-direction: column; gap: 6px; min-width: 300px; }
+  .account-selector label { font-size: 13px; font-weight: 600; }
+  .account-selector select { padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: #fff; cursor: pointer; }
+  .how-link { font-size: 13px; color: #4361ee; text-decoration: underline dashed; text-underline-offset: 3px; cursor: pointer; padding-bottom: 10px; }
+
+  /* ===== Tabs ===== */
+  .tabs { display: flex; gap: 0; border-bottom: 2px solid #e5e7eb; margin-bottom: 24px; }
+  .tab { padding: 10px 20px; font-size: 14px; font-weight: 500; color: #888; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.15s; }
+  .tab:hover { color: #4361ee; }
+  .tab.active { color: #4361ee; border-bottom-color: #4361ee; font-weight: 600; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* ===== Balance Recon Form ===== */
+  .recon-form { max-width: 700px; }
+  .form-row { display: flex; gap: 24px; margin-bottom: 20px; }
+  .form-field { flex: 1; display: flex; flex-direction: column; gap: 6px; }
+  .form-field label { font-size: 12px; font-weight: 600; color: #555; display: flex; align-items: center; gap: 4px; }
+  .form-field label .req { color: #ef4444; }
+  .form-field label .info { width: 14px; height: 14px; border-radius: 50%; background: #e5e7eb; color: #888; font-size: 9px; display: inline-flex; align-items: center; justify-content: center; cursor: help; }
+  .form-field input, .form-field select { padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; background: #fff; }
+  .form-field input:focus, .form-field select:focus { outline: none; border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,0.1); }
+
+  .collapsible { border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 20px; }
+  .collapsible-header { padding: 12px 16px; font-size: 13px; font-weight: 500; color: #555; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+  .collapsible-header:hover { background: #f9fafb; }
+
+  .btn { padding: 10px 20px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; }
+  .btn-primary { background: #4361ee; color: #fff; border-color: #4361ee; }
+  .btn-primary:hover { background: #3651d4; }
+  .btn-outline { border-color: #d1d5db; background: #fff; color: #333; }
+  .btn-outline:hover { border-color: #4361ee; color: #4361ee; }
+  .btn-sm { padding: 6px 14px; font-size: 13px; }
+
+  /* ===== History table ===== */
+  .history-filters { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; align-items: flex-end; }
+  .filter-group { display: flex; flex-direction: column; gap: 4px; }
+  .filter-group label { font-size: 11px; font-weight: 500; color: #888; }
+  .filter-group input, .filter-group select { padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; min-width: 120px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { text-align: left; padding: 10px 12px; font-weight: 600; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.3px; border-bottom: 2px solid #e5e7eb; background: #fafbfc; }
+  tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.1s; }
+  tbody tr:hover { background: #f8faff; }
+  tbody td { padding: 10px 12px; vertical-align: middle; }
+  .table-footer { display: flex; justify-content: flex-end; align-items: center; padding: 12px 0; font-size: 12px; color: #888; }
+
+  .txn-id { color: #4361ee; font-size: 12px; font-family: monospace; }
+  .type-badge { font-size: 11px; padding: 2px 8px; border-radius: 4px; font-weight: 500; display: inline-block; }
+  .type-payment { background: #dcfce7; color: #166534; }
+  .type-expense { background: #fee2e2; color: #991b1b; }
+  .type-adjustment { background: #e0e7ff; color: #3730a3; }
+  .type-sale { background: #dbeafe; color: #1e40af; }
+  .amount { font-family: 'SF Mono', 'Monaco', monospace; font-size: 13px; text-align: right; }
+  .amount.debit { color: #1a1a2e; }
+  .amount.credit { color: #dc2626; }
+  input[type="checkbox"] { width: 16px; height: 16px; accent-color: #4361ee; cursor: pointer; }
+
+  .status-badge { font-size: 11px; padding: 2px 10px; border-radius: 12px; font-weight: 500; }
+  .status-completed { background: #dcfce7; color: #166534; }
+  .status-in-progress { background: #fef3c7; color: #92400e; }
+  .status-draft { background: #f3f4f6; color: #6b7280; }
+
+  .empty-table { text-align: center; padding: 48px 20px; color: #888; }
+  .empty-table p { margin-bottom: 16px; font-size: 14px; }
+
+  /* ===== FULL-SCREEN OVERLAY ===== */
+  .overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #fff; z-index: 100; display: none; flex-direction: column; animation: overlayIn 0.3s ease-out; }
+  .overlay.visible { display: flex; }
+  @keyframes overlayIn { from { transform: scale(0.98); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  .overlay-header { height: 56px; min-height: 56px; border-bottom: 1px solid #e8ecf0; display: flex; align-items: center; padding: 0 24px; gap: 16px; background: #fff; }
+  .overlay-close { width: 36px; height: 36px; border: none; background: none; cursor: pointer; font-size: 22px; color: #666; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+  .overlay-close:hover { background: #f3f4f6; }
+  .overlay-title { font-size: 16px; font-weight: 600; flex: 1; }
+  .overlay-actions { display: flex; gap: 8px; }
+
+  .overlay-content { flex: 1; overflow-y: auto; padding: 24px 48px; }
+  .overlay-content h2 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+  .overlay-content .meta { font-size: 13px; color: #888; margin-bottom: 24px; }
+
+  /* ===== Summary Cards (Balance working view) ===== */
+  .summary-banner { display: flex; gap: 12px; margin-bottom: 24px; align-items: stretch; flex-wrap: wrap; background: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px 20px; }
+  .summary-card { min-width: 140px; }
+  .summary-card .card-label { font-size: 11px; color: #92400e; font-weight: 500; margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+  .summary-card .card-value { font-size: 20px; font-weight: 700; color: #1a1a2e; }
+  .formula-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .formula-card { text-align: center; }
+  .formula-card .card-label { font-size: 10px; color: #888; font-weight: 500; margin-bottom: 2px; }
+  .formula-card .card-value { font-size: 16px; font-weight: 600; }
+  .formula-op { font-size: 18px; color: #bbb; font-weight: 300; }
+  .difference-section { margin-left: auto; text-align: center; padding-left: 20px; border-left: 2px solid #fde68a; }
+  .difference-section .card-label { font-size: 10px; color: #ea580c; font-weight: 600; margin-bottom: 2px; display: flex; align-items: center; gap: 4px; }
+  .difference-section .card-value { font-size: 22px; font-weight: 700; color: #ea580c; }
+
+  /* ===== Investigate CTA ===== */
+  .investigate-cta { margin-top: 4px; margin-bottom: 24px; padding: 12px 16px; background: linear-gradient(135deg, #eef2ff 0%, #fef3c7 100%); border: 1px solid #c7d2fe; border-radius: 10px; display: flex; align-items: center; gap: 12px; cursor: pointer; transition: all 0.2s; }
+  .investigate-cta:hover { border-color: #4361ee; box-shadow: 0 2px 8px rgba(67, 97, 238, 0.15); transform: translateY(-1px); }
+  .investigate-cta .cta-icon { width: 36px; height: 36px; background: #4361ee; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; flex-shrink: 0; }
+  .investigate-cta .cta-text { flex: 1; }
+  .investigate-cta .cta-title { font-size: 13px; font-weight: 600; color: #1e3a5f; }
+  .investigate-cta .cta-desc { font-size: 11.5px; color: #6b7280; margin-top: 1px; }
+  .investigate-cta .cta-arrow { font-size: 18px; color: #4361ee; }
+  .pulse-ring { animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(67, 97, 238, 0.2); } 50% { box-shadow: 0 0 0 6px rgba(67, 97, 238, 0); } }
+
+  /* ===== Context Bar ===== */
+  .context-bar { height: 44px; min-height: 44px; background: #fef3c7; border-bottom: 1px solid #fcd34d; display: flex; align-items: center; padding: 0 24px; gap: 16px; font-size: 13px; color: #92400e; }
+  .context-bar .back-link { color: #4361ee; font-weight: 600; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .context-bar .back-link:hover { text-decoration: underline; }
+  .context-bar .separator { color: #d4a017; margin: 0 4px; }
+  .context-bar .context-item { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .context-bar .context-item .label { color: #b45309; font-weight: 500; }
+  .context-bar .difference-badge { background: #fee2e2; color: #dc2626; padding: 2px 10px; border-radius: 12px; font-weight: 600; font-size: 12px; }
+  .context-bar .auto-saved { margin-left: auto; font-size: 11px; color: #a3a3a3; font-style: italic; display: flex; align-items: center; gap: 4px; }
+  .context-bar .auto-saved .check { color: #22c55e; }
+
+  /* ===== Txn Recon setup form ===== */
+  .txn-recon-setup { max-width: 800px; margin: 0 auto; }
+  .setup-columns { display: grid; grid-template-columns: 1fr 1px 1fr; gap: 32px; margin-top: 24px; }
+  .setup-divider { background: #e5e7eb; }
+  .setup-column h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #333; }
+  .date-range-row { display: flex; gap: 12px; align-items: center; }
+  .date-range-row .dash { color: #aaa; }
+  .date-range-row input { flex: 1; }
+  .prefilled { background: #f0fdf4 !important; border-color: #86efac !important; }
+  .prefilled-hint { font-size: 11px; color: #16a34a; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
+
+  /* ===== Txn Recon Empty State ===== */
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; text-align: center; }
+  .empty-state .illustration { width: 140px; height: 140px; background: #f3f4f6; border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 56px; margin-bottom: 24px; }
+  .empty-state h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; }
+  .empty-state p { font-size: 14px; color: #777; max-width: 420px; line-height: 1.5; margin-bottom: 20px; }
+  .faq-item { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin-top: 8px; width: 100%; max-width: 420px; text-align: left; font-size: 13px; color: #555; cursor: pointer; display: flex; justify-content: space-between; }
+  .faq-item:hover { background: #f9fafb; }
+
+  /* ===== Txn Recon Table view ===== */
+  .recon-list-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .recon-list-header h2 { font-size: 18px; font-weight: 600; }
+
+  /* ===== Toast ===== */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a2e; color: #fff; padding: 12px 20px; border-radius: 10px; font-size: 13px; z-index: 200; display: none; align-items: center; gap: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.15); }
+  .toast.visible { display: flex; }
+
+  /* ===== Variant label ===== */
+  .variant-label { position: fixed; top: 12px; right: 12px; z-index: 300; background: #4361ee; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; box-shadow: 0 2px 8px rgba(67,97,238,0.3); }
+
+  .info-tip { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: #e5e7eb; color: #888; font-size: 9px; font-weight: 700; cursor: help; position: relative; }
+  .info-tip .tooltip { display: none; position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: #1a1a2e; color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 400; width: 260px; line-height: 1.5; z-index: 200; box-shadow: 0 4px 16px rgba(0,0,0,0.2); }
+  .info-tip .tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 6px solid transparent; border-top-color: #1a1a2e; }
+  .info-tip:hover .tooltip { display: block; }
+  .tooltip-link { color: #93c5fd; text-decoration: underline; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<div class="variant-label">Variant A: Full-Screen Overlay (v2)</div>
+
+<!-- ===== SIDEBAR ===== -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-brand"><div class="avatar">DA</div><div class="name">Dasha Test Company</div></div>
+  <div class="nav-section">
+    <div class="nav-item"><span class="nav-icon">🔄</span> Mapping</div>
+    <div class="nav-item"><span class="nav-icon">📋</span> Summaries</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-section-title">Reconciliation</div>
+    <div class="nav-item active" id="nav-balance" onclick="showBalancePage()"><span class="nav-icon">⚖️</span> Balance reconciliation <span class="beta-badge">Beta</span></div>
+    <div class="nav-item" id="nav-txn" onclick="showTxnPage()"><span class="nav-icon">🔍</span> Transaction reconciliation <span class="beta-badge">Beta</span></div>
+    <div class="nav-item"><span class="nav-icon">📝</span> Manual Journals</div>
+    <div class="nav-item"><span class="nav-icon">📊</span> Chart of accounts</div>
+  </div>
+  <div class="nav-section">
+    <div class="nav-item"><span class="nav-icon">📦</span> Products and services</div>
+    <div class="nav-item"><span class="nav-icon">✨</span> AI reports</div>
+    <div class="nav-item"><span class="nav-icon">📈</span> Reporting</div>
+  </div>
+  <div class="nav-section" style="margin-top: auto; border-top: 1px solid #e8ecf0; padding-top: 8px;">
+    <div class="nav-item"><span class="nav-icon">⚙️</span> Settings</div>
+    <div class="nav-item"><span class="nav-icon">📰</span> Release notes</div>
+  </div>
+</div>
+
+<!-- ===== MAIN ===== -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-balance">Balance: <span>1000</span></div>
+    <div class="topbar-icon">🔔</div>
+    <div class="topbar-icon">❓</div>
+    <div class="topbar-icon">👤</div>
+  </div>
+
+  <!-- ===== BALANCE RECONCILIATION PAGE ===== -->
+  <div class="page-scroll" id="page-balance">
+
+    <!-- Empty state (before account selection) -->
+    <div class="balance-empty-state" id="balance-empty-state">
+      <div class="balance-empty-illustration">
+        <svg width="140" height="120" viewBox="0 0 140 120" fill="none">
+          <!-- Back document -->
+          <rect x="15" y="10" width="80" height="95" rx="6" fill="#F3F4F6" stroke="#D1D5DB" stroke-width="1.5" transform="rotate(-4 15 10)"/>
+          <line x1="30" y1="35" x2="75" y2="33" stroke="#D0D5DD" stroke-width="2" stroke-linecap="round"/>
+          <line x1="31" y1="48" x2="70" y2="46" stroke="#D0D5DD" stroke-width="2" stroke-linecap="round"/>
+          <line x1="32" y1="61" x2="65" y2="59" stroke="#D0D5DD" stroke-width="2" stroke-linecap="round"/>
+          <!-- Front document -->
+          <rect x="40" y="15" width="80" height="95" rx="6" fill="#FFFFFF" stroke="#D1D5DB" stroke-width="1.5"/>
+          <line x1="55" y1="40" x2="105" y2="40" stroke="#E5E7EB" stroke-width="2" stroke-linecap="round"/>
+          <line x1="55" y1="53" x2="100" y2="53" stroke="#E5E7EB" stroke-width="2" stroke-linecap="round"/>
+          <line x1="55" y1="66" x2="95" y2="66" stroke="#E5E7EB" stroke-width="2" stroke-linecap="round"/>
+          <rect x="55" y="78" width="35" height="16" rx="3" fill="#F3F4F6" stroke="#E5E7EB"/>
+          <!-- Checkmark badge -->
+          <circle cx="108" cy="95" r="16" fill="#EEF2FF" stroke="#C7D2FE" stroke-width="1"/>
+          <path d="M100 95 L106 101 L117 89" stroke="#4361ee" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </div>
+      <h2 class="balance-empty-heading">Verify imported data</h2>
+      <p class="balance-empty-desc">Verify your data in Synder before posting summaries to your books by reviewing the numbers from your integrations.</p>
+      <div class="balance-empty-form">
+        <label class="balance-empty-label">Account to reconcile <span class="req">*</span></label>
+        <select id="account-select" class="balance-empty-select" onchange="onAccountChange()">
+          <option value="">Select...</option>
+          <optgroup label="Clearing">
+            <option value="shopify">Shopify Changolivia</option>
+            <option value="stripe">Stripe mzkt.by</option>
+          </optgroup>
+          <optgroup label="Assets">
+            <option value="checking">Checking</option>
+          </optgroup>
+        </select>
+        <button class="btn btn-primary" style="margin-top: 16px;" id="empty-start-btn" disabled>Start reconciliation</button>
+      </div>
+    </div>
+
+    <!-- After account selection: top-aligned account selector + form -->
+    <div id="balance-selected-state" style="display:none">
+      <h1>Reconciliation</h1>
+      <p class="subtitle">Reconcile Synder data with your original financial sources for full transparency and reliability.</p>
+
+      <div class="account-row">
+        <div class="account-selector">
+          <label>Account</label>
+          <select id="account-select-top" onchange="onAccountChangeTop()">
+            <option value="">Select...</option>
+            <optgroup label="Clearing">
+              <option value="shopify">Shopify Changolivia</option>
+              <option value="stripe">Stripe mzkt.by</option>
+            </optgroup>
+            <optgroup label="Assets">
+              <option value="checking">Checking</option>
+            </optgroup>
+          </select>
+        </div>
+        <a class="how-link" id="how-link">How to reconcile</a>
+      </div>
+
+    <!-- Tabs -->
+    <div id="balance-tabs-section">
+      <div class="tabs">
+        <div class="tab active" id="tab-recon" onclick="switchBalanceTab('recon')">Reconciliation</div>
+        <div class="tab" id="tab-history" onclick="switchBalanceTab('history')">Reconciliation history</div>
+      </div>
+
+      <!-- Reconciliation Tab: NEW account (no prior recon) -->
+      <div class="tab-content" id="tab-content-recon-new">
+        <div class="recon-form">
+          <div class="form-row">
+            <div class="form-field">
+              <label>Beginning date <span class="info">i</span> <span class="req">*</span></label>
+              <input type="text" placeholder="MM/DD/YYYY" value="">
+            </div>
+            <div class="form-field">
+              <label>Beginning balance (USD) <span class="info">i</span> <span class="req">*</span></label>
+              <input type="text" placeholder="0.00" value="">
+            </div>
+          </div>
+
+          <div class="collapsible">
+            <div class="collapsible-header">Beginning balance calculation <span>▾</span></div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label>Reconcile using <span class="info">i</span></label>
+              <select><option>Ending balance</option><option>Ending date</option></select>
+            </div>
+            <div class="form-field">
+              <label>Ending balance (USD) <span class="info">i</span> <span class="req">*</span></label>
+              <input type="text" placeholder="0.00" value="">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field" style="max-width: 320px;">
+              <label>Ending date <span class="req">*</span></label>
+              <input type="text" placeholder="MM/DD/YYYY" value="">
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="openBalanceWorkingOverlay()">Start reconciliation</button>
+        </div>
+      </div>
+
+      <!-- Reconciliation Tab: EXISTING recon (resume) -->
+      <div class="tab-content" id="tab-content-recon-resume">
+        <div class="recon-form">
+          <div class="form-row" style="align-items: flex-end;">
+            <div class="form-field">
+              <label>Beginning balance (USD) <span class="info">i</span> <span class="req">*</span></label>
+              <input type="text" value="-151.27" disabled style="background:#f9fafb;color:#666">
+            </div>
+            <a class="how-link" style="padding-bottom: 11px;">How to change beginning balance</a>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field">
+              <label>Reconcile using <span class="info">i</span></label>
+              <select><option>Ending balance</option><option>Ending date</option></select>
+            </div>
+            <div class="form-field">
+              <label>Ending balance (USD) <span class="info">i</span> <span class="req">*</span></label>
+              <input type="text" placeholder="0.00" value="500">
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-field" style="max-width: 320px;">
+              <label>Ending date <span class="req">*</span></label>
+              <input type="text" placeholder="MM/DD/YYYY" value="03/10/2026">
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="openBalanceWorkingOverlay()">Resume reconciliation</button>
+        </div>
+      </div>
+
+      <!-- History Tab -->
+      <div class="tab-content" id="tab-content-history">
+        <h3 style="font-size: 15px; font-weight: 600; margin-bottom: 16px;">All finished reconciliations</h3>
+        <div class="history-filters">
+          <div class="filter-group"><label>Search</label><input type="text" placeholder="Search by name or balance"></div>
+          <div class="filter-group"><label>Ending date</label><input type="text" placeholder="From"> <input type="text" placeholder="To" style="margin-top:4px"></div>
+          <div class="filter-group"><label>Status</label><select><option>All</option></select></div>
+          <button class="btn btn-primary btn-sm">Apply</button>
+          <button class="btn btn-outline btn-sm">Reset filters</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Ending date</th><th>Reconciled by</th><th>Reconciliation date</th>
+              <th style="text-align:right">Beginning balance (USD)</th><th style="text-align:right">Ending balance (USD)</th>
+              <th style="text-align:right">Difference (USD)</th><th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="empty-table"><td colspan="7">
+              <p>No reconciliations yet</p>
+              <button class="btn btn-primary btn-sm" onclick="switchBalanceTab('recon')">Start reconciliation</button>
+            </td></tr>
+          </tbody>
+        </table>
+        <div class="table-footer">Rows per page: 25 &nbsp; | &nbsp; 0–0 of 0</div>
+      </div>
+    </div>
+    </div><!-- end balance-selected-state -->
+  </div>
+
+  <!-- ===== TRANSACTION RECONCILIATION PAGE ===== -->
+  <div class="page-scroll" id="page-txn" style="display:none">
+    <h1>Transaction Reconciliation</h1>
+    <p class="subtitle">Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+
+    <!-- Table view (default when reconciliations exist) -->
+    <div id="txn-table-view">
+      <div class="recon-list-header">
+        <h2>All reconciliations</h2>
+        <button class="btn btn-primary btn-sm" onclick="openTxnCreateOverlay(false)">+ Add reconciliation</button>
+      </div>
+      <div class="history-filters">
+        <div class="filter-group"><label>Search</label><input type="text" placeholder="Search..."></div>
+        <div class="filter-group"><label>Status</label><select><option>All</option><option>Matched</option><option>In progress</option></select></div>
+        <button class="btn btn-primary btn-sm">Apply</button>
+        <button class="btn btn-outline btn-sm">Reset filters</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Date range</th><th>Integration</th><th>Platform</th>
+            <th>Automation</th><th>Created</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Jan 1 – Mar 1, 2026</td><td>Stripe mzkt.by</td><td>Synder</td>
+            <td>Manual</td><td>Mar 8, 2026</td>
+            <td><span class="status-badge status-in-progress">In progress</span></td>
+            <td><a style="color:#4361ee;cursor:pointer;font-size:12px;">Continue →</a></td>
+          </tr>
+          <tr>
+            <td>Dec 1 – Dec 31, 2025</td><td>Shopify Changolivia</td><td>Synder</td>
+            <td>Auto-match</td><td>Feb 15, 2026</td>
+            <td><span class="status-badge status-completed">Completed</span></td>
+            <td><a style="color:#4361ee;cursor:pointer;font-size:12px;">View →</a></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="table-footer">Rows per page: 25 &nbsp; | &nbsp; 1–2 of 2</div>
+    </div>
+
+    <!-- Empty state (shown when no reconciliations) -->
+    <div id="txn-empty-view" style="display:none">
+      <div class="empty-state">
+        <div class="illustration">🏦</div>
+        <h2>Reconcile transactions with ease</h2>
+        <p>Compare data from your integrations and accounting to spot discrepancies and keep your books accurate.</p>
+        <button class="btn btn-primary" onclick="openTxnCreateOverlay(false)">Start reconciling</button>
+        <div class="faq-item">How does reconciliation work? <span>▾</span></div>
+        <div class="faq-item">What files can I upload? <span>▾</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== BALANCE WORKING OVERLAY (full-screen) ===== -->
+<div class="overlay" id="balance-working-overlay">
+  <div class="overlay-header">
+    <button class="overlay-close" onclick="closeBalanceWorking()">✕</button>
+    <div class="overlay-title">Reconciliation</div>
+    <div class="overlay-actions">
+      <button class="btn btn-outline btn-sm">Edit details</button>
+      <button class="btn btn-outline btn-sm">Save for later ▾</button>
+    </div>
+  </div>
+  <div class="overlay-content">
+    <h2>Reconciliation</h2>
+    <p class="meta">Statement ending date: Mar 10, 2026 / Stripe mzkt.by</p>
+
+    <!-- Summary Banner -->
+    <div class="summary-banner">
+      <div class="summary-card">
+        <div class="card-label">Statement ending balance</div>
+        <div class="card-value">$500.00</div>
+      </div>
+      <div class="summary-card">
+        <div class="card-label">Selected transactions balance <span class="info-tip">i</span></div>
+        <div class="card-value">−$151.27</div>
+      </div>
+      <div class="formula-row">
+        <span class="formula-op">(</span>
+        <div class="formula-card"><div class="card-label">Beginning balance</div><div class="card-value">−$151.27</div></div>
+        <span class="formula-op">+</span>
+        <div class="formula-card"><div class="card-label">Debits (0)</div><div class="card-value">$0.00</div></div>
+        <span class="formula-op">—</span>
+        <div class="formula-card"><div class="card-label">Credits (0)</div><div class="card-value">$0.00</div></div>
+        <span class="formula-op">)</span>
+      </div>
+      <div class="difference-section">
+        <div class="card-label">Difference
+          <span class="info-tip">i
+            <span class="tooltip">This difference means your Synder records don't match your statement. To find which specific transactions cause this, <span class="tooltip-link" onclick="openTxnFromBalance()">use Transaction Reconciliation</span>.</span>
+          </span>
+        </div>
+        <div class="card-value">$651.27</div>
+      </div>
+    </div>
+
+    <!-- THE KEY CTA -->
+    <div class="investigate-cta pulse-ring" onclick="openTxnFromBalance()">
+      <div class="cta-icon">🔍</div>
+      <div class="cta-text">
+        <div class="cta-title">Investigate mismatches in Transaction Reconciliation</div>
+        <div class="cta-desc">Compare individual transactions against Stripe to find the $651.27 discrepancy</div>
+      </div>
+      <div class="cta-arrow">→</div>
+    </div>
+
+    <!-- Filters -->
+    <div class="history-filters">
+      <div class="filter-group"><label>Search</label><input type="text" placeholder="Search by transaction ID, contact, memo, amount"></div>
+      <div class="filter-group"><label>Date range <span class="info-tip">i</span></label><input type="text" placeholder="From"> <input type="text" placeholder="To" style="margin-top:4px"></div>
+      <div class="filter-group"><label>Type</label><select><option>All</option></select></div>
+      <div class="filter-group"><label>Selected status</label><select><option>All</option></select></div>
+      <button class="btn btn-primary btn-sm" style="align-self:flex-end">Apply</button>
+      <button class="btn btn-outline btn-sm" style="align-self:flex-end">Reset filters</button>
+    </div>
+
+    <!-- Transaction Table -->
+    <table style="margin-top: 16px;">
+      <thead>
+        <tr>
+          <th style="width:36px"><input type="checkbox"></th>
+          <th>Date ↓</th><th>Transaction ID</th><th>Type</th><th>Contact</th><th>Memo</th>
+          <th style="text-align:right">Debit (USD)</th><th style="text-align:right">Credit (USD)</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><input type="checkbox"></td><td>Mar 6, 2026</td><td><span class="txn-id">ch_3T84Z1...ZuKC</span></td><td><span class="type-badge type-payment">PAYMENT</span></td><td>Pamela Andersen</td><td>Payment for Invoice</td><td class="amount debit">$20.85</td><td class="amount credit">$0.00</td></tr>
+        <tr><td><input type="checkbox"></td><td>Mar 6, 2026</td><td><span class="txn-id">ch_3T84Z1...ZuKC</span></td><td><span class="type-badge type-expense">EXPENSE</span></td><td>Stripe</td><td>Stripe processing fee</td><td class="amount debit">$0.00</td><td class="amount credit">$1.01</td></tr>
+        <tr><td><input type="checkbox"></td><td>Mar 6, 2026</td><td><span class="txn-id">ch_3T84YM...v2Y8</span></td><td><span class="type-badge type-payment">PAYMENT</span></td><td>Pamela Andersen</td><td>Subscription creation</td><td class="amount debit">$30.00</td><td class="amount credit">$0.00</td></tr>
+        <tr><td><input type="checkbox"></td><td>Mar 6, 2026</td><td><span class="txn-id">ch_3T84YM...v2Y8</span></td><td><span class="type-badge type-expense">EXPENSE</span></td><td>Stripe</td><td>Stripe processing fee</td><td class="amount debit">$0.00</td><td class="amount credit">$1.32</td></tr>
+        <tr><td><input type="checkbox"></td><td>Feb 2, 2026</td><td><span class="txn-id">po_1SwAv7...3rb</span></td><td><span class="type-badge type-adjustment">ADJUSTMENT</span></td><td>—</td><td>STRIPE PAYOUT</td><td class="amount debit">$0.00</td><td class="amount credit">$21.61</td></tr>
+        <tr><td><input type="checkbox"></td><td>Jan 30, 2026</td><td><span class="txn-id">po_1Sv5SE...txg</span></td><td><span class="type-badge type-adjustment">ADJUSTMENT</span></td><td>—</td><td>STRIPE PAYOUT</td><td class="amount debit">$0.00</td><td class="amount credit">$21.61</td></tr>
+        <tr><td><input type="checkbox"></td><td>Jan 29, 2026</td><td><span class="txn-id">po_1Suj0D...9xH</span></td><td><span class="type-badge type-adjustment">ADJUSTMENT</span></td><td>—</td><td>STRIPE PAYOUT</td><td class="amount debit">$0.00</td><td class="amount credit">$21.61</td></tr>
+        <tr><td><input type="checkbox"></td><td>Jan 28, 2026</td><td><span class="txn-id">po_1SuMhH...Fce</span></td><td><span class="type-badge type-adjustment">ADJUSTMENT</span></td><td>—</td><td>STRIPE PAYOUT</td><td class="amount debit">$0.00</td><td class="amount credit">$21.61</td></tr>
+      </tbody>
+    </table>
+    <div class="table-footer">Rows per page: 25 &nbsp; | &nbsp; 1–8 of 32</div>
+  </div>
+</div>
+
+<!-- ===== TXN RECON CREATE OVERLAY (full-screen) ===== -->
+<div class="overlay" id="txn-create-overlay">
+  <div class="context-bar" id="txn-context-bar" style="display:none">
+    <a class="back-link" onclick="backToBalanceWorking()">← Back to Balance Reconciliation</a>
+    <span class="separator">|</span>
+    <span class="context-item"><span class="label">Integration:</span> Stripe mzkt.by</span>
+    <span class="separator">|</span>
+    <span class="context-item"><span class="label">Period:</span> Jan 1 – Mar 10, 2026</span>
+    <span class="separator">|</span>
+    <span class="context-item"><span class="label">Difference:</span> <span class="difference-badge">$651.27</span></span>
+    <span class="auto-saved"><span class="check">✓</span> Balance recon auto-saved as draft</span>
+  </div>
+  <div class="overlay-header">
+    <button class="overlay-close" onclick="closeTxnCreate()">✕</button>
+    <div class="overlay-title">Reconciliation details</div>
+    <div class="overlay-actions">
+      <button class="btn btn-primary btn-sm" onclick="showToast('🔄 Starting transaction matching...')">Start matching</button>
+    </div>
+  </div>
+  <div class="overlay-content">
+    <div class="txn-recon-setup">
+      <div class="form-field" style="margin-bottom: 24px;">
+        <label>Date range <span class="req">*</span></label>
+        <div class="date-range-row">
+          <input type="text" id="txn-date-from" placeholder="MM/DD/YYYY">
+          <span class="dash">–</span>
+          <input type="text" id="txn-date-to" placeholder="MM/DD/YYYY">
+        </div>
+        <div class="prefilled-hint" id="txn-prefilled-dates" style="display:none">✓ Pre-filled from Balance Reconciliation</div>
+      </div>
+
+      <div class="setup-columns">
+        <div class="setup-column">
+          <h3>Accounting</h3>
+          <div class="form-field">
+            <label>Platform</label>
+            <input type="text" value="Dasha Test Company (Synder)" disabled style="background:#f9fafb;color:#666">
+          </div>
+          <div class="form-field">
+            <label>Automation mode <span class="info-tip" style="background:#e5e7eb;color:#888">?</span> <span class="req">*</span></label>
+            <select><option>Select...</option><option>Manual</option><option>Auto-match</option></select>
+          </div>
+        </div>
+        <div class="setup-divider"></div>
+        <div class="setup-column">
+          <h3>Integration</h3>
+          <div class="form-field">
+            <label>Integration <span class="req">*</span></label>
+            <select id="txn-integration">
+              <option value="">Select...</option>
+              <option value="stripe">Stripe mzkt.by</option>
+              <option value="shopify">Shopify Changolivia</option>
+            </select>
+            <div class="prefilled-hint" id="txn-prefilled-integration" style="display:none">✓ Pre-filled from Balance Reconciliation</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span>💾</span> <span id="toast-text">Saved</span></div>
+
+<script>
+  let cameFromBalance = false;
+
+  // === Page switching ===
+  function showBalancePage() {
+    document.getElementById('page-balance').style.display = 'block';
+    document.getElementById('page-txn').style.display = 'none';
+    document.getElementById('nav-balance').classList.add('active');
+    document.getElementById('nav-txn').classList.remove('active');
+  }
+  function showTxnPage() {
+    document.getElementById('page-balance').style.display = 'none';
+    document.getElementById('page-txn').style.display = 'block';
+    document.getElementById('nav-balance').classList.remove('active');
+    document.getElementById('nav-txn').classList.add('active');
+  }
+
+  // === Balance: account selection from empty state ===
+  function onAccountChange() {
+    const val = document.getElementById('account-select').value;
+    document.getElementById('empty-start-btn').disabled = !val;
+    if (val) {
+      // Transition to selected state
+      document.getElementById('balance-empty-state').style.display = 'none';
+      document.getElementById('balance-selected-state').style.display = 'block';
+      document.getElementById('account-select-top').value = val;
+      document.getElementById('balance-tabs-section').style.display = 'block';
+      updateReconForm(val);
+    }
+  }
+
+  // === Balance: account change from top selector ===
+  function onAccountChangeTop() {
+    const val = document.getElementById('account-select-top').value;
+    if (!val) {
+      document.getElementById('balance-selected-state').style.display = 'none';
+      document.getElementById('balance-empty-state').style.display = 'flex';
+      document.getElementById('account-select').value = '';
+      return;
+    }
+    updateReconForm(val);
+  }
+
+  function updateReconForm(val) {
+    const isResume = (val === 'stripe');
+    document.getElementById('tab-content-recon-new').classList.toggle('active', !isResume);
+    document.getElementById('tab-content-recon-resume').classList.toggle('active', isResume);
+  }
+
+  // === Balance: tab switching ===
+  function switchBalanceTab(tab) {
+    document.getElementById('tab-recon').classList.toggle('active', tab === 'recon');
+    document.getElementById('tab-history').classList.toggle('active', tab === 'history');
+    document.getElementById('tab-content-recon').classList.toggle('active', tab === 'recon');
+    document.getElementById('tab-content-history').classList.toggle('active', tab === 'history');
+  }
+
+  // === Balance: open working overlay ===
+  function openBalanceWorkingOverlay() {
+    document.getElementById('balance-working-overlay').classList.add('visible');
+  }
+  function closeBalanceWorking() {
+    document.getElementById('balance-working-overlay').classList.remove('visible');
+  }
+
+  // === Txn: open create overlay (from button or from balance) ===
+  function openTxnCreateOverlay(fromBalance) {
+    cameFromBalance = fromBalance;
+    const ctx = document.getElementById('txn-context-bar');
+
+    if (fromBalance) {
+      ctx.style.display = 'flex';
+      document.getElementById('txn-date-from').value = '01/01/2026';
+      document.getElementById('txn-date-to').value = '03/10/2026';
+      document.getElementById('txn-date-from').classList.add('prefilled');
+      document.getElementById('txn-date-to').classList.add('prefilled');
+      document.getElementById('txn-integration').value = 'stripe';
+      document.getElementById('txn-integration').classList.add('prefilled');
+      document.getElementById('txn-prefilled-dates').style.display = 'flex';
+      document.getElementById('txn-prefilled-integration').style.display = 'flex';
+    } else {
+      ctx.style.display = 'none';
+      document.getElementById('txn-date-from').value = '';
+      document.getElementById('txn-date-to').value = '';
+      document.getElementById('txn-date-from').classList.remove('prefilled');
+      document.getElementById('txn-date-to').classList.remove('prefilled');
+      document.getElementById('txn-integration').value = '';
+      document.getElementById('txn-integration').classList.remove('prefilled');
+      document.getElementById('txn-prefilled-dates').style.display = 'none';
+      document.getElementById('txn-prefilled-integration').style.display = 'none';
+    }
+
+    document.getElementById('txn-create-overlay').classList.add('visible');
+  }
+
+  function closeTxnCreate() {
+    document.getElementById('txn-create-overlay').classList.remove('visible');
+    if (cameFromBalance) {
+      // Return to balance working overlay
+      document.getElementById('balance-working-overlay').classList.add('visible');
+    }
+    cameFromBalance = false;
+  }
+
+  // === Balance → Txn navigation ===
+  function openTxnFromBalance() {
+    showToast('💾 Balance reconciliation auto-saved as draft');
+    document.getElementById('balance-working-overlay').classList.remove('visible');
+    openTxnCreateOverlay(true);
+  }
+
+  function backToBalanceWorking() {
+    document.getElementById('txn-create-overlay').classList.remove('visible');
+    document.getElementById('balance-working-overlay').classList.add('visible');
+    showToast('✓ Resumed balance reconciliation from draft');
+    cameFromBalance = false;
+  }
+
+  // === Toast ===
+  function showToast(text) {
+    document.getElementById('toast-text').textContent = text;
+    const t = document.getElementById('toast');
+    t.classList.add('visible');
+    setTimeout(() => t.classList.remove('visible'), 3000);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+{
+  "validator": "a11y",
+  "round": 1,
+  "target": "Q-Explorer (QMS RPV CH) prototype — http://127.0.0.1:8099/index.html · Round 1: create & manage an evaluation",
+  "checked": [
+    { "zone": "method", "item": "real Chromium (Playwright, /usr/bin/chromium-browser, headless, 1440x900) — DOM-order inventory of interactive elements per zone, then full Tab cycles with document.activeElement + computed outline/box-shadow readback. State map records no focus behaviour, so all focus evidence is browser-observed." },
+    { "zone": "login", "item": "Tab walk, 14 stops: topbar nav ×5 → lang select → Log out → email → password → Anmelden → Passwort vergessen? → Impressum/Dokumente/Kontaktdaten. All reachable, all show a visible focus ring (outline auto 1–3px)." },
+    { "zone": "login", "item": "login-email / login-password — no <label>, no aria-label; both carry a placeholder, so an accessible name exists (not reported)" },
+    { "zone": "login → Imprint modal", "item": "focus on open / containment / return on Escape — role=dialog + aria-modal=true are present, BUT focus stays on the trigger after Enter, 7 subsequent Tabs all land OUTSIDE the modal (Documents → Support → Contact → New Evaluation → search → both filter selects), and Escape closes it leaving focus on a background filter select, not the trigger. Real defect, dropped for the 4-finding cap." },
+    { "zone": "evaluations list (landing)", "item": "full Tab cycle to wrap — 53 stops, 18 unique: topbar ×5, lang, Log out, 4 util-links, New Evaluation, search, 2 filter selects, then only Anzeigen + delete row buttons. Focus ring visible at every stop." },
+    { "zone": "evaluations list (landing)", "item": "sidebar nav-item ×3 (Evaluations / New Evaluation / Scheduled Reports) — DIVs with onclick, no tabindex, no role; never focused in the 53-stop cycle" },
+    { "zone": "evaluations list (landing)", "item": "group-header accordion ×6 — DIVs with onclick, no tabindex, no role; never focused in the 53-stop cycle, so collapsing/expanding a report-type group is mouse-only. Rows are expanded by default so the task survives; dropped for the cap." },
+    { "zone": "evaluations list (landing)", "item": "'Anzeigen' and 'delete' row buttons — accessible name is 'Anzeigen' / 'delete' with no row context; across 28 rows a screen-reader user hears 14 identical 'delete' buttons with no idea which evaluation. Dropped for the cap." },
+    { "zone": "evaluations list (landing)", "item": "In-Progress row delete button — pointer-events:none + opacity .35, no disabled attribute, no aria-disabled, tabIndex 0. Interrogated by keyboard: see A11Y-4." },
+    { "zone": "evaluations list (landing)", "item": "reports-status-filter / reports-period-filter / topbar-lang-select — three <select>s with no <label>, no aria-label, no title, no placeholder: accessible name is empty, a screen reader announces only the current value ('All', 'EN'). Real defect, dropped for the cap." },
+    { "zone": "whole document", "item": "aria-live / role=status / role=alert regions — ZERO in the entire document, so the toasts ('Evaluation deleted', 'Evaluation started — running now') are never announced. Dropped for the cap." },
+    { "zone": "whole document", "item": "table semantics — 13 <table>s with 148 real <th> cells (good), though 0 of them carry scope=" },
+    { "zone": "type selection", "item": "6 .type-card elements — DIVs, onclick, no role, tabIndex -1; full Tab cycle of the screen produces zero content stops: see A11Y-1" },
+    { "zone": "wizard step 1 — period", "item": "Tab walk — Back, 6 preset buttons (Last 7 Days…Custom), 7 day-of-week buttons (Mon…Sun), name input, Next: all real <button>/<input>, all reachable, focus ring visible. Step 1 is keyboard-complete." },
+    { "zone": "wizard step 1 — period", "item": "preset + day-of-week buttons — selected state carried by class 'active' only, no aria-pressed, so a screen reader cannot hear which period or which days are chosen. Dropped for the cap." },
+    { "zone": "wizard step 2 — filters", "item": "6 .custom-select-trigger panels (rpv / mode / canton / tu / lines / stops) — DIVs, no tabindex, no role, no aria-expanded, no aria-haspopup: see A11Y-2" },
+    { "zone": "wizard step 2 — filters", "item": "Tab walk of the whole step — topbar ×5, lang, Log out, 4 util-links, Back, Back, Next. Eleven of the fourteen stops are chrome; not one filter control appears." },
+    { "zone": "scheduled reports", "item": "Tab walk after reaching the zone programmatically — Schedule Report, search, frequency select, status select, pause_circle / edit / delete row actions all reachable with a visible ring. The zone's contents are keyboard-operable; only the route into it is not (A11Y-3)." },
+    { "zone": "scheduled reports", "item": "pause_circle / edit / delete icon buttons — icon-ligature text only, no aria-label; accessible name reads as the ligature ('pause_circle'). Dropped for the cap." }
+  ],
+  "gaps": [
+    "State map records no focus behaviour, no tab order and no accessible names anywhere — every finding here had to be established in a real browser, not from the map.",
+    "No screen reader was actually run (no NVDA/VoiceOver/Orca available). Accessible-name claims are computed from DOM semantics (labels, aria-*, text content), not from heard output.",
+    "Type cards are not focusable at all (tabIndex -1, programmatic .focus() fails), so Enter/Space activation of a report type could not be tested — only the absence of any keyboard route is proven.",
+    "Wizard step 3 (Run) was reached only by mouse/JS; its schedule toggle, frequency select and Run Now were not tab-walked, so the keyboard path through the final step is unverified.",
+    "The 'Edit a scheduled report' wizard and the Custom-period date inputs were not keyboard-interrogated; the state map lists the notify-by-email toggle as not_exercised and it stayed unexercised here too.",
+    "Focus behaviour of the six filter dropdown PANELS (containment, Escape, return to trigger) could not be tested, because the triggers cannot be opened from the keyboard in the first place."
+  ],
+  "findings": [
+    {
+      "id": "A11Y-1",
+      "severity": "Critical",
+      "confidence": 98,
+      "element": "Type selection screen — the six report-type cards (.type-card: Punctuality DPM, Raw Data Export DPM, Data Quality Index (DQI) DPM, Connection Punctuality, Trip Failures DPM, Line Analysis DPM)",
+      "finding": "The six report-type cards are plain DIVs with an onclick handler, no role and no tabindex, so the screen that starts every evaluation has zero keyboard-focusable controls in its content area.",
+      "user_impact": "A keyboard-only or screen-reader user can open 'New Evaluation' but can never choose a report type, so no evaluation can be created at all — the primary task dies on its first screen.",
+      "suggested_fix": "Make each card a real <button> (or add role=\"button\" plus tabindex=\"0\" and Enter/Space handlers) and give it an accessible name combining the type title and its one-line description.",
+      "evidence": {
+        "action": "Clicked 'New Evaluation', blurred the document, then pressed Tab 40 times and read document.activeElement after each press; also called .focus() directly on the first .type-card",
+        "observed": "Only 11 stops exist and every one is page chrome — topbar nav ×5, lang select, Log out, and the four login utility buttons (Imprint/Documents/Support/Contact) — then focus wraps. Not one of the 6 visible .type-card elements is ever focused (any type-card focusable? false). Programmatic focus also fails: {focusedIsCard: false, tabIndex: -1}."
+      }
+    },
+    {
+      "id": "A11Y-2",
+      "severity": "Critical",
+      "confidence": 97,
+      "element": "Wizard step 2 (Filters) — all six filter triggers: #rpv-trigger, #mode-trigger, #canton-trigger, #tu-trigger, #lines-trigger, #stops-trigger",
+      "finding": "Every one of the six filter dropdowns is a DIV with no tabindex, no role, no aria-expanded and no aria-haspopup, so the entire Filters step is unreachable and un-announced by keyboard.",
+      "user_impact": "A keyboard-only user on the Filters step can only press Back or Next — they cannot set a single transport association, mode, canton, TU, line or stop, so the 'filters' half of period → filters → run is impossible and every evaluation they create runs unfiltered.",
+      "suggested_fix": "Give each trigger role=\"combobox\" (or make it a <button>) with tabindex=\"0\", aria-expanded reflecting the panel state and aria-haspopup=\"listbox\", and wire Enter/Space/Arrow keys to open the panel and Escape to close it back onto the trigger.",
+      "evidence": {
+        "action": "Reached step 2, blurred the document, then pressed Tab 45 times reading document.activeElement each time; separately read tabindex/role/aria-expanded/aria-haspopup off all six .custom-select-trigger nodes",
+        "observed": "The complete tab cycle is: topbar nav ×5 → lang select → Log out → Imprint/Documents/Support/Contact → button.btn-back 'Back' → button.btn 'Back' → button.btn 'Next' → wrap. No filter control ever receives focus. All six triggers report {tag: \"div\", tabindex: null, role: null, ariaExpanded: null, ariaHaspopup: null}."
+      }
+    },
+    {
+      "id": "A11Y-3",
+      "severity": "Critical",
+      "confidence": 95,
+      "element": "Left sidebar nav — div.nav-item 'Scheduled Reports' (and the same defect on 'Evaluations' and 'New Evaluation')",
+      "finding": "The only route to the Scheduled Reports screen is a DIV with onclick and no tabindex or role, so the whole scheduled-reports zone cannot be reached from the keyboard even though everything inside it is keyboard-operable.",
+      "user_impact": "A keyboard-only user can never open Scheduled Reports, so pausing, editing or deleting a scheduled evaluation — the 'manage scheduled evaluations' half of the primary task — is unreachable, not merely awkward.",
+      "suggested_fix": "Make the three sidebar nav-items real <button>s or <a href>s (or role=\"link\" + tabindex=\"0\" + Enter handling) inside a <nav>, with aria-current on the active one.",
+      "evidence": {
+        "action": "Blurred the document on the landing screen and pressed Tab until focus wrapped (53 presses, 18 unique stops), then queried every visible element whose text mentions 'Scheduled Reports' for focusability",
+        "observed": "No div.nav-item appears anywhere in the 53-stop cycle (the stops are topbar ×5, lang, Log out, 4 util-links, New Evaluation, search, 2 filter selects, then only Anzeigen/delete row buttons). The single candidate route is {tag: \"div\", cls: \"nav-item\", tabindex: null, onclick: true, focusable: false}. Forcing the click via JS then reveals a fully tabbable zone (Schedule Report, search, 2 selects, pause/edit/delete), confirming the zone works and only the entrance is dead."
+      }
+    },
+    {
+      "id": "A11Y-4",
+      "severity": "High",
+      "confidence": 95,
+      "element": "Evaluations list — the 'delete' action icon on rows with status In Progress (button.action-icon.danger, pointer-events:none, opacity .35, title=\"Delete\")",
+      "finding": "The delete button on In-Progress rows is disabled only visually — pointer-events:none and opacity .35, with no disabled attribute and no aria-disabled — so it stays in the tab order at tabIndex 0 and Enter really deletes the row.",
+      "user_impact": "A keyboard or screen-reader user hears an ordinary enabled 'Delete' button and irreversibly deletes an in-progress evaluation that a mouse user is deliberately prevented from touching, with no warning that the action was meant to be unavailable.",
+      "suggested_fix": "Set the real disabled attribute (or aria-disabled=\"true\" plus a guard in the click handler) on the In-Progress delete button and give it a name that states why, e.g. \"Delete — unavailable while the evaluation is running\".",
+      "evidence": {
+        "action": "Hit-tested the button with document.elementFromPoint, then focused it with .focus() and pressed Enter, accepting the native confirm()",
+        "observed": "Mouse hit-test returns {hitIsButton: false, hitTag: \"div.action-icons\"} — the pointer cannot reach it. Keyboard focus lands on it fine (button.action-icon [\"delete\"], tabIndex 0, disabledAttr false, ariaDisabled null); Enter fires the native confirm 'Delete this evaluation? This action cannot be undone.' and on accept the row is gone: delete-buttons 34 → 33, 'In Progress' rows 6 → 5 (target row: 'Pünktlichkeit – Letzte 7 Tage, SBB · 19.05–25.05.2026 · In Progress'). Focus is then dumped on BODY."
+      }
+    }
+  ]
+}

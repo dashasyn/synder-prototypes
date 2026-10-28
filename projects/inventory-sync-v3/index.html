@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inventory sync — Activity · Sync · Stores</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+  body{margin:0;background:var(--color-white);font-family:var(--font-family)}
+  .content{max-width:none}   /* Ignat 2026-10-01: all tabs full width */
+
+  /* switcher — canonical, deliberately not product chrome */
+  .variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);
+    color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:14px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);font-family:inherit;font-size:14px;
+    padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+  .variant-switch .vs-note{margin-left:auto;opacity:.6;font-size:14px}
+  .variant-switch .vs-sep{width:1px;height:22px;background:rgba(255,255,255,.2)}
+
+  /* layout 2: activity as a top line with big numbers (Ignat's sketch 3) */
+  .tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;background:var(--color-grey-5);border-radius:var(--radius-sm);padding:12px;margin-bottom:16px}
+  .tile{border-radius:var(--radius-sm);padding:12px 16px;background:var(--color-white);border:1px solid var(--border-default)}
+  .tile .tl{font-size:14px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:8px}
+  .tile .tv{font-size:24px;line-height:32px;font-weight:400;margin:4px 0 0}
+  .tile .tv a{display:inline-flex;align-items:center}
+  .tile.t-held{background:var(--color-yellow-light);border-color:var(--color-status-yellow-bg)}
+  .tile.t-failed{background:var(--color-red-light);border-color:var(--color-status-red-bg)}
+  .tile.t-diff{background:var(--color-status-purple-bg);border-color:var(--color-status-purple-bg)}
+  .cols2{display:grid;grid-template-columns:1fr 2fr;gap:16px;align-items:start}
+  /* wide stores column: action sits to the right of the text, so each open row is one line shorter */
+  .cols2 .fix .grow{display:grid;grid-template-columns:1fr auto;column-gap:16px;align-items:center}
+  .cols2 .fix .grow .muted{grid-column:1}
+  .cols2 .fix .grow .row-actions{grid-column:2;grid-row:1 / span 2;margin:0 !important;flex-wrap:nowrap}
+
+  /* shell */
+  .org{display:flex;align-items:center;gap:12px}
+  .org-av{width:32px;height:32px;border-radius:var(--radius-full);background:var(--color-primary-10);color:var(--color-primary);
+    display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:500}
+  .org-name{font-size:14px;font-weight:500;color:var(--text-primary)}
+  .org-sub{font-size:14px;color:var(--text-secondary)}
+  .sidebar .material-icons{font-size:20px;color:var(--color-grey-50)}
+  .sb-beta{margin-left:auto;font-size:14px;height:20px;padding:0 5px;border-radius:var(--radius-sm);
+    background:var(--color-status-purple-bg);color:var(--color-purple);display:inline-flex;align-items:center}
+  .sidebar-item.active .sb-beta{background:rgba(255,255,255,.2);color:var(--color-white)}
+  .tabs{padding:0;margin-bottom:16px}
+  button.tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;font-family:inherit;margin:0 0 -1px;
+    -webkit-appearance:none;appearance:none}
+  button.tab:hover{background:var(--color-primary-5)}
+  button.tab.active{border-bottom-color:var(--color-primary)}
+
+  /* blocks — as in Ignat's sketch: grey block, white inner boxes */
+  .block{background:var(--color-grey-5);border-radius:var(--radius-sm);padding:16px}
+  .block-t{font-size:16px;font-weight:600;color:var(--text-primary);display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .help{font-size:16px;color:var(--color-grey-30);cursor:help}
+  .box{background:var(--color-white);border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:12px 16px}
+  .box + .box{margin-top:12px}
+  .cols{display:grid;grid-template-columns:1fr 1fr 1.25fr;gap:16px;align-items:start}
+  .line{font-size:14px;line-height:20px;color:var(--text-primary);padding:8px 0;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .line .k{font-weight:500}
+  .muted{color:var(--text-secondary)}
+  .small{font-size:14px;line-height:20px}
+  p{margin:0 0 12px;font-size:14px;line-height:20px}
+  .row-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+  a.text-link{color:var(--text-link);text-decoration:none;cursor:pointer}
+  a.text-link:hover{text-decoration:underline}
+  .i16{font-size:16px;vertical-align:-3px}
+
+  /* activity rows */
+  .act{display:flex;align-items:center;justify-content:space-between;padding:8px 0;font-size:14px}
+  /* tooltip — wrapper so it also shows on disabled buttons */
+  .tip{position:relative;display:inline-flex}
+  .tip::after{content:attr(data-tip);position:absolute;left:0;bottom:calc(100% + 8px);width:260px;background:var(--color-grey);color:var(--color-white);
+    font-size:14px;line-height:20px;font-weight:400;padding:8px 12px;border-radius:var(--radius-sm);opacity:0;pointer-events:none;transition:opacity .12s;z-index:30;white-space:normal}
+  .tip:hover::after,.tip:focus-within::after{opacity:1}
+  /* status tooltip (fixed, JS-positioned) and select clear button */
+  .stip{display:inline-flex;cursor:default}
+  .stip-box{position:fixed;display:none;max-width:280px;background:var(--color-grey);color:var(--color-white);font-size:14px;line-height:20px;padding:8px 12px;border-radius:var(--radius-sm);z-index:60;pointer-events:none}
+  .sel-wrap{position:relative}
+  .sel-clear{position:absolute;right:32px;top:50%;transform:translateY(-50%);border:0;background:none;padding:0;cursor:pointer;display:flex;color:inherit;opacity:.6}
+  .sel-clear:hover{opacity:1}.sel-clear .material-icons{font-size:18px}
+  .map-dup{display:flex;align-items:flex-start;gap:4px;color:var(--color-yellow);margin-top:4px;max-width:300px;line-height:20px}.map-dup .material-icons{margin-top:2px}
+  .listed-help{display:inline-flex;align-items:center}
+  .ev-actions,.ev-time{white-space:nowrap}.ev-actions .revert{margin-left:8px}
+  /* ⋯ menu on a connected store */
+  .kebab{position:relative;margin-left:4px}
+  .kebab-btn{width:32px;height:32px;border:none;background:none;border-radius:var(--radius-sm);cursor:pointer;color:var(--color-grey-50);display:flex;align-items:center;justify-content:center}
+  .kebab-btn:hover{background:var(--bg-hover)}
+  .menu{position:absolute;right:0;top:36px;min-width:200px;background:var(--color-white);border-radius:var(--radius-sm);box-shadow:var(--shadow-modal);padding:8px 0;z-index:40}
+  .menu-item{display:block;width:100%;text-align:left;background:none;border:none;font-family:inherit;font-size:14px;line-height:20px;padding:8px 16px;color:var(--text-primary);cursor:pointer}
+  .menu-item:hover{background:var(--bg-hover)}
+  .toolbar{align-items:flex-end}
+  .tb-field{margin:0}
+  .tb-field .select{min-width:240px}
+  .tb-check{height:36px}
+  .resume-note{font-size:14px;line-height:20px;color:var(--text-primary);padding:4px 0}.resume-note div{display:flex;gap:8px;align-items:flex-start;padding:2px 0}.resume-note .material-icons{color:var(--color-yellow);margin-top:2px}
+  .why-wrap{display:inline-flex;flex-direction:column;align-items:flex-start;gap:4px}.toolbar .why-wrap{align-items:flex-end}
+  .btn-why{font-size:14px;line-height:20px;color:var(--text-secondary)}
+  .tb-right{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+  .tb-status{font-size:14px;line-height:20px}
+  .table-wrap.wide table{min-width:1780px}
+  .pagination{justify-content:flex-end}
+  .pager-per{width:auto;height:32px;min-width:72px}
+  .run-head{display:flex;align-items:center;gap:24px;margin-bottom:4px}.run-head .grow{flex:1}
+  .back-link{display:inline-flex;align-items:center;gap:4px;margin-bottom:12px}
+  .run-sub{margin-bottom:12px}
+  .col-cb{width:40px}
+  #head-bulk th{background:var(--color-primary-5)}
+  .bulk-row{display:flex;align-items:center;gap:12px}.bulk-count{font-weight:500;color:var(--color-primary)}
+  .rec-actions{white-space:nowrap}
+  .dlg-list{margin:8px 0;padding-left:20px}
+  .diff-list{margin-top:8px;display:flex;flex-direction:column}
+  .diff-row{display:flex;flex-direction:column;padding:6px 0;color:var(--text-primary);cursor:pointer;text-decoration:none;line-height:20px}
+  .diff-row:hover .diff-p{color:var(--color-primary)}
+  .diff-n{font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--text-secondary)}.diff-n b{font-weight:500;color:var(--text-primary)}.diff-sep{margin:0 4px}
+  .diff-ok{display:flex;align-items:center;gap:8px}.diff-ok .material-icons{color:var(--color-green)}
+  .help.stip{cursor:help}
+  .block-link{color:var(--text-primary)}.block-link:hover{color:var(--text-link)}
+  .gate{align-items:center}.gate .grow{flex:1}.gate .alert-title{margin-bottom:2px}
+  .gate .material-icons{font-size:20px}
+  .diff-fail{display:flex;align-items:center;gap:8px;color:var(--color-red);margin:4px 0 8px}.diff-fail .grow{flex:1}
+  .diff-fail-t{color:var(--color-red)}
+  .prev-toggle{display:inline-flex;align-items:center;gap:4px;margin:16px 0 8px;padding-left:0}
+  .run-title{font-size:16px;font-weight:600;display:flex;align-items:center;gap:8px}
+  .cell-sub{display:block}
+  .spin.dark{border-color:var(--color-grey-20);border-top-color:var(--color-primary)}
+  .act a{display:inline-flex;align-items:center;gap:2px}
+  .headline{font-size:20px;font-weight:400;line-height:28px;color:var(--text-primary);margin:0 0 12px}
+
+  /* store card */
+  .store-h{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .store-h b{font-weight:500;font-size:14px;flex:1}
+  .shop-ic{width:24px;height:24px;border-radius:4px;background:#95BF47;color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
+  .fix{display:flex;align-items:center;gap:12px;background:var(--color-yellow-light);border-radius:var(--radius-sm);padding:8px 12px;margin:4px 0;font-size:14px;line-height:20px}
+  .fix .n{width:22px;height:22px;border-radius:var(--radius-full);background:var(--color-yellow);color:var(--color-white);font-size:14px;font-weight:700;
+    display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .fix .grow{flex:1;min-width:0;color:var(--text-primary)}
+  .fix .n-ic .material-icons{font-size:16px}
+  .fix .grow .muted{display:block;font-size:14px}
+  .okrow .material-icons{font-size:18px;color:var(--color-green)}
+
+  /* empty state */
+  .empty-wrap{display:flex;justify-content:center;padding:48px 0}
+  .empty-card{background:var(--color-grey-5);border-radius:var(--radius-sm);padding:24px;width:640px}
+  .empty-card h2{font-size:28px;font-weight:400;margin:0 0 8px;color:var(--text-primary)}
+  .empty-card .select{max-width:420px}
+  .ob-head{display:flex;align-items:center;gap:8px}
+  .ob-select{width:320px}
+  .ob-loc-row{display:flex;flex-direction:column;align-items:flex-start;gap:12px}
+  .ob-page .empty-wrap{padding-top:120px}
+  .ob-logos{display:flex;align-items:center;gap:16px;margin-bottom:24px}.ob-arrow{color:var(--text-secondary)}
+  .ob-title{font-size:20px;line-height:28px;font-weight:400;margin:0 0 8px;color:var(--text-primary);max-width:360px}
+  .ob-step{display:flex;align-items:flex-start;gap:12px;padding:12px;border-radius:var(--radius-sm);margin:8px 0;background:var(--color-white);line-height:20px}
+  .ob-step .grow{flex:1;min-width:0}.ob-step .grow .muted{display:block}
+  .ob-n{width:24px;height:24px;flex-shrink:0;border-radius:var(--radius-full);display:inline-flex;align-items:center;justify-content:center;font-weight:700;background:var(--color-primary);color:var(--color-white)}
+  .ob-step.locked{opacity:.6}.ob-step.locked .ob-n{background:var(--color-grey-40,#9AA3B2)}
+  .ob-step.done .ob-ic{color:var(--color-green);font-size:24px}
+  .steps-hint{font-size:14px;color:var(--text-secondary);line-height:18px;margin:12px 0 0}
+  .spin{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:synder-spin .8s linear infinite;display:inline-block;vertical-align:-3px;margin-right:6px}
+
+  .banner{display:flex;align-items:center;gap:12px;background:var(--color-yellow-light);color:var(--text-primary);border-radius:var(--radius-sm);padding:12px 16px;margin-bottom:16px;font-size:14px}
+  .banner .material-icons{color:var(--color-yellow)}
+  .modal{border-radius:8px}
+  .toast{position:fixed;right:24px;bottom:24px;width:320px;background:var(--color-grey);color:var(--color-white);font-size:14px;
+    padding:12px 16px;border-radius:var(--radius-sm);display:none;z-index:2000}
+  .toast.show{display:block}
+  .toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+  .toolbar .grow{flex:1}
+  .toolbar .select{height:36px;min-width:240px}
+  td select.select{height:32px;min-width:220px}
+  td.num,th.num,.synder-table th.num,.synder-table td.num{text-align:right}
+  .diff-pos{color:var(--color-green)} .diff-neg{color:var(--color-red)}
+  .empty{padding:32px;text-align:center;color:var(--text-secondary);font-size:14px}
+</style>
+</head>
+<body>
+<div class="variant-switch">
+  <span class="vs-label">Variant</span>
+  <div class="vs-opts">
+    <button id="ly-1" class="on" onclick="setLayout(1)">1 · Activity block · Comparisons</button>
+    <button id="ly-2" onclick="setLayout(2)">2 · Activity top line · Differences</button>
+  </div>
+  <span class="vs-sep"></span>
+  <span class="vs-label">State</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · First setup</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Store needs fixes</button>
+    <button id="vs-3" onclick="setVariant(3)">3 · All connected</button>
+  </div>
+  <span class="vs-note">Sample data · <a href="dev-questions.html" id="dev-q-link" style="color:inherit">Questions for dev</a></span>
+</div>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="org"><div class="org-av">Ac</div><div><div class="org-name">Acme Home Goods</div><div class="org-sub">Syncs left: 1000</div></div></div>
+    <div class="topbar-actions"><a class="text-link" style="font-size:14px">How it works?</a></div>
+  </header>
+  <div class="app-main">
+    <nav class="sidebar" aria-label="Main">
+      <a class="sidebar-item"><span class="material-icons">dashboard</span>Dashboard</a>
+      <a class="sidebar-item"><span class="material-icons">receipt_long</span>Transactions<span class="sidebar-badge">New</span></a>
+      <a class="sidebar-item active" aria-current="page"><span class="material-icons">inventory_2</span>Inventory sync<span class="sb-beta">Beta</span></a>
+      <a class="sidebar-item"><span class="material-icons">bolt</span>Smart rules</a>
+      <a class="sidebar-item"><span class="material-icons">description</span>Invoicing</a>
+      <a class="sidebar-item"><span class="material-icons">bar_chart</span>Analytics</a>
+      <a class="sidebar-item"><span class="material-icons">settings</span>Settings</a>
+      <a class="sidebar-item"><span class="material-icons">smart_toy</span>AI Agents</a>
+    </nav>
+    <main class="content" id="main"></main>
+  </div>
+</div>
+
+<div class="modal-bg" id="m-dlg">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="m-dlg-t">
+    <div class="modal-header" id="m-dlg-t"></div>
+    <div class="modal-body" id="m-dlg-b"></div>
+    <div class="modal-footer" id="m-dlg-f"></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---------------------------------------------------------------------------
+   Layout = Ignat's sketches (2026-10-01): empty screen with store picker, then
+   Overview with three blocks Activity · Sync · Shopify stores. Store problems
+   live on the store card, in setup order, one action each (yellow, not red).
+   Agreed behaviour: Connect is automated (redirect to Shopify and back, or a
+   loader and a toast — simulated here as the loader); no separate approval.
+   Enable works once at least one store has a location and "Created product
+   should be: Inventory". Sync semantics from the CSM Guide (SET/4297555974):
+   checks every 5 minutes, sends only changes, Pause queues, Disable drops,
+   nightly comparison 02:30 UTC, held reasons + retry. SAMPLE data.
+--------------------------------------------------------------------------- */
+var QBO=[['1','Ceramic plate 24cm','PL-24',140],['2','Ceramic plate 18cm','PL-18',90],['3','Serving bowl','BWL-1',35],['4','Mug set','MUG-4',60],
+ ['5','Tulip bouquet','FL-TU',25],['6','Rose bouquet','FL-RO',40],['7','Vase small','VS-S',30],['8','Vase large','VS-L',12],['9','Plate seconds (B-grade)','PL-SEC',9],['10','Gift wrapping paper',null,200]]
+ .map(function(r){return {id:r[0],name:r[1],sku:r[2],qty:r[3]}});
+function qbo(id){return QBO.filter(function(q){return q.id===id})[0]}
+function INTEGRATIONS(){return [
+ {id:'p',name:'My ceramic plates',domain:'my-ceramic-plates.myshopify.com',locations:['Warehouse in California'],
+  products:[['Ceramic plate 24cm','PL-24',132],['Ceramic plate 18cm','PL-18',90],['Serving bowl','BWL-1',35],['Mug set','MUG-4',58],['Plate seconds',null,9]],committed:{'Mug set':4}},
+ {id:'f',name:'My good flowers',domain:'my-good-flowers.myshopify.com',locations:['Warehouse in California','Flower stall, Oakland'],
+  products:[['Tulip bouquet','FL-TU',25],['Rose bouquet','FL-RO',38],['Vase small','VS-S',30],['Vase large',null,12],['Gift wrap',null,200]]},
+ {id:'s',name:'Seasonal pop-up',domain:'seasonal-popup.myshopify.com',locations:['Pop-up van'],
+  products:[['Mug set','MUG-4',10],['Tulip bouquet','FL-TU',5]]}]}
+function autoMatch(st){var m={};st.products.forEach(function(p){var q=QBO.filter(function(x){return p[1]&&x.sku===p[1]})[0];
+  if(q){m[p[0]]={q:q.id,src:'SKU'};return}q=QBO.filter(function(x){return x.name.toLowerCase()===p[0].toLowerCase()})[0];m[p[0]]=q?{q:q.id,src:'Name'}:null});return m}
+
+var S,V=1,L=1;
+function base(){var ints=INTEGRATIONS().map(function(i){return Object.assign(i,{connected:false,loc:null,inv:'Non-inventory',map:null,shop:{},cmp:null,opened:false,connectedOn:null})});
+  ints.forEach(function(i){i.products.forEach(function(p){i.shop[p[0]]=p[2]})});
+  return {tab:'overview',ints:ints,sync:'off',enabledOn:null,lastSync:null,pauseReason:null,events:[],ignored:{},evFilter:'All',mapStore:null,unmappedOnly:false,connecting:false,sel:'',per:{},page:{},runs:[],qboRefreshed:'about 7 hours ago',evStore:'all',recFilter:'all',runView:null,unresolvedOnly:true,q:''}}
+function connectInt(s,id,when){var i=s.ints.filter(function(x){return x.id===id})[0];i.connected=true;i.connectedOn=when||'just now';i.map=autoMatch(i);/* location stays unset until the user chooses (Ignat 2026-10-01) */compareStore(i,s);return i}
+function stateFirst(){var s=base();s.onb=true;return s}
+function stateFixes(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
+  p.inv='Inventory';s.sync='paused';s.enabledOn='Sep 24, 2026 14:20';s.lastSync='Oct 1, 2026 17:00';s.pauseReason='Paused on Oct 1, 2026 17:00. New changes are queued and sent when you resume.';
+  s.events=sampleEvents(p,true);nightly(s,[p]);return s}
+function nightly(s,stores){stores.forEach(function(i){var snap=JSON.parse(JSON.stringify(i.cmp));
+  s.runs.push({id:'r0'+i.id,store:i.id,started:'Oct 1, 2026 02:30',trigger:'Scheduled',rows:snap,mismatches:snap.filter(function(x){return x.mis}).length})});
+  stores.forEach(function(i){addRun(s,i,'Oct 2, 2026 02:30','Scheduled')})}
+function stateAll(){var s=base(),p=connectInt(s,'p','Sep 24, 2026 14:20'),f=connectInt(s,'f','Sep 24, 2026 14:20');p.loc='Warehouse in California';
+  p.map['Plate seconds']={q:'9',src:'Manual'};f.map['Gift wrap']={q:'10',src:'Manual'};
+  [p,f].forEach(function(i){i.inv='Inventory';
+    i.products.forEach(function(x){var q=qbo(i.map[x[0]].q);i.shop[x[0]]=q.qty});compareStore(i,s)});
+  f.loc='Flower stall, Oakland';s.sync='on';s.enabledOn='Sep 24, 2026 14:20';s.lastSync='Oct 1, 2026 17:12';
+  s.events=sampleEvents(p,false).concat([{t:'Oct 1, 2026 14:40',store:f.name,src:'Bill #1047',item:'Tulip bouquet',d:+30,status:'Applied'},{t:'Oct 1, 2026 12:15',store:f.name,src:'Invoice #2236',item:'Rose bouquet',d:-2,status:'Applied'}]);s.events.sort(function(a,b){return Date.parse(b.t)-Date.parse(a.t)});nightly(s,[p,f]);var fr=s.runs.filter(function(r){return r.store==='f'})[0];fr.status='Failed';fr.rows=[];fr.mismatches=0;return s}
+function sampleEvents(st,withHeld){var e=[
+  {t:'Oct 1, 2026 16:58',store:st.name,src:'Bill #1042',item:st.products[0][0],d:+24,status:'Applied'},
+  {t:'Oct 1, 2026 15:20',store:st.name,src:'Invoice #2231',item:st.products[1][0],d:-2,status:'Applied'},
+  {t:'Oct 1, 2026 11:05',store:st.name,src:'InventoryAdjustment #35',item:st.products[2][0],d:-3,status:'Applied'}];
+  if(withHeld){e.unshift({t:'Oct 1, 2026 16:59',store:st.name,src:'Bill #1045',item:'Plate seconds (B-grade)',d:+12,status:'Held',reason:'Item not matched'});
+    e.unshift({t:'Oct 1, 2026 17:03',store:st.name,src:'SalesReceipt #90',item:st.products[3][0],d:-1,status:'Pending'})}
+  return e}
+
+/* ---- helpers ---- */
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function signed(n){return (n>0?'+':'')+n}
+function plural(n,w){return n+' '+w+(n===1?'':'s')}
+function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(function(){t.classList.remove('show')},3000)}
+function closeM(){$('m-dlg').classList.remove('show')}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeM()});
+function dialog(title,body,buttons){$('m-dlg-t').textContent=title;$('m-dlg-b').innerHTML=body;
+  $('m-dlg-f').innerHTML='<button class="btn btn-text" onclick="closeM()">Cancel</button>'+buttons.map(function(b,i){return '<button class="btn '+(b.cls||'')+'" id="dlg-'+i+'">'+esc(b.label)+'</button>'}).join('');
+  buttons.forEach(function(b,i){$('dlg-'+i).onclick=b.fn});$('m-dlg').classList.add('show');var last=$('dlg-'+(buttons.length-1));if(last)last.focus()}
+function int(id){return S.ints.filter(function(x){return x.id===id})[0]}
+function conn(){return S.ints.filter(function(x){return x.connected})}
+function avail(){return S.ints.filter(function(x){return !x.connected})}
+function mappedN(i){return i.products.filter(function(p){return i.map&&i.map[p[0]]}).length}
+function ready(i){return !!(i.loc&&i.inv==='Inventory')}       // Ignat: location + inventory setting
+function compareStore(i,s){s=s||S;i.cmp=[];i.products.forEach(function(p){var m=i.map[p[0]];if(!m)return;var q=qbo(m.q),sq=i.shop[p[0]],k=i.id+'|'+p[0],ig=s.ignored[k];
+  i.cmp.push({prod:p[0],item:q.name,qq:q.qty,sq:sq,avail:sq-((i.committed||{})[p[0]]||0),mis:q.qty!==sq,res:q.qty===sq?'Same':(ig&&ig.qq===q.qty&&ig.sq===sq)?'Ignored':'Unresolved'})})}
+function diffsOf(i){return (i.cmp||[]).filter(function(r){return r.res==='Unresolved'})}
+function compared(){return conn().filter(function(i){return i.loc&&latestRun(i)})}   // has a finished comparison
+function allDiffs(){return compared().reduce(function(n,i){return n+diffsOf(i).length},0)}
+
+/* ---- actions ---- */
+function doConnect(id,fromDialog){if(!id){toast('Choose a store first.');return}if(fromDialog)closeM();S.connecting=id;render();
+  setTimeout(function(){var i=connectInt(S,id);S.onbId=id;S.connecting=false;toast(i.name+' connected.');S.tab='overview';render()},1200)}
+function askConnect(){var av=avail();
+  if(!av.length){dialog('Connect store','<p>All your Shopify integrations are connected to Inventory Sync.</p><p>To connect another store, connect it first in <a class="text-link" onclick="toast(\'Organization settings opened in a new tab.\')">Organization settings</a>.</p>',[]);return}
+  dialog('Connect store','<div class="form-field"><label class="form-label" for="dlg-store">Shopify store</label><select class="select" id="dlg-store">'+(av.length>1?'<option value="">Select…</option>':'')+av.map(function(x){return '<option value="'+x.id+'">'+esc(x.name)+' (Shopify)</option>'}).join('')+'</select></div>'
+    +'<p class="small" style="margin-top:8px">Don\'t see your store here? Connect it first in <a class="text-link" onclick="toast(\'Organization settings opened in a new tab.\')">Organization settings</a></p>',[{label:'Connect store',fn:function(){doConnect($('dlg-store').value,true)}}])}
+function askLoc(id){var i=int(id);dialog('Inventory location','<p>'+esc(i.name)+' receives stock adjustments at this location.</p><div class="form-field"><label class="form-label" for="dlg-loc">Location</label><select class="select" id="dlg-loc">'
+  +(i.loc?'':'<option value="">Choose location</option>')+i.locations.map(function(l){return '<option '+(i.loc===l?'selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select></div>',[{label:'Save',fn:function(){var v=$('dlg-loc').value;if(!v){toast('Choose a location first.');return}i.loc=v;closeM();toast('Inventory location updated.');render()}}])}
+function openSettings(id){var i=int(id);i.opened=true;i.inv='Inventory';   // prototype: real product detects the change automatically
+  toast('Settings opened in a new tab. '+i.name+': Created product should be = Inventory.');render()}
+function checkInv(id){var i=int(id);if(!i.opened){toast('Created product should be is still Non-inventory for '+i.name+'.');return}i.inv='Inventory';toast(i.name+': Created product should be = Inventory.');render()}
+function enable(){S.sync='on';S.enabledOn='just now';S.lastSync='just now';S.pauseReason=null;toast('Inventory sync enabled. Synder checks QuickBooks every 5 minutes.');render()}
+function askDisable(){dialog('Disable inventory sync?','<p>Synder stops reading QuickBooks. Changes made while sync is disabled are never sent to Shopify, only changes after you enable it again.</p><div class="alert alert-info" style="margin:0"><div>To stop for a while without losing changes, use <b>Pause</b>: changes are queued and sent when you resume.</div></div>',
+  [{label:'Pause instead',cls:'btn-outlined',fn:function(){closeM();pause()}},{label:'Disable',cls:'btn-danger',fn:function(){closeM();S.sync='off';toast('Inventory sync disabled.');render()}}])}
+function pause(){S.sync='paused';S.pauseReason='Paused just now. Changes are queued and sent when you resume.';toast('Paused. Changes are queued.');render()}
+/* a difference row lives in the latest run of its store and in i.cmp (the Overview count); keep both in step */
+function latestRun(i){return S.runs.filter(function(x){return x.store===i.id&&x.status!=='Failed'})[0]}   // latest finished comparison
+function lastRunAny(i){return S.runs.filter(function(x){return x.store===i.id})[0]}
+function openNights(i,prod){var n=0,rs=S.runs.filter(function(x){return x.store===i.id&&x.trigger==='Scheduled'&&x.status!=='Failed'});
+  for(var k=0;k<rs.length;k++){var x=rs[k].rows.filter(function(y){return y.prod===prod})[0];if(x&&x.mis&&x.res!=='Updated')n++;else break}return n}
+function rowOf(i,prod){var r=latestRun(i);return (r?r.rows:i.cmp).filter(function(x){return x.prod===prod})[0]}
+function both(i,prod,fn){var seen=[];[(latestRun(i)||{}).rows,i.cmp].forEach(function(arr){(arr||[]).forEach(function(x){if(x.prod===prod&&seen.indexOf(x)<0){seen.push(x);fn(x)}})})}
+function applyAccept(i,r){var d=r.qq-r.sq,item=r.item;i.shop[r.prod]=r.qq;both(i,r.prod,function(x){x.sq=x.qq;x.avail=x.qq;x.res='Updated';x.by='owner@acmehome.com · just now'});
+  S.events.unshift({t:'just now',store:i.name,src:'Stock check',item:item,d:d,status:'Pending'})}
+function setIgnored(i,prod,on){var r=rowOf(i,prod);if(on)S.ignored[i.id+'|'+prod]={qq:r.qq,sq:r.sq};else delete S.ignored[i.id+'|'+prod];
+  both(i,prod,function(x){x.res=on?'Ignored':'Unresolved';if(on)x.by='owner@acmehome.com · just now';else delete x.by})}
+function cmpWhen(i){var r=latestRun(i);return r?r.started:''}
+function askAccept(id,prod){var i=int(id),r=rowOf(i,prod);
+  dialog('Update Shopify qty','<p>'+esc(prod)+' in '+esc(i.name)+': Shopify '+r.sq+' → '+r.qq+', the same as QuickBooks in the comparison on '+esc(cmpWhen(i))+'.</p><p>If the stock changed since then, click Compare now first.</p>',
+    [{label:'Update Shopify qty',fn:function(){closeM();applyAccept(i,r);toast('Shopify quantity will be updated.');render()}}])}
+function ignoreRow(id,prod){setIgnored(int(id),prod,true);toast('Difference ignored.');render()}
+function restoreRow(id,prod){setIgnored(int(id),prod,false);toast('Difference restored.');render()}
+function bulkSel(){return Object.keys(S.recSel||{}).filter(function(k){return S.recSel[k]}).map(function(k){var j=k.indexOf('|');return {i:int(k.slice(0,j)),prod:k.slice(j+1)}})}
+function bulkAccept(){var sel=bulkSel().map(function(x){return {i:x.i,r:rowOf(x.i,x.prod)}}).filter(function(x){return x.r}),multi=sel.some(function(x){return x.i!==sel[0].i});
+  dialog('Update Shopify qty for '+plural(sel.length,'product')+'?','<p>Shopify will be set to the QuickBooks quantity, as found in the latest comparison'+(multi?'':' of '+esc(sel[0].i.name)+' on '+esc(cmpWhen(sel[0].i)))+':</p><ul class="dlg-list">'
+    +sel.map(function(x){return '<li>'+(multi?esc(x.i.name)+' · ':'')+esc(x.r.prod)+': Shopify '+x.r.sq+' → '+x.r.qq+'</li>'}).join('')+'</ul><p>If the stock changed since then, click Compare now first.</p>',
+    [{label:'Update Shopify qty',fn:function(){closeM();sel.forEach(function(x){applyAccept(x.i,x.r)});S.recSel={};toast(sel.length+(sel.length===1?' Shopify quantity':' Shopify quantities')+' will be updated.');render()}}])}
+function bulkIgnore(){var sel=bulkSel();sel.forEach(function(x){setIgnored(x.i,x.prod,true)});S.recSel={};toast(plural(sel.length,'difference')+' ignored.');render()}
+function setMap(id,prod,q,silent){var i=int(id);i.map[prod]=q?{q:q,src:'Manual'}:null;compareStore(i);if(q)toast('QuickBooks item mapped.');render()}
+function go(t,opts){if(S.tab!==t)S.runView=null;S.tab=t;Object.assign(S,opts||{});render()}
+
+var LOGO_QB='<svg class="logo-qb" width="56" height="56" viewBox="0 0 56 56" role="img" aria-label="QuickBooks"><circle cx="28" cy="28" r="28" fill="#2CA01C"/><text x="28" y="36" text-anchor="middle" font-family="Roboto,Arial,sans-serif" font-size="24" font-weight="700" fill="#fff">qb</text></svg>';
+var LOGO_SHOP='<svg class="logo-shop" width="52" height="58" viewBox="0 0 52 58" role="img" aria-label="Shopify"><path d="M17 16c0-7 4-12 9-12s9 5 9 12" fill="none" stroke="#5E8E3E" stroke-width="3"/><path d="M6 16h40l-3 38H9z" fill="#95BF47"/><path d="M26 16h20l-3 38H26z" fill="#5E8E3E"/><text x="26" y="45" text-anchor="middle" font-family="Roboto,Arial,sans-serif" font-size="24" font-weight="700" fill="#fff">S</text></svg>';
+/* ---- variant 2 onboarding: empty state → 2 steps for the first store → full product ---- */
+function vFirst(){var av=avail(),one=av.length===1;
+  return '<div class="empty-wrap"><div class="empty-card" id="first"><div class="ob-logos" aria-hidden="true">'+LOGO_QB+'<span class="material-icons ob-arrow">arrow_forward</span>'+LOGO_SHOP+'</div>'
+   +'<h2 class="ob-title">Send stock changes from QuickBooks to your Shopify stores.</h2><p class="muted" style="margin:0 0 16px">Start with one store. You can connect the others later.</p>'
+   +'<div class="form-field"><label class="form-label" for="first-store" style="font-weight:700">Shopify store</label><select class="select" id="first-store" onchange="S.sel=this.value">'
+   +(one?'':'<option value="">Select…</option>')+av.map(function(x){return '<option value="'+x.id+'" '+((one||S.sel===x.id)?'selected':'')+'>'+esc(x.name)+' (Shopify)</option>'}).join('')+'</select></div>'
+   +'<p style="margin:8px 0 16px">Don\'t see your store here? Connect it first in <a class="text-link" onclick="toast(\'Organization settings opened in a new tab.\')">Organization settings</a></p>'
+   +'<button class="btn" id="btn-first-connect" '+(S.connecting?'disabled ':'')+'onclick="doConnect(document.getElementById(\'first-store\').value)">'+(S.connecting?'<span class="spin"></span>Connecting…':'Connect store')+'</button>'
+   +'<p class="steps-hint">After connecting, 3 short steps get the store ready and start sending stock changes.</p></div></div>'}
+function onbStore(){var i=S.onbId&&int(S.onbId);return i&&i.connected?i:conn()[0]}
+function vOnboard(i){var q="'"+i.id+"'",d1=!!i.loc,d2=i.inv==='Inventory',cur=!d1?1:!d2?2:3;
+  var step=function(n,done,active,title,doneText,desc,btn){
+    if(done)return '<div class="ob-step done" data-step="'+n+'"><span class="material-icons ob-ic">check_circle</span><div class="grow"><b>'+title+'</b><span class="muted">'+doneText+'</span></div></div>';
+    if(!active)return '<div class="ob-step locked" data-step="'+n+'"><span class="ob-n">'+n+'</span><div class="grow"><b>'+title+'</b></div></div>';
+    return '<div class="ob-step active" data-step="'+n+'"><span class="ob-n">'+n+'</span><div class="grow"><b>'+title+'</b><span class="muted">'+desc+'</span><div class="row-actions" style="margin-top:12px">'+btn+'</div></div></div>'};
+  return '<div class="empty-wrap"><div class="empty-card" id="onb"><div class="ob-head"><span class="shop-ic">S</span><b>'+esc(i.name)+' (Shopify)</b><span class="status status-blue">Connected</span><span class="grow"></span><span class="muted" id="onb-count">Step '+cur+' of 3</span></div>'
+   +'<p class="muted" style="margin:4px 0 16px">3 steps to start sending stock changes from QuickBooks to this store.</p>'
+   +step(1,d1,!d1,'Choose location','Location: '+esc(i.loc||''),'Pick the Shopify location that receives stock changes.',
+     '<div class="ob-loc-row"><div class="form-field"><label class="form-label" for="onb-loc">Location</label><select class="select ob-select" id="onb-loc" onchange="S.onbLoc=this.value;render()"><option value="">Choose location</option>'
+       +i.locations.map(function(l){return '<option '+(S.onbLoc===l?'selected':'')+'>'+esc(l)+'</option>'}).join('')+'</select></div>'
+       +why(S.onbLoc?'Save the location and go to the next step.':'Choose a location first.','<button class="btn" id="onb-finish" '+(S.onbLoc?'':'disabled ')+'onclick="setLoc('+q+',S.onbLoc)">Save location</button>',!S.onbLoc)+'</div>')
+   +step(2,d2,d1&&!d2,'Track stock for products in QuickBooks','Created product should be: Inventory','Settings › Products/Services › Created product should be: Inventory. This page updates by itself.',
+     '<button class="btn" id="onb-settings" onclick="openSettings('+q+')">Open Settings <span class="material-icons i16">open_in_new</span></button>')
+   +step(3,false,d1&&d2,'Start sending stock changes','','Only changes made in QuickBooks from now on are sent to Shopify. Stock that already differs shows up in Stock check.',
+     '<button class="btn" id="onb-enable" onclick="enable()">Enable</button>')
+   +'<p style="margin:16px 0 0">Connected the wrong store? <a class="text-link" id="onb-other" onclick="onbOther('+q+')">Use a different store</a></p></div></div>'}
+function setLoc(id,v){if(!v)return;int(id).loc=v;S.onbLoc=null;render()}   // confirmed with Finish setup   // inline selector: saves on change
+function onbOther(id){var i=int(id);i.connected=false;i.loc=null;i.cmp=null;S.onbId=null;S.sel='';render()}
+/* called by render: variant 2, state 1 shows the onboarding until the first store is ready */
+function onboarding(){if(L!==2||!S.onb)return null;var i=onbStore();if(!i)return vFirst();
+  if(ready(i)&&S.sync!=='off'){S.onb=false;S.tab='overview';return null}   // onboarding ends with Enable, not with the last setting
+  return vOnboard(i)}
+
+/* ---- no store connected yet: every tab says what to do first (Ignat 2026-10-05) ---- */
+var GATE={overview:'Connect a Shopify store below. Then choose its location and track stock for its products in QuickBooks. After that, click Enable.',
+  events:'Stock changes sent from QuickBooks to your stores show up here once a store is connected.',
+  mappings:'The products of a store and their QuickBooks items show up here once the store is connected.',
+  reconcile:'Synder compares the stock in QuickBooks and Shopify every night once a store is connected. Differences show up here.'};
+function gate(tab){if(conn().length)return '';
+  return '<div class="alert alert-info gate" id="gate" data-gate="'+tab+'"><span class="material-icons">info</span><div class="grow"><span class="alert-title">Connect a Shopify store first</span>'+GATE[tab]+'</div>'
+    +(tab==='overview'?'':'<button class="btn btn-sm" id="gate-connect" '+(S.connecting?'disabled ':'')+'onclick="askConnect()">Connect store</button>')+'</div>'}
+
+/* ---- overview (sketches 2 + 3) ---- */
+function readyNote(){var rd=conn().filter(ready);if(S.sync!=='off'||!rd.length)return '';   // a ready store must not look finished while nothing is sent (KF-2)
+  return '<div class="alert alert-info gate" id="ready-note"><span class="material-icons">info</span><div class="grow"><span class="alert-title">'+esc(rd.map(function(i){return i.name}).join(', '))+(rd.length===1?' is':' are')+' ready</span>Click Enable to start sending stock changes from QuickBooks. Nothing is sent until then.</div>'
+    +'<button class="btn btn-sm" id="ready-enable" onclick="enable()">Enable</button></div>'}
+function vOverview(){
+  var cs=conn(), notReady=cs.filter(function(i){return !ready(i)}), h=readyNote();
+  if(L===2) h+=tilesLine()+'<div class="cols2"><div>'+bSync()+bDiffs()+'</div>'+bStores()+'</div>';
+  else h+='<div class="cols"><div>'+bActivity()+bDiffs()+'</div>'+bSync()+bStores()+'</div>';
+  return h}
+function bDiffs(){   // informative only: how many differ, the 3 biggest, one way to the details (Ignat 2026-10-05: no "Update all", no status chip, no night count, no summary line)
+  var st=compared(),runs=st.map(function(i){return latestRun(i)}),n=allDiffs(),multi=conn().filter(function(i){return i.loc}).length>1;
+  var failed=conn().filter(function(i){return i.loc}).filter(function(i){var a=lastRunAny(i);return a&&a.status==='Failed'});
+  var rows=[];st.forEach(function(i){diffsOf(i).forEach(function(x){rows.push({i:i,x:x,d:x.qq-x.sq})})});rows.sort(function(a,b){return Math.abs(b.d)-Math.abs(a.d)});
+  var h='<div class="block" id="b-diff" style="margin-top:16px"><div class="block-t"><a class="text-link block-link" id="diff-title" onclick="go(\'reconcile\')">Stock check</a> '+helpIc('Every night at 02:30 UTC, Synder compares the stock of each product in QuickBooks and Shopify. Products where the two numbers differ are shown here. Sync sends only changes, so a difference stays until you fix it.')+'</div><div class="box">';
+  failed.forEach(function(i){var a=lastRunAny(i);
+    h+='<div class="diff-fail" data-fail="'+i.id+'"><span class="material-icons i16">error</span><span class="grow">The last check'+(multi?' of '+esc(i.name):'')+' failed ('+esc(a.started)+'), so '+(multi?'its':'the')+' stock wasn\'t compared.</span>'
+      +tip('Compare every store that has a location now.','<button class="btn btn-outlined btn-sm" id="diff-compare" onclick="compareNow()">Compare now</button>')+'</div>'});
+  if(!runs.length){var cl=conn().filter(function(i){return i.loc}).length;   // empty: offer the comparison instead of waiting for the night
+    return h+(failed.length?'':'<div class="muted" id="diff-msg">No comparison yet.</div><div class="row-actions" style="margin-top:8px">'+why(cl?'Compare stock in QuickBooks and Shopify now, instead of waiting for the night.':'Choose a location for a store first.','<button class="btn btn-outlined btn-sm" id="diff-compare-empty" '+(cl?'':'disabled ')+'onclick="compareNow()">Compare now</button>',!cl)+'</div>')+'</div></div>'}
+  if(!n){var ok=st.filter(function(i){return failed.indexOf(i)<0&&latestRun(i)});if(!ok.length)return h+'</div></div>';   // never claim a match for a store that wasn't compared
+    return h+'<div class="diff-ok" id="diff-msg"><span class="material-icons i16">check_circle</span>'+(failed.length?esc(ok.map(function(i){return i.name}).join(', '))+': stock is the same in QuickBooks and Shopify.':'Stock is the same in QuickBooks and Shopify.')+'</div></div></div>'}
+  /* one store with differences → open its comparison; several → the list (variant 1) / the differences page (variant 2) */
+  var ds=st.filter(function(i){return diffsOf(i).length}),one=ds.length===1;
+  var open=function(i){return L===1&&i?"go('reconcile',{runView:'"+latestRun(i).id+"',unresolvedOnly:true})":"go('reconcile',{runView:null,recFilter:'all',unresolvedOnly:true})"};
+  h+='<div id="diff-msg"><b>'+(n===1?'1 product has':n+' products have')+'</b> different stock in QuickBooks and Shopify. Check '+(n===1?'it':'them')+' now.</div>'
+   +'<div class="diff-list" id="diff-list">'+rows.slice(0,3).map(function(r){
+     return '<a class="diff-row" onclick="'+open(r.i)+'"><span class="diff-p">'+esc(r.x.prod)+(multi?'<span class="muted"> · '+esc(r.i.name)+'</span>':'')+'</span>'
+       +'<span class="diff-n">QuickBooks <b>'+r.x.qq+'</b> <span class="diff-sep">·</span> Shopify <b>'+r.x.sq+'</b></span></a>'}).join('')+'</div>'   // name on top, both numbers below: same height whatever the column width
+   +'<div class="row-actions" style="margin-top:12px">'+tip('Open the comparison: see every difference and decide what to do with each one.','<button class="btn btn-outlined btn-sm" id="diff-review" onclick="'+open(one?ds[0]:null)+'">Review differences</button>')+'</div>';
+  return h+'</div></div>'}
+function tilesLine(){ // the numbers that need the user are coloured only when they are above 0
+  var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, d=allDiffs();
+  var t=[['Held',c('Held'),'Not sent: needs you','t-held',"go('events',{evFilter:'Held'})"],['Failed',c('Failed'),'Shopify rejected it','t-failed',"go('events',{evFilter:'Failed'})"],
+    ['Pending',c('Pending'),'Waiting for the next check','',"go('events',{evFilter:'Pending'})"],
+    ['Applied in 24h',c('Applied'),'Stock updated in Shopify','',"go('events',{evFilter:'Applied'})"]];
+  return '<div class="tiles" id="tiles">'+t.map(function(x){return '<div class="tile '+(x[1]>0?x[3]:'')+'" data-tile="'+x[0]+'"><div class="tl">'+stip(x[0]==='Applied in 24h'?'Applied':x[0],x[0])+'</div><div class="tv">'+(S.enabledOn?'<a class="text-link" onclick="'+x[4]+'">'+x[1]+'<span class="material-icons i16">chevron_right</span></a>':'<span class="muted">–</span>')+'</div></div>'}).join('')+'</div>'}
+function helpIc(text){return '<span class="material-icons help stip" tabindex="0" role="img" aria-label="'+esc(text)+'" data-stip="'+esc(text)+'">help</span>'}   // (?) next to a header: same tooltip as the statuses
+function why(text,inner,disabled){return disabled?'<span class="why-wrap">'+tip(text,inner)+'<span class="btn-why">'+esc(text)+'</span></span>':tip(text,inner)}   // keyboard/touch users can't hover a disabled button
+function shopLink(name){return '<a class="text-link shop-link" onclick="toast(\'Product opened in Shopify.\')">'+esc(name)+' <span class="material-icons i16">open_in_new</span></a>'}   // Mappings + Stock check (team 2026-10-09)
+function tip(text,inner){return '<span class="tip" data-tip="'+esc(text)+'">'+inner+'</span>'}   // tooltip wrapper (works on disabled buttons too)
+function bActivity(){
+  var c=function(st){return S.events.filter(function(e){return e.status===st}).length}, never=!S.enabledOn;
+  var rows=[['Held','status-yellow',c('Held')],['Failed','status-red',c('Failed')],['Pending','status-blue',c('Pending')],['Applied in 24h','status-green',c('Applied')]];
+  var h='<div class="block" id="b-activity"><div class="block-t">Activity '+helpIc('Stock changes from QuickBooks and what happened to them.')+'</div><div class="box">';
+  rows.forEach(function(r){h+='<div class="act" data-act="'+r[0]+'">'+stip(r[0]==='Applied in 24h'?'Applied':r[0],'<span class="status '+r[1]+'">'+r[0]+'</span>')
+    +(never?'<span class="muted act-n">–</span>':'<a class="text-link act-n" onclick="go(\'events\',{evFilter:\''+(r[0]==='Applied in 24h'?'Applied':r[0])+'\'})">'+r[2]+'<span class="material-icons i16">chevron_right</span></a>')+'</div>'});
+  return h+'</div></div>'}
+function nextSync(){var d=new Date(),m=d.getMinutes(),add=5-m%5;d.setMinutes(m+add);return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2)}  // every 5 min
+function bSync(){
+  var cs=conn(), rd=cs.filter(ready), mode=S.sync;
+  var chip={off:'<span class="status status-grey">Disabled</span>',on:'<span class="status status-green">Enabled</span>',paused:'<span class="status status-grey">Paused</span>'}[mode];
+  var h='<div class="block" id="b-sync"><div class="block-t">Sync '+helpIc('Synder reads stock changes from QuickBooks and sends them to the stores that are ready.')+'</div><div class="box">'
+   +'<div class="line"><span class="k">State:</span><span id="sync-state">'+chip+'</span></div>';
+  if(S.enabledOn) h+='<div class="line" id="enabled-on"><span class="k">Enabled on:</span>'+esc(S.enabledOn)+'</div><div class="line"><span class="k">Last sync:</span>'+esc(S.lastSync)+'</div>';
+  if(mode==='on') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>'+nextSync()+'</div>';
+  else if(mode==='paused') h+='<div class="line" id="next-sync"><span class="k">Next sync:</span>after you resume</div>';
+  if(mode==='paused') h+='<div class="line muted" id="pause-reason">'+esc(S.pauseReason)+'</div>';
+  var b;
+  if(mode==='off') b=why(rd.length?'Start sending stock changes from QuickBooks to the ready stores. Only changes made from now on are sent.':'Choose a location and track stock in QuickBooks for at least one store first.',
+      '<button class="btn" id="btn-enable" '+(rd.length?'':'disabled ')+'onclick="enable()">Enable</button>',!rd.length);
+  else if(mode==='on') b=tip('Stop sending to Shopify. Changes are saved and sent when you resume.','<button class="btn btn-outlined" id="btn-pause" onclick="pause()">Pause</button>')
+      +tip('Get the latest changes from QuickBooks and send them now, instead of waiting for the next update.','<button class="btn btn-outlined" id="btn-run" onclick="S.lastSync=\'just now\';toast(\'Refresh finished: 0 new, 0 applied, 0 held, 0 failed.\');render()">Refresh now</button>')
+      +tip('Stop reading QuickBooks. Changes made while disabled are never sent.','<button class="btn btn-outlined btn-outlined-error" id="btn-disable" onclick="askDisable()">Disable</button>');
+  else b=tip('Send the saved changes and continue.','<button class="btn" id="btn-resume" onclick="S.sync=\'on\';S.pauseReason=null;toast(\'Resumed. Saved changes are being sent.\');render()">Resume</button>')
+      +tip('Stop reading QuickBooks. Changes made while disabled are never sent.','<button class="btn btn-outlined btn-outlined-error" id="btn-disable" onclick="askDisable()">Disable</button>');
+  h+='<div class="row-actions">'+b+'</div>';
+  return h+'</div></div>'}
+function storeBadge(i){if(!i.connected)return '<span class="status status-grey" data-badge>Not connected</span>';
+  if(!ready(i))return '<span class="status status-yellow" data-badge>Setup needed</span>';
+  return {on:'<span class="status status-green" data-badge>Receiving changes</span>',paused:'<span class="status status-blue" data-badge>Ready</span>',off:'<span class="status status-blue" data-badge>Ready</span>'}[S.sync]}
+function kebab(i){var q="'"+i.id+"'",items='';
+  if(i.loc) items+='<button class="menu-item" onclick="closeMenus();askLoc('+q+')">Change location</button>';
+  items+='<button class="menu-item" onclick="closeMenus();go(\'mappings\',{mapStore:'+q+',unmappedOnly:false})">View mappings</button>';
+  items+='<button class="menu-item" data-menu-disconnect onclick="closeMenus();askDisconnect('+q+')">Disconnect</button>';
+  return '<div class="kebab"><button class="btn-icon kebab-btn" aria-label="Actions for '+esc(i.name)+'" aria-haspopup="menu" onclick="toggleMenu(event,'+q+')"><span class="material-icons">more_horiz</span></button>'
+    +'<div class="menu" id="menu-'+i.id+'" role="menu" hidden>'+items+'</div></div>'}
+function bStores(){
+  var h='<div class="block" id="stores-card"><div class="block-t">Shopify stores '+helpIc('Each store receives stock changes at one location once its setup is done.')+'</div>';
+  // connected stores that need setup first, then ready ones, then the ones not connected yet
+  var rank=function(i){return !i.connected?2:ready(i)?1:0};
+  S.ints.slice().sort(function(a,b){return rank(a)-rank(b)}).forEach(function(i){
+    var q="'"+i.id+"'";
+    h+='<div class="box" id="store-'+i.id+'" data-store="'+i.id+'"><div class="store-h"><span class="shop-ic">S</span><b>'+esc(i.name)+' (Shopify)</b>'+storeBadge(i)+(i.connected?kebab(i):'')+'</div>';
+    if(!i.connected){
+      h+='<div class="line">This store doesn\'t receive stock changes from QuickBooks.</div><div class="row-actions">'
+        +'<button class="btn btn-outlined btn-sm connect-btn" '+(S.connecting?'disabled ':'')+'onclick="doConnect('+q+')">'+(S.connecting===i.id?'<span class="spin dark"></span>Connecting…':'Connect store')+'</button></div></div>';
+      return}
+    var m=mappedN(i), un=i.products.length-m, fixes=[];
+    // open setup items, in order, each with one action; a done one-time setting is not shown
+    if(!i.loc) fixes.push(['loc','Choose location','Pick the Shopify location that receives stock changes.','<button class="btn btn-outlined btn-sm" onclick="askLoc('+q+')">Choose location</button>']);
+    if(i.inv!=='Inventory') fixes.push(['inv','Track stock for products in QuickBooks','Settings › Products/Services › Created product should be: Inventory (now Non-inventory).',
+      '<button class="btn btn-outlined btn-sm" onclick="openSettings('+q+')">Open Settings <span class="material-icons i16">open_in_new</span></button>']);
+    if(un) fixes.push(['map',plural(un,'item')+(un===1?' needs':' need')+' mapping','Products without a QuickBooks item don\'t get stock changes. Map them on the Mappings tab.',
+      '<button class="btn btn-outlined btn-sm" onclick="go(\'mappings\',{mapStore:'+q+',unmappedOnly:true})">Map products</button>']);
+    /* no 'Connected on' line: the date that matters is Sync's Enabled on (Ignat 2026-10-06) */
+    if(i.loc) h+='<div class="line" data-ok="loc"><span class="k">Location:</span>'+esc(i.loc)+'</div>';
+    h+='<div class="line" data-ok="map"><span class="k">Mappings:</span>'+m+'/'+i.products.length+'</div>';
+    fixes.forEach(function(f,ix){h+='<div class="fix" data-fix="'+f[0]+'">'+(f[0]==='map'?'<span class="n n-ic" aria-hidden="true"><span class="material-icons">priority_high</span></span>':'<span class="n">'+(ix+1)+'</span>')+'<div class="grow">'+f[1]+'<span class="muted">'+f[2]+'</span><div class="row-actions" style="margin-top:8px">'+f[3]+'</div></div></div>'});
+    h+='</div>'});
+  return h+'<div style="margin-top:12px;font-size:14px;line-height:20px;color:var(--text-primary)">Don\'t see your store here? Connect it first in <a class="text-link" onclick="toast(\'Organization settings opened in a new tab.\')">Organization settings</a></div></div>'}
+function toggleMenu(e,id){e.stopPropagation();var m=$('menu-'+id),open=m.hidden;closeMenus();m.hidden=!open}
+function closeMenus(){document.querySelectorAll('.menu').forEach(function(m){m.hidden=true})}
+document.addEventListener('click',closeMenus);
+function askDisconnect(id){var i=int(id);dialog('Disconnect '+i.name+'?','<p>Synder stops sending stock changes to '+esc(i.name)+'. Its history stays on the Activity tab, and its mappings are kept if you connect it again.</p>',
+  [{label:'Disconnect',cls:'btn-danger',fn:function(){closeM();i.connected=false;i.loc=null;i.cmp=null;toast(i.name+' disconnected.');render()}}])}
+
+/* ====================================================================== */
+/* TABS — rebuilt from production (demo.synderapp.com/ui/inventorySync,    */
+/* captured 2026-10-02): same filters, columns, buttons, dialogs, toasts   */
+/* and paging, on the prototype's sample data. Kit table component.        */
+/* ====================================================================== */
+function dom(name){var i=S.ints.filter(function(x){return x.name===name})[0];return i?i.domain:name}
+function gid(e){var h=0,s=e.t+e.src+e.item+e.d;for(var k=0;k<s.length;k++)h=(h*31+s.charCodeAt(k))%9000000;return 'gid://shopify/InventoryAdjustmentGroup/7820'+String(7000000000+h).slice(-10)}
+function pager(key,total){var per=S.per[key]||10,page=Math.min(S.page[key]||1,Math.max(1,Math.ceil(total/per))),from=total?(page-1)*per+1:0,to=Math.min(total,page*per),pages=Math.max(1,Math.ceil(total/per)),btns='';
+  for(var p=1;p<=pages;p++)btns+='<button class="page-btn'+(p===page?' active':'')+'" onclick="S.page[\''+key+'\']='+p+';render()">'+p+'</button>';
+  return {from:from,to:to,slice:function(a){return a.slice(from?from-1:0,to)},html:'<div class="pagination" data-pager="'+key+'"><span class="page-info">Rows per page:</span><select class="select pager-per" aria-label="Rows per page: '+per+'" onchange="S.per[\''+key+'\']=+this.value;S.page[\''+key+'\']=1;render()">'
+    +[10,25,50,100].map(function(n){return '<option '+(n===per?'selected':'')+'>'+n+'</option>'}).join('')+'</select><span class="page-info">'+from+'–'+to+' of '+total+'</span>'+btns+'</div>'}}
+function storeSelect(id,label,value,withAll,onchange,only){var cs=only||conn();return '<div class="form-field tb-field"><label class="form-label" for="'+id+'">'+label+'</label><select class="select" id="'+id+'" onchange="'+onchange+'">'
+  +(withAll?'<option value="all" '+(value==='all'?'selected':'')+'>All stores</option>':'')+cs.map(function(x){return '<option value="'+x.id+'" '+(x.id===value?'selected':'')+'>'+esc(x.name)+'</option>'}).join('')+'</select></div>'}
+
+/* ---- Mappings ---- */
+var SRC_TIP={SKU:'Matched automatically: the same SKU in Shopify and QuickBooks.',Name:'Matched automatically: the same name in Shopify and QuickBooks.',
+  Manual:'You picked this item. Automatic matching never changes it.','Not mapped':'This product doesn\'t get stock changes. Pick a QuickBooks item.'};
+function srcChip(src){return '<span class="stip" tabindex="0" data-stip="'+esc(SRC_TIP[src])+'"><span class="status '+(src==='Not mapped'?'status-yellow':'status-grey')+'">'+src+'</span></span>'}
+function usedBy(i,qid,except){return i.products.filter(function(p){var m=i.map[p[0]];return p[0]!==except&&m&&m.q===qid}).map(function(p){return p[0]})}
+function vMappings(){var cs=conn();if(!cs.length)return '<div class="table-wrap"><div class="empty">Connect a store on the Overview to see its products here.</div></div>';
+  if(S.mapStore&&S.mapStore!=='all'&&!(int(S.mapStore)||{}).connected)S.mapStore='all';
+  var sf=S.mapStore||'all',all=sf==='all',scope=all?cs:[int(sf)],q=(S.q||'').toLowerCase(),list=[];
+  scope.forEach(function(i){i.products.forEach(function(p){if((!S.unmappedOnly||!i.map[p[0]])&&(!q||p[0].toLowerCase().indexOf(q)>-1||(p[1]||'').toLowerCase().indexOf(q)>-1))list.push({i:i,p:p})})});
+  var pg=pager('map',list.length),last=scope.map(function(i){return i.mapRefreshed||'3 days ago'})[0];
+  var h='<div class="toolbar">'+storeSelect('map-store','Store',sf,true,"S.mapStore=this.value;S.page.map=1;render()")
+   +'<div class="form-field tb-field"><label class="form-label" for="map-search">Search</label><input class="input" id="map-search" style="width:320px" value="'+esc(S.q||'')+'" oninput="S.q=this.value;S.page.map=1;render();var x=document.getElementById(\'map-search\');x.focus();x.setSelectionRange(x.value.length,x.value.length)"></div>'
+   +'<label class="checkbox-wrap tb-check"><input type="checkbox" class="checkbox" id="unmapped-only" '+(S.unmappedOnly?'checked':'')+' onchange="S.unmappedOnly=this.checked;S.page.map=1;render()">Unmapped only</label>'
+   +'<span class="stip tb-check muted listed-help" tabindex="0" data-stip="Only active Shopify products with inventory tracking on, and QuickBooks items of type Inventory, are listed.">Which products are listed? <span class="material-icons i16" style="margin-left:4px">help_outline</span></span><span class="grow"></span>'
+   +tip('Reload the QuickBooks items and match the products again'+(all?' in every store':'')+'. Last updated '+last+'.','<button class="btn btn-outlined" id="btn-refresh" onclick="refreshMappings(\''+sf+'\')">Refresh</button>')+'</div>';
+  h+='<div class="table-wrap"><table class="synder-table" id="map-table"><thead><tr>'+(all?'<th>Store</th>':'')+'<th>Product</th><th>Variant</th><th>SKU</th><th style="width:320px">QuickBooks item</th><th>Match source</th><th>Actions</th></tr></thead><tbody>'
+   +(pg.slice(list).map(function(t){var i=t.i,p=t.p,m=i.map[p[0]],dup=m?usedBy(i,m.q,p[0]):[];
+     return '<tr data-prod="'+esc(p[0])+'" data-st="'+i.id+'">'+(all?'<td>'+esc(i.name)+'</td>':'')+'<td>'+shopLink(p[0])+'</td><td>Default Title</td><td>'+(p[1]?esc(p[1]):'–')+'</td>'
+     +'<td><select class="select map-sel" style="width:300px" aria-label="QuickBooks item for '+esc(p[0])+'" onchange="setMap(\''+i.id+'\',\''+p[0]+'\',this.value)"><option value="">Search by name or SKU</option>'
+     +QBO.map(function(x){var u=usedBy(i,x.id,p[0]);return '<option value="'+x.id+'" '+(m&&m.q===x.id?'selected':'')+'>'+esc(x.name)+(x.sku?' · '+esc(x.sku):'')+(u.length?' · used by '+esc(u.join(', ')):'')+'</option>'}).join('')+'</select>'
+     +(dup.length?'<div class="map-dup"><span class="material-icons i16">warning</span>'+esc(qbo(m.q).name)+' is also mapped to '+esc(dup.join(', '))+'. Only one of them gets stock changes.</div>':'')+'</td>'
+     +'<td>'+srcChip(m?m.src:'Not mapped')+'</td><td>'+(m?'<button class="btn btn-text btn-sm remove-map" onclick="setMap(\''+i.id+'\',\''+p[0]+'\',\'\',true)">Remove</button>':'–')+'</td></tr>'}).join('')
+     ||'<tr><td colspan="'+(all?7:6)+'" class="empty">No variants match.</td></tr>')+'</tbody></table></div>'+pg.html;
+  return h}
+function refreshMappings(id){var scope=id==='all'?conn():[int(id)],n=0,tot=0;
+  scope.forEach(function(i){var fresh=autoMatch(i);i.products.forEach(function(p){if(!(i.map[p[0]]&&i.map[p[0]].src==='Manual'))i.map[p[0]]=fresh[p[0]]});
+    i.mapRefreshed='less than a minute ago';compareStore(i);n+=mappedN(i);tot+=i.products.length});
+  toast(plural(tot,'product')+' checked: '+n+' mapped, '+(tot-n)+' not mapped.');render()}
+
+/* ---- Activity (was Events) ---- */
+var STATUS_TIP={Pending:'Waiting to be sent to Shopify with the next update.',Applied:'Sent. The stock in Shopify was updated.',
+  Held:'Not sent. Fix the reason, then click Retry.',Failed:'Shopify rejected the change. Click Retry. If it fails again, contact Support.',
+  Reverted:'The opposite change was sent to Shopify. QuickBooks didn\'t change.'};
+function stip(name,inner){return '<span class="stip" tabindex="0" data-stip="'+esc(STATUS_TIP[name])+'">'+inner+'</span>'}
+var DOC_NAMES={InventoryAdjustment:'Inventory qty adjustment',SalesReceipt:'Sales receipt',CreditMemo:'Credit memo',VendorCredit:'Vendor credit',RefundReceipt:'Refund receipt'};
+function docName(src){return src.replace(/^(\w+) #/,function(m,t){return (DOC_NAMES[t]||t)+' #'})}
+function shopProd(e){var i=S.ints.filter(function(x){return x.name===e.store})[0];if(!i||!i.map)return null;
+  var p=i.products.filter(function(p){var m=i.map[p[0]];return m&&qbo(m.q).name===e.item})[0];return p?p[0]:null}
+function retryable(){return S.events.filter(function(e){return e.status==='Held'||e.status==='Failed'})}
+function vEvents(){var f=S.evFilter||'All',sf=S.evStore||'all';
+  var list=S.events.filter(function(e){return (f==='All'||e.status===f)&&(sf==='all'||dom(e.store)===int(sf).domain)});
+  var pg=pager('ev',list.length),rt=retryable(),nh=rt.filter(function(e){return e.status==='Held'}).length,nf=rt.length-nh;
+  var rl=!rt.length?'Retry held and failed':'Retry '+rt.length+' '+(nh&&nf?'held and failed':nh?'held':'failed');
+  var h='<div class="toolbar">'+storeSelect('ev-store','Store',sf,true,"S.evStore=this.value;S.page.ev=1;render()")
+   +'<div class="form-field tb-field"><label class="form-label" for="ev-filter">Status</label><div class="sel-wrap"><select class="select" id="ev-filter" onchange="S.evFilter=this.value||\'All\';S.page.ev=1;render()">'
+   +'<option value="" hidden '+(f==='All'?'selected':'')+'></option>'
+   +['Pending','Applied','Held','Failed'].map(function(x){return '<option '+(x===f?'selected':'')+'>'+x+'</option>'}).join('')+'</select>'
+   +(f!=='All'?'<button class="sel-clear" id="ev-filter-clear" aria-label="Clear status filter" onclick="S.evFilter=\'All\';S.page.ev=1;render()"><span class="material-icons">close</span></button>':'')+'</div></div><span class="grow"></span>'
+   +why(rt.length?'Send the held and failed changes again. Only changes whose reason is fixed are sent.':'Nothing is held or failed.',
+     '<button class="btn btn-outlined" id="btn-retry" '+(rt.length?'':'disabled ')+'onclick="retry()">'+rl+'</button>',!rt.length)+'</div>';
+  if(!list.length)return h+'<div class="table-wrap"><div class="empty" id="ev-empty">No sync events</div></div>';
+  h+='<div class="table-wrap"><table class="synder-table table--sm" id="ev-table"><thead><tr><th>Time</th><th>Store</th><th>QuickBooks document</th><th>QuickBooks item</th><th>Shopify product</th><th class="num">Change</th><th>Status</th><th>Reason</th><th>Actions</th></tr></thead><tbody>'
+   +pg.slice(list).map(function(e){var ix=S.events.indexOf(e),chip={Applied:'status-green',Pending:'status-blue',Held:'status-yellow',Failed:'status-red'}[e.status],sp=shopProd(e),rev=/^Shopify adjustment/.test(e.src)||e.src==='Stock check';
+     return '<tr><td class="ev-time">'+esc(e.t)+'</td><td>'+esc(e.store)+'</td>'
+     +'<td>'+(rev?esc(docName(e.src)):'<a class="text-link doc-link" onclick="toast(\''+esc(docName(e.src))+' opened in QuickBooks.\')">'+esc(docName(e.src))+'</a>')+'</td>'
+     +'<td>'+esc(e.item)+'</td><td class="shop-prod">'+(sp?esc(sp):'–')+'</td><td class="num">'+signed(e.d)+'</td>'
+     +'<td>'+stip(e.status,'<span class="status '+chip+'">'+e.status+'</span>')+(e.rev?' '+stip('Reverted','<span class="text-link" style="margin-left:4px">Reverted</span>'):'')+'</td><td>'+(e.reason?esc(e.reason):'–')+'</td>'
+     +'<td class="ev-actions">'+(e.status==='Applied'?'<a class="text-link view-shopify" onclick="toast(\'Inventory history opened in Shopify.\')">View in Shopify <span class="material-icons i16">open_in_new</span></a>':'')
+     +(e.status==='Applied'&&!e.rev&&!rev?'<button class="btn btn-text btn-sm revert" onclick="askRevert('+ix+')">Revert</button>':'')
+     +(e.status!=='Applied'?'–':'')+'</td></tr>'}).join('')+'</tbody></table></div>'+pg.html;
+  return h}
+function askRevert(ix){var e=S.events[ix];dialog('Revert event','<p>Push '+signed(-e.d)+' back to the store? This writes the opposite adjustment in Shopify.</p><p>QuickBooks isn\'t changed. Shopify will differ from QuickBooks by '+Math.abs(e.d)+' until you fix it in Stock check.</p>',[{label:'Revert',fn:function(){closeM();e.rev=true;
+  S.events.unshift({t:'just now',store:e.store,src:'Shopify adjustment (revert of '+docName(e.src)+')',item:e.item,d:-e.d,status:'Applied'});toast('Event reverted.');render()}}])}
+function retry(){var n=0;retryable().forEach(function(e){var i=S.ints.filter(function(x){return x.name===e.store})[0];
+  if(i.products.some(function(p){return i.map[p[0]]&&qbo(i.map[p[0]].q).name===e.item})){e.status='Pending';delete e.reason;n++}});
+  toast(n?plural(n,'event')+' queued for retry.':'Nothing was sent: fix the reason first.');render()}
+/* status tooltips: one fixed box, so the table's scroll area doesn't clip it */
+(function(){var box=document.createElement('div');box.className='stip-box';box.setAttribute('role','tooltip');box.id='stip-box';
+  function show(t){var r=t.getBoundingClientRect();box.textContent=t.getAttribute('data-stip');box.style.display='block';
+    var top=r.top-box.offsetHeight-8;if(top<8)top=r.bottom+8;box.style.top=top+'px';box.style.left=Math.max(8,Math.min(r.left,innerWidth-box.offsetWidth-8))+'px'}
+  function hide(){box.style.display='none'}
+  document.addEventListener('DOMContentLoaded',function(){document.body.appendChild(box)});if(document.body)document.body.appendChild(box);
+  ['mouseover','focusin'].forEach(function(ev){document.addEventListener(ev,function(e){var t=e.target.closest&&e.target.closest('[data-stip]');if(t)show(t);else hide()})});
+  document.addEventListener('focusout',hide);document.addEventListener('scroll',hide,true)})();
+
+/* ---- Stock check (was Reconcile) ----
+   Variant 1: list of comparisons → open one to see its differences.
+   Variant 2: opens straight on the differences of the latest comparison of each store; history below. */
+var RUN_TIP={Finished:'The comparison is done. Open it to see the products that differ.',Failed:'The comparison didn\'t finish. Click Compare now to try again.'};
+var RES_TIP={Unresolved:'QuickBooks and Shopify differ. Update the Shopify quantity or ignore the difference.',Updated:'The difference was sent to Shopify. You can see it on the Activity tab.',
+  Ignored:'Marked as reviewed. Nothing was changed. It comes back if either quantity changes.'};
+var REC_DESC='Every night at 02:30 UTC, Synder compares QuickBooks quantity on hand with Shopify stock for every mapped product in each store.';
+function chip(tips,name,cls){return '<span class="stip" tabindex="0" data-stip="'+esc(tips[name])+'"><span class="status '+cls+'">'+name+'</span></span>'}
+function runsOf(){return S.runs.filter(function(r){return (S.recFilter||'all')==='all'||r.store===S.recFilter})}
+function qs(x){return "'"+String(x).replace(/'/g,"\\'")+"'"}
+function compareBtn(){var cs=conn().filter(function(i){return i.loc});
+  return why(cs.length?'Compare every store that has a location now, instead of waiting for the night.':'Choose a location for a store first.','<button class="btn" id="btn-compare" '+(cs.length?'':'disabled ')+'onclick="compareNow()">Compare now</button>',!cs.length)}
+function runsTable(list,pg){return '<div class="table-wrap"><table class="synder-table table--sm" id="runs-table"><thead><tr><th>Started</th><th>Store</th><th>Trigger</th><th>Status</th><th class="num">Items compared</th><th class="num">Differences</th><th class="num"></th></tr></thead><tbody>'
+   +pg.slice(list).map(function(r){return '<tr data-run="'+r.id+'"><td>'+esc(r.started)+'</td><td>'+esc(int(r.store).name)+'</td><td>'+(r.trigger==='Scheduled'?'Nightly':r.trigger)+'</td><td>'+(r.status==='Failed'?chip(RUN_TIP,'Failed','status-red'):chip(RUN_TIP,'Finished','status-green'))+'</td><td class="num">'+(r.status==='Failed'?'–':r.rows.length)+'</td><td class="num">'+(r.status==='Failed'?'–':r.mismatches)+'</td>'
+     +'<td class="num">'+(r.status==='Failed'?'–':'<button class="btn btn-text btn-sm view-rows" onclick="S.runView=\''+r.id+'\';S.unresolvedOnly=true;S.recSel={};render()">View rows</button>')+'</td></tr>'}).join('')+'</tbody></table></div>'+pg.html}
+/* the difference table, shared by both variants. items: [{i, x, run}] */
+function diffTable(items,withStore,emptyText){var sel=S.recSel||{},key=function(t){return t.i.id+'|'+t.x.prod};
+  var open=items.filter(function(t){return t.latest&&t.x.res==='Unresolved'}),nSel=open.filter(function(t){return sel[key(t)]}).length,cols=withStore?10:9;
+  var cb=function(on,label,fn){return '<input type="checkbox" class="checkbox" '+(on?'checked ':'')+'aria-label="'+esc(label)+'" onchange="'+fn+'">'};
+  var allFn="var o=this.checked;S.recSel={};if(o)["+open.map(function(t){return qs(key(t))}).join(',')+"].forEach(function(k){S.recSel[k]=true});render()";
+  var head=nSel?'<tr id="head-bulk"><th class="col-cb">'+cb(true,'Select all',allFn)+'</th><th colspan="'+(cols-1)+'"><div class="bulk-row"><span class="bulk-count">'+nSel+' selected</span>'
+      +'<button class="btn btn-sm" id="bulk-accept" onclick="bulkAccept()">Update Shopify qty</button><span class="stip" data-stip="Hides this difference until either quantity changes. Nothing is sent to Shopify. You can restore it."><button class="btn btn-text btn-sm" id="bulk-ignore" onclick="bulkIgnore()">Ignore</button></span></div></th></tr>'
+    :'<tr><th class="col-cb">'+(open.length?cb(false,'Select all',allFn):'')+'</th>'+(withStore?'<th>Store</th>':'')+'<th>Product</th><th>SKU</th><th>QuickBooks item</th><th class="num">QuickBooks</th><th class="num">Shopify</th><th class="num">'
+      +'<span class="stip" tabindex="0" data-stip="QuickBooks minus Shopify. +8 means Shopify has 8 fewer than QuickBooks.">Difference</span></th><th>Status</th><th>Actions</th></tr>';
+  return '<div class="table-wrap"><table class="synder-table table--sm" id="rec-table"><thead>'+head+'</thead><tbody>'
+   +(items.map(function(t){var i=t.i,x=t.x,d=x.qq-x.sq,p=i.products.filter(function(y){return y[0]===x.prod})[0],q=qs(i.id)+','+qs(x.prod),canAct=t.latest&&x.res==='Unresolved';
+     var st=x.res==='Unresolved'?chip(RES_TIP,'Unresolved','status-yellow'):x.res==='Ignored'?chip(RES_TIP,'Ignored','status-grey'):chip(RES_TIP,'Updated','status-green');
+     return '<tr data-prod="'+esc(x.prod)+'" data-st="'+i.id+'"><td class="col-cb">'+(canAct?cb(!!sel[key(t)],'Select '+x.prod,"S.recSel=S.recSel||{};S.recSel["+qs(key(t))+"]=this.checked;render()"):'')+'</td>'
+     +(withStore?'<td>'+esc(i.name)+'</td>':'')+'<td>'+shopLink(x.prod)+'</td><td>'+(p&&p[1]?esc(p[1]):'–')+'</td><td>'+esc(x.item)+'</td><td class="num">'+x.qq+'</td><td class="num">'+x.sq+'</td><td class="num">'+signed(d)+'</td>'
+     +'<td>'+st+(x.by?'<span class="muted cell-sub">by '+esc(x.by)+'</span>':'')+'</td>'
+     +'<td class="rec-actions">'+(canAct?'<button class="btn btn-outlined btn-sm accept" onclick="askAccept('+q+')">Update Shopify qty</button><span class="stip" data-stip="Hides this difference until either quantity changes. Nothing is sent to Shopify. You can restore it."><button class="btn btn-text btn-sm ignore" onclick="ignoreRow('+q+')">Ignore</button></span>'
+       :t.latest&&x.res==='Ignored'?'<button class="btn btn-text btn-sm restore" onclick="restoreRow('+q+')">Restore</button>':'–')+'</td></tr>'}).join('')
+     ||'<tr><td colspan="'+cols+'" class="empty">'+(emptyText||(S.unresolvedOnly?'No unresolved differences.':'No differences.'))+'</td></tr>')+'</tbody></table></div>'}
+function vReconcile(){
+  if(S.runView){var r=S.runs.filter(function(x){return x.id===S.runView})[0];return vRun(r)}
+  return L===2?vDiffs():vRuns()}
+function vRuns(){var list=runsOf(),pg=pager('rec',list.length);
+  var h='<p class="muted" style="margin:0 0 12px">'+REC_DESC+' Open a comparison to see the products that differ.</p>'
+   +'<div class="toolbar">'+storeSelect('rec-filter','Store',S.recFilter||'all',true,"S.recFilter=this.value;S.page.rec=1;render()")+'<span class="grow"></span>'+compareBtn()+'</div>';
+  if(!list.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
+  return h+runsTable(list,pg)}
+function vDiffs(){var sf=S.recFilter||'all',stores=conn().filter(function(i){return i.loc&&(sf==='all'||i.id===sf)}),items=[],last=[];
+  if(S.unresolvedOnly==null)S.unresolvedOnly=true;
+  stores.forEach(function(i){var a=lastRunAny(i);if(a&&a.status==='Failed')last.push(esc(i.name)+': <span class="diff-fail-t">failed '+esc(a.started)+'</span>');var r=latestRun(i);if(!r)return;if(!(a&&a.status==='Failed'))last.push(esc(i.name)+': '+esc(r.started));
+    r.rows.forEach(function(x){if(x.mis&&(!S.unresolvedOnly||x.res==='Unresolved'))items.push({i:i,x:x,latest:true})})});
+  var h='<p class="muted" style="margin:0 0 12px">'+REC_DESC+' Only products that differ are listed.</p>'
+   +'<div class="toolbar">'+storeSelect('rec-filter','Store',sf,true,"S.recFilter=this.value;S.recSel={};S.page.rec=1;render()")
+   +'<label class="checkbox-wrap tb-check"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label><span class="grow"></span>'+compareBtn()+'</div>';
+  if(!last.length)return h+'<div class="table-wrap"><div class="empty">No comparisons yet. Run one with Compare now.</div></div>';
+  var fl=stores.filter(function(i){var a=lastRunAny(i);return a&&a.status==='Failed'});
+  h+='<div class="muted run-sub" id="last-compared">Latest comparison · '+last.join(' · ')+'</div>'
+   +fl.map(function(i){return '<div class="diff-fail" data-fail-page="'+i.id+'"><span class="material-icons i16">error</span><span class="grow">The last check of '+esc(i.name)+' failed ('+esc(lastRunAny(i).started)+'), so its stock wasn\'t compared. Click Compare now to try again.</span></div>'}).join('')
+   +diffTable(items,true,fl.length?(S.unresolvedOnly?'No unresolved differences in the stores that were compared.':'No differences in the stores that were compared.'):null);
+  var list=runsOf(),pg=pager('rec',list.length);
+  h+='<button class="btn btn-text prev-toggle" id="prev-toggle" aria-expanded="'+!!S.prevOpen+'" onclick="S.prevOpen=!S.prevOpen;render()"><span class="material-icons i16">'+(S.prevOpen?'expand_less':'expand_more')+'</span>Previous comparisons ('+list.length+')</button>'
+   +(S.prevOpen?runsTable(list,pg):'');
+  return h}
+function vRun(r){var i=int(r.store),latest=latestRun(i)===r;
+  var rows=r.rows.filter(function(x){return x.mis&&(!S.unresolvedOnly||x.res==='Unresolved')}).map(function(x){return {i:i,x:x,latest:latest}});
+  return '<a class="text-link back-link" id="btn-back-runs" onclick="S.runView=null;S.recSel={};render()"><span class="material-icons i16">arrow_back</span>'+(L===2?'Differences':'All comparisons')+'</a>'
+   +'<div class="run-head"><div class="run-title">'+esc(i.name)+' '+chip(RUN_TIP,'Finished','status-green')+'</div>'
+   +'<label class="checkbox-wrap"><input type="checkbox" class="checkbox" id="unresolved-only" '+(S.unresolvedOnly?'checked':'')+' onchange="S.unresolvedOnly=this.checked;render()">Unresolved only</label><span class="grow"></span>'
+   +tip('Compare '+i.name+' now and open the new comparison.','<button class="btn btn-outlined" id="run-compare" onclick="compareOne(\''+i.id+'\')">Compare now</button>')+'</div>'
+   +'<div class="muted run-sub">Compared on '+esc(r.started)+' · '+plural(r.rows.length,'product')+' compared · '+plural(r.mismatches,'difference')+(latest?'':' · An older comparison: act on the latest one.')+'</div>'
+   +diffTable(rows,false)}
+function compareOne(id){var i=int(id);compareStore(i);addRun(S,i,'just now','Manual');S.runView=S.runs[0].id;S.recSel={};toast(i.name+' compared.');render()}
+function compareNow(){var cs=conn().filter(function(i){return i.loc});cs.forEach(function(i){compareStore(i);addRun(S,i,'just now','Manual')});S.page.rec=1;
+  toast(plural(cs.length,'store')+' compared.');render()}
+function addRun(s,i,when,trigger){var rows=i.cmp;s.runs.unshift({id:'r'+(s.runs.length+1)+i.id,store:i.id,started:when,trigger:trigger,rows:rows,mismatches:rows.filter(function(x){return x.mis}).length})}
+
+/* ---- render ---- */
+function render(){
+  var m=$('main');
+  var tabs=['overview','events','mappings','reconcile'],names={overview:'Overview',mappings:'Mappings',events:'Activity',reconcile:'Stock check'};
+  var ob=onboarding();
+  if(ob!==null){m.innerHTML='<div class="ob-page">'+ob+'</div>';return}
+  var v=gate(S.tab)||'';
+  if(!v||S.tab==='overview')v+=S.tab==='overview'?vOverview():S.tab==='mappings'?vMappings():S.tab==='events'?vEvents():vReconcile();   // other tabs: only the alert until a store is connected
+  m.innerHTML='<div class="page-header"><div class="page-header-text"><h1 class="page-title">Inventory sync</h1><p class="page-subtitle">Pushes QuickBooks Online stock movements into your Shopify store.</p></div></div>'
+   +'<div class="tabs" role="tablist">'+tabs.map(function(t){return '<button class="tab'+(S.tab===t?' active':'')+'" role="tab" id="tab-'+t+'" aria-selected="'+(S.tab===t)+'" onclick="go(\''+t+'\')">'+names[t]+'</button>'}).join('')+'</div>'+v;
+}
+function setVariant(n){V=n;[1,2,3].forEach(function(i){$('vs-'+i).classList.toggle('on',i===n)});S=n===1?stateFirst():n===2?stateFixes():stateAll();
+  history.replaceState(null,'','?l='+L+'&s='+n);render()}
+function setLayout(n){L=n;[1,2].forEach(function(i){$('ly-'+i).classList.toggle('on',i===n)});history.replaceState(null,'','?l='+L+'&s='+V);render()}   // same data, layout only
+L=/l=2/.test(location.search)?2:1;[1,2].forEach(function(i){$('ly-'+i).classList.toggle('on',i===L)});
+setVariant(/s=2/.test(location.search)?2:/s=3/.test(location.search)?3:1);
+</script>
+</body>
+</html>

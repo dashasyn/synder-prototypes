@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard — Per Transaction (as developed)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+/* Recreation of the developed Per Transaction dashboard, from Ignat's three
+   screenshots (2026-10-06). Layout only on top of the kit; every text is ≥14px. */
+body { margin: 0; background: var(--bg-surface); color: var(--text-primary); font-family: var(--font-family); }
+
+/* ---- prototype variant switch (not product chrome) ---- */
+.variant-switch{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;background:var(--color-grey);
+  color:var(--color-white);padding:8px 20px;flex-shrink:0;font-size:14px}
+.variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:14px;
+  text-transform:uppercase}
+.variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);
+  border-radius:6px;padding:3px}
+.variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);
+  font-family:inherit;font-size:14px;padding:5px 12px;border-radius:4px;cursor:pointer;
+  white-space:nowrap}
+.variant-switch button:hover{color:var(--color-white)}
+.variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+
+/* ---- shell ---- */
+.shell { display: flex; min-height: 100vh; }
+.sidebar { position: static; height: auto; border-right: 1px solid var(--border-nav); }
+.sidebar-logo { font-size: 18px; color: var(--color-primary); font-weight: 700; padding: 18px 16px; border-bottom: 1px solid var(--color-sidebar-divider); }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { position: static; justify-content: flex-end; font-size: 14px; }
+.syncs-left a { color: var(--text-link); text-decoration: none; }
+.content { padding: 20px 24px 40px; }
+
+/* ---- page head ---- */
+.ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.ph h1 { font-size: 24px; font-weight: 400; line-height: 32px; margin: 0; }
+.ph select { width: 140px; }
+
+.alert .alert-body { flex: 1; }
+.alert .alert-ico { flex-shrink: 0; width: 20px; height: 20px; }
+.alert .btn { margin-left: auto; flex-shrink: 0; }
+
+/* ---- KPI band ---- */
+:root { /* one track list for the KPI band and the blocks below it:
+   12px band frame · card · 24px gap · card · 24px gap · card · 12px band frame.
+   Cards sit in tracks 2/4/6; outer blocks also take the frame track, so the blocks'
+   outer edges line up with the band's and their inner edges with the cards'. */
+  --dash-grid: 12px minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr) 12px; }
+.kpi-band { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px 0; display: grid; grid-template-columns: var(--dash-grid); margin-bottom: 20px; }
+.kpi-band > .kpi:nth-child(1) { grid-column: 2; }
+.kpi-band > .kpi:nth-child(2) { grid-column: 4; }
+.kpi-band > .kpi:nth-child(3) { grid-column: 6; }
+.kpi { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 12px 12px 14px; }
+.kpi.bad  { background: var(--color-red-light); border-color: var(--color-status-red-bg); }
+.kpi.good { background: var(--color-green-light); border-color: var(--color-status-green-bg); }
+.kpi-t { font-weight: 500; font-size: 14px; line-height: 20px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.kpi-v { font-size: 16px; line-height: 24px; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.kpi-v .lnk { font-size: 14px; }
+
+/* ---- columns ---- */
+.cols { display: grid; grid-template-columns: var(--dash-grid); align-items: start; }
+.cols > .col:nth-child(1) { grid-column: 1 / 3; }
+.cols > .col:nth-child(2) { grid-column: 4; }
+.cols > .col:nth-child(3) { grid-column: 6 / 8; }
+.col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.panel { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px; }
+.panel-t { font-weight: 500; font-size: 14px; line-height: 20px; display: flex; align-items: center; gap: 6px; }
+.panel-big { font-size: 17px; line-height: 24px; margin: 2px 0 10px; }
+.panel-big .help { vertical-align: -2px; margin-left: 4px; }
+.panel-big .n { color: var(--text-link); }
+.panel-t + .box, .panel-t + .items { margin-top: 10px; }
+.box { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 6px; }
+.box.scroll { max-height: 236px; overflow-y: auto; }
+
+/* rows inside a box: label left, count + chevron right; whole row is the link */
+.row { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 27px; padding: 3px 6px; border: none; background: none; border-radius: var(--radius-sm); font: inherit; font-size: 14px; color: var(--text-primary); text-align: left; cursor: pointer; }
+.row:hover { background: var(--bg-subtle); }
+.row.hot { background: var(--color-red-light); }
+.row.hot:hover { background: var(--color-status-red-bg); }
+.row .lbl { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; }
+.row .lbl .txt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .cnt { color: var(--text-link); display: inline-flex; align-items: center; gap: 4px; }
+.row:focus-visible, .lnk:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+
+/* accounting / integration cards */
+.items { display: flex; flex-direction: column; gap: 10px; }
+.item { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 10px 12px; }
+.item.bad { background: var(--color-red-light); border-color: var(--color-status-red-bg); }
+.item-h { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.item-h .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.item-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+
+.lnk { background: none; border: none; padding: 0; font: inherit; font-size: 14px; color: var(--text-link); cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.lnk:hover { text-decoration: underline; }
+.icon-btn { background: none; border: none; padding: 2px; border-radius: var(--radius-sm); cursor: pointer; color: var(--text-secondary); display: inline-flex; }
+.icon-btn:hover { background: var(--bg-hover); }
+
+.logo { width: 18px; height: 18px; flex-shrink: 0; display: block; }
+.chev { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* help "?" — tooltip copy is not captured, the marker says so */
+.help { position: relative; display: inline-flex; color: var(--color-grey-30); cursor: help; }
+.help svg { width: 16px; height: 16px; }
+.help .tooltip { font-size: 14px; line-height: 20px; white-space: nowrap; font-weight: 400; max-width: none; }
+.help:hover .tooltip, .help:focus .tooltip { opacity: 1; }
+/* production-style tooltip card: white, wraps, stays open while the pointer moves into it */
+.help-card .tip-card { display: none; position: absolute; top: 100%; left: -8px; z-index: 120; padding-top: 6px; width: 300px; cursor: default; }
+.help-card .tip-card::before { content: ''; position: absolute; inset: 6px 0 0; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); box-shadow: var(--shadow-dropdown); z-index: -1; }
+.help-card:hover .tip-card, .help-card:focus-within .tip-card { display: block; }
+.tip-text { display: block; padding: 10px 12px 4px; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--text-primary); white-space: normal; }
+.tip-link { margin: 0 12px 10px; font-weight: 400; }
+.tip-text.tip-only { padding-bottom: 10px; }
+.acct-tip { position: relative; display: inline-flex; cursor: default; color: inherit; }
+.acct-tip .tip-card { width: 280px; }
+
+/* row menu */
+.menu-wrap { position: relative; display: inline-flex; }
+.menu-wrap .dropdown-menu { left: auto; right: 0; }
+.dropdown-item.muted { color: var(--text-secondary); cursor: default; }
+.dropdown-item.muted:hover { background: none; }
+
+/* prototype toast */
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--color-grey); color: var(--color-white); padding: 10px 16px; border-radius: var(--radius-sm); font-size: 14px; box-shadow: var(--shadow-elevated); opacity: 0; pointer-events: none; transition: opacity .15s; z-index: 200; }
+.toast.show { opacity: 1; }
+.variant-switch .vs-sep{width:1px;height:20px;background:rgba(255,255,255,.2)}
+
+/* ---- Var 1: collapsed issues block (from Var 1 – Rich, iter3), kit colours ---- */
+.issues { background: var(--color-red-light); border: 1px solid var(--color-status-red-bg); border-radius: var(--radius-sm); margin-bottom: 20px; }
+.issues-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; background: none; border: none; font: inherit; font-size: 14px; color: var(--color-red); cursor: pointer; text-align: left; border-radius: var(--radius-sm); }
+.issues-head:hover { background: rgba(204,41,41,.04); }
+.issues-head .t { font-weight: 500; flex: 1; }
+.issues-bar { display: flex; align-items: center; gap: 12px; padding-right: 12px; }
+.issues-bar .issues-head { flex: 1; }
+.tw { width: 16px; height: 16px; flex-shrink: 0; transition: transform .15s; }
+[aria-expanded="true"] > .tw { transform: rotate(90deg); }
+.issues-body { padding: 0 16px 6px 42px; }
+/* Rich-style row: red title, quieter red description, bridge link on the right */
+.issue { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-top: 1px solid var(--color-status-red-bg); }
+.issue-txt { flex: 1; min-width: 0; color: var(--color-red); font-size: 14px; line-height: 20px; }
+.issue-title { font-weight: 500; }
+.issue-desc { opacity: .8; }
+.issue .lnk { flex-shrink: 0; }
+/* ---- Var 2: always-visible action list (from dashboard-variants D) ---- */
+.acts { margin-bottom: 20px; display: flex; flex-direction: column; gap: 16px; }
+.acts-t { font-size: 16px; font-weight: 500; line-height: 24px; margin: 0 0 8px; }
+.act-list { display: flex; flex-direction: column; gap: 8px; }
+.act { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); }
+.act.req { border-left: 3px solid var(--color-red); }
+.act-body { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; }
+.act-title { font-weight: 500; }
+.act-desc { color: var(--text-secondary); }
+.act .btn { flex-shrink: 0; }
+.hdr-lnk { margin-left: auto; font-weight: 400; }
+.issues-foot { border-top: 1px solid var(--color-status-red-bg); padding: 10px 0 4px; }
+.acts-h { display: flex; align-items: baseline; gap: 12px; margin: 0 0 8px; }
+.acts-h .acts-t { margin: 0; }
+.related .row .lbl { flex: none; }
+.related .row .meta { flex: 1; min-width: 0; text-align: right; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-new { margin-left: auto; }
+/* Var 6 dashboard tabs */
+.dash-tabs { padding: 0; margin: 0 0 20px; }
+.dash-tabs .tab { background: none; border-left: none; border-right: none; border-top: none; font-family: inherit; }
+.cols[hidden] { display: none; }
+.dt-empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); padding: 48px; text-align: center; color: var(--text-secondary); font-size: 14px; }
+.dt-issues { }
+.dt-head { display: flex; align-items: center; margin-bottom: 10px; font-size: 14px; }
+.dt-h { font-weight: 500; flex: 1; }
+.dt-list { border-top: 1px solid var(--border-default); }
+.dt-issue { display: flex; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border-default); }
+.dt-txt { flex: 1; min-width: 0; font-size: 14px; line-height: 20px; color: var(--color-red); }
+.dt-title { font-weight: 500; }
+.dt-desc { opacity: .8; }
+.dt-issue .lnk { flex-shrink: 0; }
+.ph-right { display: flex; align-items: center; gap: 12px; }
+.ph-right .btn .status { margin-left: 6px; }
+/* Var 2 Troubleshooting block */
+#p-trouble .panel-t .tp-count { margin-left: 4px; }
+.tp-box { margin-top: 10px; padding: 0 12px; }
+.tp-box.bad { background: var(--color-red-light); border-color: var(--color-status-red-bg); }
+.tp-row { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 0; border-top: 1px solid var(--color-status-red-bg); }
+.tp-row:first-child { border-top: none; }
+.tp-txt { width: 100%; min-width: 0; font-size: 14px; line-height: 20px; color: var(--color-red); }
+.tp-title { font-weight: 500; }
+.tp-desc { opacity: .8; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-row .lnk { flex-shrink: 0; }
+.tp-more { padding: 8px 0 10px; font-size: 14px; color: var(--color-red); border-top: 1px solid var(--color-status-red-bg); }
+.tp-ok { padding: 10px 0; font-size: 14px; color: var(--color-green); }
+.tp-go { margin-top: 10px; }
+/* Var 4 expandable inline findings: severity on the row only, cards stay as they are */
+.fchip { margin-left: auto; }
+.panel-t .hdr-lnk + .fchip { margin-left: 8px; }
+.xf { margin: 10px 0 0; border: 1px solid; border-radius: var(--radius-sm); background: var(--bg-surface); }
+.xf + .xf { margin-top: 8px; }
+.panel-t + .xf { margin-top: 10px; }
+.xf.sev-info { border-color: var(--color-primary-20); background: var(--color-primary-5); }
+.xf.sev-warn { border-color: var(--color-status-yellow-bg); background: var(--color-yellow-light); }
+.xf.sev-danger { border-color: var(--color-status-red-bg); background: var(--color-red-light); }
+.xf-h { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; background: none; border: none; font: inherit; font-size: 14px; font-weight: 500; color: var(--text-primary); text-align: left; cursor: pointer; }
+.xf-h:focus-visible { outline: 2px solid var(--border-focus); outline-offset: -2px; }
+.xf-ico svg { width: 18px; height: 18px; display: block; }
+.sev-info .xf-ico { color: var(--color-primary); }
+.sev-warn .xf-ico { color: var(--color-yellow); }
+.sev-danger .xf-ico { color: var(--color-red); }
+.xf-t { flex: 1; min-width: 0; }
+.xf-tw { color: var(--text-secondary); }
+.xf-b { padding: 0 12px 12px 38px; font-size: 14px; line-height: 20px; }
+.xf-b p { margin: 0 0 8px; }
+.xf-l { font-weight: 500; color: var(--text-secondary); margin-bottom: 2px; }
+.xf-b ul { margin: 0 0 10px; padding-left: 18px; }
+.xf-btns { display: flex; gap: 8px; }
+.panel > .xf:last-of-type { margin-bottom: 10px; }
+.panel-big + .xf { margin-top: 0; }
+.sidebar-item.active .nav-new { background: var(--color-status-green-bg); }
+/* ---- Troubleshooting page (from production screenshots 2026-10-16) ---- */
+.ts-head { margin-bottom: 16px; }
+.ts-head h1 { font-size: 24px; font-weight: 400; line-height: 32px; margin: 0 0 2px; }
+.ts-tabs { padding: 0; margin-bottom: 20px; }
+.ts-tabs .tab { background: none; border-left: none; border-right: none; border-top: none; font-family: inherit; }
+.ts-intro { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; font-size: 14px; color: var(--text-secondary); }
+.ts-intro .btn { margin-left: auto; }
+.ts-intro .lnk { color: var(--text-link); }
+.fpanel { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px; margin-bottom: 16px; }
+.frow { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: flex-start; margin-bottom: 12px; }
+.ff { display: flex; flex-direction: column; gap: 4px; }
+.ff > label { font-size: 14px; font-weight: 500; line-height: 20px; }
+.ff .input, .ff .select { height: 32px; font-size: 14px; background-color: var(--bg-surface); }
+.ff .hint { font-size: 14px; color: var(--text-secondary); }
+.frange { display: flex; align-items: center; gap: 6px; }
+.fbtns { display: flex; gap: 12px; }
+.ts-table { margin-bottom: 0; }
+.ts-table .msg { max-width: 640px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ts-table th .help { vertical-align: -3px; margin-left: 2px; }
+.ts-table th.sortq { cursor: pointer; user-select: none; }
+.ts-table td.empty { text-align: center; color: var(--text-secondary); }
+.ts-table .intg { display: inline-flex; align-items: center; gap: 6px; }
+.ts-table th.actions, .ts-table td.actions { text-align: left; }
+.ts-pager { display: flex; justify-content: flex-end; align-items: center; gap: 16px; padding: 10px 0; font-size: 14px; }
+.ts-pager select { width: auto; height: 28px; padding-top: 0; padding-bottom: 0; }
+.ts-pager .page-btn svg { width: 20px; height: 20px; }
+.ts-info { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-secondary); margin-bottom: 16px; }
+.ts-info svg { width: 16px; height: 16px; flex-shrink: 0; }
+.ts-card { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 16px; margin-bottom: 20px; }
+.ts-card h2 { font-size: 20px; font-weight: 400; line-height: 28px; margin: 0 0 4px; display: flex; align-items: center; gap: 6px; }
+.ts-card .sub { font-size: 14px; color: var(--text-secondary); margin: 0 0 12px; }
+.ts-card .frow { margin: 12px 0 16px; align-items: center; }
+.ts-card .select { width: 170px; height: 32px; font-size: 14px; }
+.ts-card .select.sm { width: 90px; }
+.legend { display: flex; gap: 16px; font-size: 14px; margin-bottom: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 2px; display: inline-block; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart text { font-size: 14px; fill: var(--text-secondary); font-family: var(--font-family); }
+.chart-missing { height: 160px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-size: 14px; }
+.issues-head:focus-visible { outline: 2px solid var(--border-focus); outline-offset: 1px; }
+</style>
+</head>
+<body>
+
+<div class="variant-switch">
+  <span class="vs-label">State</span>
+  <div class="vs-opts">
+    <button id="vs-attention" class="on" onclick="setState('attention')">1 · Needs attention</button>
+    <button id="vs-clear" onclick="setState('clear')">2 · All clear</button>
+    <button id="vs-lost" onclick="setState('lost')">3 · Connection lost</button>
+  </div>
+  <span class="vs-sep"></span>
+  <span class="vs-label">Variant</span>
+  <div class="vs-opts">
+    <button id="vv-0" class="on" onclick="setVariant(0)">0 · As developed</button>
+    <button id="vv-1" onclick="setVariant(1)">1 · Collapsed issues</button>
+    <button id="vv-2" onclick="setVariant(2)">2 · Troubleshooting block</button>
+    <button id="vv-3" onclick="setVariant(3)">3 · Inline · links</button>
+    <button id="vv-4" onclick="setVariant(4)">4 · Inline · expandable</button>
+    <button id="vv-5" onclick="setVariant(5)">5 · Action list</button>
+    <button id="vv-6" onclick="setVariant(6)">6 · Tabs</button>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">Synder</div>
+    <nav>
+      <a class="sidebar-item active" href="#" id="nav-dashboard" data-nav="dash">Dashboard</a>
+      <a class="sidebar-item" href="#">Transactions</a>
+      <a class="sidebar-item" href="#">Smart rules</a>
+      <a class="sidebar-item" href="#">Invoicing</a>
+      <a class="sidebar-item" href="#">Analytics</a>
+      <a class="sidebar-item" href="#" id="nav-troubleshooting" data-nav="trouble">Troubleshooting <span class="status status-green nav-new">New</span></a>
+      <a class="sidebar-item" href="#">Business Insights (A)</a>
+      <a class="sidebar-item" href="#">Revenue recognition</a>
+      <a class="sidebar-item" href="#">AI Hub</a>
+      <a class="sidebar-item" href="#">What's New</a>
+      <a class="sidebar-item" href="#">Settings</a>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar"><span class="syncs-left">Syncs left: <a href="#" id="syncs-left">1000</a></span></div>
+    <div class="content">
+     <div id="page-dash">
+      <div class="ph">
+        <h1>Hi Dalia, your data is ready to review</h1>
+        <div class="ph-right"><span id="hdr-extra"></span>
+        <select class="select" id="period" aria-label="Period">
+          <option>Last 30 days</option>
+          <option disabled>[live copy not captured]</option>
+        </select></div>
+      </div>
+      <div id="banner"></div>
+      <div class="kpi-band" id="kpis"></div>
+      <div id="actions"></div>
+      <div id="dtabs"></div>
+      <div id="dtab-body"></div>
+      <div class="cols">
+        <div class="col" id="col-left"></div>
+        <div class="col" id="col-mid"></div>
+        <div class="col" id="col-right"></div>
+      </div>
+     </div>
+     <div id="page-trouble" hidden>
+      <div class="ts-head">
+        <h1>Troubleshooting</h1>
+        <p class="page-subtitle">View how your data is flowing and catch problems early.</p>
+      </div>
+      <div class="tabs ts-tabs" role="tablist">
+        <button type="button" class="tab" role="tab" id="tab-sync" data-tab="sync">Synchronization issues</button>
+        <button type="button" class="tab" role="tab" id="tab-import" data-tab="import">Import activity log</button>
+        <button type="button" class="tab" role="tab" id="tab-speed" data-tab="speed">Sync speed</button>
+      </div>
+      <div id="ts-body"></div>
+     </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ---- icons (SVG, so no icon font is needed) ---- */
+var ICON = {
+  help: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M6.2 6.1a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.7" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="#fff"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  dots: '<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><circle cx="4.5" cy="10" r="1.6" fill="currentColor"/><circle cx="10" cy="10" r="1.6" fill="currentColor"/><circle cx="15.5" cy="10" r="1.6" fill="currentColor"/></svg>',
+  alert: '<svg class="alert-ico" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8.2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 5.6v5.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="14" r="1.1" fill="currentColor"/></svg>',
+  stripe: '<svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><rect width="18" height="18" rx="4" fill="#635BFF"/><path d="M11.6 6.3c-.6-.3-1.4-.5-2.2-.5-.8 0-1.2.3-1.2.7 0 1.2 3.8.6 3.8 3.3 0 1.4-1.1 2.4-3 2.4-.9 0-1.9-.2-2.6-.6v-1.8c.7.4 1.7.7 2.6.7.6 0 1-.2 1-.6 0-1.2-3.8-.7-3.8-3.3 0-1.4 1.1-2.4 2.9-2.4.9 0 1.7.2 2.5.5z" fill="#fff"/></svg>',
+  amazon: '<svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><path d="M10.4 7.4c-2.2.1-4.6.6-4.6 2.9 0 1.5 1 2.3 2.2 2.3 1 0 1.8-.4 2.5-1.2.3.4.6.8.9 1.1l1.4-1.2c-.4-.5-.7-.9-.7-1.6V6.2C12.1 4.6 10.9 3.4 8.8 3.4 7 3.4 5.6 4.2 5.2 5.9l1.8.2c.2-.8.8-1.1 1.6-1.1 1 0 1.8.5 1.8 1.6zm0 1.6c0 1.5-.8 2.3-1.7 2.3-.7 0-1-.5-1-1.1 0-1.2 1.2-1.4 2.7-1.4z" fill="#1A1B24"/><path d="M2.6 13.3c3.6 2.2 9 2.4 12.6.3.3-.2.6.2.3.4-3.2 2.6-9.1 2.6-13 .6-.4-.2-.2-.6.1-.4z" fill="#FF9900"/><path d="M14.6 12.8c.5-.1 1.6-.2 1.8.1.2.3-.1 1.2-.4 1.7" fill="none" stroke="#FF9900" stroke-width=".9" stroke-linecap="round"/></svg>',
+  qbo: '<svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><circle cx="9" cy="9" r="9" fill="#2CA01C"/><path d="M7.6 5.4v7.2M6.9 6.3H6a2.7 2.7 0 0 0 0 5.4h.9M10.4 12.6V5.4M11.1 11.7h.9a2.7 2.7 0 0 0 0-5.4h-.9" fill="none" stroke="#fff" stroke-width="1.3" stroke-linecap="round"/></svg>'
+};
+
+/* ---- status → kit <Status> colour, read off the screenshots ---- */
+var TONE = {
+  'Failed':'status-red', 'Rollback failed':'status-red',
+  'Synced with rule failed':'status-yellow', 'Canceled':'status-yellow', 'Rollback canceled':'status-yellow',
+  'Synced with warnings':'status-yellow', 'Skipped':'status-yellow', 'Deleted with warnings':'status-yellow', 'Incomplete':'status-yellow',
+  'Synced':'status-green', 'Ready':'status-green',
+  'In progress':'status-blue', 'Scheduled':'status-blue', 'Rollback in progress':'status-blue', 'Rollback scheduled':'status-blue', 'Delayed':'status-blue',
+  'Ready to sync':'status-dark-blue',
+  'Deleted':'status-black',
+  'Pending':'status-grey', 'Not parsed':'status-grey', 'Generating entries':'status-grey'
+};
+var HOT = { 'Failed':1, 'Rollback failed':1 };   /* rows tinted red in screenshot 3 */
+
+/* ---- data: numbers and names exactly as on the screenshots ---- */
+var STRIPE = { logo:'stripe', name:'My wonderful flowers (Stripe)' };
+var AMAZON = { logo:'amazon', name:'My great bread (Amazon)' };
+var AMAZON_LONG = { logo:'amazon', name:'My great bread with some other words to make the name long (Amazon)' };
+
+var STATES = {
+  attention: {
+    banner: false,
+    score: '80%', scoreLink: true, timeLink: true, attention: 80,
+    imports: [STRIPE, AMAZON_LONG],
+    sync: [['Failed',50],['Rollback failed',20],['Synced with rule failed',20],['Canceled',20],['Rollback canceled',20],
+           ['Synced',300],['In progress',30],['Synced with warnings',20],['Skipped',300],['Deleted with warnings',20]],
+    revrec: null,
+    accounting: 'ok',   /* Ignat 2026-10-16: Needs attention = sync problems only, connections healthy */
+    integrations: [
+      { src: STRIPE, action: 'Settings', chips: [['Connected','status-green'],['Auto-import on','status-green'],['Auto-sync on','status-green']] },
+      { src: AMAZON, action: 'Settings', chips: [['Connected','status-green'],['Auto-import on','status-green'],['Auto-sync on','status-green']] }
+    ]
+  },
+  clear: {
+    banner: false,
+    score: '100%', scoreLink: false, timeLink: false, attention: 0,
+    imports: [STRIPE],
+    sync: [['Ready to sync',30],['Synced',300],['In progress',30]],
+    revrec: null,
+    accounting: 'ok',
+    integrations: [
+      { src: STRIPE, action: 'Settings', chips: [['Connected','status-green'],['Auto-import on','status-green'],['Auto-sync on','status-green']] }
+    ]
+  },
+  lost: {
+    banner: true,
+    score: '70%', scoreLink: true, timeLink: true, attention: 80,
+    imports: [STRIPE, AMAZON_LONG],   /* Ignat 2026-10-16: show 2 — orgs rarely have more */
+    sync: [['Failed',50],['Rollback failed',20],['Synced with rule failed',20],['Canceled',20],['Rollback canceled',20],
+           ['Deleted',30],['Ready to sync',30],['Pending',30],['Synced',300],['In progress',30],['Scheduled',30],
+           ['Rollback in progress',30],['Rollback scheduled',30],['Synced with warnings',20],['Skipped',300],
+           ['Delayed',30],['Deleted with warnings',20],['Not parsed',20]],
+    revrec: [['Ready',300],['Generating entries',30],['Incomplete',20]],
+    accounting: 'lost',
+    integrations: [   /* Ignat 2026-10-19: first 2 only */
+      { src: STRIPE, action: 'Reconnect', chips: [['Connection lost','status-red']] },
+      { src: AMAZON, action: 'Reconnect', chips: [['Connection lost','status-red']] }
+    ]
+  }
+};
+
+/* ---- render helpers ---- */
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt(n) { return n.toLocaleString('en-US'); }
+/* KPI tooltips: production copy, shortened with Ignat 2026-10-16. Other "?" icons are
+   still uncaptured and keep the marker. */
+var TIPS = {
+  time:  { text: 'Bookkeeping time saved by automatically recording transactions in your books.', link: 'Time saved' },
+  score: { text: 'Percentage of imported transactions synced to your books.', link: 'Sync score' }
+};
+function help(key) {
+  var t = key && TIPS[key];
+  if (t) return '<span class="help help-card" tabindex="0" data-tip="' + key + '">' + ICON.help
+    + '<span class="tip-card" role="tooltip"><span class="tip-text">' + esc(t.text) + '</span>'
+    + '<button type="button" class="lnk tip-link"' + go('How is this calculated? · ' + t.link) + '>How is this calculated?</button></span></span>';
+  return '<span class="help" tabindex="0">' + ICON.help + '<span class="tooltip">[live copy not captured]</span></span>';
+}
+function go(msg) { return ' data-go="' + esc(msg) + '"'; }
+
+function statusRow(name, n, where) {
+  return '<button type="button" class="row' + (HOT[name] ? ' hot' : '') + '"' + go(where + ' · ' + name) + '>'
+       + '<span class="lbl"><span class="status ' + (TONE[name] || 'status-grey') + '">' + esc(name) + '</span></span>'
+       + '<span class="cnt">' + fmt(n) + ICON.chev + '</span></button>';
+}
+function sourceRow(src, n) {
+  return '<button type="button" class="row"' + go('Platform transactions · ' + src.name) + '>'
+       + '<span class="lbl">' + ICON[src.logo] + '<span class="txt">' + esc(src.name) + '</span></span>'
+       + '<span class="cnt">' + fmt(n) + ICON.chev + '</span></button>';
+}
+var menuSeq = 0;
+function rowMenu() {
+  var id = 'm' + (++menuSeq);
+  return '<span class="menu-wrap"><button type="button" class="icon-btn" aria-label="More actions" aria-haspopup="true" aria-expanded="false" data-menu="' + id + '">' + ICON.dots + '</button>'
+       + '<div class="dropdown-menu" id="' + id + '" role="menu"><div class="dropdown-item muted" role="menuitem">[live copy not captured]</div></div></span>';
+}
+
+/* ---- Var 1: every problem on the page, as one collapsed Rich-style list ----
+   Built from the same state data as the panels, so the block can't
+   disagree with the columns underneath it. Plain sentences, no status chips.
+   Connection rows collapse into ONE message, the way production's banner does. */
+function issuesFor(s) {
+  var out = [];
+  var lostInts = s.integrations.filter(function (it) { return it.chips.some(function (c) { return c[0] === 'Connection lost'; }); });
+  if (s.accounting !== 'ok' || lostInts.length) out.push({ id: 'conn',
+    title: 'Connection lost',
+    desc: 'One or more of your integrations have lost connection. Please reconnect to continue syncing.',   /* live copy, production banner */
+    action: 'Organization settings', go: 'Organization settings' });
+  s.integrations.forEach(function (it, i) {
+    var off = it.chips.filter(function (c) { return / off$/.test(c[0]); }).map(function (c) { return c[0].replace(/ off$/, ''); });
+    if (!off.length) return;
+    out.push({ id: 'off' + i, title: off.join(' and ') + (off.length > 1 ? ' are' : ' is') + ' off',
+      desc: it.src.name + ' doesn\u2019t ' + off.map(function (x) { return x.replace('Auto-', '').toLowerCase(); }).join(' or ') + ' new transactions automatically.',
+      action: 'Integration settings', go: 'Integration settings · ' + it.src.name });
+  });
+  /* every failed-transaction status collapses into ONE message. The count is the
+     Needs attention card's number, so the block and the card can't disagree. */
+  var FAILED = ['Failed', 'Rollback failed', 'Synced with rule failed', 'Not parsed'];
+  var hit = s.sync.filter(function (r) { return FAILED.indexOf(r[0]) >= 0; }).map(function (r) { return r[0]; });
+  if (hit.length) out.push({ id: 'txn', title: fmt(s.attention) + ' transactions need attention',
+    desc: hit.map(function (x, i) { return i ? x.toLowerCase() : x; }).join(', ') + '.',
+    action: 'View sync issues', go: 'Sync issues' });
+  (s.revrec || []).forEach(function (r) {
+    if (r[0] !== 'Incomplete') return;
+    out.push({ id: 'rr', title: 'Revenue recognition incomplete', desc: fmt(r[1]) + ' items in Revenue recognition are incomplete.',
+      action: 'Revenue recognition', go: 'Revenue recognition · Incomplete' });
+  });
+  return out;
+}
+function renderIssues(s) {
+  var list = issuesFor(s);
+  if (!list.length) return '';
+  var rows = list.map(function (is) {
+    return '<div class="issue" data-issue="' + is.id + '"><div class="issue-txt"><div class="issue-title">' + esc(is.title) + '</div>'
+      + '<div class="issue-desc">' + esc(is.desc) + '</div></div>'
+      + '<button type="button" class="lnk"' + go(is.go) + '>' + esc(is.action) + ICON.chev + '</button></div>';
+  }).join('');
+  return '<div class="issues" id="issues"><div class="issues-bar"><button type="button" class="issues-head" aria-expanded="false" aria-controls="issues-body" id="issues-head">'
+    + ICON.chev.replace('class="chev"', 'class="tw"') + '<span class="t">' + list.length + (list.length === 1 ? ' issue found' : ' issues found') + '</span></button>'
+    + '<button type="button" class="btn btn-error btn-sm" id="go-trouble"' + go('Troubleshooting') + '>Go to Troubleshooting</button></div>'
+    + '<div class="issues-body" id="issues-body" hidden>' + rows + '</div></div>';
+}
+
+/* ---- Var 2: the same problems as Var 1, phrased as actions and always
+   visible, plus optional next steps. Same source data, so Var 1 and Var 2
+   never disagree about what's wrong. */
+function actionsFor(s) {
+  var req = issuesFor(s).map(function (is) {
+    if (is.id === 'conn') return { id: 'conn', title: 'Reconnect lost connections', desc: is.desc, btn: 'Reconnect', go: 'Organization settings' };
+    if (is.id === 'txn')  return { id: 'txn',  title: 'Review ' + fmt(s.attention) + ' transactions that need attention', desc: is.desc, btn: 'View sync issues', go: is.go };
+    if (is.id === 'rr')   return { id: 'rr',   title: 'Complete revenue recognition', desc: is.desc, btn: 'Open Revenue recognition', go: is.go };
+    return { id: is.id, title: 'Turn on ' + is.title.replace(/ (are|is) off$/, ''), desc: is.desc, btn: 'Open settings', go: is.go };
+  });
+  var next = [];
+  s.sync.forEach(function (r) {
+    if (r[0] === 'Ready to sync') next.push({ id: 'ready', title: 'Sync ' + fmt(r[1]) + ' ready transactions', desc: 'Imported and waiting to sync to your books.',
+      btn: 'Sync now', go: 'Sync ' + fmt(r[1]) + ' ready transactions' });
+  });
+  next.push({ id: 'recon', title: 'Run Transaction reconciliation', desc: 'Check this period against your bank before you close it.',
+    btn: 'Open reconciliation', go: 'Transaction reconciliation' });
+  return { req: req, next: next };
+}
+function renderActions(s) {
+  var a = actionsFor(s);
+  function list(items, kind) {
+    return '<div class="act-list">' + items.map(function (x) {
+      return '<div class="act ' + kind + '" data-act="' + x.id + '">'
+        + '<div class="act-body"><div class="act-title">' + esc(x.title) + '</div><div class="act-desc">' + esc(x.desc) + '</div></div>'
+        + '<button type="button" class="btn btn-sm ' + (kind === 'req' ? 'btn-primary' : 'btn-outlined') + '"' + go(x.go) + '>' + esc(x.btn) + '</button></div>';
+    }).join('') + '</div>';
+  }
+  return '<div class="acts" id="acts">'
+    + (a.req.length ? '<section id="acts-req"><div class="acts-h"><h2 class="acts-t">Required actions</h2>' + '' + '</div>' + list(a.req, 'req') + '</section>' : '')
+    + '<section id="acts-next"><h2 class="acts-t">Next actions</h2>' + list(a.next, 'next') + '</section></div>';
+}
+
+/* ---- bridges to Sync issues / Import activity log / Troubleshooting ----
+   Mock figures per state; Troubleshooting count = the same issues Var 1 lists. */
+var BRIDGE = {
+  attention: { groups: 6, lastImport: 'Oct 7, 11:58' },
+  clear:     { groups: 0, lastImport: 'Oct 7, 11:58' },
+  lost:      { groups: 9, lastImport: 'Oct 2, 05:58' }
+};
+function hdrLink(label, msg, id) {
+  return '<button type="button" class="lnk hdr-lnk" id="' + id + '"' + go(msg) + '>' + label + ICON.chev + '</button>';
+}
+/* ---- Var 2: separate Troubleshooting block (top-right) ----
+   The same issues Var 1 lists, first 3 shown, the rest counted. */
+function renderTroublePanel(s) {
+  var list = issuesFor(s), top = list.slice(0, 3), more = list.length - top.length;
+  var body = list.length
+    ? top.map(function (is) {
+        return '<div class="tp-row" data-tp="' + is.id + '"><div class="tp-txt"><div class="tp-title">' + esc(is.title) + '</div>'
+          + '<div class="tp-desc">' + esc(is.desc) + '</div></div>'
+          + '<button type="button" class="lnk"' + go(is.go) + '>' + esc(is.action) + ICON.chev + '</button></div>';
+      }).join('') + (more > 0 ? '<div class="tp-more" id="tp-more">+' + more + ' more</div>' : '')
+    : '<div class="tp-ok" id="tp-ok">No issues</div>';
+  return '<section class="panel" id="p-trouble"><div class="panel-t">Troubleshooting'
+    + (list.length ? '<span class="status status-red tp-count" id="tp-count">' + list.length + '</span>' : '') + '</div>'
+    + '<div class="box tp-box' + (list.length ? ' bad' : '') + '">' + body + '</div>'
+    + '<button type="button" class="btn btn-outlined btn-sm tp-go" id="tp-go"' + go('Troubleshooting') + '>Go to Troubleshooting</button></section>';
+}
+/* ---- Var 4: expandable inline findings, after pt-dashboard-inline (zip, 2026-10-16).
+   Each finding lives in its host block, under the header; What / Why / How + Fix + Ignore.
+   Import + Sync copy is the zip's (its "Re-run Integrity check" steps dropped: no Integrity
+   check here). Transactions + RevRec findings are ours. Hosts with Connection lost get none. */
+var XF = {
+  imp: { host: 'import', sev: 'info', title: 'Import activity issues',
+    what: 'Import activity shows repeated failures or stalled pulls for one or more sources.',
+    why: 'Stalled imports mean books lag behind the channel \u2014 recon and reports miss recent sales.',
+    how: ['Open the Import activity log and identify failing sources.', 'Reconnect or re-authorize the channel if credentials expired.'],
+    fix: 'Open import activity log', go: 'Import activity log' },
+  slow: { host: 'sync', sev: 'warn', title: 'Syncs running slower than usual',
+    what: 'Recent syncs are taking longer than usual for this org.',
+    why: 'Slow syncs delay books updates and can pile up failures if left unchecked.',
+    how: ['Review Sync speed insights for bottlenecks.', 'Reduce backlog (failed / in-progress) before large re-syncs.'],
+    fix: 'Review sync speed', go: 'Sync speed' },
+  txn: { host: 'sync', sev: 'danger', title: null,
+    what: null,
+    why: 'These transactions are not in your books until they are fixed.',
+    how: ['Open Synchronization issues to see them grouped by error.', 'Fix the cause, then sync them again.'],
+    fix: 'View sync issues', go: 'Sync issues' },
+  rr: { host: 'revrec', sev: 'warn', title: null,
+    what: null,
+    why: 'Revenue schedules can\u2019t post until these are complete.',
+    how: ['Open Revenue recognition and filter by Incomplete.', 'Complete the missing details.'],
+    fix: 'Open Revenue recognition', go: 'Revenue recognition · Incomplete' }
+};
+var ignored = {};
+function findingsFor(s) {
+  var out = { import: [], sync: [], revrec: [] };
+  function add(id, over) { if (ignored[id]) return; var f = {}; for (var k in XF[id]) f[k] = XF[id][k]; for (var k2 in (over || {})) f[k2] = over[k2]; f.id = id; out[f.host].push(f); }
+  if (s.attention) { add('imp'); add('slow'); }
+  issuesFor(s).forEach(function (is) {
+    if (is.id === 'txn') add('txn', { title: is.title, what: is.desc.replace(/\.$/, '') + ' transactions in this period.' });
+    if (is.id === 'rr') add('rr', { title: is.title, what: is.desc });
+  });
+  return out;
+}
+var SEV_ICON = {
+  info: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 9v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="6.3" r="1.1" fill="currentColor"/></svg>',
+  warn: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3.2 18 17H2z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M10 8.2v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="14.6" r="1" fill="currentColor"/></svg>',
+  danger: '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M10 6v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="10" cy="13.8" r="1.1" fill="currentColor"/></svg>'
+};
+function xfBlock(list) {
+  return list.map(function (f) {
+    return '<div class="xf sev-' + f.sev + '" data-xf="' + f.id + '"><button type="button" class="xf-h" aria-expanded="false">'
+      + '<span class="xf-ico">' + SEV_ICON[f.sev] + '</span><span class="xf-t">' + esc(f.title) + '</span>' + ICON.chev.replace('class="chev"', 'class="tw xf-tw"') + '</button>'
+      + '<div class="xf-b" hidden><div class="xf-l">What</div><p>' + esc(f.what) + '</p><div class="xf-l">Why it matters</div><p>' + esc(f.why) + '</p>'
+      + '<div class="xf-l">How to fix</div><ul>' + f.how.map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('') + '</ul>'
+      + '<div class="xf-btns"><button type="button" class="btn btn-primary btn-sm"' + go(f.go) + '>' + esc(f.fix) + '</button>'
+      + '<button type="button" class="btn btn-outlined btn-sm" data-ignore="' + f.id + '">Ignore</button></div></div></div>';
+  }).join('');
+}
+function fChip(list) {
+  if (!list.length) return '';
+  var sev = list.some(function (f) { return f.sev === 'danger'; }) ? 'status-red' : list.some(function (f) { return f.sev === 'warn'; }) ? 'status-yellow' : 'status-blue';
+  return '<span class="status ' + sev + ' fchip">' + list.length + (list.length === 1 ? ' finding' : ' findings') + '</span>';
+}
+
+/* ---- Var 6: tabs between the KPI band and the blocks ---- */
+var dtab = 'overview';
+function renderDashTabs(s) {
+  var list = issuesFor(s);
+  var tabs = [['overview', 'Overview', ''], ['custom', 'Custom configurations', ''],
+              ['issues', 'Issues', list.length ? '<span class="tab-count" id="dt-count">' + list.length + '</span>' : '']];
+  return '<div class="tabs dash-tabs" role="tablist">' + tabs.map(function (t) {
+    return '<button type="button" class="tab' + (t[0] === dtab ? ' active' : '') + '" role="tab" aria-selected="' + (t[0] === dtab) + '" id="dt-' + t[0] + '" data-dtab="' + t[0] + '">' + t[1] + t[2] + '</button>';
+  }).join('') + '</div>';
+}
+function renderDashTabBody(s) {
+  if (dtab === 'custom') return '<div class="dt-empty" id="dt-custom-body">[content not designed yet]</div>';
+  if (dtab !== 'issues') return '';
+  var list = issuesFor(s);
+  var rows = list.map(function (is) {
+    return '<div class="dt-issue" data-dti="' + is.id + '"><div class="dt-txt"><div class="dt-title">' + esc(is.title) + '</div><div class="dt-desc">' + esc(is.desc) + '</div></div>'
+      + '<button type="button" class="lnk"' + go(is.go) + '>' + esc(is.action) + ICON.chev + '</button></div>';
+  }).join('');
+  return '<section class="dt-issues" id="dt-issues-body"><div class="dt-head"><span class="dt-h">' + (list.length ? list.length + (list.length === 1 ? ' issue' : ' issues') : 'No issues') + '</span>'
+    + '<button type="button" class="lnk" id="dt-trouble"' + go('Troubleshooting') + '>Go to full Troubleshooting' + ICON.chev + '</button></div>'
+    + (list.length ? '<div class="dt-list">' + rows + '</div>' : '') + '</section>';
+}
+
+/* Accounting status comes from the state (Ignat 2026-10-19: no separate switch).
+   'disc' (Disconnected) is supported by the card but no state uses it. */
+var acctOverride = null;
+var ACCT_SINCE = { lost: 'Oct 2, 2026 05:58', disc: 'Oct 5, 2026 14:20' };   /* mock: when it was lost / disconnected */
+function acctNow() { return acctOverride || STATES[current].accounting; }
+
+function render(key) {
+  var s = Object.assign({}, STATES[key], { accounting: acctNow() });
+  menuSeq = 0;
+
+  var fx = variant === 4 ? findingsFor(s) : null, nIssues = issuesFor(s).length;
+  /* every variant (1-6) must link to Troubleshooting, Sync issues and Import activity log.
+     Troubleshooting goes on the Needs attention card wherever the variant's own entry
+     (red block, Troubleshooting block, header button, Issues tab) isn't on screen. */
+  var troubleInCard = false;   /* Ignat 2026-10-19: no Troubleshooting link on the Needs attention card, any variant */
+  document.getElementById('hdr-extra').innerHTML = variant === 4
+    ? '<button type="button" class="btn btn-outlined btn-sm" id="hdr-trouble"' + go('Troubleshooting') + '>Troubleshooting'
+      + (nIssues ? ' <span class="status status-red">' + nIssues + '</span>' : '') + '</button>' : '';
+  document.getElementById('actions').innerHTML = variant === 5 ? renderActions(s) : '';
+  document.getElementById('dtabs').innerHTML = variant === 6 ? renderDashTabs(s) : '';
+  document.getElementById('dtab-body').innerHTML = variant === 6 ? renderDashTabBody(s) : '';
+  document.querySelector('#page-dash .cols').hidden = variant === 6 && dtab !== 'overview';
+  document.getElementById('banner').innerHTML = variant === 1 ? renderIssues(s) : (variant === 2 || variant === 5 || variant === 6) ? '' : s.banner
+    ? '<div class="alert alert-error" id="lost-banner">' + ICON.alert
+      + '<div class="alert-body"><span class="alert-title">Connection lost</span>'
+      + 'One or more of your integrations have lost connection. Please reconnect to continue syncing.</div>'
+      + '<button type="button" class="btn btn-error btn-sm"' + go('Reconnect integrations') + '>Reconnect</button></div>'
+    : '';
+
+  var attn = s.attention
+    ? '<button type="button" class="lnk" id="attn-link" style="font-size:16px"' + go('Platform transactions · Needs attention') + '>' + fmt(s.attention) + ' transactions' + ICON.chev + '</button>'
+    : 'All clear';
+  document.getElementById('kpis').innerHTML =
+      '<div class="kpi" id="kpi-time"><div class="kpi-t">Time saved' + help('time') + '</div><div class="kpi-v">~ 47 h'
+    +   (s.timeLink ? '<button type="button" class="lnk"' + go('How to save more time') + '>How to save more time</button>' : '') + '</div></div>'
+    + '<div class="kpi" id="kpi-score"><div class="kpi-t">Sync score' + help('score') + '</div><div class="kpi-v">' + s.score
+    +   (s.scoreLink ? '<button type="button" class="lnk"' + go('How to bring it up to 100%') + '>How to bring it up to 100%</button>' : '') + '</div></div>'
+    + '<div class="kpi ' + (s.attention ? 'bad' : 'good') + '" id="kpi-attn"><div class="kpi-t">Needs attention' + help() + (troubleInCard ? hdrLink('Troubleshooting', 'Troubleshooting', 'lnk-trouble') : '') + '</div><div class="kpi-v">' + attn + '</div></div>';
+
+  /* left: Import (+ Revenue recognition when RevRec is on) */
+  var left = '<section class="panel" id="p-import"><div class="panel-t">Import' + help() + (variant >= 1 ? hdrLink('Import activity log', 'Import activity log', 'lnk-import') : '') + (fx ? fChip(fx.import) : '') + '</div>'
+    + '<div class="panel-big"><span><span class="n">1,200</span> transactions imported</span></div>'
+    + (fx ? xfBlock(fx.import) : '')
+    + '<div class="box' + (s.imports.length > 8 ? ' scroll' : '') + '" id="import-rows">'
+    + s.imports.map(function (src) { return sourceRow(src, 1200); }).join('') + '</div></section>';
+  if (s.revrec) {
+    left += '<section class="panel" id="p-revrec"><div class="panel-t">Revenue recognition' + help() + (fx ? fChip(fx.revrec) : '') + '</div>'
+      + (fx ? xfBlock(fx.revrec) : '') + '<div class="box">' + s.revrec.map(function (r) { return statusRow(r[0], r[1], 'Revenue recognition'); }).join('') + '</div></section>';
+  }
+  document.getElementById('col-left').innerHTML = left;
+
+  /* middle: Sync */
+  document.getElementById('col-mid').innerHTML =
+      '<section class="panel" id="p-sync"><div class="panel-t">Sync' + help() + (variant >= 1 ? hdrLink('Sync issues', 'Sync issues', 'lnk-sync') : '') + (fx ? fChip(fx.sync) : '') + '</div>'
+    + '<div class="panel-big"><span><span class="n">1,200</span> transactions synchronized to books</span>' + help() + '</div>'
+    + (fx ? xfBlock(fx.sync) : '')
+
+    + '<div class="box" id="sync-rows">' + s.sync.map(function (r) { return statusRow(r[0], r[1], 'Platform transactions · Status'); }).join('') + '</div></section>';
+
+  /* right: Accounting + Integrations */
+  var acctLost = s.accounting !== 'ok';
+  /* 1. Connected → Manage; Connection lost / Disconnected → Reconnect in the same place.
+     2. Lost / Disconnected status chip carries a tooltip with the time syncing stopped. */
+  var acctChip = s.accounting === 'ok' ? '<span class="status status-green">Connected</span>'
+    : '<span class="help-card acct-tip" tabindex="0" id="acct-status"><span class="status status-red">' + (s.accounting === 'disc' ? 'Disconnected' : 'Connection lost') + '</span>'
+      + '<span class="tip-card" role="tooltip"><span class="tip-text tip-only">No transactions were synced to your books since ' + ACCT_SINCE[s.accounting] + '.</span></span></span>';
+  var right = (variant === 2 ? renderTroublePanel(s) : '') + '<section class="panel" id="p-accounting"><div class="panel-t">Accounting' + help() + '</div>'
+    + '<div class="items"><div class="item' + (acctLost ? ' bad' : '') + '">'
+    + '<div class="item-h">' + ICON.qbo + '<span class="nm">My lovely money (QuickBooks Online)</span>'
+    + (acctLost ? '<button type="button" class="lnk" id="acct-action"' + go('Reconnect · My lovely money (QuickBooks Online)') + '>Reconnect</button></div>'
+                : '<button type="button" class="lnk" id="acct-action"' + go('Manage accounting connection') + '>Manage</button></div>')
+    + '<div class="item-chips">' + acctChip + '</div>'
+    + '</div></div></section>';
+  right += '<section class="panel" id="p-integrations"><div class="panel-t">Integrations' + help() + '</div><div class="items">'
+    + s.integrations.map(function (it, idx) {
+        var bad = it.chips.some(function (c) { return c[0] === 'Connection lost'; });
+        return '<div class="item' + (bad ? ' bad' : '') + '"><div class="item-h">' + ICON[it.src.logo]
+          + '<span class="nm">' + esc(it.src.name) + '</span>'
+          + '<button type="button" class="lnk"' + go(it.action + ' · ' + it.src.name) + '>' + it.action + '</button>' + rowMenu() + '</div>'
+          + '<div class="item-chips">' + it.chips.map(function (c) { return '<span class="status ' + c[1] + '">' + esc(c[0]) + '</span>'; }).join('') + '</div>'
+          + '</div>';
+      }).join('')
+    + '</div></section>';
+  document.getElementById('col-right').innerHTML = right;
+}
+
+/* ==================== Troubleshooting page ====================
+   Layout, labels and filters copied from production screenshots (2026-10-16).
+   Rows are mock data built per state, so counts agree with the dashboard:
+   Sync issues groups = BRIDGE.groups and quantities sum to the sync statuses. */
+var BVE = 'Business Validation Error: We\u2019re sorry, QuickBooks encountered an error while calculating tax. Try reselecting the tax rate or reentering the product';
+var SYNC_ISSUES = {
+  attention: [[30,'Failed',BVE],[15,'Rollback failed','Other'],[12,'Failed','Entity cannot be synchronized without Product or Service'],
+              [20,'Synced with rule failed','Other'],[8,'Failed','Account was not found in your company'],[5,'Rollback failed','Account was not found in your company']],
+  clear: [],
+  lost: [[30,'Failed',BVE],[20,'Canceled','Other'],[20,'Synced with rule failed','Other'],[15,'Rollback failed','Other'],
+         [12,'Failed','Entity cannot be synchronized without Product or Service'],[12,'Not parsed','Other'],
+         [8,'Failed','Account was not found in your company'],[8,'Not parsed','No matching product found in accounting'],
+         [5,'Rollback failed','Account was not found in your company']]
+};
+var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+function pad(n) { return (n < 10 ? '0' : '') + n; }
+function dLong(d) { return MON[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', ' + d.getUTCFullYear() + ' ' + pad(d.getUTCHours()) + ':' + pad(d.getUTCMinutes()) + ':00'; }
+function dReq(d) { return MON[d.getUTCMonth()] + ' ' + pad(d.getUTCDate()) + ', ' + d.getUTCFullYear(); }
+function iso(d) { return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate()); }
+var LAST_IMPORT = { attention: Date.UTC(2026, 9, 7, 11, 58), clear: Date.UTC(2026, 9, 7, 11, 58), lost: Date.UTC(2026, 9, 2, 5, 58) };
+function sourcesFor(key) {
+  var seen = {}, out = [];
+  STATES[key].imports.concat(STATES[key].integrations.map(function (i) { return i.src; })).forEach(function (src) {
+    var n = src === AMAZON_LONG ? AMAZON : src;
+    if (!seen[n.name]) { seen[n.name] = 1; out.push(n); }
+  });
+  return out;
+}
+function importLog(key) {
+  var srcs = sourcesFor(key), rows = [], id = 58340, end = LAST_IMPORT[key], H = 3600000;
+  for (var k = 0; rows.length < 64; k++) {
+    var to = new Date(end - k * 2 * H), from = new Date(to - 2 * H);
+    srcs.forEach(function (src, si) {
+      var pto = new Date(to - 3 * 24 * H), pfrom = new Date(pto - 2 * H);
+      rows.push({ id: id--, req: to, from: dLong(pfrom), to: dLong(pto), fromD: pfrom, src: src, imported: 0, type: 'Postponed' });
+      rows.push({ id: id--, req: to, from: dLong(from), to: dLong(to), fromD: from, src: src, imported: (k * 7 + si * 3) % 5 === 0 ? 0 : ((k * 13 + si * 5) % 17) + 1, type: 'Hourly' });
+      if (k === 2 && si === 0) rows.push({ id: id--, req: to, from: '\u2014', to: '\u2014', fromD: null, src: src, imported: 0, type: 'Pending' });
+    });
+  }
+  return rows;
+}
+var VOLUME = { attention: [[3,5,9,6,4,8,7],[2,4,3,6,5,3,4]], clear: [[4,6,8,7,5,9,8]], lost: [[3,5,9,6,0,0,0],[2,4,3,0,0,0,0]] };
+
+var page = 'dash', tsTab = 'sync';
+var tsf = {};   /* applied filters per tab */
+var tsPage = { sync: 0, import: 0 }, tsRpp = { sync: 25, import: 25 }, qtyDesc = true;
+function resetTsFilters() {
+  tsf = { sync: { q: '', status: '', from: '', to: '' }, import: { req: '', from: '', to: '', intg: '', by: '', st: '', type: '', id: '' }, speed: { intg: '' } };
+  tsPage = { sync: 0, import: 0 };
+}
+resetTsFilters();
+
+function opt(v, label, cur) { return '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label) + '</option>'; }
+var NC = '<option disabled>[live copy not captured]</option>';
+var PAGER_ICONS = {
+  first: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 5v10M14 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  prev: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M12.5 5l-5 5 5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  next: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M7.5 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  last: '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M14 5v10M6 5l5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+function pager(tab, total) {
+  var pages = Math.max(1, Math.ceil(total / tsRpp[tab])), p = Math.min(tsPage[tab], pages - 1);
+  tsPage[tab] = p;
+  function b(dir, dis, label) { return '<button type="button" class="page-btn" data-page="' + tab + ':' + dir + '" aria-label="' + label + '"' + (dis ? ' disabled' : '') + '>' + PAGER_ICONS[dir] + '</button>'; }
+  return '<div class="ts-pager" id="pager-' + tab + '"><span>Rows per page:</span><select class="select" data-rpp="' + tab + '" aria-label="Rows per page">'
+    + [10, 25, 50].map(function (n) { return '<option' + (n === tsRpp[tab] ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select>'
+    + '<span class="page-btns" style="display:flex;gap:4px">' + b('first', p === 0, 'First page') + b('prev', p === 0, 'Previous page') + b('next', p >= pages - 1, 'Next page') + b('last', p >= pages - 1, 'Last page') + '</span></div>';
+}
+
+function renderSyncIssues() {
+  var f = tsf.sync, all = SYNC_ISSUES[current].slice();
+  var statuses = []; all.forEach(function (r) { if (statuses.indexOf(r[1]) < 0) statuses.push(r[1]); });
+  var rows = all.filter(function (r) {
+    if (f.status && r[1] !== f.status) return false;
+    if (f.q.length >= 3 && (r[2] + ' ' + r[1]).toLowerCase().indexOf(f.q.toLowerCase()) < 0) return false;
+    return true;
+  }).sort(function (a, b) { return qtyDesc ? b[0] - a[0] : a[0] - b[0]; });
+  var start = tsPage.sync * tsRpp.sync;
+  var body = rows.slice(start, start + tsRpp.sync).map(function (r, i) {
+    return '<tr><td>' + r[0] + '</td><td><span class="status ' + (TONE[r[1]] || 'status-grey') + '">' + esc(r[1]) + '</span></td>'
+      + '<td class="msg" title="' + esc(r[2]) + '">' + esc(r[2]) + '</td>'
+      + '<td class="actions"><button type="button" class="lnk"' + go('Platform transactions · ' + r[1] + ' · ' + r[2]) + '>See related transactions</button></td></tr>';
+  }).join('') || '<tr><td colspan="4" class="empty" id="si-empty">[live copy not captured]</td></tr>';
+  return '<div class="fpanel" id="si-filters"><div class="frow">'
+    + '<div class="ff"><label for="si-q">Search</label><input class="input" id="si-q" placeholder="Search by any word..." value="' + esc(f.q) + '" style="width:220px"><span class="hint">Enter at least 3 characters</span></div>'
+    + '<div class="ff"><label for="si-status">Status</label><select class="select" id="si-status" style="width:200px">' + opt('', 'All', f.status) + statuses.map(function (x) { return opt(x, x, f.status); }).join('') + '</select></div>'
+    + '<div class="ff"><label for="si-range">Date range</label><select class="select" id="si-range" style="width:120px"><option>Custom</option>' + NC + '</select></div>'
+    + '<div class="ff"><label for="si-from">From</label><div class="frange"><input type="date" class="input" id="si-from" value="' + f.from + '"> \u2013 </div></div>'
+    + '<div class="ff"><label for="si-to">To</label><input type="date" class="input" id="si-to" value="' + f.to + '"></div>'
+    + '</div><div class="fbtns"><button type="button" class="btn btn-primary btn-sm" data-apply="sync">Apply</button><button type="button" class="btn btn-outlined btn-sm" data-reset="sync">Reset filters</button></div></div>'
+    + '<div class="table-wrap"><table class="synder-table table--sm ts-table" id="si-table"><thead><tr>'
+    + '<th class="sortq" id="si-sort" aria-sort="' + (qtyDesc ? 'descending' : 'ascending') + '">Quantity ' + (qtyDesc ? '\u2193' : '\u2191') + '</th><th>Status</th><th>Error message</th><th class="actions">Actions' + help() + '</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>' + pager('sync', rows.length);
+}
+
+function renderImportLog() {
+  var f = tsf.import, all = importLog(current), srcs = sourcesFor(current);
+  var rows = all.filter(function (r) {
+    if (f.intg && r.src.name !== f.intg) return false;
+    if (f.by && f.by !== 'System (auto-import)') return false;
+    if (f.st && f.st !== 'Finished') return false;
+    if (f.type && r.type !== f.type) return false;
+    if (f.id && String(r.id).indexOf(f.id.trim()) < 0) return false;
+    if (f.req && iso(r.req) !== f.req) return false;
+    if (f.from && (!r.fromD || iso(r.fromD) < f.from)) return false;
+    if (f.to && (!r.fromD || iso(r.fromD) > f.to)) return false;
+    return true;
+  });
+  var start = tsPage.import * tsRpp.import;
+  var body = rows.slice(start, start + tsRpp.import).map(function (r) {
+    return '<tr data-id="' + r.id + '"><td>' + dReq(r.req) + '</td><td>' + r.from + '</td><td>' + r.to + '</td>'
+      + '<td><span class="intg">' + ICON[r.src.logo] + esc(r.src.name) + '</span></td><td>' + r.imported + '</td>'
+      + '<td>System (auto-import)</td><td>' + r.type + '</td><td><span class="status status-green">Finished</span></td></tr>';
+  }).join('') || '<tr><td colspan="8" class="empty" id="il-empty">[live copy not captured]</td></tr>';
+  function sel(id, w, cur, opts) { return '<select class="select" id="' + id + '" style="width:' + w + 'px">' + opt('', 'All', cur) + opts.map(function (o) { return opt(o, o, cur); }).join('') + '</select>'; }
+  return '<div class="ts-intro"><span>View the list of imports from connected integrations into Synder. Check out our <button type="button" class="lnk"' + go('Guide of import types') + '>guide of import types</button>.</span>'
+    + '<button type="button" class="btn btn-outlined btn-sm"' + go('Import historical data') + '>Import historical data</button></div>'
+    + '<div class="fpanel" id="il-filters"><div class="frow">'
+    + '<div class="ff"><label for="il-req">Request date</label><input type="date" class="input" id="il-req" value="' + f.req + '"></div>'
+    + '<div class="ff"><label for="il-from">Import from</label><div class="frange"><input type="date" class="input" id="il-from" value="' + f.from + '"> \u2013 </div></div>'
+    + '<div class="ff"><label for="il-to">Import to</label><input type="date" class="input" id="il-to" value="' + f.to + '"></div>'
+    + '<div class="ff"><label for="il-intg">Integration</label>' + sel('il-intg', 220, f.intg, srcs.map(function (x) { return x.name; })) + '</div>'
+    + '<div class="ff"><label for="il-by">Initiated by</label>' + sel('il-by', 180, f.by, ['System (auto-import)']) + '</div>'
+    + '<div class="ff"><label for="il-st">Import status</label>' + sel('il-st', 150, f.st, ['Finished']) + '</div>'
+    + '<div class="ff"><label for="il-type">Type</label>' + sel('il-type', 140, f.type, ['Hourly', 'Postponed', 'Pending']) + '</div>'
+    + '<div class="ff"><label for="il-id">Import ID</label><input class="input" id="il-id" placeholder="Search by ID..." value="' + esc(f.id) + '" style="width:160px"></div>'
+    + '</div><div class="fbtns"><button type="button" class="btn btn-primary btn-sm" data-apply="import">Apply</button><button type="button" class="btn btn-outlined btn-sm" data-reset="import">Reset filters</button></div></div>'
+    + '<div class="table-wrap"><table class="synder-table table--sm ts-table" id="il-table"><thead><tr>'
+    + '<th>Request date' + help() + '</th><th>Import from' + help() + '</th><th>Import to' + help() + '</th><th>Integration</th><th>Imported' + help() + '</th><th>Initiated by</th><th>Type</th><th>Import status</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>' + pager('import', rows.length);
+}
+
+var lastSeries = [];
+function lineChart(series, w) {
+  lastSeries = series;
+  var W = w || 1100, H = 260, L = 44, R = 44, T = 12, B = 30;
+  var max = 0; series.forEach(function (s) { s.v.forEach(function (v) { if (v > max) max = v; }); });
+  max = Math.max(4, Math.ceil(max / 4) * 4);
+  var days = []; for (var i = 6; i >= 0; i--) { var d = new Date(Date.UTC(2026, 9, 7) - i * 86400000); days.push(MON[d.getUTCMonth()] + ' ' + d.getUTCDate() + ', 26'); }
+  function x(i) { return L + i * (W - L - R) / 6; }
+  function y(v) { return T + (H - T - B) * (1 - v / max); }
+  var g = '';
+  for (var k = 0; k <= 4; k++) { var yy = y(max * k / 4); g += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + yy + '" y2="' + yy + '" stroke="#DFE4EC"/><text x="' + (L - 8) + '" y="' + (yy + 5) + '" text-anchor="end">' + (max * k / 4) + '</text>'; }
+  days.forEach(function (d, i) { g += '<text x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + d + '</text>'; });
+  var paths = series.map(function (s) {
+    var pts = s.v.map(function (v, i) { return [x(i), y(v)]; }), dd = 'M' + pts[0][0] + ',' + pts[0][1];
+    for (var i = 1; i < pts.length; i++) { var p0 = pts[i - 1], p1 = pts[i], cx = (p0[0] + p1[0]) / 2; dd += ' C' + cx + ',' + p0[1] + ' ' + cx + ',' + p1[1] + ' ' + p1[0] + ',' + p1[1]; }
+    return '<path class="series" data-series="' + esc(s.name) + '" d="' + dd + '" fill="none" stroke="' + s.color + '" stroke-width="2"/>';
+  }).join('');
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="Transaction volume by platform">' + g + paths + '</svg>';
+}
+function renderSpeed() {
+  var srcs = sourcesFor(current), colors = ['var(--color-red)', 'var(--color-primary)'], f = tsf.speed;
+  var series = srcs.map(function (s, i) { return { name: s.name, v: VOLUME[current][i] || [0,0,0,0,0,0,0], color: colors[i % 2] }; })
+    .filter(function (s) { return !f.intg || s.name === f.intg; });
+  function sels(prefix, extra) {
+    return '<select class="select sm" aria-label="Period"><option>7 days</option>' + NC + '</select>'
+      + '<select class="select sm" aria-label="Granularity"><option>Day</option>' + NC + '</select>'
+      + '<select class="select" id="' + prefix + '-intg" aria-label="Integrations">' + opt('', 'All integrations', prefix === 'sp' ? f.intg : '') + srcs.map(function (x) { return opt(x.name, x.name, prefix === 'sp' ? f.intg : ''); }).join('') + '</select>' + extra;
+  }
+  return '<div class="ts-info">' + ICON.alert.replace('class="alert-ico"', '') + '<span>Below graphs helps getting a grasp of how quickly the synchronization goes. <button type="button" class="lnk"' + go('Learn more · Sync speed') + '>Learn more.</button></span></div>'
+    + '<section class="ts-card" id="sp-volume"><h2>Transaction volume by platform' + help() + '</h2><div class="frow">'
+    + sels('sp', '<select class="select" aria-label="Statuses"><option>All statuses</option>' + NC + '</select>')
+    + '<button type="button" class="btn btn-primary btn-sm" data-apply="speed">Apply</button><button type="button" class="btn btn-outlined btn-sm" data-reset="speed">Reset filters</button></div>'
+    + '<div class="legend">' + series.map(function (s) { return '<span><i style="background:' + s.color + '"></i>' + esc(s.name) + '</span>'; }).join('') + '</div>'
+    + '<div class="chart" id="sp-chart">' + lineChart(series) + '</div></section>'
+    + '<section class="ts-card" id="sp-breakdown"><h2>Sync time process breakdown' + help() + '</h2>'
+    + '<p class="sub">Breakdown of average time by sync process steps. Learn how to speed it up <button type="button" class="lnk"' + go('Learn how to speed up sync') + '>here</button>.</p><div class="frow">'
+    + sels('bd', '<select class="select" aria-label="Process groups"><option>All process groups</option>' + NC + '</select>')
+    + '<label class="checkbox-wrap"><input type="checkbox" id="bd-detailed"> Display detailed processes</label>'
+    + '<button type="button" class="btn btn-primary btn-sm"' + go('Apply · Sync time process breakdown') + '>Apply</button><button type="button" class="btn btn-outlined btn-sm"' + go('Reset filters · Sync time process breakdown') + '>Reset filters</button></div>'
+    + '<div class="chart-missing" id="bd-chart">[chart not captured]</div></section>';
+}
+function renderTrouble() {
+  ['sync', 'import', 'speed'].forEach(function (t) {
+    var b = document.getElementById('tab-' + t);
+    b.classList.toggle('active', t === tsTab); b.setAttribute('aria-selected', t === tsTab ? 'true' : 'false');
+  });
+  document.getElementById('ts-body').innerHTML = tsTab === 'sync' ? renderSyncIssues() : tsTab === 'import' ? renderImportLog() : renderSpeed();
+  /* redraw at the real pixel width so chart labels render at 14px, not scaled down */
+  var ch = document.getElementById('sp-chart');
+  if (ch) ch.innerHTML = lineChart(lastSeries, Math.round(ch.clientWidth));
+}
+function readFilters(tab) {
+  function v(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  if (tab === 'sync') tsf.sync = { q: v('si-q'), status: v('si-status'), from: v('si-from'), to: v('si-to') };
+  if (tab === 'import') tsf.import = { req: v('il-req'), from: v('il-from'), to: v('il-to'), intg: v('il-intg'), by: v('il-by'), st: v('il-st'), type: v('il-type'), id: v('il-id') };
+  if (tab === 'speed') tsf.speed = { intg: v('sp-intg') };
+  tsPage[tab] = 0;
+}
+var ROUTES = { 'Troubleshooting': 'sync', 'Sync issues': 'sync', 'Import activity log': 'import', 'Sync speed': 'speed' };
+function openPage(p, tab) {
+  page = p; if (tab) tsTab = tab;
+  document.getElementById('page-dash').hidden = p !== 'dash';
+  document.getElementById('page-trouble').hidden = p !== 'trouble';
+  document.getElementById('nav-dashboard').classList.toggle('active', p === 'dash');
+  document.getElementById('nav-troubleshooting').classList.toggle('active', p === 'trouble');
+  if (p === 'trouble') renderTrouble();
+  writeHash();
+  window.scrollTo(0, 0);
+}
+
+/* ---- state + variant switch: both swap in place ---- */
+var current = 'attention', variant = 0;
+function sync() {
+  ['attention','clear','lost'].forEach(function (k) {
+    document.getElementById('vs-' + k).classList.toggle('on', k === current);
+  });
+  [0, 1, 2, 3, 4, 5, 6].forEach(function (v) { document.getElementById('vv-' + v).classList.toggle('on', v === variant); });
+  render(current);
+  if (page === 'trouble') renderTrouble();
+  writeHash();
+}
+function writeHash() {
+  try { history.replaceState(null, '', '#' + (variant ? 'v' + variant + '-' : '') + current + (page === 'trouble' ? '/' + tsTab : '')); } catch (e) {}
+}
+function setState(key) { current = key; acctOverride = null; ignored = {}; resetTsFilters(); sync(); }
+function setVariant(v) { variant = v; sync(); }
+
+/* ---- interactions ---- */
+var toastTimer;
+function toast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = 'Prototype — would open: ' + msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2600);
+}
+function closeMenus(except) {
+  document.querySelectorAll('.dropdown-menu.show').forEach(function (m) {
+    if (m !== except) {
+      m.classList.remove('show');
+      var b = document.querySelector('[data-menu="' + m.id + '"]');
+      if (b) b.setAttribute('aria-expanded', 'false');
+    }
+  });
+}
+function toggle(btn, panel) {
+  var open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  panel.hidden = !open;
+  return open;
+}
+document.addEventListener('click', function (e) {
+  var head = e.target.closest('#issues-head');
+  if (head) {
+    toggle(head, document.getElementById('issues-body'));
+    return;
+  }
+  var dt = e.target.closest('[data-dtab]');
+  if (dt) { dtab = dt.getAttribute('data-dtab'); render(current); return; }
+  var xh = e.target.closest('.xf-h');
+  if (xh) { toggle(xh, xh.parentElement.querySelector('.xf-b')); return; }
+  var ig = e.target.closest('[data-ignore]');
+  if (ig) { ignored[ig.getAttribute('data-ignore')] = 1; render(current); return; }
+  var menuBtn = e.target.closest('[data-menu]');
+  if (menuBtn) {
+    var m = document.getElementById(menuBtn.getAttribute('data-menu'));
+    closeMenus(m);
+    var open = m.classList.toggle('show');
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    return;
+  }
+  if (!e.target.closest('.dropdown-menu')) closeMenus(null);
+  var nav = e.target.closest('[data-nav]');
+  if (nav) { e.preventDefault(); openPage(nav.getAttribute('data-nav'), nav.getAttribute('data-nav') === 'trouble' ? 'sync' : null); return; }
+  var tab = e.target.closest('.ts-tabs [data-tab]');
+  if (tab) { tsTab = tab.getAttribute('data-tab'); renderTrouble(); writeHash(); return; }
+  var ap = e.target.closest('[data-apply]');
+  if (ap) { readFilters(ap.getAttribute('data-apply')); renderTrouble(); return; }
+  var rs = e.target.closest('[data-reset]');
+  if (rs) { var t = rs.getAttribute('data-reset'), keep = tsf; resetTsFilters(); var fresh = tsf[t]; tsf = keep; tsf[t] = fresh; tsPage[t] = 0; renderTrouble(); return; }
+  var pg = e.target.closest('[data-page]');
+  if (pg) {
+    var parts = pg.getAttribute('data-page').split(':'), tb = parts[0], dir = parts[1];
+    if (dir === 'first') tsPage[tb] = 0; else if (dir === 'prev') tsPage[tb]--; else if (dir === 'next') tsPage[tb]++; else tsPage[tb] = 1e6;
+    renderTrouble(); return;
+  }
+  if (e.target.closest('#si-sort')) { qtyDesc = !qtyDesc; renderTrouble(); return; }
+  var g = e.target.closest('[data-go]');
+  if (g) {
+    e.preventDefault();
+    var dest = g.getAttribute('data-go');
+    if (g.closest('.tip-card')) g.blur();   /* a mouse click shouldn't pin the tooltip open via :focus-within */
+    if (ROUTES[dest]) { openPage('trouble', ROUTES[dest]); return; }
+    toast(dest); return;
+  }
+  var a = e.target.closest('a[href="#"]');
+  if (a) { e.preventDefault(); toast(a.textContent.trim()); }
+});
+document.addEventListener('change', function (e) {
+  var r = e.target.closest('[data-rpp]');
+  if (r) { var t = r.getAttribute('data-rpp'); tsRpp[t] = +r.value; tsPage[t] = 0; renderTrouble(); }
+});
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter' && e.target.closest('.fpanel input')) {
+    var t = e.target.closest('#si-filters') ? 'sync' : 'import'; readFilters(t); renderTrouble(); return;
+  }
+  if (e.key === 'Escape') {
+    var open = document.querySelector('.dropdown-menu.show');
+    if (open) { closeMenus(null); var b = document.querySelector('[data-menu="' + open.id + '"]'); if (b) b.focus(); }
+  }
+});
+
+function parseHash() {
+  var m = /^#(?:v(\d)-)?(\w+)(?:\/(sync|import|speed))?$/.exec(location.hash || '');
+  var v = m && m[1] ? +m[1] : 0;
+  return { v: v >= 1 && v <= 6 ? v : 0, k: m && STATES[m[2]] ? m[2] : 'attention', t: m && m[3] ? m[3] : null };
+}
+window.addEventListener('hashchange', function () {
+  var h = parseHash();
+  if (h.k !== current || h.v !== variant) { current = h.k; variant = h.v; sync(); }
+  if ((h.t ? 'trouble' : 'dash') !== page || (h.t && h.t !== tsTab)) openPage(h.t ? 'trouble' : 'dash', h.t);
+});
+var h0 = parseHash();
+current = h0.k; variant = h0.v; sync();
+if (h0.t) openPage('trouble', h0.t);
+</script>
+</body>
+</html>

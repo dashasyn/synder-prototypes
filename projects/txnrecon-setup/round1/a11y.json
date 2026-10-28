@@ -1,0 +1,94 @@
+{
+  "validator": "a11y",
+  "round": 1,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/txnrecon-setup/finalist-1-sketch.html",
+  "checked": [
+    { "zone": "header", "item": "Close (✕) icon button — accessible name (aria-label=\"Close\" present) and first tab stop" },
+    { "zone": "header", "item": "\"Read-only. Nothing in your books changes.\" badge — static text, not focusable, decorative svg aria-hidden" },
+    { "zone": "header", "item": "Run reconciliation — primary button, enabled state: reachable as 2nd tab stop" },
+    { "zone": "header", "item": "Run reconciliation — disabled state: presence in tab order and accessible reason for the block" },
+    { "zone": "header", "item": "Run reconciliation — focus destination and announcement after activation" },
+    { "zone": "period", "item": "Date range select#f-per — label association (label for=f-per) and focus ring" },
+    { "zone": "period", "item": "Custom start / end date inputs — aria-label=\"Start date\"/\"End date\", no error semantics on an inverted range" },
+    { "zone": "period", "item": "About date range (?) tooltip button — aria-label present, bubble linkage (no aria-describedby/aria-expanded), focus-visible outline suppressed by .tip:focus{outline:none}" },
+    { "zone": "what to reconcile", "item": "Integration select#f-int — label association and downstream panel swap on change" },
+    { "zone": "what to reconcile", "item": "About account (?) tooltip button — same bubble-inside-labelled-button pattern" },
+    { "zone": "what to reconcile", "item": "Account to reconcile select#f-acc — label association; shared-account warning replaces hint text in place with no live region" },
+    { "zone": "how we get the data", "item": "Automatic file retrieval card — static, not focusable" },
+    { "zone": "how we get the data", "item": "Upload manually / Use automatic retrieval toggle (button#mode-toggle) — accessible name changes with state; focus survives its own click; computed focus ring outline auto 1px" },
+    { "zone": "how we get the data", "item": "Upload manually toggle — disappears entirely for PayPal/Shopify with no announcement" },
+    { "zone": "how we get the data · Accounting card", "item": "Import method select — accessible name" },
+    { "zone": "how we get the data · Integration card", "item": "Import method select — accessible name; two identically-worded selects on screen" },
+    { "zone": "how we get the data · Integration card", "item": "\"How to get <file>\" steps accordion (button.acc-h) — aria-expanded toggles correctly; focus destination after toggle" },
+    { "zone": "how we get the data · upload blocks", "item": "Browse (button.db) — real <button>, keyboard-operable; focus destination after picking" },
+    { "zone": "how we get the data · upload blocks", "item": "Remove (button.lnk) — accessible name does not identify which file it removes; focus destination after removal" },
+    { "zone": "how we get the data · upload blocks", "item": "Drop zone \"or drag your file here\" — pointer-only affordance, Browse is the keyboard equivalent" },
+    { "zone": "matching rules", "item": "\"Matching rules\" trigger — a href=\"#\" used as a button (announced as link), appears twice inside #sources plus once in the auto card" },
+    { "zone": "matching rules", "item": "#match-modal — role=dialog, aria-modal=true, aria-labelledby present; focus entry, containment, Escape, and focus return on close" },
+    { "zone": "matching rules", "item": "#match-modal while closed — display:none, so correctly removed from the accessibility tree despite inert=false / aria-hidden=null" },
+    { "zone": "status", "item": "#running region — role=status present; text present in DOM from load, revealed by CSS display toggle only" },
+    { "zone": "page", "item": "Full recorded tab order from the ✕ button, checked against visual reading order" },
+    { "zone": "page", "item": "Global focus-outline resets — none found; only .tip:focus and the select rules suppress the outline, and both substitute a visible cue" }
+  ],
+  "findings": [
+    {
+      "id": "A11Y-1",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "[header] Run reconciliation — primary button, disabled state",
+      "finding": "Whenever a required file is missing the primary action is set `disabled`, which drops it out of the keyboard tab order entirely, and nothing on the page — no tooltip, aria-describedby, inline error or live region — names what is blocking it.",
+      "user_impact": "A keyboard or screen-reader user tabbing the page simply never encounters the primary action and is given no reason for its absence, so the run cannot be started and the blocker cannot be found.",
+      "suggested_fix": "Keep the button enabled and focusable, give it aria-describedby pointing at a visible list of the missing files, and on activation move focus to that list instead of silently disabling the control.",
+      "evidence": {
+        "action": "Picked \"Great payments for every one (PayPal)\" in Integration (no automatic option exists for it), and separately clicked Remove on one filled upload block; then tabbed the page from the ✕ close button.",
+        "observed": "Run reads disabled=true in both cases with no tooltip, no aria-describedby, no inline list and no live message naming the missing file; the recorded tab order has Run as the 2nd stop only while it is enabled, so in the disabled state a native disabled button is skipped by Tab and the primary action leaves the keyboard path with no announced reason."
+      }
+    },
+    {
+      "id": "A11Y-2",
+      "severity": "High",
+      "confidence": 95,
+      "element": "[how we get the data] manual panel — #sources grid (Browse, Remove, \"How to get …\" accordion, both Import method selects)",
+      "finding": "Every control inside the manual upload panel calls render(), which rebuilds the whole #sources grid via innerHTML, destroying the focused element so focus falls to body (or jumps back up to the mode toggle) after each interaction.",
+      "user_impact": "A keyboard user is thrown back to the top of the document after each of the three required file picks and after every accordion toggle, and a screen-reader user hears nothing at all about the file that was added or the steps that were expanded.",
+      "suggested_fix": "Update only the affected block in place rather than replacing #sources, and after any necessary re-render restore focus to the equivalent control (the accordion header just toggled, the Remove button that replaced Browse).",
+      "evidence": {
+        "action": "Activated the \"How to get General ledger export from QuickBooks\" accordion header; clicked Browse on an empty upload block; changed the Accounting Import method select from Automated to Manual.",
+        "observed": "Focus after the accordion toggle = body (lost), after the collapse = body (lost), after Browse = body (lost), and after the select change = button#mode-toggle.lnk \"Use automatic retrieval\" — a control in a different card above; aria-expanded and the new file chip update correctly but no focus target and no announcement follow them."
+      }
+    },
+    {
+      "id": "A11Y-3",
+      "severity": "High",
+      "confidence": 92,
+      "element": "[how we get the data · Accounting card and Integration card] \"Import method\" selects",
+      "finding": "Both Import method selects have an empty accessible name — the markup emits a `<label class=\"msel-lab\">` that neither wraps the select nor carries `for`, and the select has no id and no aria-label.",
+      "user_impact": "A screen-reader user reaches two unnamed comboboxes that decide how each side of the data arrives, with nothing to say which is which because the \"Accounting\" and \"Integration\" card titles are plain divs and are not associated with them either.",
+      "suggested_fix": "Give each select a unique id with a matching `for` on its label, and make the name side-specific (\"Import method — Accounting\" / \"Import method — Integration\") or associate the card title via aria-labelledby.",
+      "evidence": {
+        "action": "Tabbed forward from the \"Use automatic retrieval\" toggle onto the next control, then continued past the accordion, Remove and Matching rules onto the Integration card's select.",
+        "observed": "Focus lands on a combobox whose only exposed text is its current value \"Automated (recommended)\"; the recorded tab order lists these two stops as bare `select`, while every properly labelled field on the screen appears as select#f-per / select#f-int / select#f-acc, and methodSelect() confirms the label is a sibling with no `for` and the select has no id or aria-label."
+      }
+    },
+    {
+      "id": "A11Y-4",
+      "severity": "High",
+      "confidence": 95,
+      "element": "[matching rules] \"Matching rules\" link → #match-modal dialog",
+      "finding": "The dialog declares aria-modal=\"true\" but does nothing to manage focus: focus never enters it, nothing traps it, and on close it is not returned to the trigger.",
+      "user_impact": "A screen-reader user is told the rest of the page is inert while their focus is still outside the dialog, so tabbing operates controls behind it that will not be read, and closing dumps them at the top of the document instead of back at the Matching rules link.",
+      "suggested_fix": "On open, move focus to the dialog (its heading or the Close button), cycle Tab within it, and on close via either the Close button or Escape restore focus to the link that opened it.",
+      "evidence": {
+        "action": "Activated the \"Matching rules\" link, pressed Tab three times, closed with the Close button, then re-opened and closed with Escape.",
+        "observed": "The dialog becomes visible but focus stays on a.lnk.match-open outside it; three Tabs land on button.lnk \"Remove\" behind the dialog (focus outside dialog = true, no containment); after Close, focus = body, not the triggering link — Escape closes it but leaves focus in the same lost state."
+      }
+    }
+  ],
+  "gaps": [
+    "No screen reader was actually run — all evidence here is focus position plus DOM/ARIA inspection, so every claim about what is announced (as opposed to what is exposed in the markup) is inferred rather than heard.",
+    "Post-run feedback is unverified: #running carries role=\"status\" but its text is in the DOM from page load and is revealed only by a CSS display:none → block toggle, and the Run button sets itself disabled while it holds focus. Whether anything is announced when the run starts, and where focus lands after the button disables itself, was never recorded — treat both as unverified, not passing.",
+    "The recorded tab order stops at the Integration card's accordion header, so the Browse buttons inside the upload drop zones never appear in it. They are real `<button class=\"db\">` elements in the source and so should be reachable, but their keyboard reachability was not directly exercised in the captured state.",
+    "The \"?\" tooltip bubbles are `<span>`s nested inside buttons that carry aria-label, which would override the descendant text and hide the explanatory copy from assistive tech entirely; the state map only records that no aria-describedby/aria-expanded links them. Not filed as a finding because no screen reader confirmed the content is unreachable.",
+    "Real OS file upload, drag-and-drop, wrong-file-type/oversize errors, automatic-retrieval failure states and the post-run results view are all in the prototype's not-exercised list, so their labelling, focus and error-announcement behaviour is unknown."
+  ]
+}

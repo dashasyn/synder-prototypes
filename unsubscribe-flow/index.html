@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unsubscribe Flow — Prototype · Synder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../ui-kit/synder-ui-kit.css">
+<style>
+/* ===== PROTO BAR ===== */
+.proto-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 38px; z-index: 300;
+  background: var(--color-grey); color: white;
+  display: flex; align-items: center; gap: 10px; padding: 0 16px;
+  font-size: 12px; font-family: var(--font-family);
+}
+.proto-badge {
+  background: var(--color-primary); color: white; font-size: 10px; font-weight: 700;
+  padding: 2px 9px; border-radius: 12px; letter-spacing: 0.5px; text-transform: uppercase;
+}
+.proto-title { font-weight: 500; color: #E5E7EB; }
+.proto-sep { color: rgba(255,255,255,0.2); }
+.proto-data { color: rgba(255,255,255,0.4); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proto-actions { margin-left: auto; display: flex; gap: 6px; }
+.proto-btn {
+  font-size: 11px; padding: 3px 10px; border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 5px; background: transparent; color: rgba(255,255,255,0.6);
+  cursor: pointer; font-family: var(--font-family); transition: all 0.15s;
+}
+.proto-btn:hover { background: rgba(255,255,255,0.08); color: white; }
+.proto-btn a { color: inherit; text-decoration: none; }
+
+body { padding-top: 38px; }
+
+/* ===== APP SHELL ===== */
+.app { display: flex; min-height: calc(100vh - 38px); }
+
+/* ===== SIDEBAR ===== */
+.sidebar {
+  width: 220px; min-width: 220px;
+  position: fixed; top: 38px; left: 0;
+  height: calc(100vh - 38px);
+  overflow-y: auto; z-index: 100;
+  display: flex; flex-direction: column;
+  padding: 0;
+}
+.sidebar {
+  background: var(--color-white); color: var(--color-grey);
+  border-right: 1px solid var(--color-grey-20);
+}
+.sidebar .nav-item {
+  color: var(--color-grey-50);
+}
+.sidebar .nav-item:hover {
+  background: var(--color-grey-5); color: var(--color-grey);
+}
+.sidebar .nav-item.active {
+  background: var(--color-primary-5); color: var(--color-primary);
+  border-left-color: var(--color-primary);
+}
+.sidebar-user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 16px 14px;
+  border-bottom: 1px solid var(--color-grey-10);
+  cursor: pointer;
+}
+.uavatar {
+  width: 32px; height: 32px; background: var(--color-primary);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: white; flex-shrink: 0;
+}
+.uname { font-size: 14px; font-weight: 500; color: var(--color-grey); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uchev { color: var(--color-grey-30); font-size: 11px; }
+.sidebar-nav { padding: 8px 0; flex: 1; }
+.nav-icon { width: 18px; text-align: center; font-size: 14px; flex-shrink: 0; }
+.nav-text { flex: 1; }
+.nav-chev { color: var(--color-grey-30); font-size: 10px; }
+.nav-sep { height: 1px; background: var(--color-grey-10); margin: 6px 16px; }
+
+/* ===== MAIN ===== */
+.main { margin-left: 220px; flex: 1; display: flex; flex-direction: column; min-height: calc(100vh - 38px); }
+
+/* ===== TOPBAR ===== */
+.topbar { justify-content: flex-end; }
+.syncs-chip { font-size: var(--text-body2-size); color: var(--color-grey-50); }
+.syncs-chip span { color: var(--color-primary); font-weight: 600; cursor: pointer; }
+.tb-circle {
+  width: 30px; height: 30px; border: 1px solid var(--color-grey-20);
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 12px; color: var(--color-grey-50); cursor: pointer;
+  background: var(--color-white); font-family: var(--font-family); transition: all 0.15s;
+}
+.tb-circle:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* ===== CONTENT ===== */
+.content { padding: 28px 40px 40px; flex: 1; display: flex; flex-direction: column; align-items: center; }
+.screen { display: none; width: 100%; max-width: 760px; }
+.screen.active { display: block; }
+.screen.wide { max-width: 860px; }
+
+/* ===== BACK LINK ===== */
+.back-link {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: var(--text-body2-size); color: var(--color-primary);
+  margin-bottom: 20px; cursor: pointer; text-decoration: none;
+}
+.back-link:hover { text-decoration: underline; }
+
+/* ===== BUTTONS ===== */
+.btn-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 28px; }
+.btn-danger-outline {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 16px; border-radius: 6px;
+  font-family: var(--font-family); font-size: var(--text-body2-size); font-weight: 500;
+  cursor: pointer; border: 1px solid var(--color-red); background: var(--color-white);
+  color: var(--color-red); transition: all 0.15s; white-space: nowrap;
+}
+.btn-danger-outline:hover { background: var(--color-red-light); }
+.btn-ghost-red {
+  background: transparent; color: var(--color-red); border: none;
+  font-size: var(--text-body2-size); font-weight: 400; padding: 8px 4px;
+  cursor: pointer; font-family: var(--font-family);
+}
+.btn-ghost-red:hover { text-decoration: underline; }
+
+/* ===== SCREEN 1: SUBSCRIPTION ===== */
+.sub-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.plan-name-row { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+.plan-name { font-size: var(--text-h2-size); font-weight: 600; }
+.card-num { font-size: var(--text-body2-size); color: var(--color-grey-50); }
+.change-card { display: block; font-size: var(--text-body2-size); color: var(--color-primary); margin-bottom: 14px; cursor: pointer; }
+.price-row { display: flex; align-items: baseline; gap: 4px; margin-bottom: 4px; }
+.price-old { font-size: var(--text-body1-size); color: var(--color-grey-30); text-decoration: line-through; }
+.price-main { font-size: 28px; font-weight: 700; color: var(--color-grey); }
+.price-period { font-size: var(--text-caption-size); color: var(--color-grey-50); }
+.billing-date { font-size: var(--text-body2-size); color: var(--color-grey); margin: 8px 0 14px; }
+.plan-links { display: flex; flex-direction: column; gap: 2px; }
+.pl { font-size: var(--text-body2-size); color: var(--color-primary); cursor: pointer; padding: 4px 0; }
+.pl:hover { text-decoration: underline; }
+.pl.red { color: var(--color-red); }
+.autocharge-row {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-grey-10);
+  font-size: var(--text-caption-size); color: var(--color-grey-50);
+}
+.toggle {
+  width: 36px; height: 20px; background: var(--color-primary); border-radius: 10px;
+  position: relative; cursor: pointer; flex-shrink: 0; margin-left: auto;
+}
+.toggle::after {
+  content: ''; width: 16px; height: 16px; background: white; border-radius: 50%;
+  position: absolute; top: 2px; right: 2px; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.hist-heading { font-size: var(--text-subtitle1-size); font-weight: 600; margin-bottom: 4px; }
+.hist-num { font-size: 32px; font-weight: 700; margin: 4px 0; }
+.hist-desc { font-size: var(--text-caption-size); color: var(--color-grey-50); line-height: 1.5; margin-bottom: 12px; }
+.hist-link { font-size: var(--text-body2-size); color: var(--color-primary); cursor: pointer; display: block; margin-top: 8px; }
+.as-title { font-size: var(--text-subtitle1-size); font-weight: 600; margin-bottom: 12px; }
+.as-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 0; border-bottom: 1px solid var(--color-grey-10);
+}
+.as-row:last-of-type { border-bottom: none; }
+.as-label { font-size: var(--text-body2-size); }
+.as-controls { display: flex; align-items: center; gap: 8px; }
+.as-btn {
+  width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--color-primary);
+  background: white; color: var(--color-primary); font-size: 15px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  font-family: var(--font-family); transition: all 0.15s; line-height: 1;
+}
+.as-btn:hover { background: var(--color-primary); color: white; }
+.as-val { font-size: var(--text-body2-size); font-weight: 600; min-width: 32px; text-align: center; }
+.update-btn {
+  width: 100%; margin-top: 12px; padding: 8px;
+  background: white; border: 1px solid var(--color-grey-20); border-radius: 6px;
+  font-size: var(--text-body2-size); font-weight: 500; color: var(--color-grey-50);
+  cursor: pointer; font-family: var(--font-family); transition: all 0.15s;
+}
+.update-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
+.promo-tag {
+  display: inline-block; background: var(--color-primary-10); color: var(--color-primary);
+  font-size: var(--text-caption-size); font-weight: 500; padding: 2px 10px; border-radius: 12px; margin-bottom: 8px;
+}
+.promo-title { font-size: var(--text-subtitle1-size); font-weight: 600; margin-bottom: 6px; line-height: 1.4; }
+.promo-desc { font-size: var(--text-body2-size); color: var(--color-grey-50); line-height: 1.5; margin-bottom: 8px; }
+.promo-link { font-size: var(--text-body2-size); color: var(--color-primary); cursor: pointer; }
+.page-footer {
+  display: flex; gap: 32px; padding: 24px 0 8px; margin-top: 28px;
+  border-top: 1px solid var(--color-grey-20); font-size: var(--text-caption-size); color: var(--color-grey-30);
+}
+.fc { display: flex; flex-direction: column; gap: 3px; }
+.fc-head { font-weight: 500; color: var(--color-grey-50); margin-bottom: 2px; }
+.fc-link { cursor: pointer; color: var(--color-grey-30); }
+.fc-link:hover { color: var(--color-primary); }
+
+/* ===== SCREEN 2: LOSS AVERSION ===== */
+.loss-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.loss-card { text-align: center; padding: 28px 20px; }
+.loss-card-title { font-size: var(--text-subtitle1-size); font-weight: 700; color: var(--color-grey); margin-bottom: 8px; }
+.loss-card-desc { font-size: var(--text-body2-size); color: var(--color-grey-50); line-height: 1.5; }
+
+/* ===== SCREEN 3: SURVEY ===== */
+.survey-q { font-size: var(--text-subtitle1-size); font-weight: 600; color: var(--color-grey); margin-bottom: 20px; }
+.radio-list { display: flex; flex-direction: column; }
+.radio-label {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; cursor: pointer; font-size: var(--text-body2-size); color: var(--color-grey);
+  border-bottom: 1px solid var(--color-grey-10);
+  transition: color 0.15s; user-select: none;
+}
+.radio-label:hover { color: var(--color-primary); }
+.radio-circle {
+  width: 18px; height: 18px; border: 2px solid var(--color-grey-20); border-radius: 50%;
+  flex-shrink: 0; transition: all 0.15s;
+  display: flex; align-items: center; justify-content: center;
+}
+.radio-circle.on { border-color: var(--color-primary); background: var(--color-primary); }
+.radio-circle.on::after { content: ''; width: 6px; height: 6px; background: white; border-radius: 50%; }
+.radio-sub { display: none; flex-direction: column; padding: 2px 0 2px 30px; }
+.radio-sub.open { display: flex; }
+.radio-sub .radio-label { font-size: var(--text-body2-size); color: var(--color-grey-50); padding: 7px 0; }
+.radio-sub .radio-label:hover { color: var(--color-primary); }
+.text-wrap { display: none; padding: 6px 0 8px 30px; }
+.text-wrap.open { display: block; }
+.text-note { font-size: var(--text-body2-size); color: var(--color-grey-50); margin-bottom: 6px; }
+.survey-input {
+  width: 100%; max-width: 420px; padding: 7px 10px;
+  border: 1px solid var(--color-grey-20); border-radius: 6px;
+  font-family: var(--font-family); font-size: var(--text-body2-size); color: var(--color-grey);
+  outline: none; transition: border-color 0.15s, box-shadow 0.15s;
+}
+.survey-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-10); }
+.survey-input::placeholder { color: var(--color-grey-30); }
+
+/* ===== RETENTION SCREENS ===== */
+.ret-wrap { max-width: 580px; }
+.ret-body { font-size: var(--text-body1-size); color: var(--color-grey-50); line-height: 1.7; margin-bottom: 24px; }
+.offer-box { border-radius: 8px; padding: 20px; margin-bottom: 14px; border: 1px solid; }
+.offer-box.amber { background: var(--color-yellow-light); border-color: var(--color-yellow); }
+.offer-box.blue  { background: var(--color-blue-light); border-color: #93bffd; }
+.offer-box.green { background: var(--color-green-light); border-color: #86d8a0; }
+.offer-tag {
+  display: inline-block; font-size: var(--text-caption-size); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.4px; padding: 2px 8px;
+  border-radius: 12px; margin-bottom: 8px;
+}
+.tag-a { background: #fde68a; color: #92400e; }
+.tag-b { background: var(--color-primary-20); color: var(--color-primary); }
+.tag-g { background: #bbf7d0; color: #166534; }
+.offer-title { font-size: var(--text-subtitle1-size); font-weight: 700; color: var(--color-grey); margin-bottom: 6px; }
+.offer-desc { font-size: var(--text-body2-size); color: var(--color-grey); line-height: 1.6; }
+.offer-list { margin-top: 10px; display: flex; flex-direction: column; gap: 3px; }
+.offer-item { display: flex; align-items: flex-start; gap: 8px; font-size: var(--text-body2-size); color: var(--color-grey); padding: 2px 0; }
+.check { color: var(--color-green); font-weight: 700; flex-shrink: 0; }
+.ret-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 24px; }
+
+/* ===== CANCELED ===== */
+.canceled-wrap { max-width: 520px; }
+.canceled-p { font-size: var(--text-body1-size); color: var(--color-grey-50); line-height: 1.75; margin-bottom: 12px; }
+.canceled-p b { color: var(--color-grey); }
+
+/* ===== MODAL ===== */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 400; opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: white; border-radius: 8px; padding: 36px;
+  width: 100%; max-width: 420px;
+  box-shadow: var(--shadow-elevation-1);
+  transform: translateY(8px); transition: transform 0.2s;
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-q { font-size: var(--text-subtitle1-size); font-weight: 600; color: var(--color-grey); text-align: center; margin-bottom: 24px; line-height: 1.5; }
+.modal-btns { display: flex; gap: 12px; justify-content: center; }
+.modal-btns .btn { min-width: 140px; justify-content: center; }
+
+@media (max-width: 800px) {
+  .sub-grid, .loss-grid { grid-template-columns: 1fr; }
+  .content { padding: 20px; }
+  .sidebar { display: none; }
+  .main { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- PROTO BAR -->
+<div class="proto-bar">
+  <span class="proto-badge">Prototype</span>
+  <span class="proto-title">Unsubscribe Flow — Figma Redesign</span>
+  <span class="proto-sep">·</span>
+  <span class="proto-data">LogRocket 90d: 2,077 sessions · ~9% cancel · #1 reason: Too expensive</span>
+  <div class="proto-actions">
+    <button class="proto-btn"><a href="https://dashasyn.github.io/synder-prototypes/">← Hub</a></button>
+    <button class="proto-btn" onclick="resetFlow()">↺ Reset</button>
+  </div>
+</div>
+
+<!-- APP SHELL -->
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-user">
+      <div class="uavatar">LC</div>
+      <span class="uname">Lara Croft</span>
+      <span class="uchev">▾</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item"><span class="nav-icon">📊</span><span class="nav-text">Dashboard</span></div>
+      <div class="nav-item"><span class="nav-icon">↔</span><span class="nav-text">Transactions</span><span class="nav-chev">›</span></div>
+      <div class="nav-item"><span class="nav-icon">⚡</span><span class="nav-text">Smart rules</span><span class="nav-chev">›</span></div>
+      <div class="nav-item"><span class="nav-icon">🛒</span><span class="nav-text">Sales</span><span class="nav-chev">›</span></div>
+      <div class="nav-item"><span class="nav-icon">📄</span><span class="nav-text">Expenses</span><span class="nav-chev">›</span></div>
+      <div class="nav-item"><span class="nav-icon">✨</span><span class="nav-text">Business insights</span></div>
+      <div class="nav-item"><span class="nav-icon">📈</span><span class="nav-text">Reporting</span><span class="nav-chev">›</span></div>
+      <div class="nav-item"><span class="nav-icon">🏛</span><span class="nav-text">Chart of accounts</span></div>
+      <div class="nav-item"><span class="nav-icon">💰</span><span class="nav-text">Payroll</span></div>
+      <div class="nav-sep"></div>
+      <div class="nav-item active"><span class="nav-icon">⚙</span><span class="nav-text">Settings</span></div>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <div class="topbar">
+      <span class="syncs-chip">Syncs left: <span>1000</span></span>
+      <button class="tb-circle">?</button>
+      <button class="tb-circle">👤</button>
+    </div>
+
+    <!-- CONTENT -->
+    <div class="content">
+
+      <!-- ═══ SCREEN 1 — SUBSCRIPTION ═══ -->
+      <div id="s-sub" class="screen wide active">
+        <a class="back-link">‹ Back to Organization settings</a>
+        <h1 class="page-title" style="margin-bottom:20px;">Subscription</h1>
+
+        <div class="sub-grid">
+          <div class="card">
+            <div class="plan-name-row">
+              <span class="plan-name">Essential</span>
+              <span class="card-num">💳 •••• 4242</span>
+            </div>
+            <a class="change-card">Change card</a>
+            <div class="price-row">
+              <span class="price-old">$115.00</span>
+              <span class="price-main">$92</span>
+              <span class="price-period">/month billed yearly</span>
+            </div>
+            <div class="billing-date">Next billing date: <b>03/10/2027</b></div>
+            <div class="plan-links">
+              <a class="pl">Upgrade your plan</a>
+              <a class="pl red" onclick="openModal()">Cancel subscription</a>
+              <a class="pl">Get subscription invoices</a>
+            </div>
+            <div class="autocharge-row">
+              Autocharge me if sync balance is depleted ⓘ
+              <div class="toggle"></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="hist-heading">My historical transactions</div>
+            <div class="hist-num">0</div>
+            <div class="hist-desc">Will be used to synchronize historical transactions (when regular plan balance is empty)</div>
+            <button class="btn btn-primary" style="width:100%;justify-content:center;margin-bottom:6px;">Purchase historical transactions</button>
+            <a class="hist-link">Get more transactions for free ›</a>
+          </div>
+        </div>
+
+        <div class="sub-grid">
+          <div class="card">
+            <div class="as-title">Additional services</div>
+            <div class="as-row"><span class="as-label">Monthly transactions</span><div class="as-controls"><button class="as-btn">−</button><span class="as-val">1000</span><button class="as-btn">+</button></div></div>
+            <div class="as-row"><span class="as-label">Additional users</span><div class="as-controls"><button class="as-btn">−</button><span class="as-val">1</span><button class="as-btn">+</button></div></div>
+            <button class="update-btn">Update plan</button>
+          </div>
+          <div class="card">
+            <div class="promo-tag">For accounting professionals</div>
+            <div class="promo-title">Unlock special benefits for accountants in Synder</div>
+            <div class="promo-desc">Synder offers a variety of benefits for accounting professionals. We'll be happy to make your work easier!</div>
+            <a class="promo-link">Learn more</a>
+          </div>
+        </div>
+
+        <div class="page-footer">
+          <div class="fc"><span class="fc-head">About</span><span class="fc-link">synder.com</span><span class="fc-link">v11.6.77 · © 2026</span></div>
+          <div class="fc"><span class="fc-head">Contact us</span><span class="fc-link">help@synder.com</span><span class="fc-link">Community</span></div>
+          <div class="fc"><span class="fc-head">Legal</span><span class="fc-link">Privacy Policy</span><span class="fc-link">Terms of service</span></div>
+        </div>
+      </div>
+
+      <!-- ═══ SCREEN 2 — LOSS AVERSION ═══ -->
+      <div id="s-loss" class="screen">
+        <a class="back-link" onclick="goto('s-sub')">‹ Back to My account</a>
+        <h1 class="page-title" style="margin-bottom:4px;">What you are leaving behind</h1>
+        <p class="page-subtitle" style="margin-bottom:24px;">Applies after your current subscription period ends.</p>
+
+        <div class="loss-grid">
+          <div class="card loss-card"><div class="loss-card-title">Data</div><div class="loss-card-desc">In 7 days all your data will be permanently deleted from Synder</div></div>
+          <div class="card loss-card"><div class="loss-card-title">20% discount</div><div class="loss-card-desc">All your personal discounts and bonuses will be lost</div></div>
+          <div class="card loss-card"><div class="loss-card-title">1000 syncs</div><div class="loss-card-desc">All your unused additional free syncs will disappear</div></div>
+          <div class="card loss-card"><div class="loss-card-title">Customized account</div><div class="loss-card-desc">You'll spend hours to find an alternative and adopt it</div></div>
+        </div>
+
+        <div class="btn-row">
+          <button class="btn btn-primary" onclick="goto('s-sub')">Take me back to my account</button>
+          <button class="btn-danger-outline" onclick="goto('s-survey')">I'm fine with losing all the above, proceed</button>
+        </div>
+      </div>
+
+      <!-- ═══ SCREEN 3 — SURVEY ═══ -->
+      <div id="s-survey" class="screen">
+        <a class="back-link" onclick="goto('s-loss')">‹ Back to My account</a>
+        <div class="survey-q">Could you share with us why you decided to cancel?</div>
+
+        <div class="radio-list">
+          <!-- 1 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('expensive')"><div class="radio-circle" id="rc-expensive"></div>Too expensive</div>
+            <div class="radio-sub" id="sub-expensive">
+              <div class="radio-label" onclick="selectSub('expensive','cheaper')"><div class="radio-circle" id="src-expensive-cheaper"></div>I found a cheaper tool</div>
+              <div class="radio-label" onclick="selectSub('expensive','afford')"><div class="radio-circle" id="src-expensive-afford"></div>My business can't afford it right now</div>
+              <div class="radio-label" onclick="selectSub('expensive','value')"><div class="radio-circle" id="src-expensive-value"></div>Synder should do more for that price</div>
+              <div class="radio-label" onclick="selectSub('expensive','short')"><div class="radio-circle" id="src-expensive-short"></div>I only needed it for a short time</div>
+            </div>
+          </div>
+          <!-- 2 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('noneed')"><div class="radio-circle" id="rc-noneed"></div>No longer need Synder</div>
+            <div class="radio-sub" id="sub-noneed">
+              <div class="radio-label" onclick="selectSub('noneed','stopped')"><div class="radio-circle" id="src-noneed-stopped"></div>I stopped selling online</div>
+              <div class="radio-label" onclick="selectSub('noneed','acct')"><div class="radio-circle" id="src-noneed-acct"></div>My accountant/bookkeeper handles it differently now</div>
+              <div class="radio-label" onclick="selectSub('noneed','noauto')"><div class="radio-circle" id="src-noneed-noauto"></div>I no longer need accounting automation</div>
+            </div>
+          </div>
+          <!-- 3 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('nounderstand')"><div class="radio-circle" id="rc-nounderstand"></div>Didn't understand how to use it</div>
+            <div class="radio-sub" id="sub-nounderstand">
+              <div class="radio-label" onclick="selectSub('nounderstand','complex')"><div class="radio-circle" id="src-nounderstand-complex"></div>Setup was too complex</div>
+              <div class="radio-label" onclick="selectSub('nounderstand','start')"><div class="radio-circle" id="src-nounderstand-start"></div>I didn't know where to start</div>
+              <div class="radio-label" onclick="selectSub('nounderstand','find')"><div class="radio-circle" id="src-nounderstand-find"></div>Couldn't find the features I needed</div>
+              <div class="radio-label" onclick="selectSub('nounderstand','tutorials')"><div class="radio-circle" id="src-nounderstand-tutorials"></div>Lack of guidance or tutorials</div>
+            </div>
+          </div>
+          <!-- 4 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('missing')"><div class="radio-circle" id="rc-missing"></div>Missing features I need</div>
+            <div class="text-wrap" id="sub-missing">
+              <p class="text-note">Please, share with us what features you need.</p>
+              <input type="text" class="survey-input" placeholder="I needed to…">
+            </div>
+          </div>
+          <!-- 5 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('technical')"><div class="radio-circle" id="rc-technical"></div>Had technical issues</div>
+            <div class="radio-sub" id="sub-technical">
+              <div class="radio-label" onclick="selectSub('technical','sync')"><div class="radio-circle" id="src-technical-sync"></div>Syncing errors</div>
+              <div class="radio-label" onclick="selectSub('technical','disc')"><div class="radio-circle" id="src-technical-disc"></div>Discrepancies</div>
+              <div class="radio-label" onclick="selectSub('technical','slow')"><div class="radio-circle" id="src-technical-slow"></div>Slow performance</div>
+              <div class="radio-label" onclick="selectSub('technical','bugs')"><div class="radio-circle" id="src-technical-bugs"></div>Bugs or crashes</div>
+              <div class="radio-label" onclick="selectSub('technical','support')"><div class="radio-circle" id="src-technical-support"></div>Customer support wasn't helpful</div>
+            </div>
+          </div>
+          <!-- 6 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('competitor')"><div class="radio-circle" id="rc-competitor"></div>Switched to a competitor</div>
+            <div class="text-wrap" id="sub-competitor">
+              <p class="text-note">Could you share the competitor's name?</p>
+              <input type="text" class="survey-input" placeholder="I switched to…">
+            </div>
+          </div>
+          <!-- 7 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('closing')"><div class="radio-circle" id="rc-closing"></div>Closing my business</div>
+          </div>
+          <!-- 8 -->
+          <div class="radio-item">
+            <div class="radio-label" onclick="selectReason('other')"><div class="radio-circle" id="rc-other"></div>Other</div>
+            <div class="text-wrap" id="sub-other">
+              <input type="text" class="survey-input" placeholder="Please, specify the reason">
+            </div>
+          </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:20px;">
+          <button class="btn btn-primary" id="btn-submit" onclick="submitSurvey()" disabled>Submit</button>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: Too expensive ═══ -->
+      <div id="s-ret-expensive" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">Let's make it work for your budget</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">We understand cost is a real concern. Before you go, here's what we can offer:</p>
+          <div class="offer-box amber">
+            <span class="offer-tag tag-a">Special offer</span>
+            <div class="offer-title">Get 20% off your next 3 months</div>
+            <div class="offer-desc">Stay on your current plan at a discounted rate — automatically applied, no code needed.</div>
+          </div>
+          <div class="offer-box blue">
+            <span class="offer-tag tag-b">Or downgrade</span>
+            <div class="offer-title">Switch to a lower plan</div>
+            <div class="offer-desc">Keep your syncs and data at a fraction of the cost. You can always upgrade again later.</div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Apply 20% discount</button>
+            <button class="btn btn-outline" onclick="goto('s-sub')">Switch to a lower plan</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: No longer need ═══ -->
+      <div id="s-ret-noneed" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">You can always come back</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">If your needs have changed, that's okay. Consider pausing instead of canceling — your data stays safe.</p>
+          <div class="offer-box blue">
+            <span class="offer-tag tag-b">Instead of canceling</span>
+            <div class="offer-title">Pause your subscription for 1–3 months</div>
+            <div class="offer-desc">Your data, settings, and integrations stay intact. Resume whenever you're ready.</div>
+            <div class="offer-list">
+              <div class="offer-item"><span class="check">✓</span> All your sync rules preserved</div>
+              <div class="offer-item"><span class="check">✓</span> Transaction history stays safe</div>
+              <div class="offer-item"><span class="check">✓</span> Restart in under a minute</div>
+            </div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Pause subscription</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: Didn't understand ═══ -->
+      <div id="s-ret-nounderstand" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">We'd love to show you around</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">Getting started can be overwhelming. Let us help — free, no commitment.</p>
+          <div class="offer-box blue">
+            <span class="offer-tag tag-b">Free offer</span>
+            <div class="offer-title">Book a 1:1 onboarding session</div>
+            <div class="offer-desc">Our specialist will walk you through Synder step by step, tailored to your business. Usually 30 minutes.</div>
+            <div class="offer-list">
+              <div class="offer-item"><span class="check">✓</span> Set up your integrations</div>
+              <div class="offer-item"><span class="check">✓</span> Configure your first sync rules</div>
+              <div class="offer-item"><span class="check">✓</span> Get your questions answered live</div>
+            </div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Schedule a call</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: Missing features ═══ -->
+      <div id="s-ret-missing" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">Your feedback shapes our roadmap</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">We take every feature request seriously — your input directly influences what we build next.</p>
+          <div class="offer-box green">
+            <span class="offer-tag tag-g">Coming soon</span>
+            <div class="offer-title">New features shipping this quarter</div>
+            <div class="offer-desc">We're actively working on expanded platform support, improved reporting, and advanced automation.</div>
+            <div class="offer-list">
+              <div class="offer-item"><span class="check">✓</span> Enhanced multi-currency reporting</div>
+              <div class="offer-item"><span class="check">✓</span> Bulk transaction editing</div>
+              <div class="offer-item"><span class="check">✓</span> New Walmart &amp; TikTok integrations</div>
+            </div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Share my feature request</button>
+            <button class="btn btn-outline" onclick="goto('s-sub')">Keep subscription</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: Technical issues ═══ -->
+      <div id="s-ret-technical" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">Let's fix this together</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">Technical issues are frustrating — and they're our responsibility. Don't leave before we've had a chance to help.</p>
+          <div class="offer-box amber">
+            <span class="offer-tag tag-a">Priority support</span>
+            <div class="offer-title">Get your issue resolved in under 24 hours</div>
+            <div class="offer-desc">Skip the queue. Our senior technical team will personally investigate and follow up directly — sync errors, discrepancies, performance, all of it.</div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Get priority support</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: Competitor ═══ -->
+      <div id="s-ret-competitor" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">Before you switch — one thing to consider</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">We'd love to know what the other tool does better. But here's what you'd be leaving behind:</p>
+          <div class="offer-box blue">
+            <span class="offer-tag tag-b">Why Synder is different</span>
+            <div class="offer-title">Purpose-built for multi-channel ecommerce sync</div>
+            <div class="offer-desc">Most alternatives are general-purpose tools. Synder is built specifically for syncing 30+ sales platforms to accounting — with reconciliation, COGS tracking, and tax handling built in.</div>
+            <div class="offer-list">
+              <div class="offer-item"><span class="check">✓</span> 30+ native integrations</div>
+              <div class="offer-item"><span class="check">✓</span> Automatic reconciliation, zero manual cleanup</div>
+              <div class="offer-item"><span class="check">✓</span> SOC 2, GDPR, HIPAA compliant</div>
+            </div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Keep my subscription</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: Closing business ═══ -->
+      <div id="s-ret-closing" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">We're sorry to hear that</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">If you're closing your business, we completely understand. If things turn around, Synder will be here.</p>
+          <div class="offer-box blue">
+            <span class="offer-tag tag-b">Keep your data safe</span>
+            <div class="offer-title">Pause your subscription instead</div>
+            <div class="offer-desc">Pausing preserves all your data, settings, and integrations at no cost. If you restart, you'll be ready in minutes.</div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Pause subscription</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ RETENTION: Other ═══ -->
+      <div id="s-ret-other" class="screen">
+        <a class="back-link" onclick="goto('s-survey')">‹ Back</a>
+        <h1 class="page-title" style="margin-bottom:16px;">We'd love to understand</h1>
+        <div class="ret-wrap">
+          <p class="ret-body">Whatever your reason, we want to hear it. Would you be open to a quick conversation with our team?</p>
+          <div class="offer-box amber">
+            <span class="offer-tag tag-a">Talk to us</span>
+            <div class="offer-title">15-minute call with our team</div>
+            <div class="offer-desc">No sales pitch. Just an honest conversation about what's not working — and whether there's anything we can do.</div>
+          </div>
+          <div class="ret-actions">
+            <button class="btn btn-primary" onclick="goto('s-sub')">Schedule a call</button>
+            <button class="btn-ghost-red" onclick="goto('s-canceled')">Cancel anyway</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══ CANCELED ═══ -->
+      <div id="s-canceled" class="screen">
+        <a class="back-link">‹ Back to My account</a>
+        <div class="canceled-wrap">
+          <h1 class="page-title" style="color:var(--color-red); margin-bottom:16px;">Subscription canceled</h1>
+          <p class="canceled-p">Your Synder account will remain accessible until <b>03.10.2027</b>. Following that, all your account information will be erased. A confirmation email will be sent to you afterwards.</p>
+          <p class="canceled-p">Contact us at <a href="mailto:help@synder.com">help@synder.com</a> if you have something to share or want to come back.</p>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </main>
+</div><!-- /app -->
+
+<!-- MODAL -->
+<div id="cancel-modal" class="modal-overlay" onclick="handleBackdrop(event)">
+  <div class="modal">
+    <p class="modal-q">Are you sure you want to cancel subscription?</p>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="closeModal()">Keep my plan</button>
+      <button class="btn btn-outline" onclick="proceedCancel()">Continue to cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let current = 's-sub';
+let selectedReason = null;
+const reasonMap = {
+  expensive:'s-ret-expensive', noneed:'s-ret-noneed', nounderstand:'s-ret-nounderstand',
+  missing:'s-ret-missing', technical:'s-ret-technical', competitor:'s-ret-competitor',
+  closing:'s-ret-closing', other:'s-ret-other'
+};
+
+function goto(id) {
+  document.getElementById(current)?.classList.remove('active');
+  const el = document.getElementById(id);
+  if (el) { el.classList.add('active'); current = id; }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function openModal() { document.getElementById('cancel-modal').classList.add('open'); }
+function closeModal() { document.getElementById('cancel-modal').classList.remove('open'); }
+function proceedCancel() { closeModal(); goto('s-loss'); }
+function handleBackdrop(e) { if (e.target.id === 'cancel-modal') closeModal(); }
+
+function selectReason(reason) {
+  document.querySelectorAll('#s-survey .radio-circle:not([id^="src-"])').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('#s-survey .radio-sub, #s-survey .text-wrap').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('#s-survey [id^="src-"]').forEach(el => el.classList.remove('on'));
+  document.getElementById('rc-' + reason)?.classList.add('on');
+  const sub = document.getElementById('sub-' + reason);
+  if (sub) sub.classList.add('open');
+  selectedReason = reason;
+  document.getElementById('btn-submit').disabled = false;
+}
+function selectSub(reason, key) {
+  document.querySelectorAll(`[id^="src-${reason}-"]`).forEach(el => el.classList.remove('on'));
+  document.getElementById(`src-${reason}-${key}`)?.classList.add('on');
+}
+function submitSurvey() { if (selectedReason) goto(reasonMap[selectedReason]); }
+function resetFlow() {
+  selectedReason = null;
+  document.querySelectorAll('#s-survey .radio-circle').forEach(el => el.classList.remove('on'));
+  document.querySelectorAll('#s-survey .radio-sub, #s-survey .text-wrap').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('#s-survey .survey-input').forEach(el => el.value = '');
+  document.getElementById('btn-submit').disabled = true;
+  goto('s-sub');
+}
+</script>
+</body>
+</html>

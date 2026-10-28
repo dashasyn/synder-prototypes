@@ -1,0 +1,273 @@
+/* ════════════════════════════════════════════════════════════════════
+   PIMS Grunddaten — the app shell and the router.
+
+   Loads after ui.js and the views-*.js files, which have registered
+   themselves into VIEWS by the time this runs.
+   ════════════════════════════════════════════════════════════════════ */
+
+/* i18n.js defines the vanilla's own t(). Alias it before Root shadows the
+   name, so the language-aware wrapper below is a wrapper over ONE lookup and
+   not a second implementation that can drift from the extracted logic's. */
+const t_ = t;
+
+/* The nav highlight rules, lifted from the vanilla's render(): a detail view
+   keeps its list's menu entry marked. */
+const NAV_PARENT = {
+  detail: 'stations', lineDetail: 'lines', playlistDetail: 'sounds',
+  musicEvent: 'music',
+};
+const navActive = (view, entry) => view === entry || NAV_PARENT[view] === entry;
+
+/** The BVG heart, kept as-is: it is the client's mark, not a MUI component. */
+function BvgHeart() {
+  return html`
+    <${Box} sx=${{ width: 30, height: 30, bgcolor: '#FFCC00', borderRadius: '50% 50% 50% 0',
+                   transform: 'rotate(-45deg)', display: 'flex', alignItems: 'center',
+                   justifyContent: 'center', flexShrink: 0, mr: 2.5 }}>
+      <${Box} component="span" sx=${{ transform: 'rotate(45deg)', fontSize: 9, fontWeight: 700,
+                                      color: '#000', letterSpacing: '-0.5px' }}>BVG<//>
+    <//>`;
+}
+
+/** A top-nav entry that opens a real MUI Menu. Never a native select. */
+function NavMenu({ label, active, id, children }) {
+  const [anchor, setAnchor] = useState(null);
+  return html`
+    <${React.Fragment}>
+      ${/* data-nav, like data-view, is a stable hook: the label itself is
+            translated, so a check that clicks "Konfiguration" cannot reach the
+            same menu once the page is in English. */ ''}
+      <${Button} color="inherit" data-nav=${id} onClick=${e => setAnchor(e.currentTarget)}
+        aria-haspopup="menu" aria-expanded=${!!anchor}
+        endIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>expand_more<//>`}
+        sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
+               fontWeight: active ? 500 : 400,
+               borderBottom: active ? '3px solid' : '3px solid transparent',
+               borderColor: active ? 'primary.main' : 'transparent',
+               color: active ? 'primary.main' : 'inherit' }}>${label}<//>
+      <${Menu} anchorEl=${anchor} open=${!!anchor} onClose=${() => setAnchor(null)}
+        anchorOrigin=${{ vertical: 'bottom', horizontal: 'left' }}>
+        ${children(() => setAnchor(null))}
+      <//>
+    <//>`;
+}
+
+function Shell() {
+  const topRef = useRef(null);
+  useEffect(() => {
+    const el = topRef.current; if (!el) return;
+    const pub = () => document.documentElement.style.setProperty('--app-top', el.getBoundingClientRect().height + 'px');
+    pub(); const ro = new ResizeObserver(pub); ro.observe(el); return () => ro.disconnect();
+  }, []);
+  const app = useApp();
+  const { t, s, nav } = app;
+  const View = VIEWS[s.view];
+
+  const item = (view, label, onClick) => html`
+    <${MenuItem} key=${view} selected=${navActive(s.view, view)} data-view=${view}
+      onClick=${onClick}><${ListItemText} primary=${label} /><//>`;
+
+  return html`
+    <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
+
+      ${/* Ignat, 2026-09-30: "Top bar and staging should also be fixed. All top elements."
+            Banner + bar stick together; their height is published as --app-top so the
+            page header can stick right under them. */ ''}
+      <${Box} id="appTop" ref=${topRef} sx=${{ position: 'sticky', top: 0, zIndex: 1100, flexShrink: 0 }}>
+      ${/* Staging banner — MUI Alert, default styling. */ ''}
+      <${Alert} severity="warning" square icon=${false}
+        sx=${{ justifyContent: 'center', py: .25, flexShrink: 0 }}>
+        <b>Staging</b> – Here you can safely test features. Nothing will be played on DAISYs or ELAs.
+      <//>
+
+      ${/* The vanilla's own chrome: white, 52px, a hairline and a 1px shadow. */ ''}
+      <${AppBar} position="static" sx=${{ bgcolor: BAR_BG, color: 'text.primary', flexShrink: 0,
+                                          borderBottom: '1px solid', borderColor: 'divider',
+                                          boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <${Toolbar} sx=${{ minHeight: BAR_H, height: BAR_H, px: 2 }}>
+          <${BvgHeart} />
+          <${Stack} direction="row" sx=${{ height: BAR_H, alignItems: 'stretch' }}>
+            ${['Incidents', 'Line view'].map(l => html`
+              <${Button} key=${l} color="inherit" disabled
+                sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14 }}>${l}<//>`)}
+            ${/* Ignat, 2026-10-23: the station view moves into the Messages view menu as "ELA live";
+                  Live-Daten keeps only the Netzplan, so it becomes a plain top-bar item */ ''}
+            <${NavMenu} id="msgs" label="Messages view" active=${s.view === 'live'}>
+              ${close => [item('live', 'ELA live', () => { close(); nav('live'); })]}
+            <//>
+            <${Button} color="inherit" data-nav="liveMap" onClick=${() => nav('liveMap')}
+              sx=${{ height: BAR_H, borderRadius: 0, px: 1.75, textTransform: 'none', fontSize: 14,
+                     fontWeight: s.view === 'liveMap' ? 500 : 400,
+                     borderBottom: '3px solid', borderColor: s.view === 'liveMap' ? 'primary.main' : 'transparent',
+                     color: s.view === 'liveMap' ? 'primary.main' : 'inherit' }}>
+              ${state.lang === 'de' ? 'Netzplan' : 'Network map'}<//>
+
+            <${NavMenu} id="evr" label=${t('evrMenu')} active=${EVR_VIEWS.includes(s.view)}>
+              ${close => [
+                html`<${MenuItem} key="text" onClick=${close}><${ListItemText} primary=${t('evrText')} /><//>`,
+                item('music', t('evrMusic'), () => { close(); nav('music'); }),
+              ]}
+            <//>
+
+            <${NavMenu} id="cfg" label=${state.lang === 'de' ? 'Konfiguration' : 'Configuration'}
+              active=${GD_VIEWS.includes(s.view)}>
+              ${close => [
+                html`<${MenuItem} key="users" onClick=${close}>
+                  <${ListItemText} primary=${state.lang === 'de' ? 'Benutzer und Rechte' : 'Users and permissions'} /><//>`,
+                html`<${MenuItem} key="tpl" onClick=${close}>
+                  <${ListItemText} primary=${state.lang === 'de' ? 'Vorlagen' : 'Templates'} /><//>`,
+                // Ignat, 2026-10-09: one "Grunddaten" entry; its pages are tabs on that page
+                html`<${MenuItem} key="gd" data-view="gd" selected=${GD_VIEWS.includes(s.view) && !navActive(s.view, 'sounds')}
+                  onClick=${() => { close(); nav('stations'); }}>
+                  <${ListItemText} primary=${state.lang === 'de' ? 'Grunddaten' : 'Basic data'} /><//>`,
+                // Ignat, 2026-10-09: "keep audio library a separate tab in the configuration menu"
+                item('sounds', t('sounds'), () => { close(); nav('sounds'); }),
+              ]}
+            <//>
+          <//>
+
+          <${Box} sx=${{ flexGrow: 1 }} />
+
+          <${Stack} direction="row" spacing=${1} alignItems="center">
+            <${Button} color="primary" sx=${{ textTransform: 'uppercase', fontSize: 13, fontWeight: 500,
+                                              letterSpacing: '0.04em' }}
+              endIcon=${html`<${Icon} sx=${{ fontSize: 14 }}>north_east<//>`}>Virtual Daisy & ELA<//>
+            <${Divider} orientation="vertical" flexItem sx=${{ my: 1.5 }} />
+            <${Typography} variant="body2" color="text.secondary">TN I, TN II, TN III<//>
+            <${IconButton} color="inherit" aria-label="notifications">
+              <${Icon} sx=${{ fontSize: 18 }}>notifications<//><//>
+            <${ToggleButtonGroup} exclusive size="small" value=${state.lang}
+              onChange=${(e, v) => v && app.setLang(v)}
+              sx=${{ '& .MuiToggleButton-root': { py: .25, px: 1, fontSize: 12 } }}>
+              <${ToggleButton} value="de" aria-label="Deutsch">DE<//>
+              <${ToggleButton} value="en" aria-label="English">EN<//>
+            <//>
+            <${Avatar} sx=${{ width: 32, height: 32, fontSize: 11, fontWeight: 700,
+                              bgcolor: 'primary.main' }}>BVG<//>
+            <${Typography} variant="body2" color="text.secondary">BVG BVG<//>
+          <//>
+        <//>
+      <//>
+
+      <//>
+
+      ${/* Content. Full width, 24px gutters — brief §3. */ ''}
+      ${/* data-view is the observable the parity checker reads, so it can walk
+            the app and report which views it actually reached rather than
+            asserting the ones it happened to remember. */ ''}
+      <${Box} component="main" data-view=${s.view} sx=${{ flexGrow: 1, minWidth: 0 }}>
+        ${View ? html`<${View} />` : html`
+          <${PageBody}><${Alert} severity="error">Unknown view: ${s.view}<//><//>`}
+      <//>
+
+      ${/* Unsaved changes. Reached from the breadcrumb and from the top bar,
+            because both are ways out of a draft that only Save writes back. */ ''}
+      <${ConfirmDialog} open=${!!s.pendingNav}
+        title=${state.lang === 'de' ? 'Änderungen verwerfen?' : 'Discard changes?'}
+        body=${s.view === 'lineDetail'
+          ? (state.lang === 'de'
+            ? 'Die Linie wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
+            : 'This line has unsaved changes. Leaving the page will discard them.')
+          : s.view === 'detail'
+          ? (state.lang === 'de'
+            ? 'Die Station wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
+            : 'This station has unsaved changes. Leaving the page will discard them.')
+          : (state.lang === 'de'
+            ? 'Das Event wurde geändert und noch nicht gespeichert. Beim Verlassen gehen die Änderungen verloren.'
+            : 'This event has unsaved changes. Leaving the page will discard them.')}
+        confirmLabel=${state.lang === 'de' ? 'Verwerfen' : 'Discard'}
+        onConfirm=${app.confirmLeave} onClose=${app.cancelLeave} />
+
+      ${/* a click elsewhere must not swallow a toast that the same click just raised
+            (2026-10-14: Save pressed while the previous toast was still up showed nothing) */ ''}
+      <${Snackbar} open=${!!app.toastMsg} autoHideDuration=${2400} onClose=${(e, why) => { if (why !== 'clickaway') app.clearToast(); }}
+        message=${app.toastMsg} anchorOrigin=${{ vertical: 'bottom', horizontal: 'center' }} />
+    <//>`;
+}
+
+function Root() {
+  const [s, setS] = useState(INITIAL);
+  const [lang, setLangState] = useState('de');   // the vanilla starts in German
+  const [rev, setRev] = useState(0);             // in-place mutation nudge
+  const [toastMsg, setToastMsg] = useState('');
+
+  // one lookup, shared with the extracted logic in data.js
+  setDataLang(lang);
+  const t = useCallback((k, ...a) => t_(k, ...a), [lang]);
+
+  const set = useCallback(patch => setS(prev => ({ ...prev, ...patch })), []);
+
+  /**
+   * Ignat, 2026-09-23: "add a confirmation modal if the user wants to leave
+   * without saving." The draft lives in memory until Save writes it back, so
+   * every exit from the editor — the breadcrumb, the top-bar menus — has to
+   * pass this. The navigation is held in pendingNav and replayed if the user
+   * confirms, so the guard cannot silently swallow where they were going.
+   */
+  const isDirty = useCallback(st =>
+    (st.view === 'musicEvent' && st.evDraft && st.evPristine !== null
+      && JSON.stringify(st.evDraft) !== st.evPristine)
+    // the station detail keeps its draft locally and reports it (2026-09-30)
+    // typeof: a cached older views-stations.js without DETAIL_GUARD must not take the app down
+    || ((st.view === 'detail' || st.view === 'lineDetail') && typeof DETAIL_GUARD !== 'undefined' && DETAIL_GUARD.dirty), []);
+
+  /** The vanilla's navigate(), with the same per-view argument handling. */
+  const nav = useCallback((view, id, line) => {
+    setS(prev => {
+      if (view !== prev.view && isDirty(prev)) return { ...prev, pendingNav: { view, id, line } };
+      const next = { ...prev, view };
+      if (view === 'lineDetail') next.selectedLineId = id || null;
+      else if (view === 'playlistDetail') next.plId = id || prev.plId;
+      else if (view === 'musicEvent') {
+        if (id !== undefined && id !== null) {
+          next.evId = id;
+          next.evDraft = cloneEvent(getEvent(id));
+          next.evPristine = JSON.stringify(next.evDraft);
+        }
+      } else { next.selectedId = id || null; next.selectedLine = line || null; }
+      // leaving the editor clears the draft as well as the guard's snapshot —
+      // by this point either it was clean or the confirm has been accepted
+      if (view !== 'musicEvent') { next.evDraft = null; next.evPristine = null; next.pendingNav = null; }
+      return next;
+    });
+  }, [isDirty]);
+
+  /** Leave anyway: drop the draft, then take the navigation that was held. */
+  const confirmLeave = useCallback(() => {
+    setS(prev => {
+      const go = prev.pendingNav;
+      const next = { ...prev, evDraft: null, evPristine: null, pendingNav: null };
+      if (typeof DETAIL_GUARD !== 'undefined') DETAIL_GUARD.dirty = false;
+      if (!go) return next;
+      next.view = go.view;
+      if (go.view === 'lineDetail') next.selectedLineId = go.id || null;
+      else if (go.view === 'playlistDetail') next.plId = go.id || prev.plId;
+      else { next.selectedId = go.id || null; next.selectedLine = go.line || null; }
+      return next;
+    });
+  }, []);
+  const cancelLeave = useCallback(() => setS(prev => ({ ...prev, pendingNav: null })), []);
+
+  const setLang = useCallback(l => {
+    setLangState(l);
+    setDataLang(l);
+    document.documentElement.lang = l;   // native date/time inputs follow this
+  }, []);
+
+  const value = useMemo(() => ({
+    s, set, nav, t, lang, setLang, rev, confirmLeave, cancelLeave,
+    bump: () => setRev(r => r + 1),
+    toast: m => setToastMsg(m),
+    toastMsg, clearToast: () => setToastMsg(''),
+  }), [s, lang, rev, toastMsg, set, nav, t, setLang, confirmLeave, cancelLeave]);
+
+  return html`
+    <${ThemeProvider} theme=${theme}>
+      <${CssBaseline} />
+      <${App.Provider} value=${value}>
+        <${Shell} />
+      <//>
+    <//>`;
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${Root} />`);

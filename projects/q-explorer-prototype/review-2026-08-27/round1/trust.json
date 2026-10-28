@@ -1,0 +1,104 @@
+{
+  "validator": "trust",
+  "round": 1,
+  "target": "Q-Explorer prototype · create & manage flow",
+  "checked": [
+    { "zone": "login", "item": "Anmelden button vs. empty credential fields (does the app claim an authenticated identity it never verified?)" },
+    { "zone": "login", "item": "Utility-bar links with external-link arrow vs. the in-app modal they actually open" },
+    { "zone": "evaluations list", "item": "Search field vs. Status filter vs. Period filter — three controls narrowing the same row set, no precedence shown, no active-filter chips" },
+    { "zone": "evaluations list", "item": "Status filter value vs. the rows visible after it applies (FLT-2 shape: does the dropdown go stale?)" },
+    { "zone": "evaluations list", "item": "Row-count / group-header counts vs. rows visible under an active filter" },
+    { "zone": "evaluations list", "item": "Empty state 'No evaluations found' vs. filtered-away rows (does it distinguish 'none exist' from 'none match'?)" },
+    { "zone": "evaluations list", "item": "Native confirm() 'cannot be undone' vs. the 'Evaluation deleted' toast that follows" },
+    { "zone": "evaluations list", "item": "Delete button on an In-Progress row: title still reads 'Delete' while pointer-events are off" },
+    { "zone": "evaluations list", "item": "Status 'Fertig' badge vs. absence of any Anzeigen affordance on 10 of 19 finished rows (a row claims a finished result the UI cannot show)" },
+    { "zone": "type selection", "item": "6 report-type cards — selected type vs. the type carried into the wizard title and auto-name" },
+    { "zone": "wizard step 1", "item": "Period preset buttons vs. the auto-generated evaluation name (name as a state indicator)" },
+    { "zone": "wizard step 1", "item": "Custom date pair vs. the name it produces — reversed range accepted, name asserts a period that covers nothing" },
+    { "zone": "wizard step 1", "item": "Days-of-week toggles vs. the ', Mon–Fri' suffix in the auto-name" },
+    { "zone": "wizard step 2", "item": "Six filter triggers: label text vs. actual selection array after each interaction" },
+    { "zone": "wizard step 2", "item": "Clear-X hit area vs. the trigger's own open-panel hit area (two behaviours on one control, measured by elementFromPoint)" },
+    { "zone": "wizard step 2", "item": "Kantone panel close-on-first-pick vs. the other five panels staying open (same dimension, inconsistent commit model)" },
+    { "zone": "wizard step 2", "item": "Cantons/TU selection vs. the Linien option list (does a narrowed scope still offer out-of-scope lines?)" },
+    { "zone": "wizard step 2 → step 3", "item": "Filter trigger labels vs. the step-3 summary card's filter string (cross-zone: does the summary reflect the live selection?)" },
+    { "zone": "wizard step 3", "item": "Schedule toggle + Frequency select vs. the 'Run Now' confirmation toast" },
+    { "zone": "wizard step 3", "item": "Schedule toggle disabled state vs. the amber note explaining the Custom-period cause" },
+    { "zone": "wizard step 3 → scheduled reports", "item": "Configured schedule vs. the Geplante Berichte list (cross-zone: does a configured schedule exist anywhere?)" },
+    { "zone": "wizard step 3 → evaluations list", "item": "'Evaluation started — running now' toast vs. any new In-Progress row in the list" },
+    { "zone": "scheduled reports", "item": "Status column (Active/Paused) vs. the Next Run column on the same row" },
+    { "zone": "scheduled reports", "item": "Edit wizard title + 'Scheduled' badge vs. the configuration actually loaded into the form" },
+    { "zone": "scheduled reports", "item": "Row action set (Pause/Edit/Delete) vs. the existence of produced reports the row implies" }
+  ],
+  "findings": [
+    {
+      "id": "TRU-1",
+      "severity": "Critical",
+      "confidence": 92,
+      "element": "Scheduled reports → Edit — wizard header ('Fahrtausfälle DPM – Wöchentlich' + 'Scheduled' badge) over an empty configuration form",
+      "claims": "You are editing this named, saved schedule, and the fields in front of you are its current configuration.",
+      "actual": "None of the schedule's configuration is loaded: selectedPeriod resets to 'cur_month' and TU / cantons / lines are all empty. The schedule section is hidden entirely, so the frequency that defines this schedule is neither shown nor editable.",
+      "finding": "The edit screen labels itself with a specific saved schedule while displaying a blank default configuration, so the form's contents are not the schedule's contents.",
+      "user_impact": "An analyst opens a weekly Fahrtausfälle schedule to change one canton, sees 'Current Month' and empty TU/canton/line filters, and either believes the schedule was configured that way — misreading which measurements are being reported to BAV — or completes the wizard and silently replaces a scoped schedule with an unscoped default.",
+      "suggested_fix": "Hydrate the wizard from the stored schedule (period, day-of-week, all six filters, frequency and run-on values) and keep the schedule section visible in edit mode; if hydration is not implemented, label the screen 'New evaluation from schedule' rather than showing the schedule's name.",
+      "evidence": {
+        "action": "Scheduled reports → row 'Fahrtausfälle DPM – Wöchentlich' → Edit → inspect wizard header, step 1 period selection and step 2 filter triggers",
+        "observed": "Header reads 'Fahrtausfälle DPM – Wöchentlich' with a 'Scheduled' badge; state.selectedPeriod = 'cur_month' (not the schedule's period), TU/cantons/lines arrays empty, and the step-3 schedule block is not rendered — the title asserts saved state that no field on the screen reflects."
+      }
+    },
+    {
+      "id": "TRU-2",
+      "severity": "Critical",
+      "confidence": 95,
+      "element": "Wizard step 2 — clear-X button inside every filter trigger (.custom-select-trigger, e.g. canton-clear, tu-clear)",
+      "claims": "The trigger is a single control that opens its options panel; the X is a small, deliberate 'clear' affordance at the edge.",
+      "actual": "justify-content:space-between with three children puts the X at the horizontal centre of the 542px-wide trigger. elementFromPoint at the control's centre returns 'canton-clear' / 'tu-clear', so the natural click target reopening a filter destroys the selection instead.",
+      "finding": "Clicking the middle of a populated filter silently resets it from a specific selection to 'All', with no confirmation, no undo and no notice that a value was destroyed.",
+      "user_impact": "An analyst who picked Kanton AG clicks the control to add a second canton, the filter silently reverts to 'All cantons', and the evaluation is run — and later read as authoritative — across every canton instead of the intended scope; the same click destroys TU scope the same way.",
+      "suggested_fix": "Move the clear-X to a fixed right-edge slot outside the trigger's flexed content (or make the whole trigger open the panel and require an explicit hover-revealed X with a 'Cleared — Undo' toast), so no centre click can wipe a selection.",
+      "evidence": {
+        "action": "Step 2 → Kantone → pick 'AG' (label reads 'AG') → click the horizontal centre of the Kantone trigger (x=789, trigger 542px wide, X occupies x=769–789). Repeated on TU's with 'BLS' selected.",
+        "observed": "Kantone state ['AG'] → [], label back to 'All cantons', and the options panel does not open; TU's ['BLS'] → [] identically. Nothing in the UI acknowledges the loss. Cross-zone consequence: the step-3 summary card then prints the widened scope ('Cantons: …') as if it were the user's choice, so the only downstream check also shows the wrong-but-self-consistent state."
+      }
+    },
+    {
+      "id": "TRU-3",
+      "severity": "High",
+      "confidence": 88,
+      "element": "Wizard step 3 — 'Run Now' pressed with the Schedule box ticked and a Frequency configured; confirmation toast 'Evaluation started — running now'",
+      "claims": "The action you configured succeeded — implicitly including the recurring schedule you just set up on the same screen.",
+      "actual": "Only the immediate run is acknowledged. The toast never mentions the schedule, and no corresponding entry appears in Geplante Berichte afterwards, so the configured recurrence appears not to have been created at all.",
+      "finding": "A screen that accepts both a run and a schedule confirms only the run, leaving the user with no way to tell whether the schedule was saved or silently dropped.",
+      "user_impact": "A TU quality lead sets up a monthly DPM schedule, sees a success toast, and stops thinking about it — then the recurring report never runs and the gap is only discovered when a reporting deadline is missed.",
+      "suggested_fix": "Have the toast state both outcomes explicitly ('Evaluation started · Monthly schedule saved') with a link to Geplante Berichte, and make the new schedule appear in that list immediately; if only one of the two can be committed, disable the combination rather than confirming ambiguously.",
+      "evidence": {
+        "action": "Step 3 → tick Schedule → Frequency = Monthly → set Run on → Run Now → read the toast → navigate to Geplante Berichte",
+        "observed": "Toast reads 'Evaluation started — running now' and the app returns to the evaluations list; the schedule is absent from Geplante Berichte. Cross-zone contradiction: the confirmation zone reports success while the zone that owns schedules shows nothing was created."
+      }
+    },
+    {
+      "id": "TRU-4",
+      "severity": "High",
+      "confidence": 85,
+      "element": "Scheduled reports table — 'Next Run' column on a row whose Status reads 'Paused'",
+      "claims": "This report will next run on 01.06.2026.",
+      "actual": "The schedule is paused; no run will occur on that date. The Next Run value is left over from the active state and is never recalculated or blanked when Pause is applied.",
+      "finding": "A paused schedule keeps advertising a concrete next-run date, so two cells on the same row assert contradictory things about whether the report will produce output.",
+      "user_impact": "An analyst scanning the schedule list for coverage of the June reporting period reads a firm 01.06.2026 date, assumes the DPM report is covered, and does not run it manually — producing a reporting gap.",
+      "suggested_fix": "When a schedule is paused, replace the Next Run value with '—  Paused' (and restore the recalculated date on resume) so status and next-run can never disagree.",
+      "evidence": {
+        "action": "Scheduled reports → click Pause on a schedule → observe the row (Status cell and Next Run cell) → click Resume → observe again",
+        "observed": "Status flips Active → Paused and the action title flips Pause → Resume, but the Next Run cell continues to display 01.06.2026 throughout the paused state — the status indicator updates while the consequence indicator goes stale."
+      }
+    }
+  ],
+  "gaps": [
+    "Edit-a-schedule save path: the state map records only that the edit wizard opens with a blank config — no Run/Save was pressed from it, so whether completing that wizard overwrites the original schedule, creates a duplicate, or does nothing is unknown. TRU-1's data-loss consequence is inferred from the blank form, not observed.",
+    "'Evaluation started — running now' toast: the map does not record whether a new row actually appears in the evaluations list (and with which status), so it is unverified whether even the immediate run is truthfully reflected anywhere.",
+    "Notify-by-email toggle + email input (step 3) are in the map's not_exercised list — a control that promises a notification is exactly the shape of an unkept promise, and its commit behaviour was never tested.",
+    "Delete on an In-Progress row is recorded only as element state (opacity .35, pointer-events:none) with title still reading 'Delete'; no click was attempted, so whether the control is truly inert — and whether it gives any feedback — is unverified.",
+    "Filter cascade: the map notes cantons/TUs 'did not visibly narrow the Linien list', but does not establish whether cascading is intended. If it is, the Linien picker is offering — and the summary card would print — lines outside the selected scope; this could be a Critical scope lie but cannot be confirmed from the recon.",
+    "List filters (Search / Status / Period) were each exercised alone; the FLT-2 pattern specifically requires changing one and returning to another. It is not recorded whether Status retains its displayed value after a Search change, or whether either control is silently discarded — the exact failure this lens was created for is therefore untested here.",
+    "Group-header accordion counts were not compared against the rows visible under an active filter, so a badge/row count mismatch cannot be ruled out.",
+    "Reversed custom date range (20.08.2026 → 01.08.2026) is accepted and printed into the evaluation name; no run was performed on it, so whether the resulting report claims an empty period as valid output is unknown."
+  ]
+}

@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Monitoring · Prototype — Synder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #F5F5F7; font-family: 'Roboto', sans-serif; color: #1A1B24; font-size: 14px; line-height: 1.4; }
+
+.app { display: flex; min-height: 100vh; }
+.sidebar { width: 232px; background: #F6F6F6; border-right: 1px solid #E5E5E5; flex-shrink: 0; display: flex; flex-direction: column; }
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+/* ── Sidebar ── */
+.org-switch { display: flex; align-items: center; padding: 14px 16px; gap: 10px; border-bottom: 1px solid #E5E5E5; cursor: pointer; }
+.org-avatar { width: 32px; height: 32px; border-radius: 50%; background: #D64273; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 500; font-size: 12px; flex-shrink: 0; }
+.org-name { font-size: 14px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav { padding: 8px 0; flex: 1; overflow-y: auto; }
+.nav-item { display: flex; align-items: center; padding: 9px 16px; font-size: 14px; color: #2F303A; cursor: pointer; gap: 10px; user-select: none; }
+.nav-item:hover { background: rgba(0,83,204,.06); }
+.nav-item.active { background: #E3EEFF; color: #0053CC; font-weight: 500; border-left: 3px solid #0053CC; padding-left: 13px; }
+.nav-item .ico { width: 18px; display: flex; justify-content: center; flex-shrink: 0; }
+.nav-item .chevron { margin-left: auto; color: #6B778C; font-size: 11px; transition: transform .2s; }
+.nav-item .chevron.open { transform: rotate(180deg); }
+.badge-beta { font-size: 9px; background: #E3F2FD; color: #0053CC; padding: 1px 5px; border-radius: 3px; }
+.nav-sub { overflow: hidden; max-height: 0; transition: max-height .25s ease; }
+.nav-sub.open { max-height: 300px; }
+.nav-sub-item { display: flex; align-items: center; padding: 8px 16px 8px 44px; font-size: 14px; color: #2F303A; cursor: pointer; gap: 8px; }
+.nav-sub-item:hover { background: rgba(0,83,204,.06); }
+.nav-sub-item.active { background: #E3EEFF; color: #0053CC; font-weight: 500; border-left: 3px solid #0053CC; padding-left: 41px; }
+.alert-count { min-width: 18px; height: 18px; background: #D32F2F; color: #fff; border-radius: 9px; font-size: 11px; font-weight: 600; display: flex; align-items: center; justify-content: center; padding: 0 4px; }
+.nav-divider { height: 1px; background: #E5E5E5; margin: 6px 16px; }
+
+/* ── Topbar ── */
+.topbar { display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; height: 56px; border-bottom: 1px solid #E5E5E5; background: #FFF; gap: 16px; flex-shrink: 0; }
+.syncs-num { color: #0053CC; font-weight: 700; border-bottom: 1px solid #0053CC; }
+
+/* ── Pages ── */
+.page { display: none; padding: 28px 32px 80px; }
+.page.active { display: block; }
+.page-title { font-size: 24px; font-weight: 500; margin-bottom: 20px; }
+
+/* ── Buttons ── */
+.btn-primary { padding: 7px 14px; background: #0053CC; color: #FFF; border: none; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn-primary:hover { background: #003E99; }
+.btn-ghost { padding: 6px 12px; background: transparent; color: #0053CC; border: 1px solid #0053CC; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; white-space: nowrap; }
+.btn-ghost:hover { background: #F0F6FF; }
+.btn-ghost-sm { padding: 4px 10px; background: transparent; color: #0053CC; border: 1px solid #C8E0FF; border-radius: 4px; font-size: 12px; font-family: inherit; cursor: pointer; white-space: nowrap; flex-shrink: 0; }
+.btn-ghost-sm:hover { background: #F0F6FF; border-color: #0053CC; }
+.btn-cancel { padding: 6px 12px; background: transparent; color: #6B778C; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.btn-run { padding: 7px 14px; background: #0053CC; color: #FFF; border: none; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn-run:hover { background: #003E99; }
+.btn-run.running { background: #6B778C; cursor: default; }
+.run-ico { display: inline-block; }
+.btn-run.running .run-ico { animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Dashboard ── */
+.dash-issues-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; margin-bottom: 16px; overflow: hidden; }
+.dash-issues-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; border-bottom: 1px solid #F0F0F0; }
+.dash-issues-title { font-size: 15px; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.iss-badge { min-width: 18px; height: 18px; background: #D32F2F; color: #fff; border-radius: 9px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.dash-iss-row { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid #F0F0F0; }
+.dash-iss-row:last-child { border-bottom: none; }
+.di-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.di-dot.red { background: #D32F2F; }
+.di-dot.orange { background: #E8A000; }
+.di-name { font-size: 14px; font-weight: 500; flex: 1; }
+.di-sub { font-size: 12px; color: #6B778C; }
+.di-fix { font-size: 13px; color: #0053CC; cursor: pointer; padding: 4px 10px; border: 1px solid #C8E0FF; border-radius: 4px; background: transparent; font-family: inherit; white-space: nowrap; }
+.di-fix:hover { background: #F0F6FF; }
+.dash-hc-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.dash-hc-left { display: flex; align-items: center; gap: 12px; }
+.dash-hc-icon { width: 36px; height: 36px; border-radius: 8px; background: #E3EEFF; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #0053CC; }
+.dash-hc-title { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+.dash-hc-sub { font-size: 12px; color: #6B778C; }
+.dash-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.dash-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px; }
+.dash-card-title { font-size: 15px; font-weight: 500; margin-bottom: 2px; }
+.dash-card-sub { font-size: 12px; color: #6B778C; margin-bottom: 14px; }
+
+/* ── Problems page header ── */
+.hc-page-header { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; }
+.hcp-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.hcp-title { font-size: 15px; font-weight: 500; margin-bottom: 2px; }
+.hcp-meta { font-size: 12px; color: #6B778C; }
+.hcp-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.period-row { display: flex; align-items: center; gap: 4px; }
+.period-lbl { font-size: 12px; color: #6B778C; }
+.period-chip { padding: 4px 9px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 12px; background: #FFF; cursor: pointer; font-family: inherit; color: #2F303A; }
+.period-chip:hover { border-color: #0053CC; color: #0053CC; }
+.period-chip.active { background: #E3EEFF; border-color: #0053CC; color: #0053CC; font-weight: 500; }
+.hcp-ts { font-size: 12px; color: #6B778C; white-space: nowrap; }
+.hcp-ts span { color: #2F303A; font-weight: 500; }
+
+/* ── Cold state ── */
+.hc-cold { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 52px 32px; text-align: center; }
+.hc-cold-icon { width: 52px; height: 52px; border-radius: 14px; background: #E3EEFF; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+.hc-cold-title { font-size: 17px; font-weight: 500; margin-bottom: 8px; }
+.hc-cold-body { font-size: 13px; color: #6B778C; max-width: 420px; margin: 0 auto 22px; line-height: 1.65; }
+
+/* ── Running banner ── */
+.hc-running { background: #E3EEFF; border: 1px solid #C8E0FF; border-radius: 8px; padding: 16px 18px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 14px; }
+.hc-spinner { width: 18px; height: 18px; border: 2px solid #C8E0FF; border-top-color: #0053CC; border-radius: 50%; animation: spin .8s linear infinite; flex-shrink: 0; margin-top: 2px; }
+.hc-run-title { font-size: 14px; font-weight: 500; color: #0053CC; margin-bottom: 3px; }
+.hc-run-sub { font-size: 12px; color: #4A7ACC; line-height: 1.5; }
+
+/* ── Banners ── */
+.hc-stale { display: flex; align-items: center; gap: 8px; background: #FFF8E1; border: 1px solid #FFD740; border-radius: 6px; padding: 9px 14px; margin-bottom: 12px; font-size: 13px; color: #7A5C00; }
+.hc-stale-text { flex: 1; }
+.hc-sync-notice { display: flex; align-items: flex-start; gap: 8px; background: #F0F6FF; border: 1px solid #C8E0FF; border-radius: 6px; padding: 9px 14px; margin-bottom: 12px; font-size: 13px; color: #2F303A; }
+.sn-ico { color: #0053CC; flex-shrink: 0; }
+
+/* ════ RESULTS: summary + list ════ */
+
+/* Summary bar */
+.hc-summary { display: flex; align-items: center; gap: 20px; padding: 12px 16px; background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px 8px 0 0; border-bottom: none; }
+.hc-sum-group { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
+.hc-sum-dot { width: 8px; height: 8px; border-radius: 50%; }
+.hc-sum-dot.red { background: #D32F2F; }
+.hc-sum-dot.orange { background: #E8A000; }
+.hc-sum-dot.green { background: #2D8A3E; }
+.hc-sum-num.red { color: #A72222; }
+.hc-sum-num.orange { color: #B55C00; }
+.hc-sum-num.green { color: #2D8A3E; }
+.hc-sum-lbl { color: #6B778C; font-weight: 400; }
+.hc-sum-sep { width: 1px; height: 14px; background: #E5E5E5; }
+
+/* Results list container */
+.hc-list { background: #FFF; border: 1px solid #E5E5E5; border-radius: 0 0 8px 8px; overflow: hidden; }
+.hc-list-dimmed { opacity: .4; pointer-events: none; }
+
+/* Section header */
+.hc-sec-head { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid #E5E5E5; }
+.hc-sec-head.red { background: #FEF2F2; }
+.hc-sec-head.orange { background: #FFF8F0; }
+.hc-sec-head.green { background: #F1F8F1; }
+.hc-sec-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.hc-sec-label.red { color: #A72222; }
+.hc-sec-label.orange { color: #B55C00; }
+.hc-sec-label.green { color: #2D8A3E; }
+.hc-sec-count { min-width: 16px; height: 16px; border-radius: 8px; font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; }
+.hc-sec-count.red { background: #FEE8E8; color: #A72222; }
+.hc-sec-count.orange { background: #FFF3E0; color: #B55C00; }
+.hc-sec-count.green { background: #E8F5E9; color: #2D8A3E; }
+
+/* Issue item */
+.hc-issue { padding: 14px 16px; border-bottom: 1px solid #F0F0F0; border-left: 3px solid transparent; display: flex; gap: 16px; align-items: flex-start; }
+.hc-issue:last-child { border-bottom: none; }
+.hc-issue:hover { background: #FAFBFF; }
+.hc-issue.sev-red { border-left-color: #D32F2F; }
+.hc-issue.sev-orange { border-left-color: #E8A000; }
+.hc-issue-content { flex: 1; min-width: 0; }
+.hc-issue-title { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+.hc-issue-desc { font-size: 13px; color: #4A4B55; line-height: 1.55; margin-bottom: 6px; }
+.hc-issue-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.scope-chip { font-size: 11px; color: #6B778C; background: #F0F0F2; padding: 2px 7px; border-radius: 3px; }
+.hc-issue-action { flex-shrink: 0; padding-top: 1px; }
+
+/* Multi-integration rows */
+.hc-int-rows { margin-top: 10px; display: flex; flex-direction: column; gap: 5px; }
+.hc-int-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 10px; background: #F8F8FA; border-radius: 5px; border: 1px solid #EAEAEC; }
+.hc-int-name { font-size: 13px; font-weight: 500; flex: 1; }
+.hc-int-scope { font-size: 12px; color: #6B778C; margin-right: 8px; }
+
+/* Passed items */
+.hc-pass-item { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border-bottom: 1px solid #F0F0F0; border-left: 3px solid #2D8A3E; }
+.hc-pass-item:last-child { border-bottom: none; }
+.hc-pass-item:hover { background: #F8FCF8; }
+.pass-ico { color: #2D8A3E; font-size: 13px; font-weight: 700; flex-shrink: 0; width: 16px; text-align: center; }
+.pass-title { font-size: 13px; font-weight: 500; flex: 1; }
+.pass-scope { font-size: 12px; color: #6B778C; }
+
+/* All clear */
+.hc-all-clear { text-align: center; padding: 52px 20px; background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; }
+.hc-all-clear-icon { font-size: 40px; margin-bottom: 10px; }
+.hc-all-clear-title { font-size: 17px; font-weight: 500; color: #2D8A3E; margin-bottom: 6px; }
+.hc-all-clear-sub { font-size: 13px; color: #6B778C; }
+
+/* Deep recon */
+.deep-divider { border: none; border-top: 2px dashed #E5E5E5; margin: 24px 0 18px; }
+.deep-section { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px 20px; }
+.deep-title { font-size: 15px; font-weight: 500; margin-bottom: 4px; }
+.deep-desc { font-size: 13px; color: #6B778C; line-height: 1.55; margin-bottom: 14px; max-width: 560px; }
+.deep-last-run { font-size: 12px; color: #6B778C; margin-top: 10px; }
+.deep-last-run span { color: #2F303A; font-weight: 500; }
+.deep-running-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #4A7ACC; margin-top: 10px; }
+.acct-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; background: #E3EEFF; color: #0053CC; border: 1px solid #C8E0FF; border-radius: 3px; padding: 2px 6px; margin-right: 4px; font-weight: 500; }
+
+/* Modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; display: none; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: #FFF; border-radius: 8px; padding: 26px 26px 22px; max-width: 420px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,.14); }
+.modal-title { font-size: 16px; font-weight: 500; margin-bottom: 10px; }
+.modal-body { font-size: 13px; color: #4A4B55; line-height: 1.65; margin-bottom: 22px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Sync issues & speed */
+.filters-bar { display: flex; align-items: flex-end; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+.filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filter-label { font-size: 12px; color: #6B778C; font-weight: 500; }
+.filter-input { padding: 6px 10px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; font-family: inherit; background: #FFF; min-width: 150px; }
+.filter-select { padding: 6px 26px 6px 10px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; font-family: inherit; background: #FFF url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B778C' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 8px center; appearance: none; cursor: pointer; }
+.date-input { padding: 6px 10px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; font-family: inherit; width: 108px; }
+.btn-apply { padding: 5px 13px; background: #0053CC; color: #FFF; border: none; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.btn-reset { padding: 5px 13px; background: transparent; color: #0053CC; border: 1px solid #0053CC; border-radius: 4px; font-size: 13px; font-family: inherit; cursor: pointer; }
+.data-table { width: 100%; border-collapse: collapse; background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; overflow: hidden; }
+.data-table th { text-align: left; padding: 10px 14px; font-size: 13px; font-weight: 500; color: #6B778C; border-bottom: 1px solid #E5E5E5; background: #F6F6F6; }
+.data-table td { padding: 11px 14px; font-size: 13px; border-bottom: 1px solid #F0F0F0; vertical-align: top; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #FAFBFF; }
+.status-pill { display: inline-flex; padding: 2px 7px; border-radius: 3px; font-size: 12px; font-weight: 500; }
+.status-pill.failed { background: #FEE8E8; color: #A72222; }
+.status-pill.rollback { background: #FFF3E0; color: #B55C00; }
+.status-pill.cancelled { background: #FFF8E1; color: #A07800; }
+.table-link { color: #0053CC; cursor: pointer; }
+.table-link:hover { text-decoration: underline; }
+.table-footer { display: flex; align-items: center; justify-content: flex-end; padding: 10px 14px; background: #FFF; border: 1px solid #E5E5E5; border-top: none; border-radius: 0 0 8px 8px; gap: 8px; font-size: 13px; color: #6B778C; }
+.rows-select { padding: 3px 22px 3px 8px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 13px; appearance: none; background: #FFF url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236B778C' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 5px center; cursor: pointer; }
+.pagination-btn { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; border: 1px solid #C8C7CC; border-radius: 4px; background: #FFF; cursor: pointer; font-size: 13px; }
+.pagination-btn:disabled { color: #C8C7CC; cursor: default; }
+.info-callout { display: flex; align-items: flex-start; gap: 8px; background: #F0F6FF; border: 1px solid #C8E0FF; border-radius: 6px; padding: 9px 13px; margin-bottom: 18px; font-size: 13px; }
+.info-callout .info-ico { color: #0053CC; flex-shrink: 0; }
+.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-card { background: #FFF; border: 1px solid #E5E5E5; border-radius: 8px; padding: 18px; }
+.chart-card-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; }
+.chart-card-title { font-size: 15px; font-weight: 500; }
+.chart-card-sub { font-size: 12px; color: #6B778C; margin-bottom: 12px; }
+.chart-filters { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+.chip-filter { padding: 4px 9px; border: 1px solid #C8C7CC; border-radius: 4px; font-size: 12px; background: #FFF; cursor: pointer; display: flex; align-items: center; gap: 4px; }
+.chip-filter .caret { font-size: 10px; color: #6B778C; }
+.chart-legend { display: flex; gap: 14px; margin-bottom: 10px; }
+.legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #6B778C; }
+.legend-dot { width: 12px; height: 4px; border-radius: 2px; }
+.chart-svg { width: 100%; height: 170px; }
+
+/* Toast */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px); background: #1A1B24; color: #FFF; padding: 9px 18px; border-radius: 6px; font-size: 13px; opacity: 0; transition: all .3s; z-index: 9999; white-space: nowrap; pointer-events: none; }
+.toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+/* Demo bar */
+.demo-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1A1B24; padding: 9px 22px; display: flex; align-items: center; gap: 6px; z-index: 100; flex-wrap: wrap; }
+.demo-lbl { color: #6B778C; font-size: 12px; font-weight: 500; margin-right: 4px; }
+.demo-btn { padding: 4px 11px; border-radius: 4px; border: 1px solid #444; background: transparent; color: #CCC; font-size: 12px; font-family: inherit; cursor: pointer; }
+.demo-btn.active { background: #0053CC; border-color: #0053CC; color: #FFF; }
+.demo-sep { width: 1px; height: 16px; background: #444; margin: 0 4px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="org-switch">
+    <div class="org-avatar">LC</div>
+    <div class="org-name">Lara Croft</div>
+    <div style="color:#6B778C;font-size:12px">▾</div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item" onclick="navigate('dashboard')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/><rect x="9" y="1" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/><rect x="1" y="9" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" opacity=".7"/></svg></span>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="toggleSub('txns')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 5h12M2 8h8M2 11h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+      Transactions
+      <span class="chevron open" id="chevron-txns">▾</span>
+    </div>
+    <div class="nav-sub open" id="sub-txns">
+      <div class="nav-sub-item" onclick="showToast('All transactions')">All transactions</div>
+      <div class="nav-sub-item" onclick="showToast('Import history')">Import history</div>
+    </div>
+    <div class="nav-item" onclick="showToast('Transaction reconciliation')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 4h10M3 8h7M3 12h9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+      Transaction reconciliation
+      <span class="badge-beta">Beta</span>
+    </div>
+    <div class="nav-item" onclick="showToast('AI reports')"><span class="ico">✦</span>AI reports</div>
+    <div class="nav-item" onclick="showToast('Revenue recognition')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 13L6 8l3 3 5-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Revenue recognition
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" onclick="toggleSub('monitoring')">
+      <span class="ico"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.5"/><path d="M8 5v3l2 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+      Monitoring
+      <span class="alert-count" id="monitoring-badge" style="display:none">4</span>
+      <span class="chevron open" id="chevron-monitoring">▾</span>
+    </div>
+    <div class="nav-sub open" id="sub-monitoring">
+      <div class="nav-sub-item" id="nav-problems" onclick="navigate('problems')">
+        <span id="dot-problems" style="display:none;width:6px;height:6px;border-radius:50%;background:#D32F2F;flex-shrink:0"></span>
+        Problems
+      </div>
+      <div class="nav-sub-item" id="nav-sync-issues" onclick="navigate('sync-issues')">Synchronization issues</div>
+      <div class="nav-sub-item" id="nav-sync-speed" onclick="navigate('sync-speed')">Sync speed</div>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="nav-item" onclick="showToast('Settings')"><span class="ico">⚙</span>Settings</div>
+  </nav>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div>Syncs left: <span class="syncs-num">1000</span></div>
+    <div style="color:#0053CC;cursor:pointer">?</div>
+    <div style="width:28px;height:28px;border-radius:50%;background:#6B778C;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;cursor:pointer">LC</div>
+  </div>
+
+  <!-- ════ DASHBOARD ════ -->
+  <div class="page active" id="page-dashboard" style="max-width:1280px">
+    <div class="page-title">Dashboard</div>
+
+    <div class="dash-issues-card" id="dash-issues-widget">
+      <div class="dash-issues-head">
+        <div class="dash-issues-title">Active issues <span class="iss-badge" id="dash-iss-count">4</span></div>
+        <span style="font-size:13px;color:#0053CC;cursor:pointer" onclick="navigate('problems')">View all →</span>
+      </div>
+      <div id="dash-iss-list"></div>
+    </div>
+
+    <div class="dash-hc-card">
+      <div class="dash-hc-left">
+        <div class="dash-hc-icon">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="9" cy="9" r="7" stroke="currentColor" stroke-width="1.5"/><path d="M3 9h3l2-4 2 8 2-4h3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div>
+          <div class="dash-hc-title">Account health check</div>
+          <div class="dash-hc-sub">Last run: <span id="dash-hc-ts">Jul 23, 2026 13:04</span></div>
+        </div>
+      </div>
+      <button class="btn-run" onclick="navigate('problems')">
+        <svg class="run-ico" width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3.22 3.22l1.41 1.41M9.37 9.37l1.41 1.41M3.22 10.78l1.41-1.41M9.37 4.63l1.41-1.41" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        Run health check
+      </button>
+    </div>
+
+    <div class="dash-grid">
+      <div class="dash-card">
+        <div class="dash-card-title">Transaction volume</div>
+        <div class="dash-card-sub">Synced transactions this month</div>
+        <div style="height:110px;background:#F6F8FC;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#C8C7CC;font-size:12px">Chart placeholder</div>
+      </div>
+      <div class="dash-card">
+        <div class="dash-card-title">Sync health</div>
+        <div class="dash-card-sub">Overall connection status</div>
+        <div style="height:110px;background:#F6F8FC;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#C8C7CC;font-size:12px">Chart placeholder</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════ PROBLEMS / HEALTH CHECK ════ -->
+  <div class="page" id="page-problems" style="max-width:940px">
+    <div class="page-title">Problems</div>
+
+    <!-- Page header -->
+    <div class="hc-page-header">
+      <div class="hcp-row">
+        <div>
+          <div class="hcp-title">Health check</div>
+          <div class="hcp-meta">Checks your setup, sync activity, and accounting integrity.</div>
+        </div>
+        <div class="hcp-controls">
+          <div class="period-row" id="period-row">
+            <span class="period-lbl">Period:&nbsp;</span>
+            <button class="period-chip" onclick="setPeriod(this)">Last 7 days</button>
+            <button class="period-chip active" onclick="setPeriod(this)">Last 30 days</button>
+            <button class="period-chip" onclick="setPeriod(this)">Last 90 days</button>
+            <button class="period-chip" onclick="setPeriod(this)">Custom</button>
+          </div>
+          <div class="hcp-ts" id="hcp-ts">Last run: <span>Jul 23, 2026 13:04</span></div>
+          <button class="btn-run" id="btn-run-hc" onclick="runHealthCheck()">
+            <svg class="run-ico" width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3.22 3.22l1.41 1.41M9.37 9.37l1.41 1.41M3.22 10.78l1.41-1.41M9.37 4.63l1.41-1.41" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+            Run health check
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cold state -->
+    <div class="hc-cold" id="hc-cold" style="display:none">
+      <div class="hc-cold-icon">
+        <svg width="26" height="26" viewBox="0 0 26 26" fill="none"><circle cx="13" cy="13" r="10" stroke="#0053CC" stroke-width="1.5"/><path d="M5 13h4l3-5 3 10 3-5h4" stroke="#0053CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="hc-cold-title">Run your first health check</div>
+      <div class="hc-cold-body">Check your setup, synchronization activity, and bookkeeping integrity to make sure Synder is working as expected.</div>
+      <button class="btn-run" onclick="runHealthCheck()">
+        <svg class="run-ico" width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3.22 3.22l1.41 1.41M9.37 9.37l1.41 1.41M3.22 10.78l1.41-1.41M9.37 4.63l1.41-1.41" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        Run health check
+      </button>
+    </div>
+
+    <!-- Running banner -->
+    <div class="hc-running" id="hc-running" style="display:none">
+      <div class="hc-spinner"></div>
+      <div>
+        <div class="hc-run-title">Running health check…</div>
+        <div class="hc-run-sub">Checking your setup, sync activity, and accounting integrity. This may take a few moments.</div>
+      </div>
+    </div>
+
+    <!-- Results area -->
+    <div id="results-area">
+      <div class="hc-stale" id="hc-stale" style="display:none">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><path d="M8 2a6 6 0 100 12A6 6 0 008 2z" stroke="#E8A000" stroke-width="1.5"/><path d="M8 5v3.5" stroke="#E8A000" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="11" r=".7" fill="#E8A000"/></svg>
+        <span class="hc-stale-text">Results may no longer reflect your current setup. Last run was more than 24 hours ago.</span>
+        <button class="btn-ghost" style="padding:4px 10px;font-size:12px;white-space:nowrap" onclick="runHealthCheck()">Run now</button>
+      </div>
+      <div class="hc-sync-notice" id="hc-sync-notice" style="display:none">
+        <span class="sn-ico">ℹ</span>
+        A sync is currently in progress. Results may not include the latest transactions.
+      </div>
+
+      <!-- Summary + list -->
+      <div id="hc-results-block">
+        <!-- Summary bar -->
+        <div class="hc-summary" id="hc-summary">
+          <div class="hc-sum-group"><span class="hc-sum-dot red"></span><span class="hc-sum-num red" id="sum-crit">2</span><span class="hc-sum-lbl">Critical</span></div>
+          <div class="hc-sum-sep"></div>
+          <div class="hc-sum-group"><span class="hc-sum-dot orange"></span><span class="hc-sum-num orange" id="sum-warn">2</span><span class="hc-sum-lbl">Warnings</span></div>
+          <div class="hc-sum-sep"></div>
+          <div class="hc-sum-group"><span class="hc-sum-dot green"></span><span class="hc-sum-num green" id="sum-pass">5</span><span class="hc-sum-lbl">Passed</span></div>
+        </div>
+
+        <!-- Results list -->
+        <div class="hc-list" id="hc-list">
+
+          <!-- ══ CRITICAL section ══ -->
+          <div class="hc-sec-head red" id="sec-critical">
+            <span class="hc-sec-label red">Critical</span>
+            <span class="hc-sec-count red" id="sec-crit-count">2</span>
+          </div>
+
+          <!-- QBO disconnected -->
+          <div class="hc-issue sev-red">
+            <div class="hc-issue-content">
+              <div class="hc-issue-title">QuickBooks Online disconnected</div>
+              <div class="hc-issue-desc">Your QuickBooks Online account "LC Company" is disconnected. New transactions cannot sync to your books until the connection is restored.</div>
+              <div class="hc-issue-meta">
+                <span class="scope-chip">Current state as of Jul 23, 2026 13:04</span>
+              </div>
+            </div>
+            <div class="hc-issue-action">
+              <button class="btn-primary" onclick="showToast('Opening QuickBooks reconnect flow…')">Reconnect QBO</button>
+            </div>
+          </div>
+
+          <!-- 17 failed syncs -->
+          <div class="hc-issue sev-red">
+            <div class="hc-issue-content">
+              <div class="hc-issue-title">17 transactions failed to sync</div>
+              <div class="hc-issue-desc">17 transactions from Stripe (US Store) failed to sync during this period. These transactions may be missing from your books.</div>
+              <div class="hc-issue-meta">
+                <span class="scope-chip">Stripe (US Store)</span>
+                <span class="scope-chip">Last 30 days</span>
+              </div>
+            </div>
+            <div class="hc-issue-action">
+              <button class="btn-primary" onclick="showToast('Opening failed transactions…')">View Failed</button>
+            </div>
+          </div>
+
+          <!-- ══ WARNINGS section ══ -->
+          <div class="hc-sec-head orange" id="sec-warnings">
+            <span class="hc-sec-label orange">Warnings</span>
+            <span class="hc-sec-count orange" id="sec-warn-count">2</span>
+          </div>
+
+          <!-- Auto-sync off — multi-int -->
+          <div class="hc-issue sev-orange" id="issue-autosync">
+            <div class="hc-issue-content">
+              <div class="hc-issue-title">Auto-sync turned off</div>
+              <div class="hc-issue-desc" id="autosync-desc">Auto-sync is off for 2 integrations. New transactions won't sync automatically to your books.</div>
+              <div class="hc-issue-meta" id="autosync-meta-single" style="display:none">
+                <span class="scope-chip">Shopify (Main Store)</span>
+                <span class="scope-chip">Current state</span>
+              </div>
+              <div class="hc-int-rows" id="autosync-int-rows">
+                <div class="hc-int-row">
+                  <span class="hc-int-name">Shopify (Main Store)</span>
+                  <span class="hc-int-scope">Current state</span>
+                  <button class="btn-ghost-sm" onclick="showToast('Opening Shopify settings…')">Open Settings</button>
+                </div>
+                <div class="hc-int-row">
+                  <span class="hc-int-name">Stripe (EU Store)</span>
+                  <span class="hc-int-scope">Current state</span>
+                  <button class="btn-ghost-sm" onclick="showToast('Opening Stripe EU settings…')">Open Settings</button>
+                </div>
+              </div>
+            </div>
+            <div class="hc-issue-action" id="autosync-action-single" style="display:none">
+              <button class="btn-ghost" onclick="showToast('Opening Shopify settings…')">Open Settings</button>
+            </div>
+          </div>
+
+          <!-- 3 rolled back -->
+          <div class="hc-issue sev-orange" style="border-bottom:none">
+            <div class="hc-issue-content">
+              <div class="hc-issue-title">3 transactions rolled back</div>
+              <div class="hc-issue-desc">3 transactions from Stripe (US Store) were rolled back from your books via Synder. These transactions may no longer be reflected in your books.</div>
+              <div class="hc-issue-meta">
+                <span class="scope-chip">Stripe (US Store)</span>
+                <span class="scope-chip">Last 30 days</span>
+              </div>
+            </div>
+            <div class="hc-issue-action">
+              <button class="btn-ghost" onclick="showToast('Opening rolled back transactions…')">View Rolled Back</button>
+            </div>
+          </div>
+
+          <!-- ══ PASSED section ══ -->
+          <div class="hc-sec-head green" id="sec-passed">
+            <span class="hc-sec-label green">Passed</span>
+            <span class="hc-sec-count green">5</span>
+          </div>
+          <div class="hc-pass-item"><span class="pass-ico">✓</span><span class="pass-title">No data gaps</span><span class="pass-scope">Shopify (Main Store) · Last 30 days</span></div>
+          <div class="hc-pass-item"><span class="pass-ico">✓</span><span class="pass-title">No canceled syncs</span><span class="pass-scope">Stripe (US Store) · Last 30 days</span></div>
+          <div class="hc-pass-item"><span class="pass-ico">✓</span><span class="pass-title">Consistent account mapping</span><span class="pass-scope">Stripe (US Store) · Last 30 days</span></div>
+          <div class="hc-pass-item"><span class="pass-ico">✓</span><span class="pass-title">QuickBooks "Apply Credits" — compatible</span><span class="pass-scope">Current state</span></div>
+          <div class="hc-pass-item" style="border-bottom:none"><span class="pass-ico">✓</span><span class="pass-title">No data gaps</span><span class="pass-scope">Stripe (US Store) · Last 30 days</span></div>
+
+        </div><!-- end hc-list -->
+
+        <!-- Deep recon -->
+        <hr class="deep-divider">
+        <div class="deep-section">
+          <div class="deep-title">Deep reconciliation checks</div>
+          <div class="deep-desc">Additional checks against your accounting platform. May take longer and use API quota shared with syncing.</div>
+          <div id="deep-not-run">
+            <button class="btn-ghost" onclick="openDeepModal()">Run deep reconciliation check</button>
+          </div>
+          <div id="deep-running" style="display:none">
+            <div class="deep-running-row"><div class="hc-spinner"></div>Querying QuickBooks Online…</div>
+          </div>
+          <div id="deep-results" style="display:none">
+            <div class="deep-last-run" style="margin-bottom:12px">Last run: <span>Jul 23, 2026 13:08</span></div>
+            <!-- Deep recon summary -->
+            <div class="hc-summary" style="border-radius:8px 8px 0 0;border:1px solid #E5E5E5;border-bottom:none">
+              <div class="hc-sum-group"><span class="hc-sum-dot red"></span><span class="hc-sum-num red">1</span><span class="hc-sum-lbl">Critical</span></div>
+              <div class="hc-sum-sep"></div>
+              <div class="hc-sum-group"><span class="hc-sum-dot green"></span><span class="hc-sum-num green">1</span><span class="hc-sum-lbl">Passed</span></div>
+            </div>
+            <div class="hc-list" style="border-radius:0 0 8px 8px">
+              <div class="hc-sec-head red"><span class="hc-sec-label red">Critical</span><span class="hc-sec-count red">1</span></div>
+              <div class="hc-issue sev-red">
+                <div class="hc-issue-content">
+                  <div class="hc-issue-title"><span class="acct-badge">🏷 Changed in accounting</span>3 of 847 transactions moved from clearing account</div>
+                  <div class="hc-issue-desc">3 transactions were moved out of "Synder Clearing" in QuickBooks Online after syncing. They may prevent the account from balancing.</div>
+                  <div class="hc-issue-meta">
+                    <span class="scope-chip">Stripe (US Store)</span>
+                    <span class="scope-chip">Last 30 days</span>
+                  </div>
+                </div>
+                <div class="hc-issue-action">
+                  <button class="btn-primary" onclick="showToast('Opening affected transactions…')">View Transactions</button>
+                </div>
+              </div>
+              <div class="hc-sec-head green"><span class="hc-sec-label green">Passed</span><span class="hc-sec-count green">1</span></div>
+              <div class="hc-pass-item" style="border-bottom:none">
+                <span class="pass-ico">✓</span>
+                <span class="pass-title"><span class="acct-badge">🏷 Changed in accounting</span>No deleted transactions detected</span>
+                <span class="pass-scope">Stripe (US Store) · Last 30 days</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div><!-- end hc-results-block -->
+
+      <!-- All clear -->
+      <div class="hc-all-clear" id="hc-all-clear" style="display:none">
+        <div class="hc-all-clear-icon">✅</div>
+        <div class="hc-all-clear-title">All checks passed</div>
+        <div class="hc-all-clear-sub">No issues detected. Your setup, sync activity, and accounting integrity look good.</div>
+      </div>
+    </div><!-- end results-area -->
+  </div><!-- end page-problems -->
+
+  <!-- ════ SYNC ISSUES ════ -->
+  <div class="page" id="page-sync-issues" style="max-width:1200px">
+    <div class="page-title">Synchronization issues</div>
+    <div class="filters-bar">
+      <div class="filter-group"><div class="filter-label">Search</div><input class="filter-input" type="text" placeholder="Search by any word…"></div>
+      <div class="filter-group"><div class="filter-label">Status</div><select class="filter-select" style="width:140px"><option>All</option><option>Failed</option><option>Rollback failed</option><option>Cancelled</option></select></div>
+      <div class="filter-group"><div class="filter-label">Date range</div><select class="filter-select" style="width:130px"><option>This month</option><option>Last 7 days</option><option>Last 30 days</option><option>Custom</option></select></div>
+      <div class="filter-group"><div class="filter-label">From</div><input class="date-input" type="text" value="02/01/2025"></div>
+      <div class="filter-group"><div class="filter-label">To</div><input class="date-input" type="text" value="02/28/2025"></div>
+      <div class="filter-group"><button class="btn-apply" onclick="showToast('Filters applied')">Apply</button></div>
+      <div class="filter-group"><button class="btn-reset" onclick="showToast('Filters reset')">Reset filters</button></div>
+    </div>
+    <table class="data-table">
+      <thead><tr><th>Quantity ↓</th><th>Status</th><th>Error message</th><th>Actions</th></tr></thead>
+      <tbody>
+        <tr><td>4000</td><td><span class="status-pill failed">Failed</span></td><td>QuickBooks Online limitation: The item has been used in too many transactions. <a href="#" onclick="showToast('Learn more');return false">Learn how to…</a></td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>3500</td><td><span class="status-pill failed">Failed</span></td><td>QuickBooks Online limitation: The item has been used in too many transactions.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>300</td><td><span class="status-pill failed">Failed</span></td><td>Invoice can not be synchronized without Product or Service.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>300</td><td><span class="status-pill failed">Failed</span></td><td>Invoice can not be synchronized without Product or Service.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>250</td><td><span class="status-pill rollback">Rollback failed</span></td><td>QuickBooks Online limitation: The item has been used in too many transactions.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>200</td><td><span class="status-pill cancelled">Cancelled</span></td><td>Invoice can not be synchronized without Contact.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>150</td><td><span class="status-pill failed">Failed</span></td><td>QuickBooks Online limitation: The item has been used in too many transactions.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>100</td><td><span class="status-pill failed">Failed</span></td><td>QuickBooks Online limitation: The item has been used in too many transactions.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>50</td><td><span class="status-pill failed">Failed</span></td><td>Invoice can not be synchronized without Product or Service.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+        <tr><td>45</td><td><span class="status-pill failed">Failed</span></td><td>Invoice can not be synchronized without Product or Service.</td><td><span class="table-link" onclick="showToast('See related transactions')">See related transactions</span></td></tr>
+      </tbody>
+    </table>
+    <div class="table-footer">
+      Rows per page: <select class="rows-select"><option>10</option><option>25</option><option>50</option></select>
+      <span>1–10 of 87</span>
+      <button class="pagination-btn" disabled>‹</button>
+      <button class="pagination-btn" onclick="showToast('Next page')">›</button>
+    </div>
+  </div>
+
+  <!-- ════ SYNC SPEED ════ -->
+  <div class="page" id="page-sync-speed" style="max-width:1200px">
+    <div class="page-title">Sync speed</div>
+    <div class="info-callout">
+      <span class="info-ico">ℹ</span>
+      Below graphs help getting a grasp of how quickly the synchronization goes. <a href="#" onclick="showToast('Learn more');return false">Learn more.</a>
+    </div>
+    <div class="chart-row">
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <div class="chart-card-title">Transaction volume by platform</div>
+          <div style="display:flex;gap:6px"><select class="filter-select" style="width:90px"><option>30 days</option></select><select class="filter-select" style="width:65px"><option>Day</option></select></div>
+        </div>
+        <div class="chart-card-sub">Amount of synchronized transactions per connected integration.</div>
+        <div class="chart-filters">
+          <div class="chip-filter">All integrations <span class="caret">▾</span></div>
+          <div class="chip-filter">All statuses <span class="caret">▾</span></div>
+          <button class="btn-apply">Apply</button>
+          <button class="btn-reset">Reset</button>
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item"><span class="legend-dot" style="background:#E8A000"></span>Shopify (Main Store)</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#7B9FD4"></span>Stripe (US Store)</div>
+        </div>
+        <svg class="chart-svg" viewBox="0 0 560 155" preserveAspectRatio="none">
+          <line x1="0" y1="20" x2="560" y2="20" stroke="#F0F0F0" stroke-width="1"/>
+          <line x1="0" y1="60" x2="560" y2="60" stroke="#F0F0F0" stroke-width="1"/>
+          <line x1="0" y1="100" x2="560" y2="100" stroke="#F0F0F0" stroke-width="1"/>
+          <line x1="0" y1="138" x2="560" y2="138" stroke="#F0F0F0" stroke-width="1"/>
+          <path d="M30,128 L130,116 L230,90 L330,60 L430,28 L530,44" fill="none" stroke="#E8A000" stroke-width="2"/>
+          <path d="M30,135 L130,130 L230,116 L330,92 L430,66 L530,80" fill="none" stroke="#7B9FD4" stroke-width="2"/>
+          <text x="25" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 7</text><text x="125" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 8</text><text x="225" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 9</text><text x="325" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 10</text><text x="425" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 11</text><text x="525" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 12</text>
+        </svg>
+      </div>
+      <div class="chart-card">
+        <div class="chart-card-head">
+          <div class="chart-card-title">Sync time process breakdown</div>
+          <div style="display:flex;gap:6px"><select class="filter-select" style="width:90px"><option>30 days</option></select><select class="filter-select" style="width:65px"><option>Day</option></select></div>
+        </div>
+        <div class="chart-card-sub">Breakdown of average time by sync process steps. <a href="#" onclick="showToast('Learn more');return false">Learn how to speed it up.</a></div>
+        <div class="chart-filters">
+          <div class="chip-filter">All integrations <span class="caret">▾</span></div>
+          <div class="chip-filter">All process groups <span class="caret">▾</span></div>
+          <button class="btn-apply">Apply</button>
+          <button class="btn-reset">Reset</button>
+        </div>
+        <div class="chart-legend">
+          <div class="legend-item"><span class="legend-dot" style="background:#E8A000"></span>Query to Stripe</div>
+          <div class="legend-item"><span class="legend-dot" style="background:#7B9FD4"></span>Query to Shopify</div>
+        </div>
+        <svg class="chart-svg" viewBox="0 0 560 155" preserveAspectRatio="none">
+          <line x1="0" y1="20" x2="560" y2="20" stroke="#F0F0F0" stroke-width="1"/><line x1="0" y1="60" x2="560" y2="60" stroke="#F0F0F0" stroke-width="1"/><line x1="0" y1="100" x2="560" y2="100" stroke="#F0F0F0" stroke-width="1"/><line x1="0" y1="138" x2="560" y2="138" stroke="#F0F0F0" stroke-width="1"/>
+          <path d="M30,136 L130,120 L230,98 L330,68 L430,36 L530,50" fill="none" stroke="#E8A000" stroke-width="2"/>
+          <path d="M30,140 L130,134 L230,123 L330,103 L430,80 L530,90" fill="none" stroke="#7B9FD4" stroke-width="2"/>
+          <text x="25" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 7</text><text x="125" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 8</text><text x="225" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 9</text><text x="325" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 10</text><text x="425" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 11</text><text x="525" y="152" font-size="9" fill="#6B778C" text-anchor="middle">Mar 12</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end .main -->
+</div><!-- end .app -->
+
+<!-- Deep recon modal -->
+<div class="modal-overlay" id="deep-modal">
+  <div class="modal">
+    <div class="modal-title">Run deep reconciliation checks?</div>
+    <div class="modal-body">These checks query your accounting platform and use API quota shared with syncing. Depending on the amount of data, they may take longer to complete.</div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeDeepModal()">Cancel</button>
+      <button class="btn-primary" onclick="confirmDeepRecon()">Run checks</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="demo-bar">
+  <span class="demo-lbl">Demo:</span>
+  <button class="demo-btn" data-s="cold" onclick="setDemo('cold')">Cold (no run)</button>
+  <button class="demo-btn active" data-s="issues" onclick="setDemo('issues')">Issues — single int.</button>
+  <button class="demo-btn" data-s="multi" onclick="setDemo('multi')">Issues — multi int.</button>
+  <div class="demo-sep"></div>
+  <button class="demo-btn" data-s="stale" onclick="setDemo('stale')">Stale (&gt;24h)</button>
+  <button class="demo-btn" data-s="healthy" onclick="setDemo('healthy')">Healthy</button>
+</div>
+
+<script>
+var currentDemo = 'issues';
+var pages = ['dashboard','problems','sync-issues','sync-speed'];
+
+function navigate(page) {
+  pages.forEach(function(p) {
+    var el = document.getElementById('page-' + p);
+    if (el) el.classList.toggle('active', p === page);
+  });
+  document.querySelectorAll('.nav-item, .nav-sub-item').forEach(function(el) { el.classList.remove('active'); });
+  var map = {dashboard:'.nav-item[onclick*="dashboard"]',problems:'#nav-problems','sync-issues':'#nav-sync-issues','sync-speed':'#nav-sync-speed'};
+  var sel = map[page];
+  if (sel) { var el = document.querySelector(sel); if (el) el.classList.add('active'); }
+}
+
+function toggleSub(key) {
+  var sub = document.getElementById('sub-' + key);
+  var chev = document.getElementById('chevron-' + key);
+  var open = sub.classList.contains('open');
+  sub.classList.toggle('open', !open);
+  if (chev) chev.classList.toggle('open', !open);
+}
+
+function setPeriod(el) {
+  document.querySelectorAll('.period-chip').forEach(function(c) { c.classList.remove('active'); });
+  el.classList.add('active');
+  showToast('Period changed — re-run health check to apply');
+}
+
+function runHealthCheck() {
+  var btn = document.getElementById('btn-run-hc');
+  if (btn && btn.classList.contains('running')) return;
+  if (btn) {
+    btn.classList.add('running');
+    btn.innerHTML = '<svg class="run-ico" width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3.22 3.22l1.41 1.41M9.37 9.37l1.41 1.41M3.22 10.78l1.41-1.41M9.37 4.63l1.41-1.41" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> Checking…';
+  }
+  document.getElementById('hc-cold').style.display = 'none';
+  document.getElementById('hc-running').style.display = 'flex';
+  document.getElementById('hc-stale').style.display = 'none';
+  var list = document.getElementById('hc-results-block');
+  if (list) { list.style.opacity = '.35'; list.style.pointerEvents = 'none'; }
+
+  setTimeout(function() {
+    if (btn) {
+      btn.classList.remove('running');
+      btn.innerHTML = '<svg class="run-ico" width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3.22 3.22l1.41 1.41M9.37 9.37l1.41 1.41M3.22 10.78l1.41-1.41M9.37 4.63l1.41-1.41" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg> Run health check';
+    }
+    document.getElementById('hc-running').style.display = 'none';
+    if (list) { list.style.opacity = ''; list.style.pointerEvents = ''; }
+    var now = new Date();
+    var ts = now.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' ' + now.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+    document.getElementById('hcp-ts').innerHTML = 'Last run: <span>' + ts + '</span>';
+    document.getElementById('dash-hc-ts').textContent = ts;
+    var next = currentDemo === 'cold' ? 'issues' : currentDemo;
+    applyResultsState(next);
+    showToast(next === 'healthy' ? 'Health check complete — all passed' : 'Health check complete — 4 issues found');
+  }, 2800);
+}
+
+function openDeepModal() { document.getElementById('deep-modal').classList.add('open'); }
+function closeDeepModal() { document.getElementById('deep-modal').classList.remove('open'); }
+function confirmDeepRecon() {
+  closeDeepModal();
+  document.getElementById('deep-not-run').style.display = 'none';
+  document.getElementById('deep-running').style.display = 'flex';
+  setTimeout(function() {
+    document.getElementById('deep-running').style.display = 'none';
+    document.getElementById('deep-results').style.display = 'block';
+    showToast('Deep reconciliation complete — 1 issue found');
+  }, 2200);
+}
+
+function applyResultsState(state) {
+  var cold = document.getElementById('hc-cold');
+  var results = document.getElementById('hc-results-block');
+  var allClear = document.getElementById('hc-all-clear');
+  var stale = document.getElementById('hc-stale');
+  var syncNotice = document.getElementById('hc-sync-notice');
+  var ts = document.getElementById('hcp-ts');
+  var periodRow = document.getElementById('period-row');
+  var badge = document.getElementById('monitoring-badge');
+  var dot = document.getElementById('dot-problems');
+  var dashIssues = document.getElementById('dash-issues-widget');
+  var deepNotRun = document.getElementById('deep-not-run');
+  var deepResults = document.getElementById('deep-results');
+  var deepRunning = document.getElementById('deep-running');
+
+  deepNotRun.style.display = 'block';
+  deepResults.style.display = 'none';
+  deepRunning.style.display = 'none';
+
+  cold.style.display = state === 'cold' ? 'block' : 'none';
+  ts.style.display = state === 'cold' ? 'none' : '';
+  periodRow.style.visibility = state === 'cold' ? 'hidden' : '';
+
+  if (state === 'cold') {
+    results.style.display = 'none';
+    allClear.style.display = 'none';
+    stale.style.display = 'none';
+    syncNotice.style.display = 'none';
+    badge.style.display = 'none';
+    dot.style.display = 'none';
+    dashIssues.style.display = 'none';
+    return;
+  }
+
+  allClear.style.display = state === 'healthy' ? 'block' : 'none';
+  results.style.display = state === 'healthy' ? 'none' : 'block';
+  stale.style.display = state === 'stale' ? 'flex' : 'none';
+  syncNotice.style.display = state === 'issues' ? 'flex' : 'none';
+
+  if (state === 'stale') {
+    ts.innerHTML = 'Last run: <span>Jul 22, 2026 09:15</span>';
+  }
+
+  // Multi-integration toggle
+  var autoSyncDesc = document.getElementById('autosync-desc');
+  var autoSyncMetaSingle = document.getElementById('autosync-meta-single');
+  var autoSyncIntRows = document.getElementById('autosync-int-rows');
+  var autoSyncActionSingle = document.getElementById('autosync-action-single');
+
+  if (state === 'multi') {
+    autoSyncDesc.textContent = 'Auto-sync is off for 2 integrations. New transactions won\'t sync automatically to your books.';
+    autoSyncMetaSingle.style.display = 'none';
+    autoSyncIntRows.style.display = 'flex';
+    autoSyncActionSingle.style.display = 'none';
+  } else {
+    autoSyncDesc.textContent = 'Auto-sync is turned off for Shopify (Main Store). New transactions won\'t sync automatically to your books.';
+    autoSyncMetaSingle.style.display = 'flex';
+    autoSyncIntRows.style.display = 'none';
+    autoSyncActionSingle.style.display = 'block';
+  }
+
+  if (state === 'healthy') {
+    badge.style.display = 'none';
+    dot.style.display = 'none';
+    dashIssues.style.display = 'none';
+  } else {
+    var issueCount = 4;
+    badge.textContent = issueCount;
+    badge.style.display = 'flex';
+    dot.style.display = 'inline-block';
+    dashIssues.style.display = 'block';
+    document.getElementById('dash-iss-count').textContent = issueCount;
+    renderDashIssues([
+      {sev:'red', name:'QuickBooks Online disconnected', sub:'Critical'},
+      {sev:'orange', name:'Auto-sync turned off', sub: state === 'multi' ? '2 integrations · Warning' : 'Shopify (Main Store) · Warning'}
+    ]);
+  }
+}
+
+function renderDashIssues(issues) {
+  var list = document.getElementById('dash-iss-list');
+  list.innerHTML = issues.map(function(iss) {
+    return '<div class="dash-iss-row">' +
+      '<div class="di-dot ' + iss.sev + '"></div>' +
+      '<div class="di-name">' + iss.name + '</div>' +
+      '<div class="di-sub">' + iss.sub + '</div>' +
+      '<button class="di-fix" onclick="navigate(\'problems\')">Fix →</button>' +
+    '</div>';
+  }).join('');
+}
+
+function setDemo(state) {
+  currentDemo = state;
+  document.querySelectorAll('.demo-btn').forEach(function(b) { b.classList.toggle('active', b.dataset.s === state); });
+  applyResultsState(state);
+}
+
+function showToast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(function() { el.classList.remove('show'); }, 2200);
+}
+
+setDemo('issues');
+navigate('dashboard');
+</script>
+</body>
+</html>

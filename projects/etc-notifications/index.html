@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ITCS DatNet — Notifications</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; background: #fff; color: #2d3748; font-size: 13px; padding-bottom: 44px; }
+
+  /* ── Top nav — matches the real Israel Railways ITCS chrome ── */
+  .nav { background: #14274e; color: #fff; height: 34px; display: flex; align-items: center; position: sticky; top: 0; z-index: 1000; }
+  .nav-logo { width: 56px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .nav-items { display: flex; height: 100%; }
+  .nav-item { padding: 0 12px; height: 100%; display: flex; align-items: center; gap: 5px; font-size: 12.5px; color: #dfe6f0; cursor: pointer; white-space: nowrap; }
+  .nav-item:hover { background: rgba(255,255,255,0.09); color: #fff; }
+  .nav-item.active { background: rgba(255,255,255,0.14); color: #fff; }
+  .nav-chevron { font-size: 8px; opacity: .75; }
+  .nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; padding-right: 10px; }
+
+  /* Today's bell: a permanently-red pill. Toggle to compare with a neutral bell. */
+  .bell-red { display: flex; align-items: center; gap: 4px; background: #e02424; color: #fff; border-radius: 3px; padding: 3px 7px; font-size: 12px; font-weight: 700; cursor: pointer; border: none; font-family: inherit; }
+  .bell-red:hover { background: #c81e1e; }
+  .nav-bell-wrap { position: relative; cursor: pointer; width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; color: #dfe6f0; }
+  .nav-bell-wrap:hover { background: rgba(255,255,255,0.10); }
+  .nav-bell-wrap.pulse, .bell-red.pulse { animation: bellPulse .5s ease; }
+  @keyframes bellPulse { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 75% { transform: rotate(12deg); } }
+  .nav-bell-badge { position: absolute; top: -1px; right: -3px; background: #e02424; color: #fff; border-radius: 10px; padding: 1px 4px; font-size: 10px; font-weight: 700; min-width: 16px; text-align: center; line-height: 13px; border: 1.5px solid #14274e; }
+  .nav-bell-badge.hidden { display: none; }
+  .nav-exit { color: #dfe6f0; cursor: pointer; display: flex; }
+  .bell-variant-note { position: fixed; left: 14px; bottom: 74px; background: #fffbe6; border: 1px solid #f0d98a; color: #7a5c00; font-size: 11px; padding: 7px 10px; border-radius: 3px; z-index: 1600; max-width: 250px; line-height: 1.45; }
+
+  /* ── Page behind: the Events screen ── */
+  .layout { display: flex; min-height: calc(100vh - 34px); }
+  .sidebar { width: 32px; background: #14274e; display: flex; flex-direction: column; align-items: center; padding: 8px 0; gap: 12px; flex-shrink: 0; }
+  .sb-btn { width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; color: #9fb0cc; }
+  .sb-btn.active { color: #fff; }
+  .content { flex: 1; padding: 12px 16px; min-width: 0; }
+
+  .ev-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+  .ev-title { font-size: 17px; color: #26323f; font-weight: 400; margin-right: 4px; }
+  .ev-filter { display: flex; align-items: center; justify-content: space-between; gap: 6px; border: 1px solid #cfd6e0; border-radius: 3px; height: 34px; padding: 0 8px; font-size: 12.5px; color: #97a0ac; min-width: 108px; background: #fff; }
+  .ev-filter .caret { font-size: 8px; color: #7a838f; }
+  .ev-add { margin-left: auto; background: #1976d2; color: #fff; border: none; border-radius: 3px; height: 32px; padding: 0 14px; font-size: 12.5px; font-weight: 500; font-family: inherit; display: flex; align-items: center; gap: 5px; flex-shrink: 0; }
+
+  .ev-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .ev-table th { background: #f4f6f8; color: #77808c; font-weight: 500; text-align: left; padding: 8px 10px; border-bottom: 1px solid #e3e7ec; white-space: nowrap; }
+  .ev-table td { padding: 7px 10px; border-bottom: 1px solid #edf0f3; color: #3c4652; vertical-align: middle; }
+  .ev-table td.nowrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+  .ev-cmt { color: #6b7480; font-size: 11.5px; line-height: 1.5; }
+  .st { border-radius: 11px; padding: 2px 9px; font-size: 11px; font-weight: 500; display: inline-block; }
+  .st-active { background: #e6f6ec; color: #1f8a4c; }
+  .st-draft { background: #eef0f2; color: #6b7480; }
+  .st-finished { background: #e7f1fb; color: #1a6fc4; }
+  .ev-acts { color: #9aa3ae; white-space: nowrap; }
+  .ev-foot { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 10px 4px; font-size: 12px; color: #77808c; }
+
+  .hint { display: inline-flex; align-items: center; gap: 8px; background: #e7f1fb; color: #1a6fc4; border: 1px solid #bcd7f3; border-radius: 3px; padding: 6px 10px; margin-bottom: 10px; font-size: 12.5px; }
+
+  /* ── Backdrop + sheet ── */
+  /* 44px reserved at the bottom for the presenter bar */
+  .backdrop { position: fixed; top: 0; left: 0; right: 0; bottom: 44px; background: rgba(15,23,42,.28); opacity: 0; pointer-events: none; transition: opacity .22s ease; z-index: 1400; }
+  .backdrop.open { opacity: 1; pointer-events: auto; }
+  .sheet { position: fixed; top: 0; right: 0; bottom: 44px; width: 424px; background: #fff; box-shadow: -4px 0 24px rgba(15,23,42,.16); z-index: 1500; transform: translateX(100%); transition: transform .24s cubic-bezier(.4,0,.2,1); display: flex; flex-direction: column; overflow: hidden; }
+  .sheet.open { transform: translateX(0); }
+
+  /* panels slide inside the same sheet */
+  .panes { flex: 1; position: relative; overflow: hidden; }
+  .pane { position: absolute; inset: 0; display: flex; flex-direction: column; background: #fff; transition: transform .24s cubic-bezier(.4,0,.2,1); }
+  .pane-detail { transform: translateX(100%); }
+  .sheet.detail .pane-list { transform: translateX(-22%); }
+  .sheet.detail .pane-detail { transform: translateX(0); }
+
+  /* ── Sheet header ── */
+  .sh-head { display: flex; align-items: center; gap: 8px; padding: 14px 14px 12px; border-bottom: 1px solid #edf0f5; flex-shrink: 0; }
+  .sh-title { font-size: 15px; font-weight: 600; color: #1a202c; }
+  .sh-icon-btn { margin-left: auto; width: 28px; height: 28px; border: none; background: none; border-radius: 4px; cursor: pointer; color: #718096; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+  .sh-icon-btn:hover { background: #f1f4f9; color: #2d3748; }
+  .back-btn { display: flex; align-items: center; gap: 7px; border: none; background: none; cursor: pointer; font-size: 13px; color: #0053CC; font-family: inherit; padding: 3px 6px 3px 0; border-radius: 4px; }
+  .back-btn:hover { text-decoration: underline; }
+
+  /* ── Tabs ── */
+  .tabs { display: flex; padding: 0 14px; border-bottom: 1px solid #edf0f5; flex-shrink: 0; gap: 4px; }
+  .tab { border: none; background: none; font-family: inherit; font-size: 13px; color: #718096; padding: 9px 10px 8px; cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tab:hover { color: #2d3748; }
+  .tab.active { color: #0053CC; border-bottom-color: #0053CC; font-weight: 600; }
+  .tab-count { background: #edf0f5; color: #4a5568; border-radius: 9px; font-size: 11px; padding: 1px 6px; font-weight: 600; }
+  .tab.active .tab-count { background: #e8edf8; color: #0053CC; }
+
+  .sh-actions { display: flex; align-items: center; padding: 7px 14px; border-bottom: 1px solid #edf0f5; flex-shrink: 0; min-height: 36px; }
+  .link-btn { border: none; background: none; font-family: inherit; font-size: 12px; color: #0053CC; cursor: pointer; padding: 2px 0; }
+  .link-btn:hover { text-decoration: underline; }
+  .link-btn:disabled { color: #a0aec0; cursor: default; text-decoration: none; }
+  .sh-actions .muted { margin-left: auto; font-size: 11px; color: #a0aec0; }
+
+  /* ── List ── */
+  .list { flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+  .day-sep { position: sticky; top: 0; background: #fafbfd; border-bottom: 1px solid #edf0f5; padding: 5px 14px; font-size: 11px; font-weight: 700; color: #8494a8; text-transform: uppercase; letter-spacing: .4px; z-index: 2; }
+
+  .row { position: relative; display: flex; gap: 9px; padding: 11px 34px 11px 14px; border-bottom: 1px solid #f2f4f8; cursor: pointer; }
+  .row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--sev); }
+  .row:hover { background: #f7f9fc; }
+  .row.unread { background: #f5f8ff; }
+  .row.unread:hover { background: #eef4ff; }
+  .row.new-arrival { animation: slideIn .4s ease; }
+  @keyframes slideIn { from { background: #fff4d6; } to { background: #f5f8ff; } }
+
+  .row-dot { width: 7px; height: 7px; border-radius: 50%; background: #0053CC; flex-shrink: 0; margin-top: 5px; }
+  .row.read .row-dot { background: transparent; }
+  .row-sev { flex-shrink: 0; width: 15px; margin-top: 2px; display: flex; }
+  .row-body { min-width: 0; flex: 1; }
+  .row-text { color: #1a202c; line-height: 1.42; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .row.read .row-text { color: #5a6b80; }
+  /* nowrap + right-aligned time: the meta line must never wrap to a second row */
+  .row-meta { display: flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 11px; color: #8494a8; flex-wrap: nowrap; overflow: hidden; }
+  .row-meta .row-time { margin-left: auto; padding-left: 6px; flex-shrink: 0; }
+  .row-meta .chip { overflow: hidden; text-overflow: ellipsis; }
+  .chip { border-radius: 3px; padding: 1px 6px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+  .chip-critical { background: #fde8e8; color: #c22; }
+  .chip-warning  { background: #fdf0d5; color: #96650a; }
+  .chip-info     { background: #e8edf8; color: #0053CC; }
+  .chip-delta    { background: #fde8e8; color: #c22; }
+  .dot-sep { color: #cbd5e0; }
+  .row-x { position: absolute; top: 8px; right: 6px; width: 22px; height: 22px; border: none; background: none; border-radius: 4px; color: #a0aec0; cursor: pointer; font-size: 14px; line-height: 1; opacity: 0; transition: opacity .12s; display: flex; align-items: center; justify-content: center; }
+  .row:hover .row-x { opacity: 1; }
+  .row-x:hover { background: #fde8e8; color: #c22; }
+
+  .empty { padding: 56px 30px; text-align: center; color: #8494a8; }
+  .empty-ico { font-size: 30px; margin-bottom: 10px; }
+  .empty-title { font-size: 14px; font-weight: 600; color: #4a5568; margin-bottom: 4px; }
+
+  /* ── Detail pane ── */
+  .detail-body { flex: 1; overflow-y: auto; padding: 16px 16px 20px; }
+  .d-chips { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; flex-wrap: wrap; }
+  .d-chips .chip svg { vertical-align: -2px; margin-right: 2px; }
+  .d-time { font-size: 11px; color: #8494a8; }
+  .d-text { font-size: 14px; line-height: 1.55; color: #1a202c; margin-bottom: 16px; }
+  .d-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #0053CC; text-decoration: none; border: 1px solid #c3d4f0; background: #f5f8ff; border-radius: 3px; padding: 6px 12px; margin-bottom: 18px; cursor: pointer; font-family: inherit; }
+  .d-cta:hover { background: #e8edf8; }
+  .d-sec-title { font-size: 11px; font-weight: 700; color: #8494a8; text-transform: uppercase; letter-spacing: .4px; padding-bottom: 6px; border-bottom: 1px solid #edf0f5; margin-bottom: 2px; }
+  .d-field { display: grid; grid-template-columns: 132px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f5f7fa; }
+  .d-field dt { color: #8494a8; font-size: 12px; }
+  .d-field dd { color: #2d3748; font-size: 12px; word-break: break-word; }
+  .detail-foot { border-top: 1px solid #edf0f5; padding: 10px 16px; display: flex; gap: 8px; flex-shrink: 0; }
+  .btn { font-family: inherit; font-size: 13px; padding: 6px 14px; border-radius: 3px; cursor: pointer; }
+  .btn-ghost { background: #fff; border: 1px solid #cbd5e0; color: #4a5568; }
+  .btn-ghost:hover { background: #f7fafc; }
+  .btn-danger { background: #fff; border: 1px solid #f5c2c2; color: #c22; }
+  .btn-danger:hover { background: #fde8e8; }
+
+  /* ── Toast ── */
+  .toast { position: absolute; left: 14px; right: 14px; bottom: 14px; background: #1a2535; color: #fff; border-radius: 4px; padding: 10px 12px; display: flex; align-items: center; gap: 10px; font-size: 12px; box-shadow: 0 4px 14px rgba(15,23,42,.28); transform: translateY(150%); transition: transform .2s ease; z-index: 30; }
+  .toast.show { transform: translateY(0); }
+  .toast .link-btn { color: #7ec8e3; margin-left: auto; font-size: 12px; font-weight: 700; }
+
+  /* ══════════ Presentation layer ══════════ */
+
+  /* Cover slide */
+  .cover { position: fixed; inset: 0; background: #14274e; color: #fff; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: 40px; transition: opacity .3s ease; }
+  .cover.gone { opacity: 0; pointer-events: none; }
+  .cover-inner { max-width: 720px; }
+  .cover-kicker { font-size: 12px; letter-spacing: 1.6px; text-transform: uppercase; color: #7fa5dd; margin-bottom: 14px; }
+  .cover-h1 { font-size: 34px; font-weight: 400; line-height: 1.22; margin-bottom: 8px; }
+  .cover-sub { font-size: 15px; color: #b9c9e2; margin-bottom: 26px; }
+  .cover-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-bottom: 30px; }
+  .cover-col h4 { font-size: 11px; letter-spacing: 1.1px; text-transform: uppercase; color: #7fa5dd; font-weight: 700; margin-bottom: 9px; }
+  .cover-col ul { list-style: none; }
+  .cover-col li { font-size: 13px; color: #dbe5f2; line-height: 1.5; padding-left: 15px; position: relative; margin-bottom: 7px; }
+  .cover-col li::before { content: '—'; position: absolute; left: 0; color: #557bb0; }
+  .cover-start { background: #fff; color: #14274e; border: none; border-radius: 3px; padding: 11px 26px; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .cover-start:hover { background: #e7eef8; }
+  .cover-hint { font-size: 12px; color: #7fa5dd; margin-top: 14px; }
+
+  /* Presenter bar */
+  .presenter { position: fixed; left: 0; right: 0; bottom: 0; height: 44px; background: #202a3c; display: flex; align-items: center; gap: 6px; padding: 0 12px; z-index: 1700; box-shadow: 0 -2px 12px rgba(15,23,42,.2); }
+  .presenter-label { font-size: 11px; letter-spacing: .9px; text-transform: uppercase; color: #8b9bb4; margin-right: 6px; }
+  .seg { display: flex; border: 1px solid #3c4759; border-radius: 3px; overflow: hidden; }
+  .seg button { font-family: inherit; font-size: 12px; padding: 5px 13px; background: none; border: none; color: #b9c4d4; cursor: pointer; }
+  .seg button:hover { background: rgba(255,255,255,.07); }
+  .seg button.on { background: #3b82f6; color: #fff; font-weight: 600; }
+  .pbtn { font-family: inherit; font-size: 12px; padding: 5px 12px; background: none; border: 1px solid #3c4759; border-radius: 3px; color: #b9c4d4; cursor: pointer; }
+  .pbtn:hover { background: rgba(255,255,255,.07); color: #fff; }
+  .presenter .spacer { margin-left: auto; }
+  .presenter .caption { font-size: 12px; color: #8b9bb4; max-width: 44%; text-align: right; line-height: 1.35; }
+
+  /* Callout notes — contextual to what's on screen */
+  .note { position: fixed; z-index: 1550; background: #14274e; color: #fff; font-size: 11.5px; line-height: 1.5; padding: 9px 11px 9px 32px; border-radius: 4px; width: 258px; box-shadow: 0 4px 16px rgba(15,23,42,.3); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .note b { color: #9dc4ff; }
+  .note .num { position: absolute; left: 9px; top: 9px; width: 17px; height: 17px; border-radius: 50%; background: #3b82f6; color: #fff; font-size: 10.5px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  body.notes-on:not(.sheet-open):not(.before-view) .note[data-when="closed"] { opacity: 1; }
+  body.notes-on.sheet-open:not(.sheet-detail) .note[data-when="list"] { opacity: 1; }
+  body.notes-on.sheet-detail .note[data-when="detail"] { opacity: 1; }
+
+  /* ══════════ "Before" — today's production panel, reconstructed ══════════ */
+  .before { position: fixed; left: 32px; top: 34px; right: 0; bottom: 44px; background: #fff; z-index: 1500; box-shadow: 0 0 24px rgba(15,23,42,.2); display: none; flex-direction: column; }
+  .before.open { display: flex; }
+  .before-head { display: flex; align-items: center; padding: 12px 16px 8px; }
+  .before-title { font-size: 14px; font-weight: 700; color: #26323f; }
+  .before-x { margin-left: auto; border: none; background: none; font-size: 15px; color: #77808c; cursor: pointer; }
+  .before-upd { text-align: right; padding: 0 16px 8px; font-size: 12px; color: #6b7480; }
+  .before-scroll { flex: 1; overflow: auto; margin: 0 16px; border: 1px solid #e3e7ec; }
+  .bt { border-collapse: collapse; font-size: 11.5px; white-space: nowrap; }
+  .bt th { background: #f4f6f8; color: #77808c; font-weight: 500; text-align: left; padding: 8px 9px; border-bottom: 1px solid #e3e7ec; position: sticky; top: 0; }
+  .bt td { padding: 8px 9px; border-bottom: 1px solid #edf0f3; color: #3c4652; vertical-align: middle; }
+  .bt td.txt { white-space: normal; min-width: 215px; max-width: 215px; }
+  .bt td.dash { color: #a8b0ba; text-align: center; }
+  .bt td.delta { background: #fde8e8; color: #c22; font-weight: 600; text-align: center; }
+  .bt td.deltaempty { background: #f7f7f8; color: #a8b0ba; text-align: center; }
+  .bt .warn { color: #e9a13b; font-size: 13px; }
+  .before-foot { display: flex; align-items: center; justify-content: flex-end; gap: 16px; padding: 10px 16px; font-size: 11.5px; color: #77808c; }
+  .before-note { margin: 8px 16px 0; background: #fff4e5; border: 1px solid #f3d3a0; color: #8a5a00; font-size: 11.5px; padding: 7px 10px; border-radius: 3px; line-height: 1.5; display: none; }
+  body.notes-on .before-note { display: block; }
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="nav-logo">
+    <svg width="26" height="16" viewBox="0 0 40 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round">
+      <path d="M3 17c6-11 16-13 25-8"/><path d="M8 21c5-8 13-9.5 20-5.5"/>
+    </svg>
+  </div>
+  <div class="nav-items">
+    <div class="nav-item">Maps <span class="nav-chevron">▼</span></div>
+    <div class="nav-item">Station view</div>
+    <div class="nav-item active">Events</div>
+    <div class="nav-item">Journeys <span class="nav-chevron">▼</span></div>
+    <div class="nav-item">Systems <span class="nav-chevron">▼</span></div>
+    <div class="nav-item">Pax <span class="nav-chevron">▼</span></div>
+  </div>
+  <div class="nav-right">
+    <!-- Variant A: today's red pill -->
+    <button class="bell-red" id="bell-red" title="Notifications">
+      <svg width="12" height="12" viewBox="0 0 20 20" fill="#fff"><path d="M10 1.6 19 17.6H1z"/><rect x="9" y="7" width="2" height="5.4" fill="#e02424" rx="1"/><circle cx="10" cy="15" r="1.1" fill="#e02424"/></svg>
+      <span id="badge-red">7</span>
+    </button>
+    <!-- Variant B: neutral bell + badge -->
+    <div class="nav-bell-wrap" id="bell" title="Notifications" style="display:none">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+      <span class="nav-bell-badge hidden" id="badge">0</span>
+    </div>
+    <div class="nav-exit">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/></svg>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="sb-btn active" title="Maps">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 3 3 5v16l6-2 6 2 6-2V3l-6 2-6-2z"/><path d="M9 3v16M15 5v16"/></svg></div>
+    <div class="sb-btn" title="Analytics">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 17l6-6 4 4 7-7"/></svg></div>
+    <div class="sb-btn" title="Systems">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M2 11h20"/></svg></div>
+    <div class="sb-btn" title="Schedule">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+    <div class="sb-btn" title="Departures">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12h16l-4-5M18 12l-4 5"/><path d="M22 4v16"/></svg></div>
+  </div>
+
+  <div class="content">
+    <div class="hint">↗ Click the notification button in the top bar</div>
+    <div class="ev-head">
+      <span class="ev-title">Events</span>
+      <div class="ev-filter" style="min-width:132px">Date from <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7a838f" stroke-width="1.7"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+      <span style="color:#97a0ac">-</span>
+      <div class="ev-filter" style="min-width:132px">Date to <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#7a838f" stroke-width="1.7"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></div>
+      <div class="ev-filter" style="min-width:160px">Stations <span class="caret">▼</span></div>
+      <div class="ev-filter" style="min-width:150px">Type <span class="caret">▼</span></div>
+      <div class="ev-filter" style="min-width:150px">Event type <span class="caret">▼</span></div>
+      <div class="ev-filter" style="min-width:150px">Status <span class="caret">▼</span></div>
+      <button class="ev-add">✚ ADD EVENT</button>
+    </div>
+
+    <table class="ev-table">
+      <thead><tr>
+        <th>Time period</th><th>Unique number</th><th>Stations</th><th>Type</th>
+        <th>Event type</th><th>Comment</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody id="ev-body"></tbody>
+    </table>
+    <div class="ev-foot"><span>Rows per page 25 ▾</span><span>1-14 of 14</span><span>|‹ ‹ › ›|</span></div>
+  </div>
+</div>
+
+<!-- ══════════ "Before": today's production panel, reconstructed ══════════ -->
+<div class="before" id="before">
+  <div class="before-head">
+    <span class="before-title">Notifications</span>
+    <button class="before-x" id="before-x">✕</button>
+  </div>
+  <div class="before-upd">Last updated: 14:41:19 &nbsp;⟳</div>
+  <div class="before-note">
+    <b>Note the sort order.</b> Reading the Time column top to bottom: 5 Aug 12:20 → 5 Aug 12:25 → 5 Aug 12:40 →
+    <b>4 Aug</b> 12:55 → 5 Aug 13:05 → <b>4 Aug</b> 13:15 → <b>2 Aug</b> 13:30. It sorts by time-of-day and ignores the
+    date entirely — and ascending, so the oldest is on top. Also: pagination for 7 rows, and "Rows per page" printed twice.
+  </div>
+  <div class="before-scroll">
+    <table class="bt">
+      <thead><tr>
+        <th></th><th>Text</th><th>From</th><th>To</th><th>Delta</th><th>Module</th><th>Title</th><th>Type</th>
+        <th>Station</th><th>Destination</th><th>Planned platfo…</th><th>Actual platform</th><th>Event</th><th>Count</th><th>Time</th><th></th>
+      </tr></thead>
+      <tbody id="bt-body"></tbody>
+    </table>
+  </div>
+  <div class="before-foot"><span>Rows per page</span><span>Rows per page 25 ▾</span><span>1-7 of 7</span><span>|‹ ‹ › ›|</span></div>
+</div>
+
+<!-- ══════════ Annotations ══════════ -->
+<div class="note" data-when="closed" style="top:44px; right:14px">
+  <span class="num">1</span><b>The bell.</b> Unread count only, capped at 99+, and it disappears at zero.
+  Compare variant A (today's always-red pill — red that never turns off stops meaning anything) with variant B.
+</div>
+
+<div class="note" data-when="list" style="top:46px; right:448px">
+  <span class="num">2</span><b>Unread / All</b>, not New / Passed. "Passed" is ambiguous — it can mean
+  "already seen" or "the event is over". Those are two different axes, and the Events entity already owns the second one
+  with Active / Draft / Finished.
+</div>
+<div class="note" data-when="list" style="top:172px; right:448px">
+  <span class="num">3</span><b>The row is the message.</b> The sentence from the old Text column, clamped to two lines,
+  so no row can ever force horizontal scrolling. Type as a chip, delay as a red chip, time right-aligned.
+</div>
+<div class="note" data-when="list" style="top:300px; right:448px">
+  <span class="num">4</span><b>Urgency on the left edge</b> — red critical, amber warning, blue info — plus an icon.
+  Scannable down the whole list without reading a word.
+</div>
+<div class="note" data-when="list" style="top:410px; right:448px">
+  <span class="num">5</span><b>Per-user delete.</b> Hover a row for the ✕. Every delete gets a 5-second Undo,
+  because in an ops team a mis-click shouldn't lose an alert. Nothing is deleted for anyone else.
+</div>
+<div class="note" data-when="list" style="top:530px; right:448px">
+  <span class="num">6</span><b>Newest first</b>, grouped under sticky Today / Yesterday / date headers.
+  Today's build sorts by time-of-day and ignores the date — switch to Before and turn notes on to see it.
+</div>
+
+<div class="note" data-when="detail" style="top:100px; right:448px">
+  <span class="num">7</span><b>Only fields that have a value.</b> This is what removes the horizontal scroll: a platform
+  change shows 8 fields, an announcement shows 1, a mapping-issue alarm shows 2. The old table forced all 14 on every row —
+  39 of the 63 event-describing cells were "-".
+</div>
+<div class="note" data-when="detail" style="top:250px; right:448px">
+  <span class="num">8</span><b>Same sheet, not a new page.</b> Back returns to the list with scroll position intact.
+  Opening the detail marks it read; "Mark as unread" puts it back if you were only triaging.
+</div>
+<div class="note" data-when="detail" style="top:390px; right:448px">
+  <span class="num">9</span><b>Bilingual.</b> Events carry HEB and ENG text, so the row and detail use automatic
+  direction — Hebrew renders right-to-left without a separate layout. Open the 09:12 Ashkelon notification to see it.
+</div>
+
+<!-- ══════════ Cover slide ══════════ -->
+<div class="cover" id="cover">
+  <div class="cover-inner">
+    <div class="cover-kicker">ITCS · Israel Railways · Dispatcher</div>
+    <div class="cover-h1">Notifications</div>
+    <div class="cover-sub">From a 14-column table to a notification list.</div>
+    <div class="cover-cols">
+      <div class="cover-col">
+        <h4>The problem today</h4>
+        <ul>
+          <li>14 columns. Of the 9 that describe the event, 39 of 63 cells are "-" — every type must declare all fields, each uses 3–4</li>
+          <li>The columns repeat what the Text column already says</li>
+          <li>Horizontal scrolling to read one notification</li>
+          <li>No read state, no bell, no count</li>
+          <li>Sorted by time-of-day, ignoring the date</li>
+        </ul>
+      </div>
+      <div class="cover-col">
+        <h4>The proposal</h4>
+        <ul>
+          <li>Bell with an unread count in the top bar</li>
+          <li>424px side sheet — the Events table stays visible</li>
+          <li>One row per notification, urgency as a colour bar</li>
+          <li>Details on demand, only fields that have values</li>
+          <li>Unread / All, per-user delete with undo</li>
+        </ul>
+      </div>
+    </div>
+    <button class="cover-start" id="cover-start">Open the demo →</button>
+    <div class="cover-hint">Use the bar at the bottom to switch Before / After and toggle the annotations.</div>
+  </div>
+</div>
+
+<!-- ══════════ Presenter bar ══════════ -->
+<div class="presenter">
+  <span class="presenter-label">View</span>
+  <div class="seg">
+    <button id="seg-before">Before</button>
+    <button id="seg-after" class="on">After</button>
+  </div>
+  <span class="presenter-label" style="margin-left:10px">Bell</span>
+  <div class="seg">
+    <button id="seg-a" class="on">A · red pill</button>
+    <button id="seg-b">B · bell + count</button>
+  </div>
+  <button class="pbtn" id="btn-notes" style="margin-left:10px">Show notes</button>
+  <button class="pbtn" id="btn-incoming">Simulate incoming</button>
+  <button class="pbtn" id="btn-reset">Reset</button>
+  <div class="spacer"></div>
+  <div class="caption" id="caption">Click the notification button in the top bar.</div>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+
+<div class="sheet" id="sheet">
+  <div class="panes">
+    <!-- ── LIST PANE ── -->
+    <div class="pane pane-list">
+      <div class="sh-head">
+        <div class="sh-title">Notifications</div>
+        <button class="sh-icon-btn" id="close-1" title="Close">✕</button>
+      </div>
+      <div class="tabs">
+        <button class="tab active" data-tab="unread">Unread <span class="tab-count" id="c-unread">0</span></button>
+        <button class="tab" data-tab="all">All <span class="tab-count" id="c-all">0</span></button>
+      </div>
+      <div class="sh-actions">
+        <button class="link-btn" id="mark-all">Mark all as read</button>
+        <span class="muted" id="live-note">Updates automatically</span>
+      </div>
+      <div class="list" id="list"></div>
+    </div>
+
+    <!-- ── DETAIL PANE ── -->
+    <div class="pane pane-detail">
+      <div class="sh-head">
+        <button class="back-btn" id="back">‹ Notifications</button>
+        <button class="sh-icon-btn" id="close-2" title="Close">✕</button>
+      </div>
+      <div class="detail-body" id="detail-body"></div>
+      <div class="detail-foot">
+        <button class="btn btn-danger" id="d-delete">Delete</button>
+        <button class="btn btn-ghost" id="d-unread">Mark as unread</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast"><span id="toast-msg"></span><button class="link-btn" id="toast-undo">Undo</button></div>
+</div>
+
+<script>
+/* ────────────── Data ──────────────
+   Fields mirror the 14 columns of the current table. Empty values are simply
+   omitted from the detail view instead of being rendered as "-".            */
+/* Inline SVG rather than emoji — emoji fonts are unreliable on ops workstations
+   and read as informal in a control-centre UI. */
+const SEV_ICON = {
+  critical: `<svg viewBox="0 0 20 20" width="15" height="15" fill="#e53e3e"><circle cx="10" cy="10" r="9"/><rect x="9" y="5" width="2" height="7" fill="#fff" rx="1"/><circle cx="10" cy="14.6" r="1.2" fill="#fff"/></svg>`,
+  warning:  `<svg viewBox="0 0 20 20" width="15" height="15" fill="#e9a13b"><path d="M10 1.6 19 17.6H1z"/><rect x="9" y="7" width="2" height="5.4" fill="#fff" rx="1"/><circle cx="10" cy="15" r="1.1" fill="#fff"/></svg>`,
+  info:     `<svg viewBox="0 0 20 20" width="15" height="15" fill="#0053CC"><circle cx="10" cy="10" r="9"/><rect x="9" y="8.4" width="2" height="6.4" fill="#fff" rx="1"/><circle cx="10" cy="5.6" r="1.2" fill="#fff"/></svg>`,
+};
+const SEV_COLOR = { critical: '#e53e3e', warning: '#e9a13b', info: '#0053CC' };
+const SEV_LABEL = { critical: 'Critical', warning: 'Warning', info: 'Info' };
+
+function n(o) { return Object.assign({ read: true, severity: 'info', module: 'OPS' }, o); }
+
+const SEED = [
+  // ── Today, 5 Aug 2026 ──
+  n({ id: 1, ts: '2026-08-05T13:30', read: false, severity: 'critical', module: 'ARAMIS', type: 'ARAMIS data mapping issue',
+      text: 'Some ARAMIS real-time updates could not be matched to timetable data or known stations. Affected messages in the last 15 minutes: 23.',
+      f: { count: '23', event: 'Mapping failure' } }),
+  n({ id: 2, ts: '2026-08-05T13:15', read: false, severity: 'warning', module: 'OPS', type: 'Temporary speed restriction',
+      text: 'RE/45 Temporary speed restriction between Jerusalem and Beit Shemesh due to track works. Expect longer journey times until 18:00.',
+      f: { line: 'RE/45', from: 'JLM', to: 'TLV', station: 'Beit Shemesh', destination: 'Tel Aviv' } }),
+  n({ id: 3, ts: '2026-08-05T13:05', read: false, severity: 'info', module: 'OPS', type: 'Station facilities notice',
+      text: 'Elevator maintenance at Tel Aviv Center. Passengers with reduced mobility should use the south entrance.',
+      f: { from: 'TLV', to: 'TLV', station: 'Tel Aviv Center' } }),
+  n({ id: 4, ts: '2026-08-05T12:40', read: false, severity: 'warning', module: 'ARAMIS', type: 'Unreported schedule deviation',
+      text: 'RB/11 1188 Train 88 departed from Ashdod 12 minutes later than scheduled. No corresponding delay forecast was received.',
+      f: { line: 'RB/11', train: '1188', delta: '+12', from: 'ASH', to: 'TLV', station: 'Ashdod', event: 'Departure' } }),
+  n({ id: 5, ts: '2026-08-05T12:25', read: false, severity: 'warning', module: 'ARAMIS', type: 'Significant delay',
+      text: 'RE/45 4502 Train 02 to Tel Aviv is expected to be delayed by 14 minutes at Beit Shemesh.',
+      f: { line: 'RE/45', train: '4502', delta: '+14', from: 'JLM', to: 'TLV', station: 'Beit Shemesh', destination: 'Tel Aviv' } }),
+  n({ id: 6, ts: '2026-08-05T12:20', read: false, severity: 'warning', module: 'ARAMIS', type: 'Platform changed',
+      text: 'IC/32 3210 Train 10 to Haifa: The platform at Akko has changed from Platform 2 to Platform 4.',
+      f: { line: 'IC/32', train: '3210', from: 'TLV', to: 'HFA', station: 'Akko', destination: 'Haifa', platform: '2', actualPlatform: '4' } }),
+  n({ id: 7, ts: '2026-08-05T11:52', read: false, severity: 'warning', module: 'ARAMIS', type: 'Significant delay',
+      text: 'IC/21 2144 Train 44 to Be\'er Sheva is expected to be delayed by 9 minutes at Lod.',
+      f: { line: 'IC/21', train: '2144', delta: '+9', from: 'HFA', to: 'BS', station: 'Lod', destination: 'Be\'er Sheva' } }),
+  n({ id: 8, ts: '2026-08-05T11:14', severity: 'warning', module: 'ARAMIS', type: 'Platform changed',
+      text: 'RB/17 1702 Train 02 to Ashkelon: The platform at Lod has changed from Platform 1 to Platform 3.',
+      f: { line: 'RB/17', train: '1702', from: 'TLV', to: 'ASH', station: 'Lod', destination: 'Ashkelon', platform: '1', actualPlatform: '3' } }),
+  n({ id: 9, ts: '2026-08-05T10:38', severity: 'info', module: 'OPS', type: 'Announcement',
+      text: 'Additional carriages added to IC/32 services between Tel Aviv and Haifa for the afternoon peak.',
+      f: { line: 'IC/32', from: 'TLV', to: 'HFA' } }),
+  n({ id: 10, ts: '2026-08-05T09:47', severity: 'warning', module: 'ARAMIS', type: 'Unreported schedule deviation',
+      text: 'IC/32 3204 Train 04 arrived at Binyamina 7 minutes later than scheduled. No corresponding delay forecast was received.',
+      f: { line: 'IC/32', train: '3204', delta: '+7', from: 'TLV', to: 'HFA', station: 'Binyamina', event: 'Arrival' } }),
+  // Hebrew row — the Events table stores HEB + ENG output, so notifications will hit RTL too.
+  n({ id: 27, ts: '2026-08-05T09:12', read: false, severity: 'warning', module: 'OPS', type: 'Custom Announcement',
+      text: 'אש בתחנה בתחנת אשקלון. הרכבות אינן עוצרות בתחנה עד להודעה חדשה.',
+      f: { station: 'Ashkelon', event: 'Fire on station' } }),
+  n({ id: 11, ts: '2026-08-05T08:21', severity: 'critical', module: 'ARAMIS', type: 'Feed interruption',
+      text: 'The ARAMIS real-time feed was unavailable for 4 minutes. Position data for 61 trains was not updated during this period.',
+      f: { count: '61', event: 'Feed timeout' } }),
+
+  // ── Yesterday, 4 Aug 2026 ──
+  n({ id: 12, ts: '2026-08-04T18:44', severity: 'warning', module: 'ARAMIS', type: 'Significant delay',
+      text: 'RE/45 4518 Train 18 to Jerusalem is expected to be delayed by 21 minutes at Beit Shemesh.',
+      f: { line: 'RE/45', train: '4518', delta: '+21', from: 'TLV', to: 'JLM', station: 'Beit Shemesh', destination: 'Jerusalem' } }),
+  n({ id: 13, ts: '2026-08-04T16:02', severity: 'info', module: 'OPS', type: 'Station facilities notice',
+      text: 'Escalator at Herzliya northbound platform out of service until further notice.',
+      f: { station: 'Herzliya' } }),
+  n({ id: 14, ts: '2026-08-04T14:29', severity: 'warning', module: 'ARAMIS', type: 'Platform changed',
+      text: 'IC/32 3216 Train 16 to Nahariya: The platform at Hadera has changed from Platform 3 to Platform 1.',
+      f: { line: 'IC/32', train: '3216', from: 'TLV', to: 'NHR', station: 'Hadera', destination: 'Nahariya', platform: '3', actualPlatform: '1' } }),
+  n({ id: 15, ts: '2026-08-04T12:55', severity: 'critical', module: 'ARAMIS', type: 'ARAMIS data mapping issue',
+      text: 'Some ARAMIS real-time updates could not be matched to timetable data or known stations. Affected messages in the last 15 minutes: 23.',
+      f: { count: '23', event: 'Mapping failure' } }),
+  n({ id: 16, ts: '2026-08-04T11:07', severity: 'warning', module: 'ARAMIS', type: 'Cancelled service',
+      text: 'RB/11 1174 Train 74 from Ashdod to Tel Aviv has been cancelled. Passengers are advised to use the following service at 11:38.',
+      f: { line: 'RB/11', train: '1174', from: 'ASH', to: 'TLV', destination: 'Tel Aviv', event: 'Cancellation' } }),
+  n({ id: 17, ts: '2026-08-04T09:33', severity: 'info', module: 'OPS', type: 'Announcement',
+      text: 'Ticket office at Modi\'in Central opens at 06:00 from Sunday, one hour earlier than before.',
+      f: { station: 'Modi\'in Central' } }),
+
+  // ── 2–3 Aug 2026 ──
+  n({ id: 18, ts: '2026-08-03T19:12', severity: 'warning', module: 'ARAMIS', type: 'Significant delay',
+      text: 'IC/21 2160 Train 60 to Haifa is expected to be delayed by 16 minutes at Netanya.',
+      f: { line: 'IC/21', train: '2160', delta: '+16', from: 'BS', to: 'HFA', station: 'Netanya', destination: 'Haifa' } }),
+  n({ id: 19, ts: '2026-08-03T15:40', severity: 'warning', module: 'ARAMIS', type: 'Unreported schedule deviation',
+      text: 'RB/17 1716 Train 16 departed from Ashkelon 9 minutes later than scheduled. No corresponding delay forecast was received.',
+      f: { line: 'RB/17', train: '1716', delta: '+9', from: 'ASH', to: 'TLV', station: 'Ashkelon', event: 'Departure' } }),
+  n({ id: 20, ts: '2026-08-03T10:18', severity: 'info', module: 'OPS', type: 'Announcement',
+      text: 'Planned engineering work on the Jerusalem line next weekend. Replacement buses will operate between Jerusalem and Beit Shemesh.',
+      f: { line: 'RE/45', from: 'JLM', to: 'TLV' } }),
+  n({ id: 21, ts: '2026-08-02T13:30', severity: 'info', module: 'OPS', type: 'Weekend timetable update',
+      text: 'Updated weekend timetable published for 1–2 August. Please check journey planners before travel.',
+      f: {} }),
+  n({ id: 22, ts: '2026-08-02T11:05', severity: 'warning', module: 'ARAMIS', type: 'Platform changed',
+      text: 'RE/45 4506 Train 06 to Tel Aviv: The platform at Beit Shemesh has changed from Platform 1 to Platform 2.',
+      f: { line: 'RE/45', train: '4506', from: 'JLM', to: 'TLV', station: 'Beit Shemesh', destination: 'Tel Aviv', platform: '1', actualPlatform: '2' } }),
+  n({ id: 23, ts: '2026-08-02T08:47', severity: 'critical', module: 'ARAMIS', type: 'Feed interruption',
+      text: 'The ARAMIS real-time feed was unavailable for 11 minutes. Position data for 148 trains was not updated during this period.',
+      f: { count: '148', event: 'Feed timeout' } }),
+
+  // ── 1 Aug 2026 ──
+  n({ id: 24, ts: '2026-08-01T17:23', severity: 'warning', module: 'ARAMIS', type: 'Significant delay',
+      text: 'IC/32 3222 Train 22 to Nahariya is expected to be delayed by 12 minutes at Akko.',
+      f: { line: 'IC/32', train: '3222', delta: '+12', from: 'TLV', to: 'NHR', station: 'Akko', destination: 'Nahariya' } }),
+  n({ id: 25, ts: '2026-08-01T14:51', severity: 'warning', module: 'ARAMIS', type: 'Cancelled service',
+      text: 'RB/17 1728 Train 28 from Tel Aviv to Ashkelon has been cancelled due to a rolling stock fault.',
+      f: { line: 'RB/17', train: '1728', from: 'TLV', to: 'ASH', destination: 'Ashkelon', event: 'Cancellation' } }),
+  n({ id: 26, ts: '2026-08-01T09:09', severity: 'info', module: 'OPS', type: 'Station facilities notice',
+      text: 'New bicycle parking available at Be\'er Sheva North from Monday.',
+      f: { station: 'Be\'er Sheva North' } }),
+];
+
+const INCOMING = [
+  { severity: 'warning', module: 'ARAMIS', type: 'Significant delay',
+    text: 'IC/32 3228 Train 28 to Haifa is expected to be delayed by 18 minutes at Binyamina.',
+    f: { line: 'IC/32', train: '3228', delta: '+18', from: 'TLV', to: 'HFA', station: 'Binyamina', destination: 'Haifa' } },
+  { severity: 'warning', module: 'ARAMIS', type: 'Platform changed',
+    text: 'RE/45 4520 Train 20 to Jerusalem: The platform at Beit Shemesh has changed from Platform 2 to Platform 4.',
+    f: { line: 'RE/45', train: '4520', from: 'TLV', to: 'JLM', station: 'Beit Shemesh', destination: 'Jerusalem', platform: '2', actualPlatform: '4' } },
+  { severity: 'critical', module: 'ARAMIS', type: 'ARAMIS data mapping issue',
+    text: 'Some ARAMIS real-time updates could not be matched to timetable data or known stations. Affected messages in the last 15 minutes: 8.',
+    f: { count: '8', event: 'Mapping failure' } },
+];
+
+/* ────────────── State ────────────── */
+let items = [];
+let tab = 'unread';
+let openId = null;
+let pendingDelete = null;   // { item, index } — restored by Undo
+let toastTimer = null;
+let incomingIdx = 0;
+let nextId = 1000;
+
+function resetData() {
+  items = SEED.map(o => Object.assign({}, o, { f: Object.assign({}, o.f) }));
+  sortItems();
+}
+function sortItems() { items.sort((a, b) => b.ts.localeCompare(a.ts)); }   // newest first
+
+/* ────────────── Formatting ────────────── */
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const TODAY = '2026-08-05';                                  // "now" for this prototype
+const YESTERDAY = '2026-08-04';
+
+function dayKey(ts) { return ts.slice(0, 10); }
+function dayLabel(key) {
+  if (key === TODAY) return 'Today';
+  if (key === YESTERDAY) return 'Yesterday';
+  const [y, m, d] = key.split('-');
+  return `${Number(d)} ${MONTHS[Number(m) - 1]} ${y}`;
+}
+function timeOf(ts) { return ts.slice(11, 16); }
+function fullStamp(ts) {
+  const [y, m, d] = dayKey(ts).split('-');
+  return `${Number(d)} ${MONTHS[Number(m) - 1]} ${y}, ${timeOf(ts)}`;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+/* ────────────── Render: list ────────────── */
+const $list = document.getElementById('list');
+
+function visibleItems() { return tab === 'unread' ? items.filter(i => !i.read) : items; }
+
+function renderList(newId) {
+  const vis = visibleItems();
+  document.getElementById('c-unread').textContent = items.filter(i => !i.read).length;
+  document.getElementById('c-all').textContent = items.length;
+  document.getElementById('mark-all').disabled = !items.some(i => !i.read);
+
+  if (!vis.length) {
+    $list.innerHTML = tab === 'unread'
+      ? `<div class="empty"><div class="empty-ico">✓</div><div class="empty-title">You're all caught up</div><div>No unread notifications.</div></div>`
+      : `<div class="empty"><div class="empty-ico">🔔</div><div class="empty-title">No notifications</div><div>Nothing has been reported yet.</div></div>`;
+    return;
+  }
+
+  let html = '', lastDay = null;
+  for (const it of vis) {
+    const k = dayKey(it.ts);
+    if (k !== lastDay) { html += `<div class="day-sep">${dayLabel(k)}</div>`; lastDay = k; }
+    const delta = it.f.delta ? `<span class="chip chip-delta">${esc(it.f.delta)} min</span>` : '';
+    html += `
+      <div class="row ${it.read ? 'read' : 'unread'} ${it.id === newId ? 'new-arrival' : ''}"
+           style="--sev:${SEV_COLOR[it.severity]}" data-id="${it.id}">
+        <div class="row-dot"></div>
+        <div class="row-sev">${SEV_ICON[it.severity]}</div>
+        <div class="row-body">
+          <div class="row-text" dir="auto">${esc(it.text)}</div>
+          <div class="row-meta">
+            <span class="chip chip-${it.severity}">${esc(it.type)}</span>
+            ${delta}
+            <span class="row-time">${timeOf(it.ts)}</span>
+          </div>
+        </div>
+        <button class="row-x" data-del="${it.id}" title="Delete">✕</button>
+      </div>`;
+  }
+  $list.innerHTML = html;
+}
+
+/* ────────────── Render: detail ────────────── */
+/* Only non-empty fields are rendered — no "-" placeholders. */
+const FIELD_ORDER = [
+  ['line', 'Line'], ['train', 'Train number'], ['from', 'From'], ['to', 'To'],
+  ['delta', 'Delay (min)'], ['station', 'Station'], ['destination', 'Destination'],
+  ['platform', 'Scheduled platform'], ['actualPlatform', 'Actual platform'],
+  ['event', 'Event'], ['count', 'Affected messages'],
+];
+
+function renderDetail(it) {
+  const rows = FIELD_ORDER
+    .filter(([k]) => it.f[k] !== undefined && it.f[k] !== '' && it.f[k] !== null)
+    .map(([k, label]) => `<div class="d-field"><dt>${label}</dt><dd>${esc(it.f[k])}</dd></div>`)
+    .join('');
+
+  const cta = it.f.train
+    ? `<button class="d-cta">View train ${esc(it.f.train)} on the board →</button>`
+    : (it.f.station ? `<button class="d-cta">Open ${esc(it.f.station)} →</button>` : '');
+
+  document.getElementById('detail-body').innerHTML = `
+    <div class="d-chips">
+      <span class="chip chip-${it.severity}">${SEV_ICON[it.severity]} ${SEV_LABEL[it.severity]}</span>
+      <span class="chip chip-info">${esc(it.type)}</span>
+      <span class="d-time">${esc(it.module)} · ${fullStamp(it.ts)}</span>
+    </div>
+    <div class="d-text" dir="auto">${esc(it.text)}</div>
+    ${cta}
+    <div class="d-sec-title">Details</div>
+    <dl>${rows || '<div class="d-field"><dt>—</dt><dd>No additional fields for this notification type.</dd></div>'}</dl>`;
+}
+
+/* ────────────── Sheet open/close, navigation ────────────── */
+const $sheet = document.getElementById('sheet');
+const $backdrop = document.getElementById('backdrop');
+
+/* body classes drive which annotations are visible */
+function syncBodyState() {
+  document.body.classList.toggle('sheet-open', $sheet.classList.contains('open'));
+  document.body.classList.toggle('sheet-detail', $sheet.classList.contains('detail'));
+  const cap = document.getElementById('caption');
+  if (viewMode === 'before') cap.textContent = 'This is the panel as it ships today — 14 columns, horizontal scroll.';
+  else if ($sheet.classList.contains('detail')) cap.textContent = 'Detail in the same sheet. Back keeps your place in the list.';
+  else if ($sheet.classList.contains('open')) cap.textContent = 'Click a row for details. Hover a row for the delete ✕.';
+  else cap.textContent = 'Click the notification button in the top bar.';
+}
+function openSheet() { $sheet.classList.add('open'); $backdrop.classList.add('open'); renderList(); syncBodyState(); }
+function closeSheet() { $sheet.classList.remove('open', 'detail'); $backdrop.classList.remove('open'); openId = null; hideToast(); syncBodyState(); }
+function openDetail(id) {
+  const it = items.find(i => i.id === id);
+  if (!it) return;
+  openId = id;
+  it.read = true;                          // opening the detail marks it read
+  renderDetail(it);
+  $sheet.classList.add('detail');
+  renderList();
+  updateBadge();
+  syncBodyState();
+}
+function backToList() { $sheet.classList.remove('detail'); openId = null; syncBodyState(); }
+
+/* ────────────── Delete + undo (per user) ────────────── */
+function deleteItem(id) {
+  const idx = items.findIndex(i => i.id === id);
+  if (idx === -1) return;
+  pendingDelete = { item: items[idx], index: idx };
+  items.splice(idx, 1);
+  if (openId === id) backToList();
+  renderList();
+  updateBadge();
+  showToast('Notification deleted');
+}
+function undoDelete() {
+  if (!pendingDelete) return;
+  items.splice(pendingDelete.index, 0, pendingDelete.item);
+  pendingDelete = null;
+  sortItems();
+  renderList();
+  updateBadge();
+  hideToast();
+}
+const $toast = document.getElementById('toast');
+function showToast(msg) {
+  document.getElementById('toast-msg').textContent = msg;
+  $toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { $toast.classList.remove('show'); pendingDelete = null; }, 5000);
+}
+function hideToast() { $toast.classList.remove('show'); clearTimeout(toastTimer); }
+
+/* ────────────── Badge (both bell variants) ────────────── */
+function updateBadge() {
+  const c = items.filter(i => !i.read).length;
+  const label = c > 99 ? '99+' : String(c);
+  const $b = document.getElementById('badge');
+  $b.textContent = label;
+  $b.classList.toggle('hidden', c === 0);
+  const $r = document.getElementById('bell-red');
+  document.getElementById('badge-red').textContent = label;
+  $r.style.visibility = c === 0 ? 'hidden' : 'visible';   // the red pill has no zero state today
+}
+
+/* Bell variant A (today's red pill) vs B (neutral bell + badge) */
+let variant = 'A';
+function setVariant(v) {
+  variant = v;
+  document.getElementById('bell-red').style.display = v === 'A' ? 'flex' : 'none';
+  document.getElementById('bell').style.display = v === 'A' ? 'none' : 'flex';
+  document.getElementById('seg-a').classList.toggle('on', v === 'A');
+  document.getElementById('seg-b').classList.toggle('on', v === 'B');
+  updateBadge();
+}
+
+/* ────────────── Live arrival ────────────── */
+function simulateIncoming() {
+  const tpl = INCOMING[incomingIdx % INCOMING.length];
+  incomingIdx++;
+  const it = n(Object.assign({}, tpl, {
+    id: nextId++, read: false, ts: TODAY + 'T' + '14:0' + (incomingIdx % 10),
+    f: Object.assign({}, tpl.f),
+  }));
+  items.unshift(it);
+  sortItems();
+  updateBadge();
+  const $bell = document.getElementById(variant === 'A' ? 'bell-red' : 'bell');
+  $bell.classList.add('pulse');
+  setTimeout(() => $bell.classList.remove('pulse'), 500);
+  if ($sheet.classList.contains('open')) { renderList(it.id); $list.scrollTop = 0; }
+}
+
+/* ────────────── Events ────────────── */
+const toggleSheet = () => { $sheet.classList.contains('open') ? closeSheet() : openSheet(); };
+document.getElementById('bell').addEventListener('click', toggleSheet);
+document.getElementById('bell-red').addEventListener('click', toggleSheet);
+$backdrop.addEventListener('click', closeSheet);
+document.getElementById('close-1').addEventListener('click', closeSheet);
+document.getElementById('close-2').addEventListener('click', closeSheet);
+document.getElementById('back').addEventListener('click', backToList);
+
+document.querySelectorAll('.tab').forEach($t => $t.addEventListener('click', () => {
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  $t.classList.add('active');
+  tab = $t.dataset.tab;
+  renderList();
+  $list.scrollTop = 0;
+}));
+
+document.getElementById('mark-all').addEventListener('click', () => {
+  items.forEach(i => i.read = true);
+  renderList();
+  updateBadge();
+});
+
+$list.addEventListener('click', e => {
+  const $del = e.target.closest('[data-del]');
+  if ($del) { e.stopPropagation(); deleteItem(Number($del.dataset.del)); return; }
+  const $row = e.target.closest('.row');
+  if ($row) openDetail(Number($row.dataset.id));
+});
+
+document.getElementById('d-delete').addEventListener('click', () => { if (openId !== null) deleteItem(openId); });
+document.getElementById('d-unread').addEventListener('click', () => {
+  const it = items.find(i => i.id === openId);
+  if (!it) return;
+  it.read = false;
+  backToList();
+  renderList();
+  updateBadge();
+});
+document.getElementById('toast-undo').addEventListener('click', undoDelete);
+document.getElementById('btn-incoming').addEventListener('click', simulateIncoming);
+document.getElementById('btn-reset').addEventListener('click', () => {
+  resetData(); incomingIdx = 0; renderList(); updateBadge(); backToList();
+});
+
+/* ────────────── Presenter controls ────────────── */
+let viewMode = 'after';
+const $before = document.getElementById('before');
+
+function setView(mode) {
+  viewMode = mode;
+  document.getElementById('seg-before').classList.toggle('on', mode === 'before');
+  document.getElementById('seg-after').classList.toggle('on', mode === 'after');
+  document.body.classList.toggle('before-view', mode === 'before');
+  if (mode === 'before') { closeSheet(); $before.classList.add('open'); }
+  else { $before.classList.remove('open'); }
+  syncBodyState();
+}
+document.getElementById('seg-before').addEventListener('click', () => setView('before'));
+document.getElementById('seg-after').addEventListener('click', () => setView('after'));
+document.getElementById('before-x').addEventListener('click', () => setView('after'));
+document.getElementById('seg-a').addEventListener('click', () => setVariant('A'));
+document.getElementById('seg-b').addEventListener('click', () => setVariant('B'));
+
+const $notesBtn = document.getElementById('btn-notes');
+$notesBtn.addEventListener('click', () => {
+  const on = document.body.classList.toggle('notes-on');
+  $notesBtn.textContent = on ? 'Hide notes' : 'Show notes';
+});
+
+const $cover = document.getElementById('cover');
+document.getElementById('cover-start').addEventListener('click', () => $cover.classList.add('gone'));
+$cover.addEventListener('click', e => { if (e.target === $cover) $cover.classList.add('gone'); });
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || !$sheet.classList.contains('open')) return;
+  $sheet.classList.contains('detail') ? backToList() : closeSheet();
+});
+
+/* ────────────── Background Events table (context only) ────────────── */
+const EVENTS = [
+  ['1 Jan 2025, 03:30 - 25 Jun 2026, 01:30', '1111-qwer', 'Ofakim', 'Planned', 'Construction', 'עבודות בנייה', 'Construction work', 'active'],
+  ['1 Jan 2024, 04:30 - 18 Jun 2024, 01:30', '2222-asdf', 'Be\'er Sheva Center', 'Ad-hoc', 'Fire on station', 'אש בתחנה', 'Fire on station', 'active'],
+  ['2 Jan 2024, 03:30 - 25 Jun 2024, 01:30', '3333-zxcv', 'Binyamina', 'Planned', 'Fire on station', 'אש בתחנה', 'Fire on station', 'active'],
+  ['1 Feb 2024, 03:30 - 25 Jun 2024, 01:30', '4444-qwer', 'Karmi\'el', 'Emergency', 'Custom Emergency', 'הודעת חירום מותאמת', 'Custom Emergency', 'active'],
+  ['1 Feb 2024, 05:30 - 25 Jun 2024, 01:30', '5555-asdf', 'Kfar Sava - Nordau', 'Ad-hoc', 'Custom Announcement', 'הודעה מותאמת', 'Custom Announcement', 'active'],
+  ['3 Mar 2025, 02:20 - 25 Jun 2026, 01:30', '6666-zxcv', 'Ashdod Ad Halom', 'Planned', 'Fire on station', 'אש בתחנה', 'Fire on station', 'draft'],
+  ['18 Apr 2025, 10:30 - 25 Jun 2025, 01:30', '7777-qwer', 'Ashkelon', 'Planned', 'Fire on station', 'אש בתחנה', 'Fire on station', 'finished'],
+  ['18 May 2026, 12:30 - 25 Dec 2026, 01:30', '8888-asdf', 'Be\'er Sheva Center', 'Planned', 'Fire on station', 'אש בתחנה', 'Fire on station', 'finished'],
+  ['28 Apr 2026, 03:19 - 29 Apr 2026, 00:19', '4795068e-3d93-4ab9-a471-f', 'Ashkelon, Be\'er Sheva Center', 'Planned', 'Suspicious object', 'אש בתחנה', 'Suspicious object', 'finished'],
+  ['28 Apr 2026, 23:24 - 29 Apr 2026, 00:24', '0f104a42-7383-42b3-adad-d', 'Akko, Atlit', 'Planned', 'Suspicious object', '', 'Suspicious object', 'draft'],
+  ['-', '16dda2b0-9ffa-4693-a255-08', 'Ashkelon, Ashdod Ad Halom , Be\'er She', 'Routine', 'Suspicious object', '', 'Suspicious object', 'finished'],
+  ['-', '4a314f32-aaaa-41eb-b9b5-cc', 'TTO, TTP, Afula, Ahihud, Akko', 'Routine', 'Suspicious object', '', 'Suspicious object', 'active'],
+  ['11 May 2026, 23:10 - 11 May 2027, 22:1', '17e47c3b-8766-4343-8958-6', 'TTO, Ahihud, Akko, Ashkelon, Ashdod A', 'Planned', 'Custom Announcement', 'afef אש בתחנה', 'Custom Announcement Youy are cute', 'active'],
+];
+document.getElementById('ev-body').innerHTML = EVENTS.map(e => `
+  <tr>
+    <td class="nowrap" style="max-width:180px">${esc(e[0])}</td>
+    <td class="nowrap" style="max-width:110px">${esc(e[1])}</td>
+    <td class="nowrap" style="max-width:170px">${esc(e[2])}</td>
+    <td>${esc(e[3])}</td>
+    <td>${esc(e[4])}</td>
+    <td class="ev-cmt">Text output HEB: <span dir="auto">${esc(e[5])}</span><br>Text output ENG: ${esc(e[6])}</td>
+    <td><span class="st st-${e[7]}">${e[7][0].toUpperCase() + e[7].slice(1)}</span></td>
+    <td class="ev-acts">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M17 3a2.8 2.8 0 0 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" style="margin-left:8px"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+    </td>
+  </tr>`).join('');
+
+/* ────── "Before" table: the 7 rows exactly as production shows them ──────
+   Order preserved from the screenshot to expose the date-ignoring sort.     */
+const BEFORE_ROWS = [
+  ['warn', 'IC/32 3210 Train 10 to Haifa: The platform at Akko has changed from Platform 2 to Platform 4.',
+   'TLV','HFA','','ARAMIS','Platform change for train 3210','Platform changed','Akko','Haifa','2','4','','','5 Aug 2026 12:20'],
+  ['warn', 'RE/45 4502 Train 02 to Tel Aviv is expected to be delayed by 14 minutes at Beit Shemesh.',
+   'JLM','TLV','+14','ARAMIS','Significant delay for train 4502','Significant delay','Beit Shemesh','Tel Aviv','','','','','5 Aug 2026 12:25'],
+  ['warn', 'RB/11 1188 Train 88 departed from Ashdod 12 minutes later than scheduled. No corresponding delay forecast was received.',
+   'ASH','TLV','+12','ARAMIS','Unreported schedule deviation','Unreported schedule deviation','Ashdod','','','','Departure','','5 Aug 2026 12:40'],
+  ['warn', 'Some ARAMIS real-time updates could not be matched to timetable data or known stations. Affected messages in the last 15 minutes: 23.',
+   '','','','ARAMIS','ARAMIS data mapping issue','ARAMIS data mapping issue','','','','','','23','4 Aug 2026 12:55'],
+  ['', 'Elevator maintenance at Tel Aviv Center. Passengers with reduced mobility should use the south entrance.',
+   'TLV','TLV','','OPS','Station facilities notice','Announcement','Tel Aviv Center','','','','','','5 Aug 2026 13:05'],
+  ['warn', 'RE/45 Temporary speed restriction between Jerusalem and Beit Shemesh due to track works. Expect longer journey times until 18:00.',
+   'JLM','TLV','','OPS','Temporary speed restriction','Announcement','Beit Shemesh','Tel Aviv','','','','','4 Aug 2026 13:15'],
+  ['', 'Updated weekend timetable published for 1–2 August. Please check journey planners before travel.',
+   '','','','OPS','Weekend timetable update','Announcement','','','','','','','2 Aug 2026 13:30'],
+];
+document.getElementById('bt-body').innerHTML = BEFORE_ROWS.map(r => {
+  // slice(2) is [From, To, Delta, Module, …] — Delta is index 2, not 3.
+  const cell = (v, i) => {
+    if (i === 2) return v ? `<td class="delta">${esc(v)}</td>` : `<td class="deltaempty">-</td>`;
+    return v ? `<td>${esc(v)}</td>` : `<td class="dash">-</td>`;
+  };
+  return `<tr>
+    <td class="warn">${r[0] === 'warn' ? '⚠' : ''}</td>
+    <td class="txt">${esc(r[1])}</td>
+    ${r.slice(2).map((v, i) => cell(v, i)).join('')}
+    <td class="dash">🗑</td>
+  </tr>`;
+}).join('');
+
+/* ────────────── Boot ────────────── */
+resetData();
+setVariant('A');
+renderList();
+syncBodyState();
+</script>
+</body>
+</html>

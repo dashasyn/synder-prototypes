@@ -1,0 +1,92 @@
+{
+  "validator": "ux",
+  "round": 1,
+  "target": "reports/transactions-prototype/index.html (variant 1)",
+  "checked": [
+    { "zone": "layout & hierarchy", "item": "page header region: title + 'Import historical data' + 'View in Books' — two equal-weight buttons, neither is the primary task action (act on transactions)" },
+    { "zone": "layout & hierarchy", "item": "bulk action bar occupies the table header row position, replacing column headers when selection is non-empty (header row hidden=true)" },
+    { "zone": "layout & hierarchy", "item": "dashboard sync block: 19 status rows under 5 group headings — competing focal points before the user reaches the list" },
+    { "zone": "layout & hierarchy", "item": "arrival state from Dashboard: 3 filter chips (Date range: Last 90 days, Platform, Status: Failed) above a 1-row table" },
+    { "zone": "interaction & task completion", "item": "step 1 — dashboard sync block status row click (drill-through 'Failed' → list=true, chips applied, rows=1)" },
+    { "zone": "interaction & task completion", "item": "step 2 — row selection: 'Select all on page' checkbox (page select=25) and scope escalation prompt 'Select all 31' (→ count=31)" },
+    { "zone": "interaction & task completion", "item": "step 3 — bulk bar action choice: Sync now | Rollback | Cancel | Archive | Unarchive | Export ▾ | ×" },
+    { "zone": "interaction & task completion", "item": "step 4 — Sync now commit (dialog: 'Syncing 1 transaction…')" },
+    { "zone": "interaction & task completion", "item": "step 4 alt — Archive commit (confirm(): 'Archive 1 transaction? They will be removed from the default view but can be restored later.')" },
+    { "zone": "interaction & task completion", "item": "Export menu open + items: Export selected / Export all 31 matching / Export pending to CSV" },
+    { "zone": "interaction & task completion", "item": "header 'Import historical data' click" },
+    { "zone": "interaction & task completion", "item": "header 'View in Books' button (present, not exercised)" },
+    { "zone": "interaction & task completion", "item": "variant switcher (prototype scaffolding — toggles dashboard block + filter surface, resets list filters)" },
+    { "zone": "states", "item": "selection state on: bulk bar shown, column header row hidden" },
+    { "zone": "states", "item": "selection state off (uncheck select-all): header row NOT restored (header row=false)" },
+    { "zone": "states", "item": "selection re-armed (recheck select-all → works again)" },
+    { "zone": "states", "item": "escalated-scope state: 31 selected across pages vs 25 on page — action labels ('Archive 1 transaction?') vs selected count" },
+    { "zone": "states", "item": "in-progress state: 'Syncing 1 transaction…' dialog — no terminal success/error state recorded" },
+    { "zone": "states", "item": "post-archive state: archived rows leave the default view; no archived scope in the documented 6 tabs / 19 statuses" },
+    { "zone": "states", "item": "second-place behaviour: '×' (clear selection) vs 'Cancel' in the same bulk bar — two dismiss-like controls on one toolbar" },
+    { "zone": "states", "item": "empty/zero-result state after ANDed tab + Status chip (not reachable from this slice)" }
+  ],
+  "findings": [
+    {
+      "id": "UX-1",
+      "severity": "High",
+      "confidence": 80,
+      "element": "table header row / 'Select all on page' checkbox (bulk action bar)",
+      "finding": "Unchecking 'Select all on page' does not restore the table header row that the bulk bar replaced, so the user is left with a table that has no column headers and no header checkbox.",
+      "user_impact": "After backing out of a selection the user loses the column labels and the select-all affordance, so they cannot tell which column is which or re-select rows from the header and must reload the page.",
+      "suggested_fix": "Tie header-row visibility to selection count so it re-renders as soon as the count returns to 0, and cover the deselect path in the state test rather than only the select path.",
+      "evidence": {
+        "action": "Checked 'Select all on page' (page select=25), then unchecked it.",
+        "observed": "commit_path notes record 'uncheck restored header row=false' — the bulk bar's replacement of the header row was not reversed; rechecking re-armed selection but the header row stayed hidden."
+      }
+    },
+    {
+      "id": "UX-2",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Page header button 'Import historical data'",
+      "finding": "'Import historical data' is styled as a live primary header action but clicking it produces no dialog, no navigation and no feedback of any kind.",
+      "user_impact": "A user who arrives filtered to the last 90 days and needs older transactions clicks the one control that promises them, gets silence, and cannot tell whether the click missed, the feature is broken, or an import is running.",
+      "suggested_fix": "Either wire the button to the import flow or render it disabled with a tooltip stating why, so the header never offers an action that returns nothing.",
+      "evidence": {
+        "action": "Clicked 'Import historical data' in the page header.",
+        "observed": "Page remained list=true with no dialog opened (dialog=false) and no toast, inline message or state change recorded."
+      }
+    },
+    {
+      "id": "UX-3",
+      "severity": "Medium",
+      "confidence": 78,
+      "element": "Bulk action bar — 'Cancel' and '×', plus 'Archive' and 'Unarchive' side by side",
+      "finding": "The bulk bar presents seven equal-weight controls including two that read as dismiss ('Cancel' and '×') and two that are mutually exclusive for any one selection ('Archive' and 'Unarchive'), with nothing indicating which applies to the rows selected.",
+      "user_impact": "A user who wants to abandon a selection cannot tell whether 'Cancel' clears the selection or cancels a queued sync on the selected transactions, and the always-visible Archive/Unarchive pair means one of the two is guaranteed wrong for the current rows — a wrong guess mutates real transactions.",
+      "suggested_fix": "Rename 'Cancel' to what it acts on (e.g. 'Cancel sync'), leave '×' as the only selection-dismiss control, and show only the archive direction that is valid for the current selection, disabling the rest with a reason.",
+      "evidence": {
+        "action": "Selected a row so the bulk bar replaced the header, then read the exposed action set.",
+        "observed": "Bar renders '⟲ Sync now | ↩ Rollback | Cancel | Archive | Unarchive | Export ▾ | ×' — all presented alike, with no recorded disabled state or scoping to the selected rows' statuses."
+      }
+    },
+    {
+      "id": "UX-4",
+      "severity": "Medium",
+      "confidence": 72,
+      "element": "Bulk action bar — Archive confirm dialog / 'Unarchive' action",
+      "finding": "The Archive confirmation promises the rows 'can be restored later', but the documented status surface (6 segmented tabs and 19 statuses in 5 groups) contains no archived scope, so there is no recorded way to list archived rows and select them for 'Unarchive'.",
+      "user_impact": "A user who archives to clear their queue takes the dialog's promise at face value and then cannot find the rows again, making a reversible-sounding action effectively one-way and the 'Unarchive' button unreachable.",
+      "suggested_fix": "Add an explicit archived scope (tab or status-chip group) and link to it from the archive confirmation and its success message, so the restore path the copy promises actually exists.",
+      "evidence": {
+        "action": "Clicked 'Archive' with one row selected and read the confirm() copy, then looked for an archived scope in the documented tab row and Status chip groups.",
+        "observed": "confirm() reads 'Archive 1 transaction? They will be removed from the default view but can be restored later.'; the tab set is All / Needs attention / Ready to sync / In progress / Successful / Deleted and the 19 statuses group into those same 5 groups — none of them archived."
+      }
+    }
+  ],
+  "gaps": [
+    "Sync now: only the in-progress dialog 'Syncing 1 transaction…' was recorded — no terminal state was reached, so it is unknown whether the user is told the sync succeeded, partially failed or errored, and whether the selection and bulk bar clear afterwards.",
+    "Bulk bar: no disabled/enabled states were recorded per action, so it is unknown whether Rollback / Cancel / Archive / Unarchive are blocked for selections they cannot apply to (this is what UX-3's severity hinges on).",
+    "Archive: the post-archive list was never observed and no archived view was opened, so whether an archived scope exists somewhere outside the documented tabs/statuses is unverified (this is what UX-4's confidence hinges on).",
+    "Escalated scope (31 selected): no bulk action was committed at count=31, so it is unknown whether the confirm/progress copy reports the escalated count or keeps saying '1 transaction'.",
+    "Dashboard drill-through: the arrival record lists chips (Date range: Last 90 days, Platform, Status: Failed) but not which segmented tab is marked active, so tab/chip agreement at arrival — the KF-7 failure mode — could not be checked from this slice.",
+    "Export menu: items are inert (not_exercised), so it is unknown whether 'Export all 31 matching to CSV' respects the arriving Dashboard filters or exports the unfiltered set.",
+    "Header 'View in Books' was never clicked, so its behaviour (new tab, dialog, dead control) is unknown.",
+    "Empty/zero-result state: no tab+chip combination returning 0 rows was reached in this slice, so whether the empty state explains that two ANDed status controls caused it is unverified."
+  ]
+}

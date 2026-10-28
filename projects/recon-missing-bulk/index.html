@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reconciliation results — Missing source, select all filtered</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<style>
+  /* Layout only. Type, colour, table rows, buttons, inputs and checkboxes come from the kit. */
+  html,body{margin:0;min-height:100%}
+  body{font-family:var(--font-family);background:var(--color-white);color:var(--text-primary);font-size:14px;min-width:1280px}
+  .hidden{display:none !important}
+  /* prototype chrome: pinned above everything, overlays start below it */
+  .variant-switch{position:sticky;top:0;z-index:300;display:flex;align-items:center;gap:12px;background:var(--color-grey);color:var(--color-white);padding:8px 20px;font-size:14px}
+  .variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;text-transform:uppercase}
+  .variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+  .variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);font-family:inherit;font-size:14px;padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+  .variant-switch button:hover{color:var(--color-white)}
+  .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+  .sronly{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+  .topbar{display:flex;align-items:center;gap:14px;padding:0 24px;height:56px;border-bottom:1px solid var(--border-default)}
+  .topbar .close-x{font-size:18px}
+  .topbar .sep{width:1px;height:20px;background:var(--border-default)}
+  .topbar .ttl{font-weight:500}
+  .topbar .sp{flex:1}
+
+  .page{padding:20px 32px 60px}
+  h1.rt{font-size:22px;font-weight:500;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+  .st-chip{font-size:14px;font-weight:500;padding:2px 10px;border-radius:12px;background:var(--color-yellow-light);color:#7a4508}
+  .sub{color:var(--text-secondary);margin:0 0 16px}
+
+  button.tab{background:none;border:0;border-bottom:2px solid transparent;border-radius:0;font-family:inherit;cursor:pointer}
+  .tabs{padding:0}
+  .tab-count{font-size:14px}
+  .tab-count.c-matched{background:var(--color-green-light);color:#14602c}
+  .tab-count.c-disc{background:var(--color-yellow-light);color:#7a4508}
+  .tab-count.c-miss{background:var(--color-red-light);color:#8f1f1f}
+
+  .hintbar{display:flex;align-items:center;gap:12px;background:var(--color-primary-10);border-radius:4px;
+           padding:8px 14px;margin:16px 0;color:var(--color-primary)}
+  .hintbar .sp{flex:1}
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+  .col h2{font-size:20px;font-weight:400;margin:8px 0 16px}
+
+  /* production: grey filter card — Search · Date range · Amount, then Apply / Reset filters */
+  .filters{background:var(--bg-page);border-radius:4px;padding:14px 16px;margin-bottom:16px;
+           display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px 16px;align-items:end}
+  .fl{display:flex;flex-direction:column;gap:2px}
+  .fl .dr{display:flex;align-items:center;gap:4px}
+  .fl input[type=date]{width:136px}
+  .fl input.amt{width:180px}
+  .factions{grid-column:1 / -1;display:flex;gap:16px}
+
+  /* production: the table sits in a bordered card, with the pager inside it */
+  .tcard{border:1px solid var(--border-default);border-radius:4px;background:var(--color-white)}
+  table.synder-table{table-layout:fixed}
+  table.synder-table thead th,table.synder-table.table--sm thead th{height:56px}
+  table.synder-table th.ck,table.synder-table td.ck{width:44px;padding:0 0 0 12px;overflow:visible}
+  table.synder-table .num{text-align:right;white-space:nowrap}
+  table.synder-table td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  table.synder-table tbody tr:last-child td{border-bottom:0}
+  .sort{color:var(--text-muted);margin-left:4px;font-weight:400}
+  .sort.on{color:var(--text-primary)}
+  .muted{color:var(--text-secondary)}
+
+
+  /* Bulk bar replaces the header row on selection — one line, white, like production. */
+  /* One line when the column is wide enough (~820px). Two half-width columns rarely are, so
+     the Summaries button group wraps to its own row, right-aligned, instead of overflowing. */
+  table.synder-table tr.bulk-row th{padding:12px 12px;font-weight:400;vertical-align:top;height:56px}
+  table.synder-table tr.bulk-row th.ck{padding:19px 0 0 12px;line-height:0}
+  tr.bulk-row th.ck input{display:block}
+  tr.bulk-row th.ck .ckw{display:block}
+  .bulk-inner{display:flex;align-items:center;gap:8px 16px;flex-wrap:wrap;white-space:nowrap}
+  .bulk-inner .count{display:inline-block;line-height:32px}
+  .bulk-inner .bgroup.scope-g{margin-left:auto}
+  .bulk-inner .count{font-weight:400}
+  .bulk-inner .sp{flex:1}
+  /* Summaries list pattern: joined outlined button group on the right */
+  .bgroup{display:inline-flex;position:relative}
+  .bulk-inner .count{margin-right:4px}
+  .caret{font-size:14px;margin-left:2px}
+  .bgroup .btn-outlined{border-radius:0;margin-left:-1px}
+  .bgroup .btn-outlined:first-child{border-radius:4px 0 0 4px;margin-left:0}
+  .bgroup .btn-outlined:last-child{border-radius:0 4px 4px 0}
+  .bgroup .btn-outlined:only-child{border-radius:4px}
+  input[type=checkbox]:focus:not(:focus-visible){outline:none}
+
+  /* locked checkbox in "all filtered" mode — aria-disabled so hover still reaches the tooltip */
+  .ckw{position:relative;display:inline-flex}
+  .ckw input[aria-disabled="true"]{cursor:not-allowed;opacity:.55}
+  .tip{position:absolute;left:28px;top:50%;transform:translateY(-50%);z-index:60;width:250px;
+       background:var(--color-grey);color:var(--color-white);padding:8px 10px;border-radius:4px;
+       font-size:14px;line-height:20px;white-space:normal;font-weight:400;
+       opacity:0;visibility:hidden;transition:opacity .12s}
+  .ckw:hover .tip,.ckw:focus-within .tip{opacity:1;visibility:visible}
+  .btnw{position:relative;display:inline-flex}
+  .btnw .tip{left:auto;right:0;top:calc(100% + 6px);transform:none}
+  .btnw:hover .tip,.btnw:focus-within .tip{opacity:1;visibility:visible}
+  .btn-outlined[aria-disabled="true"]{color:var(--text-muted);border-color:var(--border-strong);cursor:not-allowed;background:var(--color-white)}
+
+  .pagination{justify-content:flex-end;gap:4px;border-top:1px solid var(--border-default)}
+  .pagination .rpp{display:flex;align-items:center;gap:8px;margin-right:24px}
+  .pagination .rpp select{width:68px}
+  .pagination .page-info{margin:0 24px 0 0}
+  .empty{padding:28px;text-align:center;color:var(--text-secondary)}
+
+  .kebab{width:32px;height:32px;border:0;background:none;border-radius:4px;cursor:pointer;color:var(--text-secondary);font-size:18px;line-height:1}
+  .kebab:hover{background:var(--bg-hover);color:var(--text-primary)}
+  .menu{position:absolute;z-index:110;background:var(--color-white);border:1px solid var(--border-default);
+        border-radius:4px;box-shadow:var(--shadow-modal);min-width:200px;padding:4px 0}
+  .mi{display:block;width:100%;text-align:left;background:none;border:0;padding:8px 14px;font:inherit;font-size:14px;color:var(--text-primary);cursor:pointer}
+  .mi:hover{background:var(--bg-hover)}
+
+  /* side sheet */
+  .scrim{position:fixed;inset:var(--vs-h,0px) 0 0 0;background:var(--bg-overlay);z-index:80}
+  .sheet{position:fixed;top:var(--vs-h,0px);right:0;bottom:0;width:min(64%,920px);background:var(--color-white);z-index:90;
+         display:flex;flex-direction:column;box-shadow:var(--shadow-modal)}
+  .sheet-head{display:flex;align-items:center;gap:8px;padding:12px 24px;border-bottom:1px solid var(--border-default)}
+  .sheet-head h2{font-size:18px;font-weight:500;margin:0;flex:1}
+  .sheet-body{flex:1;overflow:auto;padding:20px 24px 40px}
+  .jehead{display:flex;gap:24px;align-items:flex-start;margin-bottom:16px;flex-wrap:wrap}
+  .jefields{flex:1;display:flex;flex-wrap:wrap;gap:16px;min-width:340px}
+  .jefields .f{display:flex;flex-direction:column;gap:2px}
+  .jefields input,.jefields select{width:200px}
+  .totals{border-radius:6px;padding:12px 18px;display:flex;gap:28px;flex-wrap:wrap;min-width:290px}
+  .totals.ok{background:var(--color-green-light)}
+  .totals.bad{background:var(--color-red-light)}
+  .totals .tl{color:var(--text-secondary)}
+  .totals .tv{font-size:18px;font-weight:500;margin-top:2px}
+  .oob{flex-basis:100%;color:#8f1f1f;font-weight:500}
+  .info{display:flex;gap:8px;color:var(--text-secondary);margin:0 0 16px}
+  h3.sec{font-size:16px;font-weight:500;margin:0 0 8px}
+  table.lines td input,table.lines td select{height:32px}
+  table.lines td input[readonly]{background:var(--color-grey-5);color:var(--text-secondary)}
+  table.lines td.num input{text-align:right}
+  table.lines tr.agg td{background:var(--color-grey-5)}
+  .linefoot{display:flex;align-items:center;margin-top:10px}
+  .linefoot .sp{flex:1}
+  .linefoot .tt{display:flex;gap:24px;font-weight:500}
+  .linefoot .tt span{min-width:110px;text-align:right}
+  .memo textarea{width:100%}
+
+  /* modal + toasts */
+  .modal-scrim{position:fixed;inset:var(--vs-h,0px) 0 0 0;background:var(--bg-overlay);z-index:120;display:flex;align-items:center;justify-content:center}
+  .modal{max-width:480px}
+  .modal-body ul{margin:8px 0 0;padding-left:18px}
+  .kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border-default);color:var(--text-primary)}
+  .kv b{font-weight:500}
+  .toasts{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:200;display:flex;flex-direction:column;gap:8px;align-items:center}
+  .toast{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-radius:4px;min-width:320px;max-width:480px;
+         color:var(--color-white);background:#2e7d32;line-height:20px}
+  .toast .tx{flex:1}
+  .toast .cl{background:none;border:0;color:inherit;cursor:pointer;font-size:16px;line-height:1;padding:0}
+</style>
+</head>
+<body>
+<div class="variant-switch">
+  <span class="vs-label">Bulk actions</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" type="button" onclick="setVariant(1)">1 · Actions menu</button>
+    <button id="vs-2" type="button" onclick="setVariant(2)">2 · Joined buttons</button>
+  </div>
+</div>
+
+<div class="topbar">
+  <button class="close-x" type="button" aria-label="Close reconciliation results">✕</button>
+  <div class="sep"></div>
+  <span class="ttl">Reconciliation results</span>
+  <div class="sp"></div>
+  <button class="btn-outlined" type="button">Copy share link</button>
+  <button class="btn-outlined" type="button">Refresh data</button>
+</div>
+
+<div class="page">
+  <h1 class="rt">mzkt.by (Stripe) <span class="st-chip">Attention required</span></h1>
+  <p class="sub">Stripe mzkt.by (required for Synder) · Oct 1 – 31, 2026</p>
+
+  <div class="tabs" role="tablist" aria-label="Reconciliation results">
+    <button class="tab" role="tab" aria-selected="false" type="button" data-tab="matched">Matched <span class="tab-count c-matched" id="c-matched"></span></button>
+    <button class="tab" role="tab" aria-selected="false" type="button" data-tab="disc">Discrepancy <span class="tab-count c-disc">30</span></button>
+    <button class="tab active" role="tab" aria-selected="true" type="button" data-tab="miss">Missing source <span class="tab-count c-miss" id="c-miss"></span></button>
+    <button class="tab" role="tab" aria-selected="false" type="button" data-tab="ign">Ignored <span class="tab-count" id="c-ign"></span></button>
+    <button class="tab hidden" role="tab" aria-selected="false" type="button" data-tab="je" id="tab-je">Journal entry <span class="tab-count">1</span></button>
+  </div>
+
+  <div id="panel-miss">
+    <div class="hintbar">
+      <span>Manually match transactions for accurate reconciliation.</span>
+      <span class="sp"></span>
+      <span class="btnw" id="match-wrap">
+        <button class="btn-outlined" type="button" id="match-btn" aria-describedby="match-tip">Match manually</button>
+        <span class="tip" role="tooltip" id="match-tip">Select transactions in both columns to match them.</span>
+      </span>
+    </div>
+    <div class="cols">
+      <section class="col" id="col-acc" aria-labelledby="h-acc"></section>
+      <section class="col" id="col-int" aria-labelledby="h-int"></section>
+    </div>
+  </div>
+  <div id="panel-other" class="hidden"><p class="empty">Not part of this prototype.</p></div>
+</div>
+
+<!-- row menu -->
+<div class="menu hidden" id="rowmenu" role="menu"></div>
+
+<!-- create JE side sheet -->
+<div class="scrim hidden" id="sheet-scrim"></div>
+<div class="sheet hidden" id="je-sheet" role="dialog" aria-modal="true" aria-labelledby="je-title">
+  <div class="sheet-head">
+    <h2 id="je-title">Journal entry details</h2>
+    <button class="btn-outlined" type="button" id="je-cancel">Cancel</button>
+    <button class="btn" type="button" id="je-post">Post to books</button>
+  </div>
+  <div class="sheet-body">
+    <div class="jehead">
+      <div class="jefields">
+        <div class="f"><label class="form-label" for="je-num">Journal entry number</label><input id="je-num" readonly value="SYN-TXNRECON-12345678"></div>
+        <div class="f"><label class="form-label" for="je-date">Date</label><input id="je-date" type="date" value="2026-10-31" min="2026-10-01" max="2026-10-31"></div>
+        <div class="f"><label class="form-label" for="je-cur">Currency</label><select id="je-cur" disabled><option>USD</option></select></div>
+      </div>
+      <div class="totals ok" id="je-totals" role="status">
+        <div><div class="tl">Total debit</div><div class="tv" id="tot-d"></div></div>
+        <div><div class="tl">Total credit</div><div class="tv" id="tot-c"></div></div>
+        <div class="oob hidden" id="je-oob"></div>
+      </div>
+    </div>
+    <p class="info"><span aria-hidden="true">ⓘ</span> Only one journal entry can be created per reconciliation. Include all needed transactions.</p>
+    <h3 class="sec">Entry lines</h3>
+    <table class="synder-table table--sm lines">
+      <thead><tr><th>Account</th><th>Description</th><th class="num" style="width:140px">Debit</th><th class="num" style="width:140px">Credit</th><th class="k"></th></tr></thead>
+      <tbody id="lines-body"></tbody>
+    </table>
+    <div class="linefoot">
+      <button class="btn-text" type="button" id="add-line">Add line</button>
+      <span class="sp"></span>
+      <div class="tt"><span>Total</span><span id="foot-d"></span><span id="foot-c"></span></div>
+    </div>
+    <h3 class="sec" style="margin-top:24px">Memo</h3>
+    <div class="memo"><label class="sronly" for="je-memo">Memo</label>
+      <textarea id="je-memo">Balancing journal entry created from Synder's Transaction Reconciliation</textarea></div>
+  </div>
+</div>
+
+<div class="modal-scrim hidden" id="modal-scrim">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" id="modal">
+    <div class="modal-header" id="modal-title"></div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-actions"></div>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var esc = function (s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+  var fmtN = function (n) { return n.toLocaleString('en-US'); };
+  var money = function (n, c) { return (n < 0 ? '−' : '') + Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' ' + (c || 'USD'); };
+  var PER_PAGE = 25;
+  var VARIANT = /v=2/.test(location.hash) ? 2 : 1;
+  var CLEARING = 'Stripe mzkt.by (clearing)', INCOME = 'Stripe Sales';
+  var ACCOUNTS = [CLEARING, 'Stripe Sales', 'Stripe Fees', 'Sales of Product Income', 'Undeposited Funds'];
+  var REASON_TEXT = { cur:"Currency doesn't match account currency (USD)", ids:'Primary and secondary IDs are missing' };
+
+  /* ── deterministic demo data ─────────────────────────────────────────── */
+  var seed = 20261027;
+  function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
+  function rid(n) { var c = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', s = ''; for (var i = 0; i < n; i++) s += c[Math.floor(rnd() * c.length)]; return s; }
+  function day(d) { return '2026-10-' + (d < 10 ? '0' : '') + d; }
+  function r2(x) { return Math.round(x * 100) / 100; }
+
+  var ACC = [], INT = [];
+  // Rows that balance against each other sit at the top (Oct 31), so manual matching can be tried on page 1.
+  ACC.push({ id:'a-m1', date:day(31), pid:'ch_3QmatchA1x9Lk2', sid:'txn_3QmatchA1x9Lk2', type:'Payment', amt:150, cur:'USD' });
+  ACC.push({ id:'a-m2', date:day(31), pid:'ch_3QmatchB7pQr4', sid:'txn_3QmatchB7pQr4', type:'Payment', amt:40, cur:'USD' });
+  ACC.push({ id:'a-m3', date:day(31), pid:'ch_3QmatchC2wEe8', sid:'txn_3QmatchC2wEe8', type:'Payment', amt:60, cur:'USD' });
+  INT.push({ id:'i-m1', date:day(31), pid:'ch_3QmatchA1x9Lk2', sid:'txn_3QmatchA1x9Lk2', type:'Payment', amt:150, cur:'USD' });
+  INT.push({ id:'i-m2', date:day(31), pid:'py_3QcombinedD5k', sid:'txn_3QcombinedD5k', type:'Payment', amt:100, cur:'USD' });
+  for (var i = 0; i < 1245; i++) {
+    var t = rnd(), type = t < .7 ? 'Payment' : t < .85 ? 'Refund' : 'Expense';
+    var amt = type === 'Payment' ? r2(12 + rnd() * 468) : type === 'Refund' ? -r2(5 + rnd() * 195) : -r2(.3 + rnd() * 14.7);
+    var id1 = rid(18);
+    ACC.push({ id:'a' + i, date:day(30 - Math.floor(i / 1245 * 30)), pid:'ch_3Q' + id1, sid:'txn_3Q' + id1, type:type, amt:amt, cur:'USD' });
+  }
+  // the reasons a row can't go into a journal entry, from the balancing-JE spec
+  [37, 211, 640, 1102].forEach(function (k) { ACC[k].cur = 'EUR'; ACC[k].reason = 'cur'; });
+  [415, 988].forEach(function (k) { ACC[k].cur = 'GBP'; ACC[k].reason = 'cur'; });
+  [90, 702, 1190].forEach(function (k) { ACC[k].pid = ''; ACC[k].sid = ''; ACC[k].reason = 'ids'; });
+  for (var j = 0; j < 310; j++) {
+    var u = rnd(), ty = u < .55 ? 'Payment' : u < .8 ? 'Refund' : 'Payout';
+    var a = ty === 'Payment' ? r2(10 + rnd() * 390) : ty === 'Refund' ? -r2(5 + rnd() * 120) : -r2(300 + rnd() * 4200);
+    var id2 = rid(18);
+    INT.push({ id:'i' + j, date:day(30 - Math.floor(j / 310 * 30)), pid:(ty === 'Payout' ? 'po_1Q' : 'ch_3Q') + id2, sid:'txn_1Q' + id2, type:ty, amt:a, cur:'USD' });
+  }
+
+  var counts = { matched:9412, ign:10 };
+
+  /* ── per-column state ─────────────────────────────────────────────────── */
+  var DEF = { q:'', from:'2026-10-01', to:'2026-10-31', amt:'' };
+  function newSide(key, rows, title) {
+    return { key:key, rows:rows, title:title, draft:JSON.parse(JSON.stringify(DEF)), applied:JSON.parse(JSON.stringify(DEF)), page:1, sel:{}, all:false };
+  }
+  var S = { acc: newSide('acc', ACC, 'Missing in accounting'), int: newSide('int', INT, 'Missing in integration') };
+
+  function filtered(s) {
+    var f = s.applied, q = f.q.trim().toLowerCase(), am = f.amt.trim().replace(/[,\s]/g, '').replace(/^[-−]/, '');
+    return s.rows.filter(function (r) {
+      if (q && (r.pid + ' ' + r.sid + ' ' + r.type).toLowerCase().indexOf(q) < 0) return false;
+      if (f.from && r.date < f.from) return false;
+      if (f.to && r.date > f.to) return false;
+      if (am && Math.abs(r.amt).toFixed(2).indexOf(am) !== 0) return false;
+      return true;
+    }).sort(function (x, y) { return x.date < y.date ? 1 : x.date > y.date ? -1 : 0; });
+  }
+  function selectedRows(s) { return s.all ? filtered(s) : s.rows.filter(function (r) { return s.sel[r.id]; }); }
+  function selCount(s) { return s.all ? filtered(s).length : Object.keys(s.sel).length; }
+  // production wording: "2 selected, total: 28.83 (USD)"
+  function totalsText(rows) {
+    var by = {}; rows.forEach(function (r) { by[r.cur] = (by[r.cur] || 0) + r.amt; });
+    var keys = Object.keys(by).sort(function (a, b) { return a === 'USD' ? -1 : b === 'USD' ? 1 : a < b ? -1 : 1; });
+    return keys.map(function (c) { var v = r2(by[c]); return (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' (' + c + ')'; }).join(', ');
+  }
+  function clearSel(s) { s.sel = {}; s.all = false; }
+  var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function fdate(d) { return MON[+d.slice(5, 7) - 1] + ' ' + (+d.slice(8)) + ', ' + d.slice(0, 4); }
+  var COLS = '<colgroup><col style="width:44px"><col style="width:118px"><col><col><col style="width:132px"><col style="width:120px"><col style="width:40px"></colgroup>';
+
+  /* ── render a column ─────────────────────────────────────────────────── */
+  function colHtml(s) {
+    var k = s.key, f = s.draft;
+    return '<h2 id="h-' + k + '">' + s.title + '</h2>' +
+      '<form class="filters" data-filters="' + k + '">' +
+        '<div class="fl"><label class="form-label" for="' + k + '-q">Search</label><input type="text" id="' + k + '-q" data-f="q" value="' + esc(f.q) + '" placeholder="Search..."></div>' +
+        '<div class="fl"><label class="form-label" for="' + k + '-from">Date range</label><div class="dr"><input id="' + k + '-from" type="date" data-f="from" value="' + f.from + '">–<input id="' + k + '-to" type="date" data-f="to" value="' + f.to + '" aria-label="Date range end"></div></div>' +
+        '<div class="fl"><label class="form-label" for="' + k + '-amt">Amount</label><input type="text" class="amt" id="' + k + '-amt" data-f="amt" value="' + esc(f.amt) + '" placeholder="Amount"></div>' +
+        '<div class="factions"><button class="btn" type="submit">Apply</button>' +
+        '<button class="btn-outlined" type="button" data-reset="' + k + '">Reset filters</button></div>' +
+      '</form>' +
+      '<div class="tcard"><table class="synder-table table--sm" id="t-' + k + '">' + COLS +
+        '<thead id="th-' + k + '"></thead><tbody id="tb-' + k + '"></tbody></table>' +
+      '<p class="empty hidden" id="empty-' + k + '">No transactions match these filters.</p>' +
+      '<div class="pagination" id="pg-' + k + '"></div></div>';
+  }
+
+  var TIP = 'To choose individual transactions, clear the selection.';
+  function headHtml(s) {
+    var k = s.key, rows = filtered(s), start = (s.page - 1) * PER_PAGE, pageRows = rows.slice(start, start + PER_PAGE);
+    var n = selCount(s);
+    var onPage = pageRows.filter(function (r) { return s.all || s.sel[r.id]; }).length;
+    if (!n) {
+      var arrow = function (on) { return '<span class="sort' + (on ? ' on' : '') + '" aria-hidden="true">↓</span>'; };
+      return '<tr><th class="ck"><input type="checkbox" class="checkbox" data-head="' + k + '" aria-label="Select all ' + pageRows.length + ' transactions on this page"' + (pageRows.length ? '' : ' disabled') + '></th>' +
+        '<th>Date' + arrow(true) + '</th><th>Primary ID' + arrow() + '</th><th>Secondary ID' + arrow() + '</th><th>Transaction type' + arrow() + '</th><th class="num">Amount' + arrow() + '</th><th></th></tr>';
+    }
+    var headCk = s.all
+      ? '<span class="ckw"><input type="checkbox" class="checkbox" checked aria-disabled="true" data-head="' + k + '" aria-label="All filtered transactions selected" aria-describedby="tip-h-' + k + '"><span class="tip" role="tooltip" id="tip-h-' + k + '">' + TIP + '</span></span>'
+      : '<input type="checkbox" class="checkbox" data-head="' + k + '" aria-label="Select all ' + pageRows.length + ' transactions on this page"' + (onPage && onPage === pageRows.length ? ' checked' : '') + '>';
+    var actions = VARIANT === 1
+      ? '<span class="bgroup"><button class="btn-outlined" type="button" data-actions="' + k + '" aria-haspopup="menu" aria-expanded="false">Actions <span class="caret" aria-hidden="true">▼</span></button></span>'
+      : '<span class="bgroup">' + (k === 'acc' ? '<button class="btn-outlined" type="button" data-act="je" data-side="' + k + '">Create journal entry</button>' : '') +
+        '<button class="btn-outlined" type="button" data-act="ignore" data-side="' + k + '">Ignore</button></span>';
+    // Summaries list pattern: "Select all on all pages | Clear selection" as one joined group
+    var scope = '<span class="bgroup scope-g">' +
+      (!s.all && rows.length > n ? '<button class="btn-outlined" type="button" data-all="' + k + '">Select all on all pages</button>' : '') +
+      '<button class="btn-outlined" type="button" data-clear="' + k + '">Clear selection</button></span>';
+    return '<tr class="bulk-row"><th class="ck">' + headCk + '</th><th colspan="6"><div class="bulk-inner" role="toolbar" aria-label="' + s.title + ' selection">' +
+      '<span class="count" data-count="' + k + '">' + fmtN(n) + ' selected, total: <span data-total="' + k + '">' + totalsText(selectedRows(s)) + '</span></span>' +
+      actions + scope + '</div></th></tr>';
+  }
+
+  function bodyHtml(s) {
+    var rows = filtered(s), start = (s.page - 1) * PER_PAGE;
+    return rows.slice(start, start + PER_PAGE).map(function (r) {
+      var on = s.all || !!s.sel[r.id];
+      var ck = s.all
+        ? '<span class="ckw"><input type="checkbox" class="checkbox" checked aria-disabled="true" data-row="' + r.id + '" aria-label="' + esc(r.pid || 'Transaction') + ', selected with all filtered"><span class="tip" role="tooltip">' + TIP + '</span></span>'
+        : '<input type="checkbox" class="checkbox" data-row="' + r.id + '"' + (on ? ' checked' : '') + ' aria-label="Select ' + esc(r.pid || 'transaction without ID') + '">';
+      return '<tr data-id="' + r.id + '"><td class="ck">' + ck + '</td>' +
+        '<td>' + fdate(r.date) + '</td>' +
+        '<td title="' + esc(r.pid) + '">' + (r.pid ? esc(r.pid) : '-') + '</td>' +
+        '<td title="' + esc(r.sid) + '">' + (r.sid ? esc(r.sid) : '-') + '</td>' +
+        '<td>' + r.type + '</td>' +
+        '<td class="num">' + (r.amt < 0 ? '-' : '') + Math.abs(r.amt).toFixed(2) + ' ' + r.cur + '</td>' +
+        '<td class="k"><button class="kebab" type="button" data-menu="' + r.id + '" data-side="' + s.key + '" aria-label="Actions for ' + esc(r.pid || 'transaction') + '" aria-haspopup="menu">⋮</button></td></tr>';
+    }).join('');
+  }
+
+  // production pager: Rows per page · 1–25 of N · |< < [page] > >|
+  function pagerHtml(s) {
+    var total = filtered(s).length, pages = Math.max(1, Math.ceil(total / PER_PAGE)), p = s.page, k = s.key;
+    if (!total) return '';
+    var b = function (label, page, aria, extra) { return '<button class="page-btn' + (extra || '') + '" type="button" data-page="' + k + ':' + page + '"' + (page < 1 || page > pages || (extra && page === p) ? ' disabled' : '') + ' aria-label="' + aria + '">' + label + '</button>'; };
+    return '<span class="rpp">Rows per page: <select aria-label="Rows per page" disabled><option>25</option></select></span>' +
+      '<span class="page-info">' + fmtN((p - 1) * PER_PAGE + 1) + '–' + fmtN(Math.min(p * PER_PAGE, total)) + ' of ' + fmtN(total) + '</span>' +
+      b('|‹', 1, 'First page') + b('‹', p - 1, 'Previous page') +
+      '<button class="page-btn active" type="button" aria-current="page" aria-label="Page ' + p + '">' + p + '</button>' +
+      b('›', p + 1, 'Next page') + b('›|', pages, 'Last page');
+  }
+
+  function renderSide(s) {
+    $('th-' + s.key).innerHTML = headHtml(s);
+    $('tb-' + s.key).innerHTML = bodyHtml(s);
+    var total = filtered(s).length;
+    $('empty-' + s.key).classList.toggle('hidden', total > 0);
+    $('pg-' + s.key).innerHTML = pagerHtml(s);
+    var h = $('th-' + s.key).querySelector('input[data-head]:not([aria-disabled])');
+    if (h && selCount(s)) {
+      var start = (s.page - 1) * PER_PAGE, pr = filtered(s).slice(start, start + PER_PAGE);
+      var on = pr.filter(function (r) { return s.sel[r.id]; }).length;
+      h.indeterminate = on > 0 && on < pr.length;
+    }
+  }
+  function renderCounts() {
+    $('c-miss').textContent = fmtN(ACC.length + INT.length);
+    $('c-matched').textContent = fmtN(counts.matched);
+    $('c-ign').textContent = fmtN(counts.ign);
+    var ready = selCount(S.acc) > 0 && selCount(S.int) > 0;
+    $('match-btn').setAttribute('aria-disabled', ready ? 'false' : 'true');
+    $('match-tip').classList.toggle('hidden', ready);
+  }
+  function render() { renderSide(S.acc); renderSide(S.int); renderCounts(); }
+
+  $('col-acc').innerHTML = colHtml(S.acc);
+  $('col-int').innerHTML = colHtml(S.int);
+
+  /* ── events ──────────────────────────────────────────────────────────── */
+  // Re-rendering replaces the header row, so return focus for keyboard users only —
+  // after a mouse click a moved focus ring reads as a glitch.
+  var viaKeyboard = false;
+  document.addEventListener('keydown', function () { viaKeyboard = true; }, true);
+  document.addEventListener('pointerdown', function () { viaKeyboard = false; }, true);
+  function keepFocus(sel) { if (!viaKeyboard) return; var el = document.querySelector(sel); if (el) el.focus(); }
+
+  document.querySelector('.cols').addEventListener('change', function (e) {
+    var t = e.target;
+    if (t.matches('input[data-f], select[data-f]')) { var s0 = S[t.closest('[data-filters]').dataset.filters]; s0.draft[t.dataset.f] = t.value; return; }
+    if (t.matches('input[data-row]')) {
+      var s = S[t.closest('section').id.slice(4)];
+      if (t.getAttribute('aria-disabled') === 'true') { t.checked = true; return; }
+      if (t.checked) s.sel[t.dataset.row] = true; else delete s.sel[t.dataset.row];
+      render(); keepFocus('input[data-row="' + t.dataset.row + '"]');
+      return;
+    }
+    if (t.matches('input[data-head]')) {
+      var sh = S[t.dataset.head];
+      if (t.getAttribute('aria-disabled') === 'true') { t.checked = true; return; }
+      var start = (sh.page - 1) * PER_PAGE, pr = filtered(sh).slice(start, start + PER_PAGE);
+      var allOn = pr.every(function (r) { return sh.sel[r.id]; });
+      pr.forEach(function (r) { if (allOn) delete sh.sel[r.id]; else sh.sel[r.id] = true; });
+      render(); keepFocus('input[data-head="' + sh.key + '"]');
+    }
+  });
+  // locked checkboxes: aria-disabled keeps the tooltip reachable, so block the toggle ourselves
+  document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (t.matches('input[type=checkbox][aria-disabled="true"]')) { e.preventDefault(); }
+  }, true);
+
+  document.querySelector('.cols').addEventListener('input', function (e) {
+    var t = e.target; if (!t.matches('[data-f]')) return;
+    S[t.closest('[data-filters]').dataset.filters].draft[t.dataset.f] = t.value;
+  });
+  document.querySelector('.cols').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var s = S[e.target.dataset.filters];
+    var changed = JSON.stringify(s.draft) !== JSON.stringify(s.applied);
+    s.applied = JSON.parse(JSON.stringify(s.draft));
+    if (changed) { clearSel(s); s.page = 1; }
+    render();
+  });
+
+  document.querySelector('.cols').addEventListener('click', function (e) {
+    var t = e.target.closest('button'); if (!t) return;
+    if (t.dataset.reset) {
+      var s = S[t.dataset.reset];
+      var def = DEF;
+      var changed = JSON.stringify(s.applied) !== JSON.stringify(def);
+      s.draft = JSON.parse(JSON.stringify(def)); s.applied = JSON.parse(JSON.stringify(def));
+      $('col-' + s.key).innerHTML = colHtml(s);
+      if (changed) { clearSel(s); s.page = 1; }
+      render(); keepFocus('[data-reset="' + s.key + '"]'); return;
+    }
+    if (t.dataset.all) { var sa = S[t.dataset.all]; sa.all = true; sa.sel = {}; render(); keepFocus('[data-clear="' + sa.key + '"]'); return; }
+    if (t.dataset.clear) { var sc = S[t.dataset.clear]; clearSel(sc); render(); keepFocus('input[data-head="' + sc.key + '"]'); return; }
+    if (t.dataset.page) {
+      var parts = t.dataset.page.split(':'), sp = S[parts[0]];
+      sp.page = +parts[1]; render(); keepFocus('#t-' + sp.key + ' input[type=checkbox]'); return;
+    }
+    if (t.dataset.act === 'ignore') { doIgnore(S[t.dataset.side], selectedRows(S[t.dataset.side])); return; }
+    if (t.dataset.act === 'je') { startCreate(selectedRows(S.acc)); return; }
+    if (t.dataset.menu) { openMenu(t); return; }
+    if (t.dataset.actions) { openActions(t); return; }
+  });
+
+  /* tabs — switching away clears both selections */
+  document.querySelector('.tabs').addEventListener('click', function (e) {
+    var t = e.target.closest('.tab'); if (!t) return;
+    document.querySelectorAll('.tab').forEach(function (o) { var on = o === t; o.classList.toggle('active', on); o.setAttribute('aria-selected', on ? 'true' : 'false'); });
+    var miss = t.dataset.tab === 'miss';
+    $('panel-miss').classList.toggle('hidden', !miss); $('panel-other').classList.toggle('hidden', miss);
+    clearSel(S.acc); clearSel(S.int); render();
+  });
+
+  /* ── row menu ────────────────────────────────────────────────────────── */
+  var menuFor = null;
+  function openMenu(btn) {
+    var m = $('rowmenu'), s = S[btn.dataset.side], r = s.rows.filter(function (x) { return x.id === btn.dataset.menu; })[0];
+    menuFor = { s:s, r:r };
+    m.innerHTML = (s.key === 'acc' ? '<button class="mi" role="menuitem" type="button" data-mi="je">Create journal entry</button>' : '') +
+      '<button class="mi" role="menuitem" type="button" data-mi="ignore">Ignore</button>';
+    var b = btn.getBoundingClientRect();
+    m.style.top = (window.scrollY + b.bottom + 4) + 'px'; m.style.left = (window.scrollX + b.right - 200) + 'px';
+    m.classList.remove('hidden'); m.querySelector('.mi').focus();
+  }
+  function openActions(btn) {
+    var m = $('rowmenu'), s = S[btn.dataset.actions];
+    menuFor = { s:s, bulk:true };
+    m.innerHTML = (s.key === 'acc' ? '<button class="mi" role="menuitem" type="button" data-mi="je">Create journal entry</button>' : '') +
+      '<button class="mi" role="menuitem" type="button" data-mi="ignore">Ignore</button>';
+    var b = btn.getBoundingClientRect();
+    m.style.top = (window.scrollY + b.bottom + 4) + 'px'; m.style.left = (window.scrollX + b.left) + 'px';
+    m.classList.remove('hidden'); btn.setAttribute('aria-expanded', 'true');
+    if (viaKeyboard) m.querySelector('.mi').focus();
+  }
+  function closeMenu() {
+    document.querySelectorAll('[data-actions][aria-expanded="true"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); }); $('rowmenu').classList.add('hidden'); menuFor = null; }
+  $('rowmenu').addEventListener('click', function (e) {
+    var t = e.target.closest('[data-mi]'); if (!t || !menuFor) return;
+    var mf = menuFor; closeMenu();
+    var rows = mf.bulk ? selectedRows(mf.s) : [mf.r];
+    if (t.dataset.mi === 'ignore') doIgnore(mf.s, rows); else startCreate(rows);
+  });
+  document.addEventListener('click', function (e) { if (!e.target.closest('#rowmenu') && !e.target.closest('[data-menu]') && !e.target.closest('[data-actions]')) closeMenu(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeMenu(); if (!$('modal-scrim').classList.contains('hidden')) closeModal(); else if (!$('je-sheet').classList.contains('hidden')) closeSheet(); } });
+
+  /* ── actions ─────────────────────────────────────────────────────────── */
+  function removeRows(s, rows) {
+    var gone = {}; rows.forEach(function (r) { gone[r.id] = true; });
+    var keep = s.rows.filter(function (r) { return !gone[r.id]; });
+    s.rows.length = 0; Array.prototype.push.apply(s.rows, keep);
+    rows.forEach(function (r) { delete s.sel[r.id]; });
+    var pages = Math.max(1, Math.ceil(filtered(s).length / PER_PAGE));
+    if (s.page > pages) s.page = pages;
+  }
+  function doIgnore(s, rows) {
+    if (!rows.length) return;
+    removeRows(s, rows); clearSel(s); counts.ign += rows.length; render();
+    toast(fmtN(rows.length) + ' transaction' + (rows.length === 1 ? '' : 's') + ' moved to Ignored');
+  }
+
+  $('match-btn').addEventListener('click', function () {
+    if (this.getAttribute('aria-disabled') === 'true') return;
+    var a = selectedRows(S.acc), b = selectedRows(S.int);
+    var curs = {}; a.concat(b).forEach(function (r) { curs[r.cur] = 1; });
+    if (Object.keys(curs).length > 1) {
+      openModal('Transactions are in different currencies',
+        '<p style="margin:0">Matched transactions must share one currency. The selection includes ' + Object.keys(curs).join(', ') + '.</p>',
+        [{ label:'Close', kind:'btn' }]); return;
+    }
+    var ta = r2(a.reduce(function (x, r) { return x + r.amt; }, 0)), tb = r2(b.reduce(function (x, r) { return x + r.amt; }, 0));
+    if (Math.abs(ta - tb) > 0.004) {
+      openModal("Amounts don't balance",
+        '<div class="kv"><span>Accounting · ' + fmtN(a.length) + ' transaction' + (a.length === 1 ? '' : 's') + '</span><b>' + money(ta) + '</b></div>' +
+        '<div class="kv"><span>Integration · ' + fmtN(b.length) + ' transaction' + (b.length === 1 ? '' : 's') + '</span><b>' + money(tb) + '</b></div>' +
+        '<div class="kv"><span>Difference</span><b>' + money(r2(Math.abs(ta - tb))) + '</b></div>',
+        [{ label:'Close', kind:'btn' }]); return;
+    }
+    removeRows(S.acc, a); removeRows(S.int, b); clearSel(S.acc); clearSel(S.int);
+    counts.matched += 1; render();
+    toast('Matched ' + fmtN(a.length) + ' accounting and ' + fmtN(b.length) + ' integration transaction' + (b.length === 1 ? '' : 's'));
+  });
+
+  /* ── journal entry ───────────────────────────────────────────────────── */
+  var je = { made:false, rows:[], lines:[] };
+  function startCreate(picked) {
+    if (je.made) {
+      openModal('You can have only one journal entry per reconciliation',
+        '<p style="margin:0">You already have a journal entry for this reconciliation. To add more transactions, delete the existing entry first and create a new one.</p>',
+        [{ label:'Got it', kind:'btn' }]); return;
+    }
+    var good = picked.filter(function (r) { return !r.reason; }), bad = picked.filter(function (r) { return !!r.reason; });
+    var byReason = {}; bad.forEach(function (r) { byReason[r.reason] = (byReason[r.reason] || 0) + 1; });
+    var bullets = Object.keys(byReason).map(function (k) { return '<li>' + REASON_TEXT[k] + ' — ' + byReason[k] + '</li>'; }).join('');
+    if (!good.length) {
+      openModal('No transactions can be added', '<p style="margin:0">All selected transactions have one or more issues:</p><ul>' + bullets + '</ul>', [{ label:'Close', kind:'btn' }]); return;
+    }
+    if (bad.length) {
+      openModal('Some transactions can’t be added',
+        '<p style="margin:0">' + fmtN(bad.length) + ' of the ' + fmtN(picked.length) + ' selected transactions can’t be added to a journal entry:</p><ul>' + bullets + '</ul>' +
+        '<p style="margin:10px 0 0">Proceed with the remaining ' + fmtN(good.length) + ' transaction' + (good.length === 1 ? '' : 's') + '?</p>',
+        [{ label:'Cancel', kind:'btn-outlined' }, { label:'Create journal entry', kind:'btn', fn:function () { openSheet(good); } }]); return;
+    }
+    openSheet(good);
+  }
+  var SHOW_EACH = 10;   // above this, locked transaction lines collapse into one summary line
+  function openSheet(rows) {
+    je.rows = rows;
+    var net = r2(rows.reduce(function (a, r) { return a + r.amt; }, 0));
+    je.lines = [{ kind:'income', account:INCOME, desc:'Balancing entry', debit:net < 0 ? -net : 0, credit:net > 0 ? net : 0 }];
+    renderLines();
+    $('sheet-scrim').classList.remove('hidden'); $('je-sheet').classList.remove('hidden'); $('je-date').focus();
+  }
+  function closeSheet() { $('sheet-scrim').classList.add('hidden'); $('je-sheet').classList.add('hidden'); }
+  function clearingTotals() {
+    var d = 0, c = 0; je.rows.forEach(function (r) { if (r.amt > 0) d += r.amt; else c -= r.amt; }); return { d:r2(d), c:r2(c) };
+  }
+  function renderLines() {
+    var rows = je.rows, html = '';
+    if (rows.length <= SHOW_EACH) {
+      html = rows.map(function (r) {
+        return '<tr><td><input readonly value="' + esc(CLEARING) + '" aria-label="Account, locked"></td>' +
+          '<td><input readonly value="' + esc(r.date + ' · ' + r.pid + ' · ' + r.sid) + '" aria-label="Description, locked"></td>' +
+          '<td class="num"><input readonly value="' + (r.amt > 0 ? r.amt.toFixed(2) : '') + '" aria-label="Debit, locked"></td>' +
+          '<td class="num"><input readonly value="' + (r.amt < 0 ? (-r.amt).toFixed(2) : '') + '" aria-label="Credit, locked"></td><td class="k"></td></tr>';
+      }).join('');
+    } else {
+      var t = clearingTotals();
+      html = '<tr class="agg" data-agg><td>' + esc(CLEARING) + '</td><td><b style="font-weight:500">' + fmtN(rows.length) + ' transaction lines</b> <span class="muted">· one per transaction, locked</span></td>' +
+        '<td class="num">' + (t.d ? money(t.d) : '') + '</td><td class="num">' + (t.c ? money(t.c) : '') + '</td><td class="k"></td></tr>';
+    }
+    html += je.lines.map(function (l, i) {
+      return '<tr><td><select data-lf="account" data-i="' + i + '" aria-label="Account">' + ACCOUNTS.map(function (a) { return '<option' + (a === l.account ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join('') + '</select></td>' +
+        '<td><input data-lf="desc" data-i="' + i + '" value="' + esc(l.desc) + '" aria-label="Description"></td>' +
+        '<td class="num"><input data-lf="debit" data-i="' + i + '" value="' + (l.debit ? l.debit.toFixed(2) : '') + '" aria-label="Debit"></td>' +
+        '<td class="num"><input data-lf="credit" data-i="' + i + '" value="' + (l.credit ? l.credit.toFixed(2) : '') + '" aria-label="Credit"></td>' +
+        '<td class="k">' + (l.kind === 'income' ? '' : '<button class="kebab" type="button" data-rm="' + i + '" aria-label="Remove line">✕</button>') + '</td></tr>';
+    }).join('');
+    $('lines-body').innerHTML = html;
+    recalc();
+  }
+  function recalc() {
+    var t = clearingTotals();
+    var d = r2(t.d + je.lines.reduce(function (a, l) { return a + (+l.debit || 0); }, 0));
+    var c = r2(t.c + je.lines.reduce(function (a, l) { return a + (+l.credit || 0); }, 0));
+    ['tot-d','foot-d'].forEach(function (id) { $(id).textContent = money(d); });
+    ['tot-c','foot-c'].forEach(function (id) { $(id).textContent = money(c); });
+    var diff = r2(d - c), ok = diff === 0 && d > 0;
+    $('je-totals').className = 'totals ' + (ok ? 'ok' : 'bad');
+    $('je-oob').classList.toggle('hidden', ok);
+    if (!ok) $('je-oob').textContent = 'Out of balance by ' + money(Math.abs(diff)) + ' — ' + (diff > 0 ? 'credit' : 'debit') + ' side is short.';
+    $('je-post').disabled = !ok;
+    return ok;
+  }
+  $('lines-body').addEventListener('input', function (e) {
+    var el = e.target.closest('[data-lf]'); if (!el) return;
+    var l = je.lines[+el.dataset.i], f = el.dataset.lf;
+    if (f === 'debit' || f === 'credit') { l[f] = parseFloat(el.value) || 0; if (l[f]) l[f === 'debit' ? 'credit' : 'debit'] = 0; } else l[f] = el.value;
+    recalc();
+  });
+  $('lines-body').addEventListener('click', function (e) { var b = e.target.closest('[data-rm]'); if (!b) return; je.lines.splice(+b.dataset.rm, 1); renderLines(); $('add-line').focus(); });
+  $('add-line').addEventListener('click', function () { je.lines.push({ kind:'extra', account:'Stripe Fees', desc:'', debit:0, credit:0 }); renderLines(); });
+  $('je-cancel').addEventListener('click', closeSheet);
+  $('sheet-scrim').addEventListener('click', closeSheet);
+  $('je-post').addEventListener('click', function () {
+    if (!recalc()) return;
+    var rows = je.rows.slice();
+    removeRows(S.acc, rows); clearSel(S.acc);
+    counts.matched += rows.length; je.made = true;
+    $('tab-je').classList.remove('hidden');
+    closeSheet(); render();
+    toast('Journal entry posted to books · ' + fmtN(rows.length) + ' transaction' + (rows.length === 1 ? '' : 's') + ' matched');
+  });
+
+  /* ── modal + toast ───────────────────────────────────────────────────── */
+  function openModal(title, body, actions) {
+    $('modal-title').textContent = title; $('modal-body').innerHTML = body;
+    var a = $('modal-actions'); a.innerHTML = '';
+    actions.forEach(function (act) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = act.kind; b.textContent = act.label;
+      b.addEventListener('click', function () { closeModal(); if (act.fn) act.fn(); });
+      a.appendChild(b);
+    });
+    $('modal-scrim').classList.remove('hidden'); a.lastChild.focus();
+  }
+  function closeModal() { $('modal-scrim').classList.add('hidden'); }
+  function toast(msg) {
+    var t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status');
+    t.innerHTML = '<span class="tx">' + esc(msg) + '</span><button class="cl" type="button" aria-label="Close">✕</button>';
+    t.querySelector('.cl').addEventListener('click', function () { t.remove(); });
+    $('toasts').appendChild(t); setTimeout(function () { t.remove(); }, 6000);
+  }
+
+  function vsHeight() { document.documentElement.style.setProperty('--vs-h', document.querySelector('.variant-switch').offsetHeight + 'px'); }
+  vsHeight(); window.addEventListener('resize', vsHeight);
+  window.setVariant = function (v) {
+    VARIANT = v; history.replaceState(null, '', v === 2 ? '#v=2' : '#v=1');
+    $('vs-1').classList.toggle('on', v === 1); $('vs-2').classList.toggle('on', v === 2);
+    closeMenu(); closeModal(); closeSheet(); render();
+  };
+  $('vs-1').classList.toggle('on', VARIANT === 1); $('vs-2').classList.toggle('on', VARIANT === 2);
+  render();
+})();
+</script>
+</body>
+</html>

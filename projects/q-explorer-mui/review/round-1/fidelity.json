@@ -1,0 +1,110 @@
+{
+  "validator": "fidelity",
+  "round": 1,
+  "target": "projects/q-explorer-mui/ — Q-Explorer React + MUI port (evaluations list + shell)",
+  "checked": [
+    { "zone": "login", "item": "spec #view-login · E-Mail field + helper, Passwort field + helper, Anmelden, Passwort vergessen?, 4 utility links, flag + wordmark lockup — all present in the port (label placement is a declared deliberate difference)" },
+    { "zone": "top bar", "item": "spec <header id=\"topbar\"> · Swiss-flag logo, Startseite, Q-Explorer menu trigger with expand_more caret + aria-haspopup/aria-expanded, Q.Reports, Fotoalbum, Q-Messungen, EN/DE select, Log out with logout icon — all present" },
+    { "zone": "top bar", "item": "spec topbar-dropdown · exactly 2 menu items, nav_evaluations + nav_scheduled, both routing — present" },
+    { "zone": "top bar", "item": "spec #topbar { position: fixed } · port AppBar position=\"fixed\", top 36px — matches" },
+    { "zone": "filter bar", "item": "spec .toolbar · search input with clear X, status select (blank + Done + In Progress + Failed), period select (blank + last7/current_month/last_month/last_year/other), Clear filters button hidden until dirty — all five controls present; both selects carry a clear X as clearReportsStatus()/clearReportsPeriod() specify" },
+    { "zone": "filter bar", "item": "spec filterReports() · name substring match, status match, period match, count subtitle recompute, clear-all visibility — all four behaviours present in the port's useMemo filter" },
+    { "zone": "filter bar", "item": "spec filterReports() group hiding (group.style.display = groupHasVisible) · port drops empty groups from the rendered set — matches" },
+    { "zone": "filter bar", "item": "spec #reports-empty \"No evaluations found\" · message present in the port (rendered as an MUI Alert rather than the icon + <p> empty-state block)" },
+    { "zone": "group accordions", "item": "spec toggleGroup() · 6 groups in spec order (Punctuality, Raw Data Export DPM, Line Analysis DPM, Data Quality Index, Connection Punctuality, Trip Failures DPM), chevron rotation, aria-expanded flip, per-group \"<n> Evaluations\" count, all expanded on load, Enter/Space operable — all present" },
+    { "zone": "table", "item": "spec <thead> · Name | Period | Created | Status | Actions, five columns per group table — present" },
+    { "zone": "table", "item": "spec initSortableHeaders() / sortByColumn() · click-to-sort asc/desc on every non-Actions header — ABSENT (FID-3)" },
+    { "zone": "table", "item": "spec .report-name as plain <td>, not a link — matches" },
+    { "zone": "table", "item": "spec 28 rows across 6 groups with counts 6/4/4/4/5/5 — matches" },
+    { "zone": "table", "item": "spec badge markup · badge-green + badge-dot for Done, badge-red for Failed, badge-yellow + .spinner for In Progress/running — dot and colours carried over, spinner ABSENT (FID-5)" },
+    { "zone": "row actions", "item": "spec preview buttons · showPunctReport x4, showDqiReport x2, showConnectionReport x3, showFAReport x2 = 11 preview actions; port data.js carries visibility on the same 11 rows including both Fahrtausfälle DPM rows — matches" },
+    { "zone": "row actions", "item": "spec rdDownload() on the 3 finished Rohdaten Export rows, toast only, no file — port matches exactly" },
+    { "zone": "row actions", "item": "spec deleteEvaluation() · cfAsk confirm dialog (cf_del_eval_title / cf_del_eval_body / cf_delete), row removal, showUndoToast with undo, group recount — all present" },
+    { "zone": "row actions", "item": "spec markUnavailableActions() · every action icon on in_progress/running rows disabled + aria-disabled + reason title — ABSENT (FID-2)" },
+    { "zone": "row actions", "item": "spec annotateFailedRows() · .action-retry \"Run again\" button, .fail-reason line under the name, reason title on the badge — ABSENT (FID-1)" },
+    { "zone": "header", "item": "spec .page-title \"Evaluations\" + #reports-count \"<n> evaluations\" following the filters — present" },
+    { "zone": "header", "item": "spec #new-eval-btn · add icon + \"New Evaluation\", opens the wizard — present" },
+    { "zone": "header", "item": "spec annotateAcronyms() scoped to '#view-reports-list' · hover expansion of DPM/RPV/DQI/TU on group titles — ABSENT (FID-4)" }
+  ],
+  "findings": [
+    {
+      "id": "FID-1",
+      "severity": "High",
+      "confidence": 95,
+      "element": "Evaluations list — the 4 rows with status Failed (e.g. \"Pünktlichkeit – Aktuelles Jahr, BLS\"), Actions cell and Name cell",
+      "finding": "The vanilla injects a \"Run again\" retry icon into every failed row, prints the failure reason under the evaluation name, and puts that reason on the status badge as a tooltip; the port renders failed rows with a Delete icon only and no reason anywhere, and although it copied FAIL_REASONS into data.js and fail_reason_source/timeout/nodata into i18n.js, nothing reads them.",
+      "user_impact": "A failed evaluation is a dead end again — the user is told it failed, never told why, and has no way to re-run it, which is exactly the defect the vanilla closed as M2.",
+      "suggested_fix": "Add a 'refresh' entry to ROW_ACTIONS wired to a retry handler, prepend it to the actions of every status==='failed' row, and render the FAIL_REASONS string already present in data.js both under the name cell and as the status chip's tooltip.",
+      "evidence": {
+        "quote": "btn.className = 'action-icon action-retry';",
+        "source": "projects/q-explorer-prototype/index.html annotateFailedRows() (also act_retry: 'Run again', fail_reason_source: 'Data source was unreachable')"
+      }
+    },
+    {
+      "id": "FID-2",
+      "severity": "High",
+      "confidence": 95,
+      "element": "Evaluations list — Actions cell on every in_progress / running row (5 rows, e.g. \"Rohdaten Export – SBB Vollexport Mai 2026\")",
+      "finding": "The vanilla disables every action icon on a still-running evaluation and states the reason on hover; the port renders those icons fully enabled, so Delete opens the confirm dialog and removes a running evaluation.",
+      "user_impact": "The user can delete an evaluation that is still computing, an action the specification deliberately blocks (resolved as H15), and gets no explanation of why an action is unavailable because it never is.",
+      "suggested_fix": "In the row-actions map, set disabled and aria-disabled on every IconButton where r.status is 'in_progress' or 'running' and use t('act_unavailable_running') — already in i18n.js — as its tooltip.",
+      "evidence": {
+        "quote": ".forEach(b => { b.disabled = true; b.setAttribute('aria-disabled', 'true'); b.title = t('act_unavailable_running'); });",
+        "source": "projects/q-explorer-prototype/index.html markUnavailableActions()"
+      }
+    },
+    {
+      "id": "FID-3",
+      "severity": "High",
+      "confidence": 90,
+      "element": "Evaluations list — the Name / Period / Created / Status column headers of all 6 group tables",
+      "finding": "The vanilla makes every header except Actions clickable to sort the group's rows ascending then descending, with a .sortable class and a sort-asc / sort-desc indicator; the port's TableCell headers are inert static text with no sort affordance and no sort state.",
+      "user_impact": "With 28 evaluations the user cannot order a group by creation date, period or status at all — a whole interaction the specification provides on this screen is missing.",
+      "suggested_fix": "Wrap the four non-Actions header cells in MUI TableSortLabel, hold sort column + direction per group in state, and sort with localeCompare(…, 'de') as sortByColumn() does.",
+      "evidence": {
+        "quote": "th.addEventListener('click', () => sortByColumn(th));",
+        "source": "projects/q-explorer-prototype/index.html initSortableHeaders() / sortByColumn()"
+      }
+    },
+    {
+      "id": "FID-4",
+      "severity": "Medium",
+      "confidence": 85,
+      "element": "Evaluations list — group accordion titles carrying an acronym (\"Raw Data Export DPM\", \"Line Analysis DPM\", \"Data Quality Index (DQI)\", \"Trip Failures DPM\")",
+      "finding": "The vanilla scopes annotateAcronyms() to #view-reports-list and sets a title on every group title containing DPM, RPV, DQI or TU so the acronym expands on hover; the port renders the group title as a bare Typography with no tooltip, and the acr_* strings sit unused in i18n.js.",
+      "user_impact": "Four of the six group headings are unexplained acronyms with no way to find out what they mean, reopening the gap the vanilla closed as M7.",
+      "suggested_fix": "Wrap the group-title Typography in a Tooltip whose title is t('acr_' + match.toLowerCase()) when the translated type label matches one of DPM / RPV / DQI / TU.",
+      "evidence": {
+        "quote": "const ACRONYMS = ['DPM','RPV','DQI','TU'];",
+        "source": "projects/q-explorer-prototype/index.html annotateAcronyms(), scopes = ['#view-type-selection', '#wizard-step-2', '#view-reports-list']"
+      }
+    },
+    {
+      "id": "FID-5",
+      "severity": "Medium",
+      "confidence": 80,
+      "element": "Evaluations list — Status cell on the 5 in_progress / running rows",
+      "finding": "The vanilla's In Progress badge contains an animated spinner element alongside the label; the port renders a plain outlined Chip with the label only, so a running evaluation is visually static.",
+      "user_impact": "Nothing on the row indicates the evaluation is actively working, so the user has no cue that the list is worth re-checking — the only loading affordance the specification puts on this screen is gone.",
+      "suggested_fix": "Put a small CircularProgress (or the vanilla's .spinner) inside the Chip's icon slot for the in_progress and running statuses, matching the badge-yellow markup.",
+      "evidence": {
+        "quote": "<span class=\"badge badge-yellow\"><div class=\"spinner\"></div><span data-i18n=\"status_in_progress\">In Progress</span></span>",
+        "source": "projects/q-explorer-prototype/index.html #view-reports-list, row data-name=\"Rohdaten Export – SBB Vollexport Mai 2026\""
+      }
+    }
+  ],
+  "gaps": [
+    "statemap row actions: the action set is recorded as one aggregate per status:group key, so it collapses rows that differ — it reports \"done:trip_failures\":\"delete\" while data.js gives both \"Fahrtausfälle DPM – Letzte 30 Tage, alle Linien\" and \"Fahrtausfälle DPM – Letzte 7 Tage, SBB\" a visibility action. Per-row action parity could not be read from the statemap and was verified against projects/q-explorer-mui/data.js instead.",
+    "statemap records no hover/title text for any control, so tooltip-level parity (acronym expansion, disabled-reason text, failed-row reason) is invisible to it; FID-1, FID-2 and FID-4 were confirmed by reading projects/q-explorer-mui/app.js rather than from the recorded behaviour.",
+    "statemap does not say whether the per-group \"<n> Evaluations\" count updates after a delete or while a filter is active, so parity with recountGroup() was not observable (the port's source derives it from the filtered set, which the vanilla does not).",
+    "statemap does not record keyboard operation of the row action buttons or the filter selects, so parity with makeKeyboardOperable() is only partly established (group headers were exercised, nothing else was).",
+    "New evaluation and the report views are declared not_exercised, so nothing downstream of the + New Evaluation button or the preview action was compared against the vanilla."
+  ],
+  "reference_gaps": [
+    "reference.json lists only the deliberate differences; it gives no inventory of the vanilla features in scope, so runtime-injected behaviours — annotateFailedRows(), markUnavailableActions(), initSortableHeaders(), annotateAcronyms(), all attached after page load and therefore invisible to the port's static markup extractor — had to be discovered by reading the spec source.",
+    "reference.json supplies no expected row/group counts and no per-row action inventory, so the 28 rows, 6 group counts and 11 preview actions were diffed against the spec markup rather than against a stated acceptance criterion.",
+    "reference.json does not state whether the fixes recorded in the vanilla's findings-log (M2 failed-row retry, H15 disabled running actions, M7 acronym expansion) are required in the port or were considered vanilla-only hardening; FID-1, FID-2 and FID-4 are filed on the assumption that a feature present in the spec is in scope, per the reference's own 'differences from the vanilla are findings' rule.",
+    "reference.json gives no acceptance criteria for the login screen beyond the floating-label and translation carve-outs, so login parity was checked only structurally.",
+    "reference.json does not resolve the open C3 contradiction in the spec itself (rdDownload() only raises a toast, while the findings-log records Ignat confirming a real file), so download parity cannot be judged either way."
+  ]
+}

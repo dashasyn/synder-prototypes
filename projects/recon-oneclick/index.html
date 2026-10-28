@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Transaction reconciliation — first-run empty state</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --primary:#0053CC; --primary-10:#E0EBFD; --primary-5:#F2F6FC;
+  --white:#fff; --grey-5:#F7F8FA; --grey-10:#EFF1F5; --grey-20:#DFE4EC;
+  --grey-30:#B4BBCB; --grey-50:#6B778C; --grey:#1A1B24;
+  --green:#1F8940; --green-light:#ECFDDC;
+  --red:#CC2929;
+}
+/* :where() keeps this reset at zero specificity — as "#v1 *" it outranked every
+   class rule below and wiped all of variant 1's margins and paddings. */
+:where(#v1) *{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--grey-5)}
+#v1{font-family:Roboto,Arial,sans-serif;color:var(--grey);font-size:14px;line-height:1.45}
+
+/* prototype label strip */
+.strip{background:var(--grey-10);border-bottom:1px solid var(--grey-20);padding:9px 24px;font-size:12px;color:var(--grey-50)}
+.strip b{color:var(--grey);font-weight:500}
+
+.v1-page{max-width:940px;margin:0 auto;padding:32px 24px 64px}
+
+/* page header */
+.h1{font-size:26px;font-weight:400;letter-spacing:-.2px}
+.psub{color:var(--grey-50);margin-top:4px;font-size:14px}
+
+/* main card */
+.v1-card{background:var(--white);border:1px solid var(--grey-20);border-radius:8px;margin-top:24px;display:flex;align-items:stretch}
+.v1-form{flex:1 1 auto;padding:28px 32px 26px;min-width:0}
+.aside{flex:0 0 288px;border-left:1px solid var(--grey-20);background:var(--primary-5);padding:28px 26px;border-radius:0 8px 8px 0}
+
+.h2{font-size:20px;font-weight:500;margin-bottom:6px}
+.lead{color:var(--grey-50);margin-bottom:22px;max-width:46ch}
+
+/* fields */
+.fld{margin-bottom:18px;max-width:340px}
+.fld label{display:block;font-weight:500;font-size:13px;margin-bottom:6px}
+.fld .req{color:var(--red)}
+.fld .q{display:inline-flex;width:15px;height:15px;border-radius:50%;border:1px solid var(--grey-30);color:var(--grey-50);font-size:10px;align-items:center;justify-content:center;margin-left:5px;cursor:help;vertical-align:1px}
+.sel{position:relative}
+.sel select{font-family:inherit;font-size:14px;line-height:normal;width:100%;height:38px;padding:0 34px 0 12px;border:1px solid var(--grey-20);border-radius:4px;background:#fff;color:var(--grey);appearance:none;cursor:pointer}
+.sel select:hover{border-color:var(--grey-30)}
+.sel select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-10)}
+.sel::after{content:"";position:absolute;right:13px;top:50%;margin-top:-2px;border-left:5px solid transparent;border-right:5px solid transparent;border-top:6px solid var(--grey-50);pointer-events:none}
+.hint{font-size:12px;color:var(--grey-50);margin-top:5px}
+
+/* cta */
+.cta{margin-top:26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.v1-btn{font-family:inherit;font-size:15px;font-weight:500;border:0;border-radius:4px;padding:12px 24px;cursor:pointer}
+.v1-btn.pri{background:var(--primary);color:#fff}
+.v1-btn.pri:hover{background:#00429f}
+.v1-btn.pri:disabled{background:var(--grey-30);cursor:default}
+.safe{font-size:13px;color:var(--grey-50);display:flex;align-items:center;gap:7px}
+.safe svg{flex-shrink:0}
+
+/* aside advantages */
+.aside h3{font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:.6px;color:var(--grey-50);margin-bottom:14px}
+.adv{list-style:none}
+.adv li{display:flex;gap:10px;font-size:14px;margin-bottom:13px;line-height:1.4}
+.adv li:last-child{margin-bottom:0}
+.tick{flex-shrink:0;margin-top:2px}
+
+/* progress */
+.after{margin-top:24px;border:1px solid var(--primary-10);border-radius:6px;padding:16px 18px;background:var(--primary-5);display:none;max-width:520px}
+.after.show{display:block}
+.after .t{font-weight:500;margin-bottom:10px}
+.prog{display:flex;gap:9px;align-items:center;font-size:14px;color:var(--grey);margin-bottom:8px;flex-wrap:wrap}
+.pill{font-size:11px;font-weight:500;border-radius:12px;padding:3px 10px;background:#D6EBFF;color:#3C4EAC}
+.spin{width:14px;height:14px;border:2px solid var(--grey-20);border-top-color:var(--primary);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.leave{font-size:13px;color:var(--grey-50)}
+
+/* faq */
+.faqwrap{margin-top:32px}
+.faqwrap h3{font-size:13px;font-weight:500;text-transform:uppercase;letter-spacing:.6px;color:var(--grey-50);margin-bottom:12px}
+.faq div{border:1px solid var(--grey-20);border-radius:6px;background:var(--white);padding:13px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:14px;color:var(--grey);cursor:pointer}
+.faq div:hover{border-color:var(--grey-30)}
+.faq span{color:var(--grey-30);font-size:12px}
+
+@media(max-width:860px){
+  .v1-card{flex-direction:column}
+  .aside{flex:1 1 auto;border-left:0;border-top:1px solid var(--grey-20);border-radius:0 0 8px 8px}
+}
+
+/* ── prototype-only variant switcher (canonical: reports/transactions-prototype) ── */
+.variant-switch{display:flex;align-items:center;gap:12px;background:var(--color-grey);color:var(--color-white);
+  padding:8px 20px;flex-shrink:0;font-size:13px;font-family:var(--font-family)}
+.variant-switch .vs-label{font-weight:500;letter-spacing:.01em;opacity:.75;font-size:12px;text-transform:uppercase}
+.variant-switch .vs-opts{display:flex;gap:4px;background:rgba(255,255,255,.1);border-radius:6px;padding:3px}
+.variant-switch button{background:none;border:none;color:rgba(255,255,255,.7);font-family:inherit;font-size:13px;
+  padding:5px 12px;border-radius:4px;cursor:pointer;white-space:nowrap}
+.variant-switch button:hover{color:var(--color-white)}
+.variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
+.variant-switch .vs-note{margin-left:auto;opacity:.6;font-size:12px}
+[hidden]{display:none !important}
+
+/* ── Variant 2 · one click (UI kit components; layout only below) ── */
+.v2-page{max-width:720px;margin:0 auto;padding:32px 24px 64px}
+.oc{margin-top:24px;padding:32px}
+.oc-title{font-size:24px;line-height:32px;font-weight:500;color:var(--text-primary);margin:0 0 20px}
+.oc-ready{display:flex;align-items:baseline;gap:10px;margin:0 0 20px}
+.oc-ready .stat-value{font-size:32px;line-height:40px}
+.oc-ready span{color:var(--text-secondary)}
+.oc-facts{display:grid;grid-template-columns:88px 1fr;row-gap:8px;margin:0 0 24px;padding:16px 0;
+  border-top:1px solid var(--border-default);border-bottom:1px solid var(--border-default)}
+.oc-facts dt{color:var(--text-secondary)}
+.oc-facts dd{margin:0;color:var(--text-primary)}
+.oc .alert{margin:0 0 24px}
+.oc-cta{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.oc-safe{display:flex;align-items:center;gap:6px;color:var(--text-secondary)}
+.oc-time{margin:12px 0 0;color:var(--text-secondary)}
+.oc-custom{margin:24px 0 0;padding-top:16px;border-top:1px solid var(--border-default);color:var(--text-secondary)}
+.oc-started{display:flex;align-items:flex-start;gap:12px}
+.oc-started .spinner{flex-shrink:0;margin-top:2px}
+</style>
+</head>
+<body>
+<div class="variant-switch">
+  <span class="vs-label">Empty state</span>
+  <div class="vs-opts">
+    <button type="button" id="vs-1" onclick="setVariant(1)">1 · Preselected form</button>
+    <button type="button" id="vs-2" class="on" onclick="setVariant(2)">2 · One click</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+
+<div id="v1">
+
+
+<div class="v1-page">
+
+  <div class="h1">Transaction reconciliation</div>
+  <div class="psub">Compare your integration data against your books to spot discrepancies.</div>
+
+  <div class="v1-card">
+
+    <div class="v1-form">
+      <div class="h2">Reconcile in 1 click</div>
+      <div class="lead">We've filled everything in from your connected data. Change anything you like — or just run it.</div>
+
+      <div class="fld">
+        <label>Integration <span class="req">*</span><span class="q" title="The connected source Synder will compare against your books.">?</span></label>
+        <div class="sel">
+          <select>
+            <option selected>Stripe · mzkt.by</option>
+            <option>Stripe · Lalala</option>
+            <option>PayPal · mzkt.by</option>
+            <option>Shopify · Changolivia</option>
+          </select>
+        </div>
+        <div class="hint">Your most active integration</div>
+      </div>
+
+      <div class="fld">
+        <label>Account to reconcile <span class="req">*</span><span class="q" title="The clearing account in your books that this integration posts to.">?</span></label>
+        <div class="sel">
+          <select>
+            <option selected>Stripe mzkt.by (clearing)</option>
+            <option>Stripe mzkt.by (clearing) — EUR</option>
+          </select>
+        </div>
+        <div class="hint">The clearing account linked to this integration</div>
+      </div>
+
+      <div class="fld">
+        <label>Period <span class="req">*</span><span class="q" title="The date range Synder will reconcile.">?</span></label>
+        <div class="sel">
+          <select>
+            <option selected>Last month (Aug 1 – 31)</option>
+            <option>This month (Sep 1 – 28)</option>
+            <option>Last quarter (Apr 1 – Jun 30)</option>
+            <option>Custom range…</option>
+          </select>
+        </div>
+        <div class="hint">Your last full month — the usual close period</div>
+      </div>
+
+      <div class="cta">
+        <button class="v1-btn pri" id="go" onclick="runV1()">Run reconciliation</button>
+        <div class="safe">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5l5 2v4c0 3-2.1 5.4-5 6.5-2.9-1.1-5-3.5-5-6.5v-4l5-2z" stroke="#1F8940" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.6 8l1.7 1.7L10.6 6.4" stroke="#1F8940" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Read-only — nothing is changed in your books
+        </div>
+      </div>
+
+      <div class="after" id="after">
+        <div class="t">Reconciliation started</div>
+        <div class="prog"><span class="spin"></span> Gathering and processing your transactions <span class="pill">In progress</span></div>
+        <div class="leave">You can leave this page — we'll update the status when it's ready.</div>
+      </div>
+    </div>
+
+    <div class="aside">
+      <h3>What this will check</h3>
+      <ul class="adv">
+        <li><span class="tick"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#0053CC" stroke-width="1.3"/><path d="M5.2 8.2l1.9 1.9 3.7-4" stroke="#0053CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Transactions missing from your books</li>
+        <li><span class="tick"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#0053CC" stroke-width="1.3"/><path d="M5.2 8.2l1.9 1.9 3.7-4" stroke="#0053CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Fee and amount mismatches</li>
+        <li><span class="tick"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="#0053CC" stroke-width="1.3"/><path d="M5.2 8.2l1.9 1.9 3.7-4" stroke="#0053CC" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Duplicates and issues before they reach your reports</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="faqwrap">
+    <h3>Common questions</h3>
+    <div class="faq">
+      <div>Will it change anything in my books? <span>⌄</span></div>
+      <div>Can I undo and re-run a reconciliation? <span>⌄</span></div>
+      <div>How long does a reconciliation take? <span>⌄</span></div>
+      <div>How is this different from balance reconciliation? <span>⌄</span></div>
+      <div>Why should I use it? <span>⌄</span></div>
+    </div>
+  </div>
+
+</div>
+
+</div>
+
+<div id="v2" class="v2-page" hidden>
+  <div class="page-header">
+    <div class="page-header-text">
+      <h1 class="page-title">Transaction reconciliation</h1>
+      <p class="page-subtitle">Compare your integration data against your books to spot discrepancies.</p>
+    </div>
+  </div>
+
+  <section class="card oc" aria-labelledby="oc-title">
+    <h2 class="oc-title" id="oc-title">Reconcile August for Stripe mzkt.by</h2>
+
+    <p class="oc-ready"><b class="stat-value">1,200</b> <span>transactions ready to reconcile</span></p>
+
+    <dl class="oc-facts">
+      <dt>Account</dt><dd id="oc-acc">Stripe mzkt.by (required for Synder)</dd>
+      <dt>Period</dt><dd id="oc-per">Last month · Aug 1 – 31, 2026</dd>
+      <dt>Data</dt><dd>Imported automatically from QuickBooks and Stripe</dd>
+    </dl>
+
+    <div class="alert alert-warning" role="note" id="oc-unsynced">
+      <span>12 August transactions aren’t synced to QuickBooks yet — they’ll show as missing in your books.</span>
+    </div>
+
+    <div id="oc-action">
+      <div class="oc-cta">
+        <button type="button" class="btn btn-lg" id="oc-run">Run reconciliation</button>
+        <span class="oc-safe">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1.5l5 2v4c0 3-2.1 5.4-5 6.5-2.9-1.1-5-3.5-5-6.5v-4l5-2z" stroke="#1F8940" stroke-width="1.4" stroke-linejoin="round"/><path d="M5.6 8l1.7 1.7L10.6 6.4" stroke="#1F8940" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Read-only — nothing changes in your books
+        </span>
+      </div>
+      <p class="oc-time">Large pulls can take a few hours — we’ll email you when it’s ready.</p>
+    </div>
+
+    <div class="oc-started" id="oc-started" role="status" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <div>
+        <b>Reconciliation started</b><br>
+        <span class="text-secondary">August for Stripe mzkt.by. We’ll email you when it’s ready.</span>
+      </div>
+    </div>
+
+    <p class="oc-custom">Another account, period or import method?
+      <a class="text-link" id="oc-custom" href="../txnrecon-setup/finalist-1-sketch.html?integration=stripe&amp;account=clearing&amp;period=last_month">Set up a custom reconciliation</a></p>
+  </section>
+</div>
+
+<script>
+function runV1(){
+  document.getElementById('after').classList.add('show');
+  var b=document.getElementById('go');
+  b.disabled=true; b.textContent='Reconciliation running…';
+}
+function setVariant(v){
+  document.getElementById('v1').hidden = v !== 1;
+  document.getElementById('v2').hidden = v !== 2;
+  document.getElementById('vs-1').classList.toggle('on', v === 1);
+  document.getElementById('vs-2').classList.toggle('on', v === 2);
+  document.getElementById('vs-note').textContent = v === 1
+    ? 'Integration, account and period preselected and editable in place'
+    : 'Stripe + QuickBooks + Automated, one button — anything else via the custom link';
+  // Fragment must not match an element id, or the browser scrolls to it on load.
+  history.replaceState(null, '', v === 1 ? '#form' : '#one-click');
+}
+document.getElementById('oc-run').addEventListener('click', function(){
+  document.getElementById('oc-action').hidden = true;
+  document.getElementById('oc-unsynced').hidden = true;
+  var st = document.getElementById('oc-started');
+  st.hidden = false;
+  document.querySelector('.oc-custom').hidden = true;
+  st.setAttribute('tabindex', '-1'); st.focus();
+});
+setVariant(location.hash === '#form' ? 1 : 2);
+</script>
+</body>
+</html>

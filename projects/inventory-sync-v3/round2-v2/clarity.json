@@ -1,0 +1,78 @@
+{
+  "validator": "clarity",
+  "round": 2,
+  "target": "https://dashasyn.github.io/synder-prototypes/projects/inventory-sync-v3/?l=2 @ e781712 (Variant 2)",
+  "checked": [
+    { "zone": "empty state", "item": "\"Send stock changes from QuickBooks to your Shopify stores.\" headline" },
+    { "zone": "empty state", "item": "\"Shopify store\" select listing stores already marked \"(Shopify)\"" },
+    { "zone": "empty state", "item": "\"Don't see your store here? Connect it first in Organization settings\" next to the \"Connect store\" button (2 meanings of connect)" },
+    { "zone": "empty state", "item": "\"After connecting, 2 short steps get the store ready.\" reassurance" },
+    { "zone": "empty state", "item": "toast \"Choose a store first.\" when nothing is picked" },
+    { "zone": "2-step onboarding", "item": "\"Enable inventory tracking\" step: \"set Created product should be to Inventory and click Update\" (what Inventory means, what else the setting affects)" },
+    { "zone": "2-step onboarding", "item": "\"This page updates by itself.\" reassurance" },
+    { "zone": "2-step onboarding", "item": "\"Choose location\" / \"Pick the Shopify location that receives stock changes.\"" },
+    { "zone": "2-step onboarding", "item": "\"Finish setup\" disabled with tooltip \"Choose a location first.\"" },
+    { "zone": "2-step onboarding", "item": "\"Connected the wrong store? Use a different store\" escape hatch" },
+    { "zone": "2-step onboarding", "item": "numbered step rows 1/2 (KF-4 dead-click look) - not determinable from map" },
+    { "zone": "Overview", "item": "post-setup toast \"My ceramic plates is ready. Click Enable to start sending stock changes.\" (KF-2 next action)" },
+    { "zone": "Overview", "item": "tiles \"Held\", \"Failed\", \"Pending\", \"Applied in 24h\" without tooltips and \"–\" placeholders before enable" },
+    { "zone": "Overview", "item": "Stock check block \"No comparison yet. Connected stores are compared every night at 02:30 UTC.\" (UTC)" },
+    { "zone": "Overview", "item": "Stock check block \"2 products have different stock in QuickBooks and Shopify. Check them now.\" + \"Review differences\"" },
+    { "zone": "Overview", "item": "Stock check block failed-check error followed by \"Stock is the same in QuickBooks and Shopify.\"" },
+    { "zone": "Stock check tab", "item": "intro \"Synder compares QuickBooks quantity on hand with Shopify stock for every mapped product\" (quantity on hand, mapped)" },
+    { "zone": "Stock check tab", "item": "\"Latest comparison · ... My good flowers: failed Oct 2, 2026 02:30\" followed by \"No unresolved differences.\"" },
+    { "zone": "Stock check tab", "item": "\"Difference\" column values \"+8\" / \"+2\" (direction of the sign)" },
+    { "zone": "Stock check tab", "item": "row actions \"Update Shopify qty\" and \"Ignore\" (consequence of Ignore)" },
+    { "zone": "Stock check tab", "item": "\"Unresolved only\" toggle and \"Unresolved\" status" },
+    { "zone": "Stock check tab", "item": "Update Shopify qty dialog copy and \"If the stock changed since then, click Compare now first.\"" },
+    { "zone": "Stock check tab", "item": "toast \"2 Shopify quantities will be updated.\" (reversibility)" },
+    { "zone": "Stock check tab", "item": "\"Previous comparisons\" accordion: \"Trigger\", \"Nightly\", \"Items compared\", \"View rows\"" }
+  ],
+  "findings": [
+    {
+      "id": "CLR-1",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Update Shopify qty confirmation dialog (bulk and row), Stock check tab",
+      "finding": "The dialog only lists signed numbers (\"+8\", \"+2\") that Synder \"will send\" and never says what the Shopify quantity will be afterwards or whether this can be undone, so a non-expert can't tell if Shopify goes to 140 or gets 8 added on top of an already-updated count.",
+      "user_impact": "Already afraid of irreversible mistakes, the owner either cancels and leaves the difference open, or clicks confirm without knowing what they did to live store stock.",
+      "suggested_fix": "State the result per product in plain words, e.g. \"Ceramic plate 24cm: Shopify 132 → 140 (same as QuickBooks)\", and add one line on what happens if it turns out wrong (e.g. the next comparison will show it again).",
+      "evidence": {
+        "quote": "Synder will send these differences, as found in the latest comparison of My ceramic plates on Oct 2, 2026 02:30:\nCeramic plate 24cm: +8\nMug set: +2",
+        "source": "plain-language"
+      }
+    },
+    {
+      "id": "CLR-2",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Overview Stock check block (State 3) and Stock check tab empty table",
+      "finding": "Right after saying My good flowers wasn't compared, the block shows a green check \"Stock is the same in QuickBooks and Shopify.\" (and the tab shows \"No unresolved differences.\"), which reads as all stores being fine when one was never checked.",
+      "user_impact": "The owner reads the green check as \"everything matches\", skips \"Compare now\", and believes the job is done while a store's stock may be off.",
+      "suggested_fix": "Name the store the all-clear applies to, e.g. \"My ceramic plates: stock is the same in QuickBooks and Shopify.\", and in the tab say \"No differences in My ceramic plates. My good flowers wasn't compared.\"",
+      "evidence": {
+        "quote": "The last check of My good flowers failed (Oct 2, 2026 02:30), so its stock wasn't compared.\nCompare now\ncheck_circle\nStock is the same in QuickBooks and Shopify.",
+        "source": "plain-language"
+      }
+    },
+    {
+      "id": "CLR-3",
+      "severity": "Medium",
+      "confidence": 75,
+      "element": "Onboarding step 1 \"Enable inventory tracking\"",
+      "finding": "The first step asks the owner to change a Synder setting with an unexplained name (\"Created product should be\") to an unexplained value (\"Inventory\") and gives no hint of what else that setting affects.",
+      "user_impact": "A first-timer worries that changing a setting in Settings will alter how their sales are recorded and hesitates or stops at step 1.",
+      "suggested_fix": "Add a one-line plain explanation and reassurance, e.g. \"Inventory means Synder creates products that track stock count in QuickBooks; this only affects new products and you can change it back in Settings.\"",
+      "evidence": {
+        "quote": "In Settings › Products/Services, set Created product should be to Inventory and click Update. This page updates by itself.",
+        "source": "plain-language"
+      }
+    }
+  ],
+  "gaps": [
+    "Ignore (row and bulk): no commit path recorded, so whether it asks for confirmation, explains that the difference stays in Shopify, or can be reversed is unknown",
+    "Compare now: behaviour after clicking (on the Overview and the Stock check tab) is not recorded, so I can't judge whether the failed-store message clears or explains the failure",
+    "Onboarding step rows 1/2: cursor/hover affordance not recorded, so KF-4 (numbered rows looking clickable when they are not) can't be checked",
+    "Enable after onboarding: the Sync block and its Enable dialog are out of scope (variant 1), so whether the 'ready, click Enable' hand-off reassures that enabling won't overwrite Shopify totals is not assessed here; the toast text is transient and was only seen in control notes"
+  ]
+}

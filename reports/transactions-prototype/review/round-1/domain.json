@@ -1,0 +1,142 @@
+{
+  "validator": "domain",
+  "round": 1,
+  "target": "reports/transactions-prototype/index.html (variant 1)",
+  "checked": [
+    {
+      "zone": "status segments",
+      "item": "Tab labels \"All\", \"Needs attention\", \"Ready to sync\", \"In progress\", \"Successful\", \"Deleted\" with counts"
+    },
+    {
+      "zone": "status segments",
+      "item": "\"Successful\" group membership: Synced, Skipped, Excluded from sync"
+    },
+    {
+      "zone": "status segments",
+      "item": "\"Needs attention\" group membership: Failed, Rollback failed, Synced with rule failed, Canceled, Rollback canceled, Not parsed, Synced with warnings, Deleted with warnings"
+    },
+    {
+      "zone": "status filter chip",
+      "item": "19 status options vs the 18 canonical Platform Transactions statuses in vocabulary.md — \"Synced with rule failed\" and \"Delayed\" are not in the canonical list, \"Rule failed\" is missing"
+    },
+    {
+      "zone": "table",
+      "item": "Column header \"Sync status\" + tooltip \"Status of this transaction in your accounting system\""
+    },
+    {
+      "zone": "table",
+      "item": "Column header \"Amount\" — mixed sign conventions across Order, Payout, Refund, Chargeback rows"
+    },
+    {
+      "zone": "table",
+      "item": "Column header \"Integration\" (matches vocabulary.md)"
+    },
+    {
+      "zone": "table",
+      "item": "Column header \"Type\" values: Invoice payment, Subscription payment, Payout, Refund, Chargeback, Order, POS order"
+    },
+    {
+      "zone": "table",
+      "item": "\"Transaction info\" cell — 3 of 25 rows render only the raw ID, no customer name and no \"Generic customer\" fallback"
+    },
+    {
+      "zone": "table",
+      "item": "Date display format \"Apr 11, 2026\" (matches vocabulary.md preferred format)"
+    },
+    {
+      "zone": "row actions",
+      "item": "Actions verbs \"Sync\", \"Retry\", \"View sync\"; ⋯ menu items \"Sync now\", \"Rollback sync\", \"Archive\""
+    },
+    {
+      "zone": "bulk action bar",
+      "item": "\"⟳ Sync now\" and its progress dialog \"Syncing 1 transaction…\""
+    },
+    {
+      "zone": "bulk action bar",
+      "item": "\"↩ Rollback\" and its confirm \"Rollback 1 transaction? The records created in your accounting platform will be deleted.\""
+    },
+    {
+      "zone": "bulk action bar",
+      "item": "\"Cancel\" and its confirm \"Cancel sync for 1 transaction? They will be returned to pending state.\" — label is ambiguous with dismissing the bar next to the \"×\" close control"
+    },
+    {
+      "zone": "bulk action bar",
+      "item": "\"Archive\" / \"Unarchive\" and their confirms (\"removed from the default view but can be restored later\") — non-book-affecting, correctly stated"
+    },
+    {
+      "zone": "bulk action bar",
+      "item": "Scope escalation \"Select all 31\" vs page selection of 25 — export/rollback scope"
+    },
+    {
+      "zone": "bulk action bar",
+      "item": "Export menu items \"Export selected to CSV\", \"Export all 52 matching to CSV\", \"Export pending to CSV\""
+    },
+    {
+      "zone": "dashboard entry",
+      "item": "Sync card tooltip \"Transactions synced to your accounting platform, by status\" and metric \"transactions synchronized to books\""
+    },
+    {
+      "zone": "dashboard entry",
+      "item": "Needs attention card tooltip \"Transactions that failed to sync\" → \"50 transactions ›\""
+    },
+    {
+      "zone": "dashboard entry",
+      "item": "Accounting card tooltip \"Your connected accounting platform\"; \"View in Books\" link"
+    },
+    {
+      "zone": "dashboard entry",
+      "item": "Sync score tooltip \"Share of transactions synced without errors\""
+    },
+    {
+      "zone": "empty state",
+      "item": "\"No transactions in the last 90 days\" + \"Your most recent transaction was on Apr 11, 2026\""
+    }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 92,
+      "element": "Status group \"Successful\" — segmented tab \"Successful\" and the \"Successful\" group header in the Status filter panel, which list \"Skipped\" and \"Excluded from sync\" alongside \"Synced\"",
+      "finding": "\"Skipped\" and \"Excluded from sync\" are transactions that were never posted to the books, yet both are grouped under \"Successful\", so the tab count presents unposted transactions as completed.",
+      "user_impact": "At month-end an accountant filters \"Successful\" to confirm what reached QuickBooks, sees a count of 8, and signs off — while some of those transactions have no entry in the books at all, understating revenue with no visible exception anywhere in the list.",
+      "suggested_fix": "Move \"Skipped\" and \"Excluded from sync\" out of \"Successful\" into a separate \"Not synced (intentional)\" group, or rename the group to \"Closed\" so it no longer asserts the transaction is in the books; this is a book-affecting distinction, so keep the precise wording and add a tooltip rather than simplifying the label.",
+      "evidence": {
+        "quote": "Excluded from sync",
+        "source": "vocabulary.md — \"Sync (Synchronization) — syncing data from Synder to books\" and \"Books = the data/ledger ('synced to your books')\": a status that means no data reached the books cannot be grouped as successful. Accounting rule: completeness — a reconciliation view must not report unposted transactions as posted."
+      }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "Critical",
+      "confidence": 85,
+      "element": "Dashboard \"Needs attention\" card, \"?\" tooltip above the \"50 transactions ›\" link that navigates into the filtered list",
+      "finding": "The tooltip defines the group as failures only, but \"Needs attention\" also contains \"Synced with warnings\" and \"Deleted with warnings\" — transactions that did reach the books.",
+      "user_impact": "An accountant told these 50 transactions \"failed to sync\" will bulk-select them and click \"⟳ Sync now\", creating duplicate Sales Receipts and Expenses in QuickBooks for every already-synced row in the set.",
+      "suggested_fix": "Reword the tooltip to describe the group as it is composed — \"Transactions that need review: failed, canceled, not parsed, or synced with warnings\" — and keep the precise status names in the list rather than flattening them to \"failed\".",
+      "evidence": {
+        "quote": "Transactions that failed to sync",
+        "source": "vocabulary.md — Statuses › Platform Transactions lists \"Synced with warnings\" and \"Deleted with warnings\" as distinct from \"Failed\"; both mean a sync occurred. Accounting rule: an action prompt must not invite re-posting of already-recorded entries (duplicate journal entries)."
+      }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "High",
+      "confidence": 90,
+      "element": "Bulk bar \"↩ Rollback\" confirmation dialog; same banned terms in the \"Sync status\" column tooltip, the dashboard Sync card tooltip, and the dashboard Accounting card tooltip",
+      "finding": "The prototype uses \"accounting platform\" and \"accounting system\" — both explicitly disallowed — instead of \"accounting company\" for the software or \"books\" for the ledger, including in the one dialog that warns about deleting posted entries.",
+      "user_impact": "In the destructive confirmation the accountant cannot tell whether the rollback deletes entries in their books or something inside Synder, which is exactly the certainty they need before rolling back a batch of 31 transactions.",
+      "suggested_fix": "Change the confirm to \"Rollback 1 transaction? The records created in your books will be deleted.\" and replace \"accounting system\"/\"accounting platform\" with \"accounting company\" in all four tooltips.",
+      "evidence": {
+        "quote": "Rollback 1 transaction? The records created in your accounting platform will be deleted.",
+        "source": "vocabulary.md UI Words table — \"Accounting company | NOT accounting platform, accounting software\"; and \"Books | NOT your company, your accounting, ledger — the data/ledger inside the accounting company\"."
+      }
+    }
+  ],
+  "gaps": [
+    "bulk bar Rollback / Cancel / Unarchive: the state map records confirm text only for Archive and the Sync now dialog, so the Rollback wording in DOM-3 was read from the page source rather than observed in a real browser run — the dialog copy should be confirmed on screen",
+    "Export to CSV items are inert (not_exercised), so it is unverifiable whether an export honours the active status chip + tab + date filters or the escalated \"Select all 31\" scope — an export that silently ignores a filter is a real reconciliation risk and is untested",
+    "no organization/client switcher was exercised anywhere in the state map, so the multi-client (40+ clients) part of my lens is unassessed: whether status counts, selection scope, or archive state leak across organizations is unknown",
+    "the tab counts are computed with the status chip applied (countForStatuses over the applied filters), but no run in the state map records a chip value and a contradicting tab together, so whether a contradictory pair actually reads 0 before the click was never observed"
+  ]
+}

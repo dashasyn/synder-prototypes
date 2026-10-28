@@ -1,0 +1,84 @@
+{
+  "validator": "trust",
+  "round": 1,
+  "target": "projects/payment-application-v4/ (gsp.html + overlay.html)",
+  "checked": [
+    { "zone": "overlay top bar", "item": "Status chip (#chip: 'Synder default' / 'Custom rules' / 'Custom rules (inactive)') vs. the committed (saved) rule state" },
+    { "zone": "overlay top bar", "item": "Status message (#msg) vs. dirty()/unsaved-changes state and vs. the right-column 'Nothing changes until you press Update' readout" },
+    { "zone": "overlay top bar vs. GSP pane", "item": "Overlay chip vs. GSP settings page 'Payment application' chip (.pa-t) — same dimension (is a custom rule configured), two renderings" },
+    { "zone": "overlay outcomes vs. GSP settings", "item": "'Cancel sync if there is no matching open invoice found for a payment' switch inside the overlay vs. the identical toggle on the GSP Invoices tab — same dimension, two controls" },
+    { "zone": "overlay inert banner vs. GSP settings vs. presenter bar", "item": "Inline 'Turn it on' prerequisite switch vs. GSP's own 'Apply payments to unpaid Invoice transactions' toggle — same dimension, two controls" },
+    { "zone": "overlay chrome", "item": "Discard-confirmation dialog copy ('the rules that are saved right now stay exactly as they are') vs. actual commit paths of cfg/saved vs. env/shared" },
+    { "zone": "overlay chrome", "item": "Close (×) button vs. dirty() gate that decides whether the discard dialog appears at all" },
+    { "zone": "overlay chrome", "item": "Update button aria-disabled state vs. plan gating vs. validation errors" },
+    { "zone": "how to match", "item": "'Use default matching rules' / 'Use custom rules' radios vs. top-bar chip and message" },
+    { "zone": "narrow the search", "item": "Customer / Invoice date / Invoice number checkboxes vs. the 'Searches …' line in the plain-terms readout" },
+    { "zone": "narrow the search", "item": "Days-either-side number field (typed 99999, cleared) vs. displayed value and vs. the transient clamp note surviving unrelated re-renders" },
+    { "zone": "then refine", "item": "Add/remove condition rows vs. refine-row count used in the plain-terms readout and rule summary pushed to GSP" }
+  ],
+  "findings": [
+    {
+      "id": "TRU-1",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "Overlay top-bar status message (#msg)",
+      "claims": "\"Saved, but inert until the prerequisite is on.\" — worded as a statement about what is currently saved.",
+      "actual": "This exact text is shown whenever the prerequisite is off, regardless of whether the current rule edits have ever been saved. The message is built from `!env.applyPayments` alone and never checks `dirty()` (cfg vs. saved), so it reads identically whether the user has an untouched saved rule or a half-edited, never-submitted one.",
+      "finding": "The top-bar message claims a saved state while the same screen's right-hand column, at the same instant, warns \"Nothing changes until you press Update\" — the two zones of one screen disagree about whether anything has been saved.",
+      "user_impact": "A user edits the matching rule, sees \"Saved, but inert…\" in the bar they're looking at, and closes the overlay believing the new rule is committed and just waiting on the prerequisite — when in fact nothing was written and the old (or default) rule is still what runs.",
+      "suggested_fix": "Gate the message on `dirty()` the same way the plain-terms readout does: show an unsaved-changes variant (e.g. \"Not saved yet — and inert until the prerequisite is on\") whenever cfg differs from saved.",
+      "evidence": {
+        "action": "On the GSP Invoices tab, turn off \"Apply payments to unpaid Invoice transactions\". Open \"Set up matching\". Switch to \"Use custom rules\" (or edit any scope field). Do not press Update.",
+        "observed": "Top bar still reads \"Saved, but inert until the prerequisite is on.\" while the right column reads \"Nothing changes until you press Update.\" — a direct contradiction between two zones of the same screen."
+      }
+    },
+    {
+      "id": "TRU-2",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Overlay top-bar status chip (#chip)",
+      "claims": "\"Custom rules\" (green) — worded and colored as an active, in-effect configuration.",
+      "actual": "The chip is computed from `custom()`, i.e. the live in-memory draft (`cfg.useDefault`), not from `saved`. It flips to \"Custom rules\" the instant the \"Use custom rules\" radio is picked, before Update is pressed.",
+      "finding": "Picking \"Use custom rules\" turns the chip green immediately, while the GSP settings page behind the overlay (whose own chip only updates on the 'saved' postMessage) still shows \"Synder default\" — the same dimension is represented two different ways on screen at once, and the overlay's version is the one that hasn't actually happened yet.",
+      "user_impact": "A user who glances at the chip mid-edit believes their custom rule is already the one Synder is using, and may stop editing or navigate away without pressing Update, leaving the default matcher in effect while believing otherwise.",
+      "suggested_fix": "Base the chip on `saved` (or on whether cfg equals saved), not on the live draft; keep an \"Unsaved\" affordance distinct from the committed-state chip, mirroring the pattern already used for the plain-terms 'Nothing changes until you press Update' note.",
+      "evidence": {
+        "action": "Open \"Set up matching\" with a Synder-default (unconfigured) rule. Select the \"Use custom rules\" radio. Do not press Update.",
+        "observed": "Overlay chip immediately reads \"Custom rules\" in green; the GSP page's own \"Payment application\" chip, still visible/inert behind the modal, continues to read \"Synder default\" — because it only updates on the `saved` message that has not been sent."
+      }
+    },
+    {
+      "id": "TRU-3",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "\"Discard changes?\" confirmation dialog, shown by the overlay's × close button",
+      "claims": "\"These rules have unsaved changes. Closing now throws them away — the rules that are saved right now stay exactly as they are.\"",
+      "actual": "Two controls inside the same overlay — \"Cancel sync if there is no matching open invoice found for a payment\" and the inline \"Turn it on\" prerequisite switch in the inert banner — commit immediately via `postMessage` to the host page the instant they're toggled (`cfg.cancelSync`/`saved.cancelSync` are written together, and `env.applyPayments` lives outside `cfg` entirely), independent of Update. Neither one is reverted by \"Discard changes.\"",
+      "finding": "If a user toggles \"Cancel sync…\" (or the inline prerequisite switch) and also edits a draft field (e.g. a refine row), then closes and picks \"Discard changes,\" the dialog's blanket promise that saved state \"stays exactly as it is\" is false for the toggle(s) already pushed to the host — that real setting does not roll back.",
+      "user_impact": "A user who deliberately discards a half-finished edit believes they are back to their last-saved configuration, but a real setting affecting sync behavior (cancel-on-no-match, or whether payment application runs at all) has already changed and stays changed.",
+      "suggested_fix": "Either route these two settings through the same cfg/saved/Update lifecycle as everything else, or change the dialog copy to name them explicitly as already-committed and excluded from the discard.",
+      "evidence": {
+        "action": "Open \"Set up matching\". Toggle \"Cancel sync if there is no matching open invoice found for a payment\" off. Then switch to \"Use custom rules\" (an unrelated draft edit). Click × and choose \"Discard changes.\"",
+        "observed": "The overlay closes and the rule edit is gone, but the \"Cancel sync…\" toggle stays off on the GSP settings page — the one thing the dialog said would \"stay exactly as it is\" already changed and was never reverted."
+      }
+    },
+    {
+      "id": "TRU-4",
+      "severity": "Critical",
+      "confidence": 85,
+      "element": "Overlay's dirty()-gated discard prompt, guarding the × close button",
+      "claims": "Implicitly: if closing the overlay would discard nothing, no confirmation is needed — closing is silent and safe.",
+      "actual": "`dirty()` only compares `cfg` against `saved`; `env.applyPayments` (the prerequisite) is not part of `cfg` at all. So toggling only the inline \"Turn it on\" prerequisite switch and then closing produces `dirty() === false`, and the overlay closes with zero confirmation — even though that toggle already committed a real, functional setting to the live GSP page via `postMessage`.",
+      "finding": "An action that changed something real (whether payment application runs at all for this integration) is acknowledged nowhere — no confirmation prompt, no saved-chip update, no message — because the app's own \"anything to confirm?\" check doesn't know this control exists.",
+      "user_impact": "A user testing \"what does this prerequisite do\" flips it on then closes without further thought (no dialog appears, so they assume nothing happened), not realizing the prerequisite is now permanently changed on the real integration until they go looking for it again.",
+      "suggested_fix": "Fold `env.applyPayments` (and `cancelSync`) into the same change-tracking used by `dirty()`, or trigger an explicit \"prerequisite changed\" acknowledgment the moment the inline switch commits, independent of the rest of the form.",
+      "evidence": {
+        "action": "With the prerequisite off, open \"Set up matching\". In the \"Nothing here runs yet\" banner, click the inline \"Turn it on\" switch. Immediately click × without touching anything else.",
+        "observed": "The overlay closes with no discard/confirmation dialog at all — the same silent close as if nothing had been touched — while the prerequisite has in fact already flipped on for the real integration."
+      }
+    }
+  ],
+  "gaps": [
+    "The state map's recon pass recorded 'Close without saving' and 'Update' only as 'exercised separately below' with a discard prompt confirmed to appear for a generic unsaved-changes case; it does not record a run where 'Cancel sync' or the inline prerequisite switch were toggled and then the overlay was closed/discarded, so TRU-3 and TRU-4 are derived from reading the commit logic in gsp.html/overlay.html (dirty(), the cancel-sync and prereq message handlers) rather than from an observed interactive trace. The mechanism is deterministic in the code, but live confirmation in a browser was not part of the recon this validator was handed."
+  ]
+}

@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Per Transaction Dashboard · Iteration 5 — Synder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Roboto', sans-serif; color: #1A1B24; font-size: 14px; line-height: 1.5; background: #F6F7F9; }
+a { color: #0053CC; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Proto bar ── */
+.proto-bar { background: #1A1B24; display: flex; align-items: center; padding: 0 20px; height: 32px; flex-shrink: 0; }
+.proto-bar-lbl { color: rgba(255,255,255,0.4); font-size: 11px; margin-right: 12px; }
+.proto-lnk { color: rgba(255,255,255,0.5); padding: 0 12px; height: 32px; display: flex; align-items: center; text-decoration: none; font-size: 12px; border-bottom: 2px solid transparent; }
+.proto-lnk:hover { color: #fff; }
+.proto-lnk.on { color: #fff; border-bottom-color: #3478F6; }
+
+/* ── App shell ── */
+.app-wrap { display: flex; flex-direction: column; min-height: 100vh; }
+.app { display: flex; flex: 1; }
+
+/* ── Sidebar ── */
+.sidebar { width: 190px; background: #FFF; border-right: 1px solid #E8E9EE; flex-shrink: 0; display: flex; flex-direction: column; }
+.org-row { display: flex; align-items: center; padding: 12px 14px; gap: 9px; border-bottom: 1px solid #E8E9EE; cursor: pointer; }
+.org-av { width: 28px; height: 28px; border-radius: 50%; background: #0053CC; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; flex-shrink: 0; }
+.org-txt { flex: 1; overflow: hidden; }
+.org-sub { font-size: 10px; color: #9BA1B2; }
+.org-nm  { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nav { padding: 4px 0; flex: 1; }
+.ni { display: flex; align-items: center; padding: 8px 14px; font-size: 13px; color: #3A3D4A; cursor: pointer; gap: 9px; }
+.ni:hover { background: rgba(0,83,204,0.05); color: #0053CC; }
+.ni.on { background: #0053CC; color: #FFF; font-weight: 500; }
+.ni-ico { font-size: 14px; width: 16px; text-align: center; flex-shrink: 0; opacity: 0.7; }
+.ni.on .ni-ico { opacity: 1; }
+.ni-badge { margin-left: auto; background: #DBEAFE; color: #0053CC; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700; }
+.ni.on .ni-badge { background: rgba(255,255,255,0.25); color: #fff; }
+.ni-chev { margin-left: auto; color: #C8CDDA; font-size: 11px; }
+.ndivider { height: 1px; background: #EDEEF2; margin: 3px 0; }
+
+/* ── Main ── */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; background: #F6F7F9; }
+.topbar { display: flex; align-items: center; justify-content: flex-end; padding: 0 24px; height: 50px; border-bottom: 1px solid #E8E9EE; background: #FFF; gap: 14px; flex-shrink: 0; }
+.syncs-left { font-size: 13px; color: #9BA1B2; }
+.syncs-left .n { color: #0053CC; font-weight: 700; }
+.ti { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #9BA1B2; }
+.ti:hover { background: #F0F0F4; }
+
+/* ── Page ── */
+.page { padding: 20px 24px 60px; }
+
+/* ── Page header ── */
+.ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 10px; }
+.ph-title { font-size: 21px; font-weight: 400; color: #1A1B24; }
+.ph-right { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.lbl { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: #9BA1B2; }
+.period-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 1px solid #D8D9E0; background: #FFF; border-radius: 4px; font-size: 13px; cursor: pointer; color: #1A1B24; font-family: inherit; }
+.period-btn:hover { border-color: #0053CC; }
+.seg { display: inline-flex; border: 1px solid #D8D9E0; border-radius: 5px; overflow: hidden; }
+.sb { padding: 5px 11px; font-size: 12px; cursor: pointer; background: #FFF; color: #6B778C; border: none; border-right: 1px solid #D8D9E0; font-family: inherit; font-weight: 500; white-space: nowrap; }
+.sb:last-child { border-right: none; }
+.sb.a-dark { background: #1A1B24; color: #FFF; }
+.sb.a-blue { background: #0053CC; color: #FFF; }
+
+/* ── KPI strip ── */
+.kpi-strip { display: grid; grid-template-columns: 1fr 1fr 1fr; border-radius: 9px; overflow: hidden; background: #E0E1E8; margin-bottom: 14px; border: 1px solid #E0E1E8; }
+.kpi { padding: 14px 20px; background: #FFF; border-right: 1px solid #E0E1E8; }
+.kpi:last-child { border-right: none; }
+.kpi.hi { background: #FFF8EC; }
+.kpi-lbl { font-size: 11px; color: #9BA1B2; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; }
+.kpi-val-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; }
+.kpi-v { font-size: 26px; font-weight: 300; color: #1A1B24; line-height: 1; }
+.kpi-v.warn { color: #D97706; }
+.sparkline { width: 64px; height: 36px; flex-shrink: 0; overflow: visible; }
+.kpi-sub { font-size: 12px; color: #9BA1B2; margin-top: 3px; }
+.band { font-weight: 600; }
+.band.ok   { color: #16A34A; }
+.band.bad  { color: #DC2626; }
+.band.mute { color: #9BA1B2; }
+
+/* ── Tooltip ── */
+.tip { display: inline-flex; align-items: center; justify-content: center; width: 13px; height: 13px; border-radius: 50%; border: 1.5px solid #C8CDDA; color: #9BA1B2; font-size: 10px; cursor: help; position: relative; vertical-align: middle; }
+.tip:hover .tt { display: block; }
+.tt { display: none; position: absolute; bottom: calc(100%+6px); left: 50%; transform: translateX(-50%); background: #1A1B24; color: #FFF; padding: 7px 11px; border-radius: 4px; font-size: 12px; width: 210px; white-space: normal; z-index: 400; line-height: 1.5; font-weight: 400; }
+.tt::after { content:''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #1A1B24; }
+
+/* ── Chips ── */
+.chip { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.cg { background: #DCFCE7; color: #16A34A; }
+.cr { background: #FEE2E2; color: #DC2626; }
+.co { background: #FEF3C7; color: #D97706; }
+.cb { background: #DBEAFE; color: #1D4ED8; }
+.clb { background: #EFF6FF; color: #3B82F6; border: 1px solid #BFDBFE; }
+.cgr { background: #F3F4F6; color: #6B7280; }
+.cdk { background: #374151; color: #FFF; }
+.cpu { background: #EDE9FE; color: #7C3AED; }
+.lnk { font-size: 12px; color: #0053CC; }
+
+/* ════════════════════════
+   3-COLUMN CONTENT GRID — TRELLO STYLE
+   Each column is a flex stack; cards fill their natural height.
+   Medium breakpoint: col-right moves under col-left (still a column, never 3-in-a-row).
+════════════════════════ */
+.grid { display: grid; gap: 20px; align-items: start; }
+
+/* Each column is a vertical stack — Trello model */
+.col-left, .col-center, .col-right {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Large screens (≥1440px): 3 equal columns side by side */
+@media (min-width: 1440px) {
+  .grid { grid-template-columns: 1fr 1fr 1fr; }
+}
+
+/* Medium screens (1100–1439px): 2 columns.
+   col-left and col-right share the left column (col-right stacks below col-left).
+   col-center takes the right column and spans both rows. */
+@media (min-width: 1100px) and (max-width: 1439px) {
+  .grid { grid-template-columns: 1fr 1fr; }
+  .col-left   { grid-column: 1; grid-row: 1; }
+  .col-center { grid-column: 2; grid-row: 1 / span 2; }
+  .col-right  { grid-column: 1; grid-row: 2; }
+}
+
+/* Small screens (<1100px): single column */
+@media (max-width: 1099px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* ── Section — each block is its own grey card ── */
+.sec { margin-bottom: 14px; background: #EDEEF3; border-radius: 9px; padding: 12px 14px 14px; }
+.sec:last-child { margin-bottom: 0; }
+.sec-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.sec-title { font-size: 13px; font-weight: 700; color: #1A1B24; display: flex; align-items: center; gap: 6px; }
+.sec-act { font-size: 12px; color: #0053CC; }
+
+/* ── Card base — white inner content ── */
+.card { background: #FFF; border: 1px solid #E0E1E8; border-radius: 6px; overflow: hidden; }
+
+/* ── Transactions ── */
+.txn-hero { font-size: 34px; font-weight: 300; color: #0053CC; line-height: 1; padding: 4px 0 2px; }
+.txn-sub { font-size: 12px; color: #9BA1B2; margin-bottom: 12px; }
+
+/* Import mini table */
+.imptbl { width: 100%; border-collapse: collapse; }
+.imptbl th { font-size: 11px; font-weight: 600; color: #9BA1B2; text-transform: uppercase; letter-spacing: 0.3px; text-align: left; padding: 7px 12px; border-bottom: 1px solid #EDEEF2; background: #FAFBFC; position: sticky; top: 0; z-index: 1; }
+.imptbl td { padding: 9px 12px; font-size: 13px; border-bottom: 1px solid #F2F3F6; vertical-align: middle; }
+.imptbl tr:last-child td { border-bottom: none; }
+.imptbl tr:hover td { background: #FAFBFF; }
+.imptbl .num { font-weight: 600; color: #1A1B24; }
+.imp-scroll { max-height: 240px; overflow-y: auto; }
+.imp-scroll::-webkit-scrollbar { width: 3px; }
+.imp-scroll::-webkit-scrollbar-thumb { background: #C8CDDA; border-radius: 2px; }
+.plat-cell { display: flex; align-items: center; gap: 8px; }
+.pdot { width: 18px; height: 18px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #FFF; flex-shrink: 0; }
+.pdot.stripe  { background: #635BFF; }
+.pdot.shopify { background: #95BF47; }
+.pdot.paypal  { background: #003087; }
+.pdot.amazon  { background: #FF9900; color:#1A1B24; }
+.pdot.ebay    { background: #E53238; }
+.pdot.woo     { background: #7F54B3; }
+.pdot.square  { background: #3E4348; }
+.pdot.etsy    { background: #F16521; }
+.pdot.bigcom  { background: #34313F; }
+.pdot.clover  { background: #1DA462; }
+.pname { font-size: 13px; font-weight: 500; }
+.psub  { font-size: 11px; color: #9BA1B2; }
+
+/* ── Sync status ── */
+.slist { }
+.srow { display: flex; align-items: center; justify-content: space-between; padding: 7px 12px; border-bottom: 1px solid #F2F3F6; gap: 8px; }
+.srow:last-child { border-bottom: none; }
+.srow:hover { background: #FAFBFF; }
+.srow-lbl { display: flex; align-items: center; gap: 7px; }
+.sc { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.sc-grn { background: #DCFCE7; color: #16A34A; }
+.sc-org { background: #FEF3C7; color: #D97706; }
+.sc-blu { background: #DBEAFE; color: #1D4ED8; }
+.sc-lbl { background: #EFF6FF; color: #3B82F6; border: 1px solid #BFDBFE; }
+.sc-red { background: #FEE2E2; color: #DC2626; }
+.sc-gry { background: #F3F4F6; color: #6B7280; }
+.sc-drk { background: #374151; color: #FFF; }
+.sc-pur { background: #EDE9FE; color: #7C3AED; }
+.s-count { font-size: 13px; font-weight: 700; color: #1A1B24; min-width: 40px; text-align: right; }
+.show-all-row { padding: 7px 12px; border-top: 1px solid #F2F3F6; }
+
+/* ── RevRec ── */
+.rr-row { display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #F2F3F6; gap: 10px; }
+.rr-row:last-child { border-bottom: none; }
+.rr-row:hover { background: #FAFBFF; }
+.rr-lbl { font-size: 13px; color: #2F303A; }
+.rr-right { display: flex; align-items: center; gap: 7px; }
+.rr-count { font-size: 14px; font-weight: 700; color: #1A1B24; }
+
+/* ── Health check ── */
+.hc-card { background: #EEF4FF; border-radius: 6px; padding: 14px 15px; display: flex; gap: 11px; align-items: flex-start; }
+.hc-ico { font-size: 16px; flex-shrink: 0; }
+.hc-ttl { font-size: 13px; font-weight: 600; color: #1A1B24; margin-bottom: 2px; }
+.hc-sub { font-size: 12px; color: #5A6071; margin-bottom: 9px; line-height: 1.4; }
+.btn-blue { display: inline-flex; align-items: center; padding: 5px 12px; background: #0053CC; color: #FFF; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+.btn-blue:hover { background: #0044AA; }
+
+/* ── Verify cards ── */
+.vc-list { display: flex; flex-direction: column; gap: 7px; }
+.vc { border: 1px solid #E8E9EE; border-radius: 6px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; background: #FFF; }
+.vc:hover { border-color: #C7D8F8; }
+.vc-left { flex: 1; min-width: 0; }
+.vc-name { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
+.vc-dot { width: 18px; height: 18px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #FFF; flex-shrink: 0; }
+.vc-dot.stripe  { background: #635BFF; }
+.vc-dot.shopify { background: #95BF47; }
+.vc-pname { font-size: 13px; font-weight: 500; color: #1A1B24; }
+.vc-meta { font-size: 11px; color: #9BA1B2; line-height: 1.6; }
+.bado { display: inline-flex; padding: 2px 7px; background: #DCFCE7; color: #16A34A; border-radius: 4px; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+.badp { display: inline-flex; padding: 2px 7px; background: #FEF3C7; color: #D97706; border-radius: 4px; font-size: 11px; font-weight: 600; flex-shrink: 0; }
+
+/* ── Integrations ── */
+.irow { padding: 9px 12px; border-bottom: 1px solid #F2F3F6; }
+.irow:last-child { border-bottom: none; }
+.irow:hover { background: #FAFBFF; }
+.irow-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+.irow-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.irow-nm { font-size: 13px; font-weight: 500; color: #1A1B24; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.irow-chips { display: flex; gap: 4px; flex-wrap: wrap; padding-left: 26px; }
+.int-scroll { max-height: 320px; overflow-y: auto; }
+.int-scroll::-webkit-scrollbar { width: 3px; }
+.int-scroll::-webkit-scrollbar-thumb { background: #C8CDDA; border-radius: 2px; }
+
+/* ── Accounting ── */
+.acct-row { display: flex; align-items: center; justify-content: space-between; padding: 11px 12px; gap: 10px; }
+.acct-l { display: flex; align-items: center; gap: 8px; }
+.acct-logo { width: 28px; height: 28px; border-radius: 5px; background: #2CA01C; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 700; flex-shrink: 0; }
+.acct-nm { font-size: 13px; font-weight: 500; }
+.acct-sub { font-size: 11px; color: #9BA1B2; }
+
+/* ── Customize ── */
+.cust-row { display: flex; align-items: center; padding: 9px 12px; border-bottom: 1px solid #F2F3F6; gap: 10px; }
+.cust-row:last-child { border-bottom: none; }
+.cust-row:hover { background: #FAFBFF; }
+.cust-nm { flex: 1; font-size: 13px; color: #2F303A; }
+.cust-use { font-size: 13px; font-weight: 600; color: #1A1B24; }
+
+/* FDD mode */
+.fdd-on .sec-verify, .fdd-on .sec-cust { display: none; }
+
+/* Content tabs */
+.tab-bar { display: flex; gap: 2px; margin-bottom: 16px; background: #EDEEF3; border-radius: 8px; padding: 3px; }
+.tab-btn { flex: 1; padding: 6px 10px; font-size: 13px; font-weight: 500; color: #6B7280; background: none; border: none; border-radius: 6px; cursor: pointer; font-family: inherit; transition: background .15s, color .15s; }
+.tab-btn.active { background: #FFF; color: #1A1B24; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+.tab-btn:hover:not(.active) { color: #1A1B24; }
+
+/* Sync show-all toggle */
+.sync-hidden { display: none; }
+.sync-visible .sync-hidden { display: flex; }
+
+/* Deeplinks */
+.deeplink { color: #0053CC; cursor: pointer; text-decoration: none; border-bottom: 1px dashed rgba(0,83,204,0.4); }
+.deeplink:hover { border-bottom-color: #0053CC; }
+
+/* Sync hero */
+.sync-hero { font-size: 28px; font-weight: 300; color: #1A1B24; line-height: 1; padding: 4px 0 2px; }
+.sync-sub { font-size: 12px; color: #9BA1B2; margin-bottom: 12px; }
+
+/* Proto controls in proto-bar */
+.proto-ctrl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proto-ctrl .lbl { font-size: 11px; color: #9BA1B2; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; margin-left: 4px; }
+</style>
+</head>
+<body>
+<div class="app-wrap">
+
+<div class="proto-bar">
+  <span class="proto-bar-lbl">Prototype</span>
+  <a class="proto-lnk" href="../pt-dashboard-iter3/">Var 1 — Rich</a>
+  <a class="proto-lnk" href="../pt-dashboard-iter4/">Var 1 — FDD</a>
+  <a class="proto-lnk on" href="#">Var 2 — Adaptive</a>
+  <a class="proto-lnk" href="../pt-dashboard-iter6/">Var 3 — Cards</a>
+  <div style="flex:1;"></div>
+  <div class="proto-ctrl">
+    <span class="lbl">View</span>
+    <div class="seg">
+      <button class="sb a-dark" onclick="setView('all',this)">All blocks</button>
+      <button class="sb" onclick="setView('fdd',this)">FDD Iter 1</button>
+    </div>
+    <span class="lbl">State</span>
+    <div class="seg">
+      <button class="sb a-blue" onclick="setState('healthy',this)">Healthy</button>
+      <button class="sb" onclick="setState('action',this)">Action req.</button>
+      <button class="sb" onclick="setState('cold',this)">Cold</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+<aside class="sidebar">
+  <div class="org-row">
+    <div class="org-av">LA</div>
+    <div class="org-txt">
+      <div class="org-sub">Organization</div>
+      <div class="org-nm">Lara Croft</div>
+    </div>
+    <span style="color:#C8CDDA;font-size:11px;">▾</span>
+  </div>
+  <nav class="nav">
+    <div class="ni on"><span class="ni-ico">📊</span> Dashboard</div>
+    <div class="ni"><span class="ni-ico">🔄</span> Transactions <span class="ni-chev">›</span></div>
+    <div class="ni"><span class="ni-ico">🔀</span> Transaction reconciliation <span class="ni-badge">Beta</span></div>
+    <div class="ni"><span class="ni-ico">⚡</span> Smart rules <span class="ni-chev">›</span></div>
+    <div class="ni"><span class="ni-ico">🧾</span> Invoicing <span class="ni-chev">›</span></div>
+    <div class="ni"><span class="ni-ico">🤖</span> AI reports</div>
+    <div class="ni"><span class="ni-ico">📈</span> Reporting <span class="ni-chev">›</span></div>
+    <div class="ni"><span class="ni-ico">📑</span> Revenue recognition <span class="ni-chev">›</span></div>
+    <div class="ndivider"></div>
+    <div class="ni"><span class="ni-ico">⚙️</span> Settings</div>
+    <div class="ni"><span class="ni-ico">🤖</span> AI Agents</div>
+    <div class="ni"><span class="ni-ico">✨</span> What's new</div>
+    <div class="ni"><span class="ni-ico">🛠</span> Custom development <span class="ni-chev">›</span></div>
+  </nav>
+</aside>
+
+<div class="main">
+  <div class="topbar">
+    <span class="syncs-left">Syncs left: <span class="n">1000</span></span>
+    <div class="ti">❓</div>
+    <div class="ti">👤</div>
+  </div>
+
+  <div class="page">
+    <div class="ph">
+      <div class="ph-title">Hi Lara, your data is ready to review</div>
+      <button class="period-btn" onclick="cyclePeriod()">📅 <span id="plbl">Last 30 days</span> ▾</button>
+    </div>
+
+    <!-- KPI strip -->
+    <div class="kpi-strip">
+      <div class="kpi">
+        <div class="kpi-lbl">Time saved</div>
+        <div class="kpi-val-row">
+          <div class="kpi-v" id="m-time">~ 47 hours</div>
+          <svg class="sparkline" viewBox="0 0 64 36" preserveAspectRatio="none">
+            <path d="M0,30 C10,26 22,22 32,18 C42,14 52,10 64,6" fill="none" stroke="#0053CC" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+            <path d="M0,30 C10,26 22,22 32,18 C42,14 52,10 64,6 L64,36 L0,36 Z" fill="#0053CC" opacity="0.07"/>
+          </svg>
+        </div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-lbl">Sync score <span class="tip">?<span class="tt">Percentage of imported transactions synced to your accounting system.</span></span></div>
+        <div class="kpi-val-row">
+          <div class="kpi-v" id="m-score">82%</div>
+          <svg class="sparkline" viewBox="0 0 64 36" preserveAspectRatio="none">
+            <path d="M0,20 C10,16 20,12 30,16 C40,10 52,12 64,10" fill="none" stroke="#16A34A" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+            <path d="M0,20 C10,16 20,12 30,16 C40,10 52,12 64,10 L64,36 L0,36 Z" fill="#16A34A" opacity="0.07"/>
+          </svg>
+        </div>
+      </div>
+      <div class="kpi" id="m-attn-card">
+        <div class="kpi-lbl">Needs attention</div>
+        <div class="kpi-val-row">
+          <div class="kpi-v"><a class="deeplink" id="m-attn" href="#" onclick="showToast('Opening transactions requiring attention…');return false;">80 transactions</a></div>
+          <svg class="sparkline" viewBox="0 0 64 36" preserveAspectRatio="none">
+            <path d="M0,22 C10,28 20,16 32,24 C44,16 54,22 64,18" fill="none" stroke="#D97706" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" opacity="0.55"/>
+            <path d="M0,22 C10,28 20,16 32,24 C44,16 54,22 64,18 L64,36 L0,36 Z" fill="#D97706" opacity="0.07"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- Content tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" onclick="setTab('all',this)">All</button>
+      <button class="tab-btn" onclick="setTab('import',this)">Import</button>
+      <button class="tab-btn" onclick="setTab('customize',this)">Customize</button>
+      <button class="tab-btn" onclick="setTab('sync',this)">Sync</button>
+      <button class="tab-btn" onclick="setTab('verify',this)">Verify</button>
+    </div>
+
+    <!-- 3-col grid -->
+    <div class="grid">
+
+      <!-- ═══ LEFT: Import ═══ -->
+      <div class="col-left">
+
+        <!-- Transactions + Import breakdown -->
+        <div class="sec" id="sec-import">
+          <div class="sec-h">
+            <div class="sec-title">Transactions <span class="tip">?<span class="tt">Total imported in this period. Archived transactions excluded.</span></span></div>
+          </div>
+          <div class="txn-hero" id="txn-hero">1,200,002</div>
+          <div class="txn-sub" id="txn-sub">imported transactions</div>
+          <div class="card">
+            <div class="imp-scroll slist" id="imp-rows"></div>
+          </div>
+        </div>
+
+        <!-- Revenue recognition -->
+        <div class="sec" id="sec-revrec">
+          <div class="sec-h">
+            <div class="sec-title">Revenue recognition <span class="tip">?<span class="tt">Subscription revenue recognition status (RevRec enabled).</span></span></div>
+          </div>
+          <div class="card" id="rr-list"></div>
+        </div>
+
+      </div><!-- /col-left -->
+
+      <!-- ═══ CENTER: Sync + Health + Verify ═══ -->
+      <div class="col-center">
+
+        <!-- Sync -->
+        <div class="sec" id="sec-sync">
+          <div class="sec-h">
+            <div class="sec-title">Sync <span class="tip">?<span class="tt">Status of each imported transaction in the sync pipeline.</span></span></div>
+          </div>
+          <div class="sync-hero" id="sync-hero">0</div>
+          <div class="sync-sub">transactions in sync pipeline</div>
+          <div class="card">
+            <div id="sync-list" class="slist"></div>
+          </div>
+        </div>
+
+        <!-- Health check -->
+        <div id="sec-health">
+          <div class="hc-card">
+            <div class="hc-ico">🛡</div>
+            <div>
+              <div class="hc-ttl">Run account health check</div>
+              <div class="hc-sub">Check your account for interrupted imports and missing data. Last check was May 31, 2026</div>
+              <button class="btn-blue">Run health check</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Verify -->
+        <div class="sec sec-verify" id="sec-verify">
+          <div class="sec-h">
+            <div class="sec-title">Verify <span class="tip">?<span class="tt">Period reconciliation between Synder and your accounting platform.</span></span></div>
+            <a href="#" class="sec-act">Run audit →</a>
+          </div>
+          <div class="vc-list" id="vc-list"></div>
+        </div>
+
+      </div><!-- /col-center -->
+
+      <!-- ═══ RIGHT: Customize + Integrations + Accounting ═══ -->
+      <div class="col-right">
+
+        <!-- Customize -->
+        <div class="sec sec-cust" id="sec-customize">
+          <div class="sec-h">
+            <div class="sec-title">Customize</div>
+          </div>
+          <div class="card">
+            <div class="cust-row"><span class="cust-nm">Smart rules</span><span class="cust-use">3 of 3</span><a class="lnk" style="margin-left:8px;">Get more</a></div>
+            <div class="cust-row"><span class="cust-nm">Custom modifications</span><span class="cust-use">1 of 3</span><a class="lnk" style="margin-left:8px;">Get more</a></div>
+            <div class="cust-row"><span class="cust-nm">Custom Settings</span><span class="cust-use">3 of 3</span><a class="lnk" style="margin-left:8px;">Get more</a></div>
+            <div class="cust-row"><span class="cust-nm">E-commerce data enrichment</span><span class="cust-use">2 of 3</span><a class="lnk" style="margin-left:8px;">Get more</a></div>
+          </div>
+        </div>
+
+        <!-- Integrations -->
+        <div class="sec" id="sec-integrations">
+          <div class="sec-h">
+            <div class="sec-title">Integrations</div>
+            <a href="#" class="sec-act">Settings →</a>
+          </div>
+          <div class="card"><div class="int-scroll" id="int-list"></div></div>
+        </div>
+
+        <!-- Accounting -->
+        <div class="sec" id="sec-accounting">
+          <div class="sec-h">
+            <div class="sec-title">Accounting <span class="tip">?<span class="tt">Connected accounting platform.</span></span></div>
+          </div>
+          <div class="card">
+            <div class="acct-row" id="acct-row"></div>
+          </div>
+        </div>
+
+      </div><!-- /col-right -->
+    </div><!-- /grid -->
+  </div><!-- /page -->
+</div><!-- /main -->
+</div><!-- /app -->
+</div><!-- /app-wrap -->
+
+<script>
+/* ── Data ── */
+const PLATFORMS = [
+  { cls:'stripe',  l:'S', name:'My wonderful flowers', sub:'Stripe',   ct:{ healthy:750000, action:0,   cold:0 }, st:{ healthy:'c', action:'c',   cold:'c' }, imp:true,  sync:true  },
+  { cls:'shopify', l:'S', name:'Lara\'s Shopify store', sub:'Shopify',  ct:{ healthy:450000, action:0,   cold:0 }, st:{ healthy:'c', action:'c',   cold:'c' }, imp:true,  sync:true  },
+  { cls:'paypal',  l:'P', name:'My store',             sub:'PayPal',   ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'c', action:'lost', cold:'c' }, imp:false, sync:false },
+  { cls:'amazon',  l:'A', name:'My shop',              sub:'Amazon',   ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'c', action:'c',   cold:'c' }, imp:true,  sync:true  },
+  { cls:'ebay',    l:'E', name:'My eBay store',        sub:'eBay',     ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'lost', action:'lost', cold:'c' }, imp:true, sync:false },
+  { cls:'woo',     l:'W', name:'WooCommerce shop',     sub:'WooComm.', ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'c', action:'c',   cold:'c' }, imp:true,  sync:true  },
+  { cls:'square',  l:'□', name:'Square POS',           sub:'Square',   ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'off', action:'off', cold:'c'}, imp:false, sync:false },
+  { cls:'etsy',    l:'E', name:'Etsy store',           sub:'Etsy',     ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'c', action:'lost', cold:'c' }, imp:true,  sync:true  },
+  { cls:'bigcom',  l:'B', name:'BigCommerce',          sub:'BigComm.', ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'c', action:'lost', cold:'c' }, imp:true,  sync:false },
+  { cls:'clover',  l:'C', name:'Clover POS',           sub:'Clover',   ct:{ healthy:0,      action:0,   cold:0 }, st:{ healthy:'c', action:'c',   cold:'c' }, imp:false, sync:false },
+];
+
+const ST_MAP = {
+  c:    { chip:'chip cg', lbl:'Connected' },
+  lost: { chip:'chip cr', lbl:'Connection lost' },
+  off:  { chip:'chip cgr', lbl:'Disconnected' },
+};
+
+const ALL_SYNC = [
+  { cls:'sc-grn', lbl:'Synced',               major:true,  ct:{ healthy:5200, action:0,   cold:0 } },
+  { cls:'sc-org', lbl:'Partially synced',      major:true,  ct:{ healthy:400,  action:200, cold:0 } },
+  { cls:'sc-blu', lbl:'Synced adjustment',     major:true,  ct:{ healthy:5200, action:1500,cold:0 } },
+  { cls:'sc-red', lbl:'Failed',                major:true,  ct:{ healthy:50,   action:500, cold:0 } },
+  { cls:'sc-org', lbl:'Rollback failed',       major:true,  ct:{ healthy:800,  action:200, cold:0 } },
+  { cls:'sc-lbl', lbl:'Ready to sync',         major:true,  ct:{ healthy:30,   action:0,   cold:0 } },
+  { cls:'sc-gry', lbl:'Not ready',             major:true,  ct:{ healthy:1200, action:800, cold:0 } },
+  { cls:'sc-gry', lbl:'N/A',                   major:false, ct:{ healthy:30,   action:10,  cold:0 } },
+  { cls:'sc-drk', lbl:'Rolled back',           major:false, ct:{ healthy:10,   action:5,   cold:0 } },
+  { cls:'sc-lbl', lbl:'Scheduled',             major:false, ct:{ healthy:10,   action:0,   cold:0 } },
+  { cls:'sc-lbl', lbl:'Sync in progress',      major:false, ct:{ healthy:12,   action:3,   cold:0 } },
+  { cls:'sc-lbl', lbl:'Refresh scheduled',     major:false, ct:{ healthy:34,   action:0,   cold:0 } },
+  { cls:'sc-lbl', lbl:'Refreshing',            major:false, ct:{ healthy:34,   action:0,   cold:0 } },
+  { cls:'sc-lbl', lbl:'Rebuild scheduled',     major:false, ct:{ healthy:34,   action:0,   cold:0 } },
+  { cls:'sc-lbl', lbl:'Rebuild starting',      major:false, ct:{ healthy:34,   action:0,   cold:0 } },
+  { cls:'sc-lbl', lbl:'Rebuilding',            major:false, ct:{ healthy:34,   action:0,   cold:0 } },
+  { cls:'sc-pur', lbl:'Rollback scheduled',    major:false, ct:{ healthy:34,   action:2,   cold:0 } },
+  { cls:'sc-pur', lbl:'Rollback in progress',  major:false, ct:{ healthy:34,   action:1,   cold:0 } },
+];
+
+const REVREC = [
+  { cls:'sc-red', lbl:'Incomplete',         ct:{ healthy:40,  action:120, cold:0 } },
+  { cls:'sc-lbl', lbl:'Generating entries', ct:{ healthy:10,  action:5,   cold:0 } },
+  { cls:'sc-gry', lbl:'Trial',              ct:{ healthy:40,  action:40,  cold:0 } },
+  { cls:'sc-grn', lbl:'Ready',              ct:{ healthy:300, action:50,  cold:0 } },
+];
+
+const VERIFY_ROWS = {
+  healthy: [
+    { cls:'stripe',  nm:'My wonderful flowers (Stripe)',  range:'Jun 30, 2025 – May 30, 2026', acct:'Stripe clearing account', ok:true  },
+    { cls:'stripe',  nm:'My wonderful flowers (Stripe)',  range:'May 1, 2025 – Jun 29, 2025',  acct:'Stripe clearing account', ok:true  },
+    { cls:'shopify', nm:'Lara\'s Shopify store (Shopify)',range:'Jun 30, 2025 – May 30, 2026', acct:'Shopify clearing account', ok:true  },
+    { cls:'stripe',  nm:'My wonderful flowers (Stripe)',  range:'Jan 1, 2025 – Apr 30, 2025',  acct:'Stripe clearing account', ok:false },
+  ],
+  action: [
+    { cls:'stripe',  nm:'My wonderful flowers (Stripe)',  range:'Jun 30, 2025 – May 30, 2026', acct:'Stripe clearing account', ok:false },
+    { cls:'shopify', nm:'Lara\'s Shopify store (Shopify)',range:'Jun 30, 2025 – May 30, 2026', acct:'Shopify clearing account', ok:false },
+  ],
+  cold: [],
+};
+
+const ACCT = {
+  healthy: { st:'c', last:'Jul 1, 2026 at 09:14' },
+  action:  { st:'lost', last:'Jun 29, 2026' },
+  cold:    { st:'c', last:'Never' },
+};
+
+const METRICS = {
+  healthy: { time:'~ 47 hours', score:'82%', band:'Excellent', bandCls:'ok',   attn:'80',  warn:false },
+  action:  { time:'~ 12 hours', score:'0%',  band:'Critical',  bandCls:'bad',  attn:'500', warn:true  },
+  cold:    { time:'0',          score:'—',   band:'No data',   bandCls:'mute', attn:'0',   warn:false },
+};
+
+let curS = 'healthy';
+
+/* ── Render ── */
+function stChip(s) {
+  const m = ST_MAP[s] || ST_MAP['off'];
+  return `<span class="${m.chip}">${m.lbl}</span>`;
+}
+
+function renderImport(s) {
+  document.getElementById('imp-rows').innerHTML = PLATFORMS.map(p => {
+    const ct = p.ct[s];
+    return `<div class="srow">
+      <div class="srow-lbl"><div class="pdot ${p.cls}">${p.l}</div><span class="pname">${p.name} <span class="psub">· ${p.sub}</span></span></div>
+      <a class="deeplink s-count" href="#" onclick="showToast('Opening ${p.sub} transactions…');return false;">${ct.toLocaleString()}</a>
+    </div>`;
+  }).join('');
+}
+
+function renderSync(s) {
+  const list = document.getElementById('sync-list');
+  const rows = ALL_SYNC.filter(r => r.ct[s] > 0);
+  const total = rows.reduce((acc, r) => acc + r.ct[s], 0);
+  document.getElementById('sync-hero').innerHTML = `<a class="deeplink" style="font-size:inherit;font-weight:inherit;line-height:inherit;" href="#" onclick="showToast('Opening sync pipeline transactions…');return false;">${total.toLocaleString()}</a>`;
+  if (rows.length === 0) {
+    list.innerHTML = `<div style="padding:20px 12px;text-align:center;color:#9BA1B2;font-size:13px;">No transactions to sync yet</div>`;
+    return;
+  }
+  list.innerHTML = rows.map(r =>
+    `<div class="srow">
+      <div class="srow-lbl"><span class="sc ${r.cls}">${r.lbl}</span></div>
+      <a class="deeplink s-count" href="#" onclick="showToast('Opening ${r.lbl} transactions…');return false;">${r.ct[s].toLocaleString()}</a>
+    </div>`
+  ).join('');
+}
+
+function renderRevRec(s) {
+  document.getElementById('rr-list').innerHTML = REVREC.map(r =>
+    `<div class="srow">
+      <div class="srow-lbl"><span class="sc ${r.cls}">${r.lbl}</span></div>
+      <a class="deeplink s-count" href="#" onclick="showToast('Opening ${r.lbl} subscriptions…');return false;">${r.ct[s]}</a>
+    </div>`
+  ).join('');
+}
+
+function renderVerify(s) {
+  const rows = VERIFY_ROWS[s] || [];
+  document.getElementById('vc-list').innerHTML = rows.length === 0
+    ? `<div style="padding:16px 12px;text-align:center;color:#9BA1B2;font-size:13px;">No periods to verify yet</div>`
+    : rows.map(v =>
+        `<div class="vc">
+          <div class="vc-left">
+            <div class="vc-name"><div class="vc-dot ${v.cls}">S</div><span class="vc-pname">${v.nm}</span></div>
+            <div class="vc-meta">${v.range}<br>${v.acct}</div>
+          </div>
+          <span class="${v.ok ? 'bado' : 'badp'}">${v.ok ? 'Reconciled' : 'Pending'}</span>
+        </div>`
+      ).join('');
+}
+
+function renderIntegrations(s) {
+  const order = { lost: 0, off: 1, c: 2 };
+  const sorted = [...PLATFORMS].sort((a, b) => (order[a.st[s]] ?? 2) - (order[b.st[s]] ?? 2));
+  document.getElementById('int-list').innerHTML = sorted.map(p => {
+    const st = p.st[s];
+    const connected = st === 'c';
+    const lost = st === 'lost';
+    const action = connected ? 'Settings' : lost ? 'Reconnect' : 'Configure';
+    const statusChip = connected
+      ? `<span class="sc sc-grn">Connected</span>`
+      : lost
+        ? `<span class="sc sc-red">Connection lost</span>`
+        : `<span class="sc sc-org">Finish configuration</span>`;
+    const impChip  = connected ? `<span class="sc ${p.imp  ? 'sc-grn' : 'sc-red'}">${p.imp  ? 'Auto-import on'  : 'Auto-import off'}</span>`  : '';
+    const syncChip = connected ? `<span class="sc ${p.sync ? 'sc-grn' : 'sc-org'}">${p.sync ? 'Auto-sync on'    : 'Auto-sync off'}</span>`    : '';
+    return `<div class="irow">
+      <div class="irow-top">
+        <div class="irow-left">
+          <div class="pdot ${p.cls}">${p.l}</div>
+          <div class="irow-nm">${p.name} <span style="font-weight:400;color:#9BA1B2;">· ${p.sub}</span></div>
+        </div>
+        <a class="sec-act" href="#" onclick="showToast('Opening ${p.sub} settings…');return false;" style="white-space:nowrap;">${action}</a>
+      </div>
+      <div class="irow-chips">${statusChip}${impChip}${syncChip}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderAccounting(s) {
+  const a = ACCT[s];
+  const stm = ST_MAP[a.st] || ST_MAP['off'];
+  document.getElementById('acct-row').innerHTML = `
+    <div class="acct-l">
+      <div class="acct-logo">QB</div>
+      <div><div class="acct-nm">My lovely money (QuickBooks Online)</div><div class="acct-sub"><a class="lnk">View Organization settings</a></div></div>
+    </div>
+    <span class="${stm.chip}">${stm.lbl}</span>`;
+}
+
+function renderMetrics(s) {
+  const m = METRICS[s];
+  document.getElementById('m-time').textContent = m.time;
+  document.getElementById('m-score').textContent = m.score;
+  const attn = document.getElementById('m-attn');
+  attn.textContent = `${m.attn} transactions`;
+  attn.className = 'deeplink' + (m.warn ? ' warn' : '');
+  document.getElementById('m-attn-card').className = 'kpi' + (m.warn ? ' hi' : '');
+  document.getElementById('txn-hero').textContent = s === 'cold' ? '0' : '1,200,002';
+}
+
+function showToast(msg) {
+  let t = document.getElementById('_toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = '_toast';
+    t.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:#1A1B24;color:#FFF;padding:9px 18px;border-radius:6px;font-size:13px;font-family:inherit;z-index:9999;pointer-events:none;opacity:0;transition:opacity .2s;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._tid);
+  t._tid = setTimeout(() => { t.style.opacity = '0'; }, 2000);
+}
+
+const ALL_SECS = ['sec-import','sec-revrec','sec-sync','sec-health','sec-verify','sec-customize','sec-integrations','sec-accounting'];
+const TAB_MAP = {
+  all:       null,
+  import:    ['sec-import','sec-revrec','sec-integrations'],
+  customize: ['sec-customize'],
+  sync:      ['sec-sync','sec-accounting','sec-health'],
+  verify:    ['sec-verify'],
+};
+const COL_SECS = {
+  'col-left':   ['sec-import','sec-revrec'],
+  'col-center': ['sec-sync','sec-health','sec-verify'],
+  'col-right':  ['sec-customize','sec-integrations','sec-accounting'],
+};
+
+function setTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const show = TAB_MAP[tab];
+  ALL_SECS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (!show || show.includes(id)) ? '' : 'none';
+  });
+  let visibleCount = 0;
+  Object.entries(COL_SECS).forEach(([cls, ids]) => {
+    const col = document.querySelector('.' + cls);
+    if (!col) return;
+    const visible = ids.some(id => {
+      const el = document.getElementById(id);
+      return el && el.style.display !== 'none';
+    });
+    col.style.display = visible ? '' : 'none';
+    if (visible) visibleCount++;
+  });
+  // When fewer than 3 columns are visible, use a simple equal-column grid
+  // and reset any CSS-media-query grid placements so columns flow naturally.
+  const grid = document.querySelector('.grid');
+  const allCols = document.querySelectorAll('.col-left, .col-center, .col-right');
+  if (visibleCount < 3) {
+    grid.style.gridTemplateColumns = `repeat(${visibleCount}, 1fr)`;
+    allCols.forEach(c => { c.style.gridColumn = 'auto'; c.style.gridRow = 'auto'; });
+  } else {
+    grid.style.gridTemplateColumns = '';
+    // Clear inline overrides — let the CSS media queries take back control
+    allCols.forEach(c => { c.style.gridColumn = ''; c.style.gridRow = ''; });
+  }
+}
+
+function renderAll(s) {
+  renderMetrics(s);
+  renderImport(s);
+  renderSync(s);
+  renderRevRec(s);
+  renderVerify(s);
+  renderIntegrations(s);
+  renderAccounting(s);
+}
+
+function setState(s, btn) {
+  curS = s;
+  document.querySelectorAll('.sb[onclick*="setState"]').forEach(b => b.classList.remove('a-blue'));
+  btn.classList.add('a-blue');
+  renderAll(s);
+}
+
+function setView(v, btn) {
+  document.querySelectorAll('.sb[onclick*="setView"]').forEach(b => b.classList.remove('a-dark'));
+  btn.classList.add('a-dark');
+  document.body.classList.toggle('fdd-on', v === 'fdd');
+}
+
+const PERIODS = ['Last 7 days','Last 30 days','Last 35 days','Last 90 days','This month','This quarter'];
+let pidx = 1;
+function cyclePeriod() { pidx = (pidx+1)%PERIODS.length; document.getElementById('plbl').textContent = PERIODS[pidx]; }
+
+renderAll('healthy');
+</script>
+</body>
+</html>

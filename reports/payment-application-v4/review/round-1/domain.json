@@ -1,0 +1,69 @@
+{
+  "validator": "domain",
+  "round": 1,
+  "target": "projects/payment-application-v4/ (gsp.html + overlay.html)",
+  "checked": [
+    { "zone": "overlay title bar", "item": "Overlay bar title \"Payment application\" vs overlay h1 \"Payment matching rules\"" },
+    { "zone": "overlay title bar", "item": "Status chip \"Synder default\" / \"Custom rules\" / \"Custom rules (inactive)\" (overlay) vs \"Custom rule\" / \"Custom rule (inactive)\" (GSP) singular/plural mismatch" },
+    { "zone": "narrow the search", "item": "checkbox — \"Customer matches the payment’s customer\"" },
+    { "zone": "narrow the search", "item": "checkbox — \"Invoice date is within N days either side of the payment date\" (locked)" },
+    { "zone": "narrow the search", "item": "number field — \"Days either side of the payment date, 1 to 365\"" },
+    { "zone": "narrow the search", "item": "checkbox + selects — invoice-number match row (\"On the payment, take the value from\", \"Comparison\", target \"Invoice number in books (DocNumber)\")" },
+    { "zone": "narrow the search", "item": "text field — \"Which Stripe field holds the reference\"" },
+    { "zone": "then refine", "item": "button — \"+ Add condition\" (adds a \"refine row\" — naming mismatch between control and section vocabulary, not accounting-terminology)" },
+    { "zone": "then refine", "item": "checkbox — \"Include refine row 1\"" },
+    { "zone": "then refine", "item": "select — \"Refine row 1: on the payment, take the value from\"" },
+    { "zone": "then refine", "item": "select — \"Refine row 1: comparison\"" },
+    { "zone": "then refine", "item": "select — \"Refine row 1: on the invoice\" — options \"Invoice number in books (DocNumber)\" and \"Memo on statement\" (maps to QBO PrivateNote)" },
+    { "zone": "then refine", "item": "button — \"Remove refine row 1\"" },
+    { "zone": "outcomes", "item": "switch — \"Apply as overpayment\" and its description \"Post the remainder as an overpayment. Off cancels the sync instead.\"" },
+    { "zone": "outcomes", "item": "switch — \"Cancel sync if there is no matching open invoice found for a payment\" and its description (shared with Get & Send Payments)" },
+    { "zone": "right column read-out", "item": "\"In plain terms\" panel — Searches / Takes / Bigger payment / No match lines, incl. \"recorded as a Sales Receipt\" vs \"sync cancelled, payment kept as Canceled\"" },
+    { "zone": "overlay bar", "item": "\"Update\" button (save/commit action) and its status message copy" },
+    { "zone": "overlay", "item": "Discard-changes confirm dialog — \"Discard your changes?\" / \"Closing now throws them away…\"" },
+    { "zone": "GSP Invoices tab", "item": "row — \"Apply payments to unpaid Invoice transactions\" (title + hint)" },
+    { "zone": "GSP Invoices tab", "item": "row — \"Sync unpaid (open) invoices\" (title + hint)" },
+    { "zone": "GSP Invoices tab", "item": "row — \"Sync zero invoices\" (title + hint)" },
+    { "zone": "GSP Invoices tab", "item": "\"Payment application\" card description — \"Choose which of your existing invoices Synder considers for a payment, and which one gets it. While a custom rule is on, Synder's default matching does not run for this integration.\"" },
+    { "zone": "vocabulary cross-check", "item": "vocabulary.md UI Words table — Integration, Books, Sync, Update, Add, Unpaid (open) invoices" }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 82,
+      "element": "\"Refine row 1: on the invoice\" select — option \"Memo on statement\" (internally target 'private_note', api 'PrivateNote')",
+      "finding": "The option labeled \"Memo on statement\" is wired to QuickBooks Online's PrivateNote field, which is an internal-only memo that is never printed on a customer statement — the label describes a field that does not exist as named.",
+      "user_impact": "An accountant who picks this option expecting it to compare against the customer-facing statement memo is actually comparing against a different, internal-only field, so a refine rule set up on this assumption can silently fail to match the intended invoice or match the wrong one.",
+      "suggested_fix": "Rename the option to match QuickBooks Online's own field name, e.g. \"Memo (internal)\" or \"Memo (PrivateNote)\", and drop \"statement\" since PrivateNote is never shown on a statement.",
+      "evidence": { "quote": "Memo on statement", "source": "Accounting rule: QuickBooks Online's Invoice.PrivateNote is an internal-only memo not shown to the customer or on any statement; conflating it with a statement memo is a field-mapping error, not covered by vocabulary.md." }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "High",
+      "confidence": 85,
+      "element": "\"Apply as overpayment\" switch description",
+      "finding": "The description reads \"Post the remainder as an overpayment,\" using \"Post\" where Synder's canonical term for writing data into the books is \"Sync\".",
+      "user_impact": "An accountant reading \"Post\" may expect a distinct journal-entry posting step separate from Synder's usual sync, creating doubt about how and when the overpayment actually lands in the books.",
+      "suggested_fix": "Reword to \"...the remainder syncs as an overpayment\" to stay on the canonical Sync term.",
+      "evidence": { "quote": "Post the remainder as an overpayment.", "source": "vocabulary.md line 104: \"Sync (Synchronization) | post, push (syncing data from Synder to books)\"" }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "Critical",
+      "confidence": 75,
+      "element": "\"In plain terms\" read-out, \"No match\" line (shown when \"Cancel sync if there is no matching open invoice\" is off)",
+      "finding": "When the cancel-sync switch is off, an unmatched payment is recorded as a Sales Receipt automatically, with no confirmation step and no way to tell this apart from an unapplied customer payment.",
+      "user_impact": "If the real invoice exists but the rule simply failed to find it (too-narrow date window, wrong reference field), the payment books as new income via a Sales Receipt while the original invoice can still be paid separately later — double-counting revenue with nothing to catch it before or after the fact.",
+      "suggested_fix": "Add an explicit confirmation before a no-match payment is recorded as a Sales Receipt, and confirm with Product/Accounting whether an unapplied customer payment is the safer default outcome.",
+      "evidence": { "quote": "recorded as a Sales Receipt", "source": "Accounting rule: booking an unmatched payment as a new Sales Receipt without confirming the matching invoice is genuinely absent from the books risks double-counting income." }
+    }
+  ],
+  "gaps": [
+    "Update (save/commit): the actual write-to-saved-state path is exercised in a dedicated pass, not this recon; this round's read of its validation-blocks-save behaviour comes from source inspection, not an observed interaction.",
+    "Close without saving / Discard changes: the actual discard commit path is exercised in a dedicated pass, not this recon; whether unsaved rule changes are fully discarded (vs. partially retained) was not observed interactively here."
+  ],
+  "reference_gaps": [
+    "vocabulary.md has no entries for this screen's domain-specific terms (\"matching\", \"refine row\", \"overpayment\", \"payment application\"), so terminology choices specific to payment-to-invoice matching could only be checked against general accounting/QuickBooks usage, not against a canonical Synder source."
+  ]
+}

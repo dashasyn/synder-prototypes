@@ -1,0 +1,66 @@
+{
+  "validator": "a11y",
+  "round": 1,
+  "target": "projects/payment-application-v4/ (gsp.html + overlay.html)",
+  "checked": [
+    { "zone": "gsp settings", "item": "Configure / Set up matching (entry button) — reachability and focus hand-off into overlay" },
+    { "zone": "overlay chrome", "item": "focus on overlay open — lands on Close (×)" },
+    { "zone": "overlay chrome", "item": "Close (×) — unsaved-changes confirm dialog: focus trap and focus return" },
+    { "zone": "overlay chrome", "item": "Discard-changes dialog — Keep editing / Discard changes buttons, Tab trap, Escape" },
+    { "zone": "overlay chrome", "item": "Update (primary action) — with a required field empty, and success path (source-only, not exercised live)" },
+    { "zone": "overlay chrome", "item": "Escape key — global keydown handler, behavior by focus location (button vs input/select/textarea)" },
+    { "zone": "how to match", "item": "Use default matching rules (radio) — accessible name composition" },
+    { "zone": "how to match", "item": "Use custom rules (radio) — accessible name composition" },
+    { "zone": "narrow the search", "item": "Customer matches the payment's customer (checkbox) — focus retention on toggle" },
+    { "zone": "narrow the search", "item": "Invoice date is within…days (checkbox, admin-locked) — labelling and disabled state" },
+    { "zone": "narrow the search", "item": "Days either side of the payment date (number field) — no-rerender focus preservation" },
+    { "zone": "narrow the search", "item": "Invoice number match row (checkbox) — focus retention on toggle" },
+    { "zone": "narrow the search", "item": "On the payment, take the value from (select) — focus retention after choosing a value" },
+    { "zone": "narrow the search", "item": "Comparison (select) — focus retention after choosing a value" },
+    { "zone": "narrow the search", "item": "Which Stripe field holds the reference (text field) — no-rerender focus preservation" },
+    { "zone": "then refine", "item": "+ Add condition (button) — focus retention after adding a row" },
+    { "zone": "then refine", "item": "Include refine row 1 (checkbox) — focus retention on toggle" },
+    { "zone": "then refine", "item": "Refine row 1 selects (on the payment / comparison / on the invoice) and the AND/OR combinator select — focus retention after choosing a value" },
+    { "zone": "then refine", "item": "Remove refine row 1 (button) — focus retention after removal" },
+    { "zone": "outcomes", "item": "Apply as overpayment (switch) — focus retention on toggle" },
+    { "zone": "outcomes", "item": "Cancel sync if there is no matching open invoice found (switch) — focus retention on toggle" },
+    { "zone": "prototype chrome", "item": "page-behind inert while overlay open — confirmed as the modal's focus-containment mechanism, not a bug" }
+  ],
+  "findings": [
+    {
+      "id": "A11Y-1",
+      "severity": "Critical",
+      "confidence": 88,
+      "element": "Every checkbox, radio and select inside the custom-rule panel (e.g. 'Customer matches the payment's customer', 'On the payment, take the value from', 'Refine row 1: comparison', 'Use custom rules', '+ Add condition', 'Remove refine row 1')",
+      "finding": "Toggling almost any control in the configurator calls render(), which replaces the entire left-column DOM (document.getElementById('left').innerHTML = ...); none of these onchange/onclick handlers restore focus afterward, so the browser drops focus to <body> once the interacted node is destroyed and recreated.",
+      "user_impact": "A keyboard or screen-reader user who picks a source, a comparison, ticks a row, or adds/removes a refine condition loses their place after every single change and must Tab from the very top of the overlay to reach the next field — for a task that requires configuring several such controls in sequence, this makes efficient completion effectively impossible.",
+      "suggested_fix": "After render(), re-focus the element that triggered the change (e.g. capture document.activeElement's id before re-rendering and call .focus() on the new node with the same id), the way renderSim() already does for the sample-payment radios and the way c-days/c-mkey avoid the problem entirely by not re-rendering on input.",
+      "evidence": { "action": "select a new value in 'On the payment, take the value from' (or tick any row checkbox / choose 'Use custom rules') via keyboard", "observed": "source: ch('c-msrc', ...R()) and the equivalent handlers for c-cust, c-date, c-match, m-default, m-custom, ce-i, cs-i, co-i, ct-i, c-join, c-over, c-cancel, c-add, cd-i all call render(), which rewrites #left's entire innerHTML with no .focus() call afterward — contrast with renderSim()'s explicit sl.focus() and the c-days/c-mkey handlers, which use refresh() specifically to avoid destroying the focused node" }
+    },
+    {
+      "id": "A11Y-2",
+      "severity": "High",
+      "confidence": 85,
+      "element": "'How to match' radios — 'Use default matching rules' and 'Use custom rules'",
+      "finding": "Each radio's accessible name is built by nesting the option title, its full description, and (for the default option) an internal review-only assumption note inside the same <label> with no separating text, so the announced name runs the words together instead of stating the option's purpose.",
+      "user_impact": "A screen-reader user tabbing to 'Use default matching rules' hears one unbroken string — '...matching rulesSame customer, dated near the payment, invoice number matches the payment's reference. Nothing to set up.A1 — reference copy...' — burying the actual choice inside description and internal note text instead of a short, clear control name.",
+      "suggested_fix": "Give each radio an explicit short accessible name (aria-label or a dedicated aria-labelledby pointing only at the .mode-t span) and move the description into aria-describedby so it is announced separately, the way the outcome switches already do with aria-labelledby pointing at a single title span.",
+      "evidence": { "action": "focus the 'Use default matching rules' radio and read its accessible name", "observed": "recorded name is the run-on string 'Use default matching rulesSame customer, dated near the payment, invoice number matches the payment's reference. Nothing to set up.A1 — reference copy. The FDD requires the default behaviour here as non-editable reference text but does not supply the wording. Product owns it.' — matching the source, where <span class=\"mode-t\">, <span class=\"mode-d\">, and <span class=\"asm\"> all sit inside one unlabelled <label> with no separating text" }
+    },
+    {
+      "id": "A11Y-3",
+      "severity": "High",
+      "confidence": 78,
+      "element": "Overlay-wide Escape key handler",
+      "finding": "The document keydown handler for Escape explicitly ignores the key whenever the focused element is an INPUT, SELECT, or TEXTAREA, so Escape only closes the overlay when focus happens to be on something else (e.g. the close button) — which the state map's one successful Escape test used.",
+      "user_impact": "Since most of the configurator's controls are text fields and selects, a keyboard user editing 'Which Stripe field holds the reference' or any of the source/comparison/target dropdowns and pressing Escape — the standard way to back out of a modal — gets no response at all, with no indication why, and must Tab away to a non-field element first or reach for the mouse.",
+      "suggested_fix": "Let Escape trigger requestClose() regardless of focused element type (blurring the field first if needed), or at minimum close any open native <select> dropdown on the first Escape and close the overlay on a second, so the shortcut never silently does nothing.",
+      "evidence": { "action": "press Escape while focus is on the 'Which Stripe field holds the reference' text field (or any select)", "observed": "source: `if (t && (t.tagName==='INPUT'||t.tagName==='SELECT'||t.tagName==='TEXTAREA')) return;` — the handler returns before calling requestClose(), so nothing happens; this is untested by the state map, whose only Escape pass started with focus on ov-close" }
+    }
+  ],
+  "gaps": [
+    "A fully valid custom rule was never carried through a successful Update in the state map (only the empty-required-field failure and the unsaved-changes close were exercised) — whether focus/announcement on a successful save behaves as the source implies (closeOverlay returning focus to the trigger button) is inferred from code, not confirmed live.",
+    "Visual focus-indicator appearance (as opposed to DOM focus retention) for controls styled by the external ui-kit stylesheet (synder-ui-kit.css, e.g. .btn, .btn-outlined, .btn-danger used by Update, Keep editing, Discard changes) could not be verified — the state map records only 'still focused'/'still clickable', not whether a visible outline is present, and that stylesheet is a remote asset outside this pass."
+  ],
+  "reference_gaps": []
+}

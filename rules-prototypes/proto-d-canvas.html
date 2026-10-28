@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Synder Smart Rules – Proto D</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Roboto,sans-serif;background:#F9FAFB;display:flex;flex-direction:column;height:100vh;overflow:hidden;font-size:14px;color:#1A1A2E}
+
+/* ── Header ── */
+.header{background:#fff;border-bottom:1px solid #E0E0E0;padding:10px 20px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+.header-title{font-size:15px;font-weight:500}
+.rule-name{border:1px solid #E5E7EB;border-radius:4px;padding:5px 10px;font-size:13px;outline:none;width:220px;transition:border-color .15s}
+.rule-name:focus{border-color:#0053CC}
+.rule-name.dirty{border-color:#FB8C00}
+.btn{padding:7px 16px;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer;border:none;transition:background .15s}
+.btn-primary{background:#0053CC;color:#fff}.btn-primary:hover{background:#0044AA}
+.btn-secondary{background:#fff;color:#0053CC;border:1px solid #0053CC}.btn-secondary:hover{background:#EEF3FF}
+.btn-ghost{background:none;color:#616161;border:1px solid #E0E0E0}.btn-ghost:hover{background:#F5F5F5}
+.btn-sm{padding:4px 10px;font-size:12px}
+.ml-auto{margin-left:auto}
+.btn-row{display:flex;gap:8px}
+
+/* ── Layout ── */
+.workspace{display:flex;flex:1;overflow:hidden}
+.sidebar{width:300px;min-width:300px;background:#fff;border-right:1px solid #E0E0E0;display:flex;flex-direction:column;overflow-y:auto;flex-shrink:0}
+.canvas-area{flex:1;overflow:auto;padding:40px 48px}
+
+/* ── Sidebar ── */
+.sb-section{padding:16px;border-bottom:1px solid #F5F5F5}
+.sb-label{font-size:11px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:10px}
+.sb-hint{font-size:13px;color:#9E9E9E;text-align:center;padding:32px 16px;line-height:1.5}
+.form-group{margin-bottom:12px}
+.form-label{font-size:12px;color:#616161;margin-bottom:4px;display:block}
+select,.text-input{width:100%;padding:7px 10px;border:1px solid #E5E7EB;border-radius:4px;font-size:13px;color:#1A1A2E;background:#fff;outline:none;-webkit-appearance:none;appearance:none}
+select:focus,.text-input:focus{border-color:#0053CC}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M6 8L1 3h10z' fill='%239E9E9E'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:28px}
+.or-divider{text-align:center;font-size:11px;font-weight:700;color:#BDBDBD;margin:4px 0;letter-spacing:.5px}
+.or-values-list{display:flex;flex-direction:column;gap:4px}
+.or-value-row{display:flex;gap:4px;align-items:center}
+.or-value-row .text-input{flex:1}
+.remove-or{background:none;border:none;color:#BDBDBD;cursor:pointer;font-size:18px;line-height:1;padding:0 2px}.remove-or:hover{color:#F44336}
+.add-or-btn{font-size:12px;color:#0053CC;background:none;border:none;cursor:pointer;padding:2px 0;text-align:left}.add-or-btn:hover{text-decoration:underline}
+
+/* ── Canvas cards ── */
+.tree-node{display:flex;align-items:flex-start;gap:0}
+.tree-column{display:flex;flex-direction:column;align-items:center;gap:0}
+
+.card{background:#fff;border:1px solid #E5E7EB;border-radius:8px;padding:11px 14px;width:220px;cursor:pointer;position:relative;transition:box-shadow .15s;overflow:visible}
+.card:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.card.selected{box-shadow:0 0 0 2px #0053CC}
+.card.trigger-card{border-left:4px solid #757575}
+.card.condition-card{border-left:4px solid #0053CC}
+.card.action-card{border-left:4px solid #16A34A}
+.card.empty-card{width:220px;border:2px dashed #BDBDBD;background:#FAFAFA;cursor:pointer;min-height:56px;display:flex;align-items:center;justify-content:center;color:#BDBDBD;font-size:12px;transition:all .15s}
+.card.empty-card:hover{border-color:#0053CC;color:#0053CC;background:#EEF3FF}
+.card.chooser-card{width:220px;border:2px dashed #0053CC;background:#EEF3FF;padding:8px}
+
+.card-type-label{font-size:10px;font-weight:700;color:#9E9E9E;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.card-main{font-size:13px;font-weight:500;color:#1A1A2E;line-height:1.35}
+.card-detail{font-size:12px;color:#616161;margin-top:2px;line-height:1.35}
+.or-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:4px}
+.or-tag{background:#EEF3FF;color:#0053CC;font-size:11px;padding:1px 6px;border-radius:3px}
+.del-btn{position:absolute;top:6px;right:6px;background:none;border:none;color:#9E9E9E;cursor:pointer;font-size:16px;line-height:1}.del-btn:hover{color:#F44336}
+
+/* ── Path buttons on condition cards ── */
+.path-btns{display:flex;gap:6px;margin-top:8px}
+.path-btn{font-size:12px;font-weight:600;padding:4px 12px;border-radius:4px;cursor:pointer;transition:all .15s;min-width:52px;text-align:center;border:1.5px solid;background:#fff}
+.path-btn.yes{color:#16A34A;border-color:#16A34A}.path-btn.yes:hover{background:#16A34A;color:#fff}
+.path-btn.no{color:#D97706;border-color:#D97706}.path-btn.no:hover{background:#D97706;color:#fff}
+.path-btn.add-action-btn{color:#16A34A;border-color:#16A34A;width:100%}.path-btn.add-action-btn:hover{background:#16A34A;color:#fff}
+
+/* ── Drag handle + card action buttons ── */
+.drag-handle{position:absolute;top:50%;left:-18px;transform:translateY(-50%);width:14px;cursor:grab;color:#BDBDBD;display:none;flex-direction:column;gap:2px;padding:2px}
+.drag-handle:active{cursor:grabbing}
+.drag-handle span{display:block;width:10px;height:2px;background:#BDBDBD;border-radius:1px}
+.card:hover .drag-handle,.card.selected .drag-handle{display:flex}
+.copy-btn{position:absolute;top:6px;right:26px;background:none;border:none;color:#9E9E9E;cursor:pointer;font-size:13px;line-height:1;padding:0 2px}.copy-btn:hover{color:#0053CC}
+.card.drag-over{outline:2px dashed #0053CC;outline-offset:2px}
+
+/* ── Connectors ── */
+/* margin-left: 109px = (card width 220px / 2) - 1px (half conn width) */
+.conn-v{width:2px;height:28px;background:#BDBDBD;margin-left:109px;align-self:flex-start;flex-shrink:0}
+.conn-h{height:2px;width:32px;background:#BDBDBD;flex-shrink:0}
+.path-label{font-size:10px;font-weight:700;padding:2px 6px;border-radius:3px;color:#fff;margin-bottom:4px;display:inline-block;align-self:flex-start}
+.path-label.yes-lbl{background:#16A34A}
+.path-label.no-lbl{background:#D97706}
+
+/* ── Chooser card ── */
+.chooser-btns{display:flex;gap:8px;justify-content:center}
+.chooser-btn{padding:6px 14px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;border:none;transition:all .15s}
+.chooser-btn.cond{background:#EEF3FF;color:#0053CC;border:1px solid #C5D8FF}.chooser-btn.cond:hover{background:#0053CC;color:#fff}
+.chooser-btn.act{background:#E8F5E9;color:#16A34A;border:1px solid #B2DFB8}.chooser-btn.act:hover{background:#16A34A;color:#fff}
+
+/* ── Error bar ── */
+.error-bar{background:#FFF3E0;border-top:1px solid #FFCC80;padding:7px 20px;font-size:12px;color:#E65100;flex-shrink:0;display:none}
+.error-bar.show{display:block}
+
+/* ── Card flash (path already filled feedback) ── */
+@keyframes card-flash{0%,100%{box-shadow:0 0 0 2px #0053CC}50%{box-shadow:0 0 0 5px rgba(0,83,204,.45)}}
+
+/* ── Xero Invoice Overlay ── */
+.xero-modal{background:#fff;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.2);width:700px;max-width:96vw;max-height:86vh;display:flex;flex-direction:column;overflow:hidden;transform:translateY(8px);transition:transform .18s}
+.modal-overlay.open .xero-modal{transform:translateY(0)}
+.xero-inv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:14px 16px}
+.xero-inv-field{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border-radius:4px;border:1.5px solid transparent;transition:all .15s;background:#F9FAFB}
+.xero-inv-field.updatable{cursor:pointer;border-color:#BDBDBD;background:#fff}
+.xero-inv-field.updatable:hover{border-color:#0053CC;background:#F0F5FF}
+.xero-inv-field.xero-selected{border-color:#0053CC;background:#EEF3FF}
+.xero-inv-field.disabled{opacity:.45;pointer-events:none}
+.xero-field-label{font-size:11px;color:#6B7280;font-weight:500;display:flex;align-items:center;gap:5px}
+.xero-field-val{font-size:13px;color:#BDBDBD;font-style:italic;min-height:18px;margin-top:1px}
+.xero-field-val.has-val{color:#1A1A2E;font-style:normal}
+.xero-field-input{margin-top:5px;width:100%;border:none;border-top:1px solid #C5D8FF;padding-top:4px;font-size:12px;outline:none;background:transparent;color:#0053CC;font-family:Roboto,sans-serif}
+.xero-field-input::placeholder{color:#93C5FD}
+.update-badge{font-size:9px;font-weight:700;color:#fff;background:#0053CC;padding:1px 4px;border-radius:2px;letter-spacing:.3px}
+.xero-table{width:100%;border-collapse:collapse}
+.xero-table th{font-size:11px;color:#6B7280;font-weight:500;padding:8px 10px;text-align:left;border-bottom:1px solid #E5E7EB;white-space:nowrap}
+.xero-table td{padding:6px 8px;border-bottom:1px solid #F5F5F5;vertical-align:top}
+.xero-cell{padding:7px 9px;border-radius:4px;border:1.5px solid transparent;cursor:default;transition:all .15s;min-height:34px;font-size:12px;color:#BDBDBD;background:#F9FAFB}
+.xero-cell.updatable{cursor:pointer;border-color:#BDBDBD;color:#1A1A2E;background:#fff}
+.xero-cell.updatable:hover{border-color:#0053CC;background:#F0F5FF}
+.xero-cell.xero-selected{border-color:#0053CC;background:#EEF3FF}
+.xero-cell-hint{font-size:11px;color:#BDBDBD;font-style:italic}
+.xero-cell-input{width:100%;border:none;border-bottom:1px solid #C5D8FF;font-size:12px;outline:none;background:transparent;color:#0053CC;font-family:Roboto,sans-serif;padding:1px 0}
+.xero-cell-input::placeholder{color:#93C5FD}
+.xero-section-hd{font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.5px;padding:10px 16px 4px;border-top:1px solid #F5F5F5}
+.xero-summary{font-size:12px;color:#0053CC;background:#EEF3FF;border-radius:4px;padding:6px 10px;cursor:pointer;display:flex;align-items:center;gap:6px;margin-top:8px;border:1px solid #C5D8FF}
+.xero-summary:hover{background:#E0EBFF}
+.xero-open-btn{width:100%;padding:8px;border-radius:4px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px dashed #0053CC;color:#0053CC;background:#F0F5FF;transition:all .15s;text-align:center;margin-top:4px}
+.xero-open-btn:hover{background:#0053CC;color:#fff;border-style:solid}
+.card.flash{animation:card-flash .35s ease 2}
+
+/* ── AI modal ── */
+.ai-btn{background:linear-gradient(135deg,#6C47FF,#0053CC);color:#fff;border:none;display:flex;align-items:center;gap:6px;font-size:13px;font-weight:500;padding:7px 14px;border-radius:4px;cursor:pointer;transition:opacity .15s}
+.ai-btn:hover{opacity:.88}
+.ai-btn svg{flex-shrink:0}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:1000;opacity:0;pointer-events:none;transition:opacity .18s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:#fff;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,.18);width:540px;max-width:95vw;display:flex;flex-direction:column;overflow:hidden;transform:translateY(8px);transition:transform .18s}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-head{padding:18px 20px 14px;border-bottom:1px solid #E5E7EB;display:flex;align-items:center;gap:10px}
+.modal-head-title{font-size:15px;font-weight:500;flex:1}
+.modal-close{background:none;border:none;font-size:20px;color:#9E9E9E;cursor:pointer;line-height:1;padding:0 2px}.modal-close:hover{color:#1A1A2E}
+.modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
+.modal-label{font-size:12px;color:#6B7280;margin-bottom:4px;display:block}
+.ai-textarea{width:100%;min-height:90px;padding:10px 12px;border:1px solid #E5E7EB;border-radius:4px;font-size:13px;font-family:Roboto,sans-serif;resize:vertical;outline:none;line-height:1.5;color:#1A1A2E;transition:border-color .15s}
+.ai-textarea:focus{border-color:#0053CC;box-shadow:0 0 0 2px rgba(0,83,204,.15)}
+.example-chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:4px 10px;border-radius:12px;font-size:12px;background:#F3F4F6;color:#374151;border:1px solid #E5E7EB;cursor:pointer;transition:all .12s}
+.chip:hover{background:#EEF3FF;border-color:#C5D8FF;color:#0053CC}
+.ai-generating{display:none;align-items:center;gap:8px;font-size:13px;color:#6B7280;padding:4px 0}
+.ai-generating.show{display:flex}
+.spinner{width:16px;height:16px;border:2px solid #E5E7EB;border-top-color:#0053CC;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modal-foot{padding:14px 20px;border-top:1px solid #E5E7EB;display:flex;justify-content:flex-end;gap:8px}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-title">Create New Rule</div>
+  <input class="rule-name" id="ruleName" type="text" value="New Rule" />
+  <button class="ai-btn" onclick="openAiModal()">
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1l1.5 3.5L12 6l-3.5 1.5L7 11l-1.5-3.5L2 6l3.5-1.5z" fill="currentColor"/></svg>
+    Create with AI
+  </button>
+  <div class="ml-auto btn-row">
+    <button class="btn btn-ghost" onclick="history.back()">← Back</button>
+    <button class="btn btn-primary" onclick="saveRule()">Save Rule</button>
+    <button class="btn btn-secondary" onclick="saveRule()">Save &amp; Close</button>
+  </div>
+</div>
+
+<!-- AI modal -->
+<div class="modal-overlay" id="aiOverlay" onclick="onOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-head">
+      <svg width="18" height="18" viewBox="0 0 14 14" fill="none"><path d="M7 1l1.5 3.5L12 6l-3.5 1.5L7 11l-1.5-3.5L2 6l3.5-1.5z" fill="#6C47FF"/></svg>
+      <div class="modal-head-title">Create rule with AI</div>
+      <button class="modal-close" onclick="closeAiModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div>
+        <label class="modal-label">Describe what you want the rule to do</label>
+        <textarea class="ai-textarea" id="aiPrompt" placeholder="e.g. Send an email to the customer when an invoice is overdue…"></textarea>
+      </div>
+      <div>
+        <label class="modal-label">Examples</label>
+        <div class="example-chips">
+          <span class="chip" onclick="setPrompt(this)">Send email to contact when invoice has outstanding balance</span>
+          <span class="chip" onclick="setPrompt(this)">Tag high-value invoices with a tracking category</span>
+          <span class="chip" onclick="setPrompt(this)">Email me when a payment is received</span>
+          <span class="chip" onclick="setPrompt(this)">Send SMS when a refund is issued</span>
+          <span class="chip" onclick="setPrompt(this)">Post to webhook when a new contact is created</span>
+        </div>
+      </div>
+      <div class="ai-generating" id="aiGenerating">
+        <div class="spinner"></div>
+        <span>Generating rule…</span>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeAiModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="generateRule()">Generate rule</button>
+    </div>
+  </div>
+</div>
+
+<!-- Workspace -->
+<div class="workspace">
+  <!-- Sidebar -->
+  <div class="sidebar" id="sidebar">
+    <!-- content injected by renderSidebar() -->
+  </div>
+
+  <!-- Canvas -->
+  <div class="canvas-area" id="canvas">
+    <!-- content injected by renderCanvas() -->
+  </div>
+</div>
+
+<!-- Delete modal -->
+<div class="modal-overlay" id="deleteOverlay" onclick="onDeleteOverlay(event)">
+  <div class="modal" style="width:440px">
+    <div class="modal-head">
+      <div class="modal-head-title">Delete block?</div>
+      <button class="modal-close" onclick="closeDeleteModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p id="deleteModalMsg" style="font-size:13px;color:#1A1A2E;line-height:1.5"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-secondary" id="deleteOnlyBtn" onclick="confirmDeleteOnly()">Delete this block + NO branch</button>
+      <button class="btn" style="background:#DC2626;color:#fff" onclick="confirmDeleteAll()">Delete block + all below</button>
+    </div>
+  </div>
+</div>
+
+<!-- Xero Invoice overlay -->
+<div class="modal-overlay" id="xeroOverlay" onclick="onXeroOverlayClick(event)">
+  <div class="xero-modal">
+    <div class="modal-head">
+      <div>
+        <div class="modal-head-title">Configure Xero fields to update</div>
+        <div style="font-size:12px;color:#9E9E9E;margin-top:2px">Click a field on the invoice to include it in this rule. Set the value it should be changed to.</div>
+      </div>
+      <button class="modal-close" onclick="closeXeroOverlay()" style="margin-left:auto">×</button>
+    </div>
+    <div id="xeroModalBody" style="overflow-y:auto;flex:1"></div>
+    <div class="modal-foot" style="justify-content:space-between;align-items:center">
+      <div id="xeroModalCount" style="font-size:12px;color:#6B7280"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeXeroOverlay()">Cancel</button>
+        <button class="btn btn-primary" onclick="applyXeroOverlay()">Apply</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Error bar -->
+<div class="error-bar" id="errorBar">
+  ⚠️ Each IF condition needs at least one THEN action before you can save.
+</div>
+
+<script>
+// ──────────────────────────────────────────────────────────────
+// DATA
+// ──────────────────────────────────────────────────────────────
+// Xero entities (per FDD: cloudbusinessllc.atlassian.net/wiki/.../FDD+Xero+Smart+Rules)
+const ENTITIES = ['Invoice','Bill','Payment','Bill Payment','Refund','Deposit','Contact','Bank Transfer','Item'];
+const EVENTS = {
+  'Invoice':      ['Created'],
+  'Bill':         ['Created'],
+  'Payment':      ['Created'],
+  'Bill Payment': ['Created'],
+  'Refund':       ['Created'],
+  'Deposit':      ['Created'],
+  'Contact':      ['Created','Updated'],
+  'Bank Transfer':['Created'],
+  'Item':         ['Created','Updated'],
+};
+const DEFAULT_EVENTS = ['Created'];
+
+// Sub-fields for Contact (used in both Invoice/Bill and as Contact entity)
+const CONTACT_SUB = {
+  'Name':                          'text',
+  'Email':                         'text',
+  'Shipping Address: City':        'text',
+  'Shipping Address: Region':      'text',
+  'Shipping Address: Postal Code': 'text',
+  'Shipping Address: Country':     'text',
+  'Billing Address: City':         'text',
+  'Billing Address: Region':       'text',
+  'Billing Address: Postal Code':  'text',
+  'Billing Address: Country':      'text',
+};
+
+const INVOICE_FIELDS = {
+  'Reference':               {type:'text',   sub:null},
+  'Currency':                {type:'text',   sub:null},
+  'Total Amount':            {type:'number', sub:null},
+  'Balance':                 {type:'number', sub:null},
+  'Txn Date':                {type:'date',   sub:null},
+  'Line: Amount':            {type:'number', sub:null},
+  'Line: Description':       {type:'text',   sub:null},
+  'Line: Qty':               {type:'number', sub:null},
+  'Line: Item':              {type:'text',   sub:null},
+  'Line: Tax Rate':          {type:'text',   sub:null},
+  'Line: TrackingCategory1': {type:'text',   sub:null},
+  'Line: TrackingCategory2': {type:'text',   sub:null},
+  'Contact':                 {type:'object', sub:CONTACT_SUB},
+};
+
+const PAYMENT_FIELDS = {
+  'Total Amount':            {type:'number', sub:null},
+  'Currency':                {type:'text',   sub:null},
+  'Reference':               {type:'text',   sub:null},
+  'Txn Date':                {type:'date',   sub:null},
+  'Contact':                 {type:'object', sub:CONTACT_SUB},
+};
+
+const CONTACT_FIELDS = {
+  'Name':                    {type:'text',   sub:null},
+  'Email':                   {type:'text',   sub:null},
+  'Balance':                 {type:'number', sub:null},
+  'Shipping Address: City':        {type:'text', sub:null},
+  'Shipping Address: Region':      {type:'text', sub:null},
+  'Shipping Address: Postal Code': {type:'text', sub:null},
+  'Shipping Address: Country':     {type:'text', sub:null},
+  'Billing Address: City':         {type:'text', sub:null},
+  'Billing Address: Region':       {type:'text', sub:null},
+  'Billing Address: Postal Code':  {type:'text', sub:null},
+  'Billing Address: Country':      {type:'text', sub:null},
+};
+
+const BANK_TRANSFER_FIELDS = {
+  'Amount':                  {type:'number', sub:null},
+  'Txn Date':                {type:'date',   sub:null},
+  'From Account: Name':      {type:'text',   sub:null},
+  'From Account: Currency':  {type:'text',   sub:null},
+  'To Account: Name':        {type:'text',   sub:null},
+  'To Account: Currency':    {type:'text',   sub:null},
+};
+
+const ITEM_FIELDS = {
+  'Name':                    {type:'text',   sub:null},
+  'Code':                    {type:'text',   sub:null},
+  'Sale Price':              {type:'number', sub:null},
+  'Cost Price':              {type:'number', sub:null},
+};
+
+const FIELDS = {
+  'Invoice':       INVOICE_FIELDS,
+  'Bill':          INVOICE_FIELDS,
+  'Refund':        INVOICE_FIELDS,
+  'Deposit':       INVOICE_FIELDS,
+  'Payment':       PAYMENT_FIELDS,
+  'Bill Payment':  PAYMENT_FIELDS,
+  'Contact':       CONTACT_FIELDS,
+  'Bank Transfer': BANK_TRANSFER_FIELDS,
+  'Item':          ITEM_FIELDS,
+};
+
+const TEXT_OPS   = ['Contains','Equals','Not equals','Set','Not set'];
+const NUMBER_OPS = ['Equals','Greater','Greater or equals','Less','Less or equals','Not equals','Set','Not set'];
+const DATE_OPS   = ['Equals','Before','After','Set','Not set'];
+const NO_VALUE_OPS = ['Set','Not set'];
+
+const ACTION_TYPES = ['Email','SMS','Voice','Xero action','Post to URL'];
+const EMAIL_RECIPIENTS = ['Account owner','Contact','Other'];
+const XERO_ENTITY_ACTIONS = ['Update current','Update line'];
+// Xero action fields per FDD — depends on parent (Invoice/Bill have lines; Contact/Item have own fields)
+const XERO_FIELDS = {
+  'Update current': ['Contact','Reference','Tax Treatment','Line: Item','Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
+  'Update line':    ['Line: Description','Line: Account','Line: Tax Rate','Line: TrackingCategory1','Line: TrackingCategory2'],
+};
+// Which entities support Xero action
+const XERO_ACTION_ENTITIES = new Set(['Invoice','Bill','Refund','Deposit','Contact','Item','Bank Transfer']);
+
+// ──────────────────────────────────────────────────────────────
+// STATE
+// ──────────────────────────────────────────────────────────────
+let state = {
+  trigger: {entity:'Invoice', event:'Created'},
+  nodes: {},          // id -> node
+  rootId: null,
+  idCounter: 1,
+  sidebar: {mode:'trigger', nodeId:null}, // mode: trigger|condition|action|select-block|chooser
+  pendingSlot: null,  // {parentId, path:'yes'|'no'} — where new block will land
+  editBuffer: {},     // snapshots for cancel/revert
+};
+
+function createNode(type, overrides={}) {
+  const id = 'n' + (state.idCounter++);
+  const node = {id, type, yesChild:null, noChild:null, ...overrides};
+  if (type === 'condition') {
+    Object.assign(node, {field:'', subField:'', operand:'', values:[''], ...overrides});
+  }
+  if (type === 'action') {
+    Object.assign(node, {actionType:'', recipient:'', qbEntity:'', qbAction:'', qbFieldValues:{}, urlTarget:'', ...overrides});
+  }
+  state.nodes[id] = node;
+  return id;
+}
+
+// Init: create trigger node
+function init() {
+  state.rootId = createNode('trigger');
+  state.nodes[state.rootId].entity = state.trigger.entity;
+  state.nodes[state.rootId].event  = state.trigger.event;
+  state.sidebar = {mode:'trigger', nodeId:state.rootId};
+  render();
+}
+
+// ──────────────────────────────────────────────────────────────
+// HELPERS
+// ──────────────────────────────────────────────────────────────
+function getFieldType(entity, field, subField) {
+  const fieldDef = (FIELDS[entity]||{})[field];
+  if (!fieldDef) return 'text';
+  if (fieldDef.sub && subField) return fieldDef.sub[subField] || 'text';
+  return fieldDef.type || 'text';
+}
+
+function getOperands(type) {
+  if (type==='number') return NUMBER_OPS;
+  if (type==='date')   return DATE_OPS;
+  return TEXT_OPS;
+}
+
+function needsValue(op) { return !NO_VALUE_OPS.includes(op); }
+
+function findParent(id) {
+  for (const nid in state.nodes) {
+    const n = state.nodes[nid];
+    if (n.yesChild === id) return {parentId: nid, path: 'yes'};
+    if (n.noChild  === id) return {parentId: nid, path: 'no'};
+  }
+  return null;
+}
+
+function deleteSubtree(id) {
+  // Pure recursive delete — does NOT touch parent links
+  const node = state.nodes[id];
+  if (!node) return;
+  if (node.yesChild) deleteSubtree(node.yesChild);
+  if (node.noChild)  deleteSubtree(node.noChild);
+  delete state.nodes[id];
+}
+
+function deleteNode(id) {
+  // "Delete + all below": unlink from parent, then delete entire subtree
+  const p = findParent(id);
+  if (p) {
+    if (p.path === 'yes') state.nodes[p.parentId].yesChild = null;
+    else                  state.nodes[p.parentId].noChild  = null;
+  }
+  deleteSubtree(id);
+  if (state.sidebar.nodeId === id) state.sidebar = {mode:'select-block', nodeId:null};
+}
+
+function deleteOnly(id) {
+  // "Delete only this block": promote YES child up; delete NO subtree
+  const node = state.nodes[id];
+  if (!node) return;
+  const p = findParent(id);
+  const yesId = node.yesChild;
+  // Delete NO subtree
+  if (node.noChild) deleteSubtree(node.noChild);
+  // Reconnect YES child to parent (or to root if no parent — shouldn't happen for non-trigger)
+  if (p) {
+    if (p.path === 'yes') state.nodes[p.parentId].yesChild = yesId;
+    else                  state.nodes[p.parentId].noChild  = yesId;
+  }
+  // Drop this node
+  node.yesChild = null;
+  node.noChild = null;
+  delete state.nodes[id];
+  if (state.sidebar.nodeId === id) state.sidebar = {mode:'select-block', nodeId:null};
+}
+
+function countSubtree(id) {
+  const n = state.nodes[id];
+  if (!n) return 0;
+  return 1 + countSubtree(n.yesChild) + countSubtree(n.noChild);
+}
+
+// ── Copy (duplicate) ───────────────────────────────────────────
+function copyNode(nodeId) {
+  const node = state.nodes[nodeId];
+  if (!node || node.type === 'trigger') return;
+  let overrides = {};
+  if (node.type === 'condition') {
+    overrides = {field:node.field, subField:node.subField, operand:node.operand, values:[...(node.values||[''])]};
+  } else if (node.type === 'action') {
+    overrides = {actionType:node.actionType, recipient:node.recipient, customEmail:node.customEmail,
+                 qbAction:node.qbAction, qbFieldValues:{...(node.qbFieldValues||{})}, urlTarget:node.urlTarget};
+  }
+  const newId = createNode(node.type, overrides);
+  const newNode = state.nodes[newId];
+  newNode.yesChild = node.yesChild;
+  node.yesChild = newId;
+  render();
+}
+
+// ── Drag-and-drop ──────────────────────────────────────────────
+let dragId = null;
+
+function addDragListeners(el, nodeId) {
+  el.addEventListener('dragstart', e => {
+    dragId = nodeId;
+    e.dataTransfer.effectAllowed = 'move';
+    setTimeout(() => el.style.opacity = '.5', 0);
+  });
+  el.addEventListener('dragend', () => {
+    el.style.opacity = '';
+    dragId = null;
+    document.querySelectorAll('.card.drag-over').forEach(c => c.classList.remove('drag-over'));
+  });
+  el.addEventListener('dragover', e => {
+    if (!dragId || dragId === nodeId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    el.classList.add('drag-over');
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+  el.addEventListener('drop', e => {
+    e.preventDefault();
+    el.classList.remove('drag-over');
+    if (!dragId || dragId === nodeId) return;
+    moveNode(dragId, nodeId);
+    dragId = null;
+  });
+}
+
+function moveNode(fromId, beforeId) {
+  // Only reorder nodes in the root YES chain
+  const chain = [];
+  let cur = state.rootId;
+  while (cur) { chain.push(cur); cur = state.nodes[cur]?.yesChild || null; }
+  const fi = chain.indexOf(fromId);
+  const bi = chain.indexOf(beforeId);
+  if (fi < 1 || bi < 0 || fi === bi) return; // fi<1: don't move trigger
+  chain.splice(fi, 1);
+  const newBi = chain.indexOf(beforeId);
+  if (newBi < 0) return;
+  chain.splice(newBi, 0, fromId);
+  for (let i = 0; i < chain.length - 1; i++) state.nodes[chain[i]].yesChild = chain[i+1];
+  render();
+}
+
+// ── Delete modal ───────────────────────────────────────────────
+let pendingDeleteId = null;
+function openDeleteModal(id) {
+  pendingDeleteId = id;
+  const n = state.nodes[id];
+  if (!n) return;
+  const below = countSubtree(n.yesChild) + countSubtree(n.noChild);
+  const msg = document.getElementById('deleteModalMsg');
+  const onlyBtn = document.getElementById('deleteOnlyBtn');
+  if (below > 0) {
+    msg.innerHTML = `This block has <strong>${below}</strong> connected block${below !== 1 ? 's' : ''} below it.<br><br><strong>Delete this block + NO branch</strong> — keeps the YES chain attached, removes the NO branch (${below > 1 ? below - countSubtree(node.yesChild) : 0} block${below > 1 ? 's' : ''} removed).<br><strong>Delete block + all below</strong> — removes this block and everything underneath it (${below + 1} block${below + 1 !== 1 ? 's' : ''} removed).`;
+    onlyBtn.style.display = '';
+  } else {
+    msg.textContent = 'This will remove the block from your rule.';
+    onlyBtn.style.display = 'none';
+  }
+  document.getElementById('deleteOverlay').classList.add('open');
+}
+function closeDeleteModal() {
+  pendingDeleteId = null;
+  document.getElementById('deleteOverlay').classList.remove('open');
+}
+function onDeleteOverlay(e) {
+  if (e.target === document.getElementById('deleteOverlay')) closeDeleteModal();
+}
+function confirmDeleteOnly() {
+  if (pendingDeleteId) deleteOnly(pendingDeleteId);
+  closeDeleteModal();
+  render();
+}
+function confirmDeleteAll() {
+  if (pendingDeleteId) deleteNode(pendingDeleteId);
+  closeDeleteModal();
+  render();
+}
+
+function hasErrors() {
+  for (const id in state.nodes) {
+    const n = state.nodes[id];
+    if (n.type === 'condition') {
+      // Must have at least one action somewhere in its subtree
+      if (!hasActionInSubtree(id)) return true;
+    }
+  }
+  return false;
+}
+function hasActionInSubtree(id) {
+  const n = state.nodes[id];
+  if (!n) return false;
+  if (n.type === 'action') return true;
+  return hasActionInSubtree(n.yesChild) || hasActionInSubtree(n.noChild);
+}
+
+function startEdit(nodeId, mode) {
+  if (state.sidebar.nodeId !== nodeId) {
+    const n = state.nodes[nodeId];
+    if (n) state.editBuffer[nodeId] = JSON.parse(JSON.stringify(n));
+  }
+  state.sidebar = {mode, nodeId};
+}
+
+// ──────────────────────────────────────────────────────────────
+// SIDEBAR
+// ──────────────────────────────────────────────────────────────
+function renderSidebar() {
+  const sb = document.getElementById('sidebar');
+  const {mode, nodeId} = state.sidebar;
+  let html = '';
+
+  if (mode === 'trigger') {
+    const node = state.nodes[nodeId] || {};
+    const entity = node.entity || state.trigger.entity;
+    const evts = EVENTS[entity] || DEFAULT_EVENTS;
+    html = `
+      <div class="sb-section">
+        <div class="sb-label">Select trigger</div>
+        <div class="form-group">
+          <label class="form-label">Entity</label>
+          <select onchange="onTriggerEntity(this.value)">
+            ${ENTITIES.map(e=>`<option ${e===entity?'selected':''}>${e}</option>`).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Event</label>
+          <select onchange="onTriggerEvent(this.value)">
+            ${evts.map(e=>`<option ${e===node.event?'selected':''}>${e}</option>`).join('')}
+          </select>
+        </div>
+        <div style="font-size:12px;color:#9E9E9E;margin-top:4px">A trigger is the event that starts your workflow</div>
+      </div>
+      `;
+  }
+
+  else if (mode === 'condition') {
+    const node = state.nodes[nodeId];
+    if (!node) { renderSidebarHint(); return; }
+    const entity = state.trigger.entity;
+    const fields = Object.keys(FIELDS[entity] || {});
+    const fieldDef = (FIELDS[entity]||{})[node.field];
+    const hasSubFields = fieldDef && fieldDef.sub;
+    const effectiveType = getFieldType(entity, node.field, node.subField);
+    const ops = getOperands(effectiveType);
+    const showValue = needsValue(node.operand);
+
+    html = `
+      <div class="sb-section">
+        <div class="sb-label">Create / Edit Condition</div>
+        <div class="form-group">
+          <label class="form-label">Field</label>
+          <select onchange="onCondField('${nodeId}',this.value)">
+            <option value="">Select field…</option>
+            ${fields.map(f=>`<option ${f===node.field?'selected':''}>${f}</option>`).join('')}
+          </select>
+        </div>
+        ${hasSubFields ? `
+        <div class="form-group">
+          <label class="form-label">Sub-field</label>
+          <select onchange="onCondSubField('${nodeId}',this.value)">
+            <option value="">Select sub-field…</option>
+            ${Object.keys(fieldDef.sub).map(f=>`<option ${f===node.subField?'selected':''}>${f}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${node.field ? `
+        <div class="form-group">
+          <label class="form-label">Condition</label>
+          <select onchange="onCondOperand('${nodeId}',this.value)">
+            <option value="">Select…</option>
+            ${ops.map(o=>`<option ${o===node.operand?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${showValue && node.operand ? `
+        <div class="form-group">
+          <label class="form-label">Value <span style="color:#9E9E9E;font-weight:400">(OR values)</span></label>
+          <div class="or-values-list" id="orValuesList">
+            ${(node.values||['']).map((v,i)=>`
+              <div>
+                ${i>0?'<div class="or-divider">OR</div>':''}
+                <div class="or-value-row">
+                  <input class="text-input" type="text" value="${v}" oninput="onCondValue('${nodeId}',${i},this.value)" placeholder="Enter value…" />
+                  ${i>0?`<button class="remove-or" onclick="removeOrValue('${nodeId}',${i})">×</button>`:''}
+                </div>
+              </div>`).join('')}
+          </div>
+          <button class="add-or-btn" onclick="addOrValue('${nodeId}')" style="margin-top:6px">+ Add OR value</button>
+        </div>` : ''}
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Close</button>
+        </div>
+      </div>
+      ${node.field && node.operand ? `
+      <div class="sb-section">
+        <div class="sb-label">Next step</div>
+        <div style="font-size:12px;color:#616161;margin-bottom:10px">Choose what happens on YES or NO path.</div>
+        <div style="display:flex;gap:8px;flex-direction:column">
+          ${!node.yesChild ? `<div><span style="font-size:11px;font-weight:700;color:#2E7D32">YES path</span><div class="btn-row" style="margin-top:4px"><button class="btn btn-sm" style="background:#E8F5E9;color:#2E7D32;border:1px solid #B2DFB8" onclick="openSlot('${nodeId}','yes','condition')">+ Condition</button><button class="btn btn-sm" style="background:#E8F5E9;color:#2E7D32;border:1px solid #B2DFB8" onclick="openSlot('${nodeId}','yes','action')">+ Action</button></div></div>` : ''}
+          ${!node.noChild ? `<div><span style="font-size:11px;font-weight:700;color:#E65100">NO path</span><div class="btn-row" style="margin-top:4px"><button class="btn btn-sm" style="background:#FFF9EC;color:#D97706;border:1px solid #FDE68A" onclick="openSlot('${nodeId}','no','condition')">+ Condition</button><button class="btn btn-sm" style="background:#FFF9EC;color:#D97706;border:1px solid #FDE68A" onclick="openSlot('${nodeId}','no','action')">+ Action</button></div></div>` : ''}
+        </div>
+      </div>` : ''}`;
+  }
+
+  else if (mode === 'action') {
+    const node = state.nodes[nodeId];
+    if (!node) { renderSidebarHint(); return; }
+    const entity = state.trigger.entity;
+    html = `
+      <div class="sb-section">
+        <div class="sb-label">Create / Edit Action</div>
+        <div class="form-group">
+          <label class="form-label">Action type</label>
+          <select onchange="onActionType('${nodeId}',this.value)">
+            <option value="">Select action…</option>
+            ${ACTION_TYPES.map(t=>`<option ${t===node.actionType?'selected':''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        ${node.actionType === 'Email' ? `
+        <div class="form-group">
+          <label class="form-label">Recipient</label>
+          <select onchange="onActionField('${nodeId}','recipient',this.value)">
+            <option value="">Select recipient…</option>
+            ${EMAIL_RECIPIENTS.map(r=>`<option ${r===node.recipient?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>
+        ${node.recipient==='Other'?`<div class="form-group"><label class="form-label">Email address</label><input class="text-input" type="text" value="${node.customEmail||''}" placeholder="Enter email…" oninput="onActionField('${nodeId}','customEmail',this.value)" /></div>`:''}` : ''}
+        ${node.actionType === 'SMS' ? `
+        <div class="form-group">
+          <label class="form-label">Recipient</label>
+          <select onchange="onActionField('${nodeId}','recipient',this.value)">
+            <option value="">Select recipient…</option>
+            ${EMAIL_RECIPIENTS.map(r=>`<option ${r===node.recipient?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${node.actionType === 'Voice' ? `
+        <div class="form-group">
+          <label class="form-label">Recipient</label>
+          <select onchange="onActionField('${nodeId}','recipient',this.value)">
+            <option value="">Select recipient…</option>
+            ${EMAIL_RECIPIENTS.map(r=>`<option ${r===node.recipient?'selected':''}>${r}</option>`).join('')}
+          </select>
+        </div>` : ''}
+        ${node.actionType === 'Xero action' ? `
+        <div class="form-group">
+          <label class="form-label">Entity</label>
+          <select disabled>
+            <option selected>${entity}</option>
+          </select>
+          <div style="font-size:11px;color:#9E9E9E;margin-top:4px">Locked to trigger entity</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Action</label>
+          <select onchange="onActionField('${nodeId}','qbAction',this.value)">
+            <option value="">Select action…</option>
+            ${XERO_ENTITY_ACTIONS.map(a=>`<option ${a===node.qbAction?'selected':''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        ${node.qbAction ? `
+        <div class="form-group">
+          <label class="form-label">Fields to update</label>
+          ${Object.keys(node.qbFieldValues||{}).length > 0 ? `
+            <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px">
+              ${Object.keys(node.qbFieldValues).map(f=>`
+                <div style="display:flex;align-items:center;gap:6px;font-size:12px;background:#EEF3FF;border-radius:4px;padding:4px 8px;color:#0053CC">
+                  <span style="font-size:10px;font-weight:700;background:#0053CC;color:#fff;padding:1px 4px;border-radius:2px">SET</span>
+                  ${f}${node.qbFieldValues[f]?` → <em style="color:#1A1A2E">${node.qbFieldValues[f]}</em>`:''}
+                </div>`).join('')}
+            </div>` : `<div style="font-size:12px;color:#9E9E9E;margin-bottom:8px">No fields selected yet.</div>`}
+          <button class="xero-open-btn" onclick="openXeroOverlay('${nodeId}')">
+            ✎ Configure in invoice view
+          </button>
+        </div>` : ''}` : ''}
+        ${node.actionType === 'Post to URL' ? `
+        <div class="form-group">
+          <label class="form-label">URL</label>
+          <input class="text-input" type="text" value="${node.urlTarget||''}" placeholder="https://…" oninput="onActionField('${nodeId}','urlTarget',this.value)" />
+        </div>` : ''}
+        <div class="btn-row" style="margin-top:8px">
+          <button class="btn btn-ghost btn-sm" onclick="clearSidebar()">Close</button>
+        </div>
+      </div>`;
+  }
+
+  else {
+    html = `<div class="sb-hint">Click a block on the canvas to edit it, or add blocks using the + buttons.</div>`;
+  }
+
+  sb.innerHTML = html;
+}
+
+// ──────────────────────────────────────────────────────────────
+// CANVAS
+// ──────────────────────────────────────────────────────────────
+function mk(tag, css) {
+  const el = document.createElement(tag);
+  if (css) el.style.cssText = css;
+  return el;
+}
+
+// After render:
+// 1. Set noBranch marginTop so horizontal connector exits card vertical center
+// 2. Set drop height so NO child clears card bottom
+// 3. Extend V-connector (data-vconn-for) to bridge gap between card bottom and YES child
+function alignConnectors() {
+  document.querySelectorAll('.card[data-nid]').forEach(card => {
+    const id = card.dataset.nid;
+    const h = card.offsetHeight;
+    document.querySelectorAll(`.no-branch[data-align-card="${id}"]`).forEach(nb => {
+      nb.style.marginTop = Math.max(0, Math.round(h / 2 - 1)) + 'px';
+      const dropEl = nb.children[1];
+      if (dropEl) dropEl.style.height = Math.max(18, Math.round(h / 2) + 8) + 'px';
+    });
+  });
+  // Extend each condition's V-connector so YES child starts below NO subtree bottom
+  document.querySelectorAll('[data-vconn-for]').forEach(vconn => {
+    const nb = document.querySelector(`.no-branch[data-align-card="${vconn.dataset.vconnFor}"]`);
+    const card = document.querySelector(`.card[data-nid="${vconn.dataset.vconnFor}"]`);
+    if (!nb || !card) return;
+    const gap = Math.max(0, nb.getBoundingClientRect().bottom - card.getBoundingClientRect().bottom);
+    vconn.style.height = (28 + gap) + 'px';
+  });
+}
+
+function renderCanvas() {
+  const canvas = document.getElementById('canvas');
+  if (!state.rootId) { canvas.innerHTML = ''; return; }
+  canvas.innerHTML = '';
+  const el = renderNode(state.rootId);
+  if (el) canvas.appendChild(el);
+  requestAnimationFrame(alignConnectors);
+
+  const eb = document.getElementById('errorBar');
+  if (eb && !eb.dataset.sticky) eb.className = 'error-bar';
+}
+
+// Layout:
+//   - Trigger/Action: pure flex-column chain.
+//   - Condition: cardRow (flex-row: card + noBranch side by side) so the NO branch
+//     is always anchored to x=220 regardless of YES subtree depth.
+//     A dynamic V-connector below cardRow bridges any height gap.
+function renderNode(id) {
+  if (!id) return null;
+  const node = state.nodes[id];
+  if (!node) return null;
+
+  if (node.type === 'trigger') {
+    const wrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
+    wrap.appendChild(makeCard(node));
+    wrap.appendChild(makeConnV());
+    if (node.yesChild) wrap.appendChild(renderNode(node.yesChild));
+    else wrap.appendChild(makeChooser(id, 'yes'));
+    return wrap;
+  }
+
+  if (node.type === 'action') {
+    const wrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
+    wrap.appendChild(makeCard(node));
+    wrap.appendChild(makeConnV());
+    if (node.yesChild) wrap.appendChild(renderNode(node.yesChild));
+    else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') wrap.appendChild(makeChooser(id, 'yes'));
+    else wrap.appendChild(makeTerminal(id, 'yes'));
+    return wrap;
+  }
+
+  // CONDITION: cardRow keeps noBranch anchored to card right edge
+  const condWrap = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;');
+
+  const cardRow = mk('div', 'display:flex;flex-direction:row;align-items:flex-start;');
+  cardRow.appendChild(makeCard(node));
+
+  const noBranch = mk('div', 'display:flex;flex-direction:column;align-items:flex-start;flex-shrink:0;');
+  noBranch.className = 'no-branch';
+  noBranch.dataset.alignCard = node.id;
+  noBranch.appendChild(mk('div', 'height:2px;width:111px;background:#BDBDBD;flex-shrink:0;'));
+  noBranch.appendChild(mk('div', 'width:2px;height:18px;background:#BDBDBD;margin-left:109px;flex-shrink:0;'));
+  if (node.noChild) {
+    const noEl = renderNode(node.noChild);
+    if (noEl) noBranch.appendChild(noEl);
+  } else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'no') {
+    noBranch.appendChild(makeChooser(id, 'no'));
+  } else {
+    noBranch.appendChild(makeTerminal(id, 'no'));
+  }
+  cardRow.appendChild(noBranch);
+  condWrap.appendChild(cardRow);
+
+  // Dynamic V-connector — height extended by alignConnectors to bridge gap to YES child
+  const vconn = mk('div', 'width:2px;height:28px;background:#BDBDBD;margin-left:109px;align-self:flex-start;flex-shrink:0;');
+  vconn.dataset.vconnFor = node.id;
+  condWrap.appendChild(vconn);
+
+  if (node.yesChild) condWrap.appendChild(renderNode(node.yesChild));
+  else if (state.pendingSlot && state.pendingSlot.parentId === id && state.pendingSlot.path === 'yes') condWrap.appendChild(makeChooser(id, 'yes'));
+  else condWrap.appendChild(makeTerminal(id, 'yes'));
+
+  return condWrap;
+}
+
+function makeCard(node) {
+  const div = document.createElement('div');
+  div.dataset.nid = node.id;
+  const isSelected = state.sidebar.nodeId === node.id;
+
+  if (node.type === 'trigger') {
+    div.className = 'card trigger-card' + (isSelected ? ' selected' : '');
+    div.innerHTML = `
+      <div class="card-type-label">Start when</div>
+      <div class="card-main">${node.entity || '—'} ${node.event || ''}</div>`;
+    div.addEventListener('click', () => { state.sidebar = {mode:'trigger', nodeId:node.id}; render(); });
+  }
+
+  else if (node.type === 'condition') {
+    const valDisplay = (node.values||[]).filter(Boolean).join(', ');
+    const fieldLabel = node.subField ? `${node.field}: ${node.subField}` : node.field;
+    div.className = 'card condition-card' + (isSelected ? ' selected' : '');
+    div.draggable = true;
+    div.innerHTML = `
+      <div class="drag-handle" title="Drag to reorder"><span></span><span></span><span></span></div>
+      <button class="copy-btn" title="Duplicate">⧉</button>
+      <button class="del-btn" title="Delete">×</button>
+      <div class="card-type-label">IF</div>
+      <div class="card-main">${fieldLabel || '…'}</div>
+      ${node.operand ? `<div class="card-detail">${node.operand}</div>` : ''}
+      ${valDisplay ? `<div class="or-tags">${(node.values||[]).filter(Boolean).map(v=>`<span class="or-tag">${v}</span>`).join('')}</div>` : ''}
+      ${!(node.yesChild && node.noChild) ? `<div class="path-btns">
+        ${!node.yesChild ? `<button class="path-btn yes" onclick="event.stopPropagation();onPathBtn(event,'${node.id}','yes')">YES</button>` : ''}
+        ${!node.noChild  ? `<button class="path-btn no"  onclick="event.stopPropagation();onPathBtn(event,'${node.id}','no')">NO</button>`  : ''}
+      </div>` : ''}`;
+    div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); openDeleteModal(node.id); });
+    div.querySelector('.copy-btn').addEventListener('click', e => { e.stopPropagation(); copyNode(node.id); });
+    div.addEventListener('click', () => { startEdit(node.id, 'condition'); render(); });
+    addDragListeners(div, node.id);
+  }
+
+  else if (node.type === 'action') {
+    div.className = 'card action-card' + (isSelected ? ' selected' : '');
+    div.draggable = true;
+    let detail = '';
+    if (node.actionType==='Email'||node.actionType==='SMS'||node.actionType==='Voice') detail = node.recipient || '';
+    if (node.actionType==='Xero action') detail = `${state.trigger.entity} · ${node.qbAction||''}`;
+    if (node.actionType==='Post to URL') detail = node.urlTarget || '';
+    div.innerHTML = `
+      <div class="drag-handle" title="Drag to reorder"><span></span><span></span><span></span></div>
+      <button class="copy-btn" title="Duplicate">⧉</button>
+      <button class="del-btn" title="Delete">×</button>
+      <div class="card-type-label">THEN</div>
+      <div class="card-main">${node.actionType || '…'}</div>
+      ${detail ? `<div class="card-detail">${detail}</div>` : ''}
+      ${!node.yesChild ? `<div class="path-btns"><button class="path-btn add-action-btn" onclick="event.stopPropagation();addActionAfter('${node.id}')">+ Add action</button></div>` : ''}`;
+    div.querySelector('.del-btn').addEventListener('click', e => { e.stopPropagation(); openDeleteModal(node.id); });
+    div.querySelector('.copy-btn').addEventListener('click', e => { e.stopPropagation(); copyNode(node.id); });
+    div.addEventListener('click', () => { startEdit(node.id, 'action'); render(); });
+    addDragListeners(div, node.id);
+  }
+
+  return div;
+}
+
+function makeConnV() {
+  const d = document.createElement('div');
+  d.className = 'conn-v';
+  return d;
+}
+function makeConnH() {
+  const d = document.createElement('div');
+  d.className = 'conn-h';
+  return d;
+}
+
+function makeTerminal(parentId, path) {
+  const div = document.createElement('div');
+  div.className = 'card empty-card';
+  div.style.cssText = 'font-size:11px;font-weight:500;';
+  div.textContent = 'Rule ends here';
+  div.title = 'Click to add a block on this path';
+  div.addEventListener('click', () => {
+    state.pendingSlot = {parentId, path};
+    render();
+  });
+  return div;
+}
+
+function makeChooser(parentId, path) {
+  const div = document.createElement('div');
+  div.className = 'card chooser-card';
+  div.innerHTML = `
+    <div style="font-size:11px;font-weight:600;color:#9E9E9E;margin-bottom:8px;text-align:center">Add block</div>
+    <div class="chooser-btns">
+      <button class="chooser-btn cond" onclick="addBlock('${parentId}','${path}','condition')">+ Condition</button>
+      <button class="chooser-btn act"  onclick="addBlock('${parentId}','${path}','action')">+ Action</button>
+    </div>`;
+  return div;
+}
+
+// ──────────────────────────────────────────────────────────────
+// INTERACTIONS
+// ──────────────────────────────────────────────────────────────
+function onTriggerEntity(val) {
+  const node = state.nodes[state.sidebar.nodeId];
+  if (!node) return;
+  const evts = EVENTS[val] || DEFAULT_EVENTS;
+  node.entity = val;
+  node.event = evts[0];
+  state.trigger.entity = val;
+  state.trigger.event = evts[0];
+  render();
+}
+function onTriggerEvent(val) {
+  const node = state.nodes[state.sidebar.nodeId];
+  if (!node) return;
+  node.event = val;
+  state.trigger.event = val;
+}
+
+function onPathBtn(e, nodeId, path) {
+  e.stopPropagation();
+  const node = state.nodes[nodeId];
+  if (!node) return;
+  const childId = path === 'yes' ? node.yesChild : node.noChild;
+  if (childId) {
+    state.sidebar = {mode: state.nodes[childId].type === 'action' ? 'action' : 'condition', nodeId: childId};
+    render();
+    // Flash the child card so user sees which block is now selected
+    requestAnimationFrame(() => {
+      const el = document.querySelector(`.card[data-nid="${childId}"]`);
+      if (el) { el.classList.add('flash'); el.addEventListener('animationend', () => el.classList.remove('flash'), {once:true}); }
+    });
+    return;
+  }
+  if (state.pendingSlot && state.pendingSlot.parentId === nodeId && state.pendingSlot.path === path) {
+    state.pendingSlot = null;
+  } else {
+    state.pendingSlot = {parentId: nodeId, path};
+  }
+  state.sidebar = {mode:'condition', nodeId};
+  render();
+}
+
+function addBlock(parentId, path, type) {
+  const newId = createNode(type);
+  const parent = state.nodes[parentId];
+  if (!parent) return;
+  if (path === 'yes') parent.yesChild = newId;
+  else parent.noChild = newId;
+  state.pendingSlot = null;
+  state.sidebar = {mode: type, nodeId: newId};
+  render();
+}
+
+function addActionAfter(nodeId) {
+  const newId = createNode('action');
+  state.nodes[nodeId].yesChild = newId;
+  state.pendingSlot = null;
+  state.sidebar = {mode: 'action', nodeId: newId};
+  render();
+}
+
+function addBlockAfterTrigger(type) {
+  const triggerNode = state.nodes[state.rootId];
+  if (!triggerNode) return;
+  const newId = createNode(type);
+  triggerNode.yesChild = newId;
+  state.sidebar = {mode: type, nodeId: newId};
+  render();
+}
+
+function openSlot(parentId, path, type) {
+  state.pendingSlot = {parentId, path};
+  addBlock(parentId, path, type);
+}
+
+function onCondField(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.field = val;
+  n.subField = '';
+  n.operand = '';
+  n.values = [''];
+  render();
+}
+function onCondSubField(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.subField = val;
+  n.operand = '';
+  n.values = [''];
+  render();
+}
+function onCondOperand(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.operand = val;
+  if (!needsValue(val)) n.values = [''];
+  render();
+}
+function onCondValue(nodeId, idx, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.values[idx] = val;
+}
+function addOrValue(nodeId) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.values.push('');
+  render();
+}
+function removeOrValue(nodeId, idx) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.values.splice(idx, 1);
+  if (n.values.length === 0) n.values = [''];
+  render();
+}
+function saveCondition(nodeId) {
+  delete state.editBuffer[nodeId];
+  state.pendingSlot = null;
+  render();
+}
+
+function onActionType(nodeId, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n.actionType = val;
+  n.recipient = ''; n.qbEntity = state.trigger.entity; n.qbAction = ''; n.qbFieldValues = {}; n.urlTarget = '';
+  render();
+}
+function onActionField(nodeId, key, val) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  n[key] = val;
+  render();
+}
+function onQbField(nodeId, field, checked) {
+  const n = state.nodes[nodeId];
+  if (!n) return;
+  if (!n.qbFieldValues) n.qbFieldValues = {};
+  if (checked) n.qbFieldValues[field] = '';
+  else delete n.qbFieldValues[field];
+}
+function saveAction(nodeId) {
+  delete state.editBuffer[nodeId];
+  state.pendingSlot = null;
+  render();
+}
+
+// ── Xero Invoice Overlay ───────────────────────────────────────
+let xeroNodeId = null;
+
+function openXeroOverlay(nodeId) {
+  xeroNodeId = nodeId;
+  refreshXeroOverlay();
+  document.getElementById('xeroOverlay').classList.add('open');
+}
+function closeXeroOverlay() {
+  document.getElementById('xeroOverlay').classList.remove('open');
+  xeroNodeId = null;
+}
+function onXeroOverlayClick(e) {
+  if (e.target === document.getElementById('xeroOverlay')) closeXeroOverlay();
+}
+function applyXeroOverlay() {
+  closeXeroOverlay();
+  render();
+}
+
+function toggleXeroField(field) {
+  const node = state.nodes[xeroNodeId];
+  if (!node) return;
+  if (!node.qbFieldValues) node.qbFieldValues = {};
+  if (node.qbFieldValues[field] !== undefined) delete node.qbFieldValues[field];
+  else node.qbFieldValues[field] = '';
+  refreshXeroOverlay();
+}
+
+function setXeroFieldValue(field, val) {
+  const node = state.nodes[xeroNodeId];
+  if (!node || node.qbFieldValues === undefined) return;
+  node.qbFieldValues[field] = val;
+  const cnt = Object.keys(node.qbFieldValues).length;
+  document.getElementById('xeroModalCount').textContent = cnt > 0 ? `${cnt} field${cnt !== 1 ? 's' : ''} will be updated` : '';
+}
+
+function refreshXeroOverlay() {
+  const node = state.nodes[xeroNodeId];
+  if (!node) return;
+  const action = node.qbAction;
+  const fieldSet = new Set(XERO_FIELDS[action] || []);
+  const sel = node.qbFieldValues || {};
+  const isSel = f => sel[f] !== undefined;
+
+  function invField(label, key, placeholder, span1) {
+    const up = fieldSet.has(key);
+    const s = up && isSel(key);
+    return `<div class="xero-inv-field ${up ? 'updatable' : 'disabled'} ${s ? 'xero-selected' : ''}"
+              ${up ? `onclick="toggleXeroField('${key}')"` : ''}>
+      <div class="xero-field-label">${label}${s ? ' <span class="update-badge">SET</span>' : ''}</div>
+      <div class="xero-field-val ${s && sel[key] ? 'has-val' : ''}">${s && sel[key] ? sel[key] : placeholder}</div>
+      ${s ? `<input class="xero-field-input" type="text" placeholder="Set value…" value="${sel[key]||''}"
+               onclick="event.stopPropagation()" oninput="setXeroFieldValue('${key}',this.value)" />` : ''}
+    </div>`;
+  }
+
+  function lineCell(key, placeholder) {
+    const up = fieldSet.has(key);
+    const s = up && isSel(key);
+    return `<td><div class="xero-cell ${up ? 'updatable' : ''} ${s ? 'xero-selected' : ''}${!up ? ' disabled' : ''}"
+              ${up ? `onclick="toggleXeroField('${key}')"` : ''}>
+      ${s
+        ? `<div style="font-size:9px;font-weight:700;color:#0053CC;margin-bottom:3px">SET VALUE</div>
+           <input class="xero-cell-input" type="text" placeholder="Value…" value="${sel[key]||''}"
+             onclick="event.stopPropagation()" oninput="setXeroFieldValue('${key}',this.value)" />`
+        : `<span class="xero-cell-hint">${up ? placeholder : '—'}</span>`}
+    </div></td>`;
+  }
+
+  const showHeader = action === 'Update current';
+  const cnt = Object.keys(sel).length;
+  document.getElementById('xeroModalCount').textContent = cnt > 0 ? `${cnt} field${cnt !== 1 ? 's' : ''} will be updated` : 'Click fields to select them';
+
+  document.getElementById('xeroModalBody').innerHTML = `
+    <div style="padding:10px 16px 4px;background:#F9FAFB;border-bottom:1px solid #E5E7EB;font-size:12px;color:#6B7280">
+      Rule action: <strong>${action}</strong> on <strong>${state.trigger.entity}</strong>
+      — <em>highlighted fields are editable by this rule</em>
+    </div>
+
+    ${showHeader ? `
+    <div class="xero-section-hd">Invoice header</div>
+    <div class="xero-inv-grid">
+      ${invField('Contact', 'Contact', 'Test Andrew')}
+      ${invField('Reference', 'Reference', 'INV-0001')}
+      ${invField('Tax Treatment', 'Tax Treatment', 'Tax exclusive')}
+      <div class="xero-inv-field disabled">
+        <div class="xero-field-label">Issue date</div>
+        <div class="xero-field-val">Jun 3, 2026</div>
+      </div>
+      <div class="xero-inv-field disabled">
+        <div class="xero-field-label">Due date</div>
+        <div class="xero-field-val">Jul 3, 2026</div>
+      </div>
+      <div class="xero-inv-field disabled">
+        <div class="xero-field-label">Currency</div>
+        <div class="xero-field-val">United States Dollar</div>
+      </div>
+    </div>` : ''}
+
+    <div class="xero-section-hd">Line items</div>
+    <div style="overflow-x:auto;padding:8px 16px 16px">
+      <table class="xero-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Item</th>
+            <th>Description</th>
+            <th style="text-align:right">Qty</th>
+            <th style="text-align:right">Price</th>
+            <th>Account</th>
+            <th>Tax rate</th>
+            <th>Category 1</th>
+            <th>Category 2</th>
+            <th style="text-align:right">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="color:#9E9E9E;font-size:12px;padding:6px 8px">1</td>
+            ${lineCell('Line: Item', 'click to set')}
+            ${lineCell('Line: Description', 'click to set')}
+            <td><div class="xero-cell disabled" style="text-align:right">3</div></td>
+            <td><div class="xero-cell disabled" style="text-align:right">10.00</div></td>
+            ${lineCell('Line: Account', 'click to set')}
+            ${lineCell('Line: Tax Rate', 'click to set')}
+            ${lineCell('Line: TrackingCategory1', 'click to set')}
+            ${lineCell('Line: TrackingCategory2', 'click to set')}
+            <td><div class="xero-cell disabled" style="text-align:right">30.00</div></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:0 16px 12px;font-size:11px;color:#9E9E9E">
+      Greyed-out fields (Qty, Price, Amount, dates) cannot be set by a rule action.
+    </div>`;
+}
+
+function clearSidebar() {
+  state.sidebar = {mode:'none', nodeId:null};
+  render();
+}
+
+function saveRule() {
+  const eb = document.getElementById('errorBar');
+  if (hasErrors()) {
+    eb.dataset.sticky = '1';
+    eb.className = 'error-bar show';
+    eb.scrollIntoView({behavior:'smooth', block:'end'});
+    return;
+  }
+  delete eb.dataset.sticky;
+  eb.className = 'error-bar';
+  document.getElementById('ruleName').classList.remove('dirty');
+  alert('Rule saved! (prototype)');
+}
+
+// ──────────────────────────────────────────────────────────────
+// RENDER ORCHESTRATOR
+// ──────────────────────────────────────────────────────────────
+function render() {
+  renderCanvas();
+  renderSidebar();
+}
+
+// Rule name dirty state
+document.getElementById('ruleName').addEventListener('input', function() {
+  this.classList.add('dirty');
+});
+
+// ──────────────────────────────────────────────────────────────
+// AI RULE GENERATION
+// ──────────────────────────────────────────────────────────────
+const AI_TEMPLATES = [
+  {
+    keywords: ['overdue','due','past due','late','balance'],
+    name: 'Outstanding invoice alert',
+    build() {
+      resetCanvas();
+      state.trigger = {entity:'Invoice', event:'Created'};
+      const root = state.nodes[state.rootId];
+      root.entity = 'Invoice'; root.event = 'Created';
+      const cond = createNode('condition', {field:'Balance', operand:'Greater', values:['0']});
+      root.yesChild = cond;
+      const act = createNode('action', {actionType:'Email', recipient:'Contact'});
+      state.nodes[cond].yesChild = act;
+    }
+  },
+  {
+    keywords: ['high-value','high value','large','amount','expensive','tracking'],
+    name: 'High-value invoice tag',
+    build() {
+      resetCanvas();
+      state.trigger = {entity:'Invoice', event:'Created'};
+      const root = state.nodes[state.rootId];
+      root.entity = 'Invoice'; root.event = 'Created';
+      const cond = createNode('condition', {field:'Total Amount', operand:'Greater', values:['1000']});
+      root.yesChild = cond;
+      const act = createNode('action', {actionType:'Xero action', qbAction:'Update current', qbFieldValues:{'Line: TrackingCategory1':''}});
+      state.nodes[cond].yesChild = act;
+    }
+  },
+  {
+    keywords: ['payment','paid','received'],
+    name: 'Payment received',
+    build() {
+      resetCanvas();
+      state.trigger = {entity:'Payment', event:'Created'};
+      const root = state.nodes[state.rootId];
+      root.entity = 'Payment'; root.event = 'Created';
+      state.trigger.entity = 'Payment'; state.trigger.event = 'Created';
+      const act = createNode('action', {actionType:'Email', recipient:'Account owner'});
+      root.yesChild = act;
+    }
+  },
+  {
+    keywords: ['refund','credit'],
+    name: 'Refund notification',
+    build() {
+      resetCanvas();
+      state.trigger = {entity:'Refund', event:'Created'};
+      const root = state.nodes[state.rootId];
+      root.entity = 'Refund'; root.event = 'Created';
+      state.trigger.entity = 'Refund'; state.trigger.event = 'Created';
+      const act = createNode('action', {actionType:'SMS', recipient:'Account owner'});
+      root.yesChild = act;
+    }
+  },
+  {
+    keywords: ['contact','customer','new contact','client','vendor'],
+    name: 'New contact webhook',
+    build() {
+      resetCanvas();
+      state.trigger = {entity:'Contact', event:'Created'};
+      const root = state.nodes[state.rootId];
+      root.entity = 'Contact'; root.event = 'Created';
+      state.trigger.entity = 'Contact'; state.trigger.event = 'Created';
+      const act = createNode('action', {actionType:'Post to URL', urlTarget:'https://hooks.example.com/new-contact'});
+      root.yesChild = act;
+    }
+  },
+];
+
+function resetCanvas() {
+  state.nodes = {};
+  state.idCounter = 1;
+  state.editBuffer = {};
+  state.pendingSlot = null;
+  state.rootId = createNode('trigger');
+}
+
+function openAiModal() {
+  document.getElementById('aiOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('aiPrompt').focus(), 100);
+}
+function closeAiModal() {
+  document.getElementById('aiOverlay').classList.remove('open');
+  document.getElementById('aiGenerating').classList.remove('show');
+}
+function onOverlayClick(e) {
+  if (e.target === document.getElementById('aiOverlay')) closeAiModal();
+}
+function setPrompt(el) {
+  document.getElementById('aiPrompt').value = el.textContent;
+  document.getElementById('aiPrompt').focus();
+}
+
+function generateRule() {
+  const text = document.getElementById('aiPrompt').value.trim().toLowerCase();
+  if (!text) { document.getElementById('aiPrompt').focus(); return; }
+
+  document.getElementById('aiGenerating').classList.add('show');
+  document.querySelector('.modal-foot .btn-primary').disabled = true;
+
+  setTimeout(() => {
+    const match = AI_TEMPLATES.find(t => t.keywords.some(k => text.includes(k))) || {
+      name: 'Custom rule',
+      build() {
+        resetCanvas();
+        const root = state.nodes[state.rootId];
+        root.entity = 'Invoice'; root.event = 'Created';
+        state.trigger = {entity:'Invoice', event:'Created'};
+        const cond = createNode('condition');
+        root.yesChild = cond;
+        const act = createNode('action', {actionType:'Email', recipient:'Company owner'});
+        state.nodes[cond].yesChild = act;
+      }
+    };
+
+    match.build();
+    const nameInput = document.getElementById('ruleName');
+    nameInput.value = match.name;
+    nameInput.classList.add('dirty');
+    state.sidebar = {mode:'trigger', nodeId:state.rootId};
+
+    document.getElementById('aiGenerating').classList.remove('show');
+    document.querySelector('.modal-foot .btn-primary').disabled = false;
+    closeAiModal();
+    render();
+  }, 1200);
+}
+
+// Start
+init();
+</script>
+</body>
+</html>

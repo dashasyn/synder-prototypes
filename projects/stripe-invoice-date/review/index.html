@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Review · Stripe invoice date (Dasha's prototype) · round 1</title>
+<link rel="stylesheet" href="../../../ui-kit/synder-ui-kit.css">
+<style>
+  body{margin:0;background:var(--color-white);font-size:14px;color:var(--text-primary)}
+  .wrap{max-width:1040px;margin:0 auto;padding:32px 24px 64px}
+  h1{font-size:24px;font-weight:500;margin:0 0 4px}
+  h2{font-size:18px;font-weight:500;margin:32px 0 8px}
+  .meta{color:var(--text-secondary);margin:0 0 16px;line-height:20px}
+  .verdict{background:var(--color-primary-5);border-left:3px solid var(--color-primary);padding:12px 16px;margin:16px 0;line-height:20px}
+  table.synder-table td{vertical-align:top;line-height:20px;padding-top:12px;padding-bottom:12px;height:auto}
+  .q{color:var(--text-secondary)}
+  ul{line-height:22px;padding-left:20px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Stripe invoice date (my prototype): review, round 1</h1>
+  <p class="meta">Target: <a class="text-link" href="../">projects/stripe-invoice-date</a> · 2026-10-07 ·
+    Lenses: UX ×3, Domain (accountant), Clarity (business owner). Trust, A11Y and Fidelity were not run (default lens set; no Figma) ·
+    the state map was recorded in real Chromium, 12 zones · <code>validator-check.js</code> statemap PASS, verify PASS · 14 findings ·
+    automatic checks clean (no text under 14px, no radius over 4px, no horizontal overflow)</p>
+
+  <div class="verdict"><strong>Verdict:</strong> the flows work and match the FDD, and nothing from round 1 of the other prototype came back.
+    One real design hole: the RevRec lock's way out. Three lenses found that following the lock note can leave the books and the schedules on different dates.
+    The rest is copy, plus one missing row in Sync details.</div>
+
+  <h2>Critical and High</h2>
+  <div class="table-wrap"><table class="synder-table">
+    <thead><tr><th style="width:22%">Where</th><th>Problem</th><th style="width:28%">Proposed fix</th><th style="width:12%">Lenses</th></tr></thead>
+    <tbody>
+      <tr><td>Invoices lock ↔ RevRec Schedule start</td>
+        <td>The note says <span class="q">“To change it, change Schedule start date.”</span> If the user follows it and picks <em>Invoice issued date</em>,
+          Invoice date stays locked on <em>Created date</em>. Schedules now start on issued while the books use created, and the only way to unlock it (Payment date) is never mentioned.
+          The FDD doesn't say which value the Sync setting is locked at. This is the gap raised on 2 Oct.</td>
+        <td>Product decision: while locked, Invoice date <strong>follows</strong> Schedule start (issued → Issued, created → Created). At minimum, the note names Payment date as the way out.</td>
+        <td>UX ×3 (corroborated)</td></tr>
+      <tr><td>Invoices lock note wording</td>
+        <td><span class="q">“Locked while Revenue Recognition starts schedules from the invoice date.”</span> “The invoice date” is both the old RevRec label (now renamed) and the name of the locked setting itself, so it reads as “Invoice date is locked by the invoice date”.</td>
+        <td>Name the option and the product: “Locked while Synder RevRec starts schedules from the invoice created date. To change it, change Schedule start date.”</td>
+        <td>Domain, Clarity</td></tr>
+      <tr><td>Summary · Sales recording date</td>
+        <td><em>Invoice issued date</em> sits on an org-level setting, but only Stripe invoices have one. Nothing says what Shopify sales or non-invoice charges get. (This was already an open question for the FDD author.)</td>
+        <td>FDD author: make it per integration, or state the fallback in the description.</td>
+        <td>Domain</td></tr>
+      <tr><td>Summary · AR sentence</td>
+        <td><span class="q">“With Payment date there is no Accounts Receivable in summaries.”</span> Domain called it unsourced. In fact it's the <strong>live</strong> string, kept from production. Clarity: a business owner doesn't know what AR is.</td>
+        <td>Keep the live sentence and add a plain-word gloss: “Accounts Receivable (money customers still owe you)”. Confirm with the FDD author that it still holds when Sync open invoices is on.</td>
+        <td>Domain, Clarity</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>Medium</h2>
+  <ul>
+    <li><strong>Sync details, example B.</strong> When the invoice was booked on the created date, the <em>Date in books</em> row disappears, which leaves two dates and no answer to which one went to the books. Show the row in both cases (“Dec 28, 2025 · created date, per Invoice date setting”). (UX ×2, Clarity noted)</li>
+    <li><strong>RevRec confirmation dialog.</strong> It says nothing about the effect on the Stripe <em>Invoice date</em> (locked for created/issued, editable for payment). Add one clause per chosen value. (UX ×2)</li>
+    <li><strong>Summary scope.</strong> The description doesn't say whether past summaries change. Careful: the FDD expects past periods to be able to follow the new value (dual snapshot, S2.4, still open with engineering), so “from now on” could be wrong here. Decide after engineering confirms. (UX)</li>
+    <li><strong>“Payment posting date”.</strong> “Posting” is accountant wording, and the vocabulary uses “sync”. Clarity suggests “Payment date in books”, to match Sync details. This is the same naming question as before. (Clarity)</li>
+  </ul>
+
+  <h2>Gaps the validators named</h2>
+  <ul>
+    <li>No org state has Invoice date = Issued <em>and</em> RevRec turned on afterwards (the reverse mismatch: books on Issued, schedules on Created).</li>
+    <li>Below Pro and RevRec together is not a selectable state.</li>
+    <li>There's no success message after Update, after a Summary change or after RevRec Change. Whether production shows a toast there isn't captured, so this wasn't reported as a defect.</li>
+    <li>Learn more / Upgrade plan links go nowhere in the prototype.</li>
+  </ul>
+
+  <h2>Not re-flagged (decided)</h2>
+  <p class="meta">Placement under Sync unpaid (open) invoices · the plan-gate pattern · the option-level Summary gate · Update as the save model. Listed in <code>review/findings-log.json</code> → declined.</p>
+
+  <h2>Files</h2>
+  <p class="meta"><code>review/round-1/</code> holds the state map, the five validator payloads, the manifest, context.md and auto.json. Recon: <code>review/recon.cjs</code> · automatic checks: <code>review/auto.cjs</code></p>
+</div>
+</body>
+</html>
