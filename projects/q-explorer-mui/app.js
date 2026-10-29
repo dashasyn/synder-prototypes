@@ -256,9 +256,12 @@ function useListActions(t, deletedToastKey) {
  */
 function PageHeader({ crumbs, title, subtitle, action }) {
   return html`
+    ${/* Ignat, 2026-10-29: the header stays put while the report scrolls —
+          sticky under the 48px top bar, on every screen that has one */''}
     <${Box} id="page-header"
       sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              gap: 2, px: 3, py: 1.5, bgcolor: '#fff' }}>
+              gap: 2, px: 3, py: 1.5, bgcolor: '#fff',
+              position: 'sticky', top: 48, zIndex: 150, borderBottom: '1px solid #E7E7E7' }}>
       <${Box} sx=${{ minWidth: 0 }}>
         ${crumbs && html`
           <${Breadcrumbs} sx=${{ fontSize: 14 }}
