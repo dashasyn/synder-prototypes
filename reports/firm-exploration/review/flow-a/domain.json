@@ -1,0 +1,72 @@
+{
+  "validator": "domain",
+  "round": 1,
+  "target": "Synder production (demo.synderapp.com) — Firm: create firm, connect / decline / remove / reconnect clients (live walk 2026-10-29)",
+  "checked": [
+    { "zone": "Org settings › Users card › Accounting firm tab", "item": "\"Enter Firm ID of the accounting firm you want to work with in Synder.\" field + [Apply]" },
+    { "zone": "Org settings › Users card › Accounting firm tab", "item": "Error snackbar \"FirmEntity is not found by client invitation number '12345'\"" },
+    { "zone": "Org settings › Users card › Accounting firm tab", "item": "Table \"Firm name | Status\" with status \"Pending\" and no row action" },
+    { "zone": "Org settings › Users card › Accounting firm tab", "item": "\"You can connect only one accounting firm at a time. To connect another firm, please remove the existing connection first.\"" },
+    { "zone": "Org settings › Users card › Accounting firm tab", "item": "Silent return to empty Firm ID form after firm declines/removes" },
+    { "zone": "Create a Firm", "item": "Admin role description in creation modal (add/remove colleagues, assign to clients with permissions)" },
+    { "zone": "Create a Firm", "item": "Success modal \"Done! A new Firm Dasha Test Firm has been successfully created in Synder\"" },
+    { "zone": "Create a Firm", "item": "Second firm creation by same user without warning; firm #2 unreachable; no delete" },
+    { "zone": "Create a Firm", "item": "No legal entity / address / tax ID / billing captured for the firm" },
+    { "zone": "Firm page header", "item": "\"Firm ID 1793300370\" with no copy control" },
+    { "zone": "Org switcher", "item": "\"Connect client · Connect more clients to get a discount\" starting new-organization onboarding" },
+    { "zone": "List of organizations", "item": "No firm membership shown per organization" },
+    { "zone": "Firm › Clients tab", "item": "Add client instructions referencing \"My account --> Accounting firm tab\"" },
+    { "zone": "Firm › Clients tab", "item": "Columns Client name | Tags | Open month | Checks | Status | Actions" },
+    { "zone": "Firm › Clients tab", "item": "[Approve] one-click grant with no confirmation, no toast, no request notification" },
+    { "zone": "Firm › Clients tab", "item": "Remove client dialog text and toast \"Client deleted successfully!\"" },
+    { "zone": "Firm › Clients tab", "item": "Reconnect after remove creates new client record losing checks, notes, month history" }
+  ],
+  "findings": [
+    {
+      "id": "DOM-1",
+      "severity": "Critical",
+      "confidence": 90,
+      "element": "Firm › Clients tab › Remove client dialog and resulting toast",
+      "finding": "Remove irreversibly deletes the client's month-close history, ticked checks, notes and tags (reconnect creates a new record), but the dialog discloses only loss of list visibility and access, and the toast then says \"deleted\" instead of \"removed\".",
+      "user_impact": "An accountant who removes a client to fix a connection issue silently destroys the audit trail of which months were closed and which close checks were completed, with no way to restore it.",
+      "suggested_fix": "State in the dialog that open-month history, checks, notes and tags are permanently deleted (or preserve them on reconnect), and use one verb consistently with the vocabulary toast pattern, e.g. \"Client removed!\".",
+      "evidence": {
+        "quote": "Removing a client from your Firm means that: You will no longer see them in your clients list. You and all of your Firm's colleagues will lose access to this client's organization in Synder.",
+        "source": "Scope: data integrity — irreversible action without disclosure of what is lost; vocabulary.md Toast Patterns: \"{Thing} {past participle}!\" and \"No 'was successfully' — filler, remove it\" (toast \"Client deleted successfully!\")"
+      }
+    },
+    {
+      "id": "DOM-2",
+      "severity": "High",
+      "confidence": 85,
+      "element": "Org settings › Users card › Accounting firm tab › firm row (Pending/Connected)",
+      "finding": "The client is told to remove the existing firm connection, but the row has no remove/withdraw control in either Pending or Connected state, so the books owner cannot revoke an accounting firm's access to their organization.",
+      "user_impact": "A client changing accountants (or who entered the wrong Firm ID) cannot cut off the previous firm's access to their books and must rely on that firm to remove them, which is a segregation-of-access and compliance risk.",
+      "suggested_fix": "Add a Remove action (with confirmation) on the client-side firm row for both Pending and Connected states, matching the instruction already shown.",
+      "evidence": {
+        "quote": "You can connect only one accounting firm at a time. To connect another firm, please remove the existing connection first.",
+        "source": "Scope: data integrity / access control — the organization owning the books must be able to revoke third-party access; copy instructs an action that does not exist"
+      }
+    },
+    {
+      "id": "DOM-3",
+      "severity": "High",
+      "confidence": 80,
+      "element": "Create a Firm modal and avatar menu \"Firm\" entry",
+      "finding": "The same user can create a second firm with no warning, the menu always opens firm #1, firm #2 is unreachable and cannot be deleted, yet it has its own Firm ID that clients can enter.",
+      "user_impact": "With 40+ clients, any client given the orphan firm's ID sits in a Pending request no admin can see or approve, and duplicate firm entities fragment colleague assignments and billing.",
+      "suggested_fix": "Block or warn on creating a second firm for a user who already administers one, and provide a firm switcher plus delete for existing duplicates.",
+      "evidence": {
+        "quote": "Done! A new Firm Dasha Test Firm has been successfully created in Synder",
+        "source": "Scope: multi-client workflow gaps — one accounting firm must map to one Firm entity reachable by its admin"
+      }
+    }
+  ],
+  "gaps": [
+    "Remove client: state map does not record whether removal affects any synced data, settings or sync rules in the client organization's books, only firm-side record loss",
+    "Approve: no confirmation and no notification observed, but which permissions/colleagues get access on approval was not recorded",
+    "Client accepts firm on a different user account: not exercised, so what a client user sees about firm colleagues' access to their books is unknown",
+    "Connect client onboarding: not completed, so whether it creates a separate organization/subscription outside the firm (duplicate org risk) is unknown",
+    "Columns \"Open month\" and \"Checks\": meaning (period close vs. reconciliation status) and whether they reflect accounting-company data was not recorded"
+  ]
+}
