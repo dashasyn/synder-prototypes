@@ -13,7 +13,16 @@
   .ds-nav { position: sticky; top: 0; height: 100vh; overflow-y: auto; border-right: 1px solid var(--border-default); padding: 20px 12px 32px; background: var(--bg-surface); }
   .ds-brand { display: flex; align-items: center; gap: 8px; padding: 0 8px 4px; font-size: 16px; font-weight: 500; color: var(--text-primary); }
   .ds-brand .material-icons { color: var(--color-primary); }
-  .ds-brand-sub { padding: 0 8px 16px; font-size: 14px; color: var(--text-secondary); border-bottom: 1px solid var(--border-default); margin-bottom: 8px; }
+  .ds-brand-sub { padding: 0 8px 12px; font-size: 14px; color: var(--text-secondary); }
+  .ds-search { padding: 0 0 12px; border-bottom: 1px solid var(--border-default); margin-bottom: 8px; }
+  .ds-search .input { width: 100%; }
+  .ds-results { display: none; }
+  .ds-nav.searching .ds-results { display: block; }
+  .ds-nav.searching .ds-menu { display: none; }
+  .ds-res { display: block; padding: 6px 8px; border-radius: 4px; text-decoration: none; font-size: 14px; line-height: 20px; color: var(--text-primary); }
+  .ds-res:hover, .ds-res:focus { background: var(--bg-hover); outline: none; }
+  .ds-res span { display: block; color: var(--text-secondary); }
+  .ds-res-none { padding: 6px 8px; font-size: 14px; color: var(--text-secondary); }
   .ds-nav-group { font-size: 14px; font-weight: 500; color: var(--text-secondary); padding: 16px 8px 4px; }
   .ds-nav-item { display: block; font-size: 14px; line-height: 20px; padding: 6px 8px; border-radius: 4px; color: var(--text-primary); text-decoration: none; }
   .ds-nav-item:hover { background: var(--bg-hover); }
@@ -24,19 +33,33 @@
   .ds-sec-head { margin-bottom: 24px; }
   .ds-sec-head h2 { font-size: 28px; line-height: 36px; font-weight: 300; color: var(--text-primary); margin: 0 0 4px; }
   .ds-sec-head p { font-size: 14px; line-height: 20px; color: var(--text-secondary); margin: 0; }
+  .ds-h3 { font-size: 16px; line-height: 24px; font-weight: 500; margin: 32px 0 12px; color: var(--text-primary); }
   .ds-pager { display: flex; justify-content: space-between; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border-default); }
   .ds-pager a { font-size: 14px; color: var(--color-primary); text-decoration: none; }
+  .ds-notfound { margin-bottom: 24px; }
   .ds-frame { border: 1px solid var(--border-default); border-radius: 8px; overflow: hidden; }
   .ds-frame-body { display: flex; min-height: 320px; }
   .ds-frame-body .sidebar { position: static; height: auto; }
   .ds-frame-main { flex: 1; padding: 24px 32px; }
+  .ds-stage { position: relative; transform: translateZ(0); overflow: hidden; border: 1px solid var(--border-default); border-radius: 8px; background: var(--bg-page); margin-bottom: 16px; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
-  .swatch { width: 92px; } .swatch i { display: block; height: 40px; border-radius: 4px; border: 1px solid var(--border-default); }
-  .swatch span { font-size: 14px; color: var(--text-secondary); display: block; margin-top: 4px; }
+  .ds-disabled { display: inline-flex; flex-direction: column; gap: 2px; }
+  .ds-swatches { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 16px; margin-bottom: 8px; }
+  .ds-sw { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 20px; }
+  .ds-sw i { flex: none; width: 40px; height: 40px; border-radius: 4px; border: 1px solid var(--border-default); }
+  .ds-sw b { display: block; font-weight: 500; color: var(--text-primary); }
+  .ds-sw span { display: block; color: var(--text-secondary); word-break: break-all; }
   .note { font-size: 14px; color: var(--text-secondary); }
   .ds-p { font-size: 14px; line-height: 20px; max-width: 820px; margin-bottom: 12px; }
+  .ds-rules { margin-bottom: 8px; }
   .ds-rules td { vertical-align: top; padding-top: 8px; padding-bottom: 8px; height: auto; }
   .ds-rules td:first-child { white-space: nowrap; font-weight: 500; }
+  .ds-rules tr:target td, .ds-rules tr.ds-hit td { background: var(--bg-active); }
+  .ds-rowlink { background: none; border: 0; padding: 0 0 0 6px; cursor: pointer; color: var(--text-secondary); vertical-align: middle; opacity: 0; }
+  .ds-rowlink .material-icons { font-size: 16px; }
+  .ds-rules tr:hover .ds-rowlink, .ds-rowlink:focus { opacity: 1; }
+  .ds-rowlink:hover { color: var(--color-primary); }
+  .ds-more { white-space: nowrap; }
   code { font-size: 14px; }
 </style>
 </head>
@@ -45,6 +68,9 @@
   <nav class="ds-nav" aria-label="Design system">
     <div class="ds-brand"><span class="material-icons">widgets</span> Synder Design System</div>
     <div class="ds-brand-sub">Values + rules for prototypes</div>
+    <div class="ds-search"><input class="input input-search" id="ds-q" type="search" placeholder="Search rules" aria-label="Search rules and components" autocomplete="off"></div>
+    <div class="ds-results" id="ds-results" aria-live="polite"></div>
+    <div class="ds-menu">
       <div class="ds-nav-group">Start</div>
       <a class="ds-nav-item" href="#about">Overview</a>
       <a class="ds-nav-item" href="#rules">Rules: values</a>
@@ -55,259 +81,419 @@
       <div class="ds-nav-group">Components</div>
       <a class="ds-nav-item" href="#buttons">Buttons</a>
       <a class="ds-nav-item" href="#forms">Forms</a>
+      <a class="ds-nav-item" href="#filterbar">Filter bar</a>
       <a class="ds-nav-item" href="#table">Table</a>
-      <a class="ds-nav-item" href="#alerts">Alerts</a>
-      <a class="ds-nav-item" href="#status">Statuses & chips</a>
       <a class="ds-nav-item" href="#tabs">Tabs</a>
+      <a class="ds-nav-item" href="#status">Statuses & chips</a>
+      <a class="ds-nav-item" href="#alerts">Alerts</a>
+      <a class="ds-nav-item" href="#toast">Toast</a>
+      <a class="ds-nav-item" href="#modal">Modal & side sheet</a>
       <a class="ds-nav-item" href="#cards">Cards & misc</a>
       <div class="ds-nav-group">Foundations</div>
       <a class="ds-nav-item" href="#type">Type scale</a>
       <a class="ds-nav-item" href="#colours">Colours</a>
+    </div>
   </nav>
   <main class="ds-main">
+    <div class="alert alert-warning ds-notfound" id="ds-notfound" style="display:none"><span class="material-icons">warning</span><span id="ds-notfound-text"></span></div>
+
     <section class="ds-sec" id="about" data-title="Overview">
       <header class="ds-sec-head"><h2>Overview</h2><p>What this page is and how to use it.</p></header>
-
-        <p class="ds-p">This page is the single source of truth for Synder prototypes: <b>values</b> (tokens, components) come from
-        <code>synder-ui-kit.css</code>, checked against the Figma library and against production (Transaction reconciliation, measured
-        2026-10-29). <b>Rules</b> below are how to use them. If a prototype needs something that isn't here, it gets added here first,
-        never restyled locally.</p>
-      
+      <p class="ds-p">This page is the single source of truth for Synder prototypes: <b>values</b> (tokens, components) come from
+      <code>synder-ui-kit.css</code>, checked against the Figma library and against production (Transaction reconciliation, measured
+      2026-10-29). <b>Rules</b> are how to use them. If a prototype needs something that isn't here, it gets added here first,
+      never restyled locally.</p>
+      <p class="ds-p">Each component section has its full spec on top and a live demo under it. Every rule row has its own link:
+      hover the row and click <span class="material-icons" style="font-size:16px;vertical-align:middle">link</span> to copy it.</p>
     </section>
+
     <section class="ds-sec" id="rules" data-title="Rules: values">
-      <header class="ds-sec-head"><h2>Rules: values</h2><p>Sizes, colours and components, checked against Figma and production.</p></header>
-
-        <table class="synder-table table--sm ds-rules"><thead><tr><th>What</th><th>Rule</th><th>Source</th></tr></thead><tbody>
-          <tr><td>Minimum font size</td><td><b>14px for all text.</b> Never 12/13px. De-emphasise with colour (<code>--text-secondary</code>) or weight, never size. Only non-text glyphs (sort arrow, chip ×) may be smaller.</td><td>Ignat 2026-10-01</td></tr>
-          <tr><td>Font</td><td>Roboto 300/400/500/700. Body 14/20. Page title 28/36 weight 300, <code>#1A1B24</code>. Subtitle 14/20 <code>#6B778C</code>.</td><td>Production</td></tr>
-          <tr><td>Buttons</td><td>32px, radius 4, 14px/500, padding 6×19 (outlined 5×18 + 1px border). Primary <code>#0053CC</code>, hover <code>#1A43A2</code>. Large 36px only where Figma uses it. Max 2 primary buttons visible.</td><td>Production = Figma</td></tr>
-          <tr><td>Inputs & selects</td><td>32px, white, 1px <code>#DFE4EC</code>, radius 4. Label 14px <i>above</i> the field, 2px gap. Never placeholder-as-label.</td><td>Production = Figma</td></tr>
-          <tr><td>Tables</td><td>Only <code>table.synder-table</code>. White rows (child rows too), no zebra, 1px <code>#DFE4EC</code> divider under every cell, no vertical borders. Header 56px. Row height: see <a href="#decide">To decide</a>. Cell padding 0 10–12px. Hover <code>#F7F8FA</code>, selected <code>#F3F6FC</code>.</td><td>Production + Figma</td></tr>
-          <tr><td>Statuses</td><td><code>.status</code>: 20px, radius 4, 14px. Not the rounded chip (<code>.chip-input</code> is a different component).</td><td>Figma</td></tr>
-          <tr><td>Filter bar</td><td>Background <code>#EFF1F5</code> (<code>--color-grey-10</code>), padding 12×16, radius 4. Fields in a row, Apply (primary) + Reset filters (outlined) under them.</td><td>Production</td></tr>
-          <tr><td>Tabs</td><td>48px, 14px/500, active = <code>#0053CC</code> text + 2px underline.</td><td>Production</td></tr>
-          <tr><td>Spacing</td><td>8px grid: 4 · 8 · 16 · 24 · 32 · 48. Dense, professional — no consumer "breathing room".</td><td>DESIGN_RULES</td></tr>
-          <tr><td>Screen</td><td>Desktop only, minimum 1280px. Design and test at 1280 and 1440.</td><td>Ignat</td></tr>
-          <tr><td>Colour</td><td>Only kit tokens (<code>var(--…)</code>). No raw hex except third-party brand colours. No marketing palette (Poppins, marketing blues) in app UI.</td><td>Kit</td></tr>
-        </tbody></table>
-      
+      <header class="ds-sec-head"><h2>Rules: values</h2><p>Summary of sizes and colours. Full spec per component is in its own section.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>What</th><th>Rule</th><th>Source</th></tr></thead><tbody>
+        <tr><td>Minimum font size</td><td><b>14px for all text.</b> Never 12/13px. De-emphasise with colour (<code>--text-secondary</code>) or weight, never size. Only non-text glyphs (sort arrow, chip ×) may be smaller.</td><td>Ignat 2026-10-01</td></tr>
+        <tr><td>Font</td><td>Roboto 300/400/500/700. Body 14/20. Page title 28/36 weight 300, <code>#1A1B24</code>. Subtitle 14/20 <code>#6B778C</code>. <a class="ds-more" href="#type">Type scale →</a></td><td>Production</td></tr>
+        <tr><td>Buttons</td><td>32px, primary <code>#0053CC</code>, hover <code>#1A43A2</code>. Max 2 primary buttons visible. <a class="ds-more" href="#buttons">Full spec →</a></td><td>Production = Figma</td></tr>
+        <tr><td>Inputs & selects</td><td>32px, 1px <code>#DFE4EC</code>, label above. <a class="ds-more" href="#forms">Full spec →</a></td><td>Production = Figma</td></tr>
+        <tr><td>Filter bar</td><td><code>#EFF1F5</code> panel, Apply + Reset filters under the fields. <a class="ds-more" href="#filterbar">Full spec →</a></td><td>Production</td></tr>
+        <tr><td>Tables</td><td>Only <code>table.synder-table</code>. Header 56px, row height: <a href="#decide-1">To decide #1</a>. <a class="ds-more" href="#table">Full spec →</a></td><td>Production + Figma</td></tr>
+        <tr><td>Tabs</td><td>48px, active = blue text + 2px underline. <a class="ds-more" href="#tabs">Full spec →</a></td><td>Production</td></tr>
+        <tr><td>Statuses</td><td><code>.status</code> 20px, not the rounded chip. <a class="ds-more" href="#status">Full spec →</a></td><td>Figma</td></tr>
+        <tr><td>Spacing</td><td>8px grid: 4 · 8 · 16 · 24 · 32 · 48. Dense, professional — no consumer "breathing room".</td><td>DESIGN_RULES</td></tr>
+        <tr><td>Screen</td><td>Desktop only, minimum 1280px. Design and test at 1280 and 1440.</td><td>Ignat</td></tr>
+        <tr><td>Colour</td><td>Only kit tokens (<code>var(--…)</code>). No raw hex except third-party brand colours. No marketing palette (Poppins, marketing blues) in app UI. <a class="ds-more" href="#colours">Colours →</a></td><td>Kit</td></tr>
+      </tbody></table>
     </section>
+
     <section class="ds-sec" id="behaviour" data-title="Rules: behaviour">
       <header class="ds-sec-head"><h2>Rules: behaviour</h2><p>How things act: loading, empty, errors, destructive actions, toasts.</p></header>
-
-        <table class="synder-table table--sm ds-rules"><thead><tr><th>Situation</th><th>Rule</th></tr></thead><tbody>
-          <tr><td>Page load</td><td>Skeleton screens, not spinners. Spinners only inside a button for its own action.</td></tr>
-          <tr><td>Empty state</td><td>Icon + heading + one line of text + CTA. Never blank space.</td></tr>
-          <tr><td>Field error</td><td>Below the field, 14px, red. Icon optional.</td></tr>
-          <tr><td>Destructive action</td><td>Confirmation modal whose button says exactly what happens ("Delete 3 transactions", never "Confirm" / "Are you sure?").</td></tr>
-          <tr><td>Toasts</td><td>Bottom-right, 320px, auto-dismiss 5s. <b>No Undo link</b> — Synder toasts don't have one.</td></tr>
-          <tr><td>Filters</td><td>A filter value is cleared with its ×, not by choosing "All".</td></tr>
-          <tr><td>Disabled controls</td><td>Never without a visible reason (helper text or tooltip).</td></tr>
-          <tr><td>Tooltips</td><td>Never the only place important information lives.</td></tr>
-          <tr><td>Prefilled defaults</td><td>A hint explaining why a value is prefilled disappears when the user changes the value.</td></tr>
-          <tr><td>New setting</td><td>Goes next to its closest existing relative, not at the top of the tab.</td></tr>
-          <tr><td>Side sheet / modal</td><td>Side sheet 480px (wide 600), overlay <code>--bg-overlay</code>. Modal max 560px (wide 720), radius 8.</td></tr>
-          <tr><td>Copy</td><td>Never present invented text as existing product copy — mark it <code>[live copy not captured]</code> until verified.</td></tr>
-        </tbody></table>
-      
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Situation</th><th>Rule</th></tr></thead><tbody>
+        <tr><td>Page load</td><td>Skeleton screens, not spinners. Spinners only inside a button for its own action.</td></tr>
+        <tr><td>Empty state</td><td>Icon + heading + one line of text + CTA. Never blank space. <a class="ds-more" href="#cards">Example →</a></td></tr>
+        <tr><td>Field error</td><td>Below the field, 14px, red. Icon optional. <a class="ds-more" href="#forms">Forms →</a></td></tr>
+        <tr><td>Destructive action</td><td>Confirmation modal whose button says exactly what happens ("Delete 3 transactions", never "Confirm" / "Are you sure?"). <a class="ds-more" href="#modal">Modal →</a></td></tr>
+        <tr><td>Toasts</td><td>Bottom-right, 320px, auto-dismiss 5s. <b>No Undo link</b> — Synder toasts don't have one. <a class="ds-more" href="#toast">Toast →</a></td></tr>
+        <tr><td>Filters</td><td>A filter value is cleared with its ×, not by choosing "All". <a class="ds-more" href="#filterbar">Filter bar →</a></td></tr>
+        <tr><td>Disabled controls</td><td>Never without a visible reason (helper text or tooltip).</td></tr>
+        <tr><td>Tooltips</td><td>Never the only place important information lives.</td></tr>
+        <tr><td>Prefilled defaults</td><td>A hint explaining why a value is prefilled disappears when the user changes the value.</td></tr>
+        <tr><td>New setting</td><td>Goes next to its closest existing relative, not at the top of the tab.</td></tr>
+        <tr><td>Side sheet / modal</td><td>Modal max 600px (720 / 900 wide), side sheet 480px (600 wide). <a class="ds-more" href="#modal">Full spec →</a></td></tr>
+        <tr><td>Copy</td><td>Never present invented text as existing product copy — mark it <code>[live copy not captured]</code> until verified.</td></tr>
+      </tbody></table>
     </section>
+
     <section class="ds-sec" id="decide" data-title="To decide">
       <header class="ds-sec-head"><h2>To decide</h2><p>Open questions. Each has the default prototypes use until you decide.</p></header>
-
-        <table class="synder-table table--sm ds-rules"><thead><tr><th>#</th><th>Question</th><th>Current default</th></tr></thead><tbody>
-          <tr><td>1</td><td><b>Table row height.</b> Production Transaction reconciliation uses <b>32px</b> rows; Sync history and Figma use 52px (M); the kit's small size is 36px.</td><td>S = 32px for dense lists, M = 52px — pending Ignat</td></tr>
-          <tr><td>2</td><td>Caption 12/16 and Chip 13/20 exist in Figma; raised to 14/20 here by the 14px rule.</td><td>14px (Ignat 2026-10-01)</td></tr>
-          <tr><td>3</td><td>&lt;Status&gt; dark_blue uses <code>#4F8DE7</code>, which is in no palette.</td><td>Kept as-is</td></tr>
-          <tr><td>4</td><td>Placeholder text is <code>#8C97B1</code> in components, not the published grey_30.</td><td>#8C97B1</td></tr>
-          <tr><td>5</td><td>No trial-banner component in Figma; production ships <code>#DDEDF6</code> (off-palette).</td><td>Alert info pair</td></tr>
-          <tr><td>6</td><td>Outline Warning/Error hover in Figma is a dark fill under same-hue text (~1.3:1 contrast).</td><td>Light tint instead</td></tr>
-          <tr><td>7</td><td>Old <code>DESIGN_RULES.md</code> said buttons/inputs 36px, rows 48px, hover <code>#0047B3</code>, text <code>#1A1A2E</code>.</td><td>Overruled by production (above)</td></tr>
-        </tbody></table>
-      
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>#</th><th>Question</th><th>Current default</th></tr></thead><tbody>
+        <tr id="decide-1"><td>1</td><td><b>Table row height.</b> Production Transaction reconciliation uses <b>32px</b> rows; Sync history and Figma use 52px (M); the kit's small size is 36px. Summaries, Mapping, Register and Balance reconciliation not measured yet.</td><td>S = 32px for dense lists, M = 52px — pending Ignat</td></tr>
+        <tr id="decide-2"><td>2</td><td>Caption 12/16 and Chip 13/20 exist in Figma; raised to 14/20 here by the 14px rule.</td><td>14px (Ignat 2026-10-01)</td></tr>
+        <tr id="decide-3"><td>3</td><td>&lt;Status&gt; dark_blue uses <code>#4F8DE7</code>, which is in no palette.</td><td>Kept as-is</td></tr>
+        <tr id="decide-4"><td>4</td><td>Placeholder text is <code>#8C97B1</code> in components, not the published grey_30.</td><td>#8C97B1</td></tr>
+        <tr id="decide-5"><td>5</td><td>No trial-banner component in Figma; production ships <code>#DDEDF6</code> (off-palette).</td><td>Alert info pair</td></tr>
+        <tr id="decide-6"><td>6</td><td>Outline Warning/Error hover in Figma is a dark fill under same-hue text (~1.3:1 contrast).</td><td>Light tint instead</td></tr>
+        <tr id="decide-7"><td>7</td><td>Old <code>DESIGN_RULES.md</code> said buttons/inputs 36px, rows 48px, hover <code>#0047B3</code>, text <code>#1A1A2E</code>, modal max 560px radius 8.</td><td>Overruled by production and the kit</td></tr>
+        <tr id="decide-8"><td>8</td><td>Toast look (colour, icon, close) is not measured from production yet; only position, width, timing and "no Undo" are known.</td><td>Dark toast in the kit</td></tr>
+      </tbody></table>
     </section>
+
     <section class="ds-sec" id="frame" data-title="Page frame">
-      <header class="ds-sec-head"><h2>Page frame</h2><p>Banner, top bar, sidebar and page header. Layout measurements (padding, spacing, filter bar + table block) are being added from production.</p></header>
+      <header class="ds-sec-head"><h2>Page frame</h2><p>Banner, top bar, sidebar and page header. The blocks under the header have their own sections: <a href="#filterbar">Filter bar</a>, <a href="#tabs">Tabs</a>, <a href="#table">Table</a>.</p></header>
       <div class="ds-frame">
-  <div class="synder-banner"><span>Trial banner — no Figma component exists; using the Alert info pair</span><button class="btn-text">Dismiss</button></div>
-  <div class="topbar">
-    <a class="topbar-title"><span class="material-icons">sync_alt</span> Synder UI Kit</a>
-    <div class="topbar-actions"><span class="text-body2">Syncs left: <b>10000</b></span><button class="btn-icon"><span class="material-icons">notifications</span></button><div class="avatar">IP</div></div>
-  </div>
+        <div class="synder-banner"><span>Trial banner — no Figma component exists; using the Alert info pair</span><button class="btn-text">Dismiss</button></div>
+        <div class="topbar">
+          <a class="topbar-title"><span class="material-icons">sync_alt</span> Synder UI Kit</a>
+          <div class="topbar-actions"><span class="text-body2">Syncs left: <b>10000</b></span><button class="btn-icon" aria-label="Notifications"><span class="material-icons">notifications</span></button><div class="avatar">JD</div></div>
+        </div>
         <div class="ds-frame-body">
-    <nav class="sidebar">
-      <a class="sidebar-item"><span class="material-icons icon-md">dashboard</span> Dashboard</a>
-      <a class="sidebar-item active"><span class="material-icons icon-md">list</span> Platform transactions</a>
-      <a class="sidebar-item"><span class="material-icons icon-md">sync_alt</span> Transaction reconciliation <span class="sidebar-badge">New</span></a>
-      <a class="sidebar-item sidebar-item--child">Import activity log</a>
-      <a class="sidebar-item"><span class="material-icons icon-md">settings</span> Settings</a>
-    </nav>
+          <nav class="sidebar">
+            <a class="sidebar-item"><span class="material-icons icon-md">dashboard</span> Dashboard</a>
+            <a class="sidebar-item active"><span class="material-icons icon-md">list</span> Platform transactions</a>
+            <a class="sidebar-item"><span class="material-icons icon-md">sync_alt</span> Transaction reconciliation <span class="sidebar-badge">New</span></a>
+            <a class="sidebar-item sidebar-item--child">Import activity log</a>
+            <a class="sidebar-item"><span class="material-icons icon-md">settings</span> Settings</a>
+          </nav>
           <div class="ds-frame-main">
             <div class="page-header">
-        <div class="page-header-text">
-          <div class="page-title-row">
-            <h1 class="page-title">Platform transactions</h1>
-            <span class="status status-green">Synced</span>
-          </div>
-          <p class="page-subtitle">Payout ID: in_5e6e8eHJJ899</p>
-        </div>
-        <div class="page-header-actions"><button class="btn-outlined">Secondary</button><button class="btn">Run reconciliation</button></div>
-      </div>
+              <div class="page-header-text">
+                <div class="page-title-row"><h1 class="page-title">Platform transactions</h1><span class="status status-green">Synced</span></div>
+                <p class="page-subtitle">Payout ID: in_5e6e8eHJJ899</p>
+              </div>
+              <div class="page-header-actions"><button class="btn-outlined">Secondary</button><button class="btn">Run reconciliation</button></div>
+            </div>
           </div>
         </div>
       </div>
     </section>
+
     <section class="ds-sec" id="buttons" data-title="Buttons">
-      <header class="ds-sec-head"><h2>Buttons</h2><p>32px default, 36px large. No small size exists in Figma.</p></header>
-
-        <div class="row">
-          <button class="btn">Primary</button><button class="btn-outlined">Outlined</button>
-          <button class="btn-text">Text</button><button class="btn-text-plain">Text plain</button>
-          <button class="btn btn-lg">Large 36</button>
-          <button class="btn" disabled>Disabled</button>
-          <button class="btn-outlined" disabled>Outl. disabled</button>
-          <button class="btn-icon"><span class="material-icons">more_horiz</span></button>
-        </div>
-        <div class="row">
-          <button class="btn btn-warning">Warning</button><button class="btn btn-error">Error</button>
-          <button class="btn btn-success">Success</button>
-          <button class="btn-outlined btn-outlined-warning">Outl. warning</button>
-          <button class="btn-outlined btn-outlined-error">Outl. error</button>
-          <span class="note">hover the outline pair — light tint, not Figma's dark fill (unreadable)</span>
-        </div>
-      
+      <header class="ds-sec-head"><h2>Buttons</h2><p>Source: production = Figma.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Height</td><td>32px. Large 36px only where Figma uses it. No small size.</td></tr>
+        <tr><td>Shape & text</td><td>Radius 4, 14px/500, padding 6×19. Outlined: 5×18 + 1px border.</td></tr>
+        <tr><td>Primary colour</td><td><code>#0053CC</code>, hover <code>#1A43A2</code>, pressed <code>#003DA0</code>.</td></tr>
+        <tr><td>Outlined warning/error hover</td><td>Light tint, not Figma's dark fill (<a href="#decide-6">To decide #6</a>).</td></tr>
+        <tr><td>How many primaries</td><td>Max 2 primary buttons visible at once.</td></tr>
+        <tr><td>Disabled</td><td>Never without a visible reason (helper text or tooltip).</td></tr>
+        <tr><td>Destructive label</td><td>Says exactly what happens: "Delete 3 transactions", never "Confirm".</td></tr>
+        <tr><td>Classes</td><td><code>.btn</code> <code>.btn-outlined</code> <code>.btn-text</code> <code>.btn-text-plain</code> <code>.btn-icon</code> <code>.btn-lg</code> · <code>.btn-warning</code> <code>.btn-error</code> <code>.btn-success</code> · <code>.btn-outlined-warning</code> <code>.btn-outlined-error</code></td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="row">
+        <button class="btn">Primary</button><button class="btn-outlined">Outlined</button>
+        <button class="btn-text">Text</button><button class="btn-text-plain">Text plain</button>
+        <button class="btn btn-lg">Large 36</button>
+        <button class="btn-icon" aria-label="More"><span class="material-icons">more_horiz</span></button>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <span class="ds-disabled"><button class="btn" disabled>Sync selected</button><span class="form-hint">Select at least one transaction</span></span>
+        <span class="ds-disabled"><button class="btn-outlined" disabled>Export</button><span class="form-hint">Nothing to export yet</span></span>
+      </div>
+      <div class="row">
+        <button class="btn btn-warning">Warning</button><button class="btn btn-error">Error</button>
+        <button class="btn btn-success">Success</button>
+        <button class="btn-outlined btn-outlined-warning">Outl. warning</button>
+        <button class="btn-outlined btn-outlined-error">Outl. error</button>
+      </div>
     </section>
+
     <section class="ds-sec" id="forms" data-title="Forms">
-      <header class="ds-sec-head"><h2>Forms</h2><p>32px fields, label = Subtitle_2, description &amp; error 14px</p></header>
-
-        <div class="row" style="align-items:flex-start">
-          <div class="form-field" style="width:220px"><label class="form-label form-label-required">Integration</label><select class="select"><option>Shopify</option><option>Stripe</option></select><div class="form-hint">Pick the connected platform.</div></div>
-          <div class="form-field" style="width:220px"><label class="form-label">Search</label><input class="input input-search" placeholder="Search transactions"><div class="form-hint">Description text, 14px.</div></div>
-          <div class="form-field" style="width:200px"><label class="form-label">Amount</label><input class="input error" value="bad value"><div class="form-error-msg">Enter a valid amount.</div></div>
-        </div>
-        <div class="row">
-          <label class="form-check"><input class="checkbox" type="checkbox" checked> Checked</label>
-          <label class="form-check"><input class="checkbox" type="checkbox"> Unchecked</label>
-          <label class="form-check"><input class="checkbox" type="checkbox" id="ind"> Indeterminate</label>
-          <label class="form-check"><input class="checkbox" type="checkbox" disabled> Disabled</label>
-          <label class="form-check"><input class="radio" type="radio" name="r" checked> Radio on</label>
-          <label class="form-check"><input class="radio" type="radio" name="r"> Radio off</label>
-          <label class="form-check"><input class="switch" type="checkbox" checked> Switch on</label>
-          <label class="form-check"><input class="switch" type="checkbox"> Switch off</label>
-        </div>
-      
+      <header class="ds-sec-head"><h2>Forms</h2><p>Source: production = Figma.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Field</td><td>32px, white, 1px <code>#DFE4EC</code>, radius 4. Focus border <code>#0053CC</code>.</td></tr>
+        <tr><td>Label</td><td>14px Subtitle_2, <i>above</i> the field, 2px gap. Never placeholder-as-label. Required: <code>.form-label-required</code>.</td></tr>
+        <tr><td>Placeholder</td><td><code>#8C97B1</code> (<a href="#decide-4">To decide #4</a>).</td></tr>
+        <tr><td>Description</td><td>14px, <code>--text-secondary</code>, under the field (<code>.form-hint</code>).</td></tr>
+        <tr><td>Error</td><td>Under the field, 14px, red <code>#CC2929</code>; field border turns red (<code>.input.error</code> + <code>.form-error-msg</code>).</td></tr>
+        <tr><td>Checks</td><td><code>.checkbox</code>, <code>.radio</code>, <code>.switch</code> inside <code>label.form-check</code>.</td></tr>
+        <tr><td>Classes</td><td><code>.form-field</code> <code>.form-label</code> <code>.input</code> <code>.input-search</code> <code>.select</code></td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="row" style="align-items:flex-start">
+        <div class="form-field" style="width:220px"><label class="form-label form-label-required">Integration</label><select class="select"><option>Shopify</option><option>Stripe</option></select><div class="form-hint">Pick the connected platform.</div></div>
+        <div class="form-field" style="width:220px"><label class="form-label">Search</label><input class="input input-search" placeholder="Search transactions"><div class="form-hint">Description text, 14px.</div></div>
+        <div class="form-field" style="width:200px"><label class="form-label">Amount</label><input class="input error" value="bad value"><div class="form-error-msg">Enter a valid amount.</div></div>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <label class="form-check"><input class="checkbox" type="checkbox" checked> Checked</label>
+        <label class="form-check"><input class="checkbox" type="checkbox"> Unchecked</label>
+        <label class="form-check"><input class="checkbox" type="checkbox" id="ind"> Indeterminate</label>
+        <span class="ds-disabled"><label class="form-check"><input class="checkbox" type="checkbox" disabled> Auto-sync</label><span class="form-hint">Connect an accounting company first</span></span>
+        <label class="form-check"><input class="radio" type="radio" name="r" checked> Radio on</label>
+        <label class="form-check"><input class="radio" type="radio" name="r"> Radio off</label>
+        <label class="form-check"><input class="switch" type="checkbox" checked> Switch on</label>
+        <label class="form-check"><input class="switch" type="checkbox"> Switch off</label>
+      </div>
     </section>
+
+    <section class="ds-sec" id="filterbar" data-title="Filter bar">
+      <header class="ds-sec-head"><h2>Filter bar</h2><p>Source: production (Transaction reconciliation).</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Panel</td><td>Background <code>#EFF1F5</code> (<code>--color-grey-10</code>), padding 12×16, radius 4.</td></tr>
+        <tr><td>Fields</td><td>One row of 32px fields with labels above; wraps when it runs out of width.</td></tr>
+        <tr><td>Actions</td><td>Apply (primary) + Reset filters (outlined) under the fields.</td></tr>
+        <tr><td>Clearing a value</td><td>With its ×, never by choosing "All".</td></tr>
+        <tr><td>Classes</td><td><code>.synder-filter-bar</code> <code>.synder-filter-bar-fields</code> <code>.synder-filter-bar-actions</code></td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="synder-filter-bar">
+        <div class="synder-filter-bar-fields">
+          <div class="form-field" style="width:200px"><label class="form-label">Integration</label><select class="select"><option>Stripe</option><option>Shopify</option></select></div>
+          <div class="form-field" style="width:200px"><label class="form-label">Status</label><select class="select"><option>Unmatched</option><option>Matched</option></select></div>
+          <div class="form-field" style="width:240px"><label class="form-label">Search</label><input class="input input-search" placeholder="Search transactions"></div>
+        </div>
+        <div class="synder-filter-bar-actions"><button class="btn">Apply</button><button class="btn-outlined">Reset filters</button></div>
+      </div>
+    </section>
+
     <section class="ds-sec" id="table" data-title="Table">
-      <header class="ds-sec-head"><h2>Table</h2><p>56px header, 52px rows (M); dense lists see To decide #1, hover #F7F8FA, selected #F3F6FC</p></header>
-
-        <div class="table-wrap">
-          <table class="table">
-            <thead><tr><th class="col-check"><input class="checkbox" type="checkbox"></th><th class="sortable sorted">Transaction info</th><th class="sortable">Type</th><th class="col-amount">Amount</th><th>Sync status</th><th class="col-actions">Action</th></tr></thead>
-            <tbody>
-              <tr class="row-clickable"><td class="col-check"><input class="checkbox" type="checkbox" checked></td><td>Order #1042<span class="cell-subtext">Changolivia</span></td><td>Sale</td><td class="col-amount amount-positive">1,240.00</td><td><span class="status status-green">Synced</span></td><td class="col-actions"><button class="btn-icon"><span class="material-icons icon-sm">more_horiz</span></button></td></tr>
-              <tr class="row-clickable"><td class="col-check"><input class="checkbox" type="checkbox"></td><td>Refund #88 — mzkt.by</td><td>Refund</td><td class="col-amount amount-negative">-320.50</td><td><span class="status status-red">Failed</span></td><td class="col-actions"><button class="btn-icon"><span class="material-icons icon-sm">more_horiz</span></button></td></tr>
-              <tr class="row-clickable"><td class="col-check"><input class="checkbox" type="checkbox"></td><td>Payout — Stripe</td><td>Payout</td><td class="col-amount amount-zero">0.00</td><td><span class="status status-grey">Not synced</span></td><td class="col-actions"><button class="btn-icon"><span class="material-icons icon-sm">more_horiz</span></button></td></tr>
-            </tbody>
-          </table>
-        </div>
-        <div class="pagination"><button class="page-btn">‹</button><button class="page-btn active">1</button><button class="page-btn">2</button><button class="page-btn">›</button><span class="page-info">1–10 of 1002</span></div>
-      
+      <header class="ds-sec-head"><h2>Table</h2><p>Source: production + Figma.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Component</td><td>Only <code>table.synder-table</code>. Never a hand-written table.</td></tr>
+        <tr><td>Header</td><td>56px, 14px, <code>#707070</code> (<code>--text-table-header</code>).</td></tr>
+        <tr><td>Row height</td><td>Pending: 32px dense (Transaction reconciliation) vs 52px M (Sync history, Figma). <a href="#decide-1">To decide #1</a>.</td></tr>
+        <tr><td>Rows</td><td>White, child rows too. No zebra. 1px <code>#DFE4EC</code> divider under every cell, no vertical borders.</td></tr>
+        <tr><td>Cells</td><td>Padding 0 10–12px. Amounts right-aligned with tabular figures (<code>.col-amount</code>).</td></tr>
+        <tr><td>Hover & selected</td><td>Hover <code>#F7F8FA</code>, selected <code>#F3F6FC</code> (a checked row checkbox selects the row).</td></tr>
+        <tr><td>Pagination</td><td>52px row under the table (<code>.pagination</code>).</td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="table-wrap">
+        <table class="synder-table">
+          <thead><tr><th class="col-check"><input class="checkbox" type="checkbox" aria-label="Select all"></th><th class="sortable sorted">Transaction info</th><th class="sortable">Type</th><th class="col-amount">Amount</th><th>Sync status</th><th class="col-actions">Action</th></tr></thead>
+          <tbody>
+            <tr class="row-clickable"><td class="col-check"><input class="checkbox" type="checkbox" checked aria-label="Select row"></td><td>Order #1042<span class="cell-subtext">Jane Doe</span></td><td>Sale</td><td class="col-amount amount-positive">1,240.00</td><td><span class="status status-green">Synced</span></td><td class="col-actions"><button class="btn-icon" aria-label="Row actions"><span class="material-icons icon-sm">more_horiz</span></button></td></tr>
+            <tr class="row-clickable"><td class="col-check"><input class="checkbox" type="checkbox" aria-label="Select row"></td><td>Refund #88 — example.com</td><td>Refund</td><td class="col-amount amount-negative">-320.50</td><td><span class="status status-red">Failed</span></td><td class="col-actions"><button class="btn-icon" aria-label="Row actions"><span class="material-icons icon-sm">more_horiz</span></button></td></tr>
+            <tr class="row-clickable"><td class="col-check"><input class="checkbox" type="checkbox" aria-label="Select row"></td><td>Payout — Stripe</td><td>Payout</td><td class="col-amount amount-zero">0.00</td><td><span class="status status-grey">Not synced</span></td><td class="col-actions"><button class="btn-icon" aria-label="Row actions"><span class="material-icons icon-sm">more_horiz</span></button></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="pagination"><button class="page-btn" aria-label="Previous page">‹</button><button class="page-btn active">1</button><button class="page-btn">2</button><button class="page-btn" aria-label="Next page">›</button><span class="page-info">1–10 of 1002</span></div>
     </section>
-    <section class="ds-sec" id="alerts" data-title="Alerts">
-      <header class="ds-sec-head"><h2>Alerts</h2><p>no left rule, text takes the semantic colour, info = primary_10</p></header>
 
-        <div class="alert alert-info"><span class="material-icons">info</span><span>Informational message.</span><button class="alert-close"><span class="material-icons icon-sm">close</span></button></div>
-        <div class="alert alert-success"><span class="material-icons">check_circle</span><span>Reconciliation completed.</span></div>
-        <div class="alert alert-warning"><span class="material-icons">warning</span><span><span class="alert-title">Header</span>3 transactions could not be matched.</span></div>
-        <div class="alert alert-error"><span class="material-icons">error_outline</span><span>Sync failed — integration disconnected.</span></div>
-      
-    </section>
-    <section class="ds-sec" id="status" data-title="Statuses & chips">
-      <header class="ds-sec-head"><h2>Statuses & chips</h2><p>Two different components.</p></header>
-
-        <div class="row">
-          <span class="status status-green">green</span><span class="status status-grey">grey</span>
-          <span class="status status-red">red</span><span class="status status-yellow">yellow</span>
-          <span class="status status-blue">blue</span><span class="status status-purple">purple</span>
-          <span class="status status-black">black</span><span class="status status-dark-blue">dark_blue</span>
-          <span class="note">&lt;Status&gt; — 20px, radius 4, 14/20</span>
-        </div>
-        <div class="row">
-          <span class="chip-input">Chip <span class="chip-remove material-icons" style="font-size:12px">close</span></span>
-          <span class="chip-input">Another chip</span>
-          <span class="note">&lt;Chip&gt; — 24px pill, 14/20, removable</span>
-        </div>
-      
-    </section>
     <section class="ds-sec" id="tabs" data-title="Tabs">
-      <header class="ds-sec-head"><h2>Tabs</h2><p>count chip is full 14px</p></header>
-
-        <div class="tabs"><div class="tab active">All <span class="tab-count">607</span></div><div class="tab">Unmatched <span class="tab-count">72</span></div><div class="tab">Synced</div></div>
-      
+      <header class="ds-sec-head"><h2>Tabs</h2><p>Source: production.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Size & text</td><td>48px tall, 14px/500.</td></tr>
+        <tr><td>Active</td><td><code>#0053CC</code> text + 2px underline.</td></tr>
+        <tr><td>Count</td><td><code>.tab-count</code>, full 14px.</td></tr>
+        <tr><td>Classes</td><td><code>.tabs</code> <code>.tab</code> <code>.tab.active</code></td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="tabs"><div class="tab active">All <span class="tab-count">607</span></div><div class="tab">Unmatched <span class="tab-count">72</span></div><div class="tab">Synced</div></div>
     </section>
-    <section class="ds-sec" id="cards" data-title="Cards & misc">
-      <header class="ds-sec-head"><h2>Cards & misc</h2><p>Cards, stats, dropdown, tooltip, states.</p></header>
 
-        <div class="row" style="align-items:stretch">
-          <div class="card" style="width:220px"><div class="card-head"><div class="card-num">1</div><div class="card-title" style="margin:0">Connect</div></div><div class="card-sub">Link your integration.</div><div class="progress"><div class="progress-fill" style="width:60%"></div></div></div>
-          <div class="card stat-card" style="width:160px"><div class="stat-value">11.1s</div><div class="stat-label">Median dwell</div><div class="stat-change down">▼ 8%</div></div>
-          <div class="card" style="width:210px">
-            <div class="dropdown"><button class="btn-outlined">Actions <span class="material-icons icon-sm">expand_more</span></button>
-              <div class="dropdown-menu show"><div class="dropdown-item">Sync selected</div><div class="dropdown-item">Export</div><div class="dropdown-divider"></div><div class="dropdown-item danger">Delete</div></div></div>
+    <section class="ds-sec" id="status" data-title="Statuses & chips">
+      <header class="ds-sec-head"><h2>Statuses & chips</h2><p>Two different components. Source: Figma.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Status</td><td><code>.status</code>: 20px, radius 4, 14/20. Colours: green, grey, red, yellow, blue, purple, black, dark_blue.</td></tr>
+        <tr><td>Chip</td><td><code>.chip-input</code>: 24px pill, 14/20 (Figma 13, raised), grey_10 fill, optional ×.</td></tr>
+        <tr><td>Not interchangeable</td><td>Never use the rounded chip for a status.</td></tr>
+        <tr><td>dark_blue</td><td><code>#4F8DE7</code>, off-palette (<a href="#decide-3">To decide #3</a>).</td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="row">
+        <span class="status status-green">green</span><span class="status status-grey">grey</span>
+        <span class="status status-red">red</span><span class="status status-yellow">yellow</span>
+        <span class="status status-blue">blue</span><span class="status status-purple">purple</span>
+        <span class="status status-black">black</span><span class="status status-dark-blue">dark_blue</span>
+      </div>
+      <div class="row">
+        <span class="chip-input">Chip <span class="chip-remove material-icons" style="font-size:12px">close</span></span>
+        <span class="chip-input">Another chip</span>
+      </div>
+    </section>
+
+    <section class="ds-sec" id="alerts" data-title="Alerts">
+      <header class="ds-sec-head"><h2>Alerts</h2><p>Source: Figma.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Look</td><td>No left rule. Text takes the semantic colour. Info background = primary_10 <code>#E0EBFD</code>.</td></tr>
+        <tr><td>Parts</td><td>Icon left, optional title (<code>.alert-title</code>), optional close (<code>.alert-close</code>).</td></tr>
+        <tr><td>Classes</td><td><code>.alert</code> + <code>.alert-info</code> <code>.alert-success</code> <code>.alert-warning</code> <code>.alert-error</code></td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="alert alert-info"><span class="material-icons">info</span><span>Informational message.</span><button class="alert-close" aria-label="Close"><span class="material-icons icon-sm">close</span></button></div>
+      <div class="alert alert-success"><span class="material-icons">check_circle</span><span>Reconciliation completed.</span></div>
+      <div class="alert alert-warning"><span class="material-icons">warning</span><span><span class="alert-title">Header</span>3 transactions could not be matched.</span></div>
+      <div class="alert alert-error"><span class="material-icons">error_outline</span><span>Sync failed — integration disconnected.</span></div>
+    </section>
+
+    <section class="ds-sec" id="toast" data-title="Toast">
+      <header class="ds-sec-head"><h2>Toast</h2><p>Source: DESIGN_RULES and Ignat. Look not measured from production (<a href="#decide-8">To decide #8</a>).</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Position</td><td>Bottom-right, 24px from the edges. Several stack upwards, 8px apart.</td></tr>
+        <tr><td>Size & timing</td><td>320px wide, auto-dismiss after 5s.</td></tr>
+        <tr><td>Undo</td><td><b>No Undo link.</b> Synder toasts don't have one.</td></tr>
+        <tr><td>Classes</td><td><code>.synder-toast-stack</code> <code>.synder-toast</code> + <code>-success</code> / <code>-error</code></td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo</h3>
+      <div class="ds-stage" style="height:160px">
+        <div class="synder-toast-stack">
+          <div class="synder-toast synder-toast-success"><span class="material-icons">check_circle</span><span>12 transactions synced</span><button class="synder-toast-close" aria-label="Close"><span class="material-icons">close</span></button></div>
+          <div class="synder-toast synder-toast-error"><span class="material-icons">error_outline</span><span>Sync failed for 2 transactions</span><button class="synder-toast-close" aria-label="Close"><span class="material-icons">close</span></button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="ds-sec" id="modal" data-title="Modal & side sheet">
+      <header class="ds-sec-head"><h2>Modal & side sheet</h2><p>Source: kit.</p></header>
+      <table class="synder-table table--sm ds-rules"><thead><tr><th>Property</th><th>Value</th></tr></thead><tbody>
+        <tr><td>Modal width</td><td>400–600px. Wide: <code>.modal-lg</code> 720, <code>.modal-xl</code> 900. Radius 6.</td></tr>
+        <tr><td>Modal parts</td><td>Header 16px/500, padding 16×24. Body 14/20, padding 20×24. Footer: buttons right-aligned, padding 12×24. Dividers <code>#DFE4EC</code>.</td></tr>
+        <tr><td>Side sheet</td><td>Right edge, full height, 480px (<code>--wide</code> 600). Same header, body and footer as the modal.</td></tr>
+        <tr><td>Overlay</td><td><code>--bg-overlay</code> = <code>rgba(26,27,36,.5)</code>.</td></tr>
+        <tr><td>Destructive confirm</td><td>Button says exactly what happens ("Delete 3 transactions"), error colour.</td></tr>
+        <tr><td>Classes</td><td><code>.synder-overlay</code> <code>.modal</code> <code>.modal-header</code> <code>.modal-body</code> <code>.modal-footer</code> · <code>.synder-side-sheet-bg</code> <code>.synder-side-sheet</code> <code>-header</code> <code>-body</code> <code>-footer</code></td></tr>
+      </tbody></table>
+      <h3 class="ds-h3">Demo: modal</h3>
+      <div class="ds-stage" style="height:280px">
+        <div class="synder-overlay">
+          <div class="modal">
+            <div class="modal-header">Delete 3 transactions?</div>
+            <div class="modal-body">They are removed from Synder. Records already synced to QuickBooks stay there.</div>
+            <div class="modal-footer"><button class="btn-outlined">Cancel</button><button class="btn btn-error">Delete 3 transactions</button></div>
           </div>
-          <div class="card" style="width:180px"><div class="tooltip-wrap"><span class="text-body2-dotted">Hover me</span><span class="tooltip">Tooltip copy</span></div><div class="mt-16"><span class="spinner"></span></div></div>
         </div>
-        <div class="card mt-16"><div class="empty-state"><div class="empty-state-icon material-icons" style="font-size:48px">inbox</div><div class="empty-state-title">No transactions yet</div><div class="empty-state-desc">Once an integration is connected, transactions appear here.</div><button class="btn">Connect integration</button></div></div>
-      
+      </div>
+      <h3 class="ds-h3">Demo: side sheet</h3>
+      <div class="ds-stage" style="height:360px">
+        <div class="synder-side-sheet-bg"></div>
+        <div class="synder-side-sheet">
+          <div class="synder-side-sheet-header">Order #1042<button class="btn-icon" aria-label="Close"><span class="material-icons">close</span></button></div>
+          <div class="synder-side-sheet-body">
+            <div class="form-field"><label class="form-label">Customer</label><input class="input" value="Jane Doe"></div>
+            <div class="form-field"><label class="form-label">Amount</label><input class="input" value="1,240.00"></div>
+          </div>
+          <div class="synder-side-sheet-footer"><button class="btn-outlined">Cancel</button><button class="btn">Save</button></div>
+        </div>
+      </div>
     </section>
+
+    <section class="ds-sec" id="cards" data-title="Cards & misc">
+      <header class="ds-sec-head"><h2>Cards & misc</h2><p>Cards, stats, dropdown, tooltip, spinner, empty state.</p></header>
+      <div class="row" style="align-items:stretch">
+        <div class="card" style="width:220px"><div class="card-head"><div class="card-num">1</div><div class="card-title" style="margin:0">Connect</div></div><div class="card-sub">Link your integration.</div><div class="progress"><div class="progress-fill" style="width:60%"></div></div></div>
+        <div class="card stat-card" style="width:160px"><div class="stat-value">11.1s</div><div class="stat-label">Median dwell</div><div class="stat-change down">▼ 8%</div></div>
+        <div class="card" style="width:210px">
+          <div class="dropdown"><button class="btn-outlined">Actions <span class="material-icons icon-sm">expand_more</span></button>
+            <div class="dropdown-menu show"><div class="dropdown-item">Sync selected</div><div class="dropdown-item">Export</div><div class="dropdown-divider"></div><div class="dropdown-item danger">Delete</div></div></div>
+        </div>
+        <div class="card" style="width:180px"><div class="tooltip-wrap"><span class="text-body2-dotted">Hover me</span><span class="tooltip">Tooltip copy</span></div><div class="mt-16"><span class="spinner"></span></div></div>
+      </div>
+      <div class="card mt-16"><div class="empty-state"><div class="empty-state-icon material-icons" style="font-size:48px">inbox</div><div class="empty-state-title">No transactions yet</div><div class="empty-state-desc">Once an integration is connected, transactions appear here.</div><button class="btn">Connect integration</button></div></div>
+    </section>
+
     <section class="ds-sec" id="type" data-title="Type scale">
-      <header class="ds-sec-head"><h2>Type scale</h2><p>11 published styles, nothing else exists</p></header>
-
-        <div class="text-h1">H1 — 28/36 · page headers</div><div class="text-h2">H2 — 20/28</div>
-        <div class="text-subtitle1">Subtitle 1 — 16/24 w600</div><div class="text-subtitle2">Subtitle 2 — 14/20 w700 · form labels, table headers</div>
-        <div class="text-body1">Body 1 — 16/24 · Button_L</div><div class="text-body2">Body 2 — 14/20 · buttons, inputs, tabs, statuses</div>
-        <div class="text-caption">Caption — 14/20 (Figma 12/16, raised: 14px minimum)</div>
-        <div class="text-chip">Chip — 14/20 (Figma 13/20, raised)</div>
-        <div><a class="text-link">Link style — underlined by default</a></div>
-      
+      <header class="ds-sec-head"><h2>Type scale</h2><p>11 published styles, nothing else exists.</p></header>
+      <div class="text-h1">H1 — 28/36 · page headers</div><div class="text-h2">H2 — 20/28</div>
+      <div class="text-subtitle1">Subtitle 1 — 16/24 w600</div><div class="text-subtitle2">Subtitle 2 — 14/20 w700 · form labels, table headers</div>
+      <div class="text-body1">Body 1 — 16/24 · Button_L</div><div class="text-body2">Body 2 — 14/20 · buttons, inputs, tabs, statuses</div>
+      <div class="text-caption">Caption — 14/20 (Figma 12/16, raised: 14px minimum)</div>
+      <div class="text-chip">Chip — 14/20 (Figma 13/20, raised)</div>
+      <div><a class="text-link">Link style — underlined by default</a></div>
     </section>
+
     <section class="ds-sec" id="colours" data-title="Colours">
-      <header class="ds-sec-head"><h2>Colours</h2><p>23 published, plus the component-only values</p></header>
-
-        <div class="row">
-          <div class="swatch"><i style="background:var(--color-primary)"></i><span>primary</span></div>
-          <div class="swatch"><i style="background:var(--color-primary-50)"></i><span>primary_50</span></div>
-          <div class="swatch"><i style="background:var(--color-primary-10)"></i><span>primary_10</span></div>
-          <div class="swatch"><i style="background:var(--color-green)"></i><span>green</span></div>
-          <div class="swatch"><i style="background:var(--color-red)"></i><span>red</span></div>
-          <div class="swatch"><i style="background:var(--color-yellow)"></i><span>yellow</span></div>
-          <div class="swatch"><i style="background:var(--color-blue)"></i><span>blue</span></div>
-          <div class="swatch"><i style="background:var(--color-purple)"></i><span>purple</span></div>
-        </div>
-        <div class="row">
-          <div class="swatch"><i style="background:var(--color-status-green-bg)"></i><span>status green bg</span></div>
-          <div class="swatch"><i style="background:var(--color-status-red-bg)"></i><span>status red bg</span></div>
-          <div class="swatch"><i style="background:var(--color-status-yellow-bg)"></i><span>status yellow bg</span></div>
-          <div class="swatch"><i style="background:var(--color-dark-blue)"></i><span>dark_blue (no palette)</span></div>
-          <div class="swatch"><i style="background:var(--color-sidebar-active)"></i><span>sidebar active</span></div>
-          <div class="swatch"><i style="background:var(--text-placeholder)"></i><span>placeholder</span></div>
-          <div class="swatch"><i style="background:var(--bg-row-hover)"></i><span>row hover</span></div>
-          <div class="swatch"><i style="background:var(--bg-row-selected)"></i><span>row selected</span></div>
-        </div>
-      
+      <header class="ds-sec-head"><h2>Colours</h2><p>23 colours published in Figma, plus the component-only values. Hex is read live from the kit.</p></header>
+      <h3 class="ds-h3" style="margin-top:0">Primary</h3>
+      <div class="ds-swatches" data-vars="--color-primary:primary --color-primary-50:primary_50 --color-primary-20:primary_20 --color-primary-10:primary_10 --color-primary-5:primary_5"></div>
+      <h3 class="ds-h3">Grey</h3>
+      <div class="ds-swatches" data-vars="--color-white:white --color-grey-5:grey_5 --color-grey-10:grey_10 --color-grey-20:grey_20 --color-grey-30:grey_30 --color-grey-50:grey_50 --color-grey:grey"></div>
+      <h3 class="ds-h3">Semantic</h3>
+      <div class="ds-swatches" data-vars="--color-green:green --color-green-light:green_light --color-red:red --color-red-light:red_light --color-yellow:yellow --color-yellow-light:yellow_light --color-blue:blue --color-blue-light:blue_light --color-purple:purple --color-purple-light:purple_light --color-selection:selection"></div>
+      <h3 class="ds-h3">Component-only (not published in Figma)</h3>
+      <div class="ds-swatches" data-vars="--color-primary-hover:button_hover --color-primary-active:button_pressed --color-status-green-bg:status_green_bg --color-status-red-bg:status_red_bg --color-status-yellow-bg:status_yellow_bg --color-dark-blue:dark_blue --color-sidebar-active:sidebar_active --text-placeholder:placeholder --text-table-header:table_header --bg-row-hover:row_hover --bg-row-selected:row_selected --bg-overlay:overlay"></div>
     </section>
+
     <div class="ds-pager" id="ds-pager"></div>
   </main>
 </div>
+<div class="synder-toast-stack" id="ds-toasts"></div>
 <script>
 (function(){
   var secs=[].slice.call(document.querySelectorAll('.ds-sec')), links=[].slice.call(document.querySelectorAll('.ds-nav-item'));
-  function show(){ var id=(location.hash||'#rules').slice(1); if(!document.getElementById(id)) id='rules';
-    secs.forEach(function(s,i){ var on=s.id===id; s.classList.toggle('on',on);
-      if(on){ var pg=document.getElementById('ds-pager'); var prev=secs[i-1], next=secs[i+1];
+  function slug(t){ return t.toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''); }
+
+  // Stable ids + copy-link button on every rule row
+  var index=[];
+  secs.forEach(function(sec){
+    index.push({id:sec.id, label:sec.dataset.title, where:'Section', text:sec.dataset.title});
+    sec.querySelectorAll('table.ds-rules tbody tr').forEach(function(tr){
+      var first=tr.cells[0], label=first.textContent.trim();
+      if(!tr.id) tr.id=sec.id+'-'+slug(label);
+      var b=document.createElement('button'); b.type='button'; b.className='ds-rowlink';
+      b.setAttribute('aria-label','Copy link to '+sec.dataset.title+': '+label);
+      b.innerHTML='<span class="material-icons">link</span>';
+      b.addEventListener('click',function(){ copyLink(tr.id); });
+      first.appendChild(b);
+      var rule=tr.cells[1]?tr.cells[1].textContent.trim():'';
+      if(sec.id==='decide') label='#'+label+' '+rule.split('.')[0];
+      index.push({id:tr.id, label:label, where:sec.dataset.title, text:sec.dataset.title+' '+tr.textContent});
+    });
+  });
+
+  function toast(msg){ var st=document.getElementById('ds-toasts'), t=document.createElement('div');
+    t.className='synder-toast synder-toast-success'; t.setAttribute('role','status');
+    t.innerHTML='<span class="material-icons">check_circle</span><span></span>'; t.lastChild.textContent=msg;
+    st.appendChild(t); setTimeout(function(){ t.remove(); },5000); }
+  function copyLink(id){ var url=location.origin+location.pathname+'#'+id;
+    var done=function(){ toast('Link copied'); };
+    if(navigator.clipboard) navigator.clipboard.writeText(url).then(done,function(){ location.hash=id; });
+    else location.hash=id; }
+
+  // Router: #section or #row-id
+  function show(){
+    var raw=location.hash.slice(1), id=raw||'rules', el=id&&document.getElementById(id), sec=null;
+    var nf=document.getElementById('ds-notfound');
+    if(el&&el.classList.contains('ds-sec')) sec=el; else if(el&&el.closest) sec=el.closest('.ds-sec');
+    if(!sec){ sec=document.getElementById('rules'); el=null;
+      document.getElementById('ds-notfound-text').textContent='Nothing found at “#'+raw+'”. The link may be outdated. Showing Rules: values — use the search to find it.';
+      nf.style.display=""; } else nf.style.display="none";
+    secs.forEach(function(s,i){ var on=s===sec; s.classList.toggle('on',on);
+      if(on){ var pg=document.getElementById('ds-pager'), prev=secs[i-1], next=secs[i+1];
         pg.innerHTML=(prev?'<a href="#'+prev.id+'">← '+prev.dataset.title+'</a>':'<span></span>')+(next?'<a href="#'+next.id+'">'+next.dataset.title+' →</a>':''); } });
-    links.forEach(function(a){ a.classList.toggle('on', a.getAttribute('href')==='#'+id); });
-    window.scrollTo(0,0); }
+    links.forEach(function(a){ a.classList.toggle('on', a.getAttribute('href')==='#'+sec.id); });
+    document.querySelectorAll('.ds-hit').forEach(function(r){ r.classList.remove('ds-hit'); });
+    if(el&&el!==sec){ el.classList.add('ds-hit'); el.scrollIntoView({block:'center'}); } else window.scrollTo(0,0);
+  }
   window.addEventListener('hashchange',show); show();
+
+  // Search across sections and rule rows
+  var q=document.getElementById('ds-q'), res=document.getElementById('ds-results'), nav=document.querySelector('.ds-nav');
+  function esc(s){ return s.replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+  function search(){ var v=q.value.trim().toLowerCase();
+    nav.classList.toggle('searching',!!v); if(!v){ res.innerHTML=''; return; }
+    var toks=v.split(/\s+/), hits=index.filter(function(e){ var t=e.text.toLowerCase(); return toks.every(function(k){ return t.indexOf(k)>-1; }); }).slice(0,15);
+    res.innerHTML=hits.length?hits.map(function(h){ return '<a class="ds-res" href="#'+h.id+'">'+esc(h.label)+'<span>'+esc(h.where)+'</span></a>'; }).join(''):'<div class="ds-res-none">Nothing found</div>'; }
+  q.addEventListener('input',search);
+  q.addEventListener('keydown',function(e){ if(e.key==='Escape'){ q.value=''; search(); }
+    if(e.key==='Enter'){ var f=res.querySelector('.ds-res'); if(f) location.hash=f.getAttribute('href').slice(1); } });
+
+  // Colour swatches with live hex from the kit
+  var cs=getComputedStyle(document.documentElement);
+  document.querySelectorAll('.ds-swatches').forEach(function(g){
+    g.innerHTML=g.dataset.vars.split(' ').map(function(p){ var v=p.split(':')[0], n=p.split(':')[1], val=cs.getPropertyValue(v).trim();
+      return '<div class="ds-sw"><i style="background:var('+v+')"></i><div><b>'+n+'</b><span>'+esc(val)+'</span><span>'+v+'</span></div></div>'; }).join(''); });
+
   var ind=document.getElementById('ind'); if(ind) ind.indeterminate=true;
 })();
 </script>
