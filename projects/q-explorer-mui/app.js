@@ -2981,9 +2981,10 @@ function LaQuantiles({ value, onChange, keys = LA_QS }) {
 }
 
 /* Ignat, 2026-10-15: the overlay was "a weird filter". Line route is a
-   multi-select like the New evaluation filters: stops in route order along a
-   thin route line, the stops only some trips serve grouped under "Weitere
-   Haltestellen", and Most common route / All / None at the top of the list. */
+   multi-select like the New evaluation filters: stops in route order, the stops
+   only some trips serve grouped under "Weitere Haltestellen", and Most common
+   route / All / None at the top. 2026-10-29: a plain checkbox list — no route
+   line, no heading over the main stops. */
 function LaRouteSelect({ route, selected, setSelected }) {
   const { t } = useT();
   const extra = new Set(LA_EXTRA.map(e => e[0]));
@@ -2998,7 +2999,10 @@ function LaRouteSelect({ route, selected, setSelected }) {
     <//>${props.children}<//>`, []);
   return html`<${Autocomplete} multiple disableCloseOnSelect id="la-route" size="small" sx=${{ width: 280 }}
     options=${ordered} value=${value} filterOptions=${scopeFilter}
-    groupBy=${o => o.extra ? t('la_more_stops') : t('la_most_common')}
+    groupBy=${o => o.extra ? t('la_more_stops') : ''}
+    renderGroup=${p => html`<li key=${p.key}>
+      ${p.group && html`<${M.ListSubheader} className="la-route-group">${p.group}<//>`}
+      <ul style=${{ padding: 0 }}>${p.children}</ul></li>`}
     isOptionEqualToValue=${(o, v) => o.id === v.id} getOptionLabel=${o => o.label}
     onChange=${(e, v) => setSelected(v.map(o => o.id))}
     PaperComponent=${Paper2} ListboxProps=${{ style: { maxHeight: 420 } }}
@@ -3007,7 +3011,6 @@ function LaRouteSelect({ route, selected, setSelected }) {
       ${t('la_stops_of').replace('{n}', value.length).replace('{total}', opts.length)}<//>`}
     renderOption=${(props, o, { selected: on }) => { const { key, ...rest } = props;
       return html`<li key=${o.id} ...${rest} className=${(rest.className || '') + ' la-route-stop'} data-stop=${o.id}>
-        <${Box} sx=${{ width: 4, alignSelf: 'stretch', bgcolor: o.extra ? '#BDBDBD' : '#E53935', mr: 1.5, ml: -1 }} />
         <${Checkbox} size="small" checked=${on} sx=${{ mr: 1 }} />${o.label}</li>`; }}
     renderInput=${params => html`<${TextField} ...${params} variant="filled" label=${t('la_route')} />`} />`;
 }
