@@ -3191,7 +3191,11 @@ function ReportLineAnalysis({ go, row }) {
             html`<${Tab} key=${k} label=${t(k)} id=${'la-tab-' + i} />`)}
         <//>
 
-        <${Card} id="la-panel"><${CardContent}>
+        ${/* Ignat, 2026-10-29: tables sit edge to edge on every report. The
+              Table tab has no view settings, so it drops the panel's frame and
+              padding; charts and heatmaps keep theirs. */''}
+        <${Card} id="la-panel" sx=${tab === 3 ? { border: 'none', bgcolor: 'transparent' } : undefined}>
+          <${CardContent} sx=${tab === 3 ? { p: 0, '&:last-child': { pb: 0 } } : undefined}>
           ${stops.length === 0 ? html`<${Alert} severity="info" id="la-empty">${t('la_no_stops')}<//>` : html`
             ${tab !== 3 && html`<${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mb: 2 }}>
               <${Box} sx=${{ flex: 1 }} />
