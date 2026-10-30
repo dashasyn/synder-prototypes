@@ -224,19 +224,23 @@ function App() {
           control=${html`<${Checkbox} id="passing" checked=${passing} onChange=${e => setPassing(e.target.checked)} />`}
           label="Show passing trains" />
 
-        <${Chip} id="offset-chip" size="small" label=${bubble.label}
-          sx=${{ flexShrink: 0, minWidth: 56, bgcolor: bubble.bg, color: bubble.fg, fontWeight: 500, height: 24, mt: 1.5 }} />
-        <${Box} id="time" sx=${{ width: 300, flexShrink: 0, position: 'relative', pt: 3.5, mr: 1 }}>
-          <${Typography} id="viewing" sx=${{ position: 'absolute', top: 2, right: 0, fontSize: 15 }}>Viewing: ${fmtHM(viewing)} ${fmtDay(viewing)}<//>
-          <${Slider} id="slider" value=${offset} min=${-12} max=${24} step=${1} marks aria-label="Time offset (hours)"
-            onChange=${(e, v) => setOffset(v)} size="small" sx=${{ mt: .5, mb: -.5, '& .MuiSlider-mark': { bgcolor: '#fff', opacity: .6 } }} />
-          <${Box} sx=${{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>-12</span><span>+24</span><//>
+        ${/* Time block fits the 48px field row: chip · [Viewing … / -12 slider +24]. One text size (16px). */ ''}
+        <${Chip} id="offset-chip" label=${bubble.label}
+          sx=${{ flexShrink: 0, minWidth: 60, height: 28, fontSize: 16, bgcolor: bubble.bg, color: bubble.fg, fontWeight: 500 }} />
+        <${Box} id="time" sx=${{ width: 330, flexShrink: 0, height: 48, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', mr: 1 }}>
+          <${Typography} id="viewing" sx=${{ fontSize: 16, lineHeight: '20px' }}>Viewing: ${fmtHM(viewing)} ${fmtDay(viewing)}<//>
+          <${Box} sx=${{ display: 'flex', alignItems: 'center', gap: 1.25, height: 24 }}>
+            <${Typography} component="span" sx=${{ fontSize: 14, color: 'rgba(255,255,255,.7)', width: 24, textAlign: 'right' }}>-12<//>
+            <${Slider} id="slider" value=${offset} min=${-12} max=${24} step=${1} marks aria-label="Time offset (hours)"
+              onChange=${(e, v) => setOffset(v)} size="small" sx=${{ flex: 1, py: '10px', '& .MuiSlider-mark': { bgcolor: '#fff', opacity: .6 } }} />
+            <${Typography} component="span" sx=${{ fontSize: 14, color: 'rgba(255,255,255,.7)', width: 24 }}>+24<//>
+          <//>
         <//>
         ${offset !== 0 ? html`<${Button} id="reset" variant="outlined" onClick=${() => setOffset(0)}
-          sx=${{ flexShrink: 0, whiteSpace: 'nowrap', borderColor: 'rgba(100,181,246,.5)' }}>Reset to now<//>` : null}
+          sx=${{ flexShrink: 0, whiteSpace: 'nowrap', height: 36, borderColor: 'rgba(100,181,246,.5)' }}>Reset to now<//>` : null}
 
         <${Box} sx=${{ ml: 'auto', display: 'flex', alignItems: 'center', gap: .5, flexShrink: 0 }}>
-          <${Typography} id="updated" sx=${{ fontSize: 15 }}>Last Updated: ${fmtHMS(updated)}<//>
+          <${Typography} id="updated" sx=${{ fontSize: 16 }}>Last Updated: ${fmtHMS(updated)}<//>
           <${IconButton} id="refresh" aria-label="Refresh" color="primary" onClick=${refresh}>
             <${Icon} sx=${{ transition: 'transform .5s', transform: spin ? 'rotate(360deg)' : 'none' }}>sync<//>
           <//>
