@@ -6,6 +6,9 @@
    earlier version was lost. Faithful copy of the staging screen
    (n8.isr.staging…/isr/staff-pc?station=TM): dark theme, controls LTR in
    English, the table RTL with Hebrew headers.
+   2026-10-30 (later): table restyled to the customer reference (608 · Feature 621) —
+   8 columns, Hebrew names/types, pass-through and delay in הערות, platform change
+   blinks 5 s then stays yellow until departure; demo bar on top drives live updates.
 
    Copy sources:
    · captured — every label, header, the station dropdown entries shown,
@@ -37,6 +40,18 @@ const theme = createTheme({
   },
 });
 
+/* Hebrew station names for the table (customer reference 608 / Feature 621; names not in the
+   reference are my translation — sample). */
+const HE = {
+  AHI: 'אחיהוד', AKO: 'עכו', ADA: 'אשדוד עד הלום', ASK: 'אשקלון', ATL: 'עתלית', BS: 'באר שבע-אוניברסיטה',
+  YOST: 'בת ים-יוספטל', KOM: 'בת ים-קוממיות', BQV: 'באר יעקב', NTBG: 'נתב"ג', YSA: 'בית יהושע',
+  RZL: 'הרצליה', HOL: 'חולון-צומת', JERU: 'ירושלים-נבון', NET: 'נתניה', TM: 'תל אביב-סבידור מרכז',
+  HGA: 'תל אביב-ההגנה', HSM: 'תל אביב-השלום', UN: 'תל אביב-אוניברסיטה',
+};
+const heSt = c => HE[c] || c;
+/* Train types in Hebrew — the reference leaves סוג empty, so these are my translation (sample). */
+const TYPE_HE = { Passenger: 'נוסעים', Cargo: 'משא', Empty: 'ריק' };
+
 /* ── Stations — the dropdown rows captured, plus TM and the codes used in the table (sample names). */
 const STATIONS = [
   ['AHI', 'Ahihud'], ['AKO', 'Akko'], ['ADA', 'Ashdod Ad Halom'], ['ASK', 'Ashkelon'], ['ATL', 'Atlit'],
@@ -44,19 +59,19 @@ const STATIONS = [
   ['NTBG', 'Ben Gurion Airport'], ['YSA', 'Beit Yehoshua'], ['RZL', 'Herzliya'], ['HOL', 'Holon Junction'],
   ['JERU', 'Jerusalem - Yitzhak Navon'], ['NET', 'Netanya'], ['TM', 'TLV-Center'], ['HGA', 'TLV-HaHagana'],
   ['HSM', 'TLV-HaShalom'], ['UN', 'TLV-University'],
-].map(([code, name]) => ({ code, name, label: `${code} - ${name}` }))
+].map(([code, name]) => ({ code, name, label: `${code} - ${name}`, he: HE[code] || name }))
  .sort((a, b) => a.name.localeCompare(b.name));
 const TYPES = ['Cargo', 'Empty', 'Passenger'];
 
 /* ── Timetable — services repeat every day. min = minute past the hour; every = minutes.
    TM reproduces the captured rows (740 RZL 13:20, 745 JERU 13:35, 643 ASK 13:37, 518 NET 14:38 …). */
 const TM_SERVICES = [
-  { base: 740, step: 2, dest: 'RZL', via: ['UN'], first: '05:20', every: 30, type: 'Passenger' },
-  { base: 745, step: 2, dest: 'JERU', via: ['HSM', 'HGA', 'NTBG'], first: '05:05', every: 30, type: 'Passenger' },
-  { base: 643, step: 2, dest: 'ASK', via: ['HSM', 'HGA', 'HOL'], first: '05:07', every: 30, type: 'Passenger' },
-  { base: 518, step: 450, dest: 'NET', via: ['UN', 'RZL', 'YSA'], first: '05:38', every: 30, type: 'Passenger' },
-  { base: 6012, step: 2, dest: 'ADA', via: [], first: '05:52', every: 120, type: 'Cargo', passing: true },
-  { base: 9301, step: 1, dest: 'BQV', via: [], first: '05:28', every: 180, type: 'Empty', passing: true },
+  { base: 740, step: 2, dest: 'RZL', via: ['UN'], first: '05:20', every: 30, type: 'Passenger', pl: 3 },
+  { base: 745, step: 2, dest: 'JERU', via: ['HSM', 'HGA', 'NTBG'], first: '05:05', every: 30, type: 'Passenger', pl: 1 },
+  { base: 643, step: 2, dest: 'ASK', via: ['HSM', 'HGA', 'HOL'], first: '05:07', every: 30, type: 'Passenger', pl: 2 },
+  { base: 518, step: 450, dest: 'NET', via: ['UN', 'RZL', 'YSA'], first: '05:38', every: 30, type: 'Passenger', pl: 4 },
+  { base: 6012, step: 2, dest: 'ADA', via: [], first: '05:52', every: 120, type: 'Cargo', passing: true, pl: 5 },
+  { base: 9301, step: 1, dest: 'BQV', via: [], first: '05:28', every: 180, type: 'Empty', passing: true, pl: 6 },
 ];
 const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
 /* Other stations: same shape, destinations and stops shifted so each board looks different. */
@@ -76,7 +91,7 @@ function dayTrains(code) {
   servicesFor(code).forEach(s => {
     for (let t = toMin(s.first), i = 0; t < 24 * 60; t += s.every, i++) {
       const no = s.base + ((i * s.step) % 500);
-      out.push({ no, type: s.type, dest: s.dest, via: s.via, min: t, passing: !!s.passing,
+      out.push({ no, type: s.type, dest: s.dest, via: s.via, min: t, passing: !!s.passing, platform: s.pl,
         // sample: a few trains run late
         delay: no % 11 === 0 ? 4 : no % 17 === 0 ? 7 : 0 });
     }
@@ -99,9 +114,13 @@ const mm = m => { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.fl
 /* Window shown around the viewing time — the capture at 14:08 lists 13:20 … 15:35. */
 const BEFORE = 50, AFTER = 90;
 
-const cellSx = { color: '#fff', borderBottom: '1px solid #333', py: 1.1, whiteSpace: 'nowrap' };
-const headSx = { color: 'rgba(0,0,0,.87)', bgcolor: '#F0F0F0', fontWeight: 700, borderBottom: 'none', py: 1.1, whiteSpace: 'nowrap',
-  position: 'relative', '&:not(:last-of-type)::after': { content: '""', position: 'absolute', left: 0, top: '25%', height: '50%', width: '1px', bgcolor: '#BDBDBD' } };
+/* Customer reference (608 · Feature 621): black header with a red line, rows alternating
+   black / grey, all table text yellow. */
+const YEL = '#FFFF4D', GREY = '#6E6E6E';
+const cellSx = { color: YEL, borderBottom: 'none', py: 1.1, whiteSpace: 'nowrap', fontSize: 15 };
+const headSx = { color: '#fff', bgcolor: '#000', fontWeight: 700, borderBottom: 'none', py: 1.1, whiteSpace: 'nowrap', fontSize: 15 };
+const BLINK_MS = 5000;
+const FIELD_SX = { width: 270, '& .MuiInputBase-root': { height: 56 } };
 
 function App() {
   const [now, setNow] = useState(() => new Date());
@@ -111,15 +130,19 @@ function App() {
   const [types, setTypes] = useState([]);
   const [passing, setPassing] = useState(true);
   const [offset, setOffset] = useState(0);
+  /* Live updates from the demo bar, per train row: { platform, platformAt, delay } */
+  const [live, setLive] = useState({});
+  const [note, setNote] = useState('');
 
-  useEffect(() => { const t = setInterval(() => setNow(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 250); return () => clearInterval(t); }, []);
   const refresh = () => { setSpin(true); setTimeout(() => { setUpdated(new Date()); setSpin(false); }, 500); };
-  useEffect(() => { refresh(); }, [station]);
+  useEffect(() => { refresh(); setLive({}); setNote(''); }, [station]);
 
   const viewing = new Date(now.getTime() + offset * 3600e3);
-  const viewMin = minuteOfDay(now) + offset * 60;          // minutes relative to today 00:00
+  const nowMin = minuteOfDay(now);
+  const viewMin = nowMin + offset * 60;          // minutes relative to today 00:00
 
-  const rows = useMemo(() => {
+  const base = useMemo(() => {
     const day = dayTrains(station);
     const all = [-1, 0, 1, 2].flatMap(d => day.map(t => ({ ...t, abs: t.min + d * 1440, key: `${d}-${t.no}-${t.min}` })));
     return all.filter(t => t.abs >= viewMin - BEFORE && t.abs <= viewMin + AFTER)
@@ -127,33 +150,71 @@ function App() {
       .filter(t => passing || !t.passing)
       .sort((a, b) => a.abs - b.abs);
   }, [station, types, passing, Math.floor(viewMin)]);
+  const rows = base.map(t => {
+    const l = live[t.key] || {};
+    return { ...t, ...(l.delay != null ? { delay: l.delay } : {}), oldPlatform: l.platform != null ? t.platform : null,
+             platform: l.platform != null ? l.platform : t.platform, platformAt: l.platformAt };
+  });
+
+  /* Demo actions — a train that hasn't left yet changes platform / runs late. */
+  const upcoming = () => rows.filter(t => t.abs + (t.delay || 0) >= nowMin && !t.passing);
+  const rnd = a => a[Math.floor(Math.random() * a.length)];
+  const changePlatform = () => {
+    const t = rnd(upcoming().length ? upcoming() : rows); if (!t) return;
+    const np = rnd([1, 2, 3, 4, 5, 6].filter(p => p !== t.platform));
+    setLive(l => ({ ...l, [t.key]: { ...(l[t.key] || {}), platform: np, platformAt: Date.now() } }));
+    setUpdated(new Date());
+    setNote(`Train ${t.no}: platform ${t.platform} → ${np}`);
+  };
+  const delayTrain = () => {
+    const pool = upcoming().filter(t => !t.delay); const t = rnd(pool.length ? pool : rows); if (!t) return;
+    const d = rnd([3, 5, 8, 12]);
+    setLive(l => ({ ...l, [t.key]: { ...(l[t.key] || {}), delay: d } }));
+    setUpdated(new Date());
+    setNote(`Train ${t.no}: ${d} min late`);
+  };
+  const resetDemo = () => { setLive({}); setNote(''); };
 
   const pct = (offset + 12) / 36 * 100;
   const bubble = offset === 0
     ? { label: 'Now', bg: '#E8F5E9', fg: '#2E7D32' }
     : offset > 0 ? { label: `+${offset}h`, bg: '#E3F2FD', fg: '#1565C0' } : { label: `${offset}h`, bg: '#FFF3E0', fg: '#E65100' };
 
-  const stationOptions = STATIONS;
-  const head = ['רכבת', 'סוג רכבת', 'רציף', 'תחנות ביניים', 'יעד', 'עובר', 'שעה מתוכננת', 'שעה מעודכנת', 'הערות'];
+  /* Column order from the customer reference, right to left. */
+  const head = ['רכבת', 'יעד', 'שעה', 'מעודכן', 'רציף', 'סוג', 'תחנות ביניים', 'הערות'];
+  const remark = t => [t.passing ? 'חולפת' : '', t.delay ? 'איחור' : ''].filter(Boolean).join(', ');
+  const demoBtn = (id, label, onClick) => html`<button id=${id} onClick=${onClick}
+    style=${{ background: 'none', border: 'none', color: 'rgba(255,255,255,.85)', fontFamily: 'inherit', fontSize: 14,
+              padding: '5px 12px', borderRadius: 4, cursor: 'pointer' }}>${label}</button>`;
 
   return html`
-    <${Box} sx=${{ minHeight: '100vh', bgcolor: '#000', color: '#fff', px: 1.5, py: 2 }}>
+    <div className="variant-switch" id="demo-bar"
+      style=${{ display: 'flex', alignItems: 'center', gap: 12, background: '#2B2B2B', color: '#fff', padding: '8px 20px',
+                fontSize: 14, fontFamily: 'Roboto, sans-serif', borderBottom: '1px solid #444' }}>
+      <span style=${{ opacity: .75, fontSize: 14, fontWeight: 500, textTransform: 'uppercase' }}>Demo</span>
+      <span style=${{ display: 'flex', gap: 4, background: 'rgba(255,255,255,.1)', borderRadius: 6, padding: 3 }}>
+        ${demoBtn('demo-platform', 'Change platform', changePlatform)}
+        ${demoBtn('demo-delay', 'Delay a train', delayTrain)}
+        ${demoBtn('demo-reset', 'Reset', resetDemo)}
+      </span>
+      <span id="demo-note" style=${{ opacity: .75 }}>${note}</span>
+    </div>
+    <${Box} sx=${{ minHeight: 'calc(100vh - 47px)', bgcolor: '#000', color: '#fff', px: 1.5, py: 2 }}>
       <${Box} id="toolbar" sx=${{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5, flexWrap: 'nowrap' }}>
         <${TextField} select id="station" label="Station" variant="filled" size="small" value=${station}
-          onChange=${e => setStation(e.target.value)} sx=${{ width: 270 }}
+          onChange=${e => setStation(e.target.value)} sx=${FIELD_SX}
           SelectProps=${{ MenuProps: { PaperProps: { sx: { bgcolor: '#fff', color: 'rgba(0,0,0,.87)', maxHeight: 420 } } },
                           IconComponent: p => html`<${Tooltip} title=${'Close'}><${Box} component="span" ...${p} className=${'material-icons ' + (p.className || '')} sx=${{ color: '#fff' }}>arrow_drop_down<//><//>` }}>
-          ${stationOptions.map(s => html`<${MenuItem} key=${s.code} value=${s.code} data-station=${s.code} sx=${{ fontSize: 16 }}>${s.label}<//>`)}
+          ${STATIONS.map(s => html`<${MenuItem} key=${s.code} value=${s.code} data-station=${s.code} sx=${{ fontSize: 16 }}>${s.label}<//>`)}
         <//>
-        <${FormControl} variant="filled" size="small" sx=${{ width: 270 }}>
-          <${Select} id="types" multiple displayEmpty value=${types} onChange=${e => setTypes(e.target.value)}
-            renderValue=${v => v.length ? v.join(', ') : 'All Train Types'}
-            MenuProps=${{ PaperProps: { sx: { bgcolor: '#fff', color: 'rgba(0,0,0,.87)' } } }}
-            sx=${{ '& .MuiSelect-select': { pt: '16px', pb: '15px' } }}>
-            ${TYPES.map(t => html`<${MenuItem} key=${t} value=${t} data-type=${t}>
-              <${Checkbox} size="small" checked=${types.includes(t)} sx=${{ color: 'rgba(0,0,0,.54)', p: .5, mr: 1 }} />
-              <${ListItemText} primary=${t} primaryTypographyProps=${{ fontSize: 16 }} /><//>`)}
-          <//>
+        <${TextField} select id="types-field" variant="filled" size="small" value=${types} sx=${FIELD_SX}
+          SelectProps=${{ id: 'types', multiple: true, displayEmpty: true, onChange: e => setTypes(e.target.value),
+                          renderValue: v => v.length ? v.join(', ') : 'All Train Types',
+                          MenuProps: { PaperProps: { sx: { bgcolor: '#fff', color: 'rgba(0,0,0,.87)' } } } }}
+          inputProps=${{ 'aria-label': 'Train types' }}>
+          ${TYPES.map(t => html`<${MenuItem} key=${t} value=${t} data-type=${t}>
+            <${Checkbox} size="small" checked=${types.includes(t)} sx=${{ color: 'rgba(0,0,0,.54)', p: .5, mr: 1 }} />
+            <${ListItemText} primary=${t} primaryTypographyProps=${{ fontSize: 16 }} /><//>`)}
         <//>
         <${FormControlLabel} id="passing-label" sx=${{ mr: 1, flexShrink: 0 }}
           control=${html`<${Checkbox} id="passing" checked=${passing} onChange=${e => setPassing(e.target.checked)} />`}
@@ -178,25 +239,31 @@ function App() {
         <//>
       <//>
 
-      <${TableContainer} component=${Paper} elevation=${0} sx=${{ bgcolor: '#000', border: '1px solid #333', borderRadius: '4px' }}>
-        <${Table} id="board" dir="rtl" size="small">
+      <${TableContainer} component=${Paper} elevation=${0} sx=${{ bgcolor: '#000', borderTop: '4px solid #E00000', borderRadius: 0 }}>
+        <${Table} id="board" dir="rtl" size="small"
+          sx=${{ '@keyframes plBlink': { '0%, 49%': { backgroundColor: YEL, color: '#000' }, '50%, 100%': { backgroundColor: 'transparent', color: YEL } } }}>
           <${TableHead}><${TableRow}>${head.map(h => html`<${TableCell} key=${h} align="right" sx=${headSx}>${h}<//>`)}<//><//>
           <${TableBody}>
-            ${rows.length ? rows.map(t => html`
-              <${TableRow} key=${t.key} data-train=${t.no} data-type=${t.type} data-passing=${t.passing ? 1 : 0}>
+            ${rows.length ? rows.map((t, i) => {
+              const changed = t.oldPlatform != null;
+              const blinking = changed && now.getTime() - t.platformAt < BLINK_MS;
+              // stays yellow until the train has left the station
+              const marked = changed && (blinking || t.abs + (t.delay || 0) >= nowMin);
+              const plSx = !marked ? cellSx : blinking
+                ? { ...cellSx, animation: 'plBlink 1s steps(1) infinite', fontWeight: 700 }
+                : { ...cellSx, bgcolor: YEL, color: '#000', fontWeight: 700 };
+              return html`
+              <${TableRow} key=${t.key} data-train=${t.no} data-type=${t.type} data-passing=${t.passing ? 1 : 0}
+                sx=${{ bgcolor: i % 2 ? '#000' : GREY }}>
                 <${TableCell} align="right" sx=${cellSx}>${t.no}<//>
-                <${TableCell} align="right" sx=${cellSx}>${t.type}<//>
-                <${TableCell} align="right" sx=${cellSx}>--<//>
-                <${TableCell} align="right" sx=${cellSx} data-col="via">
-                  ${/* RTL cell, as captured: "HSM, HGA, NTBG" reads right to left, airport icon after NTBG */ ''}
-                  ${t.via.length ? t.via.map((c, i) => html`${i ? ', ' : ''}${c}${c === 'NTBG' ? html`<${Icon} sx=${{ fontSize: 16, verticalAlign: 'middle', ml: .25 }}>flight_takeoff<//>` : ''}`) : '--'}
-                <//>
-                <${TableCell} align="right" sx=${cellSx}>${t.dest}<//>
-                <${TableCell} align="right" sx=${cellSx} data-col="passing">${t.passing ? html`<${Icon} sx=${{ fontSize: 18 }}>check<//>` : ''}<//>
+                <${TableCell} align="right" sx=${cellSx} data-col="dest">${heSt(t.dest)}<//>
                 <${TableCell} align="right" sx=${cellSx} data-col="planned">${mm(t.abs)}<//>
-                <${TableCell} align="right" sx=${{ ...cellSx, color: t.delay ? '#FFB74D' : '#fff' }} data-col="updated">${t.delay ? mm(t.abs + t.delay) : '--'}<//>
-                <${TableCell} align="right" sx=${cellSx}>--<//>
-              <//>`) : html`<${TableRow}><${TableCell} colSpan=${9} align="center" sx=${{ ...cellSx, py: 4, color: 'rgba(255,255,255,.7)' }} id="empty">אין רכבות<//><//>`}
+                <${TableCell} align="right" sx=${cellSx} data-col="updated">${t.delay ? mm(t.abs + t.delay) : ''}<//>
+                <${TableCell} align="right" sx=${plSx} data-col="platform" data-state=${blinking ? 'blink' : marked ? 'changed' : ''}>${t.platform}<//>
+                <${TableCell} align="right" sx=${cellSx} data-col="type">${TYPE_HE[t.type]}<//>
+                <${TableCell} align="right" sx=${cellSx} data-col="via">${t.via.map(heSt).join(', ')}<//>
+                <${TableCell} align="right" sx=${cellSx} data-col="remark">${remark(t)}<//>
+              <//>`; }) : html`<${TableRow}><${TableCell} colSpan=${8} align="center" sx=${{ ...cellSx, py: 4 }} id="empty">אין רכבות<//><//>`}
           <//>
         <//>
       <//>
