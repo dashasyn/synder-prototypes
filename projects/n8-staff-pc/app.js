@@ -23,7 +23,7 @@ const html = htm.bind(React.createElement);
 const {
   ThemeProvider, createTheme, CssBaseline, Box, Button, IconButton, Typography, TextField, MenuItem,
   Select, FormControl, InputLabel, Checkbox, ListItemText, FormControlLabel, Slider, Chip, Tooltip,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+  Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, InputAdornment,
 } = MaterialUI;
 
 const Icon = ({ children, sx }) =>
@@ -208,6 +208,10 @@ function App() {
         <//>
         <${TextField} select id="types-field" label="Train types" variant="filled" size="small" value=${types} sx=${FIELD_SX}
           InputLabelProps=${{ shrink: true }}
+          InputProps=${{ endAdornment: types.length ? html`<${InputAdornment} position="end" sx=${{ mr: 2.5 }}>
+            <${IconButton} id="types-clear" size="small" aria-label="Clear train types"
+              onMouseDown=${e => e.stopPropagation()} onClick=${e => { e.stopPropagation(); setTypes([]); }}>
+              <${Icon} sx=${{ fontSize: 18, color: '#fff' }}>close<//><//><//>` : null }}
           SelectProps=${{ id: 'types', multiple: true, displayEmpty: true, onChange: e => setTypes(e.target.value),
                           renderValue: v => v.length ? v.join(', ') : 'All',
                           MenuProps: { PaperProps: { sx: { bgcolor: '#fff', color: 'rgba(0,0,0,.87)' } } } }}
