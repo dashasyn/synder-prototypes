@@ -120,6 +120,8 @@ const YEL = '#FFFF4D', GREY = '#6E6E6E';
 const cellSx = { color: YEL, borderBottom: 'none', py: .9, whiteSpace: 'nowrap', fontSize: 20, fontWeight: 500 };
 const headSx = { color: '#fff', bgcolor: '#000', fontWeight: 700, borderBottom: 'none', py: 1, whiteSpace: 'nowrap', fontSize: 18 };
 const BLINK_MS = 5000;
+/* Delay minutes after the updated time, red, as in N8's current StaffPC: "10:52 (+6)". Times and
+   numbers read left to right inside Hebrew text, so the bracket sits right of the time. To discuss. */
 const FIELD_SX = { width: 270, '& .MuiInputBase-root': { height: 56 } };
 
 function App() {
@@ -266,7 +268,7 @@ function App() {
                 <${TableCell} align="right" sx=${cellSx}>${t.no}<//>
                 <${TableCell} align="right" sx=${cellSx} data-col="dest">${heSt(t.dest)}<//>
                 <${TableCell} align="right" sx=${cellSx} data-col="planned">${mm(t.abs)}<//>
-                <${TableCell} align="right" sx=${cellSx} data-col="updated">${t.delay ? mm(t.abs + t.delay) : ''}<//>
+                <${TableCell} align="right" sx=${cellSx} data-col="updated">${t.delay ? html`<span dir="ltr">${mm(t.abs + t.delay)} <${Box} component="span" data-delay sx=${{ color: '#FF5A5A', fontWeight: 700 }}>(+${t.delay})<//></span>` : ''}<//>
                 <${TableCell} align="right" sx=${plSx} data-col="platform" data-state=${blinking ? 'blink' : marked ? 'changed' : ''}>${t.platform}<//>
                 <${TableCell} align="right" sx=${cellSx} data-col="type">${TYPE_HE[t.type]}<//>
                 <${TableCell} align="right" sx=${cellSx} data-col="via">${t.via.map(heSt).join(', ')}<//>
