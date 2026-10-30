@@ -82,6 +82,14 @@
   .bgroup{display:inline-flex;position:relative}
   .bulk-inner .count{margin-right:4px}
   .caret{font-size:14px;margin-left:2px}
+  .morew{position:relative;display:inline-flex}
+  .morew .more{height:auto;font-size:14px}
+  .morew .tip{left:0;top:calc(100% + 6px);transform:none;width:auto;white-space:nowrap}
+  .morew:hover .tip,.morew:focus-within .tip{opacity:1;visibility:visible}
+  .mi.two{line-height:20px}
+  .mi-sub{display:block;color:var(--text-secondary)}
+  .msep{height:1px;background:var(--border-default);margin:4px 0}
+  .menu{min-width:260px}
   .bgroup .btn-outlined{border-radius:0;margin-left:-1px}
   .bgroup .btn-outlined:first-child{border-radius:4px 0 0 4px;margin-left:0}
   .bgroup .btn-outlined:last-child{border-radius:0 4px 4px 0}
@@ -288,6 +296,8 @@
   // the reasons a row can't go into a journal entry, from the balancing-JE spec
   [37, 211, 640, 1102].forEach(function (k) { ACC[k].cur = 'EUR'; ACC[k].reason = 'cur'; });
   [415, 988].forEach(function (k) { ACC[k].cur = 'GBP'; ACC[k].reason = 'cur'; });
+  // a mixed-currency first page, so the selection total has to cope with several currencies
+  [[5,'EUR'],[8,'CAD'],[11,'AUD'],[14,'GBP'],[17,'PLN']].forEach(function (x) { ACC[x[0]].cur = x[1]; ACC[x[0]].reason = 'cur'; });
   [90, 702, 1190].forEach(function (k) { ACC[k].pid = ''; ACC[k].sid = ''; ACC[k].reason = 'ids'; });
   for (var j = 0; j < 310; j++) {
     var u = rnd(), ty = u < .55 ? 'Payment' : u < .8 ? 'Refund' : 'Payout';
@@ -318,11 +328,15 @@
   function selectedRows(s) { return s.all ? filtered(s) : s.rows.filter(function (r) { return s.sel[r.id]; }); }
   function selCount(s) { return s.all ? filtered(s).length : Object.keys(s.sel).length; }
   // production wording: "2 selected, total: 28.83 (USD)"
-  function totalsText(rows) {
+  function totalsText(rows, more) {
     var by = {}; rows.forEach(function (r) { by[r.cur] = (by[r.cur] || 0) + r.amt; });
     var keys = Object.keys(by).sort(function (a, b) { return a === 'USD' ? -1 : b === 'USD' ? 1 : a < b ? -1 : 1; });
-    return keys.map(function (c) { var v = r2(by[c]); return (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' (' + c + ')'; }).join(', ');
+    var parts = keys.map(function (c) { var v = r2(by[c]); return (v < 0 ? '-' : '') + Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' (' + c + ')'; });
+    if (!more || parts.length <= 2) return parts.join(', ');
+    return parts.slice(0, 2).join(', ') + ' <span class="morew"><button class="btn-text-plain more" type="button" aria-describedby="' + more + '">+' + (parts.length - 2) + ' more</button>' +
+      '<span class="tip" role="tooltip" id="' + more + '">' + parts.join('<br>') + '</span></span>';
   }
+  function totalsPlain(rows) { return totalsText(rows); }
   function clearSel(s) { s.sel = {}; s.all = false; }
   var MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   function fdate(d) { return MON[+d.slice(5, 7) - 1] + ' ' + (+d.slice(8)) + ', ' + d.slice(0, 4); }
@@ -361,13 +375,12 @@
     var actions = VARIANT === 1
       ? '<span class="bgroup"><button class="btn-outlined" type="button" data-actions="' + k + '" aria-haspopup="menu" aria-expanded="false">Actions <span class="caret" aria-hidden="true">▼</span></button></span>'
       : '<span class="bgroup">' + (k === 'acc' ? '<button class="btn-outlined" type="button" data-act="je" data-side="' + k + '">Create journal entry</button>' : '') +
-        '<button class="btn-outlined" type="button" data-act="ignore" data-side="' + k + '">Ignore</button></span>';
+        '<button class="btn-outlined" type="button" data-actions="' + k + '" data-only="ignore" aria-haspopup="menu" aria-expanded="false">Ignore <span class="caret" aria-hidden="true">▼</span></button></span>';
     // Summaries list pattern: "Select all on all pages | Clear selection" as one joined group
     var scope = '<span class="bgroup scope-g">' +
-      (!s.all && rows.length > n ? '<button class="btn-outlined" type="button" data-all="' + k + '">Select all on all pages</button>' : '') +
       '<button class="btn-outlined" type="button" data-clear="' + k + '">Clear selection</button></span>';
     return '<tr class="bulk-row"><th class="ck">' + headCk + '</th><th colspan="6"><div class="bulk-inner" role="toolbar" aria-label="' + s.title + ' selection">' +
-      '<span class="count" data-count="' + k + '">' + fmtN(n) + ' selected, total: <span data-total="' + k + '">' + totalsText(selectedRows(s)) + '</span></span>' +
+      '<span class="count" data-count="' + k + '">' + fmtN(n) + ' selected, total: <span data-total="' + k + '">' + totalsText(selectedRows(s), 'more-' + k) + '</span></span>' +
       actions + scope + '</div></th></tr>';
   }
 
@@ -516,13 +529,16 @@
     m.classList.remove('hidden'); m.querySelector('.mi').focus();
   }
   function openActions(btn) {
-    var m = $('rowmenu'), s = S[btn.dataset.actions];
+    var m = $('rowmenu'), s = S[btn.dataset.actions], n = selCount(s), all = filtered(s).length;
     menuFor = { s:s, bulk:true };
-    m.innerHTML = (s.key === 'acc' ? '<button class="mi" role="menuitem" type="button" data-mi="je">Create journal entry</button>' : '') +
-      '<button class="mi" role="menuitem" type="button" data-mi="ignore">Ignore</button>';
+    m.innerHTML = (s.key === 'acc' && !btn.dataset.only ? '<button class="mi" role="menuitem" type="button" data-mi="je">Create journal entry</button><div class="msep" role="separator"></div>' : '') +
+      '<button class="mi" role="menuitem" type="button" data-mi="ignore">Ignore ' + fmtN(n) + ' selected</button>' +
+      '<button class="mi two" role="menuitem" type="button" data-mi="ignore-all">Ignore all ' + fmtN(all) + ' filtered<span class="mi-sub">Every transaction that matches the filters, on all pages</span></button>';
     var b = btn.getBoundingClientRect();
     m.style.top = (window.scrollY + b.bottom + 4) + 'px'; m.style.left = (window.scrollX + b.left) + 'px';
     m.classList.remove('hidden'); btn.setAttribute('aria-expanded', 'true');
+    var over = m.getBoundingClientRect().right - (document.documentElement.clientWidth - 8);
+    if (over > 0) m.style.left = (parseFloat(m.style.left) - over) + 'px';
     if (viaKeyboard) m.querySelector('.mi').focus();
   }
   function closeMenu() {
@@ -531,7 +547,8 @@
     var t = e.target.closest('[data-mi]'); if (!t || !menuFor) return;
     var mf = menuFor; closeMenu();
     var rows = mf.bulk ? selectedRows(mf.s) : [mf.r];
-    if (t.dataset.mi === 'ignore') doIgnore(mf.s, rows); else startCreate(rows);
+    if (t.dataset.mi === 'ignore-all') confirmIgnoreAll(mf.s);
+    else if (t.dataset.mi === 'ignore') doIgnore(mf.s, rows); else startCreate(rows);
   });
   document.addEventListener('click', function (e) { if (!e.target.closest('#rowmenu') && !e.target.closest('[data-menu]') && !e.target.closest('[data-actions]')) closeMenu(); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { closeMenu(); if (!$('modal-scrim').classList.contains('hidden')) closeModal(); else if (!$('je-sheet').classList.contains('hidden')) closeSheet(); } });
@@ -544,6 +561,17 @@
     rows.forEach(function (r) { delete s.sel[r.id]; });
     var pages = Math.max(1, Math.ceil(filtered(s).length / PER_PAGE));
     if (s.page > pages) s.page = pages;
+  }
+  // Nothing on screen shows the total of the unseen pages, so ignoring all filtered states it first.
+  function confirmIgnoreAll(s) {
+    var rows = filtered(s), f = s.applied, fl = [fdate(f.from) + ' – ' + fdate(f.to)];
+    if (f.q.trim()) fl.push('Search: “' + esc(f.q.trim()) + '”');
+    if (f.amt.trim()) fl.push('Amount: ' + esc(f.amt.trim()));
+    openModal('Ignore all ' + fmtN(rows.length) + ' filtered transactions?',
+      '<div class="kv"><span>Transactions</span><b>' + fmtN(rows.length) + '</b></div>' +
+      '<div class="kv"><span>Total</span><b style="text-align:right">' + totalsText(rows).split(', ').join('<br>') + '</b></div>' +
+      '<div class="kv"><span>Filters</span><b style="text-align:right">' + fl.join('<br>') + '</b></div>',
+      [{ label:'Cancel', kind:'btn-outlined' }, { label:'Ignore ' + fmtN(rows.length) + ' transactions', kind:'btn', fn:function () { doIgnore(s, rows); } }]);
   }
   function doIgnore(s, rows) {
     if (!rows.length) return;
