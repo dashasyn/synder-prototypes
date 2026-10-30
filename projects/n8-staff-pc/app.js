@@ -18,7 +18,7 @@
                 the occasional delay, the passing-train mark in עובר.
    Minimum text size 14px.
    ════════════════════════════════════════════════════════════════════ */
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect, useMemo, useRef, useLayoutEffect } = React;
 const html = htm.bind(React.createElement);
 const {
   ThemeProvider, createTheme, CssBaseline, Box, Button, IconButton, Typography, TextField, MenuItem,
@@ -117,7 +117,7 @@ const BEFORE = 50, AFTER = 90;
 /* Customer reference (608 · Feature 621): black header, rows alternating black / grey, all table
    text yellow. Red line removed and text enlarged at Ignat's request (2026-10-30). */
 const YEL = '#FFFF4D', GREY = '#3C3C3C', RED = '#FF6E6E';   // darker grey for TV contrast (Ignat, 2026-10-30)
-const cellSx = { color: YEL, borderBottom: 'none', py: .9, whiteSpace: 'nowrap', fontSize: 24, fontWeight: 600 };
+const cellSx = { color: YEL, borderBottom: 'none', py: .6, whiteSpace: 'nowrap', fontSize: 24, fontWeight: 600 };
 const headSx = { color: '#fff', bgcolor: '#000', fontWeight: 700, borderBottom: 'none', py: 1, whiteSpace: 'nowrap', fontSize: 20 };
 const BLINK_MS = 5000;
 /* Delay minutes after the updated time, red, as in N8's current StaffPC: "10:52 (+6)". Times and
@@ -158,18 +158,38 @@ function App() {
              platform: l.platform != null ? l.platform : t.platform, platformAt: l.platformAt };
   });
 
+  /* The board fills the screen without scrolling: render only the rows that fit.
+     Upcoming trains win; departed ones (look-back window) fill the space that's left, at least 2. */
+  const boxRef = useRef(null);
+  const [fit, setFit] = useState(99);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const box = boxRef.current; if (!box) return;
+      const head = box.querySelector('thead'), row = box.querySelector('tbody tr');
+      if (!head || !row || row.querySelector('#empty')) return;
+      const n = Math.max(1, Math.floor((box.clientHeight - head.getBoundingClientRect().height) / row.getBoundingClientRect().height + 0.01));
+      setFit(f => f === n ? f : n);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  });
+  const firstUp = (i => i < 0 ? rows.length : i)(rows.findIndex(t => t.abs >= viewMin));
+  const keepPast = Math.min(firstUp, Math.max(2, fit - (rows.length - firstUp)));
+  const shown = rows.slice(firstUp - keepPast, firstUp - keepPast + fit);
+
   /* Demo actions — a train that hasn't left yet changes platform / runs late. */
-  const upcoming = () => rows.filter(t => t.abs + (t.delay || 0) >= nowMin && !t.passing);
+  const upcoming = () => shown.filter(t => t.abs + (t.delay || 0) >= nowMin && !t.passing);
   const rnd = a => a[Math.floor(Math.random() * a.length)];
   const changePlatform = () => {
-    const t = rnd(upcoming().length ? upcoming() : rows); if (!t) return;
+    const t = rnd(upcoming().length ? upcoming() : shown); if (!t) return;
     const np = rnd([1, 2, 3, 4, 5, 6].filter(p => p !== t.platform));
     setLive(l => ({ ...l, [t.key]: { ...(l[t.key] || {}), platform: np, platformAt: Date.now() } }));
     setUpdated(new Date());
     setNote(`Train ${t.no}: platform ${t.platform} → ${np}`);
   };
   const delayTrain = () => {
-    const pool = upcoming().filter(t => !t.delay); const t = rnd(pool.length ? pool : rows); if (!t) return;
+    const pool = upcoming().filter(t => !t.delay); const t = rnd(pool.length ? pool : shown); if (!t) return;
     const d = rnd([3, 5, 8, 12]);
     setLive(l => ({ ...l, [t.key]: { ...(l[t.key] || {}), delay: d } }));
     setUpdated(new Date());
@@ -191,7 +211,7 @@ function App() {
   return html`
     <div className="variant-switch" id="demo-bar"
       style=${{ display: 'flex', alignItems: 'center', gap: 12, background: '#2B2B2B', color: '#fff', padding: '8px 20px',
-                fontSize: 14, fontFamily: 'Roboto, sans-serif', borderBottom: '1px solid #444' }}>
+                fontSize: 14, fontFamily: 'Roboto, sans-serif', borderBottom: '1px solid #444', flexShrink: 0 }}>
       <span style=${{ opacity: .75, fontSize: 14, fontWeight: 500, textTransform: 'uppercase' }}>Demo</span>
       <span style=${{ display: 'flex', gap: 4, background: 'rgba(255,255,255,.1)', borderRadius: 6, padding: 3 }}>
         ${demoBtn('demo-platform', 'Change platform', changePlatform)}
@@ -200,8 +220,8 @@ function App() {
       </span>
       <span id="demo-note" style=${{ opacity: .75 }}>${note}</span>
     </div>
-    <${Box} sx=${{ minHeight: 'calc(100vh - 47px)', bgcolor: '#000', color: '#fff', px: 1.5, py: 2 }}>
-      <${Box} id="toolbar" sx=${{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5, flexWrap: 'nowrap' }}>
+    <${Box} sx=${{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', bgcolor: '#000', color: '#fff', px: 1.5, pt: 2, pb: 1 }}>
+      <${Box} id="toolbar" sx=${{ display: 'flex', alignItems: 'center', gap: 2, mb: 2, flexWrap: 'nowrap', flexShrink: 0 }}>
         <${TextField} select id="station" label="Station" variant="filled" size="small" value=${station}
           onChange=${e => setStation(e.target.value)} sx=${FIELD_SX}
           SelectProps=${{ MenuProps: { PaperProps: { sx: { bgcolor: '#fff', color: 'rgba(0,0,0,.87)', maxHeight: 420 } } },
@@ -249,12 +269,12 @@ function App() {
         <//>
       <//>
 
-      <${TableContainer} component=${Paper} elevation=${0} sx=${{ bgcolor: '#000', borderRadius: 0 }}>
-        <${Table} id="board" dir="rtl" size="small"
+      <${TableContainer} ref=${boxRef} id="board-box" component=${Paper} elevation=${0} sx=${{ bgcolor: '#000', borderRadius: 0, flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        <${Table} id="board" dir="rtl" size="small" data-total=${rows.length}
           sx=${{ '@keyframes plBlink': { '0%, 49%': { backgroundColor: YEL, color: '#000' }, '50%, 100%': { backgroundColor: 'transparent', color: YEL } } }}>
           <${TableHead}><${TableRow}>${head.map(h => html`<${TableCell} key=${h} align="right" sx=${headSx}>${h}<//>`)}<//><//>
           <${TableBody}>
-            ${rows.length ? rows.map((t, i) => {
+            ${shown.length ? shown.map((t, i) => {
               const changed = t.oldPlatform != null;
               const blinking = changed && now.getTime() - t.platformAt < BLINK_MS;
               // stays yellow until the train has left the station
