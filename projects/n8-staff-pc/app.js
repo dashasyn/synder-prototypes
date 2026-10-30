@@ -114,11 +114,11 @@ const mm = m => { const x = ((m % 1440) + 1440) % 1440; return `${String(Math.fl
 /* Window shown around the viewing time — the capture at 14:08 lists 13:20 … 15:35. */
 const BEFORE = 50, AFTER = 90;
 
-/* Customer reference (608 · Feature 621): black header with a red line, rows alternating
-   black / grey, all table text yellow. */
+/* Customer reference (608 · Feature 621): black header, rows alternating black / grey, all table
+   text yellow. Red line removed and text enlarged at Ignat's request (2026-10-30). */
 const YEL = '#FFFF4D', GREY = '#6E6E6E';
-const cellSx = { color: YEL, borderBottom: 'none', py: 1.1, whiteSpace: 'nowrap', fontSize: 15 };
-const headSx = { color: '#fff', bgcolor: '#000', fontWeight: 700, borderBottom: 'none', py: 1.1, whiteSpace: 'nowrap', fontSize: 15 };
+const cellSx = { color: YEL, borderBottom: 'none', py: .9, whiteSpace: 'nowrap', fontSize: 20, fontWeight: 500 };
+const headSx = { color: '#fff', bgcolor: '#000', fontWeight: 700, borderBottom: 'none', py: 1, whiteSpace: 'nowrap', fontSize: 18 };
 const BLINK_MS = 5000;
 const FIELD_SX = { width: 270, '& .MuiInputBase-root': { height: 56 } };
 
@@ -175,7 +175,6 @@ function App() {
   };
   const resetDemo = () => { setLive({}); setNote(''); };
 
-  const pct = (offset + 12) / 36 * 100;
   const bubble = offset === 0
     ? { label: 'Now', bg: '#E8F5E9', fg: '#2E7D32' }
     : offset > 0 ? { label: `+${offset}h`, bg: '#E3F2FD', fg: '#1565C0' } : { label: `${offset}h`, bg: '#FFF3E0', fg: '#E65100' };
@@ -207,11 +206,12 @@ function App() {
                           IconComponent: p => html`<${Tooltip} title=${'Close'}><${Box} component="span" ...${p} className=${'material-icons ' + (p.className || '')} sx=${{ color: '#fff' }}>arrow_drop_down<//><//>` }}>
           ${STATIONS.map(s => html`<${MenuItem} key=${s.code} value=${s.code} data-station=${s.code} sx=${{ fontSize: 16 }}>${s.label}<//>`)}
         <//>
-        <${TextField} select id="types-field" variant="filled" size="small" value=${types} sx=${FIELD_SX}
+        <${TextField} select id="types-field" label="Train types" variant="filled" size="small" value=${types} sx=${FIELD_SX}
+          InputLabelProps=${{ shrink: true }}
           SelectProps=${{ id: 'types', multiple: true, displayEmpty: true, onChange: e => setTypes(e.target.value),
-                          renderValue: v => v.length ? v.join(', ') : 'All Train Types',
+                          renderValue: v => v.length ? v.join(', ') : 'All',
                           MenuProps: { PaperProps: { sx: { bgcolor: '#fff', color: 'rgba(0,0,0,.87)' } } } }}
-          inputProps=${{ 'aria-label': 'Train types' }}>
+          >
           ${TYPES.map(t => html`<${MenuItem} key=${t} value=${t} data-type=${t}>
             <${Checkbox} size="small" checked=${types.includes(t)} sx=${{ color: 'rgba(0,0,0,.54)', p: .5, mr: 1 }} />
             <${ListItemText} primary=${t} primaryTypographyProps=${{ fontSize: 16 }} /><//>`)}
@@ -220,16 +220,16 @@ function App() {
           control=${html`<${Checkbox} id="passing" checked=${passing} onChange=${e => setPassing(e.target.checked)} />`}
           label="Show passing trains" />
 
-        <${Box} id="time" sx=${{ width: 300, flexShrink: 0, position: 'relative', pt: 3.5, mx: 1 }}>
-          <${Chip} id="offset-chip" size="small" label=${bubble.label}
-            sx=${{ position: 'absolute', top: 0, left: `${pct}%`, transform: 'translateX(-50%)', bgcolor: bubble.bg, color: bubble.fg, fontWeight: 500, height: 22 }} />
+        <${Chip} id="offset-chip" size="small" label=${bubble.label}
+          sx=${{ flexShrink: 0, minWidth: 56, bgcolor: bubble.bg, color: bubble.fg, fontWeight: 500, height: 24, mt: 1.5 }} />
+        <${Box} id="time" sx=${{ width: 300, flexShrink: 0, position: 'relative', pt: 3.5, mr: 1 }}>
           <${Typography} id="viewing" sx=${{ position: 'absolute', top: 2, right: 0, fontSize: 15 }}>Viewing: ${fmtHM(viewing)} ${fmtDay(viewing)}<//>
           <${Slider} id="slider" value=${offset} min=${-12} max=${24} step=${1} marks aria-label="Time offset (hours)"
             onChange=${(e, v) => setOffset(v)} size="small" sx=${{ mt: .5, mb: -.5, '& .MuiSlider-mark': { bgcolor: '#fff', opacity: .6 } }} />
           <${Box} sx=${{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}><span>-12</span><span>+24</span><//>
         <//>
         ${offset !== 0 ? html`<${Button} id="reset" variant="outlined" onClick=${() => setOffset(0)}
-          sx=${{ flexShrink: 0, lineHeight: 1.3, width: 110, borderColor: 'rgba(100,181,246,.5)' }}>Reset to now<//>` : null}
+          sx=${{ flexShrink: 0, whiteSpace: 'nowrap', borderColor: 'rgba(100,181,246,.5)' }}>Reset to now<//>` : null}
 
         <${Box} sx=${{ ml: 'auto', display: 'flex', alignItems: 'center', gap: .5, flexShrink: 0 }}>
           <${Typography} id="updated" sx=${{ fontSize: 15 }}>Last Updated: ${fmtHMS(updated)}<//>
@@ -239,7 +239,7 @@ function App() {
         <//>
       <//>
 
-      <${TableContainer} component=${Paper} elevation=${0} sx=${{ bgcolor: '#000', borderTop: '4px solid #E00000', borderRadius: 0 }}>
+      <${TableContainer} component=${Paper} elevation=${0} sx=${{ bgcolor: '#000', borderRadius: 0 }}>
         <${Table} id="board" dir="rtl" size="small"
           sx=${{ '@keyframes plBlink': { '0%, 49%': { backgroundColor: YEL, color: '#000' }, '50%, 100%': { backgroundColor: 'transparent', color: YEL } } }}>
           <${TableHead}><${TableRow}>${head.map(h => html`<${TableCell} key=${h} align="right" sx=${headSx}>${h}<//>`)}<//><//>
