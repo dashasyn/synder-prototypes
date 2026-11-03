@@ -261,7 +261,7 @@ function PageHeader({ crumbs, title, subtitle, action }) {
     <${Box} id="page-header"
       sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               gap: 2, px: 3, py: 1.5, bgcolor: '#fff',
-              position: 'sticky', top: 48, zIndex: 150, borderBottom: '1px solid #E7E7E7' }}>
+              position: 'sticky', top: 88, zIndex: 150, borderBottom: '1px solid #E7E7E7' }}>
       <${Box} sx=${{ minWidth: 0 }}>
         ${crumbs && html`
           <${Breadcrumbs} sx=${{ fontSize: 14 }}
@@ -3468,7 +3468,7 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
     <${Box}><${Typography} variant="body2" color="text.secondary">${label}<//><${Typography} variant="body1">${value}<//><//><//>`;
   return html`
     <${M.Drawer} anchor="right" open=${!!which} onClose=${onClose} id=${'info-' + which}
-      PaperProps=${{ sx: { width: 560 } }}>
+      PaperProps=${{ sx: { width: 560, top: 40, height: 'calc(100% - 40px)' } }}>
       <${Box} sx=${{ display: 'flex', alignItems: 'center', px: 3, py: 2 }}>
         <${Typography} variant="h6" sx=${{ flex: 1 }}>${which && t('info_' + which)}<//>
         <${IconButton} aria-label=${t('info_close')} onClick=${onClose} id="info-close"><${Icon}>close<//><//>
@@ -3553,7 +3553,7 @@ function TopBar({ go, onLogout, role }) {
           #main carries a matching margin-top:48px. Ignat removed the prototype
           banner on 2026-09-17; the bar sat at top:36 only to clear it, which
           is what left it looking broken once the banner went. */''}
-    <${AppBar} position="fixed" sx=${{ bgcolor: NAVY, zIndex: 200, top: 0 }}>
+    <${AppBar} position="fixed" sx=${{ bgcolor: NAVY, zIndex: 200, top: 40 }}>
       <${Toolbar} sx=${{ gap: 0.5 }}>
         ${/* The same extracted lockup the login screen uses — flag plus the
               QMS RPV CH wordmark — instead of the red "+" placeholder I had
@@ -3644,7 +3644,7 @@ function Login({ onLogin }) {
       pass: pass.trim() ? '' : t('err_password_required'),
     };
     setErr(next);
-    if (!next.email && !next.pass) onLogin(/admin/i.test(email) ? 'admin' : 'user');
+    if (!next.email && !next.pass) onLogin();
   };
   const onKey = e => { if (e.key === 'Enter') submit(); };
 
@@ -3767,8 +3767,7 @@ function App() {
     <${I18n.Provider} value=${{ t, lang, setLang }}>
       <${ThemeProvider} theme=${theme}>
         <${CssBaseline} />
-        ${/* mock roles: an e-mail containing "admin" signs in as administrator */''}
-        <${Login} onLogin=${r => { setRole(r); setAuthed(true); setRoute({ name: 'list' }); }} />
+        <${Login} onLogin=${() => { setAuthed(true); setRoute({ name: 'list' }); }} />
       <//>
     <//>`;
 
@@ -3777,8 +3776,21 @@ function App() {
       <${ThemeProvider} theme=${theme}>
         <${CssBaseline} />
         <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+          ${/* Ignat, 2026-11-03: the role is a switch at the top — prototype
+                chrome in the shared variant-switch style, not product UI */''}
+          <${Box} className="variant-switch" id="role-switch" sx=${{ position: 'fixed', top: 0, left: 0, right: 0, height: 40,
+                   zIndex: 1400, display: 'flex', alignItems: 'center', gap: 1.5, px: 2.5, bgcolor: '#2B2B2B', color: '#fff' }}>
+            <${Typography} variant="body2" sx=${{ opacity: .75, textTransform: 'uppercase', fontWeight: 500 }}>${t('vs_role')}<//>
+            <${Box} sx=${{ display: 'flex', gap: .5, bgcolor: 'rgba(255,255,255,.1)', borderRadius: '6px', p: '3px' }}>
+              ${['admin', 'user'].map((r, i) => html`<${Box} component="button" key=${r} id=${'vs-' + r}
+                className=${role === r ? 'on' : ''} aria-pressed=${role === r} onClick=${() => setRole(r)}
+                sx=${{ border: 'none', font: 'inherit', fontSize: 14, cursor: 'pointer', px: 1.5, py: .5, borderRadius: '4px',
+                       bgcolor: role === r ? '#fff' : 'transparent', color: role === r ? '#2B2B2B' : 'rgba(255,255,255,.7)' }}>
+                ${i + 1} · ${t(r === 'admin' ? 'role_admin' : 'role_user')}<//>`)}
+            <//>
+          <//>
           <${TopBar} go=${go} role=${role} onLogout=${() => setAuthed(false)} />
-          <${Box} sx=${{ flex: 1, mt: '48px' }}>${screen}<//>
+          <${Box} sx=${{ flex: 1, mt: '88px' }}>${screen}<//>
         <//>
       <//>
     <//>`;
