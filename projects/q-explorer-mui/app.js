@@ -3339,17 +3339,23 @@ function NotPorted({ go, row }) {
    home page; contact names and the support address are mock. */
 const SUPPORT_MAIL = 'support@etc-consult.ch';
 const INFO_DOCS = [
-  ['2026-09-22', 'Tools: QMS RPV CH Assessment-relevant stops – Guidelines'],
-  ['2025-10-25', 'QMS RPV Overview: FAQ'],
-  ['2025-10-25', 'Assessment Guidelines: MSS Survey Assessment Guidelines 2026'],
-  ['2025-10-25', 'Assessment Guidelines: Survey MSS Assessment Guidelines 2025 and 2026 (Comparison)'],
-  ['2025-10-25', 'Training materials: Information for employees'],
-  ['2025-10-25', 'Training materials: Quick guide QMS RPV CH'],
-  ['2025-10-25', 'Training materials: Instructions QMS RPV CH'],
-  ['2025-10-25', 'Training materials: Tutorial Line Analysis DPM'],
-  ['2025-10-25', 'Tools: Controlling process for the QMS RPV CH from 2020 onwards'],
-  ['2025-10-25', 'Tools: Checklist network map'],
-];
+  ['2026-09-22', 'Tools: QMS RPV CH Assessment-relevant stops – Guidelines', 'de'],
+  ['2025-10-25', 'QMS RPV Overview: FAQ', 'de'],
+  ['2025-10-25', 'Assessment Guidelines: MSS Survey Assessment Guidelines 2026', 'de'],
+  ['2025-10-25', 'Assessment Guidelines: Survey MSS Assessment Guidelines 2025 and 2026 (Comparison)', 'fr'],
+  ['2025-10-25', 'Training materials: Information for employees', 'de'],
+  ['2025-10-25', 'Training materials: Quick guide QMS RPV CH', 'it'],
+  ['2025-10-25', 'Training materials: Instructions QMS RPV CH', 'de'],
+  ['2025-10-25', 'Training materials: Tutorial Line Analysis DPM', 'en'],
+  ['2025-10-25', 'Tools: Controlling process for the QMS RPV CH from 2020 onwards', 'de'],
+  ['2025-10-25', 'Tools: Checklist network map', 'fr'],
+].map(([date, title, lang], i) => ({ id: 'd' + i, date, title, lang }));
+const DOC_LANGS = ['de', 'fr', 'it', 'en'];
+const DOC_EXT = ['pdf', 'docx', 'xlsx'];
+const DOC_MAX = 20 * 1024 * 1024;
+// mock profile — a fake person, the prototype is public
+const PROFILE = { name: 'Jane Doe', position: 'Quality manager', mail: 'jane.doe@example.com', phone: '+41 00 000 00 00' };
+const APP_VERSION = ['stage-bav-0.0.10 (e0eec840)', '27.10.2026, 12:43'];
 const INFO_CONTACTS = [
   { role: 'ct_data', org: 'ETC Solutions GmbH', name: 'Anna Muster', unit: 'Operational Project Management ETC',
     addr: ['Ringstrasse 17', 'CH-4600 Olten'], phone: '+41 62 000 00 01', mail: 'anna.muster@etc-consult.ch' },
@@ -3367,40 +3373,140 @@ const INFO_IMPRINT = [
   ['imp_g_tax', [['imp_vat', 'DE 165533279'], ['imp_tax', '37/280/3077'], ['imp_reg', 'AG Charlottenburg HRB 8866']]],
 ];
 
-function InfoDialog({ which, onClose }) {
+const fmtSize = n => n < 1024 * 1024 ? Math.max(1, Math.round(n / 1024)) + ' KB' : (n / 1024 / 1024).toFixed(1) + ' MB';
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+/* Ignat, 2026-11-03: manual upload — drag and drop + Browse, one file, the
+   name taken from the file (editable, with a reset), a required language.
+   It sits at the top of the Documents sheet itself, so there is no second
+   dialog. Admins only. */
+function DocUpload({ onAdd }) {
+  const { t } = useT();
+  const [file, setFile] = useState(null);
+  const [error, setError] = useState('');
+  const [name, setName] = useState('');
+  const [docLang, setDocLang] = useState('');
+  const [over, setOver] = useState(false);
+  const input = React.useRef(null);
+  const base = f => f.name.replace(/\.[^.]+$/, '');
+  const pick = f => {
+    if (!f) return;
+    const ext = (f.name.split('.').pop() || '').toLowerCase();
+    const err = !DOC_EXT.includes(ext) ? t('up_err_type').replace('{name}', f.name)
+      : f.size > DOC_MAX ? t('up_err_size').replace('{name}', f.name) : '';
+    setError(err);
+    if (err) { setFile(null); return; }
+    setFile(f); setName(base(f)); setDocLang('');
+  };
+  const reset = () => { setFile(null); setName(''); setDocLang(''); setError(''); if (input.current) input.current.value = ''; };
+  const submit = () => { onAdd({ title: name.trim() || base(file), lang: docLang, file }); reset(); };
+  return html`<${Box} id="doc-upload" sx=${{ mb: 3 }}>
+    <${Box} id="doc-drop"
+      onDragOver=${e => { e.preventDefault(); setOver(true); }} onDragLeave=${() => setOver(false)}
+      onDrop=${e => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files[0]); }}
+      sx=${{ border: '1px dashed', borderColor: error ? 'error.main' : over ? 'primary.main' : '#BDBDBD',
+              bgcolor: over ? 'rgba(33,150,243,0.06)' : '#FAFAFA', borderRadius: 1, p: 3, textAlign: 'center' }}>
+      <${Icon} sx=${{ fontSize: 32, color: 'text.secondary' }}>upload_file<//>
+      <${Typography} variant="body1" sx=${{ mt: 1 }}>${t('up_drop')}
+        <${Button} id="doc-browse" size="small" onClick=${() => input.current.click()} sx=${{ ml: .5, fontSize: 16, textTransform: 'none', verticalAlign: 'baseline', minWidth: 0, p: '0 4px' }}>
+          ${t('up_browse')}<//><//>
+      <${Typography} variant="body2" color="text.secondary">PDF, DOCX, XLSX · max. 20 MB<//>
+      <input ref=${input} type="file" id="doc-file" hidden accept=".pdf,.docx,.xlsx"
+        onChange=${e => pick(e.target.files[0])} />
+    <//>
+    ${error && html`<${Typography} variant="body2" color="error" id="doc-error" sx=${{ mt: 1 }}>${error}<//>`}
+    ${file && html`<${Box} id="doc-form" sx=${{ mt: 2 }}>
+      <${Stack} direction="row" alignItems="center" spacing=${1} sx=${{ mb: 2 }}>
+        <${Icon} sx=${{ color: 'text.secondary' }}>description<//>
+        <${Typography} variant="body2" sx=${{ flex: 1, overflowWrap: 'anywhere' }} id="doc-file-name">${file.name}<//>
+        <${Typography} variant="body2" color="text.secondary">${fmtSize(file.size)}<//>
+        <${Tooltip} title=${t('up_remove')}><${IconButton} id="doc-remove" aria-label=${t('up_remove')} onClick=${reset}><${Icon}>close<//><//><//>
+      <//>
+      <${TextField} id="doc-name" label=${t('up_name')} value=${name} fullWidth sx=${{ mb: 2 }}
+        onChange=${e => setName(e.target.value)}
+        InputProps=${name !== base(file) ? { endAdornment: html`<${InputAdornment} position="end">
+          <${Tooltip} title=${t('up_name_reset')}><${IconButton} id="doc-name-reset" aria-label=${t('up_name_reset')}
+            onClick=${() => setName(base(file))}><${Icon}>restart_alt<//><//><//><//>` } : undefined} />
+      <${FormControl} fullWidth required sx=${{ mb: 2 }}>
+        <${InputLabel} id="doc-lang-label">${t('up_lang')}<//>
+        <${Select} labelId="doc-lang-label" id="doc-lang" label=${t('up_lang') + ' *'} value=${docLang}
+          onChange=${e => setDocLang(e.target.value)}>
+          ${DOC_LANGS.map(l => html`<${MenuItem} key=${l} value=${l}>${t('lang_' + l)}<//>`)}
+        <//>
+      <//>
+      <${Stack} direction="row" spacing=${1} justifyContent="flex-end">
+        <${Button} onClick=${reset} id="doc-cancel">${t('action_cancel')}<//>
+        <${Button} variant="contained" id="doc-submit" disabled=${!docLang || !name.trim()} onClick=${submit}>${t('up_submit')}<//>
+      <//>
+    <//>`}
+  <//>`;
+}
+
+/* Ignat, 2026-11-03: one side sheet, opened from the user menu, for profile,
+   documents, contacts and imprint — like the sheet in ETC's other product.
+   It keeps the report underneath as it was, the reason dialogs were chosen. */
+function InfoSheet({ which, onClose, role, docs, setDocs }) {
   const { t, lang } = useT();
   const [toast, setToast] = useState('');
-  const download = title => {
+  const [confirm, setConfirm] = useState(null);
+  const admin = role === 'admin';
+  const download = d => {
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([title + '\n(prototype placeholder)'], { type: 'text/plain' }));
-    a.download = title.replace(/[^\w\-]+/g, '_') + '.txt';
+    a.href = URL.createObjectURL(d.file || new Blob([d.title + '\n(prototype placeholder)'], { type: 'text/plain' }));
+    a.download = d.file ? d.file.name : d.title.replace(/[^\w\-]+/g, '_') + '.txt';
     a.click();
-    setToast(t('info_download_started').replace('{name}', title));
+    setToast(t('info_download_started').replace('{name}', d.title));
   };
   const iso = d => { const [y, m, dd] = d.split('-'); return fmtDate(`${dd}.${m}.${y}`, lang); };
+  const add = ({ title, lang: l, file }) => {
+    setDocs(x => [{ id: 'u' + Date.now(), date: todayIso(), title, lang: l, file }, ...x]);
+    setToast(t('up_done').replace('{name}', title));
+  };
+  const remove = d => { setDocs(x => x.filter(y => y.id !== d.id)); setConfirm(null); setToast(t('up_deleted').replace('{name}', d.title)); };
+  const field = (icon, label, value) => html`<${Stack} direction="row" spacing=${2} sx=${{ mb: 2.5 }} key=${label}>
+    <${Icon} sx=${{ color: 'text.secondary', mt: .25 }}>${icon}<//>
+    <${Box}><${Typography} variant="body2" color="text.secondary">${label}<//><${Typography} variant="body1">${value}<//><//><//>`;
   return html`
-    <${Dialog} open=${!!which} onClose=${onClose} maxWidth=${which === 'contacts' ? 'lg' : 'md'} fullWidth
-      id=${'info-' + which}>
-      <${DialogTitle} sx=${{ display: 'flex', alignItems: 'center' }}>
-        ${which && t('info_' + which)}<${Box} sx=${{ flex: 1 }} />
+    <${M.Drawer} anchor="right" open=${!!which} onClose=${onClose} id=${'info-' + which}
+      PaperProps=${{ sx: { width: 560 } }}>
+      <${Box} sx=${{ display: 'flex', alignItems: 'center', px: 3, py: 2 }}>
+        <${Typography} variant="h6" sx=${{ flex: 1 }}>${which && t('info_' + which)}<//>
         <${IconButton} aria-label=${t('info_close')} onClick=${onClose} id="info-close"><${Icon}>close<//><//>
       <//>
-      <${DialogContent} dividers>
-        ${which === 'documents' && html`<${Table} id="info-doc-table"><${TableBody}>
-          ${[...INFO_DOCS].sort((a, b) => b[0].localeCompare(a[0])).map(([d, title]) => html`
-            <${TableRow} key=${title} hover>
-              <${TableCell} sx=${{ whiteSpace: 'nowrap', color: 'text.secondary', width: 130 }}>${iso(d)}<//>
-              ${/* Ignat, 2026-10-26: files, not links — plain title, download
-                    icon at the row end, as every row action in the app */''}
-              <${TableCell}>${title}<//>
-              <${TableCell} align="right" sx=${{ width: 56 }}>
-                <${Tooltip} title=${t('la_download')}>
-                  <${IconButton} className="info-doc" aria-label=${t('la_download') + ': ' + title}
-                    onClick=${() => download(title)}><${Icon}>download<//><//><//><//>
-            <//>`)}
-        <//><//>`}
-        ${which === 'contacts' && html`
-          <${Box} sx=${{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 2 }}>
+      <${Box} sx=${{ px: 3, pb: 3, overflowY: 'auto' }}>
+        ${which === 'profile' && html`<${Box} id="profile-fields">
+          ${field('person_outline', t('pf_name'), PROFILE.name)}
+          ${field('badge', t('pf_position'), PROFILE.position)}
+          ${field('admin_panel_settings', t('pf_role'), t(admin ? 'role_admin' : 'role_user'))}
+          ${field('mail_outline', t('pf_mail'), PROFILE.mail)}
+          ${field('phone', t('pf_phone'), PROFILE.phone)}
+        <//>`}
+        ${which === 'documents' && html`
+          ${admin && html`<${DocUpload} onAdd=${add} />`}
+          <${Table} id="info-doc-table" sx=${{ tableLayout: 'fixed' }}>
+            <colgroup><col style=${{ width: 110 }} /><col /><col style=${{ width: 90 }} /><col style=${{ width: admin ? 96 : 56 }} /></colgroup>
+            <${TableHead}><${TableRow}>
+              <${TableCell}>${t('doc_col_date')}<//><${TableCell}>${t('doc_col_title')}<//>
+              <${TableCell}>${t('doc_col_lang')}<//><${TableCell} />
+            <//><//>
+            <${TableBody}>
+            ${[...docs].sort((a, b) => b.date.localeCompare(a.date)).map(d => html`
+              <${TableRow} key=${d.id} hover data-doc=${d.id}>
+                <${TableCell} sx=${{ color: 'text.secondary' }}>${iso(d.date)}<//>
+                <${TableCell} sx=${{ overflowWrap: 'anywhere' }} className="doc-title">${d.title}<//>
+                <${TableCell} className="doc-lang">${d.lang.toUpperCase()}<//>
+                <${TableCell} align="right" sx=${{ px: 1, whiteSpace: 'nowrap' }}>
+                  <${Tooltip} title=${t('la_download')}>
+                    <${IconButton} className="info-doc" aria-label=${t('la_download') + ': ' + d.title}
+                      onClick=${() => download(d)}><${Icon}>download<//><//><//>
+                  ${admin && html`<${Tooltip} title=${t('act_delete')}>
+                    <${IconButton} className="doc-delete" color="error" aria-label=${t('act_delete') + ': ' + d.title}
+                      onClick=${() => setConfirm(d)}><${Icon}>delete<//><//><//>`}
+                <//>
+              <//>`)}
+            <//>
+          <//>`}
+        ${which === 'contacts' && html`<${Stack} spacing=${2}>
             ${INFO_CONTACTS.map((c, i) => html`<${Card} key=${i} className="info-contact"><${CardContent}>
               <${Typography} variant="subtitle1" sx=${{ fontWeight: 500 }}>${t(c.role)}<//>
               <${Typography} variant="body2" sx=${{ mb: 1 }}>${c.org}<//>
@@ -3417,21 +3523,30 @@ function InfoDialog({ which, onClose }) {
           ${INFO_IMPRINT.map(([g, rows]) => html`<${React.Fragment} key=${g}>
             <${TableRow}><${TableCell} colSpan=${2} sx=${{ fontWeight: 500, bgcolor: '#F4F4F4' }}>${t(g)}<//><//>
             ${rows.map(([k, v], i) => html`<${TableRow} key=${k + i}>
-              <${TableCell} sx=${{ width: 280, color: 'text.secondary' }}>${t(k)}<//>
+              <${TableCell} sx=${{ width: 180, color: 'text.secondary', verticalAlign: 'top' }}>${t(k)}<//>
               <${TableCell}>${v.startsWith('imp_') ? t(v) : v}<//><//>`)}
           <//>`)}
         <//><//>`}
       <//>
-      <${Snackbar} open=${!!toast} autoHideDuration=${2500} onClose=${() => setToast('')} message=${toast} />
-    <//>`;
+    <//>
+    <${Dialog} open=${!!confirm} onClose=${() => setConfirm(null)} id="doc-confirm">
+      <${DialogTitle}>${t('up_del_title')}<//>
+      <${DialogContent}><${DialogContentText}>${confirm && t('up_del_text').replace('{name}', confirm.title)}<//><//>
+      <${DialogActions}>
+        <${Button} onClick=${() => setConfirm(null)}>${t('action_cancel')}<//>
+        <${Button} color="error" variant="contained" id="doc-confirm-yes" onClick=${() => remove(confirm)}>${t('act_delete')}<//>
+      <//>
+    <//>
+    <${Snackbar} open=${!!toast} autoHideDuration=${2500} onClose=${() => setToast('')} message=${toast} id="info-toast" />`;
 }
 
-function TopBar({ go, onLogout }) {
+function TopBar({ go, onLogout, role }) {
   const { t, lang, setLang } = useT();
   const [anchor, setAnchor] = useState(null);
   const [langAnchor, setLangAnchor] = useState(null);
   const [infoAnchor, setInfoAnchor] = useState(null);
   const [info, setInfo] = useState(null);
+  const [docs, setDocs] = useState(INFO_DOCS);
   const openInfo = k => { setInfoAnchor(null); setInfo(k); };
   return html`
     ${/* The vanilla's #topbar is position:fixed, height 48, z-index 200, and
@@ -3468,23 +3583,6 @@ function TopBar({ go, onLogout }) {
         <${Button} color="inherit" sx=${{ opacity: .75 }}>Fotoalbum<//>
         <${Button} color="inherit" sx=${{ opacity: .75 }}>Q-Messungen<//>
         <${Box} sx=${{ flex: 1 }} />
-        <${Tooltip} title=${t('info_menu')}>
-          <${IconButton} color="inherit" id="info-trigger" aria-label=${t('info_menu')} aria-haspopup="menu"
-            aria-expanded=${!!infoAnchor} onClick=${e => setInfoAnchor(e.currentTarget)} sx=${{ mr: .5 }}>
-            <${Icon}>info_outline<//><//><//>
-        <${Menu} anchorEl=${infoAnchor} open=${!!infoAnchor} onClose=${() => setInfoAnchor(null)} id="info-menu"
-                 anchorOrigin=${{ vertical: 'bottom', horizontal: 'right' }}
-                 transformOrigin=${{ vertical: 'top', horizontal: 'right' }}>
-          <${MenuItem} onClick=${() => openInfo('documents')} id="info-m-documents">
-            ${t('info_documents')}<//>
-          <${MenuItem} onClick=${() => openInfo('contacts')} id="info-m-contacts">
-            ${t('info_contacts')}<//>
-          <${MenuItem} component="a" href=${'mailto:' + SUPPORT_MAIL} onClick=${() => setInfoAnchor(null)} id="info-m-support">
-            ${t('info_support')}<//>
-          <${Divider} />
-          <${MenuItem} onClick=${() => openInfo('imprint')} id="info-m-imprint">
-            ${t('info_imprint')}<//>
-        <//>
         <${Button} color="inherit" variant="outlined" id="lang-trigger"
                    aria-haspopup="menu" aria-expanded=${!!langAnchor}
                    onClick=${e => setLangAnchor(e.currentTarget)}
@@ -3494,11 +3592,31 @@ function TopBar({ go, onLogout }) {
             <${MenuItem} key=${l} selected=${l === lang}
               onClick=${() => { setLang(l); setLangAnchor(null); }}>${l.toUpperCase()}<//>`)}
         <//>
-        <${Button} color="inherit" id="logout-btn" onClick=${onLogout}
-                   startIcon=${html`<${Icon}>logout<//>`}>${t('btn_logout')}<//>
+        ${/* Ignat, 2026-11-03: one user menu, as in ETC's other product —
+              profile and the info items open the side sheet */''}
+        <${Button} color="inherit" id="info-trigger" aria-haspopup="menu" aria-expanded=${!!infoAnchor}
+          onClick=${e => setInfoAnchor(e.currentTarget)} sx=${{ ml: 1, textTransform: 'none', fontSize: 14 }}
+          startIcon=${html`<${Icon}>account_circle<//>`}>${PROFILE.name}<//>
+        <${Menu} anchorEl=${infoAnchor} open=${!!infoAnchor} onClose=${() => setInfoAnchor(null)} id="info-menu"
+                 anchorOrigin=${{ vertical: 'bottom', horizontal: 'right' }}
+                 transformOrigin=${{ vertical: 'top', horizontal: 'right' }}
+                 MenuListProps=${{ sx: { minWidth: 240 } }}>
+          <${MenuItem} onClick=${() => openInfo('profile')} id="info-m-profile">${t('info_profile')}<//>
+          <${MenuItem} onClick=${() => openInfo('documents')} id="info-m-documents">${t('info_documents')}<//>
+          <${MenuItem} onClick=${() => openInfo('contacts')} id="info-m-contacts">${t('info_contacts')}<//>
+          <${MenuItem} onClick=${() => openInfo('imprint')} id="info-m-imprint">${t('info_imprint')}<//>
+          <${MenuItem} component="a" href=${'mailto:' + SUPPORT_MAIL} onClick=${() => setInfoAnchor(null)} id="info-m-support">
+            ${t('info_support')}<//>
+          <${Divider} />
+          <${MenuItem} id="logout-btn" onClick=${() => { setInfoAnchor(null); onLogout(); }}>${t('btn_logout')}<//>
+          <${Divider} />
+          <${Box} id="app-version" sx=${{ px: 2, py: .5 }}>
+            ${APP_VERSION.map(v => html`<${Typography} key=${v} variant="body2" color="text.disabled">${v}<//>`)}
+          <//>
+        <//>
       <//>
     <//>
-    <${InfoDialog} which=${info} onClose=${() => setInfo(null)} />`;
+    <${InfoSheet} which=${info} onClose=${() => setInfo(null)} role=${role} docs=${docs} setDocs=${setDocs} />`;
 }
 
 /**
@@ -3526,7 +3644,7 @@ function Login({ onLogin }) {
       pass: pass.trim() ? '' : t('err_password_required'),
     };
     setErr(next);
-    if (!next.email && !next.pass) onLogin();
+    if (!next.email && !next.pass) onLogin(/admin/i.test(email) ? 'admin' : 'user');
   };
   const onKey = e => { if (e.key === 'Enter') submit(); };
 
@@ -3603,6 +3721,7 @@ function App() {
   const [lang, setLang] = useState('en');
   const [route, setRoute] = useState({ name: 'list' });
   const [authed, setAuthed] = useState(false);
+  const [role, setRole] = useState('admin');
   // data.js owns t() and its lang binding, because the extracted record sets
   // call it while they build. Duplicating the lookup here would give two
   // implementations that can disagree.
@@ -3648,7 +3767,8 @@ function App() {
     <${I18n.Provider} value=${{ t, lang, setLang }}>
       <${ThemeProvider} theme=${theme}>
         <${CssBaseline} />
-        <${Login} onLogin=${() => { setAuthed(true); setRoute({ name: 'list' }); }} />
+        ${/* mock roles: an e-mail containing "admin" signs in as administrator */''}
+        <${Login} onLogin=${r => { setRole(r); setAuthed(true); setRoute({ name: 'list' }); }} />
       <//>
     <//>`;
 
@@ -3657,7 +3777,7 @@ function App() {
       <${ThemeProvider} theme=${theme}>
         <${CssBaseline} />
         <${Box} sx=${{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <${TopBar} go=${go} onLogout=${() => setAuthed(false)} />
+          <${TopBar} go=${go} role=${role} onLogout=${() => setAuthed(false)} />
           <${Box} sx=${{ flex: 1, mt: '48px' }}>${screen}<//>
         <//>
       <//>
