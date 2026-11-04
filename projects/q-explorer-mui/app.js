@@ -23,8 +23,15 @@ const {
 } = M;
 const Fragment = React.Fragment;
 
-const Icon = ({ children, sx }) =>
-  html`<span className="material-icons" style=${{ fontSize: 20, ...(sx || {}) }}>${children}</span>`;
+// sx here is a plain style object, so theme tokens ('text.secondary') must be
+// resolved by hand — the browser silently drops them otherwise
+const ICON_TOKENS = { 'text.secondary': 'rgba(0,0,0,0.6)', 'text.disabled': 'rgba(0,0,0,0.38)',
+  'primary.main': '#2196F3', 'error.main': '#D32F2F', 'success.main': '#2E7D32', 'warning.main': '#ED6C02' };
+const Icon = ({ children, sx }) => {
+  const st = { fontSize: 20, ...(sx || {}) };
+  if (ICON_TOKENS[st.color]) st.color = ICON_TOKENS[st.color];
+  return html`<span className="material-icons" style=${st}>${children}</span>`;
+};
 
 /* ── i18n ─────────────────────────────────────────────────────────────
    The 462 EN + 462 DE strings are lifted verbatim from the vanilla
@@ -3380,7 +3387,7 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
    name taken from the file (editable, with a reset), a required language.
    It sits at the top of the Documents sheet itself, so there is no second
    dialog. Admins only. */
-function DocUpload({ onAdd }) {
+function DocUpload({ onAdd, onCancel }) {
   const { t } = useT();
   const [file, setFile] = useState(null);
   const [error, setError] = useState('');
@@ -3400,7 +3407,7 @@ function DocUpload({ onAdd }) {
   };
   const reset = () => { setFile(null); setName(''); setDocLang(''); setError(''); if (input.current) input.current.value = ''; };
   const submit = () => { onAdd({ title: name.trim() || base(file), lang: docLang, file }); reset(); };
-  return html`<${Box} id="doc-upload" sx=${{ mb: 3 }}>
+  return html`<${Box} id="doc-upload">
     <${Box} id="doc-drop"
       onDragOver=${e => { e.preventDefault(); setOver(true); }} onDragLeave=${() => setOver(false)}
       onDrop=${e => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files[0]); }}
@@ -3435,7 +3442,7 @@ function DocUpload({ onAdd }) {
         <//>
       <//>
       <${Stack} direction="row" spacing=${1} justifyContent="flex-end">
-        <${Button} onClick=${reset} id="doc-cancel">${t('action_cancel')}<//>
+        <${Button} onClick=${() => { reset(); onCancel && onCancel(); }} id="doc-cancel">${t('action_cancel')}<//>
         <${Button} variant="contained" id="doc-submit" disabled=${!docLang || !name.trim()} onClick=${submit}>${t('up_submit')}<//>
       <//>
     <//>`}
@@ -3449,6 +3456,7 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
   const { t, lang } = useT();
   const [toast, setToast] = useState('');
   const [confirm, setConfirm] = useState(null);
+  const [upOpen, setUpOpen] = useState(false);
   const admin = role === 'admin';
   const download = d => {
     const a = document.createElement('a');
@@ -3461,6 +3469,7 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
   const add = ({ title, lang: l, file }) => {
     setDocs(x => [{ id: 'u' + Date.now(), date: todayIso(), title, lang: l, file }, ...x]);
     setToast(t('up_done').replace('{name}', title));
+    setUpOpen(false);
   };
   const remove = d => { setDocs(x => x.filter(y => y.id !== d.id)); setConfirm(null); setToast(t('up_deleted').replace('{name}', d.title)); };
   const field = (icon, label, value) => html`<${Stack} direction="row" spacing=${2} sx=${{ mb: 2.5 }} key=${label}>
@@ -3468,7 +3477,7 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
     <${Box}><${Typography} variant="body2" color="text.secondary">${label}<//><${Typography} variant="body1">${value}<//><//><//>`;
   return html`
     <${M.Drawer} anchor="right" open=${!!which} onClose=${onClose} id=${'info-' + which}
-      PaperProps=${{ sx: { width: 560, top: 40, height: 'calc(100% - 40px)' } }}>
+      PaperProps=${{ sx: { width: 720, top: 40, height: 'calc(100% - 40px)' } }}>
       <${Box} sx=${{ display: 'flex', alignItems: 'center', px: 3, py: 2 }}>
         <${Typography} variant="h6" sx=${{ flex: 1 }}>${which && t('info_' + which)}<//>
         <${IconButton} aria-label=${t('info_close')} onClick=${onClose} id="info-close"><${Icon}>close<//><//>
@@ -3482,9 +3491,12 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
           ${field('phone', t('pf_phone'), PROFILE.phone)}
         <//>`}
         ${which === 'documents' && html`
-          ${admin && html`<${DocUpload} onAdd=${add} />`}
+          ${/* Ignat, 2026-11-04: upload is a button that opens a dialog */''}
+          ${admin && html`<${Box} sx=${{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+            <${Button} variant="contained" id="doc-upload-btn" onClick=${() => setUpOpen(true)}
+              startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>upload<//>`}>${t('up_open')}<//><//>`}
           <${Table} id="info-doc-table" sx=${{ tableLayout: 'fixed' }}>
-            <colgroup><col style=${{ width: 110 }} /><col /><col style=${{ width: 90 }} /><col style=${{ width: admin ? 96 : 56 }} /></colgroup>
+            <colgroup><col style=${{ width: 140 }} /><col /><col style=${{ width: 90 }} /><col style=${{ width: admin ? 96 : 56 }} /></colgroup>
             <${TableHead}><${TableRow}>
               <${TableCell}>${t('doc_col_date')}<//><${TableCell}>${t('doc_col_title')}<//>
               <${TableCell}>${t('doc_col_lang')}<//><${TableCell} />
@@ -3492,7 +3504,7 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
             <${TableBody}>
             ${[...docs].sort((a, b) => b.date.localeCompare(a.date)).map(d => html`
               <${TableRow} key=${d.id} hover data-doc=${d.id}>
-                <${TableCell} sx=${{ color: 'text.secondary' }}>${iso(d.date)}<//>
+                <${TableCell} sx=${{ color: 'text.secondary', whiteSpace: 'nowrap' }} className="doc-date">${iso(d.date)}<//>
                 <${TableCell} sx=${{ overflowWrap: 'anywhere' }} className="doc-title">${d.title}<//>
                 <${TableCell} className="doc-lang">${d.lang.toUpperCase()}<//>
                 <${TableCell} align="right" sx=${{ px: 1, whiteSpace: 'nowrap' }}>
@@ -3514,9 +3526,10 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
               ${[c.unit, ...c.addr].map(x => html`<${Typography} key=${x} variant="body2" color="text.secondary">${x}<//>`)}
               <${Typography} variant="body2" color="text.secondary" sx=${{ mt: 1 }}>${t('info_phone')}: ${c.phone}<//>
               ${c.fax && html`<${Typography} variant="body2" color="text.secondary">${t('info_fax')}: ${c.fax}<//>`}
-              <${Link} href=${'mailto:' + c.mail} className="info-mail"
-                sx=${{ display: 'inline-flex', gap: .75, alignItems: 'center', mt: 1 }}>
-                <${Icon} sx=${{ fontSize: 18 }}>mail_outline<//>${c.mail}<//>
+              <${Stack} direction="row" spacing=${.75} alignItems="center" sx=${{ mt: 1 }}>
+                <${Icon} sx=${{ fontSize: 18, color: 'rgba(0,0,0,0.6)' }}>mail_outline<//>
+                <${Link} href=${'mailto:' + c.mail} className="info-mail" underline="none">${c.mail}<//>
+              <//>
             <//><//>`)}
           <//>`}
         ${which === 'imprint' && html`<${Table} id="info-imprint-table"><${TableBody}>
@@ -3528,6 +3541,11 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
           <//>`)}
         <//><//>`}
       <//>
+    <//>
+    <${Dialog} open=${upOpen} onClose=${() => setUpOpen(false)} id="doc-upload-dialog" maxWidth="sm" fullWidth>
+      <${DialogTitle} sx=${{ display: 'flex', alignItems: 'center' }}>${t('up_title')}<${Box} sx=${{ flex: 1 }} />
+        <${IconButton} aria-label=${t('info_close')} onClick=${() => setUpOpen(false)}><${Icon}>close<//><//><//>
+      <${DialogContent}><${DocUpload} onAdd=${add} onCancel=${() => setUpOpen(false)} /><//>
     <//>
     <${Dialog} open=${!!confirm} onClose=${() => setConfirm(null)} id="doc-confirm">
       <${DialogTitle}>${t('up_del_title')}<//>
