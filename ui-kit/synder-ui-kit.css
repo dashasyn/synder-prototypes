@@ -163,7 +163,7 @@ button { font-family: inherit; }
   --color-sidebar-icon:       #007AFF;   /* production sidebar icons + chevrons */
   --color-sidebar-text:       #555555;   /* production sidebar label */
   --color-sidebar-open:       #D9D9D9;   /* expanded group row, production = Figma */
-  --color-sidebar-hover:      #EBEBEB;   /* kit-only: production has no hover fill; visible on #F6F6F6 */
+  --color-sidebar-hover:      #D9D9D9;   /* production 2026-11-04: hover on non-expandable rows = rgb(217,217,217); groups have none */
   --color-sidebar-divider:    #C8C7CC;
   --color-banner-info:        #E0EBFD;   /* alert-info fill; Figma has no banner component */
 
@@ -424,6 +424,10 @@ button { font-family: inherit; }
 .sidebar-item-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-item .material-icons, .synder-sidebar-item .material-icons { font-size: 24px; color: var(--color-sidebar-icon); flex-shrink: 0; }
 .sidebar-item:hover, .synder-sidebar-item:hover { background: var(--color-sidebar-hover); }
+/* Expandable group rows (with a chevron) have NO hover fill in production; an open group keeps #D9D9D9 */
+.sidebar-item--group:hover, .sidebar-item:has(.sidebar-chevron):hover { background: transparent; }
+.sidebar-item--group.open:hover, .sidebar-item.open:has(.sidebar-chevron):hover { background: var(--color-sidebar-open); }
+.sidebar-item.active:hover, .synder-sidebar-item.active:hover { background: var(--color-sidebar-active); }
 .sidebar-item.open, .synder-sidebar-item.open { background: var(--color-sidebar-open); }
 /* Group chevron (expand_more / expand_less), right side, sidebar blue */
 .sidebar-chevron { margin-left: auto; }
@@ -1334,8 +1338,9 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
 .synder-filter-bar-fields .form-field { margin: 0; }
 .synder-filter-bar-actions { display: flex; gap: 8px; margin-top: 12px; }
 
-/* Toast — Figma: white card 316px, r4, Elevation_1, 24px coloured icon, grey text,
-   close icon, 5px progress bar. Bottom-right, 5s, no Undo. Production not captured. */
+/* Toast — Ignat 2026-11-04: FULL-COLOUR fills. Success solid green #1F8940, error solid
+   red #CC2929, info solid primary; white text + icons (contrast ≥ 5:1). 316px, r4,
+   Elevation_1, 24px icon, close icon, progress bar. Bottom-right, 5s, NO Undo. */
 .synder-toast-stack {
   position: fixed; right: 24px; bottom: 24px; z-index: 1100;
   display: flex; flex-direction: column; gap: 8px;
@@ -1344,19 +1349,16 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
   position: relative; overflow: hidden;
   width: 316px; min-height: 64px; display: flex; align-items: center; gap: 12px;
   padding: 16px 16px 21px; border-radius: 4px;
-  background: var(--bg-surface); color: var(--text-secondary);
+  background: var(--color-grey); color: var(--color-white);
   font-size: 14px; line-height: 20px; letter-spacing: 0.15px; box-shadow: var(--shadow-elevation-1);
 }
-.synder-toast > .material-icons { font-size: 24px; flex-shrink: 0; }
-.synder-toast-success > .material-icons { color: var(--color-green); }
-.synder-toast-error > .material-icons { color: var(--color-red); }
-.synder-toast-info > .material-icons { color: var(--color-primary); }
-.synder-toast-close { margin-left: auto; background: none; border: 0; padding: 0; color: var(--text-secondary); cursor: pointer; display: inline-flex; }
+.synder-toast > .material-icons { font-size: 24px; flex-shrink: 0; color: var(--color-white); }
+.synder-toast-success { background: var(--color-green); }
+.synder-toast-error   { background: var(--color-red); }
+.synder-toast-info    { background: var(--color-primary); }
+.synder-toast-close { margin-left: auto; background: none; border: 0; padding: 0; color: var(--color-white); cursor: pointer; display: inline-flex; }
 .synder-toast-close .material-icons { font-size: 24px; }
-.synder-toast::after { content: ''; position: absolute; left: 0; bottom: 0; height: 5px; width: var(--toast-progress, 100%); background: currentColor; opacity: .35; }
-.synder-toast-success::after { background: var(--color-green); opacity: 1; }
-.synder-toast-error::after { background: var(--color-red); opacity: 1; }
-.synder-toast-info::after { background: var(--color-primary); opacity: 1; }
+.synder-toast::after { content: ''; position: absolute; left: 0; bottom: 0; height: 5px; width: var(--toast-progress, 100%); background: var(--color-white); opacity: .45; }
 
 /* Side sheet — right edge, 480px (wide 600), over --bg-overlay */
 .synder-side-sheet-bg { position: fixed; inset: 0; z-index: 1000; background: var(--bg-overlay); }
@@ -1378,21 +1380,68 @@ tr.row-clickable:focus-visible { outline: 2px solid var(--border-focus); outline
 }
 
 /* ============================================================================
-   MUI TABLE PAGINATION (production 2026-11-04): "Rows per page" select +
-   "1–25 of 312" + prev/next arrows, 52px, right-aligned. .pagination (numbered)
-   stays only for legacy Bootstrap pages such as the old Transactions list.
+   PAGINATION (production 2026-11-04, Transaction reconciliation + Summaries):
+   MUI TablePagination "Rows per page: [25 ▾]" + "1–25 of 312", then numbered
+   MuiPagination (« ‹ 1 2 3 › »): 32×32 items, r4, 14px, gap 4, current page
+   bg #E0EBFD. Gap 24 between the two parts. 52px row, right-aligned, directly
+   under the table. Legacy .pagination stays for old prototypes.
    ============================================================================ */
 .synder-pagination {
   display: flex; align-items: center; justify-content: flex-end; gap: 24px;
-  min-height: 52px; padding: 0 8px 0 16px;
+  min-height: 52px; padding: 0;
   font-size: 14px; line-height: 20px; letter-spacing: 0.15px; color: var(--text-primary);
 }
 .synder-pagination-rows { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.synder-pagination-rows select { width: auto; }
 .synder-pagination-rows select {
-  height: 32px; padding: 0 24px 0 8px; border: none; background-color: transparent;
+  width: auto; height: 32px; padding: 0 24px 0 8px; border: none; background-color: transparent;
   font: inherit; color: inherit; cursor: pointer;
 }
-.synder-pagination-arrows { display: inline-flex; gap: 4px; }
-.synder-pagination-arrows .btn-icon:disabled { color: rgba(0, 0, 0, 0.26); pointer-events: none; }
+.synder-pagination-range { white-space: nowrap; }
+.synder-pagination-pages, .synder-pagination-arrows { display: inline-flex; align-items: center; gap: 4px; }
+.synder-pagination-pages button, .synder-pagination-arrows button {
+  min-width: 32px; height: 32px; padding: 0 4px; border: 0; border-radius: 4px;
+  background: transparent; color: rgba(0, 0, 0, 0.87); font: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.synder-pagination-pages button:hover { background: var(--bg-row-hover); }
+.synder-pagination-pages button[aria-current="page"] { background: var(--color-primary-10); }
+.synder-pagination-pages button:disabled, .synder-pagination-arrows button:disabled { color: rgba(0, 0, 0, 0.26); pointer-events: none; }
+.synder-pagination-pages .material-icons { font-size: 20px; }
 
+/* ============================================================================
+   PAGE LAYOUT (production 2026-11-04, Transaction reconciliation + Summaries at 1440):
+   content starts 32px right of the sidebar divider, 32px from the right edge, 24px
+   below the top bar; fluid width (1146px at 1440). Title block: H1 28/36 w300 +
+   subtitle 14/20 #6B778C (no gap), actions right, vertically centred, gap 16.
+   Stack: title → 8px → info chips; title/chips → 16–24px → alert / filter bar;
+   filter bar → 16px → tabs (48 + 1px line); tabs → 0 → table; table → 0–12px → pagination.
+   ============================================================================ */
+.synder-page { padding: 24px 32px 32px; min-width: 0; flex: 1; background: var(--bg-surface); }
+.synder-page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.synder-page-header-text { min-width: 0; }
+.synder-page-title { margin: 0; font-size: 28px; line-height: 36px; font-weight: 300; color: var(--text-primary); }
+.synder-page-subtitle { margin: 0; font-size: 14px; line-height: 20px; color: var(--text-secondary); }
+.synder-page-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.synder-page-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.synder-page-chip { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 4px 8px; border-radius: 4px; font-size: 14px; line-height: 20px; }
+.synder-page-chip .material-icons { font-size: 14px; }
+.synder-page-chip--green { background: var(--color-status-green-bg); color: var(--color-green); }
+.synder-page-chip--blue  { background: var(--color-primary-10); color: var(--color-primary); }
+.synder-page-section { margin-top: 24px; }
+.synder-list-block { margin-top: 16px; }
+.synder-page-header + .synder-list-block, .synder-page-chips + .synder-list-block { margin-top: 24px; }
+.synder-list-block > .synder-filter-bar { margin-bottom: 16px; }
+.synder-list-block > .tabs, .synder-list-block > .synder-tabs { margin-bottom: 0; padding: 0; gap: 0; }   /* production: tabs flush with content, no gap */
+.synder-list-block > .synder-pagination--spaced { margin-top: 12px; }
+
+/* ============================================================================
+   VARIANT SWITCHER — prototype chrome, not product UI. First element in <body>,
+   full width, dark bar; swaps variants in place. One variant = no switcher.
+   ============================================================================ */
+.variant-switch { display: flex; align-items: center; gap: 12px; background: var(--color-grey); color: var(--color-white); padding: 8px 20px; flex-shrink: 0; font-size: 14px; line-height: 20px; }
+.variant-switch .vs-label { letter-spacing: .01em; opacity: .75; text-transform: uppercase; }
+.variant-switch .vs-opts { display: flex; gap: 4px; background: rgba(255,255,255,.1); border-radius: 6px; padding: 3px; }
+.variant-switch button { background: none; border: none; color: rgba(255,255,255,.75); font: inherit; padding: 5px 12px; border-radius: 4px; cursor: pointer; white-space: nowrap; }
+.variant-switch button:hover { color: var(--color-white); }
+.variant-switch button.on { background: var(--color-white); color: var(--text-primary); }
+.variant-switch .vs-note { margin-left: auto; opacity: .75; }
