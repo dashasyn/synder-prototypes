@@ -3408,7 +3408,8 @@ function DocUpload({ onAdd, onCancel }) {
   const reset = () => { setFile(null); setName(''); setDocLang(''); setError(''); if (input.current) input.current.value = ''; };
   const submit = () => { onAdd({ title: name.trim() || base(file), lang: docLang, file }); reset(); };
   return html`<${Box} id="doc-upload">
-    <${Box} id="doc-drop"
+    ${/* Ignat, 2026-11-04: one file per upload — the drop area goes once a file is chosen */''}
+    ${!file && html`<${Box} id="doc-drop"
       onDragOver=${e => { e.preventDefault(); setOver(true); }} onDragLeave=${() => setOver(false)}
       onDrop=${e => { e.preventDefault(); setOver(false); pick(e.dataTransfer.files[0]); }}
       sx=${{ border: '1px dashed', borderColor: error ? 'error.main' : over ? 'primary.main' : '#BDBDBD',
@@ -3420,7 +3421,7 @@ function DocUpload({ onAdd, onCancel }) {
       <${Typography} variant="body2" color="text.secondary">PDF, DOCX, XLSX · max. 20 MB<//>
       <input ref=${input} type="file" id="doc-file" hidden accept=".pdf,.docx,.xlsx"
         onChange=${e => pick(e.target.files[0])} />
-    <//>
+    <//>`}
     ${error && html`<${Typography} variant="body2" color="error" id="doc-error" sx=${{ mt: 1 }}>${error}<//>`}
     ${file && html`<${Box} id="doc-form" sx=${{ mt: 2 }}>
       <${Stack} direction="row" alignItems="center" spacing=${1} sx=${{ mb: 2 }}>
@@ -3528,7 +3529,8 @@ function InfoSheet({ which, onClose, role, docs, setDocs }) {
               ${c.fax && html`<${Typography} variant="body2" color="text.secondary">${t('info_fax')}: ${c.fax}<//>`}
               <${Stack} direction="row" spacing=${.75} alignItems="center" sx=${{ mt: 1 }}>
                 <${Icon} sx=${{ fontSize: 18, color: 'rgba(0,0,0,0.6)' }}>mail_outline<//>
-                <${Link} href=${'mailto:' + c.mail} className="info-mail" underline="none">${c.mail}<//>
+                <${Link} href=${'mailto:' + c.mail} className="info-mail" underline="hover"
+                  sx=${{ '&:hover': { color: 'primary.dark' } }}>${c.mail}<//>
               <//>
             <//><//>`)}
           <//>`}
