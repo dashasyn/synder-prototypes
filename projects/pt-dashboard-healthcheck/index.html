@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ignat · PT Dashboard + Health check — Connection lost</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+/* Page layout on top of the kit. All text ≥14px. Proto-bar is not product chrome. */
+body { margin: 0; background: var(--bg-surface); color: var(--text-primary); font-family: var(--font-family); }
+.proto-bar { display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; background:#1a1b24; color:#fff; padding:8px 20px; flex-shrink:0; font-size:14px; }
+.proto-bar .name { opacity:.75; letter-spacing:.01em; }
+.proto-bar .seg { display:flex; gap:4px; background:rgba(255,255,255,.1); border-radius:6px; padding:3px; }
+.proto-bar button { background:none; border:none; color:rgba(255,255,255,.7); font-family:inherit; font-size:14px; padding:5px 12px; border-radius:4px; cursor:pointer; }
+.proto-bar button:hover { color:#fff; }
+.proto-bar button.on { background:#0053CC; color:#fff; }
+
+.shell { display:flex; min-height:calc(100vh - 40px); }
+.sidebar { position:static; height:auto; border-right:1px solid var(--border-nav); width:230px; flex-shrink:0; background:#F6F6F6; }
+.sidebar-logo { font-size:18px; color:var(--color-primary); font-weight:700; padding:18px 16px; border-bottom:1px solid var(--color-sidebar-divider,#C8C7CC); }
+.sidebar-item { display:flex; align-items:center; height:42px; padding:0 16px; color:#555; text-decoration:none; font-size:14px; border-bottom:1px solid transparent; cursor:pointer; background:none; border-left:none; border-right:none; border-top:none; width:100%; font-family:inherit; text-align:left; }
+.sidebar-item:hover { background:#D9D9D9; }
+.sidebar-item.active { background:#007AFF; color:#fff; }
+.sidebar-item .nav-new { margin-left:auto; }
+.sidebar-item.active .nav-new { background:var(--color-status-green-bg,#C6F0D3); color:var(--color-green,#1F8940); }
+.main { flex:1; min-width:0; display:flex; flex-direction:column; }
+.topbar { position:static; justify-content:flex-end; font-size:14px; height:59px; display:flex; align-items:center; padding:0 24px; border-bottom:1px solid #C8C7CC; background:#fff; }
+.syncs-left a { color:var(--text-link); text-decoration:none; }
+.content { padding:24px 32px 48px; }
+
+.ph { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; gap:16px; }
+.ph h1 { font-size:28px; font-weight:400; line-height:36px; margin:0; color:#1A1B24; }
+.ph select { width:160px; }
+.page-subtitle { font-size:14px; line-height:20px; color:#6B778C; margin:2px 0 0; }
+
+.alert .alert-body { flex:1; }
+.alert .alert-ico { flex-shrink:0; width:20px; height:20px; }
+.alert .btn { margin-left:auto; flex-shrink:0; }
+
+:root { --dash-grid: 12px minmax(0,1fr) 24px minmax(0,1fr) 24px minmax(0,1fr) 12px; }
+.kpi-band { background:var(--color-grey-10,#EFF1F5); border-radius:4px; padding:12px 0; display:grid; grid-template-columns:var(--dash-grid); margin-bottom:20px; }
+.kpi-band > .kpi:nth-child(1){grid-column:2} .kpi-band > .kpi:nth-child(2){grid-column:4} .kpi-band > .kpi:nth-child(3){grid-column:6}
+.kpi { background:var(--bg-surface,#fff); border:1px solid var(--border-default,#DFE4EC); border-radius:4px; padding:12px 12px 14px; }
+.kpi.bad { background:var(--color-red-light,#FDF2F2); border-color:var(--color-status-red-bg,#F5D0D0); }
+.kpi.good { background:var(--color-green-light,#F0F9F3); border-color:var(--color-status-green-bg,#C6F0D3); }
+.kpi-t { font-weight:700; font-size:14px; line-height:20px; display:flex; align-items:center; gap:6px; margin-bottom:4px; }
+.kpi-v { font-size:16px; line-height:24px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; }
+
+.issues { background:var(--color-red-light,#FDF2F2); border:1px solid var(--color-status-red-bg,#F5D0D0); border-radius:4px; margin-bottom:16px; }
+.issues-bar { display:flex; align-items:center; gap:12px; padding-right:12px; }
+.issues-head { display:flex; align-items:center; gap:10px; flex:1; padding:12px 16px; background:none; border:none; font:inherit; font-size:14px; color:var(--color-red,#CC2929); cursor:pointer; text-align:left; border-radius:4px; }
+.issues-head:hover { background:rgba(204,41,41,.04); }
+.issues-head .t { font-weight:700; flex:1; }
+.tw { width:16px; height:16px; flex-shrink:0; transition:transform .15s; }
+[aria-expanded="true"] > .tw { transform:rotate(90deg); }
+.issues-body { padding:0 16px 6px 42px; }
+.issue { display:flex; align-items:center; gap:16px; padding:10px 0; border-top:1px solid var(--color-status-red-bg,#F5D0D0); }
+.issue-txt { flex:1; min-width:0; color:var(--color-red,#CC2929); font-size:14px; line-height:20px; }
+.issue-title { font-weight:700; }
+.issue-desc { opacity:.85; }
+.issue .lnk { flex-shrink:0; }
+
+/* Health check Dashboard block — scheduled/manual findings only */
+.hc-block { display:flex; align-items:center; gap:16px; padding:14px 16px; border-radius:4px; margin-bottom:20px; border:1px solid var(--color-status-yellow-bg,#F5D9B8); background:var(--color-yellow-light,#FFFAF5); }
+.hc-block.ok { border-color:var(--color-status-green-bg,#C6F0D3); background:var(--color-green-light,#F0F9F3); }
+.hc-ico { width:40px; height:40px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex-shrink:0; background:#FEF3E6; color:var(--color-yellow,#B54708); }
+.hc-block.ok .hc-ico { background:var(--color-status-green-bg,#C6F0D3); color:var(--color-green,#1F8940); }
+.hc-body { flex:1; min-width:0; }
+.hc-title { font-size:14px; font-weight:700; line-height:20px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.hc-meta { font-size:14px; line-height:20px; color:var(--text-secondary,#6B778C); margin-top:2px; }
+.hc-block .btn { flex-shrink:0; }
+.hc-sevs { display:inline-flex; gap:6px; }
+
+.cols { display:grid; grid-template-columns:var(--dash-grid); align-items:start; }
+.cols > .col:nth-child(1){grid-column:1 / 3} .cols > .col:nth-child(2){grid-column:4} .cols > .col:nth-child(3){grid-column:6 / 8}
+.col { display:flex; flex-direction:column; gap:20px; min-width:0; }
+.panel { background:var(--color-grey-10,#EFF1F5); border-radius:4px; padding:12px; }
+.panel-t { font-weight:700; font-size:14px; line-height:20px; display:flex; align-items:center; gap:6px; }
+.panel-big { font-size:16px; line-height:24px; margin:2px 0 10px; }
+.panel-big .n { color:var(--text-link,#0053CC); }
+.panel-t + .box, .panel-t + .items { margin-top:10px; }
+.box { background:#fff; border:1px solid var(--border-default,#DFE4EC); border-radius:4px; padding:6px; }
+.row { display:flex; align-items:center; gap:8px; width:100%; min-height:28px; padding:4px 6px; border:none; background:none; border-radius:4px; font:inherit; font-size:14px; color:var(--text-primary); text-align:left; cursor:pointer; }
+.row:hover { background:var(--bg-subtle,#F7F8FA); }
+.row.hot { background:var(--color-red-light,#FDF2F2); }
+.row .lbl { flex:1; min-width:0; display:flex; align-items:center; gap:6px; }
+.row .lbl .txt { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.row .cnt { color:var(--text-link,#0053CC); display:inline-flex; align-items:center; gap:4px; }
+.items { display:flex; flex-direction:column; gap:10px; }
+.item { background:#fff; border:1px solid var(--border-default,#DFE4EC); border-radius:4px; padding:10px 12px; }
+.item.bad { background:var(--color-red-light,#FDF2F2); border-color:var(--color-status-red-bg,#F5D0D0); }
+.item-h { display:flex; align-items:center; gap:8px; font-size:14px; }
+.item-h .nm { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.item-chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.lnk { background:none; border:none; padding:0; font:inherit; font-size:14px; color:var(--text-link,#0053CC); cursor:pointer; display:inline-flex; align-items:center; gap:4px; }
+.lnk:hover { text-decoration:underline; }
+.hdr-lnk { margin-left:auto; font-weight:400; }
+.logo { width:18px; height:18px; flex-shrink:0; display:block; }
+.chev { width:16px; height:16px; flex-shrink:0; }
+.help { position:relative; display:inline-flex; color:var(--color-grey-30,#8C97B1); cursor:help; }
+.help svg { width:16px; height:16px; }
+.help .tooltip { font-size:14px; line-height:20px; white-space:nowrap; font-weight:400; max-width:none; }
+
+.ts-head { margin-bottom:16px; }
+.ts-head h1 { font-size:28px; font-weight:400; line-height:36px; margin:0 0 2px; }
+.ts-tabs { padding:0; margin-bottom:20px; }
+.ts-tabs .tab { background:none; border-left:none; border-right:none; border-top:none; font-family:inherit; }
+.ts-intro { display:flex; align-items:center; gap:16px; margin-bottom:12px; font-size:14px; color:var(--text-secondary,#6B778C); }
+.ts-intro .btn { margin-left:auto; }
+.fpanel { background:var(--color-grey-10,#EFF1F5); border-radius:4px; padding:12px; margin-bottom:16px; }
+.frow { display:flex; flex-wrap:wrap; gap:12px 16px; align-items:flex-start; margin-bottom:12px; }
+.ff { display:flex; flex-direction:column; gap:4px; }
+.ff > label { font-size:14px; font-weight:400; line-height:20px; color:#6B778C; }
+.ff .input, .ff .select { height:32px; font-size:14px; background:#fff; }
+.ff .hint { font-size:14px; color:var(--text-secondary,#6B778C); }
+.frange { display:flex; align-items:center; gap:6px; }
+.fbtns { display:flex; gap:12px; }
+.ts-table .msg { max-width:640px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ts-table td.empty { text-align:center; color:var(--text-secondary,#6B778C); }
+.ts-table .intg { display:inline-flex; align-items:center; gap:6px; }
+.ts-pager { display:flex; justify-content:flex-end; align-items:center; gap:16px; padding:10px 0; font-size:14px; }
+.ts-info { display:flex; align-items:center; gap:8px; font-size:14px; color:var(--text-secondary,#6B778C); margin-bottom:16px; }
+.ts-card { background:#fff; border:1px solid var(--border-default,#DFE4EC); border-radius:4px; padding:16px; margin-bottom:20px; }
+.ts-card h2 { font-size:20px; font-weight:400; line-height:28px; margin:0 0 4px; }
+.ts-card .sub { font-size:14px; color:var(--text-secondary,#6B778C); margin:0 0 12px; }
+.chart-missing { height:160px; border:1px dashed var(--border-strong,#C8C7CC); border-radius:4px; display:flex; align-items:center; justify-content:center; color:var(--text-secondary,#6B778C); font-size:14px; }
+.legend { display:flex; gap:16px; font-size:14px; margin-bottom:8px; }
+.legend span { display:inline-flex; align-items:center; gap:6px; }
+.legend i { width:12px; height:12px; border-radius:2px; display:inline-block; }
+
+/* Health check tab */
+.hc-toolbar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:16px 0; }
+.hc-toolbar .spacer { flex:1; }
+.hc-last { font-size:14px; color:var(--text-secondary,#6B778C); }
+.finding { border:1px solid var(--border-default,#DFE4EC); border-radius:4px; background:#fff; margin-bottom:8px; }
+.finding.sev-high { border-color:var(--color-status-red-bg,#F5D0D0); background:var(--color-red-light,#FDF2F2); }
+.finding.sev-med { border-color:var(--color-status-yellow-bg,#F5D9B8); background:var(--color-yellow-light,#FFFAF5); }
+.finding.sev-ok, .finding.sev-ignored { background:#fff; }
+.finding-h { display:flex; align-items:center; gap:10px; width:100%; padding:12px 14px; background:none; border:none; font:inherit; font-size:14px; text-align:left; cursor:pointer; }
+.finding-h:focus-visible { outline:2px solid var(--border-focus,#0053CC); outline-offset:-2px; }
+.finding-h .ft { flex:1; min-width:0; font-weight:700; }
+.finding-h .fmeta { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+.finding-b { padding:0 14px 14px 44px; font-size:14px; line-height:20px; }
+.finding-b .fl { font-weight:700; color:var(--text-secondary,#6B778C); margin:8px 0 2px; }
+.finding-b p { margin:0 0 6px; }
+.finding-b ul { margin:0 0 10px; padding-left:18px; }
+.finding-btns { display:flex; gap:8px; flex-wrap:wrap; }
+.hc-group { margin:20px 0 8px; font-size:14px; font-weight:700; color:var(--text-secondary,#6B778C); }
+.hc-blurb { font-size:14px; color:var(--text-secondary,#6B778C); margin:0 0 4px; }
+
+.toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#1A1B24; color:#fff; padding:10px 16px; border-radius:4px; font-size:14px; opacity:0; pointer-events:none; transition:opacity .15s; z-index:200; }
+.toast.show { opacity:1; }
+
+.modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.5); display:flex; align-items:center; justify-content:center; z-index:300; }
+.modal { background:#fff; border-radius:4px; width:560px; max-width:calc(100vw - 32px); max-height:calc(100vh - 48px); overflow:auto; box-shadow:0 8px 28px rgba(0,0,0,.2); }
+.modal-header { padding:16px 32px; font-size:20px; line-height:28px; border-bottom:1px solid #DFE4EC; }
+.modal-body { padding:16px 32px; font-size:14px; line-height:20px; }
+.modal-footer { padding:12px 32px; display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #DFE4EC; }
+.cfg-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid #EFF1F5; }
+.cfg-row label { flex:1; }
+.cfg-sec { font-weight:700; margin:16px 0 8px; }
+
+[hidden] { display:none !important; }
+</style>
+</head>
+<body>
+
+<div class="proto-bar">
+  <span class="name">Ignat · PT Dashboard + Health check</span>
+  <div class="seg" role="group" aria-label="State">
+    <button type="button" class="on" id="seg-lost" data-view="dash">Connection lost</button>
+    <button type="button" id="seg-trouble" data-view="trouble">Troubleshooting</button>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="sidebar-logo">Synder</div>
+    <nav>
+      <button type="button" class="sidebar-item active" id="nav-dashboard" data-nav="dash">Dashboard</button>
+      <button type="button" class="sidebar-item" data-go="Transactions">Transactions</button>
+      <button type="button" class="sidebar-item" data-go="Smart rules">Smart rules</button>
+      <button type="button" class="sidebar-item" data-go="Invoicing">Invoicing</button>
+      <button type="button" class="sidebar-item" data-go="Analytics">Analytics</button>
+      <button type="button" class="sidebar-item" id="nav-troubleshooting" data-nav="trouble">Troubleshooting <span class="status status-green nav-new">New</span></button>
+      <button type="button" class="sidebar-item" data-go="Business Insights">Business Insights (A)</button>
+      <button type="button" class="sidebar-item" data-go="Revenue recognition">Revenue recognition</button>
+      <button type="button" class="sidebar-item" data-go="AI Hub">AI Hub</button>
+      <button type="button" class="sidebar-item" data-go="What's New">What's New</button>
+      <button type="button" class="sidebar-item" data-go="Settings">Settings</button>
+    </nav>
+  </aside>
+
+  <div class="main">
+    <div class="topbar"><span class="syncs-left">Syncs left: <a href="#" data-go="Buy syncs">1000</a></span></div>
+    <div class="content">
+
+      <div id="page-dash">
+        <div class="ph">
+          <h1>Hi Dalia, your data is ready to review</h1>
+          <select class="select" id="period" aria-label="Period">
+            <option>Last 30 days</option>
+            <option disabled>[live copy not captured]</option>
+          </select>
+        </div>
+
+        <!-- Automatic issues only (connection lost + sync failures). Not Health check. -->
+        <div class="issues" id="issues">
+          <div class="issues-bar">
+            <button type="button" class="issues-head" aria-expanded="true" aria-controls="issues-body" id="issues-head">
+              <svg class="tw" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="t">3 issues found</span>
+            </button>
+            <button type="button" class="btn btn-error" id="go-trouble" data-nav="trouble" data-tab="sync">Go to Troubleshooting</button>
+          </div>
+          <div class="issues-body" id="issues-body">
+            <div class="issue">
+              <div class="issue-txt">
+                <div class="issue-title">Connection lost</div>
+                <div class="issue-desc">My lovely money (QuickBooks Online), My wonderful flowers (Stripe) and My great bread (Amazon) lost connection. Reconnect in Organization settings to continue syncing.</div>
+              </div>
+              <button type="button" class="lnk" data-go="Organization settings">Go to Organization settings<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="issue">
+              <div class="issue-txt">
+                <div class="issue-title">130 transactions need attention</div>
+                <div class="issue-desc">Failed, rollback failed, synced with rule failed, canceled, rollback canceled.</div>
+              </div>
+              <button type="button" class="lnk" data-nav="trouble" data-tab="sync">View sync issues<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+            <div class="issue">
+              <div class="issue-txt">
+                <div class="issue-title">Revenue recognition incomplete</div>
+                <div class="issue-desc">20 items in Revenue recognition are incomplete.</div>
+              </div>
+              <button type="button" class="lnk" data-go="Revenue recognition · Incomplete">Revenue recognition<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="kpi-band" id="kpis">
+          <div class="kpi" id="kpi-time">
+            <div class="kpi-t">Time saved <span class="help" tabindex="0"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M6.2 6.1a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.7" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="#fff"/></svg><span class="tooltip">Bookkeeping time saved by automatically recording transactions in your books.</span></span></div>
+            <div class="kpi-v">~ 47 h</div>
+          </div>
+          <div class="kpi" id="kpi-score">
+            <div class="kpi-t">Sync score <span class="help" tabindex="0"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M6.2 6.1a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.7" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="#fff"/></svg><span class="tooltip">Percentage of imported transactions synced to your books.</span></span></div>
+            <div class="kpi-v">70%</div>
+          </div>
+          <div class="kpi bad" id="kpi-attn">
+            <div class="kpi-t">Needs attention <span class="help" tabindex="0"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M6.2 6.1a1.9 1.9 0 0 1 3.7.5c0 1.3-1.9 1.6-1.9 2.7" fill="none" stroke="#fff" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="11.6" r=".9" fill="#fff"/></svg><span class="tooltip">Failed, Rollback failed, Synced with rule failed, Canceled, Rollback canceled for this period.</span></span></div>
+            <div class="kpi-v"><button type="button" class="lnk" style="font-size:16px" data-go="Platform transactions · Needs attention">130 transactions<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+          </div>
+        </div>
+
+        <!-- Health check block: scheduled/manual findings only. No connection-lost / sync-failure repeats. -->
+        <div class="hc-block" id="hc-block">
+          <div class="hc-ico" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 6v6c0 5 3.4 8.4 8 9 4.6-.6 8-4 8-9V6l-8-3z"/><path d="M12 8v5" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="currentColor" stroke="none"/></svg>
+          </div>
+          <div class="hc-body">
+            <div class="hc-title">
+              Health check
+              <span class="hc-sevs" id="hc-sevs"></span>
+            </div>
+            <div class="hc-meta" id="hc-meta"></div>
+          </div>
+          <button type="button" class="btn btn-primary" id="hc-cta" data-nav="trouble" data-tab="health">Check issues</button>
+        </div>
+
+        <div class="cols">
+          <div class="col" id="col-left">
+            <section class="panel" id="p-import">
+              <div class="panel-t">Import <button type="button" class="lnk hdr-lnk" data-nav="trouble" data-tab="import">Import activity log<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="panel-big"><span class="n">800</span> transactions imported</div>
+              <div class="box">
+                <button type="button" class="row" data-go="Platform transactions · My wonderful flowers (Stripe)"><span class="lbl"><svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><rect width="18" height="18" rx="4" fill="#635BFF"/><path d="M11.6 6.3c-.6-.3-1.4-.5-2.2-.5-.8 0-1.2.3-1.2.7 0 1.2 3.8.6 3.8 3.3 0 1.4-1.1 2.4-3 2.4-.9 0-1.9-.2-2.6-.6v-1.8c.7.4 1.7.7 2.6.7.6 0 1-.2 1-.6 0-1.2-3.8-.7-3.8-3.3 0-1.4 1.1-2.4 2.9-2.4.9 0 1.7.2 2.5.5z" fill="#fff"/></svg><span class="txt">My wonderful flowers (Stripe)</span></span><span class="cnt">800<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · My great bread (Amazon)"><span class="lbl"><svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><path d="M10.4 7.4c-2.2.1-4.6.6-4.6 2.9 0 1.5 1 2.3 2.2 2.3 1 0 1.8-.4 2.5-1.2.3.4.6.8.9 1.1l1.4-1.2c-.4-.5-.7-.9-.7-1.6V6.2C12.1 4.6 10.9 3.4 8.8 3.4 7 3.4 5.6 4.2 5.2 5.9l1.8.2c.2-.8.8-1.1 1.6-1.1 1 0 1.8.5 1.8 1.6zm0 1.6c0 1.5-.8 2.3-1.7 2.3-.7 0-1-.5-1-1.1 0-1.2 1.2-1.4 2.7-1.4z" fill="#1A1B24"/><path d="M2.6 13.3c3.6 2.2 9 2.4 12.6.3.3-.2.6.2.3.4-3.2 2.6-9.1 2.6-13 .6-.4-.2-.2-.6.1-.4z" fill="#FF9900"/></svg><span class="txt">My great bread (Amazon)</span></span><span class="cnt">0<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+              </div>
+            </section>
+            <section class="panel" id="p-revrec">
+              <div class="panel-t">Revenue recognition</div>
+              <div class="box">
+                <button type="button" class="row" data-go="Revenue recognition · Ready"><span class="lbl"><span class="status status-green">Ready</span></span><span class="cnt">300<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Revenue recognition · Generating entries"><span class="lbl"><span class="status status-grey">Generating entries</span></span><span class="cnt">30<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row hot" data-go="Revenue recognition · Incomplete"><span class="lbl"><span class="status status-yellow">Incomplete</span></span><span class="cnt">20<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+              </div>
+            </section>
+          </div>
+          <div class="col" id="col-mid">
+            <section class="panel" id="p-sync">
+              <div class="panel-t">Sync <button type="button" class="lnk hdr-lnk" data-nav="trouble" data-tab="sync">Sync issues<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+              <div class="panel-big"><span class="n">560</span> transactions synchronized to books</div>
+              <div class="box" id="sync-rows">
+                <!-- Needs attention group (sums to 130) -->
+                <button type="button" class="row hot" data-go="Platform transactions · Failed"><span class="lbl"><span class="status status-red">Failed</span></span><span class="cnt">50<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row hot" data-go="Platform transactions · Rollback failed"><span class="lbl"><span class="status status-red">Rollback failed</span></span><span class="cnt">20<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · Synced with rule failed"><span class="lbl"><span class="status status-yellow">Synced with rule failed</span></span><span class="cnt">20<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · Canceled"><span class="lbl"><span class="status status-yellow">Canceled</span></span><span class="cnt">20<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · Rollback canceled"><span class="lbl"><span class="status status-yellow">Rollback canceled</span></span><span class="cnt">20<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · Synced"><span class="lbl"><span class="status status-green">Synced</span></span><span class="cnt">560<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · In progress"><span class="lbl"><span class="status status-blue">In progress</span></span><span class="cnt">20<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · Ready to sync"><span class="lbl"><span class="status status-dark-blue">Ready to sync</span></span><span class="cnt">30<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+                <button type="button" class="row" data-go="Platform transactions · Skipped"><span class="lbl"><span class="status status-grey">Skipped</span></span><span class="cnt">60<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>
+              </div>
+            </section>
+          </div>
+          <div class="col" id="col-right">
+            <section class="panel" id="p-accounting">
+              <div class="panel-t">Accounting</div>
+              <div class="items">
+                <div class="item bad">
+                  <div class="item-h">
+                    <svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><rect width="18" height="18" rx="4" fill="#2CA01C"/><text x="9" y="12.5" text-anchor="middle" fill="#fff" font-size="7" font-family="Roboto,sans-serif" font-weight="700">QB</text></svg>
+                    <span class="nm">My lovely money (QuickBooks Online)</span>
+                    <button type="button" class="lnk" data-go="Organization settings">Reconnect</button>
+                  </div>
+                  <div class="item-chips"><span class="status status-red">Connection lost</span></div>
+                </div>
+              </div>
+            </section>
+            <section class="panel" id="p-integrations">
+              <div class="panel-t">Integrations</div>
+              <div class="items">
+                <div class="item bad">
+                  <div class="item-h">
+                    <svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><rect width="18" height="18" rx="4" fill="#635BFF"/><path d="M11.6 6.3c-.6-.3-1.4-.5-2.2-.5-.8 0-1.2.3-1.2.7 0 1.2 3.8.6 3.8 3.3 0 1.4-1.1 2.4-3 2.4-.9 0-1.9-.2-2.6-.6v-1.8c.7.4 1.7.7 2.6.7.6 0 1-.2 1-.6 0-1.2-3.8-.7-3.8-3.3 0-1.4 1.1-2.4 2.9-2.4.9 0 1.7.2 2.5.5z" fill="#fff"/></svg>
+                    <span class="nm">My wonderful flowers (Stripe)</span>
+                    <button type="button" class="lnk" data-go="Organization settings">Reconnect</button>
+                  </div>
+                  <div class="item-chips"><span class="status status-red">Connection lost</span></div>
+                </div>
+                <div class="item bad">
+                  <div class="item-h">
+                    <svg class="logo" viewBox="0 0 18 18" aria-hidden="true"><path d="M10.4 7.4c-2.2.1-4.6.6-4.6 2.9 0 1.5 1 2.3 2.2 2.3 1 0 1.8-.4 2.5-1.2.3.4.6.8.9 1.1l1.4-1.2c-.4-.5-.7-.9-.7-1.6V6.2C12.1 4.6 10.9 3.4 8.8 3.4 7 3.4 5.6 4.2 5.2 5.9l1.8.2c.2-.8.8-1.1 1.6-1.1 1 0 1.8.5 1.8 1.6zm0 1.6c0 1.5-.8 2.3-1.7 2.3-.7 0-1-.5-1-1.1 0-1.2 1.2-1.4 2.7-1.4z" fill="#1A1B24"/><path d="M2.6 13.3c3.6 2.2 9 2.4 12.6.3.3-.2.6.2.3.4-3.2 2.6-9.1 2.6-13 .6-.4-.2-.2-.6.1-.4z" fill="#FF9900"/></svg>
+                    <span class="nm">My great bread (Amazon)</span>
+                    <button type="button" class="lnk" data-go="Organization settings">Reconnect</button>
+                  </div>
+                  <div class="item-chips"><span class="status status-red">Connection lost</span></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      <div id="page-trouble" hidden>
+        <div class="ts-head">
+          <h1>Troubleshooting</h1>
+          <p class="page-subtitle">View how your data is flowing and catch problems early.</p>
+        </div>
+        <div class="tabs ts-tabs" role="tablist">
+          <button type="button" class="tab active" role="tab" aria-selected="true" data-tab="health">Health check</button>
+          <button type="button" class="tab" role="tab" aria-selected="false" data-tab="sync">Synchronization issues</button>
+          <button type="button" class="tab" role="tab" aria-selected="false" data-tab="import">Import activity log</button>
+          <button type="button" class="tab" role="tab" aria-selected="false" data-tab="history">Sync history</button>
+          <button type="button" class="tab" role="tab" aria-selected="false" data-tab="speed">Sync speed</button>
+        </div>
+        <div id="ts-body"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div id="modal-root"></div>
+
+<script>
+var CHECKS = [{"id": "auto-import-enabled", "label": "Auto-import", "cost": "live", "scope": "state", "cat": "Integration", "sev": "warn", "title": "Auto-import is off — My garden shop (Stripe)", "what": "Checks that auto-import is on for each connected sales or payment channel. With auto-import on, Synder pulls in new transactions automatically.", "why": "When auto-import is off, new transactions do not come into Synder. They do not sync, and the books fall behind without a warning.", "how": ["Open the channel settings.", "Turn on Auto-import.", "If you turned it off on purpose, ignore this check."], "fix": "Go to Stripe settings"}, {"id": "auto-sync-enabled", "label": "Auto-sync", "cost": "live", "scope": "state", "cat": "Integration", "sev": "warn", "title": "Auto-sync is off — My wonderful flowers (Stripe)", "what": "Checks that auto-sync is on for each connected channel. With auto-sync on, Synder sends imported transactions to your books automatically.", "why": "When auto-sync is off, imported transactions stay in Synder until someone syncs them by hand. Balances and reports in the books are not up to date.", "how": ["Open the channel settings.", "Turn on Auto-sync.", "If you sync by hand on purpose, ignore this check."], "fix": "Go to Stripe settings"}, {"id": "auto-sync-partial", "label": "Auto-sync for some tabs", "cost": "live", "scope": "state", "cat": "Integration", "sev": "warn", "title": "Auto-sync is off for some tabs — My garden shop (Stripe)", "what": "Checks the additional settings of each channel that has auto-sync on. It finds tabs where auto-sync is off.", "why": "Transactions on those tabs, for example fees or payouts, do not sync automatically. The books look complete, but part of the data is missing.", "how": ["Open the channel settings and go to the additional settings.", "Find the tabs where auto-sync is off.", "Turn on auto-sync for those tabs. If manual sync is intentional, ignore this check."], "fix": "Go to Stripe settings"}, {"id": "invoice-settings-auto-apply-credit-conflict", "label": "Invoice auto-apply conflict", "cost": "live", "scope": "state", "cat": "Accounting", "sev": "danger", "title": "Automatically apply credits is on — My lovely money (QuickBooks Online)", "what": "Checks the QuickBooks Online setting Automatically apply credits. Synder needs it off to apply payments and credits to the correct invoices.", "why": "When it is on, QuickBooks applies credits to open invoices by itself. Payments from Synder then go to the wrong invoices, and customer balances and accounts receivable do not match.", "how": ["In QuickBooks Online, go to Settings → Account and settings → Advanced → Automation.", "Turn off Automatically apply credits and save.", "Check recent invoices that QuickBooks changed, and correct them."], "fix": "Go to QuickBooks settings"}, {"id": "revrec-missing-mapping", "label": "RevRec mapping", "cost": "live", "scope": "state", "cat": "RevRec", "sev": "danger", "title": "Missing mapping on RevRec", "revrec": true, "what": "Checks that each subscription product or price plan has a product and an income account in the revenue recognition configuration.", "why": "Without a mapping, Synder cannot build the recognition journal entries for that item. Deferred and recognized revenue in the books are not correct.", "how": ["Open Revenue recognition → Configuration.", "Map each product or price plan that has no product or income account.", "Save. The check updates automatically."], "fix": "Go to Revenue recognition configuration"}, {"id": "recon-errored", "label": "Reconciliation errors", "cost": "live", "scope": "date", "cat": "Accounting", "sev": "warn", "title": "Transaction reconciliation errors", "what": "Checks for transaction reconciliations in the period with the Error status. Deleted reconciliations are not counted.", "why": "The reconciliation could not complete, so the period is not reconciled.", "how": ["Open Transaction reconciliation and filter by Error.", "Open the process log. It shows the step that failed, with the file, the row and the reason.", "Correct the source file or the setting, then run the reconciliation again."], "fix": "Go to Transaction reconciliation"}, {"id": "recon-attention", "label": "Reconciliation needs attention", "cost": "live", "scope": "date", "cat": "Accounting", "sev": "warn", "title": "Transaction reconciliation needs attention", "what": "Checks for transaction reconciliations in the period with the Attention required status. Deleted reconciliations are not counted.", "why": "The reconciliation finished, but transactions in Discrepancy or Missing source are not resolved. The books and the platform do not agree for the period.", "how": ["Open the reconciliation.", "Resolve each transaction in Discrepancy and Missing source: fix it, match it, or move it to Ignored.", "After you sync missing transactions, click Refresh data."], "fix": "Go to Transaction reconciliation"}, {"id": "recon-cancelled", "label": "Reconciliation cancelled", "cost": "live", "scope": "date", "cat": "Accounting", "sev": "info", "title": "Transaction reconciliation cancelled", "what": "Checks for transaction reconciliations in the period with the Cancelled status. Deleted reconciliations are not counted.", "why": "A cancelled reconciliation did not finish, so part of the period is not reconciled.", "how": ["Open Transaction reconciliation and filter by Cancelled.", "Start the reconciliation again for the same account and period."], "fix": "Go to Transaction reconciliation"}, {"id": "period-not-locked", "label": "Period not locked after reconciliation", "cost": "live", "scope": "date", "cat": "Accounting", "sev": "info", "title": "Period not locked after reconciliation", "what": "Checks the transaction reconciliations in the period with the Reconciled status. For each one, it checks that Period lock is set through the end date of that reconciliation.", "why": "A reconciled period is complete. Without a period lock, a late sync, a rollback or a resync can still change that period, and the reconciliation no longer agrees with the books. This is information, not an error.", "how": ["Open Period lock.", "Turn on the lock for the integration and set the lock date to the end date of the reconciliation. You can also click Lock period on the reconciliation result.", "If you do not lock periods on purpose, ignore this check."], "fix": "Go to Period lock"}, {"id": "revrec-incomplete-subscription", "label": "Incomplete subscriptions", "cost": "live", "scope": "date", "cat": "RevRec", "sev": "warn", "title": "Incomplete subscriptions", "revrec": true, "what": "Checks for revenue recognition subscriptions with the Incomplete status. Synder cannot complete the processing of their transactions for the recognition schedules.", "why": "Revenue for these subscriptions is not recognized on schedule, so deferred and recognized revenue are not correct.", "how": ["Open Revenue recognition and find the subscriptions with the Incomplete status.", "Contact Synder Support with the subscription IDs."], "fix": "Go to Revenue recognition"}, {"id": "provider-clearing-consistency", "label": "Clearing account consistency", "cost": "scheduled", "scope": "state", "cat": "Integration", "sev": "warn", "title": "Clearing mismatch, USD — My wonderful flowers (Stripe)", "what": "Checks that sales and fees of each channel and currency use the same clearing account.", "why": "When sales and fees use different clearing accounts, payouts do not net to zero, and the bank deposit does not match.", "how": ["Open the channel settings for that currency.", "Use one clearing account for sales and fees.", "Save, then run the check again."], "fix": "Go to Stripe settings"}, {"id": "duplicate-currency-slot-account", "label": "Multi-currency account mapping", "cost": "scheduled", "scope": "state", "cat": "Integration", "sev": "warn", "title": "Shared account across currencies — My ceramic plates (Amazon)", "hide": "amazon", "what": "Checks that each currency of a channel has its own account, not an account shared with other currencies.", "why": "When currencies share one account, balances and exchange differences mix, and the account does not reconcile.", "how": ["Open the multi-currency mapping of the channel.", "Give each currency its own account. Use the same account for that currency on all tabs.", "Save, then run the check again."], "fix": "Go to Amazon settings"}, {"id": "foreign-payouts-multicurrency", "label": "Foreign payouts / multicurrency", "cost": "scheduled", "scope": "state", "cat": "Integration", "sev": "danger", "title": "Foreign payouts need multicurrency — My wonderful flowers (Stripe)", "what": "Checks that multicurrency is on when a channel has payouts in a currency other than the home currency.", "why": "Without multicurrency, foreign payouts post with wrong amounts or fail. Bank deposits and exchange differences do not reconcile.", "how": ["Turn on multicurrency in your accounting company.", "Set up the currency accounts for the channel in Synder.", "Run the check again."], "fix": "Go to QuickBooks settings"}, {"id": "sync-duration-health", "label": "Sync duration", "cost": "scheduled", "scope": "date", "cat": "Sync", "sev": "warn", "title": "Syncs running slower than usual", "what": "Checks how long syncs in the period took to finish.", "why": "Slow syncs delay when transactions appear in the books. Until they finish, data can look missing.", "how": ["Open Sync speed and check if slow syncs are still running.", "Fix failed or stuck syncs before a large re-sync.", "If syncs stay slow, contact Synder Support."], "fix": "Go to Sync speed"}, {"id": "deleted-accounting-transaction", "label": "Deleted transactions", "cost": "scheduled", "scope": "date", "cat": "Accounting", "sev": "danger", "title": "Deleted in accounting — 3 synced transactions", "what": "For each transaction that Synder synced in the period, Synder checks that the linked entry still exists in the accounting company. It finds transactions that Synder shows as Synced, but that the user or another app deleted in accounting.", "why": "Synder still shows these transactions as Synced, but they are not in the books. Income, fees or payouts are missing, and reports and reconciliation do not agree.", "how": ["Open the affected transactions in Synder.", "Find out who or which app deleted them in the accounting company.", "If they must be in the books, sync them again from Transactions (Actions → Sync). To remove a synced transaction, roll it back in Synder instead of deleting it in the books."], "fix": "Go to Transactions"}, {"id": "moved-clearing-account", "label": "Moved clearing account", "cost": "scheduled", "scope": "date", "cat": "Integration", "sev": "warn", "title": "Moved clearing account — My wonderful flowers (Stripe)", "what": "Checks that transactions synced in the period use the clearing account that is in the settings now.", "why": "When the clearing account changes in the middle of a period, older entries stay on the old account. Payouts do not net to zero, and bank reconciliation does not match.", "how": ["Confirm the correct clearing account in the channel settings.", "Roll back and sync again the transactions that use the old account.", "Run the check again."], "fix": "Go to Stripe settings"}, {"id": "amazon-v2-reports-readiness", "label": "Amazon settlement coverage", "cost": "scheduled", "scope": "date", "cat": "Integration", "sev": "warn", "title": "Settlement reports have a gap — My ceramic plates (Amazon)", "what": "Checks that processed Amazon settlement reports cover the full period.", "why": "A gap in settlement reports means payouts, fees or refunds for those days are missing in Synder and in the books.", "how": ["Check the Amazon connection.", "Wait for late settlement reports, or reconnect Amazon if reports stopped.", "Run the check again when the period is covered."], "fix": "Go to Amazon settings"}];
+var DEMO = {"auto-import-enabled": "ignored", "auto-sync-enabled": "ignored", "auto-sync-partial": "ignored", "invoice-settings-auto-apply-credit-conflict": "ignored", "revrec-missing-mapping": "passed", "recon-errored": "passed", "recon-attention": "failed", "recon-cancelled": "passed", "period-not-locked": "passed", "revrec-incomplete-subscription": "passed", "provider-clearing-consistency": "failed", "duplicate-currency-slot-account": "failed", "foreign-payouts-multicurrency": "failed", "sync-duration-health": "passed", "deleted-accounting-transaction": "failed", "moved-clearing-account": "passed", "amazon-v2-reports-readiness": "ignored"};
+var LAST_CHECK = 'Oct 14, 2026 09:12';
+var openSet = {};
+var enabled = {};
+CHECKS.forEach(function (c) { enabled[c.id] = true; });
+var userIgnored = {};
+var marked = {};
+
+var BVE = 'Business Validation Error: We\u2019re sorry, QuickBooks encountered an error while calculating tax. Try reselecting the tax rate or reentering the product';
+/* Sync issues quantities sum to Needs attention 130 */
+var SYNC_ISSUES = [
+  [50,'Failed',BVE],
+  [20,'Canceled','Sync stopped before completion'],
+  [20,'Synced with rule failed','Smart Rule condition was not met'],
+  [20,'Rollback failed','Account was not found in your company'],
+  [12,'Failed','Entity cannot be synchronized without Product or Service'],
+  [8,'Failed','Account was not found in your company']
+];
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function sevWord(s){ return s==='danger' ? 'High' : 'Medium'; } /* info treated as Medium if shown; only red/yellow */
+function sevClass(s){ return s==='danger' ? 'high' : 'med'; }
+function statusOf(c){
+  if(!enabled[c.id]) return 'ignored';
+  if(userIgnored[c.id]) return 'ignored';
+  if(marked[c.id]) return 'marked';
+  if(DEMO[c.id]==='ignored') return 'ignored';
+  if(DEMO[c.id]==='passed') return 'passed';
+  if(DEMO[c.id]==='failed') return 'failed';
+  return DEMO[c.id] || 'passed';
+}
+function ignoreReason(c){
+  if(!enabled[c.id]) return 'Turned off in Check settings.';
+  if(userIgnored[c.id]) return 'Ignored by you.';
+  if(DEMO[c.id]==='ignored'){
+    if(c.id.indexOf('amazon')>=0 || c.id.indexOf('auto-')===0 || c.id.indexOf('invoice-')===0)
+      return 'Ignored by the system: a connection is lost. Reconnect it to check again. Connection issues are listed on the Dashboard.';
+    return 'Ignored by the system.';
+  }
+  return '';
+}
+function openFindings(){
+  return CHECKS.filter(function(c){
+    if(statusOf(c)!=='failed') return false;
+    if(c.sev==='info') return false; /* only red/yellow */
+    return true;
+  });
+}
+function countBySev(){
+  var high=0, med=0;
+  openFindings().forEach(function(c){ if(c.sev==='danger') high++; else med++; });
+  return { high:high, med:med, total:high+med };
+}
+
+function renderHcBlock(){
+  var c = countBySev();
+  var sevs = document.getElementById('hc-sevs');
+  var meta = document.getElementById('hc-meta');
+  var block = document.getElementById('hc-block');
+  if(c.total===0){
+    block.classList.add('ok');
+    sevs.innerHTML = '<span class="status status-green">No issues</span>';
+    meta.textContent = 'Last checked ' + LAST_CHECK;
+    document.getElementById('hc-cta').textContent = 'Open Health check';
+  } else {
+    block.classList.remove('ok');
+    var pills = '';
+    if(c.high) pills += '<span class="status status-red">' + c.high + ' high</span>';
+    if(c.med) pills += '<span class="status status-yellow">' + c.med + ' medium</span>';
+    sevs.innerHTML = pills + '<span class="status status-yellow">' + c.total + (c.total===1?' issue':' issues') + '</span>';
+    meta.textContent = 'Last checked ' + LAST_CHECK + ' · Scheduled and settings checks. Connection lost and sync failures are listed above.';
+    document.getElementById('hc-cta').textContent = 'Check issues';
+  }
+}
+
+function findingRow(c){
+  var st = statusOf(c);
+  var open = !!openSet[c.id];
+  var sev = (st==='failed') ? sevClass(c.sev) : (st==='passed'||st==='marked' ? 'ok' : 'ignored');
+  var pill;
+  if(st==='failed') pill = '<span class="status status-'+(c.sev==='danger'?'red':'yellow')+'">Needs fix · '+sevWord(c.sev)+'</span>';
+  else if(st==='marked') pill = '<span class="status status-blue">Marked as fixed</span>';
+  else if(st==='passed') pill = '<span class="status status-green">Passed check</span>';
+  else pill = '<span class="status status-grey">Ignored</span>';
+  var title = st==='failed' || st==='marked' ? c.title : c.label;
+  var cost = c.cost==='live' ? 'Live' : 'Scheduled';
+  var body = '';
+  if(open){
+    body = '<div class="finding-b">'
+      + (st==='ignored' ? '<p>'+esc(ignoreReason(c))+'</p>' : '')
+      + '<div class="fl">What</div><p>'+esc(c.what)+'</p>'
+      + '<div class="fl">Why it matters</div><p>'+esc(c.why)+'</p>'
+      + '<div class="fl">How to fix</div><ul>'+(c.how||[]).map(function(h){return '<li>'+esc(h)+'</li>';}).join('')+'</ul>'
+      + '<div class="finding-btns">';
+    if(st==='failed'){
+      body += '<button type="button" class="btn btn-primary" data-go="'+esc(c.fix)+'">'+esc(c.fix)+'</button>';
+      if(c.cost==='scheduled') body += '<button type="button" class="btn btn-outlined" data-mark="'+c.id+'">Mark as fixed</button>';
+      body += '<button type="button" class="btn btn-outlined" data-ignore="'+c.id+'">Ignore</button>';
+    } else if(st==='ignored' && !enabled[c.id]){
+      body += '<button type="button" class="btn btn-outlined" data-open-settings="1">Open Check settings</button>';
+    } else if(st==='ignored' && DEMO[c.id]==='ignored'){
+      body += '<button type="button" class="btn btn-outlined" data-go="Organization settings">Go to Organization settings</button>';
+    }
+    body += '</div></div>';
+  }
+  return '<div class="finding sev-'+sev+'" data-id="'+c.id+'">'
+    + '<button type="button" class="finding-h" aria-expanded="'+(open?'true':'false')+'">'
+    + '<svg class="tw" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    + '<span class="ft">'+esc(title)+'</span>'
+    + '<span class="fmeta">'+pill+'<span class="status status-grey">'+cost+'</span></span>'
+    + '</button>'+body+'</div>';
+}
+
+function renderHealth(){
+  var order = { failed:0, marked:1, passed:2, ignored:3 };
+  var list = CHECKS.slice().sort(function(a,b){
+    var sa=statusOf(a), sb=statusOf(b);
+    if(order[sa]!==order[sb]) return order[sa]-order[sb];
+    if(sa==='failed'){
+      if(a.sev!==b.sev) return a.sev==='danger'?-1:1; /* red before yellow, no rank among reds beyond that */
+    }
+    return 0;
+  });
+  var c = countBySev();
+  var html = '<p class="hc-blurb">Settings and scheduled checks for your organization. Live checks stay up to date. Scheduled checks run on your schedule, or when you click Run check. Connection lost and sync failures stay on the Dashboard — they are not repeated here.</p>'
+    + '<div class="hc-toolbar"><span class="hc-last">Last checked '+LAST_CHECK+' · '+c.total+' open</span><span class="spacer"></span>'
+    + '<button type="button" class="btn btn-outlined" id="btn-run">Run check</button>'
+    + '<button type="button" class="btn btn-primary" id="btn-settings">Check settings</button></div>';
+  var groups = [['Open findings', function(x){return statusOf(x)==='failed';}],
+                ['Passed / marked', function(x){var s=statusOf(x); return s==='passed'||s==='marked';}],
+                ['Ignored', function(x){return statusOf(x)==='ignored';}]];
+  groups.forEach(function(g){
+    var rows = list.filter(g[1]);
+    if(!rows.length) return;
+    html += '<div class="hc-group">'+g[0]+' · '+rows.length+'</div>' + rows.map(findingRow).join('');
+  });
+  return html;
+}
+
+function renderSyncIssues(){
+  var body = SYNC_ISSUES.map(function(r){
+    return '<tr><td>'+r[0]+'</td><td><span class="status '+(r[1]==='Failed'||r[1]==='Rollback failed'?'status-red':'status-yellow')+'">'+esc(r[1])+'</span></td>'
+      + '<td class="msg" title="'+esc(r[2])+'">'+esc(r[2])+'</td>'
+      + '<td><button type="button" class="lnk" data-go="Platform transactions · '+esc(r[1])+'">See related transactions</button></td></tr>';
+  }).join('');
+  var sum = SYNC_ISSUES.reduce(function(a,r){return a+r[0];},0);
+  return '<div class="fpanel"><div class="frow">'
+    + '<div class="ff"><label>Search</label><input class="input" placeholder="Search by any word..." style="width:220px"><span class="hint">Enter at least 3 characters</span></div>'
+    + '<div class="ff"><label>Status</label><select class="select" style="width:180px"><option>All</option><option>Failed</option><option>Canceled</option></select></div>'
+    + '<div class="ff"><label>Date range</label><select class="select" style="width:120px"><option>Custom</option></select></div>'
+    + '<div class="ff"><label>From</label><div class="frange"><input type="date" class="input"> – </div></div>'
+    + '<div class="ff"><label>To</label><input type="date" class="input"></div>'
+    + '</div><div class="fbtns"><button type="button" class="btn btn-primary">Apply</button><button type="button" class="btn btn-outlined">Reset filters</button></div></div>'
+    + '<p class="hc-blurb" style="margin-bottom:12px">'+sum+' transactions across '+SYNC_ISSUES.length+' error groups · matches Needs attention on the Dashboard.</p>'
+    + '<div class="table-wrap"><table class="synder-table table--sm ts-table"><thead><tr><th>Quantity ↓</th><th>Status</th><th>Error message</th><th>Actions</th></tr></thead><tbody>'+body+'</tbody></table></div>'
+    + '<div class="ts-pager"><span>Rows per page:</span><select class="select" style="width:70px"><option>25</option></select><span>1–'+SYNC_ISSUES.length+' of '+SYNC_ISSUES.length+'</span></div>';
+}
+
+function renderImport(){
+  return '<div class="ts-intro"><span>View the list of imports from connected integrations into Synder.</span>'
+    + '<button type="button" class="btn btn-outlined" data-go="Import historical data">Import historical data</button></div>'
+    + '<div class="table-wrap"><table class="synder-table table--sm ts-table"><thead><tr>'
+    + '<th>Request date</th><th>Import from</th><th>Import to</th><th>Integration</th><th>Imported</th><th>Type</th><th>Import status</th>'
+    + '</tr></thead><tbody>'
+    + '<tr><td>Oct 2, 2026</td><td>Oct 2, 2026 03:58:00</td><td>Oct 2, 2026 05:58:00</td><td><span class="intg">My wonderful flowers (Stripe)</span></td><td>42</td><td>Hourly</td><td><span class="status status-green">Finished</span></td></tr>'
+    + '<tr><td>Oct 2, 2026</td><td>Oct 2, 2026 03:58:00</td><td>—</td><td><span class="intg">My great bread (Amazon)</span></td><td>0</td><td>Hourly</td><td><span class="status status-yellow">Postponed</span></td></tr>'
+    + '<tr><td>Oct 1, 2026</td><td>Oct 1, 2026 01:58:00</td><td>Oct 1, 2026 03:58:00</td><td><span class="intg">My wonderful flowers (Stripe)</span></td><td>38</td><td>Hourly</td><td><span class="status status-green">Finished</span></td></tr>'
+    + '</tbody></table></div>'
+    + '<div class="ts-pager"><span>Rows per page:</span><select class="select" style="width:70px"><option>25</option></select><span>1–3 of 3</span></div>';
+}
+
+function renderHistory(){
+  return '<p class="hc-blurb" style="margin-bottom:12px">Sync runs that pushed transactions to your books. Moved here from its previous location so it sits with the other Troubleshooting tools.</p>'
+    + '<div class="table-wrap"><table class="synder-table table--sm ts-table"><thead><tr>'
+    + '<th>Time</th><th>Integration</th><th>Synced</th><th>Failed</th><th>Status</th><th>Actions</th>'
+    + '</tr></thead><tbody>'
+    + '<tr><td>Oct 2, 2026 05:58</td><td>My wonderful flowers (Stripe)</td><td>36</td><td>4</td><td><span class="status status-yellow">Completed with errors</span></td><td><button type="button" class="lnk" data-go="Platform transactions · Sync run">View transactions</button></td></tr>'
+    + '<tr><td>Oct 2, 2026 03:58</td><td>My wonderful flowers (Stripe)</td><td>40</td><td>0</td><td><span class="status status-green">Synced</span></td><td><button type="button" class="lnk" data-go="Platform transactions · Sync run">View transactions</button></td></tr>'
+    + '<tr><td>Oct 1, 2026 23:10</td><td>My great bread (Amazon)</td><td>0</td><td>12</td><td><span class="status status-red">Failed</span></td><td><button type="button" class="lnk" data-nav="trouble" data-tab="sync">View sync issues</button></td></tr>'
+    + '<tr><td>Oct 1, 2026 21:10</td><td>My great bread (Amazon)</td><td>28</td><td>0</td><td><span class="status status-green">Synced</span></td><td><button type="button" class="lnk" data-go="Platform transactions · Sync run">View transactions</button></td></tr>'
+    + '</tbody></table></div>'
+    + '<div class="ts-pager"><span>Rows per page:</span><select class="select" style="width:70px"><option>25</option></select><span>1–4 of 4</span></div>';
+}
+
+function renderSpeed(){
+  return '<div class="ts-info"><span>Below graphs help getting a grasp of how quickly the synchronization goes. <button type="button" class="lnk" data-go="Learn more · Sync speed">Learn more.</button></span></div>'
+    + '<section class="ts-card"><h2>Transaction volume by platform</h2>'
+    + '<p class="sub">Connection lost on Oct 2 — volumes drop to zero after that.</p>'
+    + '<div class="legend"><span><i style="background:var(--color-red,#CC2929)"></i>My wonderful flowers (Stripe)</span><span><i style="background:var(--color-primary,#0053CC)"></i>My great bread (Amazon)</span></div>'
+    + '<div class="chart-missing">Median sync 42 s · p95 3 min 10 s · [chart placeholder]</div></section>'
+    + '<section class="ts-card"><h2>Sync time process breakdown</h2>'
+    + '<p class="sub">Breakdown of average time by sync process steps.</p>'
+    + '<div class="chart-missing">[chart not captured]</div></section>';
+}
+
+var page = 'dash', tsTab = 'health';
+
+function writeHash(){
+  try {
+    var h = '#lost' + (page==='trouble' ? '/' + tsTab : '');
+    history.replaceState(null,'',h);
+  } catch(e){}
+}
+
+function openPage(p, tab){
+  page = p;
+  if(tab) tsTab = tab;
+  document.getElementById('page-dash').hidden = p !== 'dash';
+  document.getElementById('page-trouble').hidden = p !== 'trouble';
+  document.getElementById('nav-dashboard').classList.toggle('active', p==='dash');
+  document.getElementById('nav-troubleshooting').classList.toggle('active', p==='trouble');
+  document.getElementById('seg-lost').classList.toggle('on', p==='dash');
+  document.getElementById('seg-trouble').classList.toggle('on', p==='trouble');
+  if(p==='trouble') renderTrouble();
+  writeHash();
+  window.scrollTo(0,0);
+}
+
+function renderTrouble(){
+  document.querySelectorAll('.ts-tabs .tab').forEach(function(t){
+    var on = t.getAttribute('data-tab')===tsTab;
+    t.classList.toggle('active', on);
+    t.setAttribute('aria-selected', on?'true':'false');
+  });
+  var body = document.getElementById('ts-body');
+  if(tsTab==='health') body.innerHTML = renderHealth();
+  else if(tsTab==='sync') body.innerHTML = renderSyncIssues();
+  else if(tsTab==='import') body.innerHTML = renderImport();
+  else if(tsTab==='history') body.innerHTML = renderHistory();
+  else body.innerHTML = renderSpeed();
+}
+
+var toastTimer;
+function toast(msg){
+  var t=document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2600);
+}
+
+function closeModal(){ document.getElementById('modal-root').innerHTML=''; }
+
+function openRunModal(){
+  var sched = CHECKS.filter(function(c){ return c.cost==='scheduled' && enabled[c.id]; });
+  var body = '<p style="margin:0 0 12px;color:#6B778C">Run the checks now. The schedule in Check settings does not change.</p>'
+    + '<div class="cfg-sec">Scheduled checks in this run</div>'
+    + sched.map(function(c){ return '<div class="cfg-row"><label class="form-check"><input type="checkbox" checked disabled> '+esc(c.label)+'</label><span class="status status-'+(c.sev==='danger'?'red':'yellow')+'">'+sevWord(c.sev)+'</span></div>'; }).join('');
+  document.getElementById('modal-root').innerHTML = '<div class="modal-bg" data-close-modal="1"><div class="modal" role="dialog" aria-modal="true"><div class="modal-header">Run check</div><div class="modal-body">'+body+'</div><div class="modal-footer"><button type="button" class="btn btn-outlined" data-close-modal="1">Cancel</button><button type="button" class="btn btn-primary" id="run-confirm">Run check</button></div></div></div>';
+}
+
+function openSettingsModal(){
+  var live = CHECKS.filter(function(c){return c.cost==='live';});
+  var sched = CHECKS.filter(function(c){return c.cost==='scheduled';});
+  function rows(arr){
+    return arr.map(function(c){
+      return '<div class="cfg-row"><label class="form-check"><input type="checkbox" data-en="'+c.id+'" '+(enabled[c.id]?'checked':'')+'> '+esc(c.label)+'</label><span class="status status-grey">'+c.cat+'</span></div>';
+    }).join('');
+  }
+  var body = '<p style="margin:0 0 12px;color:#6B778C">Synder runs these checks on your schedule. A check that is off does not run. Its row shows Ignored.</p>'
+    + '<div class="cfg-sec">Live setting checks</div>'+rows(live)
+    + '<div class="cfg-sec">Scheduled checks</div>'+rows(sched)
+    + '<div class="cfg-sec">Schedule</div><p style="margin:0">Monthly on day 5 · Period: last 30 days</p>';
+  document.getElementById('modal-root').innerHTML = '<div class="modal-bg" data-close-modal="1"><div class="modal" role="dialog" aria-modal="true"><div class="modal-header">Check settings</div><div class="modal-body">'+body+'</div><div class="modal-footer"><button type="button" class="btn btn-outlined" data-close-modal="1">Cancel</button><button type="button" class="btn btn-primary" id="cfg-save">Save</button></div></div></div>';
+}
+
+document.addEventListener('click', function(e){
+  var head = e.target.closest('#issues-head');
+  if(head){
+    var body = document.getElementById('issues-body');
+    var open = head.getAttribute('aria-expanded')!=='true';
+    head.setAttribute('aria-expanded', open?'true':'false');
+    body.hidden = !open;
+    return;
+  }
+  var fh = e.target.closest('.finding-h');
+  if(fh){
+    var id = fh.parentElement.getAttribute('data-id');
+    openSet[id] = !openSet[id];
+    renderTrouble();
+    return;
+  }
+  var ig = e.target.closest('[data-ignore]');
+  if(ig){ userIgnored[ig.getAttribute('data-ignore')]=1; renderHcBlock(); renderTrouble(); toast('Check ignored'); return; }
+  var mk = e.target.closest('[data-mark]');
+  if(mk){ marked[mk.getAttribute('data-mark')]=1; DEMO[mk.getAttribute('data-mark')]='marked'; renderHcBlock(); renderTrouble(); toast('Marked as fixed — next scheduled check confirms'); return; }
+  if(e.target.closest('#btn-run')){ openRunModal(); return; }
+  if(e.target.closest('#btn-settings') || e.target.closest('[data-open-settings]')){ openSettingsModal(); return; }
+  if(e.target.closest('#run-confirm')){ LAST_CHECK = 'Nov 5, 2026 18:10'; closeModal(); renderHcBlock(); renderTrouble(); toast('Check finished · '+countBySev().total+' open'); return; }
+  if(e.target.closest('#cfg-save')){
+    document.querySelectorAll('[data-en]').forEach(function(cb){ enabled[cb.getAttribute('data-en')] = cb.checked; });
+    closeModal(); renderHcBlock(); renderTrouble(); toast('Check settings saved'); return;
+  }
+  if(e.target.classList && e.target.classList.contains('modal-bg')){ closeModal(); return; }
+  if(e.target.closest('[data-close-modal]') && !e.target.closest('.modal-body') && !e.target.closest('.modal-header')){ closeModal(); return; }
+
+  var nav = e.target.closest('[data-nav]');
+  if(nav){ e.preventDefault(); openPage(nav.getAttribute('data-nav'), nav.getAttribute('data-tab') || (nav.getAttribute('data-nav')==='trouble'?tsTab||'health':null)); return; }
+  var tab = e.target.closest('.ts-tabs [data-tab]');
+  if(tab){ tsTab = tab.getAttribute('data-tab'); renderTrouble(); writeHash(); return; }
+  var seg = e.target.closest('.proto-bar [data-view]');
+  if(seg){ openPage(seg.getAttribute('data-view'), seg.getAttribute('data-view')==='trouble'?'health':null); return; }
+  var g = e.target.closest('[data-go]');
+  if(g){ e.preventDefault(); toast('Prototype — would open: '+g.getAttribute('data-go')); return; }
+  var a = e.target.closest('a[href="#"]');
+  if(a){ e.preventDefault(); toast('Prototype — would open: '+a.textContent.trim()); }
+});
+
+function parseHash(){
+  var m = /^#lost(?:\/(health|sync|import|history|speed))?$/.exec(location.hash||'#lost');
+  return { t: m && m[1] ? m[1] : null };
+}
+window.addEventListener('hashchange', function(){
+  var h = parseHash();
+  openPage(h.t ? 'trouble' : 'dash', h.t);
+});
+
+renderHcBlock();
+var h0 = parseHash();
+if(h0.t) openPage('trouble', h0.t);
+else { writeHash(); }
+</script>
+</body>
+</html>
