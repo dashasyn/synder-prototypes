@@ -134,8 +134,25 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 .map .sub{display:inline-flex;align-items:center;gap:4px}
 .map .sub .hlp{font-size:16px;color:#B0B7C3}
 .map .integ{display:flex;align-items:center;gap:8px}
-.map tbody tr.unmapped td{background:#FFF1DD}
+.map tbody tr.unmapped td{background:#FFF1DD}   /* every unsaved row = needs action (Ignat, 2026-11-06); saved rows white */
 .map tbody tr.unmapped:hover td{background:#FFEAC9}
+.map tbody tr.picked td{background:#F2F6FC}      /* live: selected row, its account select disabled */
+.map tbody tr.picked:hover td{background:#E8F0FB}
+/* live selection bar: "N selected · Bulk mapping" left, "Select all on all pages · Clear selection" right */
+.selbar{display:none;align-items:center;gap:16px;height:52px;padding:0 14px 0 12px;border-bottom:1px solid #E0E0E0}
+.selbar.on{display:flex}
+.selbar .sp{flex:1}
+.selbar .grp2{display:inline-flex}
+.selbar .grp2 .btn+.btn{margin-left:-1px;border-top-left-radius:0;border-bottom-left-radius:0}
+.selbar .grp2 .btn:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+.bm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:70;align-items:center;justify-content:center}
+.bm-bg.on{display:flex}
+.bm{background:#fff;border-radius:4px;width:468px;box-shadow:0 11px 15px -7px rgba(0,0,0,.2),0 24px 38px 3px rgba(0,0,0,.14)}
+.bm h2{margin:0;padding:20px 24px;font-size:20px;font-weight:500;border-bottom:1px solid #E0E0E0}
+.bm-b{padding:20px 24px}
+.bm-b label{display:block;font-weight:600;color:#000;margin-bottom:4px}
+.bm-b select{width:200px}
+.bm-f{display:flex;justify-content:flex-end;gap:12px;padding:16px 24px;border-top:1px solid #E0E0E0}
 .map tbody tr:last-child td{border-bottom:none}
 .pagination{justify-content:flex-end;height:52px;box-sizing:border-box;border-top:1px solid #E0E0E0}
 .pagination select{width:auto;height:32px}
@@ -207,6 +224,16 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
         </div>
       </div>
 
+      <div class="selbar" id="selbar" role="toolbar" aria-label="Selected groups">
+        <span id="sel-n"></span>
+        <button type="button" class="btn btn-outlined btn-sm" id="bm-open" onclick="openBulk()">Bulk mapping</button>
+        <span class="sp"></span>
+        <span class="grp2">
+          <button type="button" class="btn btn-outlined btn-sm" id="sel-allpages" onclick="selectAllPages()">Select all on all pages</button>
+          <button type="button" class="btn btn-outlined btn-sm" id="sel-clear" onclick="clearSel()">Clear selection</button>
+        </span>
+      </div>
+
       <div class="table-wrap map">
         <table class="synder-table" id="tbl">
           <thead><tr>
@@ -241,6 +268,17 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
   </div>
 </aside>
 
+<div class="bm-bg" id="bm-bg" onclick="if(event.target===this)closeBulk()">
+  <div class="bm" role="dialog" aria-modal="true" aria-labelledby="bm-t">
+    <h2 id="bm-t">Bulk mapping</h2>
+    <div class="bm-b"><label for="bm-acc">Account</label><select id="bm-acc" class="select"></select></div>
+    <div class="bm-f">
+      <button type="button" class="btn btn-outlined" onclick="closeBulk()">Cancel</button>
+      <button type="button" class="btn" id="bm-save" onclick="saveBulk()">Save mapping</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
@@ -273,7 +311,7 @@ add('Chargebacks','Other expense','st','unsure'); add('Reserve balance','Other c
 // confident system groups (39)
 ['st','sh','am','pp'].forEach(function(k){
   add('Clearing','Clearing',k,'sure',CLEAR[k]);
-  add('Customer balance','Accounts receivable',k,'sure','Customer prepayments');
+  add('Customer balance','Other current liabilities',k,'sure','Customer prepayments');
   add('Discounts','Discounts',k,'sure','Discounts given');
   add('Platform fees','Commissions and fees',k,'sure', k==='am'?'Amazon seller fees':'Merchant fees');
   add('Sales','Income',k,'sure',SALES[k]);
@@ -347,11 +385,12 @@ function render(){
     var sec = section(r);
     var I = INTEG[r.integ],
         rs = dirty(r) ? '<button type="button" class="btn btn-outlined-warning btn-sm row-save" onclick="saveRow('+r.id+')">Save</button>' : '';
-    h += '<tr data-id="'+r.id+'" data-sec="'+sec+'"'+(r.value?'':' class="unmapped"')+'>'+
+    var cls = S.sel[r.id] ? 'picked' : (r.value && r.value===r.saved ? '' : 'unmapped');
+    h += '<tr data-id="'+r.id+'" data-sec="'+sec+'"'+(cls?' class="'+cls+'"':'')+'>'+
       '<td class="c-sel"><input type="checkbox" class="checkbox" aria-label="Select '+esc(r.group)+'"'+(S.sel[r.id]?' checked':'')+' onchange="sel('+r.id+',this.checked)"></td>'+
       '<td class="grp">'+esc(r.group)+'</td><td><span class="sub">'+esc(r.subtype)+'<span class="material-icons hlp" aria-hidden="true">help</span></span></td><td>Online Sales</td>'+
       '<td><span class="integ"><span class="pi pi-'+r.integ+'">'+I.l+'</span>'+esc(I.name)+'</span></td>'+
-      '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'" onchange="setVal('+r.id+',this.value)">'+opts(r.value)+'</select>'+rs+'</div></td></tr>';
+      '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'"'+(S.sel[r.id]?' disabled':'')+' onchange="setVal('+r.id+',this.value)">'+opts(r.value)+'</select>'+rs+'</div></td></tr>';
   });
   if (!slice.length) h = '<tr class="m-empty"><td colspan="6">'+(S.status==='not' && !S.q && !S.group && !S.acc && S.tab==='all'
       ? 'All groups are mapped.' : 'No groups match these filters.')+
@@ -359,7 +398,11 @@ function render(){
   document.getElementById('tb').innerHTML = h;
   var ids = slice.map(function(r){return r.id;}), sa = document.getElementById('sel-all');
   sa.checked = ids.length>0 && ids.every(function(i){return S.sel[i];});
-  document.getElementById('save').disabled = !ROWS.some(dirty);
+  var nDirty = ROWS.filter(dirty).length, sv = document.getElementById('save');
+  sv.disabled = !nDirty; sv.textContent = nDirty ? 'Save mappings ('+nDirty+')' : 'Save mappings';
+  var nSel = Object.keys(S.sel).length;
+  document.getElementById('selbar').classList.toggle('on', nSel>0);
+  document.getElementById('sel-n').textContent = nSel+' selected';
   renderChips();
   renderPager(list.length, pages);
   renderTabs();
@@ -415,7 +458,7 @@ function applySheet(){
   S.page = 1; closeSheet(); render();
 }
 function resetDraft(){ ['f-status','f-group','f-gw','f-acc'].forEach(function(id){ document.getElementById(id).selectedIndex = 0; }); }
-document.addEventListener('keydown', function(e){ if (e.key==='Escape') closeSheet(); });
+document.addEventListener('keydown', function(e){ if (e.key==='Escape') { closeSheet(); closeBulk(); } });
 
 /* ───────── actions ───────── */
 function setVal(id, v){ ROWS[id].value = v; render(); }
@@ -426,7 +469,24 @@ function selectPage(on){
 }
 function commit(rows){
   rows.forEach(function(r){ r.saved = r.value; r.pending = false; delete S.sel[r.id]; });
-  toast(rows.length===1 ? '1 mapping saved' : rows.length+' mappings saved'); render();
+  var left = ROWS.filter(function(r){ return !r.value; }).length;
+  toast((rows.length===1 ? '1 mapping saved' : rows.length+' mappings saved') +
+    (left ? ' · '+left+(left===1?' group still needs':' groups still need')+' an account' : ''));
+  render();
+}
+// Live behaviour (demo, 2026-11-06): checkboxes select rows for Bulk mapping — one account for all selected rows.
+function selectAllPages(){ visible().forEach(function(r){ S.sel[r.id]=1; }); render(); }
+function clearSel(){ S.sel = {}; render(); }
+function openBulk(){
+  document.getElementById('bm-acc').innerHTML = '<option value="">Select…</option>'+ACCOUNTS.map(function(a){return '<option>'+esc(a)+'</option>';}).join('');
+  document.getElementById('bm-bg').classList.add('on'); document.getElementById('bm-acc').focus();
+}
+function closeBulk(){ document.getElementById('bm-bg').classList.remove('on'); }
+function saveBulk(){
+  var a = document.getElementById('bm-acc').value; if (!a) { document.getElementById('bm-acc').focus(); return; }
+  var rows = ROWS.filter(function(r){ return S.sel[r.id]; });
+  rows.forEach(function(r){ r.value = a; });
+  closeBulk(); commit(rows);
 }
 function saveDirty(){ commit(ROWS.filter(dirty)); }
 function saveRow(id){ commit([ROWS[id]]); }
