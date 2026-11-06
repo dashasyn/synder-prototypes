@@ -139,7 +139,13 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 .map tbody tr.picked td{background:#F2F6FC}      /* live: selected row, its account select disabled */
 .map tbody tr.picked:hover td{background:#E8F0FB}
 /* live selection bar: "N selected · Bulk mapping" left, "Select all on all pages · Clear selection" right */
-.selbar{display:none;align-items:center;gap:16px;height:52px;padding:0 14px 0 12px;border-bottom:1px solid #E0E0E0}
+.selbar{display:none;align-items:center;gap:16px;height:53px;box-sizing:border-box;padding:0 14px 0 12px;border-bottom:1px solid #E0E0E0}
+.selbar .sel-cb{display:flex;align-items:center;gap:12px;width:auto}
+/* live (Ignat's screenshot 2026-11-06): the selection bar takes the place of the header row */
+.map-card.selecting #tbl thead{display:none}
+.bm-b select.err{border-color:var(--color-red)}
+.bm-err{display:none;color:var(--color-red);margin-top:4px}
+.bm-err.on{display:block}
 .selbar.on{display:flex}
 .selbar .sp{flex:1}
 .selbar .grp2{display:inline-flex}
@@ -225,7 +231,7 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
       </div>
 
       <div class="selbar" id="selbar" role="toolbar" aria-label="Selected groups">
-        <span id="sel-n"></span>
+        <span class="sel-cb"><input type="checkbox" class="checkbox" id="sel-bar-cb" aria-label="Clear selection" onchange="clearSel()"><span id="sel-n"></span></span>
         <button type="button" class="btn btn-outlined btn-sm" id="bm-open" onclick="openBulk()">Bulk mapping</button>
         <span class="sp"></span>
         <span class="grp2">
@@ -271,7 +277,7 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 <div class="bm-bg" id="bm-bg" onclick="if(event.target===this)closeBulk()">
   <div class="bm" role="dialog" aria-modal="true" aria-labelledby="bm-t">
     <h2 id="bm-t">Bulk mapping</h2>
-    <div class="bm-b"><label for="bm-acc">Account</label><select id="bm-acc" class="select"></select></div>
+    <div class="bm-b"><label for="bm-acc">Account</label><select id="bm-acc" class="select" aria-describedby="bm-err" onchange="bmErr(false)"></select><div class="bm-err" id="bm-err" role="alert">Required</div></div>
     <div class="bm-f">
       <button type="button" class="btn btn-outlined" onclick="closeBulk()">Cancel</button>
       <button type="button" class="btn" id="bm-save" onclick="saveBulk()">Save mapping</button>
@@ -307,7 +313,7 @@ function add(group, subtype, integ, kind, sug){ ROWS.push({id:ROWS.length, group
 // bank — always manual (4)
 add('Bank','Bank','st','bank'); add('Bank','Bank','sh','bank'); add('Bank','Bank','am','bank'); add('Bank','Bank','pp','bank');
 // unsure — no confident match (2)
-add('Chargebacks','Other expense','st','unsure'); add('Reserve balance','Other current assets','am','unsure');
+add('Adjustments','Other expense','st','unsure'); add('Other fees','Commissions and fees','am','unsure');
 // confident system groups (39)
 ['st','sh','am','pp'].forEach(function(k){
   add('Clearing','Clearing',k,'sure',CLEAR[k]);
@@ -405,6 +411,8 @@ function render(){
   sv.disabled = !nDirty || Object.keys(S.sel).length > 0; sv.textContent = nDirty ? 'Save mappings ('+nDirty+')' : 'Save mappings';
   var nSel = Object.keys(S.sel).length;
   document.getElementById('selbar').classList.toggle('on', nSel>0);
+  document.querySelector('.map-card').classList.toggle('selecting', nSel>0);
+  var bcb = document.getElementById('sel-bar-cb'); bcb.checked = nSel>0 && ids.every(function(i){return S.sel[i];}); bcb.indeterminate = nSel>0 && !bcb.checked;
   document.getElementById('sel-n').textContent = nSel+' selected';
   renderChips();
   renderPager(list.length, pages);
@@ -474,8 +482,12 @@ function commit(rows){
   rows.forEach(function(r){ r.saved = r.value; r.pending = false; delete S.sel[r.id]; });
   // groups Synder couldn't premap that still have no SAVED account (an unsaved pick doesn't count)
   var left = ROWS.filter(function(r){ return !r.sug && !r.saved; }).length;
+  // The Not mapped filter is shown only while there are not-mapped rows (Ignat, 2026-11-06):
+  // new mapping rows can appear any time; once everything is saved the list goes back to All.
+  var allDone = !ROWS.some(function(r){ return !r.saved; });
+  if (allDone && S.status==='not') { S.status = 'all'; S.page = 1; }
   toast((rows.length===1 ? '1 mapping saved' : rows.length+' mappings saved') +
-    (left ? ' · '+left+(left===1?' group still needs':' groups still need')+' an account' : ''));
+    (left ? ' · '+left+(left===1?' group still needs':' groups still need')+' an account' : (allDone ? ' · All groups are mapped' : '')));
   render();
 }
 // Live behaviour (demo, 2026-11-06): checkboxes select rows for Bulk mapping — one account for all selected rows.
@@ -485,9 +497,10 @@ function openBulk(){
   document.getElementById('bm-acc').innerHTML = '<option value="">Select…</option>'+ACCOUNTS.map(function(a){return '<option>'+esc(a)+'</option>';}).join('');
   document.getElementById('bm-bg').classList.add('on'); document.getElementById('bm-acc').focus();
 }
-function closeBulk(){ document.getElementById('bm-bg').classList.remove('on'); }
+function bmErr(on){ document.getElementById('bm-acc').classList.toggle('err', on); document.getElementById('bm-err').classList.toggle('on', on); }
+function closeBulk(){ bmErr(false); document.getElementById('bm-bg').classList.remove('on'); }
 function saveBulk(){
-  var a = document.getElementById('bm-acc').value; if (!a) { document.getElementById('bm-acc').focus(); return; }
+  var a = document.getElementById('bm-acc').value; if (!a) { bmErr(true); document.getElementById('bm-acc').focus(); return; }
   var rows = ROWS.filter(function(r){ return S.sel[r.id]; });
   rows.forEach(function(r){ r.value = a; });
   closeBulk(); commit(rows);
