@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Summary — automapping on first visit</title>
+<title>Summary — automapping, saved (flow 2, idea)</title>
 <link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
@@ -220,19 +220,13 @@ body.v2 .ai-alert{display:flex}
 .toast.on{display:block}
 </style>
 </head>
-<body class="v1">
+<body class="v2">
 
 <div class="variant-switch" role="toolbar" aria-label="Prototype controls">
-  <span class="vs-label">Mapping on first visit</span>
+  <span class="vs-label">Flow step</span>
   <div class="vs-opts">
-    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Premapped</button>
-    <button id="vs-2" onclick="setVariant(2)">2 · Fully saved</button>
-  </div>
-  <span class="vs-sep"></span>
-  <span class="vs-label">Screen</span>
-  <div class="vs-opts">
-    <button id="sc-onb" onclick="go('onboarding')">Onboarding</button>
-    <button id="sc-map" class="on" onclick="go('mapping')">Mappings list</button>
+    <button id="sc-onb" onclick="go('onboarding')">1 · Onboarding</button>
+    <button id="sc-map" class="on" onclick="go('mapping')">2 · Mappings list</button>
   </div>
 </div>
 
@@ -327,11 +321,6 @@ body.v2 .ai-alert{display:flex}
         </div>
       </div>
 
-      <div class="alert alert-info" id="premap-alert" role="status">
-        <span class="material-icons">info</span>
-        <span id="premap-text"></span>
-        <button type="button" class="link" id="premap-show" onclick="setStatus('premapped')">Show premapped</button>
-      </div>
 
       <!-- variant 2: automapping status, proposed copy -->
       <div class="ai-alert" id="ai-alert" data-on="1" role="status">
@@ -516,14 +505,6 @@ function render(){
   var ids = slice.map(function(r){return r.id;}), sa = document.getElementById('sel-all');
   sa.checked = ids.length>0 && ids.every(function(i){return S.sel[i];});
   document.getElementById('save').disabled = !ROWS.some(dirty);
-  // variant 1: premap alert — counts across all integrations, gone once nothing is waiting for approval
-  var nSug = ROWS.filter(function(r){return section(r)==='sug';}).length,
-      nAtt = ROWS.filter(function(r){return section(r)==='att';}).length,
-      al = document.getElementById('premap-alert');
-  al.style.display = (S.v===1 && nSug) ? '' : 'none';
-  document.getElementById('premap-text').innerHTML = '<strong>'+nSug+' groups are premapped.</strong> '+
-    'Save them to sync your summaries.'+(nAtt ? ' '+nAtt+(nAtt===1?' group needs':' groups need')+' an account.' : '');
-  document.getElementById('premap-show').style.display = S.status==='premapped' ? 'none' : '';
   renderChips();
   renderPager(list.length, pages);
   renderTabs();
@@ -546,7 +527,7 @@ function renderTabs(){
   document.getElementById('tabs').innerHTML = h;
 }
 function renderStatusFilter(){
-  var keys = S.v===1 && S.automap ? ['all','not','premapped','mapped'] : ['all','not','mapped'];
+  var keys = ['all','not','mapped'];
   document.getElementById('f-status').innerHTML = keys.map(function(k){return '<option value="'+k+'">'+STATUS[k]+'</option>';}).join('');
   var groups = []; ROWS.forEach(function(r){ if (groups.indexOf(r.group)<0) groups.push(r.group); });
   document.getElementById('f-group').innerHTML = '<option value="">All</option>'+groups.map(function(g){return '<option>'+esc(g)+'</option>';}).join('');
@@ -609,7 +590,7 @@ function pick(w){
   cb.disabled = (w==='pt');
   document.getElementById('automap-row').classList.toggle('off', w==='pt');
 }
-function setAutomap(on){ S.automap = on; reset(); renderStatusFilter(); S.status=defaultStatus(); render(); }
+function setAutomap(on){ S.automap = on; reset(); renderStatusFilter(); S.status=defaultStatus(); render(); S.autoOn = on; renderAi(); }
 function obContinue(){
   if (document.getElementById('r-pt').checked){ toast('Per transaction setup isn’t part of this prototype'); return; }
   go('mapping');
@@ -635,8 +616,6 @@ function toggleAuto(){ S.autoOn = !S.autoOn; renderAi(); toast(S.autoOn ? 'Autom
 function setVariant(n){
   S.v = n; document.body.className = 'v'+n;
   document.getElementById('tip-automap').textContent = TIP[n];
-  document.getElementById('vs-1').classList.toggle('on', n===1);
-  document.getElementById('vs-2').classList.toggle('on', n===2);
   reset(); renderStatusFilter(); S.status=defaultStatus(); S.group=''; S.gw=''; S.acc=''; render(); S.autoOn = S.automap; renderAi(); syncUrl();
 }
 function go(s){
@@ -647,12 +626,11 @@ function go(s){
   document.getElementById('sc-map').classList.toggle('on', s==='mapping');
   syncUrl();
 }
-function syncUrl(){ history.replaceState(null,'', '?v='+S.v+'#'+S.screen); }
+function syncUrl(){ history.replaceState(null,'', '#'+S.screen); }
 
 (function init(){
-  var v = /[?&]v=2/.test(location.search) ? 2 : 1;
-  S.screen = location.hash==='#onboarding' ? 'onboarding' : 'mapping';
-  setVariant(v);
+  S.screen = location.hash==='#mapping' ? 'mapping' : 'onboarding';   // the flow starts on onboarding
+  setVariant(2);
   go(S.screen);
 })();
 window.addEventListener('hashchange', function(){ go(location.hash==='#onboarding' ? 'onboarding' : 'mapping'); });

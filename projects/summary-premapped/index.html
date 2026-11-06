@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Summary — premapped mappings (flow 1)</title>
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+<style>
+/* Two decisions on one dataset (Ignat, 2026-10-27, topic "Mapping page"):
+     1 · Premapped — suggestions are filled in but not saved; grouped Needs attention / Suggested / Mapped
+     2 · Fully saved — suggestions are saved; one plain list, as production
+   Both: bank accounts and unsure groups stay empty. Every text is ≥14px. */
+body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--color-white);
+  font-family:var(--font-family);font-size:14px;color:var(--text-primary)}
+.mi{font-family:'Material Icons Outlined';font-weight:normal;font-style:normal;font-size:22px;line-height:1;
+  display:inline-block;-webkit-font-smoothing:antialiased;font-feature-settings:'liga';text-transform:none;
+  letter-spacing:normal;white-space:nowrap}
+
+.screen{flex:1;min-height:0;display:flex}
+
+/* ── App shell: live Summary sidebar (structure from demo.synderapp.com capture) ── */
+#scr-map{flex-direction:row}
+.sb{--sb-bg:#F5F5F5;--sb-fg:#424242;--sb-ic:#1E73E8;--sb-div:#DADADA;--sb-hover:#EBEBEB;--sb-on:#3B82F6;--sb-open:#E3E3E3;
+  width:224px;flex-shrink:0;border-right:1px solid var(--sb-div);display:flex;flex-direction:column;
+  background:var(--sb-bg);color:var(--sb-fg);overflow-y:auto}
+.sb-org{display:flex;align-items:center;gap:10px;height:56px;padding:0 12px 0 14px;flex-shrink:0;
+  border-bottom:1px solid var(--sb-div);color:var(--text-primary)}
+.sb-org .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-av{width:28px;height:28px;border-radius:50%;background:#C2185B;font-size:14px;color:#fff;display:flex;align-items:center;
+  justify-content:center;flex-shrink:0}
+.sb-item{display:flex;align-items:center;gap:12px;min-height:40px;padding:0 8px 0 12px;color:var(--sb-fg);
+  border-bottom:1px solid var(--sb-div);text-decoration:none;flex-shrink:0;cursor:pointer}
+.sb-item:hover{background:var(--sb-hover)}
+.sb-item .mi{color:var(--sb-ic);flex-shrink:0}
+.sb-item .lb{flex:1;min-width:0;line-height:20px;padding:10px 0}
+.sb-item.open{background:var(--sb-open)}
+.sb-item.sub{padding-left:36px;border-bottom:none}
+.sb-item.on{background:var(--sb-on);color:#fff}
+.sb-item.on .mi{color:#fff}
+.sb-subs{border-bottom:1px solid var(--sb-div)}
+.sb-gap{margin-top:40px;border-top:1px solid var(--sb-div)}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
+.topbar-x{height:56px;flex-shrink:0;display:flex;align-items:center;justify-content:flex-end;gap:16px;
+  padding:0 24px;border-bottom:1px solid var(--border-default)}
+.topbar-x .mi{color:var(--text-secondary)}
+/* live top bar (Ignat's screenshot 2026-10-28): Balance with blue underline, How it works?, blue bell, ? and user with chevrons */
+.topbar-x{gap:24px}
+.tb-bal{display:inline-flex;align-items:baseline;gap:6px;padding:6px 0;border-bottom:3px solid #3B82F6;border-radius:2px;
+  text-decoration:none;font-size:16px}
+.tb-bal .lbl{color:#6B778C}
+.tb-bal .num{color:#1E73E8;font-weight:500;font-size:18px}
+.tb-link{color:#1E73E8;text-decoration:none;font-size:16px}
+.tb-link:hover{text-decoration:underline}
+.tb-ic{color:#1E73E8;font-size:26px;cursor:pointer}
+.tb-help{font-size:28px}
+.tb-dd{display:inline-flex;align-items:center;gap:2px;cursor:pointer}
+.tb-chev{color:#1E73E8;font-size:20px}
+.page{flex:1;overflow-y:auto;padding:24px}
+
+/* Measured on live demo (DS_test_2_dasha, 2026-10-27 20:40):
+   filters panel #EFF1F5, padding 16, labels 14/600, Reset filters only (no Apply) + Enable locations/classes toggles;
+   tabs, table and pager sit in one card with a 1px #DFE4EC border, square corners;
+   header row 52 + 1px #E0E0E0, header text 14px weight 900, black;
+   body rows 52 + 1px #E0E0E0, cell padding 0 10px, text black; unmapped rows tinted #FFF1DD;
+   Account combobox 241×32, 1px #DFE4EC, radius 4. Columns 40/221/221/180/221/261. */
+/* Filters: search + "Filters" button + right side sheet + removable applied chips
+   (pattern from reports/transactions-prototype, variant 2 — Ignat, 2026-10-30) */
+.m-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.m-search{flex:1;min-width:0;display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;box-sizing:border-box;
+  border:1px solid var(--border-default);border-radius:4px;background:#fff}
+.m-search:focus-within{border-color:var(--color-primary)}
+.m-search .material-icons{font-size:18px;color:var(--text-muted)}
+.m-search input{border:none;outline:none;padding:0;height:auto;flex:1;min-width:0;font:inherit;font-size:14px;background:none}
+.f-badge{display:none;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;margin-left:4px;
+  border-radius:10px;background:var(--color-primary-10);color:var(--color-primary);font-size:14px;font-weight:500}
+.f-badge.show{display:inline-flex}
+.m-chips{display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.m-chips.show{display:flex}
+.a-chip{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 4px 0 10px;border-radius:4px;
+  background:var(--color-primary-10);color:var(--color-primary);font-size:14px;white-space:nowrap}
+.a-chip button{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border:none;background:none;
+  padding:0;border-radius:3px;color:inherit;cursor:pointer}
+.a-chip button:hover{background:rgba(0,83,204,.15)}
+.a-chip .material-icons{font-size:16px}
+.chips-clear{border:none;background:none;padding:0;color:var(--color-primary);font:inherit;font-size:14px;cursor:pointer}
+.chips-clear:hover{text-decoration:underline}
+.sheet-ov{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:60}
+.sheet-ov.on{display:block}
+.f-sheet{position:fixed;top:0;right:0;width:400px;height:100%;background:#fff;box-shadow:-4px 0 24px rgba(0,0,0,.15);z-index:61;
+  display:flex;flex-direction:column;transform:translateX(100%);visibility:hidden;transition:transform .25s ease,visibility 0s linear .25s}
+.f-sheet.on{transform:none;visibility:visible;transition:transform .25s ease,visibility 0s}
+.f-sheet-h{display:flex;align-items:center;justify-content:space-between;padding:16px 24px;border-bottom:1px solid var(--border-default)}
+.f-sheet-h h2{margin:0;font-size:20px;font-weight:500}
+.f-sheet-h button{border:none;background:none;cursor:pointer;color:var(--text-secondary);display:flex;padding:4px;border-radius:50%}
+.f-sheet-h button:hover{background:var(--bg-row-hover)}
+.f-sheet-b{flex:1;overflow-y:auto;padding:20px 24px}
+.f-field{margin-bottom:20px}
+.f-field>label{display:block;font-weight:500;margin-bottom:6px}
+.f-sep{border-top:1px solid var(--border-default);margin:4px 0 20px}
+.f-tog{display:flex;align-items:center;gap:10px;margin-bottom:16px;cursor:pointer}
+.f-tog .mi{font-size:16px;color:var(--text-muted)}
+.f-sheet-f{display:flex;justify-content:flex-end;gap:12px;padding:16px 24px;border-top:1px solid var(--border-default)}
+.m-empty td{height:120px!important;text-align:center;color:var(--text-secondary)}
+.m-empty .btn{margin-left:8px}
+
+.map-card{border:1px solid #DFE4EC;background:#fff}
+.tabs-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 14px 0 8px;border-bottom:1px solid #E0E0E0}
+.tabs-row .tabs{border-bottom:none;margin-bottom:0;padding:0;gap:0;min-width:0}
+.tabs-row .tab{height:48px;box-sizing:border-box;padding:12px 16px;font-weight:500;gap:6px}
+.tab-act{display:flex;gap:8px}
+.tab-act .btn .material-icons{font-size:20px;margin-right:-6px}
+.alert .link{margin-left:auto;flex-shrink:0;border:none;background:none;padding:0;font:inherit;font-size:14px;font-weight:500;color:var(--color-primary);cursor:pointer}
+.alert .link:hover{text-decoration:underline}
+.pi{width:20px;height:20px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:700;font-size:14px;flex-shrink:0}
+.pi-st{background:#635bff}.pi-sh{background:#5c8c3e}.pi-am{background:#232F3E}.pi-pp{background:#003087}
+
+.table-wrap.map{box-shadow:none;border-radius:0;overflow:visible}
+.map table.synder-table thead th{position:sticky;top:-24px;z-index:2;height:53px;padding:0 10px;font-weight:900;color:#000;
+  border-bottom:1px solid #E0E0E0}   /* .page has 24px top padding */
+.map table.synder-table tbody td{height:53px;padding:0 10px;color:#000;border-bottom:1px solid #E0E0E0}
+.map .c-sel{width:40px;text-align:center;padding:0 5px!important}
+.map .c-acc{width:261px}
+.map .acc{display:flex;align-items:center;gap:8px}
+.map .acc select{width:241px;height:32px;flex-shrink:0;border-color:#DFE4EC}
+.map .acc select.empty{color:var(--text-placeholder)}
+/* live: unsaved row → select narrows, orange outlined Save (64×34) in the same cell */
+.map .acc.has-save select{width:169px}
+.map .row-save{height:34px;width:64px;padding:0;flex-shrink:0;background:var(--color-white)}
+.map .sub{display:inline-flex;align-items:center;gap:4px}
+.map .sub .hlp{font-size:16px;color:#B0B7C3}
+.map .integ{display:flex;align-items:center;gap:8px}
+.map tbody tr.unmapped td{background:#FFF1DD}
+.map tbody tr.unmapped:hover td{background:#FFEAC9}
+.map tbody tr:last-child td{border-bottom:none}
+.pagination{justify-content:flex-end;height:52px;box-sizing:border-box;border-top:1px solid #E0E0E0}
+.pagination select{width:auto;height:32px}
+
+
+/* toast: bottom-right, 320px, 5s (DESIGN_RULES) — no Undo */
+.toast{position:fixed;right:24px;bottom:24px;width:320px;box-sizing:border-box;background:#323232;color:#fff;
+  padding:14px 16px;border-radius:4px;box-shadow:0 4px 16px rgba(0,0,0,.2);display:none;z-index:50;font-size:14px}
+.toast.on{display:block}
+</style>
+</head>
+<body>
+
+
+<!-- ═══════════ MAPPINGS LIST ═══════════ -->
+<div class="screen on" id="scr-map">
+  <nav class="sb" aria-label="Main">
+    <div class="sb-org"><span class="sb-av">SU</span><span class="nm">Summary_test</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">dashboard</span><span class="lb">Dashboard</span></div>
+    <div class="sb-item open"><span class="mi">sync</span><span class="lb">Mapping</span><span class="mi">expand_less</span></div>
+    <div class="sb-subs">
+      <a class="sb-item sub on" href="#mapping"><span class="mi">compare_arrows</span><span class="lb">Mappings list</span></a>
+      <a class="sb-item sub"><span class="mi">apps</span><span class="lb">Groups</span></a>
+    </div>
+    <div class="sb-item"><span class="mi">sync_alt</span><span class="lb">Summaries</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">vertical_split</span><span class="lb">Reconciliation</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">shopping_cart</span><span class="lb">Products and services</span></div>
+    <div class="sb-item"><span class="mi">trending_up</span><span class="lb">Analytics</span><span class="mi">expand_more</span></div>
+    <div class="sb-item"><span class="mi">event_note</span><span class="lb">Revenue recognition</span></div>
+    <div class="sb-gap"></div>
+    <div class="sb-item"><span class="mi">hub</span><span class="lb">AI Hub</span></div>
+    <div class="sb-item"><span class="mi">stars</span><span class="lb">What's New</span></div>
+    <div class="sb-item"><span class="mi">settings</span><span class="lb">Settings</span></div>
+  </nav>
+
+  <div class="main">
+    <div class="topbar-x">
+      <a class="tb-bal" href="#mapping"><span class="lbl">Balance :</span> <span class="num">1000</span></a>
+      <a class="tb-link" href="#mapping">How it works?</a>
+      <span class="material-icons tb-ic tb-bell">notifications</span>
+      <span class="tb-dd"><span class="material-icons tb-ic tb-help">help_outline</span><span class="material-icons tb-chev">expand_more</span></span>
+      <span class="tb-dd"><span class="material-icons tb-ic">person</span><span class="material-icons tb-chev">expand_more</span></span></div>
+    <div class="page">
+      <div class="page-header">
+        <div class="page-header-text">
+          <h1 class="page-title">Mappings list</h1>
+          <p class="page-subtitle">Create mappings between transactions and your Chart of Accounts.</p>
+        </div>
+        <div class="page-header-actions">
+          <button class="btn btn-outlined btn-sm">Export CSV</button>
+        </div>
+      </div>
+
+
+
+      <div class="m-toolbar">
+        <label class="m-search"><span class="material-icons">search</span>
+          <input type="text" id="m-q" placeholder="Search group or account" aria-label="Search groups" oninput="S.q=this.value;S.page=1;render()"></label>
+        <button type="button" class="btn btn-outlined btn-sm" id="f-open" onclick="openSheet()"><span class="material-icons" style="font-size:18px">tune</span>Filters<span class="f-badge" id="f-badge"></span></button>
+      </div>
+      <div class="m-chips" id="m-chips"></div>
+
+      <div class="map-card">
+      <div class="tabs-row">
+        <div class="tabs" id="tabs" role="tablist"></div>
+        <div class="tab-act">
+          <button class="btn btn-outlined btn-sm">Add group<span class="material-icons">expand_more</span></button>
+          <button class="btn btn-sm" id="save" onclick="saveDirty()" disabled>Save mappings</button>
+        </div>
+      </div>
+
+      <div class="table-wrap map">
+        <table class="synder-table" id="tbl">
+          <thead><tr>
+            <th class="c-sel"><input type="checkbox" class="checkbox" id="sel-all" aria-label="Select all on page" onchange="selectPage(this.checked)"></th>
+            <th>Group</th><th>Account subtype</th><th>Payment gateway</th><th>Integration</th><th class="c-acc">Account</th>
+          </tr></thead>
+          <tbody id="tb"></tbody>
+        </table>
+      </div>
+      <div class="pagination" id="pager"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="sheet-ov" id="sheet-ov" onclick="closeSheet()"></div>
+<aside class="f-sheet" id="f-sheet" role="dialog" aria-modal="true" aria-labelledby="f-sheet-t">
+  <div class="f-sheet-h"><h2 id="f-sheet-t">Filters</h2>
+    <button type="button" aria-label="Close" onclick="closeSheet()"><span class="material-icons">close</span></button></div>
+  <div class="f-sheet-b">
+    <div class="f-field"><label for="f-status">Mapping status</label><select id="f-status" class="select"></select></div>
+    <div class="f-field"><label for="f-group">Groups</label><select id="f-group" class="select"></select></div>
+    <div class="f-field"><label for="f-gw">Payment gateway</label><select id="f-gw" class="select"><option value="">All</option><option>Online Sales</option></select></div>
+    <div class="f-field"><label for="f-acc">Account</label><select id="f-acc" class="select"></select></div>
+    <div class="f-sep"></div>
+    <label class="f-tog" onclick="this.querySelector('.toggle').classList.toggle('on')"><span class="toggle" id="t-loc"></span>Enable locations<span class="mi">help</span></label>
+    <label class="f-tog" onclick="this.querySelector('.toggle').classList.toggle('on')"><span class="toggle" id="t-cls"></span>Enable classes<span class="mi">help</span></label>
+  </div>
+  <div class="f-sheet-f">
+    <button type="button" class="btn btn-outlined" id="f-reset" onclick="resetDraft()">Reset filters</button>
+    <button type="button" class="btn" id="f-apply" onclick="applySheet()">Apply filters</button>
+  </div>
+</aside>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ───────── data: one org, 4 integrations, 120 groups ───────── */
+var INTEG = {
+  st:{name:'Flowers (Stripe)', l:'S'},
+  sh:{name:'Plates (Shopify)',  l:'S'},
+  am:{name:'Bakery (Amazon)',      l:'a'},
+  pp:{name:'Tea shop (PayPal)',       l:'P'}
+};
+var ACCOUNTS = [
+  'Chase Business Checking','Chase Savings','Wise EUR account','Mercury Operating',
+  'Stripe clearing (Synder)','Shopify clearing (Synder)','Amazon clearing (Synder)','PayPal clearing (Synder)',
+  'Accounts Receivable (A/R)','Customer prepayments','Discounts given','Merchant fees','Amazon seller fees',
+  'Advertising','Sales','Sales — Flowers','Sales — Plates','Sales — Bread','Sales — Tea','Shipping income',
+  'Sales tax payable','Refunds','Gift card liability','Tips payable','Chargebacks','Loan payable — Shopify Capital',
+  'Exchange gain or loss','Reserve held by Amazon','Inventory reimbursements','Other income','Bank charges',
+  'Uncategorized expense'
+];
+var SALES = {st:'Sales — Flowers', sh:'Sales — Plates', am:'Sales — Bread', pp:'Sales — Tea'};
+var CLEAR = {st:'Stripe clearing (Synder)', sh:'Shopify clearing (Synder)', am:'Amazon clearing (Synder)', pp:'PayPal clearing (Synder)'};
+
+var ROWS = [];
+function add(group, subtype, integ, kind, sug){ ROWS.push({id:ROWS.length, group:group, subtype:subtype, integ:integ, kind:kind, sug:sug||''}); }
+
+// bank — always manual (4)
+add('Bank','Bank','st','bank'); add('Bank','Bank','sh','bank'); add('Bank','Bank','am','bank'); add('Bank','Bank','pp','bank');
+// unsure — no confident match (2)
+add('Chargebacks','Other expense','st','unsure'); add('Reserve balance','Other current assets','am','unsure');
+// confident system groups (39)
+['st','sh','am','pp'].forEach(function(k){
+  add('Clearing','Clearing',k,'sure',CLEAR[k]);
+  add('Customer balance','Accounts receivable',k,'sure','Customer prepayments');
+  add('Discounts','Discounts',k,'sure','Discounts given');
+  add('Platform fees','Commissions and fees',k,'sure', k==='am'?'Amazon seller fees':'Merchant fees');
+  add('Sales','Income',k,'sure',SALES[k]);
+  add('Taxes','Taxes payable',k,'sure','Sales tax payable');
+  add('Refunds','Income',k,'sure','Refunds');
+  add('Shipping','Income',k,'sure','Shipping income');
+  add('Invoices','Accounts receivable',k,'sure','Accounts Receivable (A/R)');
+});
+add('FBA fees','Commissions and fees','am','sure','Amazon seller fees');
+add('Referral fees','Commissions and fees','am','sure','Amazon seller fees');
+add('Advertising fees','Advertising','am','sure','Advertising');
+// confident product groups by SKU (75)
+var PROD = {
+  st:['Peony bouquet','Tulip box','Rose dozen','Seasonal wreath','Orchid pot','Dried lavender','Sunflower bunch','Wedding arch set','Bridal posy','Gift card bouquet','Succulent trio','Lily stems','Hydrangea vase','Monthly flower plan','Funeral spray','Ranunculus bunch','Anemone bunch','Eucalyptus stems','Protea stem'],
+  sh:['Stoneware dinner plate','Side plate','Pasta bowl','Serving platter','Mug — speckled','Mug — matte black','Espresso cup','Salad bowl','Butter dish','Teapot','Dessert plate','Oval tray','Ramen bowl','Pitcher','Gravy boat','Cake stand','Saucer','Dip bowls set','Soup tureen','Egg cups'],
+  am:['Sourdough loaf','Rye loaf','Baguette 2-pack','Focaccia','Brioche','Cinnamon rolls','Seeded bagels','Croissant 6-pack','Banana bread','Gluten-free loaf','Ciabatta','Pretzel rolls','Challah','Bread starter kit','Muffin 4-pack','Pita 10-pack','Spelt loaf','Olive bread'],
+  pp:['Sencha 100g','Earl Grey 100g','Chamomile 50g','Matcha 30g','Oolong 100g','Rooibos 100g','Chai blend','Jasmine pearls','Tea sampler','Cast-iron teapot','Gaiwan','Tea strainer','Mint blend','Pu-erh cake','Hojicha 100g','Gift box','Genmaicha 100g','Darjeeling 100g']
+};
+var PFX = {st:'FL',sh:'PL',am:'BR',pp:'TE'};
+Object.keys(PROD).forEach(function(k){
+  PROD[k].forEach(function(n,i){ add('SKU '+PFX[k]+'-'+(1001+i)+' · '+n,'Income',k,'sure',SALES[k]); });
+});
+
+/* ───────── state ───────── */
+var S = {v:1, automap:true, screen:'mapping', tab:'all', status:'all', group:'', gw:'', acc:'', q:'', page:1, per:25, sel:{}};
+function reset(){
+  ROWS.forEach(function(r){
+    var sure = r.kind==='sure' && S.automap;
+    r.saved = (S.v===2 && sure) ? r.sug : '';
+    r.value = sure ? r.sug : '';
+    r.pending = (S.v===1 && sure);        // a filled-in suggestion that isn't saved
+  });
+  S.sel = {}; S.page = 1;
+}
+function section(r){ return r.saved ? 'map' : (r.pending ? 'sug' : 'att'); }
+function dirty(r){ return !!r.value && r.value !== r.saved; }
+function edited(r){ return r.pending && r.value && r.value!==r.sug; }
+
+/* ───────── render ───────── */
+var STATUS = {all:'All', not:'Not mapped', mapped:'Mapped'};
+// Flow 1: a premapped row is not mapped until the user saves it (same as live Mapping status).
+function statusOf(r){ return r.saved ? 'mapped' : 'not'; }
+// Opens on Not mapped when there is anything left to map (Ignat, 2026-10-30); otherwise All.
+function defaultStatus(){ return ROWS.some(function(r){ return !r.saved; }) ? 'not' : 'all'; }
+function visible(){
+  var q = S.q.trim().toLowerCase();
+  return ROWS.filter(function(r){
+    if (S.tab!=='all' && r.integ!==S.tab) return false;
+    if (S.status!=='all' && statusOf(r)!==S.status) return false;
+    if (S.group && r.group!==S.group) return false;
+    if (S.acc && r.value!==S.acc) return false;
+    if (q && (r.group+' '+r.value).toLowerCase().indexOf(q)<0) return false;
+    return true;
+  }).sort(function(a,b){
+    var io = {st:0,sh:1,am:2,pp:3};
+    // rows Synder could not premap first (they need a choice), then production order; fixed so a row never jumps while you edit it
+    return (a.sug?1:0)-(b.sug?1:0) || io[a.integ]-io[b.integ] || a.id-b.id;
+  });
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
+function opts(v){
+  var h = '<option value=""'+(v?'':' selected')+'>Search or start typing…</option>';
+  ACCOUNTS.forEach(function(a){ h += '<option'+(a===v?' selected':'')+'>'+esc(a)+'</option>'; });
+  return h;
+}
+function render(){
+  var list = visible(), pages = Math.max(1, Math.ceil(list.length/S.per));
+  if (S.page>pages) S.page = pages;
+  var slice = list.slice((S.page-1)*S.per, S.page*S.per), h = '';
+  slice.forEach(function(r){
+    var sec = section(r);
+    var I = INTEG[r.integ],
+        rs = dirty(r) ? '<button type="button" class="btn btn-outlined-warning btn-sm row-save" onclick="saveRow('+r.id+')">Save</button>' : '';
+    h += '<tr data-id="'+r.id+'" data-sec="'+sec+'"'+(r.value?'':' class="unmapped"')+'>'+
+      '<td class="c-sel"><input type="checkbox" class="checkbox" aria-label="Select '+esc(r.group)+'"'+(S.sel[r.id]?' checked':'')+' onchange="sel('+r.id+',this.checked)"></td>'+
+      '<td class="grp">'+esc(r.group)+'</td><td><span class="sub">'+esc(r.subtype)+'<span class="material-icons hlp" aria-hidden="true">help</span></span></td><td>Online Sales</td>'+
+      '<td><span class="integ"><span class="pi pi-'+r.integ+'">'+I.l+'</span>'+esc(I.name)+'</span></td>'+
+      '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'" onchange="setVal('+r.id+',this.value)">'+opts(r.value)+'</select>'+rs+'</div></td></tr>';
+  });
+  if (!slice.length) h = '<tr class="m-empty"><td colspan="6">'+(S.status==='not' && !S.q && !S.group && !S.acc && S.tab==='all'
+      ? 'All groups are mapped.' : 'No groups match these filters.')+
+    '<button type="button" class="btn btn-outlined btn-sm" onclick="clearAll()">Show all groups</button></td></tr>';
+  document.getElementById('tb').innerHTML = h;
+  var ids = slice.map(function(r){return r.id;}), sa = document.getElementById('sel-all');
+  sa.checked = ids.length>0 && ids.every(function(i){return S.sel[i];});
+  document.getElementById('save').disabled = !ROWS.some(dirty);
+  renderChips();
+  renderPager(list.length, pages);
+  renderTabs();
+}
+function renderPager(total, pages){
+  var from = total ? (S.page-1)*S.per+1 : 0, to = Math.min(total, S.page*S.per);
+  var h = '<span class="page-info">Rows per page:</span><select class="select" id="per" onchange="S.per=+this.value;S.page=1;render()">'+
+    [25,50,100].map(function(n){return '<option'+(n===S.per?' selected':'')+'>'+n+'</option>';}).join('')+'</select>'+
+    '<span class="page-info" id="range">'+from+'–'+to+' of '+total+'</span>'+
+    '<button class="page-btn" aria-label="Previous page" '+(S.page<=1?'disabled':'')+' onclick="S.page--;render()"><span class="material-icons">chevron_left</span></button>';
+  for (var p=1;p<=pages;p++) h += '<button class="page-btn'+(p===S.page?' active':'')+'" onclick="S.page='+p+';render()">'+p+'</button>';
+  h += '<button class="page-btn" aria-label="Next page" '+(S.page>=pages?'disabled':'')+' onclick="S.page++;render()"><span class="material-icons">chevron_right</span></button>';
+  document.getElementById('pager').innerHTML = h;
+}
+function renderTabs(){
+  var h = '<div class="tab'+(S.tab==='all'?' active':'')+'" role="tab" onclick="setTab(\'all\')">All</div>';
+  Object.keys(INTEG).forEach(function(k){
+    h += '<div class="tab'+(S.tab===k?' active':'')+'" role="tab" onclick="setTab(\''+k+'\')"><span class="pi pi-'+k+'">'+INTEG[k].l+'</span>'+esc(INTEG[k].name)+'</div>';
+  });
+  document.getElementById('tabs').innerHTML = h;
+}
+function renderStatusFilter(){
+  var keys = ['all','not','mapped'];
+  document.getElementById('f-status').innerHTML = keys.map(function(k){return '<option value="'+k+'">'+STATUS[k]+'</option>';}).join('');
+  var groups = []; ROWS.forEach(function(r){ if (groups.indexOf(r.group)<0) groups.push(r.group); });
+  document.getElementById('f-group').innerHTML = '<option value="">All</option>'+groups.map(function(g){return '<option>'+esc(g)+'</option>';}).join('');
+  document.getElementById('f-acc').innerHTML = '<option value="">All</option>'+ACCOUNTS.map(function(a){return '<option>'+esc(a)+'</option>';}).join('');
+}
+var CHIP = {status:'Mapping status', group:'Group', gw:'Payment gateway', acc:'Account'};
+function activeFilters(){ return ['status','group','gw','acc'].filter(function(k){ return k==='status' ? S.status!=='all' : !!S[k]; }); }
+function renderChips(){
+  var keys = activeFilters(), b = document.getElementById('f-badge'), c = document.getElementById('m-chips');
+  b.textContent = keys.length; b.classList.toggle('show', keys.length>0);
+  c.classList.toggle('show', keys.length>0);
+  c.innerHTML = keys.map(function(k){
+    var v = k==='status' ? STATUS[S.status] : S[k];
+    return '<span class="a-chip">'+CHIP[k]+': '+esc(v)+'<button type="button" aria-label="Remove '+CHIP[k]+' filter" onclick="dropFilter(\''+k+'\')"><span class="material-icons">close</span></button></span>';
+  }).join('') + (keys.length>1 ? '<button type="button" class="chips-clear" onclick="clearAll()">Clear all</button>' : '');
+}
+function dropFilter(k){ if (k==='status') S.status='all'; else S[k]=''; S.page=1; render(); }
+function clearAll(){ S.status='all'; S.group=''; S.gw=''; S.acc=''; S.q=''; S.tab='all'; document.getElementById('m-q').value=''; S.page=1; render(); }
+function setStatus(k){ S.status=k; S.page=1; render(); }
+function openSheet(){
+  document.getElementById('f-status').value = S.status; document.getElementById('f-group').value = S.group;
+  document.getElementById('f-gw').value = S.gw; document.getElementById('f-acc').value = S.acc;
+  document.getElementById('sheet-ov').classList.add('on'); document.getElementById('f-sheet').classList.add('on');
+  setTimeout(function(){ document.getElementById('f-status').focus(); }, 50);
+}
+function closeSheet(){ document.getElementById('sheet-ov').classList.remove('on'); document.getElementById('f-sheet').classList.remove('on'); }
+function applySheet(){
+  S.status = document.getElementById('f-status').value; S.group = document.getElementById('f-group').value;
+  S.gw = document.getElementById('f-gw').value; S.acc = document.getElementById('f-acc').value;
+  S.page = 1; closeSheet(); render();
+}
+function resetDraft(){ ['f-status','f-group','f-gw','f-acc'].forEach(function(id){ document.getElementById(id).selectedIndex = 0; }); }
+document.addEventListener('keydown', function(e){ if (e.key==='Escape') closeSheet(); });
+
+/* ───────── actions ───────── */
+function setVal(id, v){ ROWS[id].value = v; render(); }
+function sel(id, on){ if (on) S.sel[id]=1; else delete S.sel[id]; render(); }
+function selectPage(on){
+  var list = visible().slice((S.page-1)*S.per, S.page*S.per);
+  list.forEach(function(r){ if (on) S.sel[r.id]=1; else delete S.sel[r.id]; }); render();
+}
+function commit(rows){
+  rows.forEach(function(r){ r.saved = r.value; r.pending = false; delete S.sel[r.id]; });
+  toast(rows.length===1 ? '1 mapping saved' : rows.length+' mappings saved'); render();
+}
+function saveDirty(){ commit(ROWS.filter(dirty)); }
+function saveRow(id){ commit([ROWS[id]]); }
+function setTab(k){ S.tab = k; S.page = 1; render(); }
+
+var tt;
+function toast(m){ var t = document.getElementById('toast'); t.textContent = m; t.classList.add('on');
+  clearTimeout(tt); tt = setTimeout(function(){ t.classList.remove('on'); }, 5000); }
+
+(function init(){
+  S.v = 1; reset(); renderStatusFilter(); S.status = defaultStatus(); render();
+})();
+</script>
+</body>
+</html>
