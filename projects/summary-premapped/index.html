@@ -131,6 +131,12 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 /* live: unsaved row → select narrows, orange outlined Save (64×34) in the same cell */
 .map .acc.has-save select{width:169px}
 .map .row-save{height:34px;width:64px;padding:0;flex-shrink:0;background:var(--color-white)}
+/* row Save: disabled with a loader for a moment, then the row leaves the Not mapped view (Ignat, 2026-11-06) */
+.map .row-save.busy{position:relative;color:transparent}
+.map .row-save.busy .spinner{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-10px 0 0 -10px}
+.bm-scope{margin:0 0 16px;color:var(--text-primary)}
+body.bv2 #save{display:none}
+.variant-switch button{font-size:14px}
 .map .sub{display:inline-flex;align-items:center;gap:4px}
 .map .sub .hlp{font-size:16px;color:#B0B7C3}
 .map .integ{display:flex;align-items:center;gap:8px}
@@ -171,6 +177,13 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 </style>
 </head>
 <body>
+<div class="variant-switch">
+  <span class="vs-label">Bulk actions</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Save mappings button</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Bulk area</button>
+  </div>
+</div>
 
 
 <!-- ═══════════ MAPPINGS LIST ═══════════ -->
@@ -232,6 +245,7 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 
       <div class="selbar" id="selbar" role="toolbar" aria-label="Selected groups">
         <span class="sel-cb"><input type="checkbox" class="checkbox" id="sel-bar-cb" aria-label="Clear selection" onchange="clearSel()"><span id="sel-n"></span></span>
+        <button type="button" class="btn btn-sm" id="sel-save" onclick="saveSelected()">Save mappings</button>
         <button type="button" class="btn btn-outlined btn-sm" id="bm-open" onclick="openBulk()">Bulk mapping</button>
         <span class="sp"></span>
         <span class="grp2">
@@ -277,7 +291,7 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 <div class="bm-bg" id="bm-bg" onclick="if(event.target===this)closeBulk()">
   <div class="bm" role="dialog" aria-modal="true" aria-labelledby="bm-t">
     <h2 id="bm-t">Bulk mapping</h2>
-    <div class="bm-b"><label for="bm-acc">Account</label><select id="bm-acc" class="select" aria-describedby="bm-err" onchange="bmErr(false)"></select><div class="bm-err" id="bm-err" role="alert">Required</div></div>
+    <div class="bm-b"><p class="bm-scope" id="bm-scope"></p><label for="bm-acc">Account</label><select id="bm-acc" class="select" aria-describedby="bm-err" onchange="bmErr(false)"></select><div class="bm-err" id="bm-err" role="alert">Required</div></div>
     <div class="bm-f">
       <button type="button" class="btn btn-outlined" onclick="closeBulk()">Cancel</button>
       <button type="button" class="btn" id="bm-save" onclick="saveBulk()">Save mapping</button>
@@ -342,7 +356,7 @@ Object.keys(PROD).forEach(function(k){
 });
 
 /* ───────── state ───────── */
-var S = {v:1, automap:true, screen:'mapping', tab:'all', status:'all', group:'', gw:'', acc:'', q:'', page:1, per:25, sel:{}};
+var S = {v:1, bv:1, saving:{}, automap:true, screen:'mapping', tab:'all', status:'all', group:'', gw:'', acc:'', q:'', page:1, per:25, sel:{}};
 function reset(){
   ROWS.forEach(function(r){
     var sure = r.kind==='sure' && S.automap;
@@ -359,14 +373,19 @@ function edited(r){ return r.pending && r.value && r.value!==r.sug; }
 /* ───────── render ───────── */
 var STATUS = {all:'All', not:'Not mapped', mapped:'Mapped'};
 // Flow 1: a premapped row is not mapped until the user saves it (same as live Mapping status).
-function statusOf(r){ return r.saved ? 'mapped' : 'not'; }
+// A saved row whose account was changed and not saved again is also Not mapped (round-3 review, Ignat 2026-11-06).
+function isNot(r){ return !r.saved || dirty(r); }
+function statusOf(r){ return isNot(r) ? 'not' : 'mapped'; }
 // Opens on Not mapped when there is anything left to map (Ignat, 2026-10-30); otherwise All.
-function defaultStatus(){ return ROWS.some(function(r){ return !r.saved; }) ? 'not' : 'all'; }
+function defaultStatus(){ return ROWS.some(isNot) ? 'not' : 'all'; }
 function visible(){
   var q = S.q.trim().toLowerCase();
   return ROWS.filter(function(r){
     if (S.tab!=='all' && r.integ!==S.tab) return false;
-    if (S.status!=='all' && statusOf(r)!==S.status) return false;
+    // an edited saved row stays in the Mapped view while you edit it, and also shows under Not mapped
+    if (S.status==='not' && !isNot(r)) return false;
+    if (S.status==='mapped' && !r.saved) return false;
+    if (S.gw && S.gw!=='Online Sales') return false;
     if (S.group && r.group!==S.group) return false;
     if (S.acc && r.value!==S.acc) return false;
     if (q && (r.group+' '+r.value).toLowerCase().indexOf(q)<0) return false;
@@ -393,22 +412,30 @@ function render(){
   slice.forEach(function(r){
     var sec = section(r);
     var I = INTEG[r.integ],
-        rs = dirty(r) ? '<button type="button" class="btn btn-outlined-warning btn-sm row-save"'+(anySel?' disabled':'')+' onclick="saveRow('+r.id+')">Save</button>' : '';
+        busy = !!S.saving[r.id],
+        rs = dirty(r) ? '<button type="button" class="btn btn-outlined-warning btn-sm row-save'+(busy?' busy':'')+'"'+(anySel||busy?' disabled':'')+(busy?' aria-busy="true"':'')+' onclick="saveRow('+r.id+')">Save'+(busy?'<span class="spinner" aria-hidden="true"></span>':'')+'</button>' : '';
     var cls = S.sel[r.id] ? 'picked' : (r.value && r.value===r.saved ? '' : 'unmapped');
     h += '<tr data-id="'+r.id+'" data-sec="'+sec+'"'+(cls?' class="'+cls+'"':'')+'>'+
       '<td class="c-sel"><input type="checkbox" class="checkbox" aria-label="Select '+esc(r.group)+'"'+(S.sel[r.id]?' checked':'')+' onchange="sel('+r.id+',this.checked)"></td>'+
       '<td class="grp">'+esc(r.group)+'</td><td><span class="sub">'+esc(r.subtype)+'<span class="material-icons hlp" aria-hidden="true">help</span></span></td><td>Online Sales</td>'+
       '<td><span class="integ"><span class="pi pi-'+r.integ+'">'+I.l+'</span>'+esc(I.name)+'</span></td>'+
-      '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'"'+(anySel?' disabled':'')+' onchange="setVal('+r.id+',this.value)">'+opts(r.value)+'</select>'+rs+'</div></td></tr>';
+      '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'"'+(anySel||busy?' disabled':'')+' onchange="setVal('+r.id+',this.value)">'+opts(r.value)+'</select>'+rs+'</div></td></tr>';
   });
-  if (!slice.length) h = '<tr class="m-empty"><td colspan="6">'+(S.status==='not' && !S.q && !S.group && !S.acc && S.tab==='all'
-      ? 'All groups are mapped.' : 'No groups match these filters.')+
-    '<button type="button" class="btn btn-outlined btn-sm" onclick="clearAll()">Show all groups</button></td></tr>';
+  if (!slice.length) {
+    var done = S.status==='not' && !S.q && !S.group && !S.acc && !S.gw;
+    // on an integration tab: say that integration is done and keep the tab (round-3 review)
+    h = '<tr class="m-empty"><td colspan="6">'+(done ? (S.tab==='all' ? 'All groups are mapped.' : 'All '+esc(INTEG[S.tab].name)+' groups are mapped.') : 'No groups match these filters.')+
+      '<button type="button" class="btn btn-outlined btn-sm" onclick="'+(done && S.tab!=='all' ? "dropFilter('status')" : 'clearAll()')+'">Show all groups</button></td></tr>';
+  }
   document.getElementById('tb').innerHTML = h;
   var ids = slice.map(function(r){return r.id;}), sa = document.getElementById('sel-all');
   sa.checked = ids.length>0 && ids.every(function(i){return S.sel[i];});
-  var nDirty = ROWS.filter(dirty).length, sv = document.getElementById('save');
+  // Save mappings saves the unsaved rows of the current view (tab, filters, search) on all its pages (Ignat, 2026-11-06)
+  var nDirty = list.filter(dirty).length, sv = document.getElementById('save');
   sv.disabled = !nDirty || Object.keys(S.sel).length > 0; sv.textContent = nDirty ? 'Save mappings ('+nDirty+')' : 'Save mappings';
+  // variant 2: the selection bar's Save saves the selected rows that have an unsaved account
+  var nSelDirty = ROWS.filter(function(r){ return S.sel[r.id] && dirty(r); }).length, ss = document.getElementById('sel-save');
+  ss.style.display = S.bv===2 ? '' : 'none'; ss.disabled = !nSelDirty; ss.textContent = nSelDirty ? 'Save mappings ('+nSelDirty+')' : 'Save mappings';
   var nSel = Object.keys(S.sel).length;
   document.getElementById('selbar').classList.toggle('on', nSel>0);
   document.querySelector('.map-card').classList.toggle('selecting', nSel>0);
@@ -484,8 +511,11 @@ function commit(rows){
   var left = ROWS.filter(function(r){ return !r.sug && !r.saved; }).length;
   // The default Not mapped filter is picked on page load only (defaultStatus). Never change the
   // user's filter mid-session; when the last row is saved the empty state says so (Ignat, 2026-11-06).
+  // once nothing is empty, count what is still unsaved, so the toast never reads as "done" too early (round-3 review)
+  var unsaved = ROWS.filter(isNot).length;
   toast((rows.length===1 ? '1 mapping saved' : rows.length+' mappings saved') +
-    (left ? ' · '+left+(left===1?' group still needs':' groups still need')+' an account' : ''));
+    (left ? ' · '+left+(left===1?' group still needs':' groups still need')+' an account'
+          : (unsaved ? ' · '+unsaved+' not saved yet' : '')));
   render();
 }
 // Live behaviour (demo, 2026-11-06): checkboxes select rows for Bulk mapping — one account for all selected rows.
@@ -493,6 +523,8 @@ function selectAllPages(){ visible().forEach(function(r){ S.sel[r.id]=1; }); ren
 function clearSel(){ S.sel = {}; render(); }
 function openBulk(){
   document.getElementById('bm-acc').innerHTML = '<option value="">Select…</option>'+ACCOUNTS.map(function(a){return '<option>'+esc(a)+'</option>';}).join('');
+  var n = Object.keys(S.sel).length;
+  document.getElementById('bm-scope').textContent = 'The selected account will be applied to '+(n===1 ? 'the selected group.' : 'all '+n+' selected groups.');
   document.getElementById('bm-bg').classList.add('on'); document.getElementById('bm-acc').focus();
 }
 function bmErr(on){ document.getElementById('bm-acc').classList.toggle('err', on); document.getElementById('bm-err').classList.toggle('on', on); }
@@ -503,8 +535,22 @@ function saveBulk(){
   rows.forEach(function(r){ r.value = a; });
   closeBulk(); commit(rows);
 }
-function saveDirty(){ commit(ROWS.filter(dirty)); }
-function saveRow(id){ commit([ROWS[id]]); }
+function saveDirty(){ commit(visible().filter(dirty)); }
+var SAVE_DELAY = 800;
+function saveRow(id){
+  if (S.saving[id]) return;
+  S.saving[id] = 1; render();
+  setTimeout(function(){ delete S.saving[id]; commit([ROWS[id]]); }, SAVE_DELAY);
+}
+function saveSelected(){
+  var rows = ROWS.filter(function(r){ return S.sel[r.id] && dirty(r); });
+  S.sel = {}; commit(rows);
+}
+function setVariant(n){
+  S.bv = n; S.sel = {}; document.body.classList.toggle('bv2', n===2);
+  [1,2].forEach(function(i){ document.getElementById('vs-'+i).classList.toggle('on', i===n); });
+  render();
+}
 function setTab(k){ S.tab = k; S.page = 1; render(); }
 
 var tt;
