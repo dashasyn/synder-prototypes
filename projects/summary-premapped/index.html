@@ -136,6 +136,8 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 .map .row-save.busy .spinner{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-10px 0 0 -10px}
 .bm-scope{margin:0 0 16px;color:var(--text-primary)}
 body.bv2 #save{display:none}
+.premap-alert .link-btn{background:none;border:none;padding:0;margin-left:8px;font:inherit;font-weight:500;color:var(--color-primary);text-decoration:underline;cursor:pointer}
+body:not(.bv2) #premap-sel{display:none}
 .variant-switch button{font-size:14px}
 .map .sub{display:inline-flex;align-items:center;gap:4px}
 .map .sub .hlp{font-size:16px;color:#B0B7C3}
@@ -157,6 +159,7 @@ body.bv2 #save{display:none}
 .selbar .grp2{display:inline-flex}
 .selbar .grp2 .btn+.btn{margin-left:-1px;border-top-left-radius:0;border-bottom-left-radius:0}
 .selbar .grp2 .btn:first-child{border-top-right-radius:0;border-bottom-right-radius:0}
+body:not(.bv2) .selbar .sel-acts .btn{border-radius:var(--radius-sm);margin-left:0}
 .bm-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:70;align-items:center;justify-content:center}
 .bm-bg.on{display:flex}
 .bm{background:#fff;border-radius:4px;width:468px;box-shadow:0 11px 15px -7px rgba(0,0,0,.2),0 24px 38px 3px rgba(0,0,0,.14)}
@@ -227,6 +230,11 @@ body.bv2 #save{display:none}
 
 
 
+      <!-- first visit after premapping: dismissable info alert (Ignat, 2026-11-06) -->
+      <div class="alert alert-info premap-alert" id="premap-alert" role="status"><span class="material-icons">info</span>
+        <span><span class="alert-title" id="premap-t"></span>Check them and save to sync your summaries.<button type="button" class="link-btn" id="premap-sel" onclick="selectPremapped()">Select them</button></span>
+        <button type="button" class="alert-close" aria-label="Dismiss" onclick="S.alertOff=true;render()"><span class="material-icons">close</span></button></div>
+
       <div class="m-toolbar">
         <label class="m-search"><span class="material-icons">search</span>
           <input type="text" id="m-q" placeholder="Search group or account" aria-label="Search groups" oninput="S.q=this.value;S.page=1;S.sel={};render()"></label>
@@ -245,8 +253,11 @@ body.bv2 #save{display:none}
 
       <div class="selbar" id="selbar" role="toolbar" aria-label="Selected groups">
         <span class="sel-cb"><input type="checkbox" class="checkbox" id="sel-bar-cb" aria-label="Clear selection" onchange="clearSel()"><span id="sel-n"></span></span>
-        <button type="button" class="btn btn-sm" id="sel-save" onclick="saveSelected()">Save selected</button>
-        <button type="button" class="btn btn-outlined btn-sm" id="bm-open" onclick="openBulk()">Change mapping…</button>
+        <!-- same segmented outlined group as the live Summaries list bar (Sync · Rollback · Resync · Delete · Rebuild), demo 2026-11-06 -->
+        <span class="grp2 sel-acts">
+          <button type="button" class="btn btn-outlined btn-sm" id="sel-save" onclick="saveSelected()">Save selected</button>
+          <button type="button" class="btn btn-outlined btn-sm" id="bm-open" onclick="openBulk()">Change mapping…</button>
+        </span>
         <span class="sp"></span>
         <span class="grp2">
           <button type="button" class="btn btn-outlined btn-sm" id="sel-allpages" onclick="selectAllPages()">Select all on all pages</button>
@@ -356,7 +367,7 @@ Object.keys(PROD).forEach(function(k){
 });
 
 /* ───────── state ───────── */
-var S = {v:1, bv:1, saving:{}, automap:true, screen:'mapping', tab:'all', status:'all', group:'', gw:'', acc:'', q:'', page:1, per:25, sel:{}};
+var S = {v:1, bv:1, saving:{}, alertOff:false, automap:true, screen:'mapping', tab:'all', status:'all', group:'', gw:'', acc:'', q:'', page:1, per:25, sel:{}};
 function reset(){
   ROWS.forEach(function(r){
     var sure = r.kind==='sure' && S.automap;
@@ -441,6 +452,10 @@ function render(){
   document.querySelector('.map-card').classList.toggle('selecting', nSel>0);
   var bcb = document.getElementById('sel-bar-cb'); bcb.checked = nSel>0 && ids.every(function(i){return S.sel[i];}); bcb.indeterminate = nSel>0 && !bcb.checked;
   document.getElementById('sel-n').textContent = nSel+' selected';
+  // the alert lives while premapped suggestions are unsaved and the user hasn't dismissed it
+  var nPre = list.filter(function(r){ return r.sug && !r.saved; }).length;   // scoped to the view, like every count on the page
+  document.getElementById('premap-alert').style.display = (nPre && !S.alertOff) ? '' : 'none';
+  document.getElementById('premap-t').textContent = nPre+(nPre===1?' group is':' groups are')+' premapped.';
   renderChips();
   renderPager(list.length, pages);
   renderTabs();
@@ -544,6 +559,11 @@ function saveRow(id){
   if (S.saving[id]) return;
   S.saving[id] = 1; render();
   setTimeout(function(){ delete S.saving[id]; commit([ROWS[id]]); }, SAVE_DELAY);
+}
+// var 2: the alert's 'Select them' ticks the premapped rows still unsaved in this view, so the bar offers 'Save selected (N)'
+function selectPremapped(){
+  // within the current view (tab, filters, search) — never changes the user's filters
+  S.sel={}; visible().forEach(function(r){ if (r.sug && !r.saved && dirty(r)) S.sel[r.id]=1; }); render();
 }
 function saveSelected(){
   var rows = ROWS.filter(function(r){ return S.sel[r.id] && dirty(r); });
