@@ -229,7 +229,7 @@ body.bv2 #save{display:none}
 
       <div class="m-toolbar">
         <label class="m-search"><span class="material-icons">search</span>
-          <input type="text" id="m-q" placeholder="Search group or account" aria-label="Search groups" oninput="S.q=this.value;S.page=1;render()"></label>
+          <input type="text" id="m-q" placeholder="Search group or account" aria-label="Search groups" oninput="S.q=this.value;S.page=1;S.sel={};render()"></label>
         <button type="button" class="btn btn-outlined btn-sm" id="f-open" onclick="openSheet()"><span class="material-icons" style="font-size:18px">tune</span>Filters<span class="f-badge" id="f-badge"></span></button>
       </div>
       <div class="m-chips" id="m-chips"></div>
@@ -245,8 +245,8 @@ body.bv2 #save{display:none}
 
       <div class="selbar" id="selbar" role="toolbar" aria-label="Selected groups">
         <span class="sel-cb"><input type="checkbox" class="checkbox" id="sel-bar-cb" aria-label="Clear selection" onchange="clearSel()"><span id="sel-n"></span></span>
-        <button type="button" class="btn btn-sm" id="sel-save" onclick="saveSelected()">Save mappings</button>
-        <button type="button" class="btn btn-outlined btn-sm" id="bm-open" onclick="openBulk()">Bulk mapping</button>
+        <button type="button" class="btn btn-sm" id="sel-save" onclick="saveSelected()">Save selected</button>
+        <button type="button" class="btn btn-outlined btn-sm" id="bm-open" onclick="openBulk()">Change mapping…</button>
         <span class="sp"></span>
         <span class="grp2">
           <button type="button" class="btn btn-outlined btn-sm" id="sel-allpages" onclick="selectAllPages()">Select all on all pages</button>
@@ -290,7 +290,7 @@ body.bv2 #save{display:none}
 
 <div class="bm-bg" id="bm-bg" onclick="if(event.target===this)closeBulk()">
   <div class="bm" role="dialog" aria-modal="true" aria-labelledby="bm-t">
-    <h2 id="bm-t">Bulk mapping</h2>
+    <h2 id="bm-t">Change mapping</h2>
     <div class="bm-b"><p class="bm-scope" id="bm-scope"></p><label for="bm-acc">Account</label><select id="bm-acc" class="select" aria-describedby="bm-err" onchange="bmErr(false)"></select><div class="bm-err" id="bm-err" role="alert">Required</div></div>
     <div class="bm-f">
       <button type="button" class="btn btn-outlined" onclick="closeBulk()">Cancel</button>
@@ -435,7 +435,7 @@ function render(){
   sv.disabled = !nDirty || Object.keys(S.sel).length > 0; sv.textContent = nDirty ? 'Save mappings ('+nDirty+')' : 'Save mappings';
   // variant 2: the selection bar's Save saves the selected rows that have an unsaved account
   var nSelDirty = ROWS.filter(function(r){ return S.sel[r.id] && dirty(r); }).length, ss = document.getElementById('sel-save');
-  ss.style.display = S.bv===2 ? '' : 'none'; ss.disabled = !nSelDirty; ss.textContent = nSelDirty ? 'Save mappings ('+nSelDirty+')' : 'Save mappings';
+  ss.style.display = S.bv===2 ? '' : 'none'; ss.disabled = !nSelDirty; ss.textContent = nSelDirty ? 'Save selected ('+nSelDirty+')' : 'Save selected';
   var nSel = Object.keys(S.sel).length;
   document.getElementById('selbar').classList.toggle('on', nSel>0);
   document.querySelector('.map-card').classList.toggle('selecting', nSel>0);
@@ -480,9 +480,9 @@ function renderChips(){
     return '<span class="a-chip">'+CHIP[k]+': '+esc(v)+'<button type="button" aria-label="Remove '+CHIP[k]+' filter" onclick="dropFilter(\''+k+'\')"><span class="material-icons">close</span></button></span>';
   }).join('') + (keys.length>1 ? '<button type="button" class="chips-clear" onclick="clearAll()">Clear all</button>' : '');
 }
-function dropFilter(k){ if (k==='status') S.status='all'; else S[k]=''; S.page=1; render(); }
-function clearAll(){ S.status='all'; S.group=''; S.gw=''; S.acc=''; S.q=''; S.tab='all'; document.getElementById('m-q').value=''; S.page=1; render(); }
-function setStatus(k){ S.status=k; S.page=1; render(); }
+function dropFilter(k){ if (k==='status') S.status='all'; else S[k]=''; S.page=1; S.sel={}; render(); }
+function clearAll(){ S.status='all'; S.group=''; S.gw=''; S.acc=''; S.q=''; S.tab='all'; document.getElementById('m-q').value=''; S.page=1; S.sel={}; render(); }
+function setStatus(k){ S.status=k; S.page=1; S.sel={}; render(); }
 function openSheet(){
   document.getElementById('f-status').value = S.status; document.getElementById('f-group').value = S.group;
   document.getElementById('f-gw').value = S.gw; document.getElementById('f-acc').value = S.acc;
@@ -493,7 +493,7 @@ function closeSheet(){ document.getElementById('sheet-ov').classList.remove('on'
 function applySheet(){
   S.status = document.getElementById('f-status').value; S.group = document.getElementById('f-group').value;
   S.gw = document.getElementById('f-gw').value; S.acc = document.getElementById('f-acc').value;
-  S.page = 1; closeSheet(); render();
+  S.page = 1; S.sel = {}; closeSheet(); render();
 }
 function resetDraft(){ ['f-status','f-group','f-gw','f-acc'].forEach(function(id){ document.getElementById(id).selectedIndex = 0; }); }
 document.addEventListener('keydown', function(e){ if (e.key==='Escape') { closeSheet(); closeBulk(); } });
@@ -523,8 +523,11 @@ function selectAllPages(){ visible().forEach(function(r){ S.sel[r.id]=1; }); ren
 function clearSel(){ S.sel = {}; render(); }
 function openBulk(){
   document.getElementById('bm-acc').innerHTML = '<option value="">Select…</option>'+ACCOUNTS.map(function(a){return '<option>'+esc(a)+'</option>';}).join('');
-  var n = Object.keys(S.sel).length;
-  document.getElementById('bm-scope').textContent = 'The selected account will be applied to '+(n===1 ? 'the selected group.' : 'all '+n+' selected groups.');
+  var selRows = ROWS.filter(function(r){ return S.sel[r.id]; }), n = selRows.length,
+      k = selRows.filter(function(r){ return !!r.value; }).length;   // rows that already have a mapping (saved or premapped)
+  document.getElementById('bm-scope').textContent = n===1
+    ? 'Applies to the selected group.'+(k ? ' Replaces its current mapping.' : '')
+    : 'Applies to all '+n+' selected groups.'+(k ? (k===n ? ' Replaces the current mapping in all of them.' : ' Replaces the current mapping in '+k+' of them.') : '');
   document.getElementById('bm-bg').classList.add('on'); document.getElementById('bm-acc').focus();
 }
 function bmErr(on){ document.getElementById('bm-acc').classList.toggle('err', on); document.getElementById('bm-err').classList.toggle('on', on); }
@@ -544,14 +547,15 @@ function saveRow(id){
 }
 function saveSelected(){
   var rows = ROWS.filter(function(r){ return S.sel[r.id] && dirty(r); });
-  S.sel = {}; commit(rows);
+  commit(rows);   // commit() unticks the saved rows; ticked rows with no account stay ticked (round-4 review)
 }
 function setVariant(n){
   S.bv = n; S.sel = {}; document.body.classList.toggle('bv2', n===2);
   [1,2].forEach(function(i){ document.getElementById('vs-'+i).classList.toggle('on', i===n); });
   render();
 }
-function setTab(k){ S.tab = k; S.page = 1; render(); }
+// the selection never outlives the view: changing tab, search or filters clears it (round-4 review)
+function setTab(k){ S.tab = k; S.page = 1; S.sel = {}; render(); }
 
 var tt;
 function toast(m){ var t = document.getElementById('toast'); t.textContent = m; t.classList.add('on');
