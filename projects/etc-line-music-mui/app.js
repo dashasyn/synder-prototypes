@@ -123,13 +123,17 @@ function TopBar() {
 const MUTE_ORANGE = '#E8792E';
 function TrackBox({ s, st, i, onClick }) {
   const muted = st.mute && st.mute.tracks.includes(i);
+  // Ignat, 2026-11-09: paused music shows inside the track square, like the mute — but grey
+  const m = musicNow(s, st), musicOff = !muted && (m === 'paused' || m === 'schedule');
   const n = s.tracks[i];
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
-  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '')} data-st=${s.c} data-track=${i}
+  const box = html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOff ? ' music-off' : '')} data-st=${s.c} data-track=${i}
     aria-label=${s.name + ' Gleis ' + n} onClick=${e => onClick(e, s.c, i)}
     sx=${{ all: 'unset', ...base, ...(muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
+      : musicOff ? { bgcolor: '#EEEEEE', border: '2px solid #757575', color: '#757575' }
       : s.ev ? { bgcolor: '#7C4DFF', color: '#fff' } : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' }) }}>
-    ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : n}<//>`;
+    ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : musicOff ? html`<${Icon} sx=${{ fontSize: 18 }}>music_off<//>` : n}<//>`;
+  return musicOff ? html`<${Tooltip} title=${m === 'paused' ? 'Musik pausiert' : `Musik stumm ${s.outdoor.from}–${s.outdoor.to} (Zeitplan)`}>${box}<//>` : box;
 }
 
 function LineDiagram({ state, onTrack }) {
@@ -138,14 +142,8 @@ function LineDiagram({ state, onTrack }) {
         height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'pre-line' }}>${s.c.replace(' / ', ' /\n')}<//>`)}
     ${STATIONS.map(s => {
       const st = state[s.c], m = musicNow(s, st);
-      // Ignat, 2026-11-09: music is secondary — grey, one icon per station, never orange
-      const icon = m === 'paused' ? ['music_off', 'Musik pausiert'] : m === 'schedule' ? ['music_off', `Musik stumm ${s.outdoor.from}–${s.outdoor.to} (Zeitplan)`] : null;
       return html`<${Box} key=${s.c} className="st-col" data-st=${s.c} data-music=${m}
-        sx=${{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, pt: 1, pb: 2, borderTop: '1px solid #8A94A6' }}>
-        <${Box} className="music-slot" sx=${{ height: 22, display: 'flex', alignItems: 'center' }}>
-          ${icon ? html`<${Tooltip} title=${icon[1]}><${Box} component="span" className="music-icon" data-st=${s.c} sx=${{ color: '#757575', display: 'flex' }}>
-            <${Icon} sx=${{ fontSize: 20 }}>${icon[0]}<//><//><//>` : null}
-        <//>
+        sx=${{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, pt: 2, pb: 2, borderTop: '1px solid #8A94A6' }}>
         ${s.tracks.map((_, i) => html`<${TrackBox} key=${i} s=${s} st=${st} i=${i} onClick=${onTrack} />`)}
         <${Stack} spacing=${.5} alignItems="center" sx=${{ mt: .5 }}>${s.xfer.map(l => html`<${LineBadge} key=${l} line=${l} />`)}<//>
       <//>`; })}
