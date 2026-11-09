@@ -75,6 +75,8 @@ SEED.Pr.mute  = { scope: 'Bahnhof', tracks: [0, 1], reason: 'Polizeieinsatz', by
 SEED.Kbo.music = 'paused';
 SEED.Kbo.pause = { reason: 'Beschwerde von Anwohnern', by: 'S. Weber', at: '09.11.2026 13:40' };
 SEED.Ho.music = 'none';
+SEED.U.music = 'paused';
+SEED.U.pause = { reason: 'Veranstaltung im Bahnhof', by: 'T. Yilmaz', at: '09.11.2026 12:10' };
 
 const now = () => { const d = new Date(), p = x => String(x).padStart(2, '0');
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
@@ -123,8 +125,9 @@ function TopBar() {
 const MUTE_ORANGE = '#E8792E';
 function TrackBox({ s, st, i, onClick }) {
   const muted = st.mute && st.mute.tracks.includes(i);
-  // Ignat, 2026-11-09: paused music shows inside the track square, like the mute — but grey
-  const m = musicNow(s, st), musicOff = !muted && (m === 'paused' || m === 'schedule');
+  // Ignat, 2026-11-09: paused music shows inside the track square, like the mute — but grey, and only
+  // on a track with no event and no mute
+  const m = musicNow(s, st), musicOff = !muted && !s.ev && (m === 'paused' || m === 'schedule');   // low priority: events and the mute win
   const n = s.tracks[i];
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
   const box = html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOff ? ' music-off' : '')} data-st=${s.c} data-track=${i}
