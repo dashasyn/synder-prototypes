@@ -169,6 +169,32 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id }) {
     <//>`;
 }
 
+/* Ignat, 2026-11-10: every paged table ends the same way, MUI style — one
+   footer attached to the table: rows per page, the range, the page numbers.
+   page is 1-based. */
+function TablePager({ id, total, page, pp, setPage, setPp }) {
+  const { t } = useT();
+  const pages = Math.max(1, Math.ceil(total / pp));
+  const start = total ? (Math.min(page, pages) - 1) * pp + 1 : 0;
+  return html`<${Box} id=${id} className="table-pager"
+    sx=${{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3, px: 2, py: 1,
+           border: '1px solid #E7E7E7', borderTop: 'none', borderRadius: '0 0 4px 4px', bgcolor: '#fff' }}>
+    <${Stack} direction="row" alignItems="center" spacing=${1}>
+      <${Typography} variant="body2" color="text.secondary">${t('sel_rows_per_page')}:<//>
+      <${FormControl} variant="standard" id=${id + '-pp'}>
+        <${Select} value=${pp} disableUnderline inputProps=${{ 'aria-label': t('sel_rows_per_page') }}
+          onChange=${e => { setPp(Number(e.target.value)); setPage(1); }} sx=${{ fontSize: 14 }}>
+          ${[10, 25, 50, 100].map(n => html`<${MenuItem} key=${n} value=${n}>${n}<//>`)}
+        <//>
+      <//>
+    <//>
+    <${Typography} variant="body2" color="text.secondary" className="pager-range" sx=${{ minWidth: 110, textAlign: 'right' }}>
+      ${t('pager_range').replace('{start}', start).replace('{end}', Math.min(page * pp, total)).replace('{total}', total)}<//>
+    <${Pagination} count=${pages} page=${Math.min(page, pages)} onChange=${(e, v) => setPage(v)}
+      shape="rounded" showFirstButton showLastButton className="pager-pages" />
+  <//>`;
+}
+
 /**
  * Row actions, and what each one does.
  *
@@ -1727,11 +1753,7 @@ function ConnRows({ go, row, node, reduce }) {
         title=${t('conn_rows_title')} subtitle=${node.path.length ? node.path.map(x => x[1]).join(' · ') : t('rpt_gesamt')} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="conn-rows-params" hotClass="conn-hot" fields=${fields} />
-        <${Stack} direction="row" alignItems="center" sx=${{ mb: 1 }}>
-          <${LaSelect} id="conn-rows-pp" label=${t('fa_mask_entries')} value=${pp} minWidth=${170}
-            onChange=${v => { setPp(v); setPage(1); }} options=${[10, 25, 50, 100].map(n => ({ value: n, label: String(n) }))} />
-        <//>
-        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
           <${Table} id="conn-rows-table">
             <${TableHead}>
               <${TableRow}>${CONN_ROW_COLS.map((k, i) => html`<${TableCell} key=${k} align=${i >= 5 ? 'right' : 'left'}
@@ -1752,14 +1774,7 @@ function ConnRows({ go, row, node, reduce }) {
             <//>
           <//>
         <//>
-        <${Stack} direction="row" alignItems="center" sx=${{ mt: 2 }}>
-          <${Typography} variant="body2" color="text.secondary" id="conn-rows-info">
-            ${t('fa_pager_info').replace('{start}', rows.length ? (page - 1) * pp + 1 : 0)
-              .replace('{end}', Math.min(page * pp, rows.length)).replace('{total}', rows.length)}<//>
-          <${Box} sx=${{ flex: 1 }} />
-          <${Pagination} count=${pages} page=${Math.min(page, pages)} onChange=${(e, v) => setPage(v)}
-            showFirstButton showLastButton shape="rounded" id="conn-rows-pager" />
-        <//>
+        <${TablePager} id="conn-rows-pager" total=${rows.length} page=${page} pp=${pp} setPage=${setPage} setPp=${setPp} />
       <//>
     <//>`;
 }
@@ -2518,7 +2533,7 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
     [node, allRows]);
   const hot = node && node.dim ? [t(PUNCT_DIM_LABELS[node.dim] || node.dim), node.label] : null;
   const [filters, setFilters] = useState({});
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(10);
 
   const filtered = useMemo(() => {
@@ -2528,7 +2543,7 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
       String(r[i] ?? '').toLowerCase().includes(q.trim().toLowerCase())));
   }, [filters, rows]);
 
-  const shown = filtered.slice(page * perPage, page * perPage + perPage);
+  const shown = filtered.slice((page - 1) * perPage, page * perPage);
   const pages = Math.max(1, Math.ceil(filtered.length / perPage));
 
   return html`
@@ -2542,14 +2557,7 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
       <${Box} sx=${{ p: 3 }}>
         ${row && html`<${ParamGrid} id="raw-params" hotClass="raw-hot"
           fields=${[...punctParamFields(t, lang, row).slice(0, 8), ...(hot ? [[hot[0], hot[1], false, true]] : [])]} />`}
-        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mb: 2 }}>
-          <${FilterSelect} id="raw-pp" label=${t('sel_rows_per_page')} minWidth=${110}
-            value=${String(perPage)}
-            onChange=${v => { setPerPage(Number(v) || 10); setPage(0); }}
-            options=${['10', '25', '50'].map(v => ({ value: v, label: v }))} />
-          <${Typography} variant="body2" color="text.secondary">${t('fa_mask_entries')}<//>
-        <//>
-        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', overflowX: 'auto' }}>
+        <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', overflowX: 'auto', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
           <${Table} id="raw-table">
             <${TableHead}>
               <${TableRow}>
@@ -2563,12 +2571,12 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
                     ${RAW_ENUM[i] ? html`
                       <${FilterSelect} id=${'raw-f-' + i} minWidth=${120}
                         label=${t(RAW_COLS[i])} value=${filters[i] || ''}
-                        onChange=${v => { setPage(0); setFilters(f => ({ ...f, [i]: v })); }}
+                        onChange=${v => { setPage(1); setFilters(f => ({ ...f, [i]: v })); }}
                         options=${RAW_ENUM[i].map(o => ({ value: o, label: o }))} />`
                     : html`
                       <${TextField} variant="standard" size="small" placeholder="…"
                         value=${filters[i] || ''}
-                        onChange=${e => { setPage(0); setFilters(f => ({ ...f, [i]: e.target.value })); }}
+                        onChange=${e => { setPage(1); setFilters(f => ({ ...f, [i]: e.target.value })); }}
                         sx=${{ minWidth: 70 }} />`}
                   <//>`)}
               <//>
@@ -2585,11 +2593,7 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
             <//>
           <//>
         <//>
-        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mt: 2 }}>
-          <${Button} disabled=${page === 0} onClick=${() => setPage(p => p - 1)}>${t('rpt_pager_prev')}<//>
-          <${Typography} variant="body2">${page + 1} / ${pages}<//>
-          <${Button} disabled=${page + 1 >= pages} onClick=${() => setPage(p => p + 1)}>${t('rpt_pager_next')}<//>
-        <//>
+        <${TablePager} id="raw-pager" total=${filtered.length} page=${page} pp=${perPage} setPage=${setPage} setPp=${setPerPage} />
       <//>
     <//>`;
 }
@@ -2843,9 +2847,6 @@ function Ausfallmaske({ go, row, tuId, day }) {
         <//><//>
 
         <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mb: 1 }}>
-          <${FilterSelect} id="fa-mask-pp" label=${t('fa_mask_entries')} minWidth=${170}
-            value=${String(pp)} onChange=${v => { setPp(Number(v) || 10); setPage(1); }}
-            options=${['10', '25', '50', '100'].map(v => ({ value: v, label: v }))} />
           <${Box} sx=${{ flex: 1 }} />
           <${Button} variant="outlined" id="fa-mask-expand" onClick=${() => setWrap(true)}>${t('fa_mask_expand_all')}<//>
           <${Button} variant="outlined" id="fa-mask-collapse" onClick=${() => setWrap(false)}>${t('fa_mask_collapse_all')}<//>
@@ -2853,7 +2854,7 @@ function Ausfallmaske({ go, row, tuId, day }) {
 
         ${rows.length === 0 ? html`
           <${Alert} severity="info" id="fa-mask-empty">${t('fa_mask_no_match')}<//>` : html`
-          <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
+          <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
             <${Table} id="fa-mask-table" sx=${{ '& td': { whiteSpace: wrap ? 'normal' : 'nowrap' } }}>
               <${TableHead}>
                 <${TableRow}>
@@ -2888,17 +2889,7 @@ function Ausfallmaske({ go, row, tuId, day }) {
             <//>
           <//>`}
 
-        <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mt: 2 }}>
-          <${Typography} variant="body2" color="text.secondary" id="fa-mask-info">
-            ${t('fa_pager_info')
-                .replace('{start}', rows.length === 0 ? 0 : (page - 1) * pp + 1)
-                .replace('{end}', Math.min(page * pp, rows.length))
-                .replace('{total}', rows.length)}
-          <//>
-          <${Box} sx=${{ flex: 1 }} />
-          <${Pagination} count=${pages} page=${Math.min(page, pages)} id="fa-mask-pager"
-            onChange=${(e, v) => setPage(v)} showFirstButton showLastButton shape="rounded" />
-        <//>
+        ${rows.length > 0 && html`<${TablePager} id="fa-mask-pager" total=${rows.length} page=${page} pp=${pp} setPage=${setPage} setPp=${setPp} />`}
         <${Stack} direction="row" spacing=${1} alignItems="center" sx=${{ mt: 2 }}>
           <${Button} variant="outlined" id="fa-mask-cancel" disabled=${!dirty}
             startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>undo<//>`}
