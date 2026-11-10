@@ -61,12 +61,12 @@ const STATIONS = [
   { c: 'Wt',      name: 'Wittenbergplatz',   tracks: [1, 6],    xfer: ['U2', 'U3'], ev: true },
   { c: 'Nu / Nm', name: 'Nollendorfplatz',   tracks: [1, 2],    xfer: ['U2', 'U3', 'U4'], ev: true },
   { c: 'Kus',     name: 'Kurfürstenstraße',  tracks: [1, 2],    xfer: ['U3'], ev: true },
-  { c: 'Go',      name: 'Gleisdreieck',      tracks: [1, 2],    xfer: ['U2', 'U3'], ev: true },
-  { c: 'Mo',      name: 'Möckernbrücke',     tracks: [1, 2],    xfer: ['U3', 'U7'], ev: true },
-  { c: 'Ho',      name: 'Hallesches Tor',    tracks: [1, 2],    xfer: ['U3', 'U6'], ev: true },
-  { c: 'Pr',      name: 'Prinzenstraße',     tracks: [1, 2],    xfer: ['U3'], ev: true },
-  { c: 'Kbo',     name: 'Kottbusser Tor',    tracks: [1, 2],    xfer: ['U3', 'U8'], ev: true },
-  { c: 'Gr',      name: 'Görlitzer Bahnhof', tracks: [1, 2],    xfer: ['U3'], ev: true },
+  { c: 'Go',      name: 'Gleisdreieck',      tracks: [1, 2],    xfer: ['U2', 'U3'] },
+  { c: 'Mo',      name: 'Möckernbrücke',     tracks: [1, 2],    xfer: ['U3', 'U7'] },
+  { c: 'Ho',      name: 'Hallesches Tor',    tracks: [1, 2],    xfer: ['U3', 'U6'] },
+  { c: 'Pr',      name: 'Prinzenstraße',     tracks: [1, 2],    xfer: ['U3'] },
+  { c: 'Kbo',     name: 'Kottbusser Tor',    tracks: [1, 2],    xfer: ['U3', 'U8'] },
+  { c: 'Gr',      name: 'Görlitzer Bahnhof', tracks: [1, 2],    xfer: ['U3'] },
   { c: 'S',       name: 'Schlesisches Tor',  tracks: [1, 2],    xfer: ['U3'], outdoor: { from: '22:00', to: '06:00' } },
   { c: 'WA',      name: 'Warschauer Straße', tracks: [1, 2, 3], xfer: ['U3', 'S'] },
 ];
@@ -81,6 +81,10 @@ SEED.Kbo.music = 'paused';
 SEED.Kbo.pause = { reason: 'Beschwerde von Anwohnern', by: 'S. Weber', at: '09.11.2026 13:40' };
 SEED.Ho.music = 'none';
 SEED.U.music = 'paused';
+// Ignat, 2026-11-10: more stations paused by default, to walk the flow
+SEED.Go.music = 'paused';  SEED.Go.pause  = { reason: 'Gottesdienst in der Nähe', by: 'M. Krüger', at: '10.11.2026 07:55' };
+SEED.Gr.music = 'paused';  SEED.Gr.pause  = { reason: 'Reinigungsarbeiten', by: 'S. Weber', at: '10.11.2026 06:30' };
+SEED['Nu / Nm'].music = 'paused'; SEED['Nu / Nm'].pause = { reason: 'Durchsagen schlecht verständlich', by: 'T. Yilmaz', at: '10.11.2026 08:15' };
 SEED.U.pause = { reason: 'Veranstaltung im Bahnhof', by: 'T. Yilmaz', at: '09.11.2026 12:10' };
 
 const now = () => { const d = new Date(), p = x => String(x).padStart(2, '0');
@@ -258,7 +262,7 @@ function ActionDialog({ dlg, state, role, onClose, onApply }) {
 
 /* ── events tables (production, static) ───────────────────────────── */
 const EV_ROWS = () => [
-  ['09.11, 03:30 - 24.11, 01:30', L('Baumaßnahme / Kein Halt - beidseitig', 'Construction work / No stop - both sides'), '', 'TN 1', 'Kfo - Gr', ['U2', 'U3', 'U4', 'U6', 'U7', 'U8', 'U9'], L('Hauptmeldung', 'Main announcement'), L('Geplant', 'Planned'), L('Aktiv', 'Active'), 'on'],
+  ['09.11, 03:30 - 24.11, 01:30', L('Baumaßnahme / Kein Halt - beidseitig', 'Construction work / No stop - both sides'), '', 'TN 1', 'Kfo - Kus', ['U2', 'U3', 'U4', 'U9'], L('Hauptmeldung', 'Main announcement'), L('Geplant', 'Planned'), L('Aktiv', 'Active'), 'on'],
   ['21.09, 02:30 - 06.10, 00:30', L('Baumaßnahme / Kein Halt - beidseitig', 'Construction work / No stop - both sides'), '', 'TN 1', 'Go', ['U2', 'U3', 'U7'], '--', L('Geplant', 'Planned'), L('Pausiert', 'Paused'), 'off'],
 ];
 function EventTables() {
