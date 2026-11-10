@@ -23,6 +23,14 @@
 </style>
 </head>
 <body>
+<div class="variant-switch">
+  <span class="vs-label">Table</span>
+  <div class="vs-opts">
+    <button id="vs-1" class="on" onclick="setVariant(1)">1 · Flat (main)</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Grouped by transaction</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
 <div class="synder-app">
   <div class="topbar">
     <a class="topbar-title"><span class="material-icons">sync_alt</span> Synder</a>
@@ -229,22 +237,84 @@ document.querySelectorAll('.select-clear select').forEach(s => s.addEventListene
 // Sync date sorts, newest first by default (support, Alex: production orders by sync ID)
 function toggleSort() { sortDir = sortDir === 'desc' ? 'asc' : 'desc'; render(); }
 
-function render() {
-  const list = FLAT.filter(({t, s}) => match(t, s)).sort((a, b) => sortDir === 'desc' ? key(b.s) - key(a.s) : key(a.s) - key(b.s));
-  const head = `<thead><tr><th>Sync ID</th><th>Transaction ID</th><th>From integration</th><th>To integration</th>
+function syncRow(t, s, firstCell) {
+  return `<td>${firstCell}</td><td>${syncLink(s[0])}</td><td>${co(INT[t.i])}</td><td>${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td>`;
+}
+let variant = 1;
+const dir = (a, b) => sortDir === 'desc' ? key(b) - key(a) : key(a) - key(b);
+function head(v) {
+  const c = v === 1 ? ['Sync ID','Transaction ID'] : ['Transaction ID','Sync ID'];
+  return `<thead><tr><th${v === 2 ? ' style="padding-left:40px"' : ''}>${c[0]}</th><th>${c[1]}</th><th>From integration</th><th>To integration</th>
     <th class="sortable sorted${sortDir === 'desc' ? ' desc' : ''}" aria-sort="${sortDir === 'desc' ? 'descending' : 'ascending'}" tabindex="0" onclick="toggleSort()" onkeydown="if(event.key==='Enter')toggleSort()">Sync date</th>
     <th>Sync status</th></tr></thead>`;
+}
+const empty = `<tr><td colspan="6">[live copy not captured]</td></tr>`;   // production empty-table text not captured
+function setRange(n) {
+  const pages = Math.ceil(n / PAGE);
+  document.getElementById('range').textContent = n ? `1–${Math.min(PAGE, n)} of ${n}` : '0–0 of 0';
+  ['p2','p3','p4'].forEach((id, k) => document.getElementById(id).style.display = k + 2 <= pages ? '' : 'none');
+}
+function renderFlat() {
+  const list = FLAT.filter(({t, s}) => match(t, s)).sort((a, b) => dir(a.s, b.s));
   const rows = list.slice(0, PAGE).map(({t, s}) => `<tr>
     <td>${syncLink(s[0])}</td><td>${txLink(t)}</td><td>${co(INT[t.i])}</td><td>${co(ACC[s[2]])}</td>
     <td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
-  const empty = `<tr><td colspan="6">[live copy not captured]</td></tr>`;   // production empty-table text not captured
-  document.getElementById('tbl').innerHTML = head + `<tbody>${rows || empty}</tbody>`;
-  const pages = Math.ceil(list.length / PAGE);
-  document.getElementById('range').textContent = list.length ? `1–${Math.min(PAGE, list.length)} of ${list.length}` : '0–0 of 0';
-  ['p2','p3','p4'].forEach((id, k) => document.getElementById(id).style.display = k + 2 <= pages ? '' : 'none');
+  document.getElementById('tbl').innerHTML = head(1) + `<tbody>${rows || empty}</tbody>`;
+  setRange(list.length);
+}
+/* Grouped version: one row per transaction, collapsed. A transaction is listed if any of its syncs
+   matches the filters; the parent shows the latest status of all its syncs. Syncs that don't match
+   are folded behind "Show N other syncs". Pagination counts transactions. */
+let GROUPS = [];
+function renderGrouped() {
+  GROUPS = T.map(t => { const syncs = [...t.syncs].sort(dir); return { t, syncs, m: syncs.map(s => match(t, s)) }; })
+    .filter(g => g.m.some(Boolean)).sort((a, b) => dir(a.syncs.reduce((x, y) => key(x) > key(y) ? x : y), b.syncs.reduce((x, y) => key(x) > key(y) ? x : y)));
+  const autoOpen = !!(F.s || F.q);
+  const rows = GROUPS.slice(0, PAGE).map(({t, syncs, m}, gi) => {
+    if (syncs.length === 1) return `<tr>${syncRow(t, syncs[0], `<span class="row-toggle-spacer"></span>${txLink(t)}`).replace(`<td>${syncLink(syncs[0][0])}</td>`, `<td>${syncLink(syncs[0][0])}</td>`)}</tr>`;
+    const latest = t.syncs.reduce((x, y) => key(x) > key(y) ? x : y);
+    const accs = [...new Set(syncs.map(s => s[2]))];
+    const others = m.filter(x => !x).length;
+    const parent = `<tr class="grp row-clickable" data-g="${gi}" onclick="toggle(${gi}, event)">
+      <td><button class="row-toggle" type="button" aria-expanded="false" aria-label="Show syncs"><span class="material-icons">chevron_right</span></button>${txLink(t)}</td>
+      <td data-copy="proposed">${syncs.length} syncs</td><td>${co(INT[t.i])}</td>
+      <td>${accs.length > 1 ? `<span data-copy="proposed">${accs.length} companies</span>` : co(ACC[accs[0]])}</td>
+      <td>${date(latest[3])}</td><td>${pill(latest[4])}</td></tr>`;
+    const kids = syncs.map((s, k) => `<tr class="child ${m[k] ? 'match' : 'other'}" data-of="${gi}" hidden>
+      <td></td><td>${syncLink(s[0])}</td><td></td><td>${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
+    const more = others ? `<tr class="child others-row" data-of="${gi}" hidden><td></td><td colspan="5"><button class="btn-text others" type="button" aria-expanded="false" data-n="${others}" onclick="toggleOthers(${gi}, this)" data-copy="proposed">Show ${others} other sync${others === 1 ? '' : 's'}</button></td></tr>` : '';
+    return parent + kids + more;
+  }).join('');
+  document.getElementById('tbl').innerHTML = head(2) + `<tbody>${rows || empty}</tbody>`;
+  if (autoOpen) GROUPS.slice(0, PAGE).forEach((g, gi) => { if (g.syncs.length > 1) toggle(gi); });
+  setRange(GROUPS.length);
+}
+function toggle(gi, e) {
+  if (e && e.target.closest('a')) return;
+  const btn = document.querySelector(`tr.grp[data-g="${gi}"] .row-toggle`);
+  const open = btn.getAttribute('aria-expanded') !== 'true';
+  btn.setAttribute('aria-expanded', open);
+  const ob = document.querySelector(`tr.others-row[data-of="${gi}"] .others`);
+  const showOthers = ob && ob.getAttribute('aria-expanded') === 'true';
+  document.querySelectorAll(`tr.child[data-of="${gi}"]`).forEach(r => r.hidden = !open || (r.classList.contains('other') && !showOthers));
+}
+function toggleOthers(gi, btn) {
+  const show = btn.getAttribute('aria-expanded') !== 'true', n = btn.dataset.n;
+  btn.setAttribute('aria-expanded', show);
+  btn.textContent = `${show ? 'Hide' : 'Show'} ${n} other sync${n === '1' ? '' : 's'}`;
+  document.querySelectorAll(`tr.child.other[data-of="${gi}"]`).forEach(r => r.hidden = !show);
+}
+const render = () => variant === 1 ? renderFlat() : renderGrouped();
+const NOTES = { 1: 'Main version · one row per sync', 2: 'Alternative · one row per transaction, click to expand' };
+function setVariant(v) {
+  variant = v;
+  ['vs-1','vs-2'].forEach((id, k) => document.getElementById(id).classList.toggle('on', k + 1 === v));
+  document.getElementById('vs-note').textContent = NOTES[v];
+  render();
+  history.replaceState(null, '', v === 2 ? '#grouped' : location.pathname);
 }
 writeFields();
-render();
+setVariant(location.hash === '#grouped' ? 2 : 1);
 </script>
 </body>
 </html>
