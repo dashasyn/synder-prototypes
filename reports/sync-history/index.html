@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
 <link rel="stylesheet" href="../../ui-kit/proposed.css">
 <!-- Built from ui-kit/starter. Kit classes and tokens only; the two pieces the kit lacks
-     (.table-link hover underline, .select-clear ×) live in ui-kit/proposed.css.
+     (.table-link hover underline, .row-toggle) live in ui-kit/proposed.css.
      The <style> below only places integration logos — it restyles no kit component. -->
 <style>
   .co{display:inline-flex;align-items:center;gap:6px;max-width:100%;vertical-align:middle}
@@ -53,8 +53,8 @@
     <main class="synder-page">
       <div class="synder-page-header">
         <div class="synder-page-header-text">
-          <h1 class="synder-page-title" data-copy="proposed" title="Production: “Syncs History”">Sync history</h1>
-          <p class="synder-page-subtitle" data-copy="proposed" title="Production: “History of changes per transaction.”">Every sync of each transaction to your accounting, including re-syncs, deletions and rollbacks.</p>
+          <h1 class="synder-page-title" data-copy="proposed">Sync history</h1>
+          <p class="synder-page-subtitle" data-copy="proposed">Every sync of each transaction to your accounting, including re-syncs, deletions and rollbacks.</p>
         </div>
       </div>
 
@@ -65,12 +65,12 @@
               <input class="input input-search" id="f-q" type="search" autocomplete="off" data-copy="proposed" placeholder="Transaction or sync ID"></div>
             <div class="form-field"><span class="form-label">Sync date</span>
               <span class="synder-filter-bar-fields"><input id="f-from" class="input" type="date" aria-label="Sync date from" style="width:150px"><input id="f-to" class="input" type="date" aria-label="Sync date to" style="width:150px"></span></div>
-            <div class="form-field" style="width:220px"><label class="form-label" for="f-i">From integration</label>
-              <span class="select-clear"><select class="select" id="f-i"></select><button type="button" aria-label="Clear From integration" onclick="clearField('f-i')" hidden><span class="material-icons">close</span></button></span></div>
-            <div class="form-field" style="width:260px"><label class="form-label" for="f-a">To integration</label>
-              <span class="select-clear"><select class="select" id="f-a"></select><button type="button" aria-label="Clear To integration" onclick="clearField('f-a')" hidden><span class="material-icons">close</span></button></span></div>
-            <div class="form-field" style="width:220px"><label class="form-label" for="f-s">Sync status</label>
-              <span class="select-clear"><select class="select" id="f-s"></select><button type="button" aria-label="Clear Sync status" onclick="clearField('f-s')" hidden><span class="material-icons">close</span></button></span></div>
+            <div class="form-field" style="width:220px"><span class="form-label">From integration</span>
+              <div class="select-ms" id="f-i" style="width:100%" aria-label="From integration"></div></div>
+            <div class="form-field" style="width:260px"><span class="form-label">To integration</span>
+              <div class="select-ms" id="f-a" style="width:100%" aria-label="To integration"></div></div>
+            <div class="form-field" style="width:220px"><span class="form-label">Sync status</span>
+              <div class="select-ms" id="f-s" style="width:100%" aria-label="Sync status"></div></div>
           </div>
           <div class="synder-filter-bar-actions"><button class="btn" type="submit" id="f-apply">Apply</button><button class="btn-outlined" type="button" id="f-reset" onclick="resetFilters()">Reset filters</button></div>
         </form>
@@ -203,21 +203,50 @@ let sortDir = 'desc';
 const STATUS_OPTIONS = ['Canceled','Synced','Synced with warnings','Failed','In progress','Rollback canceled','Rollback failed',
   'Rollback in progress','Rollback scheduled','Synced with rule failed','Scheduled','Skipped','Excluded from sync','Deleted',
   'Deleted with warnings','Pending','Not parsed','Ready to sync'];
-const opt = (v, label) => `<option value="${esc(v)}">${esc(label)}</option>`;
-const blank = '<option value="" hidden></option>';                // filters clear with ×, no "All" option
-document.getElementById('f-i').innerHTML = blank + Object.entries(INT).map(([k, o]) => opt(k, o.n)).join('');
-document.getElementById('f-a').innerHTML = blank + Object.entries(ACC).map(([k, o]) => opt(k, o.n)).join('');
-document.getElementById('f-s').innerHTML = blank + STATUS_OPTIONS.map(s => opt(s, s)).join('');
+/* Filters use the kit's .select-ms (react-select replica): × clears, only shown when a value is set.
+   Placeholder "All" is captured from production (/sync/list filter bar). Sync status is multi-select, as in production. */
+const SEL = {};
+function selectMs(id, options, multi) {
+  const el = document.getElementById(id);
+  const st = SEL[id] = { value: multi ? [] : '', multi, options, el };
+  el.innerHTML = `<div class="select-ms-control" tabindex="0" role="combobox" aria-expanded="false"><span class="select-ms-value"></span>
+    <button type="button" class="select-clear" aria-label="Clear">close</button><span class="select-sep"></span><span class="select-arrow">expand_more</span></div>
+    <div class="select-ms-menu" role="listbox">${options.map(([v, l]) => multi
+      ? `<label class="select-ms-option"><input class="checkbox" type="checkbox" value="${esc(v)}"> ${esc(l)}</label>`
+      : `<div class="select-ms-option" role="option" data-v="${esc(v)}">${esc(l)}</div>`).join('')}</div>`;
+  const ctl = el.querySelector('.select-ms-control');
+  ctl.addEventListener('click', e => { if (e.target.closest('.select-clear')) return; const o = !el.classList.contains('open'); closeAll(); el.classList.toggle('open', o); ctl.setAttribute('aria-expanded', o); });
+  ctl.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); ctl.click(); } if (e.key === 'Escape') closeAll(); });
+  el.querySelector('.select-clear').addEventListener('click', e => { e.stopPropagation(); setSel(id, multi ? [] : ''); });
+  if (multi) el.querySelectorAll('input').forEach(i => i.addEventListener('change', () => setSel(id, [...el.querySelectorAll('input:checked')].map(x => x.value))));
+  else el.querySelectorAll('.select-ms-option').forEach(o => o.addEventListener('click', () => { setSel(id, o.dataset.v); closeAll(); }));
+  setSel(id, st.value);
+}
+function setSel(id, v) {
+  const st = SEL[id]; st.value = v;
+  const has = st.multi ? v.length > 0 : !!v;
+  const label = !has ? 'All' : st.multi ? (v.length === 1 ? v[0] : `${v.length} items selected`) : st.options.find(o => o[0] === v)[1];
+  const val = st.el.querySelector('.select-ms-value');
+  val.textContent = label; val.classList.toggle('is-placeholder', !has); val.title = has ? label : '';
+  st.el.querySelector('.select-clear').style.display = has ? '' : 'none';   // kit sets display, so [hidden] alone doesn't hide it
+  if (st.multi) st.el.querySelectorAll('input').forEach(i => i.checked = v.includes(i.value));
+}
+function closeAll() { document.querySelectorAll('.select-ms.open').forEach(e => { e.classList.remove('open'); e.querySelector('.select-ms-control').setAttribute('aria-expanded', 'false'); }); }
+document.addEventListener('click', e => { if (!e.target.closest('.select-ms')) closeAll(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+selectMs('f-i', Object.entries(INT).map(([k, o]) => [k, o.n]), false);
+selectMs('f-a', Object.entries(ACC).map(([k, o]) => [k, o.n]), false);
+selectMs('f-s', STATUS_OPTIONS.map(x => [x, x]), true);
 
 // To integration defaults to the accounting company (support, Hendrick) — visible in the field, cleared with ×
-const DEFAULTS = {q:'', from:'', to:'', i:'', a:'qbo', s:''};
-let F = {...DEFAULTS};
-const fields = { q:'f-q', from:'f-from', to:'f-to', i:'f-i', a:'f-a', s:'f-s' };
+const DEFAULTS = {q:'', from:'', to:'', i:'', a:'qbo', s:[]};
+let F = {...DEFAULTS, s: []};
+const inputs = { q:'f-q', from:'f-from', to:'f-to' }, sels = { i:'f-i', a:'f-a', s:'f-s' };
 const dayStart = v => Date.parse(v + 'T00:00:00'), dayEnd = v => Date.parse(v + 'T23:59:59');
 function match(t, s) {
   if (F.i && t.i !== F.i) return false;
   if (F.a && s[2] !== F.a) return false;
-  if (F.s && s[4] !== F.s) return false;
+  if (F.s.length && !F.s.includes(s[4])) return false;
   if (F.from || F.to) {
     if (!s[3]) return false;
     const d = Date.parse(s[3]);
@@ -227,12 +256,14 @@ function match(t, s) {
   if (F.q) { const q = F.q.toLowerCase(); if (!(t.id.toLowerCase().includes(q) || String(s[0]).includes(q) || String(s[1]).includes(q))) return false; }
   return true;
 }
-function syncClears() { document.querySelectorAll('.select-clear').forEach(w => w.querySelector('button').hidden = !w.querySelector('select').value); }
-function clearField(id) { document.getElementById(id).value = ''; syncClears(); }
-function writeFields() { Object.entries(fields).forEach(([k, id]) => document.getElementById(id).value = F[k]); syncClears(); }
-function applyFilters() { Object.entries(fields).forEach(([k, id]) => F[k] = document.getElementById(id).value.trim()); render(); }
-function resetFilters() { F = {...DEFAULTS}; writeFields(); render(); }
-document.querySelectorAll('.select-clear select').forEach(s => s.addEventListener('change', syncClears));
+function writeFields() { Object.entries(inputs).forEach(([k, id]) => document.getElementById(id).value = F[k]); Object.entries(sels).forEach(([k, id]) => setSel(id, Array.isArray(F[k]) ? [...F[k]] : F[k])); }
+function applyFilters() {
+  closeAll();
+  Object.entries(inputs).forEach(([k, id]) => F[k] = document.getElementById(id).value.trim());
+  Object.entries(sels).forEach(([k, id]) => F[k] = Array.isArray(SEL[id].value) ? [...SEL[id].value] : SEL[id].value);
+  render();
+}
+function resetFilters() { F = {...DEFAULTS, s: []}; writeFields(); render(); }
 
 // Sync date sorts, newest first by default (support, Alex: production orders by sync ID)
 function toggleSort() { sortDir = sortDir === 'desc' ? 'asc' : 'desc'; render(); }
@@ -269,7 +300,7 @@ let GROUPS = [];
 function renderGrouped() {
   GROUPS = T.map(t => { const syncs = [...t.syncs].sort(dir); return { t, syncs, m: syncs.map(s => match(t, s)) }; })
     .filter(g => g.m.some(Boolean)).sort((a, b) => dir(a.syncs.reduce((x, y) => key(x) > key(y) ? x : y), b.syncs.reduce((x, y) => key(x) > key(y) ? x : y)));
-  const autoOpen = !!(F.s || F.q);
+  const autoOpen = !!(F.s.length || F.q);
   const rows = GROUPS.slice(0, PAGE).map(({t, syncs, m}, gi) => {
     if (syncs.length === 1) return `<tr>${syncRow(t, syncs[0], `<span class="row-toggle-spacer"></span>${txLink(t)}`).replace(`<td>${syncLink(syncs[0][0])}</td>`, `<td>${syncLink(syncs[0][0])}</td>`)}</tr>`;
     const latest = t.syncs.reduce((x, y) => key(x) > key(y) ? x : y);
