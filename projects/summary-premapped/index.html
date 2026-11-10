@@ -135,6 +135,24 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 .map .row-save.busy{position:relative;color:transparent}
 .map .row-save.busy .spinner{position:absolute;left:50%;top:50%;width:16px;height:16px;margin:-10px 0 0 -10px}
 .bm-scope{margin:0 0 16px;color:var(--text-primary)}
+/* Mapping fields (was "Dimensions" next to Reset filters on live) — table setup, lives with the table actions (Ignat, 2026-11-10) */
+.map-card:not(.has-dims) .c-exp{display:none}
+.map .c-exp{width:40px;text-align:center;padding:0!important}
+.map .c-exp button{background:none;border:none;cursor:pointer;color:var(--text-secondary);display:inline-flex;padding:4px}
+.map .c-exp button:disabled{cursor:default;opacity:.5}
+.map tr.det td{background:var(--bg-subtle)!important;padding:12px 16px 16px 92px!important}
+.det-f{display:flex;gap:16px}
+.det-f label{display:block;font-weight:600;color:#000;margin-bottom:4px}
+.det-f select{width:200px}
+.mf-note{margin:0 0 4px;color:var(--text-primary)}
+.mf-note2{margin:0 0 16px;color:var(--text-secondary)}
+.mf-opts{display:flex;gap:40px}
+.mf-opts label{display:flex;align-items:center;gap:10px;cursor:pointer}
+.bm-dims{display:none;gap:16px;margin-top:16px}
+.bm-dims.on{display:flex}
+.bm-dims label{margin-bottom:4px}
+.bm-keep{display:none;margin:16px 0 0;color:var(--text-secondary)}
+.bm-keep.on{display:block}
 body.bv2 #save{display:none}
 .variant-switch button{font-size:14px}
 .map .sub{display:inline-flex;align-items:center;gap:4px}
@@ -244,6 +262,7 @@ body:not(.bv2) .selbar .sel-acts .btn{border-radius:var(--radius-sm);margin-left
       <div class="tabs-row">
         <div class="tabs" id="tabs" role="tablist"></div>
         <div class="tab-act">
+          <button type="button" class="btn btn-outlined btn-sm" id="mf-open" onclick="openFields()"><span class="material-icons" style="font-size:18px;margin-right:6px">settings</span>Mapping fields</button>
           <button class="btn btn-outlined btn-sm">Add group<span class="material-icons">expand_more</span></button>
           <button class="btn btn-sm" id="save" onclick="saveDirty()" disabled>Save mappings</button>
         </div>
@@ -266,6 +285,7 @@ body:not(.bv2) .selbar .sel-acts .btn{border-radius:var(--radius-sm);margin-left
       <div class="table-wrap map">
         <table class="synder-table" id="tbl">
           <thead><tr>
+            <th class="c-exp"></th>
             <th class="c-sel"><input type="checkbox" class="checkbox" id="sel-all" aria-label="Select all on page" onchange="selectPage(this.checked)"></th>
             <th>Group</th><th>Account subtype</th><th>Payment gateway</th><th>Integration</th><th class="c-acc">Account</th>
           </tr></thead>
@@ -287,9 +307,6 @@ body:not(.bv2) .selbar .sel-acts .btn{border-radius:var(--radius-sm);margin-left
     <div class="f-field"><label for="f-group">Groups</label><select id="f-group" class="select"></select></div>
     <div class="f-field"><label for="f-gw">Payment gateway</label><select id="f-gw" class="select"><option value="">All</option><option>Online Sales</option></select></div>
     <div class="f-field"><label for="f-acc">Account</label><select id="f-acc" class="select"></select></div>
-    <div class="f-sep"></div>
-    <label class="f-tog" onclick="this.querySelector('.toggle').classList.toggle('on')"><span class="toggle" id="t-loc"></span>Enable locations<span class="mi">help</span></label>
-    <label class="f-tog" onclick="this.querySelector('.toggle').classList.toggle('on')"><span class="toggle" id="t-cls"></span>Enable classes<span class="mi">help</span></label>
   </div>
   <div class="f-sheet-f">
     <button type="button" class="btn btn-outlined" id="f-reset" onclick="resetDraft()">Reset filters</button>
@@ -300,10 +317,31 @@ body:not(.bv2) .selbar .sel-acts .btn{border-radius:var(--radius-sm);margin-left
 <div class="bm-bg" id="bm-bg" onclick="if(event.target===this)closeBulk()">
   <div class="bm" role="dialog" aria-modal="true" aria-labelledby="bm-t">
     <h2 id="bm-t">Change mapping</h2>
-    <div class="bm-b"><p class="bm-scope" id="bm-scope"></p><label for="bm-acc">Account</label><select id="bm-acc" class="select" aria-describedby="bm-err" onchange="bmErr(false)"></select><div class="bm-err" id="bm-err" role="alert">Required</div></div>
+    <div class="bm-b"><p class="bm-scope" id="bm-scope"></p><label for="bm-acc">Account</label><select id="bm-acc" class="select" aria-describedby="bm-err" onchange="bmErr(false)"></select><div class="bm-err" id="bm-err" role="alert">Required</div>
+      <div class="bm-dims" id="bm-dims"><div id="bm-cls-f"><label for="bm-cls">Class</label><select id="bm-cls" class="select"></select></div><div id="bm-loc-f"><label for="bm-loc">Location</label><select id="bm-loc" class="select"></select></div></div>
+      <p class="bm-keep" id="bm-keep">Empty fields stay unchanged.</p></div>
     <div class="bm-f">
       <button type="button" class="btn btn-outlined" onclick="closeBulk()">Cancel</button>
       <button type="button" class="btn" id="bm-save" onclick="saveBulk()">Save mapping</button>
+    </div>
+  </div>
+</div>
+
+<div class="bm-bg" id="mf-bg" onclick="if(event.target===this)closeFields()">
+  <div class="bm" role="dialog" aria-modal="true" aria-labelledby="mf-t">
+    <h2 id="mf-t">Mapping fields</h2>
+    <div class="bm-b">
+      <p class="mf-note">Choose what to map for each group. Account is always required.</p>
+      <p class="mf-note2">Other fields are in the row details: expand a row to fill them. Hiding a field keeps its values.</p>
+      <div class="mf-opts">
+        <label><input type="checkbox" class="checkbox" checked disabled>Account</label>
+        <label><input type="checkbox" class="checkbox" id="mf-cls">Class</label>
+        <label><input type="checkbox" class="checkbox" id="mf-loc">Location</label>
+      </div>
+    </div>
+    <div class="bm-f">
+      <button type="button" class="btn btn-outlined" onclick="closeFields()">Cancel</button>
+      <button type="button" class="btn" id="mf-apply" onclick="applyFields()">Apply</button>
     </div>
   </div>
 </div>
@@ -327,6 +365,8 @@ var ACCOUNTS = [
   'Exchange gain or loss','Reserve held by Amazon','Inventory reimbursements','Other income','Bank charges',
   'Uncategorized expense'
 ];
+var CLASSES = ['Retail','Wholesale','Online','Subscriptions'];
+var LOCATIONS = ['Vilnius store','Kaunas store','Warehouse','Online'];
 var SALES = {st:'Sales — Flowers', sh:'Sales — Plates', am:'Sales — Bread', pp:'Sales — Tea'};
 var CLEAR = {st:'Stripe clearing (Synder)', sh:'Shopify clearing (Synder)', am:'Amazon clearing (Synder)', pp:'PayPal clearing (Synder)'};
 
@@ -365,18 +405,20 @@ Object.keys(PROD).forEach(function(k){
 });
 
 /* ───────── state ───────── */
-var S = {v:1, bv:1, saving:{}, alertOff:false, automap:true, screen:'mapping', tab:'all', status:'all', group:'', gw:'', acc:'', q:'', page:1, per:25, sel:{}};
+var S = {v:1, bv:1, saving:{}, alertOff:false, dims:{cls:false, loc:false}, exp:{}, automap:true, screen:'mapping', tab:'all', status:'all', group:'', gw:'', acc:'', q:'', page:1, per:25, sel:{}};
 function reset(){
   ROWS.forEach(function(r){
     var sure = r.kind==='sure' && S.automap;
     r.saved = (S.v===2 && sure) ? r.sug : '';
     r.value = sure ? r.sug : '';
     r.pending = (S.v===1 && sure);        // a filled-in suggestion that isn't saved
+    r.cls = r.scls = ''; r.loc = r.sloc = '';   // optional mapping fields (class, location) and their saved values
   });
   S.sel = {}; S.page = 1;
 }
 function section(r){ return r.saved ? 'map' : (r.pending ? 'sug' : 'att'); }
-function dirty(r){ return !!r.value && r.value !== r.saved; }
+// a row needs saving when it has an account and anything differs from what's saved (account, class or location)
+function dirty(r){ return !!r.value && (r.value !== r.saved || r.cls !== r.scls || r.loc !== r.sloc); }
 function edited(r){ return r.pending && r.value && r.value!==r.sug; }
 
 /* ───────── render ───────── */
@@ -405,6 +447,7 @@ function visible(){
     return (a.sug?1:0)-(b.sug?1:0) || io[a.integ]-io[b.integ] || a.id-b.id;
   });
 }
+function dimOpts(list, v){ return '<option value="">Select…</option>'+list.map(function(a){ return '<option'+(a===v?' selected':'')+'>'+esc(a)+'</option>'; }).join(''); }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'); }
 function opts(v){
   var h = '<option value=""'+(v?'':' selected')+'>Search or start typing…</option>';
@@ -423,17 +466,23 @@ function render(){
     var I = INTEG[r.integ],
         busy = !!S.saving[r.id],
         rs = dirty(r) ? '<button type="button" class="btn btn-outlined-warning btn-sm row-save'+(busy?' busy':'')+'"'+(anySel||busy?' disabled':'')+(busy?' aria-busy="true"':'')+' onclick="saveRow('+r.id+')">Save'+(busy?'<span class="spinner" aria-hidden="true"></span>':'')+'</button>' : '';
-    var cls = S.sel[r.id] ? 'picked' : (r.value && r.value===r.saved ? '' : 'unmapped');
+    var cls = S.sel[r.id] ? 'picked' : (!r.value || dirty(r) ? 'unmapped' : '');
+    var hasDims = S.dims.cls || S.dims.loc, open = hasDims && S.exp[r.id];
     h += '<tr data-id="'+r.id+'" data-sec="'+sec+'"'+(cls?' class="'+cls+'"':'')+'>'+
+      '<td class="c-exp"><button type="button" aria-label="'+(open?'Collapse':'Expand')+' '+esc(r.group)+'" aria-expanded="'+(open?'true':'false')+'" onclick="toggleExp('+r.id+')"><span class="material-icons">'+(open?'expand_less':'expand_more')+'</span></button></td>'+
       '<td class="c-sel"><input type="checkbox" class="checkbox" aria-label="Select '+esc(r.group)+'"'+(S.sel[r.id]?' checked':'')+' onchange="sel('+r.id+',this.checked)"></td>'+
       '<td class="grp">'+esc(r.group)+'</td><td><span class="sub">'+esc(r.subtype)+'<span class="material-icons hlp" aria-hidden="true">help</span></span></td><td>Online Sales</td>'+
       '<td><span class="integ"><span class="pi pi-'+r.integ+'">'+I.l+'</span>'+esc(I.name)+'</span></td>'+
       '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'"'+(anySel||busy?' disabled':'')+' onchange="setVal('+r.id+',this.value)">'+opts(r.value)+'</select>'+rs+'</div></td></tr>';
+    if (open) h += '<tr class="det" data-det="'+r.id+'"><td colspan="7"><div class="det-f">'+
+      (S.dims.cls ? '<div><label>Class</label><select class="select'+(r.cls?'':' empty')+'" aria-label="Class for '+esc(r.group)+'"'+(anySel||busy?' disabled':'')+' onchange="setDim('+r.id+',\'cls\',this.value)">'+dimOpts(CLASSES,r.cls)+'</select></div>' : '')+
+      (S.dims.loc ? '<div><label>Location</label><select class="select'+(r.loc?'':' empty')+'" aria-label="Location for '+esc(r.group)+'"'+(anySel||busy?' disabled':'')+' onchange="setDim('+r.id+',\'loc\',this.value)">'+dimOpts(LOCATIONS,r.loc)+'</select></div>' : '')+
+      '</div></td></tr>';
   });
   if (!slice.length) {
     var done = S.status==='not' && !S.q && !S.group && !S.acc && !S.gw;
     // on an integration tab: say that integration is done and keep the tab (round-3 review)
-    h = '<tr class="m-empty"><td colspan="6">'+(done ? (S.tab==='all' ? 'All groups are mapped.' : 'All '+esc(INTEG[S.tab].name)+' groups are mapped.') : 'No groups match these filters.')+
+    h = '<tr class="m-empty"><td colspan="7">'+(done ? (S.tab==='all' ? 'All groups are mapped.' : 'All '+esc(INTEG[S.tab].name)+' groups are mapped.') : 'No groups match these filters.')+
       '<button type="button" class="btn btn-outlined btn-sm" onclick="'+(done && S.tab!=='all' ? "dropFilter('status')" : 'clearAll()')+'">Show all groups</button></td></tr>';
   }
   document.getElementById('tb').innerHTML = h;
@@ -448,6 +497,7 @@ function render(){
   var nSel = Object.keys(S.sel).length;
   document.getElementById('selbar').classList.toggle('on', nSel>0);
   document.querySelector('.map-card').classList.toggle('selecting', nSel>0);
+  document.querySelector('.map-card').classList.toggle('has-dims', S.dims.cls || S.dims.loc);
   var bcb = document.getElementById('sel-bar-cb'); bcb.checked = nSel>0 && ids.every(function(i){return S.sel[i];}); bcb.indeterminate = nSel>0 && !bcb.checked;
   document.getElementById('sel-n').textContent = nSel+' selected';
   // the alert lives while premapped suggestions are unsaved and the user hasn't dismissed it
@@ -510,17 +560,30 @@ function applySheet(){
   S.page = 1; S.sel = {}; closeSheet(); render();
 }
 function resetDraft(){ ['f-status','f-group','f-gw','f-acc'].forEach(function(id){ document.getElementById(id).selectedIndex = 0; }); }
-document.addEventListener('keydown', function(e){ if (e.key==='Escape') { closeSheet(); closeBulk(); } });
+document.addEventListener('keydown', function(e){ if (e.key==='Escape') { closeSheet(); closeBulk(); closeFields(); } });
 
 /* ───────── actions ───────── */
 function setVal(id, v){ ROWS[id].value = v; render(); }
+function setDim(id, k, v){ ROWS[id][k] = v; render(); }
+function toggleExp(id){ if (S.exp[id]) delete S.exp[id]; else S.exp[id] = 1; render(); }
+function openFields(){
+  document.getElementById('mf-cls').checked = S.dims.cls; document.getElementById('mf-loc').checked = S.dims.loc;
+  document.getElementById('mf-bg').classList.add('on'); document.getElementById('mf-cls').focus();
+}
+function closeFields(){ document.getElementById('mf-bg').classList.remove('on'); }
+// unticking hides a field; values stay and come back when it's ticked again (Ignat, 2026-11-10)
+function applyFields(){
+  S.dims = {cls: document.getElementById('mf-cls').checked, loc: document.getElementById('mf-loc').checked};
+  if (!S.dims.cls && !S.dims.loc) S.exp = {};
+  closeFields(); render();
+}
 function sel(id, on){ if (on) S.sel[id]=1; else delete S.sel[id]; render(); }
 function selectPage(on){
   var list = visible().slice((S.page-1)*S.per, S.page*S.per);
   list.forEach(function(r){ if (on) S.sel[r.id]=1; else delete S.sel[r.id]; }); render();
 }
 function commit(rows){
-  rows.forEach(function(r){ r.saved = r.value; r.pending = false; delete S.sel[r.id]; });
+  rows.forEach(function(r){ r.saved = r.value; r.scls = r.cls; r.sloc = r.loc; r.pending = false; delete S.sel[r.id]; });
   // groups Synder couldn't premap that still have no SAVED account (an unsaved pick doesn't count)
   var left = ROWS.filter(function(r){ return !r.sug && !r.saved; }).length;
   // The default Not mapped filter is picked on page load only (defaultStatus). Never change the
@@ -542,6 +605,10 @@ function openBulk(){
   document.getElementById('bm-scope').textContent = n===1
     ? 'Applies to the selected group.'+(k ? ' Replaces its current mapping.' : '')
     : 'Applies to all '+n+' selected groups.'+(k ? (k===n ? ' Replaces the current mapping in all of them.' : ' Replaces the current mapping in '+k+' of them.') : '');
+  // extra mapping fields: empty means "keep each group's current value"
+  document.getElementById('bm-cls').innerHTML = dimOpts(CLASSES,''); document.getElementById('bm-loc').innerHTML = dimOpts(LOCATIONS,'');
+  document.getElementById('bm-cls-f').style.display = S.dims.cls ? '' : 'none'; document.getElementById('bm-loc-f').style.display = S.dims.loc ? '' : 'none';
+  document.getElementById('bm-dims').classList.toggle('on', S.dims.cls || S.dims.loc); document.getElementById('bm-keep').classList.toggle('on', S.dims.cls || S.dims.loc);
   document.getElementById('bm-bg').classList.add('on'); document.getElementById('bm-acc').focus();
 }
 function bmErr(on){ document.getElementById('bm-acc').classList.toggle('err', on); document.getElementById('bm-err').classList.toggle('on', on); }
@@ -549,7 +616,8 @@ function closeBulk(){ bmErr(false); document.getElementById('bm-bg').classList.r
 function saveBulk(){
   var a = document.getElementById('bm-acc').value; if (!a) { bmErr(true); document.getElementById('bm-acc').focus(); return; }
   var rows = ROWS.filter(function(r){ return S.sel[r.id]; });
-  rows.forEach(function(r){ r.value = a; });
+  var c = S.dims.cls ? document.getElementById('bm-cls').value : '', l = S.dims.loc ? document.getElementById('bm-loc').value : '';
+  rows.forEach(function(r){ r.value = a; if (c) r.cls = c; if (l) r.loc = l; });
   closeBulk(); commit(rows);
 }
 function saveDirty(){ commit(visible().filter(dirty)); }
