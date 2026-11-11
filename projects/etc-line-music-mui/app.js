@@ -323,12 +323,13 @@ function EventTables() {
 
 /* ── the page ─────────────────────────────────────────────────────── */
 function App() {
-  const [variant, setVRaw] = useState(() => location.hash === '#v2' ? 2 : 1);
-  const setV = n => { setVRaw(n); history.replaceState(null, '', '#v' + n); setPop(null); };
+  // Ignat, 2026-11-11: two buttons it is (option 1), and every user may manage the music —
+  // no variant switch, no roles
+  const variant = 1;
   const [lang, setLangRaw] = useState(() => localStorage.getItem('pims-lang') || 'de');
   LANG = lang;
   const setLang = l => { localStorage.setItem('pims-lang', l); document.documentElement.lang = l; setLangRaw(l); };
-  const [role, setRole] = useState('fgi');
+  const role = 'fgi';
   const [state, setState] = useState(SEED);
   const [pop, setPop] = useState(null);
   const [dlg, setDlg] = useState(null);
@@ -358,7 +359,6 @@ function App() {
   };
 
   return html`<${Box} sx=${{ minHeight: '100vh', bgcolor: 'background.default' }}>
-    <${VariantBar} v=${variant} setV=${setV} role=${role} setRole=${r => { setRole(r); setPop(null); }} />
     <${TopBar} lang=${lang} setLang=${setLang} unread=${reminders.length > 0 && !seen} onBell=${() => { setPop(null); setSheet(true); setSeen(true); }} />
     <${Box} sx=${{ display: 'flex' }}>
       <${Box} id="lineRail" sx=${{ width: 56, bgcolor: '#fff', borderRight: '1px solid #E0E0E0', py: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.25 }}>
