@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Health check — Integration column</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link rel="stylesheet" href="../../ui-kit/proposed.css">
+<!-- Built from ui-kit/starter. Recreates production Troubleshooting → Health check (Ignat's
+     screenshots, 2026-11-11) with two changes: Integration is its own column, Category is gone.
+     The dashboard Health check strip has a Current / Proposed switch.
+     The <style> below is page layout only (dashboard grid, logos, expanded rows); it restyles no kit component. -->
+<style>
+  .variant-switch { flex-wrap: wrap; }
+  .vs-sep { width: 1px; height: 20px; background: rgba(255,255,255,.2); }
+  .sidebar-org { padding: 12px 8px; border-bottom: 1px solid var(--color-sidebar-divider); }
+  .uncaptured { color: var(--text-secondary); font-style: italic; }
+
+  /* integration name with logo */
+  .co { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; }
+  .lg { flex: none; width: 20px; height: 20px; border-radius: 4px; display: grid; place-items: center; color: var(--color-white); font-size: 14px; font-weight: 700; line-height: 1; }
+  .lg.stripe { background: #635BFF; }
+  .lg.shopify { background: #5E8E3E; }
+  .lg.qbo { background: #2CA01C; border-radius: 50%; }
+  .dash { color: var(--text-secondary); }
+
+  /* Health check table */
+  .hc-toolbar { display: flex; justify-content: flex-end; gap: 8px; margin: 16px 0; }
+  #hc-table td { vertical-align: top; }
+  #hc-table .c-tog { width: 40px; }
+  #hc-table .c-when, #hc-table .c-period, #hc-table .c-status { white-space: nowrap; }
+  #hc-table .c-act { width: 48px; text-align: right; }
+  #hc-table tr.main { cursor: pointer; }
+  #hc-table tr.exp > td { background: var(--bg-subtle); }
+  .exp-box { padding: 4px 0 8px; }
+  .exp-box h4 { font-size: 14px; font-weight: 500; margin: 12px 0 2px; }
+  .exp-box h4:first-child { margin-top: 0; }
+  .exp-box p { margin: 0; }
+  .exp-box ol { margin: 0; padding-left: 20px; }
+  .exp-acts { display: flex; align-items: center; gap: 24px; margin-top: 14px; }
+  .menu-wrap { position: relative; display: inline-flex; }
+  .menu-wrap .dropdown-menu { left: auto; right: 0; top: 100%; min-width: 220px; }
+
+  /* dashboard (same grid as pt-dashboard-current) */
+  :root { --dash-grid: 12px minmax(0,1fr) 24px minmax(0,1fr) 24px minmax(0,1fr) 12px; }
+  .ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .ph h1 { font-size: 24px; font-weight: 400; line-height: 32px; margin: 0; }
+  .ph select { width: 140px; }
+  .band { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px 0; display: grid; grid-template-columns: var(--dash-grid); margin-bottom: 20px; }
+  .band > .kpi:nth-child(1) { grid-column: 2; } .band > .kpi:nth-child(2) { grid-column: 4; } .band > .kpi:nth-child(3) { grid-column: 6; }
+  .kpi { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 12px; }
+  .kpi.bad { background: var(--color-red-light); border-color: var(--color-status-red-bg); }
+  .kpi-t { font-weight: 500; line-height: 20px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .kpi-v { font-size: 16px; line-height: 24px; display: flex; align-items: baseline; gap: 10px; }
+  .help { color: var(--color-grey-30); font-size: 16px !important; cursor: help; vertical-align: -3px; }
+  .hc-band { grid-template-columns: 12px 1fr 12px; }
+  .hc-row { grid-column: 2; display: flex; align-items: center; gap: 12px; min-height: 36px; flex-wrap: wrap; }
+  .hc-row .t { font-weight: 500; }
+  .hc-row .meta { color: var(--text-secondary); }
+  .hc-row .btn-outlined { margin-left: auto; }
+  .hc-row .tooltip-wrap .tooltip { white-space: normal; width: 280px; font-size: 14px; }
+  .cols { display: grid; grid-template-columns: var(--dash-grid); align-items: start; }
+  .cols > .col:nth-child(1) { grid-column: 1 / 3; } .cols > .col:nth-child(2) { grid-column: 4; } .cols > .col:nth-child(3) { grid-column: 6 / 8; }
+  .col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+  .panel { background: var(--color-grey-10); border-radius: var(--radius-sm); padding: 12px; }
+  .panel-t { font-weight: 500; line-height: 20px; display: flex; align-items: center; gap: 6px; }
+  .panel-t .link { margin-left: auto; font-weight: 400; }
+  .panel-big { font-size: 17px; line-height: 24px; margin: 10px 0; }
+  .panel-big .n { color: var(--text-link); }
+  .dbox { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 6px; }
+  .rw { display: flex; align-items: center; gap: 8px; min-height: 27px; padding: 3px 6px; }
+  .rw .l { flex: 1; min-width: 0; }
+  .rw .c { color: var(--text-link); display: inline-flex; align-items: center; gap: 2px; }
+  .rw .c .material-icons { font-size: 18px; }
+  .items { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .item { background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 10px 12px; }
+  .item-h { display: flex; align-items: center; gap: 8px; }
+  .item-h .nm { flex: 1; min-width: 0; }
+  .item-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .page-pad { padding: 20px 24px 40px; }
+</style>
+</head>
+<body>
+<div class="variant-switch">
+  <span class="vs-label">Dashboard message</span>
+  <div class="vs-opts">
+    <button id="vs-1" onclick="setVariant(1)">1 · Current</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · Proposed</button>
+  </div>
+  <span class="vs-sep"></span>
+  <span class="vs-label">Data</span>
+  <div class="vs-opts">
+    <button id="ds-captured" onclick="setData('captured')">As captured</button>
+    <button id="ds-high" onclick="setData('high')">With a High issue</button>
+    <button id="ds-clear" onclick="setData('clear')">No issues</button>
+  </div>
+</div>
+<div class="synder-app">
+  <div class="topbar">
+    <span></span>
+    <div class="topbar-actions" style="gap:24px;align-self:stretch">
+      <span class="topbar-syncs">Syncs left :<b>9682</b></span>
+      <a class="topbar-link-lg">How it works?</a>
+      <span class="topbar-bell" aria-label="Notifications"><span class="material-icons">notifications</span></span>
+      <span class="topbar-menu" aria-label="Help"><span class="material-icons">help_outline</span><span class="material-icons">arrow_drop_down</span></span>
+      <span class="topbar-menu" aria-label="Account"><span class="material-icons">person</span><span class="material-icons">arrow_drop_down</span></span>
+    </div>
+  </div>
+  <div class="synder-layout">
+    <nav class="sidebar" aria-label="Main">
+      <div class="sidebar-org"><div class="sidebar-org-select"><span class="sidebar-org-avatar">HE</span><span class="sidebar-org-name">Health Check (1…</span><span class="material-icons">expand_more</span></div></div>
+      <a class="sidebar-item"><span class="material-icons">apps</span><span>Administrative functions</span></a>
+      <a class="sidebar-item" id="nav-dash" href="#" data-view="dash"><span class="material-icons">dashboard</span><span>Dashboard</span><span class="badge-new">New</span></a>
+      <a class="sidebar-item sidebar-item--group"><span class="material-icons">swap_horiz</span><span>Transactions</span><span class="material-icons sidebar-chevron">expand_more</span></a>
+      <a class="sidebar-item"><span class="material-icons">inventory_2</span><span>Inventory sync</span><span class="sidebar-badge sidebar-badge--beta">Beta</span></a>
+      <a class="sidebar-item sidebar-item--group"><span class="material-icons">account_tree</span><span>Smart rules</span><span class="material-icons sidebar-chevron">expand_more</span></a>
+      <a class="sidebar-item sidebar-item--group"><span class="material-icons">shopping_cart</span><span>Invoicing</span><span class="material-icons sidebar-chevron">expand_more</span></a>
+      <a class="sidebar-item sidebar-item--group"><span class="material-icons">trending_up</span><span>Analytics</span><span class="material-icons sidebar-chevron">expand_more</span></a>
+      <a class="sidebar-item" id="nav-trouble" href="#" data-view="hc"><span class="material-icons">troubleshoot</span><span>Troubleshooting</span><span class="badge-new">New</span></a>
+      <a class="sidebar-item"><span class="material-icons">insights</span><span>Business Insights (A)</span></a>
+      <a class="sidebar-item"><span class="material-icons">event_repeat</span><span>Revenue recognition</span></a>
+      <a class="sidebar-item"><span class="material-icons">smart_toy</span><span>AI Hub</span></a>
+      <a class="sidebar-item"><span class="material-icons">stars</span><span>What's New</span></a>
+      <a class="sidebar-item"><span class="material-icons">settings</span><span>Settings</span></a>
+      <div class="sidebar-promo">
+        <button class="sidebar-promo-close" type="button" aria-label="Close"><span class="material-icons">close</span></button>
+        <div class="sidebar-promo-title">Missed any transactions?</div>
+        <p class="sidebar-promo-text">Compare your accounting records to your payment platform — find any transaction that's missing, mismatched, or didn't sync.</p>
+        <button class="btn" type="button">Check now</button>
+      </div>
+    </nav>
+
+    <!-- ===== Dashboard ===== -->
+    <main class="synder-page page-pad" id="view-dash">
+      <div class="ph">
+        <h1>Hi The Best, your data is ready to review</h1>
+        <select class="select" aria-label="Period"><option>Last 30 days</option></select>
+      </div>
+      <div class="band">
+        <div class="kpi"><div class="kpi-t">Time saved <span class="material-icons help" title="[live copy not captured]">help</span></div><div class="kpi-v">~11h <a class="link">How to save more time</a></div></div>
+        <div class="kpi"><div class="kpi-t">Sync score <span class="material-icons help" title="[live copy not captured]">help</span></div><div class="kpi-v">86% <a class="link">How to bring it up to 100%</a></div></div>
+        <div class="kpi bad"><div class="kpi-t">Needs attention <span class="material-icons help" title="[live copy not captured]">help</span></div><div class="kpi-v"><a class="link link--chevron">26 transactions</a></div></div>
+      </div>
+      <div class="band hc-band" id="hc-strip"><div class="hc-row" id="hc-row"></div></div>
+      <div class="cols">
+        <div class="col">
+          <div class="panel">
+            <div class="panel-t">Import <span class="material-icons help">help</span><a class="link link--chevron" href="#" data-tab="import">Import activity log</a></div>
+            <div class="panel-big"><span class="n">339</span> transactions imported</div>
+            <div class="dbox">
+              <div class="rw"><span class="l co"><span class="lg stripe">S</span>Stripe Test (sandbox)</span><span class="c">185<span class="material-icons">chevron_right</span></span></div>
+              <div class="rw"><span class="l co"><span class="lg shopify">S</span>Changolivia (Shopify)</span><span class="c">154<span class="material-icons">chevron_right</span></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="panel">
+            <div class="panel-t">Sync <span class="material-icons help">help</span><a class="link link--chevron" href="#" data-tab="sync">Sync issues</a></div>
+            <div class="panel-big"><span class="n">293</span> transactions synchronized to books <span class="material-icons help">help</span></div>
+            <div class="dbox">
+              <div class="rw"><span class="l"><span class="status status-green">Synced</span></span><span class="c">293<span class="material-icons">chevron_right</span></span></div>
+              <div class="rw"><span class="l"><span class="status status-grey">Not parsed</span></span><span class="c">2<span class="material-icons">chevron_right</span></span></div>
+              <div class="rw"><span class="l"><span class="status status-yellow">Synced with warnings</span></span><span class="c">15<span class="material-icons">chevron_right</span></span></div>
+              <div class="rw"><span class="l"><span class="status status-yellow">Canceled</span></span><span class="c">9<span class="material-icons">chevron_right</span></span></div>
+              <div class="rw"><span class="l"><span class="status status-blue">Ready to sync</span></span><span class="c">20<span class="material-icons">chevron_right</span></span></div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="panel">
+            <div class="panel-t">Accounting <span class="material-icons help">help</span></div>
+            <div class="items"><div class="item"><div class="item-h"><span class="nm co"><span class="lg qbo">q</span>Sandbox Company US 5d48 (QuickBooks Online)</span><a class="link">Manage</a></div><div class="item-chips"><span class="status status-green">Connected</span></div></div></div>
+          </div>
+          <div class="panel">
+            <div class="panel-t">Integrations <span class="material-icons help">help</span></div>
+            <div class="items">
+              <div class="item"><div class="item-h"><span class="nm co"><span class="lg stripe">S</span>Stripe Test (sandbox)</span><a class="link">Settings</a><span class="material-icons" style="color:var(--text-secondary)">more_horiz</span></div><div class="item-chips"><span class="status status-green">Connected</span><span class="status status-green">Auto-import on</span><span class="status status-yellow">Auto-sync off</span></div></div>
+              <div class="item"><div class="item-h"><span class="nm co"><span class="lg shopify">S</span>Changolivia (Shopify)</span><a class="link">Settings</a><span class="material-icons" style="color:var(--text-secondary)">more_horiz</span></div><div class="item-chips"><span class="status status-green">Connected</span><span class="status status-green">Auto-import on</span><span class="status status-yellow">Auto-sync off</span></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- ===== Troubleshooting ===== -->
+    <main class="synder-page" id="view-hc" hidden>
+      <div class="synder-page-header">
+        <div class="synder-page-header-text">
+          <h1 class="synder-page-title">Troubleshooting</h1>
+          <p class="synder-page-subtitle">View how your data is flowing and catch problems early.</p>
+        </div>
+      </div>
+      <div class="tabs" role="tablist" id="ts-tabs">
+        <div class="tab" role="tab" data-tab="sync">Synchronization issues</div>
+        <div class="tab" role="tab" data-tab="import">Import activity log</div>
+        <div class="tab" role="tab" data-tab="speed">Sync speed</div>
+        <div class="tab" role="tab" data-tab="hc">Health check <span class="sidebar-badge sidebar-badge--beta">Beta</span></div>
+      </div>
+      <div id="tab-other" hidden><p class="uncaptured" style="margin:24px 0">[content not captured] — only the Health check tab is in this prototype.</p></div>
+      <div id="tab-hc">
+        <div class="hc-toolbar"><button class="btn-outlined" type="button" id="btn-log">Activity log</button><button class="btn" type="button" id="btn-run">Run check</button></div>
+        <div class="table-wrap">
+          <table class="synder-table" id="hc-table">
+            <thead><tr><th class="c-tog"><span class="sr-only">Expand</span></th><th>Issue</th><th>Integration</th><th>Last checked</th><th>Period</th><th>Status</th><th class="c-act"><span class="sr-only">Actions</span></th></tr></thead>
+            <tbody id="hc-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<div class="toast" id="toast" style="position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--color-grey);color:var(--color-white);padding:10px 16px;border-radius:var(--radius-sm);opacity:0;pointer-events:none;transition:opacity .15s;z-index:200"></div>
+
+<script>
+const INT = {
+  stripe: { name:'Stripe Test (sandbox)', lg:'stripe', ch:'S' },
+  shop:   { name:'Changolivia (Shopify)', lg:'shopify', ch:'S' },
+  qbo:    { name:'Sandbox Company US 5d48 (QuickBooks Online)', lg:'qbo', ch:'q' }
+};
+const LAST = 'Nov 11, 2026', PER = 'Oct 13, 2026 – Nov 11, 2026', CUR = 'Current setting';
+const AUTOSYNC = tab => ({
+  result: 'Auto-sync is off for '+tab+'.',
+  what: 'Checks that "Auto-sync" is on for each connected integration. With "Auto-sync" on, Synder sends imported transactions to your books automatically.',
+  why: 'When "Auto-sync" is off, imported transactions stay in Synder until someone syncs them by hand. Balances and reports in the books are not up to date.',
+  how: ['Open the settings of the integration.', 'Turn on "Auto-sync".'], cta: true
+});
+const RECEIVABLES = {
+  result: 'Receivables as of 2026-11-11: 6,202.33 USD open, 382.09 USD more than 60 days overdue, of which 156.00 USD more than 90 days (3% of the open balance).',
+  what: 'Checks aged receivables and payables as of period end (30-day buckets). Also reports customers or vendors with a credit (negative) balance as Info.',
+  why: 'Old overdue balances need action. Credit balances can be unapplied credits, payments, or misposted items.',
+  how: ['Open Aged Receivables and Aged Payables in QuickBooks Online.', 'Work the overdue customers and vendors.', 'Review any credit balances the finding names.'],
+  order: ['ignore','fixed']
+};
+const SYNCCOUNT = {
+  result: '320 platform transactions had a sync or rollback in this period',
+  what: 'Counts how many platform transactions had a sync or rollback in the period (each transaction counted by its latest sync).',
+  why: 'Information about sync volume for the period. It is not a failure.',
+  order: ['ignore']
+};
+/* Rows in production order (screenshots 2026-11-11). Title = old "Issue" text without " — {integration}". */
+const BASE = [
+  ['as1','Auto-sync (Default)','stripe',CUR,'failed',AUTOSYNC('Default')],
+  ['as2','Auto-sync (Manual Order)','shop',CUR,'failed',AUTOSYNC('Manual Order')],
+  ['as3','Auto-sync (Other Order refund)','shop',CUR,'failed',null],
+  ['as4','Auto-sync (Default)','shop',CUR,'failed',null],
+  ['as5','Auto-sync (POS Order)','shop',CUR,'failed',null],
+  ['as6','Auto-sync (POS Order refund)','shop',CUR,'failed',null],
+  ['as7','Auto-sync (Order refund)','shop',CUR,'failed',null],
+  ['as8','Auto-sync (Refund)','stripe',CUR,'failed',null],
+  ['as9','Auto-sync (Other Order)','shop',CUR,'failed',null],
+  ['ish1','Integration sync health','shop',PER,'failed',null],
+  ['ish2','Integration sync health','stripe',PER,'failed',null],
+  ['rb','Rolled back and canceled syncs',null,PER,'failed',null],
+  ['unc','Uncategorized accounts','qbo',PER,'failed',null],
+  ['un1','Unapplied & undeposited','qbo',PER,'failed',null],
+  ['un2','Unapplied & undeposited','qbo',PER,'failed',null],
+  ['ar1','Receivables & payables aging','qbo',PER,'failed',RECEIVABLES],
+  ['ar2','Receivables & payables aging','qbo',PER,'failed',null],
+  ['sc','Sync count',null,PER,'info',SYNCCOUNT],
+  ['ra','Rule attribution',null,PER,'info',null],
+  ['ar3','Receivables & payables aging','qbo',PER,'info',null],
+  ['mm','Material movements','qbo',PER,'info',null],
+  ['as10','Auto-sync (Manual Order refund)','shop',CUR,'marked',null],
+  ['acc','Accounting connection','qbo',CUR,'passed',null],
+  ['inv','QuickBooks invoice auto-apply conflict',null,CUR,'passed',null],
+  ['cl1','Clearing account consistency, USD','shop',CUR,'passed',null],
+  ['cl2','Clearing account consistency, USD','stripe',CUR,'passed',null],
+  ['ft','Failed transactions',null,PER,'passed',null],
+  ['ia','Import activity',null,PER,'passed',null],
+  ['mc','Multi-currency account mapping',null,CUR,'passed',null],
+  ['sd','Sync duration',null,PER,'passed',null]
+];
+const ORDER = { failed:1, info:2, marked:3, passed:4, ignored:5 };
+let rows = [], open = new Set(), menuOpen = null;
+let variant = 2, data = 'captured', view = 'dash', tab = 'hc';
+
+function load(){
+  rows = BASE.map(([id,title,int,period,status,copy]) => ({ id, title, int, period, status, sev: status==='failed' ? 'Medium' : null, copy }));
+  if(data==='high'){ const a = rows.find(r=>r.id==='acc'); a.status='failed'; a.sev='High'; a.period=CUR; }
+  if(data==='clear') rows.forEach(r=>{ if(r.status==='failed'){ r.status='passed'; r.sev=null; } });
+  open.clear();
+}
+const sorted = () => rows.slice().sort((a,b)=> (ORDER[a.status]-ORDER[b.status]) || ((a.sev==='High'?0:1)-(b.sev==='High'?0:1)) || (BASE.findIndex(x=>x[0]===a.id)-BASE.findIndex(x=>x[0]===b.id)));
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const intHtml = k => k ? '<span class="co"><span class="lg '+INT[k].lg+'" aria-hidden="true">'+INT[k].ch+'</span>'+esc(INT[k].name)+'</span>' : '<span class="dash" aria-label="No integration">—</span>';
+function chip(r){
+  if(r.status==='failed') return '<span class="status '+(r.sev==='High'?'status-red':'status-yellow')+'">Failed · '+r.sev+'</span>';
+  if(r.status==='info') return '<span class="status status-blue">Info</span>';
+  if(r.status==='marked') return '<span class="status status-green">Marked as fixed</span>';
+  if(r.status==='ignored') return '<span class="status status-grey">Ignored</span>';
+  return '<span class="status status-green">Passed check</span>';
+}
+function expHtml(r){
+  const c = r.copy;
+  if(!c || (r.status!=='failed' && r.status!=='info')) return '<div class="exp-box"><p class="uncaptured">[live copy not captured]</p></div>';
+  let h = '<div class="exp-box"><h4>Result</h4><p>'+esc(c.result)+'</p><h4>What it checks</h4><p>'+esc(c.what)+'</p><h4>Why it matters</h4><p>'+esc(c.why)+'</p>';
+  if(c.how) h += '<h4>How to fix</h4><ol>'+c.how.map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>';
+  const btn = { ignore:'<button type="button" class="btn-text" data-act="ignored" data-id="'+r.id+'">Ignore</button>', fixed:'<button type="button" class="btn-text" data-act="marked" data-id="'+r.id+'">Mark as fixed</button>' };
+  const order = c.order || ['ignore','fixed'];
+  h += '<div class="exp-acts">'+(c.cta ? '<button type="button" class="btn-outlined" data-go="'+r.id+'">Go to '+esc(INT[r.int].name)+' settings</button>' : '')+order.map(k=>btn[k]).join('')+'</div></div>';
+  return h;
+}
+function renderTable(){
+  document.getElementById('hc-body').innerHTML = sorted().map(r=>{
+    const o = open.has(r.id), menu = r.status!=='passed';
+    return '<tr class="main" data-row="'+r.id+'"><td class="c-tog"><button type="button" class="row-toggle" aria-expanded="'+o+'" aria-label="Show details"><span class="material-icons">chevron_right</span></button></td>'
+      + '<td>'+esc(r.title)+'</td><td class="c-int">'+intHtml(r.int)+'</td><td class="c-when">'+LAST+'</td><td class="c-period">'+r.period+'</td><td class="c-status">'+chip(r)+'</td>'
+      + '<td class="c-act">'+(menu ? '<span class="menu-wrap"><button type="button" class="btn-icon" data-menu="'+r.id+'" aria-label="Row actions"><span class="material-icons">more_horiz</span></button><div class="dropdown-menu'+(menuOpen===r.id?' show':'')+'"><div class="dropdown-item uncaptured">[menu items not captured]</div></div></span>' : '')+'</td></tr>'
+      + (o ? '<tr class="exp"><td></td><td colspan="6">'+expHtml(r)+'</td></tr>' : '');
+  }).join('');
+}
+function counts(){
+  const f = rows.filter(r=>r.status==='failed');
+  return { n:f.length, high:f.filter(r=>r.sev==='High').length, med:f.filter(r=>r.sev==='Medium').length };
+}
+const plural = (n,w) => n+' '+w+(n===1?'':'s');
+function renderStrip(){
+  const {n,high,med} = counts(), el = document.getElementById('hc-row');
+  if(variant===1){
+    /* production strip as captured */
+    el.innerHTML = '<span class="t">Health check</span><span class="status status-blue">Not date-filtered</span>'
+      + (n ? '<span class="status status-red">'+n+' failed checks</span>' : '')
+      + (high ? '<span class="status status-red">'+high+' High</span>' : '') + (med ? '<span class="status status-yellow">'+med+' Medium</span>' : '')
+      + '<span class="meta">Last run '+LAST+'</span><button type="button" class="btn-outlined" id="hc-cta">Check issues</button>';
+    return;
+  }
+  /* proposed: one sentence, one number, severity in words, same date label as the table */
+  let msg;
+  if(!n) msg = '<span class="status status-green">No issues found</span>';
+  else if(high && med) msg = '<span class="status status-red">'+plural(n,'issue')+' to fix</span><span>'+high+' High, '+med+' Medium</span>';
+  else msg = '<span class="status '+(high?'status-red':'status-yellow')+'">'+n+' '+(high?'High':'Medium')+' '+(n===1?'issue':'issues')+' to fix</span>';
+  el.innerHTML = '<span class="t">Health check</span>'
+    + '<span class="tooltip-wrap"><span class="material-icons help" tabindex="0" aria-label="About Health check">help</span><span class="tooltip" role="tooltip">Shows the current status of your setup and books. The date range above doesn\'t apply.</span></span>'
+    + msg + '<span class="meta">Last checked '+LAST+'</span>'
+    + '<button type="button" class="btn-outlined" id="hc-cta">'+(n?'Check issues':'Open Health check')+'</button>';
+}
+function render(){
+  document.getElementById('view-dash').hidden = view!=='dash';
+  document.getElementById('view-hc').hidden = view!=='hc';
+  document.getElementById('nav-dash').classList.toggle('active', view==='dash');
+  document.getElementById('nav-trouble').classList.toggle('active', view==='hc');
+  document.querySelectorAll('#ts-tabs .tab').forEach(t=>{ const on=t.dataset.tab===tab; t.classList.toggle('active',on); t.setAttribute('aria-selected',on); });
+  document.getElementById('tab-hc').hidden = tab!=='hc';
+  document.getElementById('tab-other').hidden = tab==='hc';
+  ['1','2'].forEach(v=>document.getElementById('vs-'+v).classList.toggle('on', String(variant)===v));
+  ['captured','high','clear'].forEach(d=>document.getElementById('ds-'+d).classList.toggle('on', data===d));
+  renderStrip(); renderTable();
+  history.replaceState(null,'','#v'+variant+'-'+data+'/'+(view==='dash'?'dash':tab));
+}
+function setVariant(v){ variant=v; render(); }
+function setData(d){ data=d; load(); render(); }
+function toast(m){ const t=document.getElementById('toast'); t.textContent=m; t.style.opacity=1; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.opacity=0,2200); }
+
+document.addEventListener('click', e=>{
+  const t = e.target;
+  const nav = t.closest('[data-view]'); if(nav){ e.preventDefault(); view=nav.dataset.view; if(view==='hc') tab='hc'; window.scrollTo(0,0); return render(); }
+  const tl = t.closest('[data-tab]'); if(tl){ e.preventDefault(); view='hc'; tab=tl.dataset.tab; window.scrollTo(0,0); return render(); }
+  if(t.closest('#hc-cta')){ view='hc'; tab='hc'; window.scrollTo(0,0); return render(); }
+  if(t.closest('#btn-log') || t.closest('#btn-run')) return toast('[not in this prototype]');
+  const m = t.closest('[data-menu]'); if(m){ e.stopPropagation(); menuOpen = menuOpen===m.dataset.menu ? null : m.dataset.menu; return renderTable(); }
+  if(t.closest('.dropdown-menu')) return;
+  const go = t.closest('[data-go]'); if(go){ const r=rows.find(x=>x.id===go.dataset.go); return toast('Opens '+INT[r.int].name+' settings'); }
+  const act = t.closest('[data-act]'); if(act){ const r=rows.find(x=>x.id===act.dataset.id); r.status=act.dataset.act; r.sev=null; return render(); }
+  if(menuOpen){ menuOpen=null; renderTable(); }
+  const row = t.closest('tr.main'); if(row){ const id=row.dataset.row; open.has(id)?open.delete(id):open.add(id); return renderTable(); }
+});
+
+(function init(){
+  const m = location.hash.match(/^#v([12])-(captured|high|clear)\/(dash|hc|sync|import|speed)$/);
+  if(m){ variant=+m[1]; data=m[2]; if(m[3]==='dash') view='dash'; else { view='hc'; tab=m[3]; } }
+  load(); render();
+})();
+</script>
+</body>
+</html>
