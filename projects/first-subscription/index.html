@@ -6,8 +6,8 @@
 <title>Choose your plan — first subscription</title>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
-<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css?v=13">
-<link rel="stylesheet" href="../../ui-kit/proposed.css?v=13">   <!-- sketch components: not approved, not in the kit -->
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css?v=15">
+<link rel="stylesheet" href="../../ui-kit/proposed.css?v=15">   <!-- sketch components: not approved, not in the kit -->
 <!-- First subscription page (DIS-593). Opened from "Choose plan" in the trial banner.
      Prices, tiers and plan contents: Per transaction — captured from demo /organizations/billing?action=SUBSCRIBE_SYNC in a PE org, 2026-11-10.
      Layout: Ignat's sketch. Headline, step names, taglines: Ignat's sketch (proposed). Quotes: real (Ignat). -->
@@ -34,6 +34,14 @@
 </style>
 </head>
 <body>
+<div class="variant-switch" id="vs">
+  <span class="vs-label">User</span>
+  <div class="vs-opts">
+    <button id="vs-owner" class="on" onclick="setView('owner')">Business owner · 4 plans</button>
+    <button id="vs-accountant" onclick="setView('accountant')">Accountant · 3 plans</button>
+  </div>
+  <span class="vs-note">Premium card hidden for profession "Accountant or bookkeeper in practice" (core: useSubscriptionPlansToRender)</span>
+</div>
 <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="fs-title">
   <button class="close-x fs-close" aria-label="Close" id="fs-close"><span class="material-icons">close</span></button>
   <div class="overlay-body" id="fs-body">
@@ -154,7 +162,7 @@ const CARDS = [
   { id:'essential', name:'Essential', tagline:'For more volume and detail' },
   { id:'pro', name:'Pro', tagline:'For complex workflows', max:{ id:'promax', name:'Pro Max', tagline:'For high volume and custom workflows' }, popular:true },
 ];
-const state = { period:'monthly', tier:{ basic:0, essential:0, pro:0, promax:0 }, max:false };
+const state = { view: new URLSearchParams(location.search).get('view')==='accountant' ? 'accountant' : 'owner', period:'monthly', tier:{ basic:0, essential:0, pro:0, promax:0 }, max:false };
 
 // ---- Rolling price (slot machine) ----
 function setPrice(el, value){
@@ -182,9 +190,19 @@ function setPrice(el, value){
 
 function planOf(card){ return card.max && state.max ? card.max : card; }
 
+// Premium: UI placeholder card (core SET-298), shown to everyone except accountants. Copy: live in-app strings where they exist.
+const PREMIUM = { id:'premium', name:'Premium', tagline:'For complex needs', custom:true };
+const PREMIUM_ROWS = [
+  ['download','Import','<span class="plan-plus">+</span> free unlimited history, dedicated server'],
+  ['tune','Customize','<span class="plan-plus">+</span> 10 Smart Rules, custom development'],
+  ['sync','Sync','<span class="plan-plus">+</span> RevRec up to 5,000 subscriptions'],
+  ['done','Reconcile','Books vs payment integrations'],
+];
+function cardsForView(){ return state.view === 'owner' ? [...CARDS, PREMIUM] : CARDS; }
 function renderCards(){
   const grid = document.getElementById('plans'); grid.innerHTML = '';
-  for (const card of CARDS){
+  grid.classList.toggle('plan-grid--4', state.view === 'owner');
+  for (const card of cardsForView()){
     const el = document.createElement('article');
     el.className = 'plan-card' + (card.popular ? ' plan-card--featured' : '');
     el.dataset.card = card.id;
@@ -192,11 +210,21 @@ function renderCards(){
     fillCard(el, card, true);
   }
 }
+function fillPremium(el){
+  el.innerHTML = `
+    <div class="plan-card-head"><h2 class="plan-name" style="margin:0">Premium</h2></div>
+    <p class="plan-tagline" style="margin-bottom:0">${PREMIUM.tagline}</p>
+    <div class="plan-price"><span class="plan-price-custom">Custom pricing</span></div>
+    <div class="plan-volume">50,000+ transactions / month</div>
+    <a class="btn btn-lg btn-outlined plan-cta" data-choose="premium" href="https://sales.synder.com/meetings/synder/talk-to-us-subscribed" target="_blank" rel="noopener">Talk to sales</a>
+    <ul class="plan-rows">${PREMIUM_ROWS.map(r=>`<li class="plan-row"><span class="plan-row-icon"><span class="material-icons">${r[0]}</span></span><span><span class="plan-row-label d-block">${r[1]}</span><span class="plan-row-text">${r[2]}</span></span></li>`).join('')}</ul>`;
+}
 function fillCard(el, card, first){
+  if (card.custom) return fillPremium(el);
   const p = planOf(card), pr = PRICES[p.id], t = state.tier[p.id];
   const vol = pr.tiers.length === 1
     ? `<span>Up to ${pr.tiers[0]} transactions / month</span>`
-    : `<select class="select" aria-label="${p.name} transactions a month" data-plan="${p.id}">${pr.tiers.map((x,i)=>`<option value="${i}" ${i===t?'selected':''}>Up to ${x} transactions / month</option>`).join('')}</select>`;
+    : `<select class="select" aria-label="${p.name} transactions a month" data-plan="${p.id}">${pr.tiers.map((x,i)=>`<option value="${i}" ${i===t?'selected':''}>Up to ${x} transactions/mo</option>`).join('')}</select>`;
   el.innerHTML = `
     ${card.popular ? '<span class="plan-badge">Most popular</span>' : ''}
     <div class="plan-card-head">
@@ -214,7 +242,7 @@ function fillCard(el, card, first){
   if (first){ const roll = el.querySelector('.price-roll'); setPrice(roll, pr[state.period][t]); el._roll = roll; }
 }
 function update(cardId){
-  for (const card of CARDS){
+  for (const card of CARDS){   // Premium has no price to roll
     if (cardId && card.id !== cardId) continue;
     const el = document.querySelector(`[data-card="${card.id}"]`);
     const oldRoll = el._roll;
@@ -255,14 +283,24 @@ document.getElementById('to-compare').addEventListener('click', e=>{
 // ---- Compare plans (demo "Compare plans", all four sections, captured 2026-11-10) ----
 // ---- Compare plans: live layout (demo PE org, 2026-11-10) — collapsible sections, one column per card; Pro column follows Standard | Max ----
 const CMP = {"Core functionalities": {"basic": [[true, "2 integration slots", false], [true, "Product names tracking", false], [true, "Tax tracking", false], [true, "Multicurrency", false], [true, "Daily import", false], [true, "Paid unlimited history", true], [true, "1 additional user", false], [true, "Synchronization to Custom ERP, QuickBooks Online, Xero, Puzzle", false], [true, "Generic customer", false], [false, "Applying payments to unpaid invoices", false], [false, "Syncing sales as invoices", false], [false, "Canceling syncs if a matching invoice is not found", false], [false, "Canceling syncs if a product is not found", false], [false, "Syncing open invoices", false], [false, "Product mapping", false], [false, "Skipping duplicates", false], [false, "Syncing discounts as line items", false], [false, "Bundles/assemblies syncing", false], [false, "QuickBooks locations support", false], [false, "Creating inventory items", false], [false, "Premium integrations", false]], "essential": [[true, "Unlimited integration slots", false], [true, "Product names tracking", false], [true, "Tax tracking", false], [true, "Multicurrency", false], [true, "Hourly import", false], [true, "Paid unlimited history", true], [true, "1 additional user", false], [true, "Synchronization to Custom ERP, QuickBooks Online, Xero, QuickBooks Desktop, Puzzle", false], [true, "Individual customer tracking", false], [true, "Applying payments to unpaid invoices", false], [true, "Syncing sales as invoices", false], [true, "Canceling syncs if a matching invoice is not found", false], [true, "Canceling syncs if a product is not found", false], [true, "Syncing open invoices", false], [true, "Product mapping", false], [true, "Skipping duplicates", false], [false, "Syncing discounts as line items", false], [false, "Bundles/assemblies syncing", false], [false, "QuickBooks locations support", false], [false, "Creating inventory items", false], [false, "Premium integrations", false]], "pro": [[true, "Unlimited integration slots", false], [true, "Product names tracking", false], [true, "Tax tracking", false], [true, "Multicurrency", false], [true, "Hourly import", false], [true, "3 months of history for free, then paid unlimited history", false], [true, "2 additional users", false], [true, "Synchronization to Custom ERP, QuickBooks Online, Xero, QuickBooks Desktop, Oracle NetSuite, Puzzle", false], [true, "Individual customer tracking", false], [true, "Applying payments to unpaid invoices", false], [true, "Syncing sales as invoices", false], [true, "Canceling syncs if a matching invoice is not found", false], [true, "Canceling syncs if a product is not found", false], [true, "Syncing open invoices", false], [true, "Product mapping", false], [true, "Skipping duplicates", false], [true, "Syncing discounts as line items", false], [true, "Bundles/assemblies syncing", false], [true, "QuickBooks locations support", false], [true, "Creating inventory items", false], [true, "Premium integrations: Magento, Walmart, Clover, Faire, TikTok, Ecwid, ShipStation, Squarespace, BigCommerce, Synder API, PayPal API", false]], "promax": [[true, "Unlimited integration slots", false], [true, "Product names tracking", false], [true, "Tax tracking", false], [true, "Multicurrency", false], [true, "Hourly import", false], [true, "3 months of history for free, then paid unlimited history", false], [true, "2 additional users", false], [true, "Synchronization to Custom ERP, QuickBooks Online, Xero, QuickBooks Desktop, Oracle NetSuite, Puzzle", false], [true, "Individual customer tracking", false], [true, "Applying payments to unpaid invoices", false], [true, "Syncing sales as invoices", false], [true, "Canceling syncs if a matching invoice is not found", false], [true, "Canceling syncs if a product is not found", false], [true, "Syncing open invoices", false], [true, "Product mapping", false], [true, "Skipping duplicates", false], [true, "Syncing discounts as line items", false], [true, "Bundles/assemblies syncing", false], [true, "QuickBooks locations support", false], [true, "Creating inventory items", false], [true, "Premium integrations: Magento, Walmart, Clover, Faire, TikTok, Ecwid, ShipStation, Squarespace, BigCommerce, Synder API, PayPal API", false]]}, "Add-ons": {"basic": [[false, "Custom modifications", false], [true, "Smart Rules", true], [true, "Additional users", true], [false, "Dedicated server", false], [false, "Custom development", false]], "essential": [[false, "Custom modifications", false], [true, "Smart Rules", true], [true, "Additional users", true], [false, "Dedicated server", false], [false, "Custom development", false]], "pro": [[true, "Custom modifications", false], [true, "3 free Smart Rules", false], [true, "Additional users", true], [false, "Dedicated server", false], [false, "Custom development", false]], "promax": [[true, "Custom modifications", false], [true, "10 free Smart Rules", false], [true, "Additional users", true], [false, "Dedicated server", false], [false, "Custom development", false]]}, "Other Synder products": {"basic": [[true, "Invoicing", true], [false, "Synder RevRec", false]], "essential": [[true, "Invoicing", true], [false, "Synder RevRec", false]], "pro": [[true, "Invoicing", true], [true, "RevRec free for up to 1000 subscriptions", true]], "promax": [[true, "Invoicing", true], [true, "RevRec free for up to 2000 subscriptions", true]]}, "Support options": {"basic": [[true, "Email support, live chat support", false], [false, "Support screen-sharing sessions", false], [true, "Self-service onboarding", false], [false, "Monthly account health checks", false], [true, "Regular Lane Tech Support", false]], "essential": [[true, "Email support", false], [false, "Support screen-sharing sessions", false], [true, "Self-service onboarding", false], [false, "Monthly account health checks", false], [true, "Regular Lane Tech Support", false]], "pro": [[true, "Email support, live chat support", false], [true, "Support screen-sharing sessions (free)", false], [true, "Assisted setup", false], [true, "Quarterly account health checks", false], [true, "Express Lane Tech Support", false]], "promax": [[true, "Email support, live chat support", false], [true, "Support screen-sharing sessions (free)", false], [true, "Assisted setup", false], [true, "Monthly account health checks", false], [true, "Fast Track Tech Support", false]]}};
+// Premium column (owner view only): Pro Max list + live Premium key features / add-ons from core subscriptionRenderUtils
+for (const sec of Object.keys(CMP)){
+  const swap = {'3 months of history for free, then paid unlimited history':'Free unlimited history','10 free Smart Rules':'10 free Smart Rules','RevRec free for up to 2000 subscriptions':'RevRec free for up to 5000 subscriptions'};
+  CMP[sec].premium = CMP[sec].promax.map(([y,l,f])=>{
+    if (l==='Dedicated server') return [true,l,false];
+    if (l==='Custom development') return [true,'Paid custom development',false];
+    if (sec==='Support options' && /Tech Support$/.test(l)) return [true,'Premium support (video, phone, email, chat)',false];
+    return [y, swap[l]||l, (swap[l]&&/history/.test(l))?false:f];
+  });
+}
 const SECTIONS = Object.keys(CMP);
 const open = new Set();
 function renderCompare(){
-  const ids = ['basic','essential', state.max ? 'promax' : 'pro'];
+  const ids = ['basic','essential', state.max ? 'promax' : 'pro', ...(state.view==='owner' ? ['premium'] : [])];
   document.getElementById('cmp').innerHTML = SECTIONS.map((sec,i)=>`
     <div class="compare-acc">
       <button class="compare-acc-btn" aria-expanded="${open.has(sec)}" aria-controls="cmp-${i}" data-sec="${sec}">${sec}<span class="material-icons">${open.has(sec)?'expand_less':'expand_more'}</span></button>
-      <div class="plan-grid compare-cols" id="cmp-${i}" ${open.has(sec)?'':'hidden'}>${ids.map(id=>`<ul class="compare-list" aria-label="${id}">${CMP[sec][id].map(([y,l,f])=>`<li class="compare-item${y?'':' is-off'}"><span class="material-icons" aria-label="${y?'Included':'Not included'}">${y?'check':'close'}</span><span>${l}${f?' <span class="info-chip">+ Fee</span>':''}</span></li>`).join('')}</ul>`).join('')}</div>
+      <div class="plan-grid compare-cols${state.view==='owner'?' plan-grid--4':''}" id="cmp-${i}" ${open.has(sec)?'':'hidden'}>${ids.map(id=>`<ul class="compare-list" aria-label="${id}">${CMP[sec][id].map(([y,l,f])=>`<li class="compare-item${y?'':' is-off'}"><span class="material-icons" aria-label="${y?'Included':'Not included'}">${y?'check':'close'}</span><span>${l}${f?' <span class="info-chip">+ Fee</span>':''}</span></li>`).join('')}</ul>`).join('')}</div>
     </div>`).join('');
 }
 document.getElementById('cmp').addEventListener('click', e=>{
@@ -271,6 +309,18 @@ document.getElementById('cmp').addEventListener('click', e=>{
   renderCompare(); document.querySelector(`[data-sec="${b.dataset.sec}"]`).focus();
 });
 function renderCompareHead(){ renderCompare(); }
+
+function setView(v){
+  state.view = v;
+  document.getElementById('vs-owner').classList.toggle('on', v==='owner');
+  document.getElementById('vs-accountant').classList.toggle('on', v==='accountant');
+  const u = new URL(location.href); u.searchParams.set('view', v); history.replaceState(null,'',u);
+  renderCards(); renderCompare();
+}
+document.querySelector('.overlay').style.top = document.getElementById('vs').offsetHeight + 'px';
+document.getElementById('fs-close').style.top = (document.getElementById('vs').offsetHeight + 12) + 'px';
+document.getElementById('vs-owner').classList.toggle('on', state.view==='owner');
+document.getElementById('vs-accountant').classList.toggle('on', state.view==='accountant');
 
 // ---- States: ?state=loading | ?state=error ----
 const S = new URLSearchParams(location.search).get('state');
