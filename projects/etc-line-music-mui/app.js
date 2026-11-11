@@ -8,12 +8,11 @@
    · always the whole station (music is per station); no end time
    · a reminder after 3 h (the backend triggers it — here only a preview)
    · a muted station mutes its music too; after unmute paused music stays paused
-   · outdoor stations with mute times: music is silent during that window
    Two options behind the switcher:
      1 · a separate button and its own dialog (recommended)
      2 · one STUMMSCHALTUNG button, the choice of what to silence inside the dialog
    The line, the event table and the mute dialog recreate his production screenshots.
-   Names, reasons, times and the outdoor schedule are SAMPLE data.
+   Names, reasons, times are SAMPLE data.
    ════════════════════════════════════════════════════════════════════ */
 const { useState } = React;
 const html = htm.bind(React.createElement);
@@ -67,7 +66,7 @@ const STATIONS = [
   { c: 'Pr',      name: 'Prinzenstraße',     tracks: [1, 2],    xfer: ['U3'] },
   { c: 'Kbo',     name: 'Kottbusser Tor',    tracks: [1, 2],    xfer: ['U3', 'U8'] },
   { c: 'Gr',      name: 'Görlitzer Bahnhof', tracks: [1, 2],    xfer: ['U3'] },
-  { c: 'S',       name: 'Schlesisches Tor',  tracks: [1, 2],    xfer: ['U3'], outdoor: { from: '22:00', to: '06:00' } },
+  { c: 'S',       name: 'Schlesisches Tor',  tracks: [1, 2],    xfer: ['U3'] },
   { c: 'WA',      name: 'Warschauer Straße', tracks: [1, 2, 3], xfer: ['U3', 'S'] },
 ];
 const BY = Object.fromEntries(STATIONS.map(s => [s.c, s]));
@@ -82,6 +81,7 @@ SEED.Kbo.pause = { reason: 'Beschwerde von Anwohnern', by: 'S. Weber', at: '09.1
 SEED.Ho.music = 'none';
 SEED.U.music = 'paused';
 // Ignat, 2026-11-10: more stations paused by default, to walk the flow
+SEED.S.music = 'paused';   SEED.S.pause  = { reason: 'Außenbahnhof: Nachtruhe', by: 'S. Weber', at: '10.11.2026 22:00' };
 SEED.Go.music = 'paused';  SEED.Go.pause  = { reason: 'Gottesdienst in der Nähe', by: 'M. Krüger', at: '10.11.2026 07:55' };
 SEED.Gr.music = 'paused';  SEED.Gr.pause  = { reason: 'Reinigungsarbeiten', by: 'S. Weber', at: '10.11.2026 06:30' };
 SEED['Nu / Nm'].music = 'paused'; SEED['Nu / Nm'].pause = { reason: 'Durchsagen schlecht verständlich', by: 'T. Yilmaz', at: '10.11.2026 08:15' };
@@ -91,7 +91,7 @@ const now = () => { const d = new Date(), p = x => String(x).padStart(2, '0');
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 /* what the music actually does right now */
 const musicNow = (s, st) => st.mute ? 'muted' : st.music === 'none' ? 'none'
-  : st.music === 'paused' ? 'paused' : s.outdoor ? 'schedule' : st.music;   // a pause outlives the schedule     // the sample outdoor window is treated as active now
+  : st.music;   // Ignat, 2026-11-11: no schedule on this screen — paused or playing
 
 /* ── chrome ───────────────────────────────────────────────────────── */
 function VariantBar({ v, setV, role, setRole }) {
@@ -174,7 +174,6 @@ function MusicInfo({ s, st }) {
     ${line(html`<b>${L('Musik pausiert', 'Music paused')}</b> · ${st.pause.by} · ${st.pause.at}`, 'music-paused-by')}
     ${line(html`<b>${L('Grund', 'Reason')}:</b> ${st.pause.reason}`, 'music-reason')}<//>`;
   if (m === 'muted') return html`<${Box} className="music-info" sx=${{ mt: 1.5 }}>${line(html`<b>${L('Musik stumm', 'Music off')}</b> ${L('(Stummschaltung aktiv)', '(station muted)')}`)}<//>`;
-  if (m === 'schedule') return html`<${Box} className="music-info" sx=${{ mt: 1.5 }}>${line(html`<b>${L('Musik stumm', 'Music off')}</b> ${L('bis', 'until')} ${s.outdoor.to} (${L('Zeitplan', 'schedule')} ${s.outdoor.from}–${s.outdoor.to})`)}<//>`;
   return null;
 }
 
@@ -230,8 +229,7 @@ function ActionDialog({ dlg, state, role, onClose, onApply }) {
 
   if (dlg.kind === 'unmute') body = T(L('Alle Ansagen aus PIMS wieder aktivieren', 'Re-enable all PIMS announcements'));
   else if (dlg.kind === 'musicStart') body = T(L(`Musik an ${s.name} (${s.c}) wieder starten`, `Start the music at ${s.name} (${s.c}) again`));
-  else if (dlg.kind === 'musicPause') { body = html`${T(L(`Musik an ${s.name} (${s.c}) pausieren, bis sie manuell fortgesetzt wird.`, `Pause the music at ${s.name} (${s.c}) until it is resumed manually.`))}
-      ${m === 'schedule' ? T(L(`Gilt auch nach Ende des Zeitplans (${s.outdoor.to}).`, `Also applies after the schedule ends (${s.outdoor.to}).`)) : null}${reasonField}`; applyOk = !!reason.trim(); }
+  else if (dlg.kind === 'musicPause') { body = html`${T(L(`Musik an ${s.name} (${s.c}) pausieren, bis sie manuell fortgesetzt wird.`, `Pause the music at ${s.name} (${s.c}) until it is resumed manually.`))}${reasonField}`; applyOk = !!reason.trim(); }
   else {
     // mute (production) — and in variant 2 the music choice joins the same list
     const musicOpt = dlg.kind === 'combo' && role === 'fgi' && (m === 'playing' || m === 'paused' || m === 'schedule') ? (m === 'paused' ? 'musicStart' : 'musicPause') : null;
