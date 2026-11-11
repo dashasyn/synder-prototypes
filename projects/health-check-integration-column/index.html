@@ -316,16 +316,19 @@ const plural = (n,w) => n+' '+w+(n===1?'':'s');
 function renderStrip(){
   /* Ignat 2026-11-11: the whole line is the alert, no status chips. Red = issues, yellow = no check for over a month, green = all clear */
   const {n} = counts(), old = stale(), when = fmtD(lastRun), al = document.getElementById('hc-alert');
-  const check = cls => '<button type="button" class="'+cls+'" id="hc-check"'+(checking?' disabled':'')+'>'+(checking?'Checking…':'Check now')+'</button>';
+  /* one button per state; both labels open the Health check tab, where the user runs the check (Ignat 2026-11-11) */
+  const check = cls => '<button type="button" class="'+cls+'" id="hc-cta">Check now</button>';
   const view = '<button type="button" class="btn-outlined btn-outlined-error" id="hc-cta">View issues</button>';
   let kind, icon, msg, btns;
-  if(n && old){ kind='error'; icon='error'; msg='<b>Health check found '+plural(n,'issue')+' on '+when+', more than a month ago.</b> Fix them, then check again to catch anything new.'; btns=check('btn-text')+view; }
+  if(n && old){ kind='error'; icon='error'; msg='<b>Health check found '+plural(n,'issue')+' on '+when+', more than a month ago.</b> Fix them, then check again to catch anything new.'; btns=view; }
   else if(n){ kind='error'; icon='error'; msg='<b>Health check found '+plural(n,'issue')+'.</b> Fix them to keep your books accurate. Last check '+when+'.'; btns=view; }
   else if(old){ kind='warning'; icon='warning'; msg='<b>Time to check your organization\'s health.</b> The last check was more than a month ago, on '+when+'.'; btns=check('btn-outlined btn-outlined-warning'); }
   else { kind='success'; icon='check_circle'; msg='<b>All good: Health check found no issues on '+when+'.</b> Changed settings since then? Check again to be sure.'; btns=check('btn-outlined'); }
   al.innerHTML = '<div class="alert alert-'+kind+' hc-alert" role="status"><span class="material-icons">'+icon+'</span><span class="hc-msg">'+msg+'</span>'+btns+'</div>';
 }
+function renderRun(){ const b=document.getElementById('btn-run'); b.disabled=checking; b.textContent=checking?'Checking…':'Run check'; }
 function render(){
+  renderRun();
   document.getElementById('view-dash').hidden = view!=='dash';
   document.getElementById('view-hc').hidden = view!=='hc';
   document.getElementById('nav-dash').classList.toggle('active', view==='dash');
@@ -344,9 +347,9 @@ document.addEventListener('click', e=>{
   const t = e.target;
   const nav = t.closest('[data-view]'); if(nav){ e.preventDefault(); view=nav.dataset.view; if(view==='hc') tab='hc'; window.scrollTo(0,0); return render(); }
   const tl = t.closest('[data-tab]'); if(tl){ e.preventDefault(); view='hc'; tab=tl.dataset.tab; window.scrollTo(0,0); return render(); }
-  if(t.closest('#hc-check')){ if(checking) return; checking=true; renderStrip(); return setTimeout(()=>{ checking=false; data = data==='stalei' ? 'issues' : 'clear'; load(); render(); toast('Check finished.'); }, 900); }
   if(t.closest('#hc-cta')){ view='hc'; tab='hc'; window.scrollTo(0,0); return render(); }
-  if(t.closest('#btn-log') || t.closest('#btn-run')) return toast('[not in this prototype]');
+  if(t.closest('#btn-run')){ if(checking) return; checking=true; renderRun(); return setTimeout(()=>{ checking=false; data = (data==='stalei' || data==='issues') ? 'issues' : 'clear'; load(); render(); toast('Check finished.'); }, 900); }
+  if(t.closest('#btn-log')) return toast('[not in this prototype]');
   const m = t.closest('[data-menu]'); if(m){ e.stopPropagation(); menuOpen = menuOpen===m.dataset.menu ? null : m.dataset.menu; return renderTable(); }
   if(t.closest('.dropdown-menu')) return;
   const go = t.closest('[data-go]'); if(go){ const r=rows.find(x=>x.id===go.dataset.go); return toast('Opens '+INT[r.int].name+' settings'); }
