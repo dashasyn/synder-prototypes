@@ -65,6 +65,8 @@
   .hc-row .hc-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
   .hc-row .hc-body .meta { margin-top: 2px; }
   .hc-row .hc-body ~ .btn-outlined { margin-left: 0; }
+  .hc-alert { align-items: center; margin-bottom: 20px; }
+  .hc-alert .hc-msg { flex: 1; min-width: 0; }
   .hc-row .tooltip-wrap .tooltip { white-space: normal; width: 280px; font-size: 14px; }
   .cols { display: grid; grid-template-columns: var(--dash-grid); align-items: start; }
   .cols > .col:nth-child(1) { grid-column: 1 / 3; } .cols > .col:nth-child(2) { grid-column: 4; } .cols > .col:nth-child(3) { grid-column: 6 / 8; }
@@ -94,6 +96,7 @@
     <button id="vs-1" onclick="setVariant(1)">1 · Current</button>
     <button id="vs-2" onclick="setVariant(2)">2 · One line</button>
     <button id="vs-3" onclick="setVariant(3)">3 · Name + description</button>
+    <button id="vs-4" onclick="setVariant(4)">4 · Alert line</button>
   </div>
   <span class="vs-sep"></span>
   <span class="vs-label">Data</span>
@@ -101,6 +104,8 @@
     <button id="ds-captured" onclick="setData('captured')">As captured</button>
     <button id="ds-high" onclick="setData('high')">With a High issue</button>
     <button id="ds-clear" onclick="setData('clear')">No issues</button>
+    <button id="ds-stale" onclick="setData('stale')">No issues, last run &gt; 1 month</button>
+    <button id="ds-stalei" onclick="setData('stalei')">Issues, last run &gt; 1 month</button>
   </div>
 </div>
 <div class="synder-app">
@@ -150,6 +155,7 @@
         <div class="kpi bad"><div class="kpi-t">Needs attention <span class="material-icons help" title="[live copy not captured]">help</span></div><div class="kpi-v"><a class="link link--chevron">26 transactions</a></div></div>
       </div>
       <div class="band hc-band" id="hc-strip"><div class="hc-row" id="hc-row"></div></div>
+      <div id="hc-alert"></div>
       <div class="cols">
         <div class="col">
           <div class="panel">
@@ -225,7 +231,11 @@ const INT = {
   shop:   { name:'Changolivia (Shopify)', lg:'shopify', ch:'S' },
   qbo:    { name:'Sandbox Company US 5d48 (QuickBooks Online)', lg:'qbo', ch:'q' }
 };
-const LAST = 'Nov 11, 2026', PER = 'Oct 13, 2026 – Nov 11, 2026', CUR = 'Current setting';
+const TODAY = new Date(2026,10,11), RUN_RECENT = new Date(2026,10,11), RUN_OLD = new Date(2026,9,2);
+const fmtD = d => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()]+' '+d.getDate()+', '+d.getFullYear();
+let lastRun = RUN_RECENT, checking = false;
+const stale = () => { const m = new Date(TODAY); m.setMonth(m.getMonth()-1); return lastRun < m; };
+const PER = 'Oct 13, 2026 – Nov 11, 2026', CUR = 'Current setting';
 const AUTOSYNC = tab => ({
   result: 'Auto-sync is off for '+tab+'.',
   what: 'Checks that "Auto-sync" is on for each connected integration. With "Auto-sync" on, Synder sends imported transactions to your books automatically.',
@@ -281,12 +291,13 @@ const BASE = [
 ];
 const ORDER = { failed:1, info:2, marked:3, passed:4, ignored:5 };
 let rows = [], open = new Set(), menuOpen = null;
-let variant = 3, data = 'captured', view = 'dash', tab = 'hc';
+let variant = 4, data = 'captured', view = 'dash', tab = 'hc';
 
 function load(){
   rows = BASE.map(([id,title,int,period,status,copy]) => ({ id, title, int, period, status, sev: status==='failed' ? 'Medium' : null, copy }));
   if(data==='high'){ const a = rows.find(r=>r.id==='acc'); a.status='failed'; a.sev='High'; a.period=CUR; }
-  if(data==='clear') rows.forEach(r=>{ if(r.status==='failed'){ r.status='passed'; r.sev=null; } });
+  lastRun = (data==='stale' || data==='stalei') ? RUN_OLD : RUN_RECENT;
+  if(data==='clear' || data==='stale') rows.forEach(r=>{ if(r.status==='failed'){ r.status='passed'; r.sev=null; } });
   open.clear();
 }
 const sorted = () => rows.slice().sort((a,b)=> (ORDER[a.status]-ORDER[b.status]) || ((a.sev==='High'?0:1)-(b.sev==='High'?0:1)) || (BASE.findIndex(x=>x[0]===a.id)-BASE.findIndex(x=>x[0]===b.id)));
@@ -313,7 +324,7 @@ function renderTable(){
   document.getElementById('hc-body').innerHTML = sorted().map(r=>{
     const o = open.has(r.id), menu = r.status!=='passed';
     return '<tr class="main" data-row="'+r.id+'"><td class="c-tog"><button type="button" class="row-toggle" aria-expanded="'+o+'" aria-label="Show details"><span class="material-icons">chevron_right</span></button></td>'
-      + '<td class="c-issue">'+esc(r.title)+'</td><td class="c-int">'+intHtml(r.int)+'</td><td class="c-when">'+LAST+'</td><td class="c-period">'+r.period+'</td><td class="c-status">'+chip(r)+'</td>'
+      + '<td class="c-issue">'+esc(r.title)+'</td><td class="c-int">'+intHtml(r.int)+'</td><td class="c-when">'+fmtD(lastRun)+'</td><td class="c-period">'+r.period+'</td><td class="c-status">'+chip(r)+'</td>'
       + '<td class="c-act">'+(menu ? '<span class="menu-wrap"><button type="button" class="btn-icon" data-menu="'+r.id+'" aria-label="Row actions"><span class="material-icons">more_horiz</span></button><div class="dropdown-menu'+(menuOpen===r.id?' show':'')+'"><div class="dropdown-item uncaptured">[menu items not captured]</div></div></span>' : '')+'</td></tr>'
       + (o ? '<tr class="exp"><td></td><td colspan="6">'+expHtml(r)+'</td></tr>' : '');
   }).join('');
@@ -324,13 +335,26 @@ function counts(){
 }
 const plural = (n,w) => n+' '+w+(n===1?'':'s');
 function renderStrip(){
-  const {n,high,med} = counts(), el = document.getElementById('hc-row');
+  const {n,high,med} = counts(), el = document.getElementById('hc-row'), al = document.getElementById('hc-alert');
+  document.getElementById('hc-strip').style.display = variant===4 ? 'none' : '';
+  al.style.display = variant===4 ? '' : 'none';
+  if(variant===4) el.innerHTML = ''; else al.innerHTML = '';
+  if(variant===4){
+    /* Ignat 2026-11-11: no status chips, the whole line is the alert. Red = issues found, yellow = last run > 1 month ago, green = all clear */
+    const old = stale(), when = fmtD(lastRun);
+    let kind, icon, msg, btn;
+    if(n){ kind='error'; icon='error'; msg='<b>Health check found '+plural(n,'issue')+'.</b> '+(old ? 'Last run more than a month ago, on '+when+'.' : 'Last run '+when+'.'); btn='<button type="button" class="btn-outlined btn-outlined-error" id="hc-cta">View issues</button>'; }
+    else if(old){ kind='warning'; icon='warning'; msg='<b>Health check last ran more than a month ago,</b> on '+when+'.'; btn='<button type="button" class="btn-outlined btn-outlined-warning" id="hc-check"'+(checking?' disabled':'')+'>'+(checking?'Checking…':'Check now')+'</button>'; }
+    else { kind='success'; icon='check_circle'; msg='<b>Health check found no issues.</b> Last run '+when+'.'; btn='<button type="button" class="btn-outlined" id="hc-cta">Open Health check</button>'; }
+    al.innerHTML = '<div class="alert alert-'+kind+' hc-alert" role="status"><span class="material-icons">'+icon+'</span><span class="hc-msg">'+msg+'</span>'+btn+'</div>';
+    return;
+  }
   if(variant===1){
     /* production strip as captured */
     el.innerHTML = '<span class="t">Health check</span><span class="status status-blue">Not date-filtered</span>'
       + (n ? '<span class="status status-red">'+n+' failed checks</span>' : '')
       + (high ? '<span class="status status-red">'+high+' High</span>' : '') + (med ? '<span class="status status-yellow">'+med+' Medium</span>' : '')
-      + '<span class="meta">Last run '+LAST+'</span><button type="button" class="btn-outlined" id="hc-cta">Check issues</button>';
+      + '<span class="meta">Last run '+fmtD(lastRun)+'</span><button type="button" class="btn-outlined" id="hc-cta">Check issues</button>';
     return;
   }
   if(variant===3){
@@ -341,7 +365,7 @@ function renderStrip(){
     else chip = '<span class="status '+(high?'status-red':'status-yellow')+'">'+plural(n,'issue')+' to fix</span>';
     el.innerHTML = '<div class="hc-body"><div class="hc-head"><span class="t">Health check</span>'+chip+'</div>'
       + '<div class="meta">Checks your settings and synced data for problems. Shows the current status, not the selected period.</div></div>'
-      + '<span class="meta">Last checked '+LAST+'</span>'
+      + '<span class="meta">Last checked '+fmtD(lastRun)+'</span>'
       + '<button type="button" class="btn-outlined" id="hc-cta">'+(n?'Check issues':'Open Health check')+'</button>';
     return;
   }
@@ -352,7 +376,7 @@ function renderStrip(){
   else msg = '<span class="status '+(high?'status-red':'status-yellow')+'">'+n+' '+(high?'High':'Medium')+' '+(n===1?'issue':'issues')+' to fix</span>';
   el.innerHTML = '<span class="t">Health check</span>'
     + '<span class="tooltip-wrap"><span class="material-icons help" tabindex="0" aria-label="About Health check">help</span><span class="tooltip" role="tooltip">Shows the current status of your setup and books. The date range above doesn\'t apply.</span></span>'
-    + msg + '<span class="meta">Last checked '+LAST+'</span>'
+    + msg + '<span class="meta">Last checked '+fmtD(lastRun)+'</span>'
     + '<button type="button" class="btn-outlined" id="hc-cta">'+(n?'Check issues':'Open Health check')+'</button>';
 }
 function render(){
@@ -363,8 +387,8 @@ function render(){
   document.querySelectorAll('#ts-tabs .tab').forEach(t=>{ const on=t.dataset.tab===tab; t.classList.toggle('active',on); t.setAttribute('aria-selected',on); });
   document.getElementById('tab-hc').hidden = tab!=='hc';
   document.getElementById('tab-other').hidden = tab==='hc';
-  ['1','2','3'].forEach(v=>document.getElementById('vs-'+v).classList.toggle('on', String(variant)===v));
-  ['captured','high','clear'].forEach(d=>document.getElementById('ds-'+d).classList.toggle('on', data===d));
+  ['1','2','3','4'].forEach(v=>document.getElementById('vs-'+v).classList.toggle('on', String(variant)===v));
+  ['captured','high','clear','stale','stalei'].forEach(d=>document.getElementById('ds-'+d).classList.toggle('on', data===d));
   renderStrip(); renderTable();
   history.replaceState(null,'','#v'+variant+'-'+data+'/'+(view==='dash'?'dash':tab));
 }
@@ -376,6 +400,7 @@ document.addEventListener('click', e=>{
   const t = e.target;
   const nav = t.closest('[data-view]'); if(nav){ e.preventDefault(); view=nav.dataset.view; if(view==='hc') tab='hc'; window.scrollTo(0,0); return render(); }
   const tl = t.closest('[data-tab]'); if(tl){ e.preventDefault(); view='hc'; tab=tl.dataset.tab; window.scrollTo(0,0); return render(); }
+  if(t.closest('#hc-check')){ if(checking) return; checking=true; renderStrip(); return setTimeout(()=>{ checking=false; data = data==='stalei' ? 'captured' : 'clear'; load(); render(); toast('Check finished.'); }, 900); }
   if(t.closest('#hc-cta')){ view='hc'; tab='hc'; window.scrollTo(0,0); return render(); }
   if(t.closest('#btn-log') || t.closest('#btn-run')) return toast('[not in this prototype]');
   const m = t.closest('[data-menu]'); if(m){ e.stopPropagation(); menuOpen = menuOpen===m.dataset.menu ? null : m.dataset.menu; return renderTable(); }
@@ -387,7 +412,7 @@ document.addEventListener('click', e=>{
 });
 
 (function init(){
-  const m = location.hash.match(/^#v([123])-(captured|high|clear)\/(dash|hc|sync|import|speed)$/);
+  const m = location.hash.match(/^#v([1234])-(captured|high|clear|stale|stalei)\/(dash|hc|sync|import|speed)$/);
   if(m){ variant=+m[1]; data=m[2]; if(m[3]==='dash') view='dash'; else { view='hc'; tab=m[3]; } }
   load(); render();
 })();
