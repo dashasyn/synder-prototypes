@@ -95,6 +95,17 @@ body{margin:0;height:100vh;display:flex;flex-direction:column;background:var(--c
 .sub .hlp{font-size:16px;color:#B0B7C3}
 
 .table-wrap.map{box-shadow:none;border-radius:0;overflow:visible}
+/* wide table as on live (Region + Product name/SKU push Account off-screen at 1440):
+   horizontal scroll + soft edge shadows that show only while there is more to scroll (Ignat, 2026-11-11) */
+.tscroll{position:relative}
+.tscroll .table-wrap.map{overflow-x:auto}
+.tscroll .map table.synder-table{min-width:1420px}
+.tscroll:before,.tscroll:after{content:"";position:absolute;top:0;bottom:0;width:24px;pointer-events:none;z-index:3;opacity:0;transition:opacity .15s}
+.tscroll:before{left:0;background:linear-gradient(to right,rgba(0,0,0,.12),rgba(0,0,0,0))}
+.tscroll:after{right:0;background:linear-gradient(to left,rgba(0,0,0,.12),rgba(0,0,0,0))}
+.tscroll.more-left:before,.tscroll.more-right:after{opacity:1}
+.sku{display:flex;flex-direction:column;line-height:18px}
+.sku span{color:var(--text-secondary);max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .map table.synder-table thead th{height:53px;padding:0 10px;font-weight:900;color:#000;border-bottom:1px solid #E0E0E0}
 .map table.synder-table tbody td{height:53px;padding:0 10px;color:#000;border-bottom:1px solid #E0E0E0}
 .map .c-exp{width:40px;text-align:center;padding:0!important}
@@ -219,12 +230,13 @@ body.v2 .v1-only{display:none!important}
           <span class="sp"></span>
           <span class="grp2"><button type="button" class="btn btn-outlined btn-sm" id="sel-allpages" onclick="selectAllPages()">Select all on all pages</button><button type="button" class="btn btn-outlined btn-sm" id="sel-clear" onclick="clearSel()">Clear selection</button></span>
         </div>
-        <div class="table-wrap map">
+        <div class="tscroll" id="tscroll"><div class="table-wrap map" id="twrap" onscroll="edgeShadows()">
           <table class="synder-table" id="tbl">
             <thead><tr><th class="c-exp"></th><th class="c-sel"><input type="checkbox" class="checkbox" id="sel-all" aria-label="Select all on page" onchange="selectPage(this.checked)"></th>
-              <th>Group</th><th>Account subtype</th><th>Payment gateway</th><th>Integration</th><th class="c-acc">Account</th></tr></thead>
+              <th>Group</th><th>Account subtype</th><th>Payment gateway</th><th>Region</th><th>Product name/SKU</th><th>Integration</th><th class="c-acc">Account</th></tr></thead>
             <tbody id="tb"></tbody>
           </table>
+        </div>
         </div>
         <div class="pagination" id="pager"></div>
       </div>
@@ -256,8 +268,8 @@ body.v2 .v1-only{display:none!important}
       <p class="note2 v2-only" id="bm-scope" style="color:var(--text-primary);margin-bottom:16px"></p>
       <div class="bm-grid">
         <div class="acc-f"><label for="bm-acc">Account</label><select id="bm-acc" class="select" onchange="bmCheck()"></select><div class="bm-err" id="bm-err" role="alert">Required</div></div>
-        <div id="bm-cls-f" class="new-row"><label for="bm-cls">Class</label><select id="bm-cls" class="select"></select></div>
-        <div id="bm-loc-f"><label for="bm-loc">Location</label><select id="bm-loc" class="select"></select></div>
+        <div id="bm-cls-f" class="new-row"><label for="bm-cls">Class</label><select id="bm-cls" class="select" onchange="bmCheck()"></select></div>
+        <div id="bm-loc-f"><label for="bm-loc">Location</label><select id="bm-loc" class="select" onchange="bmCheck()"></select></div>
       </div>
     </div>
     <div class="dlg-f"><button type="button" class="btn btn-outlined" onclick="closeBulk()">Cancel</button><button type="button" class="btn" id="bm-save" onclick="saveBulk()">Save mapping</button></div>
@@ -273,7 +285,8 @@ var ACCOUNTS = ['Chase Business Checking','Stripe clearing (Synder)','Amazon cle
 var CLASSES = ['Retail','Wholesale','Online','Subscriptions'];
 var LOCATIONS = ['Vilnius store','Kaunas store','Warehouse','Online'];
 var ROWS = [];
-function add(g, sub, integ, acc, cls, loc){ ROWS.push({id:ROWS.length, group:g, subtype:sub, integ:integ, value:acc||'', saved:acc||'', cls:cls||'', scls:cls||'', loc:loc||'', sloc:loc||''}); }
+function add(g, sub, integ, acc, cls, loc){ ROWS.push({id:ROWS.length, group:g, subtype:sub, integ:integ, value:acc||'', saved:acc||'', cls:cls||'', scls:cls||'', loc:loc||'', sloc:loc||'',
+  region: /fees|Exchange/i.test(g) ? 'N/A' : (sub==='Income' ? 'Unknown' : '')}); }
 // unmapped rows first (live sorts them on top), then mapped ones; some already carry class/location
 ['st','am'].forEach(function(k){
   add('Bank','Bank',k); add('Inventory','Inventory',k); add('Other fees','Commissions and fees',k);
@@ -291,7 +304,8 @@ function add(g, sub, integ, acc, cls, loc){ ROWS.push({id:ROWS.length, group:g, 
   add('Invoices','Accounts receivable',k,'Accounts Receivable (A/R)','Wholesale');
 });
 ['Peony bouquet','Tulip box','Rose dozen','Orchid pot','Seasonal wreath','Sourdough loaf','Rye loaf','Focaccia','Brioche','Croissant 6-pack','Banana bread'].forEach(function(n,i){
-  var k = i<5?'st':'am'; add('SKU '+(1001+i)+' · '+n,'Income',k,k==='st'?'Sales — Flowers':'Sales — Bread','Retail','Online');
+  var k = i<5?'st':'am'; add('Sales','Income',k,k==='st'?'Sales — Flowers':'Sales — Bread','Retail','Online');
+  ROWS[ROWS.length-1].sku = n; ROWS[ROWS.length-1].pid = 'price_1U'+(7000+i*37)+'PQHVO06WC'+(k==='st'?'FL':'BR');
 });
 
 var S = {v:2, dims:{cls:true, loc:true}, exp:{}, sel:{}, tab:'all', page:1, per:25, f:{group:'',acc:'',cls:'',loc:'',status:''}};
@@ -333,17 +347,18 @@ function render(){
       '<td class="c-exp"><button type="button" aria-label="'+(open?'Collapse':'Expand')+' '+esc(r.group)+'" aria-expanded="'+(open?'true':'false')+'" onclick="toggleExp('+r.id+')"><span class="material-icons">'+(open?'expand_less':'expand_more')+'</span></button></td>'+
       '<td class="c-sel"><input type="checkbox" class="checkbox" aria-label="Select '+esc(r.group)+'"'+(S.sel[r.id]?' checked':'')+' onchange="sel('+r.id+',this.checked)"></td>'+
       '<td>'+esc(r.group)+'</td><td><span class="sub">'+esc(r.subtype)+'<span class="material-icons hlp" aria-hidden="true">help</span></span></td><td>Online Sales</td>'+
+      '<td>'+esc(r.region||'')+'</td><td>'+(r.sku?'<div class="sku">'+esc(r.sku)+'<span>'+esc(r.pid)+'</span></div>':'')+'</td>'+
       '<td><span class="integ"><span class="pi pi-'+r.integ+'">'+I.l+'</span>'+esc(I.name)+'</span></td>'+
       '<td class="c-acc"><div class="acc'+(rs?' has-save':'')+'"><select class="select'+(r.value?'':' empty')+'" aria-label="Account for '+esc(r.group)+'"'+(anySel?' disabled':'')+' onchange="setF('+r.id+',\'value\',this.value)">'+opts(ACCOUNTS,r.value,'Search or start typing…')+'</select>'+rs+'</div></td></tr>';
     // no extra fields on: the details say so and offer the setup (live "No accounting dimensions" view, Ignat's screenshot 2026-11-10)
-    if (open && !hasDims) h += '<tr class="det none" data-det="'+r.id+'"><td colspan="7"><div class="det-none"><span id="none-t">'+(S.v===1 ? 'No accounting dimensions are applied' : 'No mapping fields are applied')+'</span>'+
+    if (open && !hasDims) h += '<tr class="det none" data-det="'+r.id+'"><td colspan="9"><div class="det-none"><span id="none-t">'+(S.v===1 ? 'No accounting dimensions are applied' : 'No mapping fields are applied')+'</span>'+
       '<button type="button" class="btn btn-sm det-setup" onclick="openFields()">'+(S.v===1 ? 'Dimensions' : 'Mapping fields')+'</button></div></td></tr>';
-    else if (open) h += '<tr class="det" data-det="'+r.id+'"><td colspan="7"><div class="det-f">'+
+    else if (open) h += '<tr class="det" data-det="'+r.id+'"><td colspan="9"><div class="det-f">'+
       (S.dims.cls ? '<div><label>Class</label><select class="select'+(r.cls?'':' empty')+'" aria-label="Class for '+esc(r.group)+'"'+(anySel?' disabled':'')+' onchange="setF('+r.id+',\'cls\',this.value)">'+opts(CLASSES,r.cls,'Select…')+'</select></div>' : '')+
       (S.dims.loc ? '<div><label>Location</label><select class="select'+(r.loc?'':' empty')+'" aria-label="Location for '+esc(r.group)+'"'+(anySel?' disabled':'')+' onchange="setF('+r.id+',\'loc\',this.value)">'+opts(LOCATIONS,r.loc,'Select…')+'</select></div>' : '')+
       '</div></td></tr>';
   });
-  if (!slice.length) h = '<tr><td colspan="7" style="text-align:center;color:var(--text-secondary);height:120px">No groups match these filters.</td></tr>';
+  if (!slice.length) h = '<tr><td colspan="9" style="text-align:center;color:var(--text-secondary);height:120px">No groups match these filters.</td></tr>';
   document.getElementById('tb').innerHTML = h;
   var card = document.querySelector('.map-card'), nSel = Object.keys(S.sel).length, ids = slice.map(function(r){return r.id;});
   card.classList.toggle('has-dims', hasDims); card.classList.toggle('selecting', nSel>0);
@@ -352,8 +367,14 @@ function render(){
   var bcb=document.getElementById('sel-bar-cb'); bcb.checked = nSel>0 && ids.every(function(i){return S.sel[i];}); bcb.indeterminate = nSel>0 && !bcb.checked;
   document.getElementById('sel-all').checked = ids.length>0 && ids.every(function(i){return S.sel[i];});
   document.getElementById('save').disabled = !ROWS.some(dirty) || nSel>0;
-  renderTabs(); renderPager(list.length, pages);
+  renderTabs(); renderPager(list.length, pages); edgeShadows();
 }
+function edgeShadows(){
+  var w = document.getElementById('twrap'), t = document.getElementById('tscroll'); if (!w) return;
+  t.classList.toggle('more-left', w.scrollLeft > 1);
+  t.classList.toggle('more-right', w.scrollLeft + w.clientWidth < w.scrollWidth - 1);
+}
+window.addEventListener('resize', edgeShadows);
 function renderTabs(){
   var h = '<div class="tab'+(S.tab==='all'?' active':'')+'" role="tab" onclick="setTab(\'all\')">All</div>';
   Object.keys(INTEG).forEach(function(k){ h += '<div class="tab'+(S.tab===k?' active':'')+'" role="tab" onclick="setTab(\''+k+'\')"><span class="pi pi-'+k+'">'+INTEG[k].l+'</span>'+esc(INTEG[k].name)+'</div>'; });
@@ -399,27 +420,43 @@ function applyFields(){
 /* Bulk mapping */
 function openBulk(){
   var rows = ROWS.filter(function(r){ return S.sel[r.id]; }), n = rows.length, k = rows.filter(function(r){ return !!r.value; }).length;
-  document.getElementById('bm-acc').innerHTML = opts(ACCOUNTS,'','Select…');
-  document.getElementById('bm-cls').innerHTML = opts(CLASSES,'','Select…');
-  document.getElementById('bm-loc').innerHTML = opts(LOCATIONS,'','Select…');
+  // proposed: every field opens on "Keep current" so nothing is overwritten by accident; dimensions also offer "Clear";
+  // Account has no Clear (an empty account fails the summary sync) (Ignat, 2026-11-11)
+  var keep = function(list, clr){ return '<option value="__keep" selected>Keep current</option>'+(clr?'<option value="__clear">Clear</option>':'')+list.map(function(a){ return '<option>'+esc(a)+'</option>'; }).join(''); };
+  document.getElementById('bm-acc').innerHTML = S.v===1 ? opts(ACCOUNTS,'','Select…') : keep(ACCOUNTS,false);
+  document.getElementById('bm-cls').innerHTML = S.v===1 ? opts(CLASSES,'','Select…') : keep(CLASSES,true);
+  document.getElementById('bm-loc').innerHTML = S.v===1 ? opts(LOCATIONS,'','Select…') : keep(LOCATIONS,true);
   document.getElementById('bm-cls-f').style.display = S.dims.cls ? '' : 'none';
   document.getElementById('bm-loc-f').style.display = S.dims.loc ? '' : 'none';
-  document.getElementById('bm-scope').textContent = (n===1 ? 'Applies to the selected group.' : 'Applies to all '+n+' selected groups.') +
-    (k ? (n===1 ? ' Replaces its current mapping.' : (k===n ? ' Replaces the current mapping in all of them.' : ' Replaces the current mapping in '+k+' of them.')) : '') +
-    // one description at the top (Ignat, 2026-11-10)
-    ((S.dims.cls||S.dims.loc) ? ' Empty fields stay unchanged.' : '');
+  S.bmN = n; S.bmK = k;
   bmErr(false); bmCheck();
   document.getElementById('bm-bg').classList.add('on'); document.getElementById('bm-acc').focus();
 }
 // today: Save mapping stays disabled until an account is picked (live); proposed: enabled, "Required" on click
-function bmCheck(){ bmErr(false); document.getElementById('bm-save').disabled = S.v===1 && !document.getElementById('bm-acc').value; }
+function bmVal(id){ var e=document.getElementById(id); return e.offsetParent ? e.value : '__keep'; }
+function bmCheck(){
+  bmErr(false);
+  var save = document.getElementById('bm-save');
+  if (S.v===1) { save.disabled = !document.getElementById('bm-acc').value; save.textContent = 'Save mapping'; return; }
+  var acc = bmVal('bm-acc'), changed = ['bm-acc','bm-cls','bm-loc'].some(function(id){ return bmVal(id)!=='__keep'; });
+  save.disabled = !changed; save.textContent = 'Save mapping ('+S.bmN+')';
+  // the replace warning only matters when a new account is picked for groups that already have one
+  document.getElementById('bm-scope').textContent = (S.bmN===1 ? 'Applies to the selected group.' : 'Applies to all '+S.bmN+' selected groups.') +
+    (acc!=='__keep' && S.bmK ? (S.bmN===1 ? ' Replaces its current account.' : (S.bmK===S.bmN ? ' Replaces the current account in all of them.' : ' Replaces the current account in '+S.bmK+' of them.')) : '');
+}
 function bmErr(on){ document.getElementById('bm-acc').classList.toggle('err',on); document.getElementById('bm-err').classList.toggle('on',on); }
 function closeBulk(){ document.getElementById('bm-bg').classList.remove('on'); }
 function saveBulk(){
-  var a=document.getElementById('bm-acc').value; if(!a){ bmErr(true); return; }
-  var c = S.dims.cls ? document.getElementById('bm-cls').value : '', l = S.dims.loc ? document.getElementById('bm-loc').value : '';
   var ids = Object.keys(S.sel).map(Number);
-  ids.forEach(function(i){ var r=ROWS[i]; r.value=a; if(c) r.cls=c; if(l) r.loc=l; });
+  if (S.v===1) {
+    var a=document.getElementById('bm-acc').value; if(!a){ bmErr(true); return; }
+    var c = S.dims.cls ? document.getElementById('bm-cls').value : '', l = S.dims.loc ? document.getElementById('bm-loc').value : '';
+    ids.forEach(function(i){ var r=ROWS[i]; r.value=a; if(c) r.cls=c; if(l) r.loc=l; });
+  } else {
+    var A=bmVal('bm-acc'), C=bmVal('bm-cls'), L=bmVal('bm-loc');
+    var put = function(v, cur){ return v==='__keep' ? cur : (v==='__clear' ? '' : v); };
+    ids.forEach(function(i){ var r=ROWS[i]; r.value=put(A,r.value); r.cls=put(C,r.cls); r.loc=put(L,r.loc); });
+  }
   closeBulk(); saveRows(ids);
 }
 
