@@ -169,6 +169,18 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id }) {
     <//>`;
 }
 
+/* Ignat, 2026-11-12 (review round 2, UX-1): a report keeps its view while you
+   drill into a row and come back — tab, breakdown, toggles, filters. Stored per
+   evaluation outside the component, cleared when you leave for the list. */
+const STICKY = new Map();
+function useSticky(key, init) {
+  const [v, setV] = useState(() => STICKY.has(key) ? STICKY.get(key) : (typeof init === 'function' ? init() : init));
+  const set = React.useCallback(x => setV(prev => {
+    const n = typeof x === 'function' ? x(prev) : x; STICKY.set(key, n); return n; }), [key]);
+  return [v, set];
+}
+const rk = (row, k) => ((row && row.name) || '') + '::' + k;
+
 /* Ignat, 2026-11-10: every paged table ends the same way, MUI style — one
    footer attached to the table: rows per page, the range, the page numbers.
    page is 1-based. */
@@ -1428,7 +1440,7 @@ function ReportPunctuality({ go, row }) {
   // The vanilla's punct-auf-1/2 carry selected="linienbuendel" and
   // selected="linie", so the report opens TWO levels deep. Mine opened one,
   // which is a quieter version of "the report is missing rows".
-  const [dims, setDims] = useState(['linienbuendel', 'linie', '']);
+  const [dims, setDims] = useSticky(rk(row, 'dims'), ['linienbuendel', 'linie', '']);
 
   const active = dims.filter(Boolean);
   // the scale must be set BEFORE anything reads a record — the rows are getters
@@ -1476,7 +1488,7 @@ function ReportPunctuality({ go, row }) {
         <${Card} sx=${{ mb: 3 }}>
           <${CardContent}>
             <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>
-              ${t('punct_aufschluss_label')}
+              ${t('breakdown_heading')}
             <//>
             <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
               ${[0, 1, 2].map(i => html`
@@ -1509,6 +1521,7 @@ function ReportPunctuality({ go, row }) {
                 node=${{ label: t('rpt_gesamt'), agg: total, children: tree }}
                 onChart=${node => go('chart', row, { chart: {
                   title: node.label, backLabel: t('type_punctuality'),
+                  hot: node.dim ? [t(PUNCT_DIM_LABELS[node.dim] || node.dim), node.label] : null,
                   format: v => v.toFixed(2).replace('.', ',') + '%',
                   items: (node.children && node.children.length ? node.children : [node])
                     .map(c => ({ label: c.label, value: c.agg.wert || 0 })),
@@ -1617,9 +1630,9 @@ function ConnRow({ node, depth, t, val, adj, onChart, onRows, open0 }) {
 
 function ReportConnection({ go, row }) {
   const { t, lang } = useT();
-  const [dims, setDims] = useState(['haltestelle_abb', 'linie_zub', 'linie_abb']);
-  const [reduce, setReduce] = useState(false);
-  const [strict, setStrict] = useState(false);
+  const [dims, setDims] = useSticky(rk(row, 'dims'), ['haltestelle_abb', 'linie_zub', 'linie_abb']);
+  const [reduce, setReduce] = useSticky(rk(row, 'reduce'), false);
+  const [strict, setStrict] = useSticky(rk(row, 'strict'), false);
   const active = dims.filter(Boolean);
   const kids = useMemo(() => connTree(RPT_RECORDS, active.length ? active : ['haltestelle_abb']), [dims.join('|')]);
   const root = { label: t('rpt_gesamt'), path: [], recs: RPT_RECORDS, v: RPT_DATA.gesamt, kids };
@@ -1644,7 +1657,7 @@ function ReportConnection({ go, row }) {
         <${Card} sx=${{ mb: 2 }} id="conn-controls"><${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
           <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
             <${Box}>
-              <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('fa_aufschluss_label')}<//>
+              <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('breakdown_heading')}<//>
               <${Stack} direction="row" spacing=${1}>
                 ${[0, 1, 2].map(i => html`<${FilterSelect} key=${i} id=${'rpt-auf-' + (i + 1)} minWidth=${220}
                   label=${t(['sel_breakdown_1', 'sel_breakdown_2', 'sel_breakdown_3'][i])}
@@ -1698,7 +1711,7 @@ function ConnChart({ go, row, node, reduce, strict }) {
           { label: row ? row.name : t('type_connection'), onClick: () => go('report', row) }, { label: t('rpt_action_chart') }]}
         title=${t('rpt_action_chart')} subtitle=${sub} />
       <${Box} sx=${{ p: 3 }}>
-        <${ParamGrid} id="conn-chart-params" fields=${[...connParamFields(t, lang, row).slice(0, 7),
+        <${ParamGrid} id="conn-chart-params" fields=${[...connParamFields(t, lang, row),
           ...node.path.map(([d, v]) => [t(RPT_DIM_LABELS[d]), v, false, true])]} />
         <${Card}><${CardContent}>
         <${Typography} variant="h6" align="center" id="conn-chart-title">${t('fa_chart_period')}: ${fmtDate(p.von, lang)} - ${fmtDate(p.bis, lang)}<//>
@@ -1745,7 +1758,7 @@ function ConnRows({ go, row, node, reduce }) {
   const setFilter = (i, v) => { setF(x => { const n = [...x]; n[i] = v; return n; }); setPage(1); };
   const base = connParamFields(t, lang, row);
   const sel = node.path.map(([d, v]) => [t(RPT_DIM_LABELS[d]), v, false, true]);
-  const fields = [...base.slice(0, 7), ...sel];
+  const fields = [...base, ...sel];
   return html`
     <${Box}>
       <${PageHeader} crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
@@ -1958,18 +1971,20 @@ function FaSankey({ causes }) {
     </svg>`;
 }
 
-function FaOverview({ t, lang }) {
-  const [dim, setDim] = useState('tu');
+function FaOverview({ t, lang, row }) {
+  const [dim, setDim] = useSticky(rk(row, 'ubDim'), 'tu');
   const modes = FA_UB_MODES;
   const entities = dim === 'vm' ? modes : ['GESAMT', ...FA_DATA.tus.map(x => x.id)];
-  const [ent, setEnt] = useState(FA_DATA.tus[0].id);
+  const [ent, setEnt] = useSticky(rk(row, 'ubEnt'), FA_DATA.tus[0].id);
   React.useEffect(() => { if (!entities.includes(ent)) setEnt(entities[0]); }, [dim]);
   const d = entities.includes(ent) ? faUbData(dim, ent) : null;
   const entLabel = k => k === 'GESAMT' ? t('fa_mask_all') : k;
   const [snap, setSnap] = useState(false);
   return html`
     <${Box} id="fa-overview">
-      <${Stack} direction="row" spacing=${2} alignItems="flex-start" sx=${{ mb: 2 }}>
+      <${Card} sx=${{ mb: 2 }} id="fa-ub-controls"><${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
+      <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('dqi_show')}<//>
+      <${Stack} direction="row" spacing=${2} alignItems="flex-start">
         <${FilterSelect} id="fa-ub-dim" label=${t('sel_dimension')} value=${dim} minWidth=${180}
           onChange=${v => setDim(v || 'tu')}
           options=${[{ value: 'tu', label: t('fa_opt_tu') },
@@ -1977,11 +1992,8 @@ function FaOverview({ t, lang }) {
         <${FilterSelect} id="fa-ub-tu-sel" label=${t('sel_entity')} value=${ent} minWidth=${180}
           onChange=${v => setEnt(v || entities[0])}
           options=${entities.map(k => ({ value: k, label: entLabel(k) }))} />
-        <${Box} sx=${{ flex: 1 }} />
-        <${Link} href="#" onClick=${e => e.preventDefault()} id="fa-ub-infoblatt"
-          sx=${{ display: 'inline-flex', alignItems: 'center', gap: .5, pt: 1.5 }}>
-          ${t('fa_infoblatt')} <${Icon} sx=${{ fontSize: 16 }}>open_in_new<//><//>
       <//>
+      <//><//>
       ${d && html`
         <${Card} id="fa-ub-card"><${CardContent} sx=${{ position: 'relative' }}>
           <${Tooltip} title=${t('fa_ub_camera')}>
@@ -2046,12 +2058,12 @@ function FaRow({ node, depth, t, onChart, onMask, hideZero, startOpen }) {
 
 function ReportTripFailures({ go, row }) {
   const { t, lang } = useT();
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useSticky(rk(row, 'tab'), 0);
   // production's defaults: TU · Betriebstag · none, and additionally Ersatzverkehr
-  const [dims, setDims] = useState(['tu', 'betriebstag', '']);
-  const [add, setAdd] = useState(['ersatz', '']);
-  const [netto, setNetto] = useState(false);
-  const [hideZero, setHideZero] = useState(false);
+  const [dims, setDims] = useSticky(rk(row, 'dims'), ['tu', 'betriebstag', '']);
+  const [add, setAdd] = useSticky(rk(row, 'add'), ['ersatz', '']);
+  const [netto, setNetto] = useSticky(rk(row, 'netto'), false);
+  const [hideZero, setHideZero] = useSticky(rk(row, 'hideZero'), false);
 
   const FA_DIMS = ['tu', 'betriebstag', 'linie', 'vm', 'region'];
   const ADD_DIMS = ['ersatz', 'betriebstag', 'linie', 'vm'];
@@ -2087,8 +2099,11 @@ function ReportTripFailures({ go, row }) {
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
                   { label: row ? row.name : t('type_trip_failures') }]}
         title=${row ? row.name : t('type_trip_failures')} subtitle=${t('type_trip_failures')}
-        action=${html`<${Button} variant="outlined"
-                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//>`} />
+        action=${html`<${Stack} direction="row" spacing=${1} alignItems="center">
+          <${Tooltip} title=${t('fa_infoblatt')}><${IconButton} aria-label=${t('fa_infoblatt')} id="fa-ub-infoblatt">
+            <${Icon}>description<//><//><//>
+          <${Button} variant="outlined"
+                        startIcon=${html`<${Icon} sx=${{ fontSize: 18 }}>download<//>`}>${t('export_csv')}<//><//>`} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="fa-params" fields=${faParamFields(t, lang, row)} />
         <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} sx=${{ mb: 2 }} id="fa-tabs">
@@ -2096,12 +2111,12 @@ function ReportTripFailures({ go, row }) {
           <${Tab} label=${t('fa_tab_tabelle')} id="fa-tab-tab" />
         <//>
 
-        ${tab === 0 ? html`<${FaOverview} t=${t} lang=${lang} />` : html`
+        ${tab === 0 ? html`<${FaOverview} t=${t} lang=${lang} row=${row} />` : html`
           <${Box} id="fa-tabelle">
             <${Card} sx=${{ mb: 2 }}><${CardContent}>
               <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
                 <${Box}>
-                  <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('fa_aufschluss_label')}<//>
+                  <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('breakdown_heading')}<//>
                   <${Stack} direction="row" spacing=${1}>
                     ${[0, 1, 2].map(i => html`
                       <${FilterSelect} key=${i} id=${'fa-auf-' + (i + 1)} minWidth=${170}
@@ -2250,11 +2265,11 @@ function FaChart({ go, row, node }) {
  */
 function ReportDQI({ go, row }) {
   const { t, lang } = useT();
-  const [tab, setTab] = useState('overview');
-  const [scope, setScope] = useState('tu');
-  const [entity, setEntity] = useState('');
-  const [dims, setDims] = useState(['', '', '']);
-  const [onlyBelow, setOnlyBelow] = useState(false);
+  const [tab, setTab] = useSticky(rk(row, 'tab'), 'overview');
+  const [scope, setScope] = useSticky(rk(row, 'scope'), 'tu');
+  const [entity, setEntity] = useSticky(rk(row, 'entity'), '');
+  const [dims, setDims] = useSticky(rk(row, 'dims'), ['', '', '']);
+  const [onlyBelow, setOnlyBelow] = useSticky(rk(row, 'onlyBelow'), false);
   const [open, setOpen] = useState([]);
   const [note, setNote] = useState('');
 
@@ -2396,7 +2411,7 @@ function ReportDQI({ go, row }) {
             <${Card} sx=${{ mb: 3 }}><${CardContent}>
               <${Stack} direction="row" spacing=${4} flexWrap="wrap" useFlexGap alignItems="flex-start">
                 <${Box}>
-                  <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('rpt_aufschluss_label')}<//>
+                  <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('breakdown_heading')}<//>
                   <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
                     ${[0, 1, 2].map(i => html`
                       <${FilterSelect} key=${i} id=${'dqi-auf-' + (i + 1)} minWidth=${200}
@@ -2440,7 +2455,14 @@ function ReportDQI({ go, row }) {
                     <${TableCell}>${t('dqi_lg_avg')}<//>
                     ${DQI_NATIONAL.map((v, i) => html`
                       <${TableCell} key=${i} align="right">${dqiPct(v)}<//>`)}
-                    <${TableCell} />
+                    <${TableCell} align="right">
+                      <${Tooltip} title=${t('rpt_action_chart')}>
+                        <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
+                          title: t('dqi_lg_avg'), backLabel: t('type_data_quality'), hot: null,
+                          format: v => v.toFixed(2) + '%',
+                          items: DQI_INDICATORS.map((ind, i) => ({ label: String(ind.n), value: DQI_NATIONAL[i] })),
+                        } })}><${Icon}>bar_chart<//><//><//>
+                    <//>
                   <//>
                   ${visible.map((r, ri) => html`
                     <${TableRow} key=${r.label + ri} hover>
@@ -2458,7 +2480,8 @@ function ReportDQI({ go, row }) {
                       <${TableCell} align="right">
                         <${Tooltip} title=${t('rpt_action_chart')}>
                           <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
-                            title: r.label, backLabel: t('type_data_quality'),
+                            title: r.total ? t('rpt_gesamt') : r.label, backLabel: t('type_data_quality'),
+                            hot: r.total ? null : [t(scope === 'kanton' ? 'dqi_dim_kanton' : 'dqi_dim_tu'), r.label],
                             format: v => v.toFixed(2) + '%',
                             items: DQI_INDICATORS.map((ind, i) => ({ label: String(ind.n), value: r.v[i] })),
                           } })}><${Icon}>bar_chart<//><//>
@@ -2468,8 +2491,9 @@ function ReportDQI({ go, row }) {
                             onClick=${() => setNote(t('dqi_by_day_toast'))}>
                             <${Icon}>calendar_today<//><//>
                         <//>
-                        <${Button} size="small" aria-label="log"
-                          onClick=${() => setNote(t('dqi_log_toast'))}>LOG<//>
+                        <${Tooltip} title=${t('dqi_log')}>
+                          <${IconButton} aria-label="log" onClick=${() => setNote(t('dqi_log_toast'))}>
+                            <${Icon}>receipt_long<//><//><//>
                       <//>
                     <//>`)}
                 <//>
@@ -2553,10 +2577,10 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
                    ...(onBack ? [{ label: backLabel, onClick: onBack }] : []),
                    { label: title }]}
         title=${title}
-        subtitle=${`${filtered.length.toLocaleString('de-CH')} / ${rows.length.toLocaleString('de-CH')}`} />
+        subtitle=${node ? (hot ? hot[1] : t('rpt_gesamt')) : ''} />
       <${Box} sx=${{ p: 3 }}>
         ${row && html`<${ParamGrid} id="raw-params" hotClass="raw-hot"
-          fields=${[...punctParamFields(t, lang, row).slice(0, 8), ...(hot ? [[hot[0], hot[1], false, true]] : [])]} />`}
+          fields=${[...punctParamFields(t, lang, row), ...(hot ? [[hot[0], hot[1], false, true]] : [])]} />`}
         <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7', overflowX: 'auto', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
           <${Table} id="raw-table">
             <${TableHead}>
@@ -2635,18 +2659,20 @@ function BarChart({ items, max, format }) {
     <//>`;
 }
 
-function ChartView({ go, row, title, items, format, backLabel, onBack }) {
+/* Every drill-in: the view as the title, the drilled row as the subtitle, the
+   evaluation name as the way back, and the report's parameters plus the row. */
+function ChartView({ go, row, title, items, format, backLabel, onBack, hot }) {
   const { t, lang } = useT();
   return html`
     <${Box}>
       <${PageHeader}
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                  { label: backLabel, onClick: onBack },
+                  { label: (row && row.name) || backLabel, onClick: onBack },
                   { label: t('rpt_action_chart') }]}
-        title=${title} subtitle=${t('rpt_action_chart')} />
+        title=${t('rpt_action_chart')} subtitle=${title} />
       <${Box} sx=${{ p: 3 }}>
-        ${row && html`<${ParamGrid} id="chart-params" fields=${row.group === 'punctuality'
-          ? punctParamFields(t, lang, row) : faParamFields(t, lang, row)} />`}
+        ${row && html`<${ParamGrid} id="chart-params" fields=${[...(row.group === 'punctuality'
+          ? punctParamFields(t, lang, row) : faParamFields(t, lang, row)), ...(hot ? [[hot[0], hot[1], false, true]] : [])]} />`}
         <${Card}><${CardContent}>
           ${items.length
             ? html`<${BarChart} items=${items} format=${format} />`
@@ -2806,7 +2832,7 @@ function Ausfallmaske({ go, row, tuId, day }) {
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
                   { label: row ? row.name : t('type_trip_failures'), onClick: () => go('report', row) },
                   { label: t('fa_mask_title') }]}
-        title=${t('fa_mask_title')} subtitle=${[key === 'GESAMT' ? '' : key, day ? fmtDate(day, lang) : '']
+        title=${t('fa_mask_title')} subtitle=${[key === 'GESAMT' ? t('rpt_gesamt') : key, day ? fmtDate(day, lang) : '']
           .filter(Boolean).join(' · ')} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="fa-mask-header" fields=${faParamFields(t, lang, row, key === 'GESAMT' ? '' : key)} />
@@ -3124,13 +3150,13 @@ function LaHeatmap({ rowsLabels, cols, colLabel, cell, colour, legendTitle, lege
 
 function ReportLineAnalysis({ go, row }) {
   const { t, lang } = useT();
-  const [tab, setTab] = useState(0);
-  const [dir, setDir] = useState(0);
-  const [mode, setMode] = useState('delay');
-  const [arrdep, setArrdep] = useState('both');
-  const [deptime, setDeptime] = useState('all');
-  const [q, setQ] = useState('q50');
-  const [selected, setSelected] = useState(LA_STOPS.map(s => s[0]));
+  const [tab, setTab] = useSticky(rk(row, 'tab'), 0);
+  const [dir, setDir] = useSticky(rk(row, 'dir'), 0);
+  const [mode, setMode] = useSticky(rk(row, 'mode'), 'delay');
+  const [arrdep, setArrdep] = useSticky(rk(row, 'arrdep'), 'both');
+  const [deptime, setDeptime] = useSticky(rk(row, 'deptime'), 'all');
+  const [q, setQ] = useSticky(rk(row, 'q'), 'q50');
+  const [selected, setSelected] = useSticky(rk(row, 'selected'), () => LA_STOPS.map(s => s[0]));
   const [snap, setSnap] = useState(false);
   const seed = deptime !== 'all' ? laTrips.indexOf(Number(deptime)) + 1 : 0;
   const ordered = laRoute(dir);
@@ -3288,7 +3314,7 @@ function LaStopHeatmap({ go, row, stop, kind, dir, mode }) {
         crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
                   { label: row ? row.name : t('type_line_analysis'), onClick: () => go('report', row) },
                   { label: `${stop[0]} ${stop[1]}` }]}
-        title=${t('la_stop_heatmap')} subtitle=${`${stop[0]} ${stop[1]}`} />
+        title=${t('la_stop_hm_title')} subtitle=${`${stop[0]} ${stop[1]}`} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="la-stop-params" fields=${[...laParamFields(t, lang, row),
           [t('la_col_stop'), `${stop[0]} ${stop[1]}`, false, true]]} />
@@ -3737,7 +3763,11 @@ function App() {
   // call it while they build. Duplicating the lookup here would give two
   // implementations that can disagree.
   const t = useMemo(() => { setDataLang(lang); return k => window.t(k); }, [lang]);
-  const go = (name, row, extra) => setRoute({ name, row, ...(extra || {}) });
+  const go = (name, row, extra) => {
+    // leaving the reports for a list or a form forgets every report's view
+    if (['list', 'scheduled', 'new'].includes(name)) STICKY.clear();
+    setRoute({ name, row, ...(extra || {}) });
+  };
 
   const screen =
     route.name === 'list'      ? html`<${EvaluationsList} go=${go} />` :
@@ -3757,7 +3787,7 @@ function App() {
                                    kind=${route.kind} dir=${route.dir} mode=${route.mode} />` :
     route.name === 'chart'     ? html`<${ChartView} go=${go} row=${route.row}
                                    title=${route.chart.title} items=${route.chart.items}
-                                   format=${route.chart.format}
+                                   format=${route.chart.format} hot=${route.chart.hot}
                                    backLabel=${route.chart.backLabel}
                                    onBack=${() => go('report', route.row)} />` :
     route.name === 'mask'      ? html`<${Ausfallmaske} go=${go} row=${route.row} tuId=${route.tuId} day=${route.day} />` :
