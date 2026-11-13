@@ -761,6 +761,7 @@ body.nl-body { margin: 0; font-family: Roboto, sans-serif; }
 </style>
 </head><body class="nl-body">
 <div class="variant-switch fs-states" id="vs">
+  <span class="vs-label nl-fp" hidden>Screen</span><div class="vs-opts nl-fp" data-k="nav" hidden><button data-v="tx" data-href="../free-plan/?screen=tx">Transactions</button><button data-v="org" data-href="../free-plan/?screen=org">Organization settings</button><button data-v="pricing">Choose plan</button></div>
   <span class="vs-label">User</span><div class="vs-opts" data-k="view"><button data-v="owner">Business owner · 4 plans</button><button data-v="accountant">Accountant · 3 plans</button></div>
   <span class="vs-label">Product</span><div class="vs-opts" data-k="product"><button data-v="pt">Per transaction</button><button data-v="summary">Summary</button></div>
   <span class="vs-label">RevRec</span><div class="vs-opts" data-k="revrec"><button data-v="on">On</button><button data-v="off">Off</button></div>
@@ -928,6 +929,9 @@ function planOf(card){ return card.max && state.max ? card.max : (card.id === 'b
 const LITE = { id:'lite', name:'Basic Lite' };
 // free-plan view is simplified (Ignat 2026-11-13): no RevRec, Books, Black Friday or History offer states
 const LITE_FIXED = { revrec:'off', books:'qbo', campaign:'none', offer:'off' };
+// free-plan prototype mode (?fp=1): reached from projects/free-plan; only User + Product switches, Screen nav back to the app
+state.fp = Q.get('fp') === '1'; state.nav = 'pricing';
+if (state.fp) state.plan = 'lite';
 if (state.plan === 'lite') Object.assign(state, LITE_FIXED);
 const hasLite = () => state.plan === 'lite';
 function liteRows(){ const r = rowsFor('basic').map(x => x.slice()); r.find(x => x[1] === 'Import')[2] = '1 integration'; return r; }
@@ -1057,7 +1061,7 @@ const FAQ1 = { pt: document.getElementById('faq1').textContent,
 function applyChrome(){
   document.querySelectorAll('#vs .vs-opts').forEach(g => g.querySelectorAll('button').forEach(b => b.classList.toggle('on', state[g.dataset.k] === b.dataset.v)));
   if (state.plan === 'lite') Object.assign(state, LITE_FIXED);
-  document.querySelectorAll('#vs .vs-opts').forEach(g => { const h = state.plan === 'lite' && g.dataset.k in LITE_FIXED; g.hidden = h; if (g.previousElementSibling) g.previousElementSibling.hidden = h; });
+  document.querySelectorAll('#vs .vs-opts').forEach(g => { const h = g.dataset.k === 'nav' ? !state.fp : state.fp ? !['view','product'].includes(g.dataset.k) : (state.plan === 'lite' && g.dataset.k in LITE_FIXED); g.hidden = h; if (g.previousElementSibling) g.previousElementSibling.hidden = h; });
   document.getElementById('partner').hidden = state.view !== 'accountant';
   document.getElementById('bf').hidden = !isBF();          // live: banner only for the campaign's billing period (yearly)
   document.getElementById('offer').hidden = state.offer !== 'on';
@@ -1068,6 +1072,8 @@ function applyChrome(){
 }
 document.getElementById('vs').addEventListener('click', e => {
   const b = e.target.closest('.vs-opts button'); if (!b) return;
+  if (b.dataset.href){ location.href = b.dataset.href; return; }
+  if (b.parentElement.dataset.k === 'nav') return;
   state[b.parentElement.dataset.k] = b.dataset.v;
   const u = new URL(location.href); u.searchParams.set(b.parentElement.dataset.k, b.dataset.v); history.replaceState(null,'',u);
   applyChrome(); renderCards(); renderCompare();
@@ -1076,5 +1082,7 @@ window.addEventListener('resize', applyChrome);
 let left = 48*3600-1; setInterval(() => { left=Math.max(0,left-1); const p=n=>String(n).padStart(2,'0'); document.getElementById('offer-timer').textContent=`${p(Math.floor(left/3600))} : ${p(Math.floor(left/60)%60)} : ${p(left%60)}`; }, 1000);
 document.querySelector('[data-test="sentinelStart"]')?.removeAttribute('tabindex');
 applyChrome(); renderCards(); renderCompare();
+// free-plan mode: the dialog's × returns to the app (Transactions)
+if (state.fp){ const x = document.querySelector('.containerHeader-0-1-49 svg'); if (x){ x.style.cursor = 'pointer'; x.setAttribute('role','button'); x.setAttribute('aria-label','Close'); x.addEventListener('click', () => { location.href = '../free-plan/?screen=tx'; }); } }
 </script>
 </body></html>
