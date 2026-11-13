@@ -82,6 +82,23 @@
   .grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
   .setup-card{display:flex;align-items:center;gap:24px}
   .setup-card .progress{flex:1;max-width:360px}
+  .bulk-bar{display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-active);border-radius:var(--radius-sm);margin:8px 0}
+  .bill-plans{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;max-width:880px}
+  .bill-plan{padding:24px;display:flex;flex-direction:column;gap:12px}
+  .bill-plan h2{font-size:24px;line-height:32px;font-weight:400;margin:0}
+  .bill-plan p{margin:0}
+  .bill-price{color:var(--text-secondary)} .bill-price span{font-size:32px;line-height:40px;color:var(--text-primary);margin-right:4px}
+  .bill-plan ul{list-style:none;padding:0;margin:0;border-top:1px solid var(--border-default)}
+  .bill-plan li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-default)}
+  .bill-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:24px;margin-top:24px}
+  .bill-big{font-size:24px;line-height:32px;margin:4px 0}
+  .bill-tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:16px}
+  .bill-tier{padding:16px}
+  .qty{display:flex;align-items:center;gap:12px}
+  .qty-n{min-width:24px;text-align:center;font-size:16px}
+  .buy-sum{margin-top:24px;display:flex;flex-direction:column;gap:8px}
+  .buy-sum > div{display:flex;justify-content:space-between}
+  .buy-total{font-size:18px;line-height:28px;border-top:1px solid var(--border-default);padding-top:8px}
   .name-cell{max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .integ-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border-default)}
   .integ-row:last-child{border-bottom:0}
@@ -118,6 +135,8 @@
       <option value="empty">Clients · empty</option>
       <option value="imported">Clients · 37 imported, 4 connected</option>
       <option value="dashboard">Dashboard</option>
+      <option value="bill-new">Billing · no subscription yet</option>
+      <option value="bill-sub">Billing · Core, 13 licences</option>
     </select>
     <button onclick="nextLogin()">Simulate next login</button>
     <button id="reset" onclick="resetDemo()">Reset</button>
@@ -308,6 +327,7 @@ function renderShell(){
   if(client) renderClientWorkspace(client);
   else if(r==='clients') renderClients();
   else if(r==='dashboard') renderDashboard();
+  else if(r==='billing') renderBilling();
   else { const n=FIRM_NAV.find(x=>x[0]===r); if(!n){ go('#clients'); return; } $('#page').innerHTML = `<div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">${n[2]}</h1></div></div><div class="proto-note" style="margin-top:16px">The existing firm page, unchanged in this prototype.</div>`; }
 }
 function toggleOrgMenu(e){
@@ -597,9 +617,181 @@ async function renderDashboard(){
     </tbody></table></div></div>`;
 }
 
+/* ---------- Billing and licences (proposal; prices + discount tiers from accounting-firm code 2026-11-13) ---------- */
+const PLANS = {
+  core: { name:'Synder Core', tiers:[['ess','Essential',100],['pro','Pro',250]], disc:[[11,15,5],[16,20,10],[21,1e9,15]], credits:'up to 3,000 sync credits per client' },
+  adv:  { name:'Synder Advanced', tiers:[['ess','Essential',90],['pro','Pro',230],['max','Pro Max',480]], disc:[[8,10,5],[11,15,10],[16,1e9,15]], credits:'up to 20,000 sync credits per client' }
+};
+const MIN_LIC = 5, NEXT_CHARGE = 'Dec 1, 2026', DAYS_LEFT = 18;
+const TIER_NAME = k => ({ess:'Essential',pro:'Pro',max:'Pro Max'})[k];
+function freshBill(){ return { plan:null, period:'month', owned:{ess:0,pro:0,max:0}, tab:'all', sel:new Set() }; }
+function presetBilling(subscribed){
+  if(S.clients.length<12) presetImported();
+  S.bill = freshBill();
+  S.clients.forEach(c=>{ c.lic=null; c.own=null; c.moving=null; });
+  [11,12,13].forEach((i,k)=>{ S.clients[i].own = [{plan:'Pro, yearly',renews:'Mar 3, 2027'},{plan:'Essential, monthly',renews:'Dec 9, 2026'},{plan:'Pro Max, yearly',renews:'Jun 20, 2027'}][k]; });
+  if(subscribed){
+    S.bill.plan='core'; S.bill.owned={ess:10,pro:3,max:0};
+    for(let i=0;i<7;i++) S.clients[i].lic='ess';
+    for(let i=7;i<10;i++) S.clients[i].lic='pro';
+  }
+}
+const used = k => S.clients.filter(c=>c.lic===k).length;
+const totalLic = o => Object.values(o).reduce((a,b)=>a+b,0);
+function discPct(plan,n){ const t=PLANS[plan].disc.find(([a,b])=>n>=a&&n<=b); return t?t[2]:0; }
+function nextTier(plan,n){ const t=PLANS[plan].disc.find(([a])=>a>n); return t?{need:t[0]-n,pct:t[2]}:null; }
+function monthly(plan,owned,period){
+  const sub = PLANS[plan].tiers.reduce((s,[k,,p])=>s+(owned[k]||0)*p,0);
+  const pct = discPct(plan,totalLic(owned));
+  const afterDisc = sub*(1-pct/100);
+  return { sub, pct, disc:sub-afterDisc, total: period==='year'? afterDisc*0.8 : afterDisc };
+}
+const usd = n => '$'+n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+function renderBilling(){
+  const B=S.bill||(S.bill=freshBill()), p=$('#page');
+  const head = `<div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">Billing and licences</h1></div>
+    <div class="synder-page-actions">${B.plan?`<button class="btn-outlined" onclick="toast('Invoices are not part of this prototype','info')">Invoices</button><button class="btn" id="buy-btn" onclick="openBuy()">Buy licences</button>`:''}</div></div>`;
+  let top;
+  if(!B.plan){
+    top = `<div class="bill-plans" id="bill-plans">${Object.entries(PLANS).map(([k,P])=>`
+      <div class="card bill-plan"><h2>${P.name}</h2><p class="text-secondary">${P.credits}</p>
+        <div class="bill-price"><span>${usd(P.tiers[0][2])}</span> per client / month</div>
+        <ul>${P.tiers.map(([,n,pr])=>`<li><span>${n}</span><b>${usd(pr)}</b></li>`).join('')}</ul>
+        <p class="text-secondary">From ${MIN_LIC} licences · up to 15% off for more clients · 20% off yearly</p>
+        <button class="btn-outlined w-full" id="start-${k}" onclick="openBuy('${k}')">Choose ${P.name.replace('Synder ','')}</button></div>`).join('')}</div>
+      <p class="text-secondary" style="margin:12px 0 0">Not sure which fits? <a class="text-link" href="#" onclick="toast('Opens the HubSpot booking page — not part of this prototype','info');return false">Book a call</a></p>`;
+  } else {
+    const P=PLANS[B.plan], m=monthly(B.plan,B.owned,B.period), n=totalLic(B.owned), nt=nextTier(B.plan,n);
+    top = `<div class="card bill-summary" id="bill-summary">
+        <div><div class="stat-label" style="margin:0">Plan</div><div class="bill-big">${P.name}</div><div class="text-secondary">${B.period==='year'?'Yearly':'Monthly'} · ${n} licences</div></div>
+        <div><div class="stat-label" style="margin:0">Next charge</div><div class="bill-big">${usd(B.period==='year'?m.total*12:m.total)}</div><div class="text-secondary">on ${NEXT_CHARGE}${m.pct?` · ${m.pct}% volume discount`:''}</div></div>
+        <div><div class="stat-label" style="margin:0">Volume discount</div><div class="bill-big">${m.pct}%</div><div class="text-secondary">${nt?`${nt.need} more licence${nt.need>1?'s':''} → ${nt.pct}% off`:'Top discount reached'}</div></div>
+      </div>
+      <div class="bill-tiers" id="bill-tiers">${P.tiers.map(([k,name])=>{const own=B.owned[k],u=used(k),left=own-u;return `
+        <div class="card bill-tier" data-tier="${k}"><div class="row-gap" style="justify-content:space-between"><b>${name}</b><span class="${left<=0&&own?'text-error':'text-secondary'}">${own?`${u} of ${own} used`:'None bought'}</span></div>
+          <div class="progress" style="margin:12px 0"><div class="progress-fill ${left<=0&&own?'error':''}" style="width:${own?Math.min(100,u/own*100):0}%"></div></div>
+          <div class="row-gap" style="justify-content:space-between"><span class="text-secondary">${own?(left>0?`${left} left`:'All in use'):'—'}</span><button class="btn-text btn-sm" onclick="openBuy(null,{${k}:1})">Buy more</button></div></div>`;}).join('')}</div>`;
+  }
+  p.innerHTML = head + top + billingClients();
+}
+function billingRow(c){
+  const B=S.bill, tiers=B.plan?PLANS[B.plan].tiers:[];
+  let pays;
+  if(c.moving) pays = `<span class="status status-blue">Firm licence from ${c.moving}</span><span class="cell-subtext">Own plan ends then</span>`;
+  else if(c.own) pays = `<span class="status status-yellow">Pays on its own</span><span class="cell-subtext">${c.own.plan} · renews ${c.own.renews}</span>`;
+  else if(c.lic) pays = `<span class="status status-green">Firm pays</span>`;
+  else pays = `<span class="text-secondary">No plan</span>`;
+  let lic;
+  if(!B.plan) lic = `<span class="text-secondary">—</span>`;
+  else lic = `<select class="select" style="width:160px" aria-label="Licence for ${esc(c.name)}" onchange="setLic(${c.id},this.value,this)"><option value="">No licence</option>${tiers.map(([k,n])=>{const left=B.owned[k]-used(k)+(c.lic===k?1:0);return `<option value="${k}" ${c.lic===k?'selected':''}>${n}${left<=0?' · none left':''}</option>`}).join('')}</select>`;
+  const act = c.own && !c.moving ? `<button class="btn-outlined btn-sm" data-act="move" onclick="moveToFirm(${c.id})">Move to firm licence</button>` : '';
+  return `<tr data-id="${c.id}"><td class="col-check"><input class="checkbox" type="checkbox" aria-label="Select ${esc(c.name)}" ${B.sel.has(c.id)?'checked':''} onchange="this.checked?S.bill.sel.add(${c.id}):S.bill.sel.delete(${c.id});renderBilling()"></td>
+    <td><div class="name-cell" title="${esc(c.name)}">${esc(c.name)}</div><span class="cell-subtext">${status(c)[0]}</span></td><td>${lic}</td><td>${pays}</td><td>${act}</td></tr>`;
+}
+function billingClients(){
+  const B=S.bill;
+  if(!S.clients.length) return `<div class="card" style="margin-top:24px"><div class="empty-state"><div class="empty-state-title">No clients yet</div><button class="btn" onclick="go('#clients')">Bring in clients</button></div></div>`;
+  const f = {all:()=>true, none:c=>!c.lic&&!c.moving, own:c=>!!c.own&&!c.moving, firm:c=>!!c.lic};
+  const cnt = k => S.clients.filter(f[k]).length;
+  const rows = S.clients.filter(f[B.tab]);
+  const selN=B.sel.size;
+  return `<div class="synder-page-section"><h2 class="sec-title">Clients</h2>
+    <div class="tabs" role="tablist">${[['all','All'],['firm','Firm pays'],['none','No licence'],['own','Pays on its own']].map(([k,l])=>`<div class="tab ${B.tab===k?'active':''}" role="tab" aria-selected="${B.tab===k}" onclick="S.bill.tab='${k}';S.bill.sel.clear();renderBilling()">${l} <span class="tab-count">${cnt(k)}</span></div>`).join('')}</div>
+    ${selN&&B.plan?`<div class="bulk-bar" id="bill-bulk"><b>${selN} selected</b><span class="synder-toolbar-divider"></span>${PLANS[B.plan].tiers.map(([k,n])=>`<button class="btn-outlined btn-sm" onclick="bulkLic('${k}')">Give ${n}</button>`).join('')}<button class="btn-outlined btn-sm" onclick="bulkLic('')">Remove licence</button><button class="btn-text btn-sm" style="margin-left:auto" onclick="S.bill.sel.clear();renderBilling()">Clear selection</button></div>`:''}
+    ${selN&&!B.plan?`<div class="bulk-bar" id="bill-bulk"><b>${selN} selected</b><span class="synder-toolbar-divider"></span><button class="btn btn-sm" onclick="openBuy('core',{ess:Math.max(${MIN_LIC},${selN})})">Buy ${Math.max(MIN_LIC,selN)} licences for them</button><button class="btn-text btn-sm" style="margin-left:auto" onclick="S.bill.sel.clear();renderBilling()">Clear selection</button></div>`:''}
+    <div class="table-wrap"><table class="synder-table table--lg" id="bill-table"><thead><tr><th class="col-check"><input class="checkbox" type="checkbox" aria-label="Select all" ${rows.length&&rows.every(c=>B.sel.has(c.id))?'checked':''} onchange="billAll(this.checked,[${rows.map(c=>c.id)}])"></th><th>Client</th><th>Licence</th><th>Who pays</th><th><span class="sr-only">Action</span></th></tr></thead>
+    <tbody>${rows.length?rows.map(billingRow).join(''):`<tr><td colspan="5"><div class="empty-state"><div class="empty-state-title">No clients here</div></div></td></tr>`}</tbody></table></div></div>`;
+}
+function billAll(on,ids){ ids.forEach(id=>on?S.bill.sel.add(id):S.bill.sel.delete(id)); renderBilling(); }
+function setLic(id,k,el){
+  const c=byId(id), B=S.bill;
+  if(k && B.owned[k]-used(k)<=0){ el.value=c.lic||''; shortfall(k,1,[id]); return; }
+  if(k && c.own && !c.moving){ el.value=c.lic||''; moveToFirm(id,k); return; }
+  c.lic=k||null; if(!k) c.moving=null; renderBilling(); toast(k?`${c.name}: ${TIER_NAME(k)} licence`:`${c.name}: licence removed`);
+}
+function bulkLic(k){
+  const B=S.bill, ids=[...B.sel];
+  if(!k){ ids.forEach(id=>{const c=byId(id);c.lic=null;c.moving=null;}); B.sel.clear(); renderBilling(); toast(`Licences removed from ${ids.length} clients`); return; }
+  const need = ids.filter(id=>byId(id).lic!==k).length, left = B.owned[k]-used(k);
+  if(need>left){ shortfall(k,need-left,ids); return; }
+  ids.forEach(id=>{const c=byId(id); c.lic=k; if(c.own&&!c.moving) c.moving=c.own.renews;});
+  B.sel.clear(); renderBilling(); toast(`${TIER_NAME(k)} given to ${ids.length} clients`);
+}
+function shortfall(k,n,ids){
+  modal(`<div class="synder-modal-header">Not enough ${TIER_NAME(k)} licences</div>
+    <div class="synder-modal-body">${used(k)} of ${S.bill.owned[k]} are in use. You need ${n} more.</div>
+    <div class="synder-modal-footer"><button class="btn-outlined" onclick="closeModal()">Cancel</button><button class="btn" id="short-buy" onclick="closeModal();openBuy(null,{${k}:${n}},[${ids}],'${k}')">Buy ${n} more</button></div>`,'modal-confirm');
+}
+function moveToFirm(id,k){
+  const c=byId(id), B=S.bill;
+  if(!B.plan){ openBuy('core',{ess:MIN_LIC}); return; }
+  const tiers=PLANS[B.plan].tiers;
+  const opts=tiers.map(([t,n])=>{const left=B.owned[t]-used(t);return `<option value="${t}" ${t===(k||'ess')?'selected':''} ${left<=0?'disabled':''}>${n}${left<=0?' · none left':` · ${left} left`}</option>`}).join('');
+  modal(`<div class="synder-modal-header">Move ${esc(c.name)} to a firm licence</div>
+    <div class="synder-modal-body"><p style="margin:0 0 16px">${esc(c.name)} pays for <b>${c.own.plan}</b> itself. Its plan stays active until <b>${c.own.renews}</b>, then the firm licence takes over and its own plan is cancelled. Nobody is charged twice.</p>
+      <div class="form-field"><label class="form-label" for="mv-tier">Firm licence</label><select class="select w-full" id="mv-tier">${opts}</select></div></div>
+    <div class="synder-modal-footer"><button class="btn-outlined" onclick="closeModal()">Cancel</button><button class="btn" id="mv-go" onclick="doMove(${id})">Move on ${c.own.renews}</button></div>`,'modal-md');
+}
+function doMove(id){
+  const c=byId(id), k=$('#mv-tier').value;
+  if(S.bill.owned[k]-used(k)<=0){ closeModal(); shortfall(k,1,[id]); return; }
+  c.lic=k; c.moving=c.own.renews; closeModal(); renderBilling(); toast(`${c.name} moves to the firm licence on ${c.own.renews}`);
+}
+
+/* buy / change licences side sheet */
+function openBuy(plan,add,assignIds,assignTier){
+  const B=S.bill, subscribed=!!B.plan;
+  const draft = { plan: plan||B.plan||'core', period:B.period, owned:{...B.owned}, assignIds:assignIds||[], assignTier:assignTier||null };
+  if(!subscribed && !totalLic(draft.owned)) draft.owned.ess=MIN_LIC;
+  Object.entries(add||{}).forEach(([k,n])=>{ draft.owned[k]=subscribed? B.owned[k]+n : Math.max(draft.owned[k],n); });
+  window._buy=draft; drawBuy();
+}
+function drawBuy(){
+  const B=S.bill, D=window._buy, subscribed=!!B.plan, P=PLANS[D.plan];
+  const m=monthly(D.plan,D.owned,D.period), cur=subscribed?monthly(B.plan,B.owned,B.period):null, n=totalLic(D.owned), nt=nextTier(D.plan,n);
+  const delta = subscribed ? Math.max(0,(m.total-cur.total)*(DAYS_LEFT/30)) : (D.period==='year'?m.total*12:m.total);
+  const changed = !subscribed || JSON.stringify(D.owned)!==JSON.stringify(B.owned) || D.period!==B.period;
+  const html = `<div class="synder-side-sheet-header">${subscribed?'Buy licences':'Choose your licences'}<button class="modal-close" aria-label="Close" onclick="closeModal()"><span class="material-icons">close</span></button></div>
+    <div class="synder-side-sheet-body" id="buy-body">
+      <div class="d-flex gap-16 mb-16">
+        <div class="form-field flex-1"><label class="form-label" for="buy-plan">Plan</label><select class="select w-full" id="buy-plan" ${subscribed?'disabled':''} onchange="window._buy.plan=this.value;window._buy.owned={ess:${MIN_LIC},pro:0,max:0};drawBuy()">${Object.entries(PLANS).map(([k,p])=>`<option value="${k}" ${k===D.plan?'selected':''}>${p.name}</option>`).join('')}</select>${subscribed?`<div class="form-hint">To switch plan, <a class="text-link" href="#" onclick="toast('Opens the HubSpot booking page — not part of this prototype','info');return false">book a call</a></div>`:''}</div>
+        <div class="form-field flex-1"><label class="form-label" for="buy-period">Billing</label><select class="select w-full" id="buy-period" ${subscribed&&B.period==='year'?'disabled':''} onchange="window._buy.period=this.value;drawBuy()"><option value="month" ${D.period==='month'?'selected':''}>Monthly</option><option value="year" ${D.period==='year'?'selected':''}>Yearly · 20% off</option></select></div>
+      </div>
+      <table class="synder-table" id="buy-table"><thead><tr><th>Licence</th><th>Per client / month</th><th>In use</th><th>Quantity</th></tr></thead><tbody>
+      ${P.tiers.map(([k,name,price])=>`<tr><td>${name}</td><td>${usd(D.period==='year'?price*0.8:price)}</td><td>${used(k)}</td><td><div class="qty"><button class="btn-icon btn-icon--bordered" aria-label="Fewer ${name}" onclick="stepQty('${k}',-1)"><span class="material-icons">remove</span></button><span class="qty-n" id="qty-${k}">${D.owned[k]||0}</span><button class="btn-icon btn-icon--bordered" aria-label="More ${name}" onclick="stepQty('${k}',1)"><span class="material-icons">add</span></button></div><div class="form-error-msg" id="qty-err-${k}" hidden></div></td></tr>`).join('')}
+      </tbody></table>
+      <div class="buy-sum">
+        <div><span>${n} licences</span><span>${usd(D.period==='year'?m.sub*0.8:m.sub)}</span></div>
+        ${m.pct?`<div class="text-success"><span>Volume discount ${m.pct}%</span><span>−${usd(D.period==='year'?m.disc*0.8:m.disc)}</span></div>`:''}
+        ${nt?`<div class="text-secondary"><span>Add ${nt.need} more licence${nt.need>1?'s':''} for ${nt.pct}% off</span><span></span></div>`:''}
+        <div class="buy-total"><span>Per month${D.period==='year'?', billed yearly':''}</span><span id="buy-month">${usd(m.total)}</span></div>
+        ${subscribed?`<div class="text-secondary"><span>Today, for the ${DAYS_LEFT} days left in this period</span><span id="buy-today">${usd(delta)}</span></div>`:''}
+      </div>
+      ${D.assignTier?`<div class="alert alert-info" style="margin-top:16px"><span class="material-icons">info</span>After payment, ${D.assignIds.length} selected client${D.assignIds.length>1?'s get':' gets'} ${TIER_NAME(D.assignTier)}.</div>`:''}
+    </div>
+    <div class="synder-side-sheet-footer"><button class="btn-outlined" onclick="closeModal()">Cancel</button><button class="btn" id="buy-pay" onclick="payBuy()">${subscribed?(changed?`Pay ${usd(delta)}`:'Pay'):`Pay ${usd(delta)}`}</button></div>`;
+  if($('#sheet')) $('#sheet').innerHTML=html; else sheet(html);
+}
+function stepQty(k,d){
+  const D=window._buy, u=used(k), next=(D.owned[k]||0)+d, e=$('#qty-err-'+k);
+  if(next<u){ e.textContent=`${u} in use. Remove the licence from clients first.`; e.hidden=false; return; }
+  if(d<0 && totalLic(D.owned)-1<MIN_LIC){ e.textContent=`Minimum ${MIN_LIC} licences in total.`; e.hidden=false; return; }
+  D.owned[k]=next; drawBuy();
+}
+async function payBuy(){
+  const B=S.bill, D=window._buy, subscribed=!!B.plan;
+  if(subscribed && JSON.stringify(D.owned)===JSON.stringify(B.owned) && D.period===B.period){ toast('Change a quantity or the billing period first','info'); return; }
+  const b=$('#buy-pay'); b.disabled=true; b.innerHTML=spin+' Paying…'; await wait(subscribed?800:1200);
+  B.plan=D.plan; B.period=D.period; B.owned={...D.owned};
+  if(D.assignTier) D.assignIds.forEach(id=>{const c=byId(id); c.lic=D.assignTier; if(c.own&&!c.moving) c.moving=c.own.renews;});
+  B.sel.clear(); closeModal(); renderBilling();
+  toast(subscribed?'Licences updated':`${PLANS[B.plan].name} is active · ${totalLic(B.owned)} licences`);
+}
+
 /* ---------- routing ---------- */
 const ONB = ['#home','#start','#signup','#name','#business'];
-function go(h){ closeMenus(); if(location.hash===h) route(); else location.hash=h; }
+function go(h){ closeMenus(); const pg=document.getElementById('page'); if(pg) pg.scrollTop=0; if(location.hash===h) route(); else location.hash=h; }
 function route(){
   if(!location.hash) history.replaceState(null,'',location.pathname+location.search+'#home');
   const h=location.hash, setup=h.startsWith('#setup-'), full=setup||ONB.includes(h);
@@ -609,6 +801,7 @@ function route(){
 }
 window.addEventListener('hashchange', route);
 function jumpTo(k){
+  if(k==='bill-new'||k==='bill-sub'){ presetBilling(k==='bill-sub'); go('#billing'); return; }
   if(k==='home'){ S=fresh(); go('#home'); }
   else if(k==='start'){ S=fresh(); go('#start'); }
   else if(k==='signup'){ go('#signup'); }
