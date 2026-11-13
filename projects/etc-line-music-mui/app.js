@@ -140,16 +140,16 @@ const MUTE_ORANGE = '#E8792E';
 const MUSIC_BLUE = '#1976D2';
 function TrackBox({ s, st, i, onClick, onLeave, showMusic }) {
   const muted = st.mute && st.mute.tracks.includes(i);
-  // Ignat, 2026-11-13: the number stays readable — paused music is a blue frame around the square,
-  // on top of whatever the square shows (event purple, normal grey). A muted square keeps its orange frame.
-  const m = musicNow(s, st), musicOff = showMusic && !muted && m === 'paused';
+  // Ignat, 2026-11-13: paused music looks like the mute square, in blue — and keeps the track number
+  const m = musicNow(s, st), musicOff = showMusic && !muted && !s.ev && m === 'paused';   // events and the mute win
   const n = s.tracks[i];
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
   return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOff ? ' music-off' : '')} data-st=${s.c} data-track=${i}
     aria-label=${s.name + L(' Gleis ', ' track ') + n} onClick=${e => onClick(e, s.c, i)} onMouseEnter=${e => onClick(e, s.c, i)} onMouseLeave=${onLeave}
     sx=${{ all: 'unset', ...base, ...(muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
-      : s.ev ? { bgcolor: '#7C4DFF', color: '#fff' } : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' }),
-      ...(musicOff ? { outline: '2px solid ' + MUSIC_BLUE, outlineOffset: '2px' } : null) }}>
+      : s.ev ? { bgcolor: '#7C4DFF', color: '#fff' }
+      : musicOff ? { bgcolor: '#DCEBFA', border: '2px solid ' + MUSIC_BLUE, color: MUSIC_BLUE, fontWeight: 500 }
+      : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' }) }}>
     ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : n}<//>`;
 }
 
@@ -379,7 +379,7 @@ function App() {
               <${Tooltip} title=${showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music')}>
                 <${IconButton} id="btnMusicView" aria-pressed=${showMusic} onClick=${toggleMusic}
                   aria-label=${showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music')}
-                  sx=${{ color: showMusic ? MUSIC_BLUE : '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>${showMusic ? 'music_note' : 'music_off'}<//><//>
+                  sx=${{ color: '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>${showMusic ? 'music_off' : 'music_note'}<//><//>
               <//>
             <//>
           <//>
