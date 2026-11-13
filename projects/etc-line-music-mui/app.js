@@ -82,6 +82,7 @@ SEED.Ho.music = 'none';
 SEED.U.music = 'paused';
 // Ignat, 2026-11-10: more stations paused by default, to walk the flow
 SEED.S.music = 'paused';   SEED.S.pause  = { reason: 'Außenbahnhof: Nachtruhe', by: 'S. Weber', at: '10.11.2026 22:00' };
+SEED.Pr.music = 'paused';  SEED.Pr.pause  = { reason: 'Bleibt nach Ende der Stummschaltung aus', by: 'T. Yilmaz', at: '11.11.2026 09:20' };
 SEED.Go.music = 'paused';  SEED.Go.pause  = { reason: 'Gottesdienst in der Nähe', by: 'M. Krüger', at: '10.11.2026 07:55' };
 SEED.Gr.music = 'paused';  SEED.Gr.pause  = { reason: 'Reinigungsarbeiten', by: 'S. Weber', at: '10.11.2026 06:30' };
 SEED['Nu / Nm'].music = 'paused'; SEED['Nu / Nm'].pause = { reason: 'Durchsagen schlecht verständlich', by: 'T. Yilmaz', at: '10.11.2026 08:15' };
@@ -90,7 +91,7 @@ SEED.U.pause = { reason: 'Veranstaltung im Bahnhof', by: 'T. Yilmaz', at: '09.11
 const now = () => { const d = new Date(), p = x => String(x).padStart(2, '0');
   return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; };
 /* what the music actually does right now */
-const musicNow = (s, st) => st.mute ? 'muted' : st.music === 'none' ? 'none'
+const musicNow = (s, st) => st.music === 'none' ? 'none'   // Ignat, 2026-11-13: music is independent of the station mute
   : st.music;   // Ignat, 2026-11-11: no schedule on this screen — paused or playing
 
 /* ── chrome ───────────────────────────────────────────────────────── */
@@ -136,27 +137,23 @@ function TopBar({ lang, setLang, unread, onBell }) {
 
 /* ── the line ─────────────────────────────────────────────────────── */
 const MUTE_ORANGE = '#E8792E';
-function TrackBox({ s, st, i, onClick, onLeave, layers }) {
+const MUSIC_BLUE = '#1976D2';
+function TrackBox({ s, st, i, onClick, onLeave, showMusic }) {
   const muted = st.mute && st.mute.tracks.includes(i);
-  // Ignat, 2026-11-09: paused music shows inside the track square, like the mute — but grey, and only
-  // on a track with no event and no mute
-  const m = musicNow(s, st), musicOff = layers.music && !muted && !s.ev && m === 'paused';   // low priority: events and the mute win
+  // Ignat, 2026-11-13: the number stays readable — paused music is a blue frame around the square,
+  // on top of whatever the square shows (event purple, normal grey). A muted square keeps its orange frame.
+  const m = musicNow(s, st), musicOff = showMusic && !muted && m === 'paused';
   const n = s.tracks[i];
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
-  const box = html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOff ? ' music-off' : '')} data-st=${s.c} data-track=${i}
+  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOff ? ' music-off' : '')} data-st=${s.c} data-track=${i}
     aria-label=${s.name + L(' Gleis ', ' track ') + n} onClick=${e => onClick(e, s.c, i)} onMouseEnter=${e => onClick(e, s.c, i)} onMouseLeave=${onLeave}
     sx=${{ all: 'unset', ...base, ...(muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
-      : musicOff ? { bgcolor: '#EEEEEE', border: '2px solid #757575', color: '#757575' }
-      : s.ev ? { bgcolor: '#7C4DFF', color: '#fff' } : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' }) }}>
-    ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : musicOff ? html`<${Icon} sx=${{ fontSize: 18 }}>music_off<//>` : n}<//>`;
-  return box;
+      : s.ev ? { bgcolor: '#7C4DFF', color: '#fff' } : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' }),
+      ...(musicOff ? { outline: '2px solid ' + MUSIC_BLUE, outlineOffset: '2px' } : null) }}>
+    ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : n}<//>`;
 }
 
-/* Ignat, 2026-11-11: secondary layers the user can hide from the gear — SAMPLE positions.
-   Meldungen: the bar on a track square (active DAISY/ELA message); Züge: the pill between stations. */
-const MSG_BARS = { U: [0], Kfo: [0, 1], Wt: [1], Kus: [0], Mo: [0, 1], Ho: [1], Kbo: [0], WA: [0, 1] };
-const TRAINS = [['U', 0, '#4CAF50'], ['Wt', 1, '#FBC02D'], ['Go', 0, '#4CAF50'], ['Pr', 1, '#E53935'], ['Gr', 0, '#FBC02D'], ['S', 1, '#4CAF50']];
-function LineDiagram({ state, onTrack, onLeave, layers }) {
+function LineDiagram({ state, onTrack, onLeave, showMusic }) {
   return html`<${Box} id="lineDiagram" sx=${{ display: 'grid', gridTemplateColumns: `repeat(${STATIONS.length}, 1fr)`, mx: 2 }}>
     ${STATIONS.map(s => html`<${Box} key=${s.c} sx=${{ bgcolor: '#8FA963', color: '#fff', fontWeight: 700, fontSize: 14, textAlign: 'center',
         height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'pre-line' }}>${s.c.replace(' / ', ' /\n')}<//>`)}
@@ -165,12 +162,8 @@ function LineDiagram({ state, onTrack, onLeave, layers }) {
       return html`<${Box} key=${s.c} className="st-col" data-st=${s.c} data-music=${m}
         sx=${{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, pt: 2, pb: 2, borderTop: '1px solid #8A94A6' }}>
         ${s.tracks.map((_, i) => html`<${Box} key=${i} sx=${{ position: 'relative' }}>
-          ${layers.msgs && (MSG_BARS[s.c] || []).includes(i) ? html`<${Box} className="msg-bar" sx=${{ position: 'absolute', left: 0, right: 0, height: 4,
-            bgcolor: '#7FD3EA', borderRadius: '1px', [i === 0 ? 'top' : 'bottom']: -6 }} />` : null}
-          <${TrackBox} s=${s} st=${st} i=${i} onClick=${onTrack} onLeave=${onLeave} layers=${layers} />
+          <${TrackBox} s=${s} st=${st} i=${i} onClick=${onTrack} onLeave=${onLeave} showMusic=${showMusic} />
         <//>`)}
-        ${layers.trains ? TRAINS.filter(t => t[0] === s.c).map(([, i, col]) => html`<${Box} key=${'t' + i} className="train"
-          sx=${{ position: 'absolute', right: -9, top: i === 0 ? 22 : 54, width: 18, height: 7, borderRadius: '4px', bgcolor: col }} />`) : null}
         <${Stack} spacing=${.5} alignItems="center" sx=${{ mt: .5 }}>${s.xfer.map(l => html`<${LineBadge} key=${l} line=${l} />`)}<//>
       <//>`; })}
   <//>`;
@@ -178,20 +171,22 @@ function LineDiagram({ state, onTrack, onLeave, layers }) {
 
 /* ── the popover on a track ───────────────────────────────────────── */
 function MusicInfo({ s, st }) {
+  // Ignat, 2026-11-13: the card always states the music
   const m = musicNow(s, st);
   const line = (t, cls) => html`<${Typography} className=${cls} sx=${{ fontSize: 16 }}>${t}<//>`;
-  if (m === 'paused') return html`<${Box} className="music-info" sx=${{ mt: 1.5 }}>
-    ${line(html`<b>${L('Musik pausiert', 'Music paused')}</b> · ${st.pause.by} · ${st.pause.at}`, 'music-paused-by')}
-    ${line(html`<b>${L('Grund', 'Reason')}:</b> ${st.pause.reason}`, 'music-reason')}<//>`;
-  if (m === 'muted') return html`<${Box} className="music-info" sx=${{ mt: 1.5 }}>${line(html`<b>${L('Musik stumm', 'Music off')}</b> ${L('(Stummschaltung aktiv)', '(station muted)')}`)}<//>`;
-  return null;
+  const head = t => line(html`<b>${L('Musik', 'Music')}:</b> ${t}`, 'music-state');
+  return html`<${Box} className="music-info" data-music=${m} sx=${{ mt: 1.5 }}>
+    ${m === 'paused' ? html`${head(html`${L('pausiert', 'paused')} · ${st.pause.by} · ${st.pause.at}`)}
+      ${line(html`<b>${L('Grund', 'Reason')}:</b> ${st.pause.reason}`, 'music-reason')}`
+      : head(m === 'none' ? L('nicht eingerichtet', 'not set') : L('läuft', 'playing'))}<//>`;
 }
 
 function TrackPopover({ pop, state, variant, role, onClose, open, hold, release }) {
   if (!pop) return null;
   const s = BY[pop.c], st = state[pop.c], m = musicNow(s, st);
   // Ignat, 2026-11-11: pausing works despite the schedule — at night FGI can pause for the next day
-  const canMusic = role === 'fgi' && (m === 'playing' || m === 'paused' || m === 'schedule');
+  // Ignat, 2026-11-13: pause/resume also on a muted station — pausing in advance keeps it silent after the unmute
+  const canMusic = m === 'playing' || m === 'paused';
   // Ignat, 2026-11-11: as in production — the full card with its buttons opens on hover
   return html`<${Popper} open=${true} anchorEl=${pop.el} placement="bottom" id="trackPopover" sx=${{ zIndex: 1200 }}
     modifiers=${[{ name: 'offset', options: { offset: [0, 4] } }]}>
@@ -207,7 +202,7 @@ function TrackPopover({ pop, state, variant, role, onClose, open, hold, release 
       <${Button} variant="outlined" fullWidth sx=${{ mt: 1.5 }}>${L('Ereignis anzeigen', 'View event')}<//>
     <//>` : null}
     ${st.mute ? html`<${Typography} className="mute-reason" sx=${{ fontSize: 16 }}><b>${L('Grund', 'Reason')}:</b> ${st.mute.reason}<//>` : null}
-    ${role !== 'other' ? html`<${MusicInfo} s=${s} st=${st} />` : null}
+    <${MusicInfo} s=${s} st=${st} />
     <${Stack} spacing=${1} sx=${{ mt: 2 }}>
       <${Button} variant="outlined" id="btnMute" onClick=${() => open(st.mute ? 'unmute' : variant === 2 ? 'combo' : 'mute')}
         sx=${{ color: MUTE_ORANGE, borderColor: '#F0B58D', '&:hover': { borderColor: MUTE_ORANGE, bgcolor: '#FFF6EF' } }}>${L('Stummschaltung', 'Mute')}<//>
@@ -338,11 +333,9 @@ function App() {
   LANG = lang;
   const setLang = l => { localStorage.setItem('pims-lang', l); document.documentElement.lang = l; setLangRaw(l); };
   const role = 'fgi';
-  // the gear's layers, saved per user (here: in the browser)
-  const [layers, setLayers] = useState(() => ({ music: true, trains: true, msgs: true, ...JSON.parse(localStorage.getItem('pims-layers') || '{}') }));
-  const toggleLayer = k => setLayers(x => { const n = { ...x, [k]: !x[k] }; localStorage.setItem('pims-layers', JSON.stringify(n)); return n; });
-  const [layerMenu, setLayerMenu] = useState(null);
-  const anyHidden = !layers.music || !layers.trains || !layers.msgs;
+  // Ignat, 2026-11-13: one view setting only — show/hide music, saved per user (here: the browser)
+  const [showMusic, setShowMusic] = useState(() => localStorage.getItem('pims-show-music') !== '0');
+  const toggleMusic = () => setShowMusic(v => { localStorage.setItem('pims-show-music', v ? '0' : '1'); return !v; });
   const [state, setState] = useState(SEED);
   const [pop, setPop] = useState(null);
   const [dlg, setDlg] = useState(null);
@@ -383,19 +376,14 @@ function App() {
           <${Box} sx=${{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1.5, mb: 2 }}>
             <${LineBadge} line="U1" big /><${Typography} sx=${{ fontSize: 22 }} id="lineTitle">U Uhlandstraße - S+U Warschauer Straße<//>
             <${Box} sx=${{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)' }}>
-              <${Badge} variant="dot" color="primary" invisible=${!anyHidden} overlap="circular" id="gearDot">
-                <${IconButton} id="btnLayers" aria-label=${L('Anzeige', 'Display')} aria-haspopup="menu" onClick=${e => setLayerMenu(e.currentTarget)}
-                  sx=${{ color: anyHidden ? 'primary.main' : '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>settings<//><//>
-              <//>
-              <${Menu} anchorEl=${layerMenu} open=${!!layerMenu} onClose=${() => setLayerMenu(null)} id="layerMenu"
-                anchorOrigin=${{ vertical: 'bottom', horizontal: 'right' }} transformOrigin=${{ vertical: 'top', horizontal: 'right' }}>
-                ${[['music', L('Musik', 'Music')], ['trains', L('Züge', 'Trains')], ['msgs', L('Meldungen', 'Messages')]].map(([k, l]) => html`
-                  <${MenuItem} key=${k} data-layer=${k} onClick=${() => toggleLayer(k)} sx=${{ pr: 3 }}>
-                    <${Checkbox} checked=${layers[k]} sx=${{ p: .5, mr: 1 }} /><${ListItemText} primary=${l} /><//>`)}
+              <${Tooltip} title=${showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music')}>
+                <${IconButton} id="btnMusicView" aria-pressed=${showMusic} onClick=${toggleMusic}
+                  aria-label=${showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music')}
+                  sx=${{ color: showMusic ? MUSIC_BLUE : '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>${showMusic ? 'music_note' : 'music_off'}<//><//>
               <//>
             <//>
           <//>
-          <${LineDiagram} state=${state} layers=${layers} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
+          <${LineDiagram} state=${state} showMusic=${showMusic} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
         <//>
         <${EventTables} />
       <//>
