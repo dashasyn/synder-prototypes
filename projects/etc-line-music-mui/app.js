@@ -83,7 +83,6 @@ SEED.U.music = 'paused';
 // Ignat, 2026-11-10: more stations paused by default, to walk the flow
 SEED.S.music = 'paused';   SEED.S.pause  = { reason: 'Außenbahnhof: Nachtruhe', by: 'S. Weber', at: '10.11.2026 22:00' };
 SEED.Pr.music = 'paused';  SEED.Pr.pause  = { reason: 'Bleibt nach Ende der Stummschaltung aus', by: 'T. Yilmaz', at: '11.11.2026 09:20' };
-SEED.Go.music = 'paused';  SEED.Go.pause  = { reason: 'Gottesdienst in der Nähe', by: 'M. Krüger', at: '10.11.2026 07:55' };
 SEED.Gr.music = 'paused';  SEED.Gr.pause  = { reason: 'Reinigungsarbeiten', by: 'S. Weber', at: '10.11.2026 06:30' };
 SEED['Nu / Nm'].music = 'paused'; SEED['Nu / Nm'].pause = { reason: 'Durchsagen schlecht verständlich', by: 'T. Yilmaz', at: '10.11.2026 08:15' };
 SEED.U.pause = { reason: 'Veranstaltung im Bahnhof', by: 'T. Yilmaz', at: '09.11.2026 12:10' };
@@ -141,14 +140,14 @@ const MUSIC_BLUE = '#1976D2';
 function TrackBox({ s, st, i, onClick, onLeave, showMusic }) {
   const muted = st.mute && st.mute.tracks.includes(i);
   // Ignat, 2026-11-13: paused music looks like the mute square, in blue — and keeps the track number
-  const m = musicNow(s, st), musicOff = showMusic && !muted && !s.ev && m === 'paused';   // events and the mute win
+  const m = musicNow(s, st), musicOn = showMusic && !muted && !s.ev && m === 'playing';   // Ignat, 2026-11-16: blue = music playing; events and the mute win
   const n = s.tracks[i];
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
-  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOff ? ' music-off' : '')} data-st=${s.c} data-track=${i}
+  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOn ? ' music-on' : '')} data-st=${s.c} data-track=${i}
     aria-label=${s.name + L(' Gleis ', ' track ') + n} onClick=${e => onClick(e, s.c, i)} onMouseEnter=${e => onClick(e, s.c, i)} onMouseLeave=${onLeave}
     sx=${{ all: 'unset', ...base, ...(muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
       : s.ev ? { bgcolor: '#7C4DFF', color: '#fff' }
-      : musicOff ? { bgcolor: '#DCEBFA', border: '2px solid ' + MUSIC_BLUE, color: MUSIC_BLUE, fontWeight: 500 }
+      : musicOn ? { bgcolor: '#DCEBFA', border: '2px solid ' + MUSIC_BLUE, color: MUSIC_BLUE, fontWeight: 500 }
       : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' }) }}>
     ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : n}<//>`;
 }
