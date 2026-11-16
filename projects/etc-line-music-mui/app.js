@@ -293,11 +293,9 @@ function NotificationSheet({ open, onClose, items, onResume, onKeep }) {
           <${Typography} sx=${{ flex: 1, fontSize: 14, color: 'text.secondary' }}>${L('vor 3 Std.', '3 h ago')}<//>
           ${chip(L('Musik pausiert', 'Music paused'), { bgcolor: '#E0E0E0', color: '#212121' })}
         <//>
-        <${Typography} sx=${{ fontSize: 16 }}>U1, ${n.c}, ${n.at}, ${L('Musik seit 3 Std. pausiert. Wieder starten?', 'Music paused for 3 h. Start it again?')} ${L('Grund', 'Reason')}: ${n.reason}<//>
-        <${Stack} direction="row" justifyContent="center" spacing=${2}>
-          ${btn(L('Pausiert lassen', 'Keep paused'), () => onKeep(n.c), 'notif-keep')}
-          ${btn(L('Musik fortsetzen', 'Resume music'), () => onResume(n.c), 'notif-resume')}
-        <//>
+        <${Typography} sx=${{ fontSize: 16 }}>U1, ${n.c}, ${n.at}, ${L('Musik seit 3 Std. pausiert. Bitte prüfen, ob sie fortgesetzt werden soll.', 'Music paused for 3 h. Please check whether it should be resumed.')} ${L('Grund', 'Reason')}: ${n.reason}<//>
+        ${/* Ignat, 2026-11-16: only hide here — the music is resumed on the line, by hand */ ''}
+        ${btn(L('Ausblenden', 'Hide'), () => onKeep(n.c), 'notif-hide')}
       <//>`)}
       ${SHIFT.map(([w]) => html`<${Box} key=${w} className="notif" sx=${{ py: 1.5 }}>
         <${Box} sx=${{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>${chip(L('Schichtwechsel', 'Shift change'), { bgcolor: '#EEF3B5', color: '#6B6B1E' })}<//>
