@@ -94,16 +94,15 @@ const musicNow = (s, st) => st.music === 'none' ? 'none'   // Ignat, 2026-11-13:
   : st.music;   // Ignat, 2026-11-11: no schedule on this screen — paused or playing
 
 /* ── chrome ───────────────────────────────────────────────────────── */
-function VariantBar({ v, setV, role, setRole }) {
-  const seg = (items, val, set, idp) => html`<${Box} sx=${{ display: 'flex', gap: .5, bgcolor: 'rgba(255,255,255,.1)', borderRadius: '6px', p: '3px' }}>
-    ${items.map(([k, l]) => html`<${Box} key=${k} component="button" id=${idp + k} onClick=${() => set(k)}
-      sx=${{ all: 'unset', cursor: 'pointer', px: 1.5, py: .6, borderRadius: '4px', fontSize: 14,
-             color: val === k ? '#2B2B2B' : 'rgba(255,255,255,.8)', bgcolor: val === k ? '#fff' : 'transparent' }}>${l}<//>`)}<//>`;
-  const lab = t => html`<${Box} component="span" sx=${{ opacity: .75, textTransform: 'uppercase', fontSize: 14 }}>${t}<//>`;
+function VariantBar({ v, setV }) {
+  const items = [[1, L('1 · Musik im Liniensicht', '1 · Music on the line view')], [2, L('2 · Eigene Musikansicht', '2 · Separate music view')]];
   return html`<${Box} className="variant-switch" sx=${{ display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: '#2B2B2B', color: '#fff', px: 2.5, py: 1 }}>
-    ${lab(L('Variante', 'Variant'))}${seg([[1, L('1 · Eigener Button', '1 · Own button')], [2, L('2 · Auswahl im Dialog', '2 · Choice in dialog')]], v, setV, 'vs-')}
-    <${Box} sx=${{ width: 16 }} />
-    ${lab(L('Rolle', 'Role'))}${seg([['fgi', 'FGI'], ['admin', 'Admin Jukebox'], ['other', L('Andere', 'Other')]], role, setRole, 'role-')}
+    <${Box} component="span" sx=${{ opacity: .75, textTransform: 'uppercase', fontSize: 14 }}>${L('Variante', 'Variant')}<//>
+    <${Box} sx=${{ display: 'flex', gap: .5, bgcolor: 'rgba(255,255,255,.1)', borderRadius: '6px', p: '3px' }}>
+      ${items.map(([k, l]) => html`<${Box} key=${k} component="button" id=${'vs-' + k} onClick=${() => setV(k)}
+        sx=${{ all: 'unset', cursor: 'pointer', px: 1.5, py: .6, borderRadius: '4px', fontSize: 14,
+               color: v === k ? '#2B2B2B' : 'rgba(255,255,255,.8)', bgcolor: v === k ? '#fff' : 'transparent' }}>${l}<//>`)}
+    <//>
   <//>`;
 }
 
@@ -137,22 +136,32 @@ function TopBar({ lang, setLang, unread, onBell }) {
 /* ── the line ─────────────────────────────────────────────────────── */
 const MUTE_ORANGE = '#E8792E';
 const MUSIC_BLUE = '#1976D2';
-function TrackBox({ s, st, i, onClick, onLeave, showMusic }) {
-  const muted = st.mute && st.mute.tracks.includes(i);
-  // Ignat, 2026-11-13: paused music looks like the mute square, in blue — and keeps the track number
-  const m = musicNow(s, st), musicOn = showMusic && !muted && !s.ev && m === 'playing';   // Ignat, 2026-11-16: blue = music playing; events and the mute win
-  const n = s.tracks[i];
+/* mode: 'overlay' (variant 1, music shown) · 'none' (no music info) · 'music' (variant 2 music view:
+   only the music state, no mute / no events — Ignat, 2026-11-16) */
+const MUSIC_LOOK = {
+  playing: { bgcolor: '#DCEBFA', border: '2px solid #1976D2', color: '#1976D2', fontWeight: 500 },
+  paused:  { bgcolor: '#E0E0E0', border: '2px solid #616161', color: '#424242', fontWeight: 500 },
+  none:    { bgcolor: '#fff', border: '1px dashed #9E9E9E', color: '#757575' },
+};
+function TrackBox({ s, st, i, onClick, onLeave, mode }) {
+  const m = musicNow(s, st), n = s.tracks[i];
+  const muted = mode !== 'music' && st.mute && st.mute.tracks.includes(i);
+  const ev = mode !== 'music' && s.ev;
+  const musicOn = mode === 'overlay' && !muted && !ev && m === 'playing';   // blue = playing; events and the mute win
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
-  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOn ? ' music-on' : '')} data-st=${s.c} data-track=${i}
+  const look = mode === 'music' ? MUSIC_LOOK[m]
+    : muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
+    : ev ? { bgcolor: '#7C4DFF', color: '#fff' }
+    : musicOn ? MUSIC_LOOK.playing
+    : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' };
+  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOn ? ' music-on' : '') + (mode === 'music' ? ' mv-' + m : '')}
+    data-st=${s.c} data-track=${i}
     aria-label=${s.name + L(' Gleis ', ' track ') + n} onClick=${e => onClick(e, s.c, i)} onMouseEnter=${e => onClick(e, s.c, i)} onMouseLeave=${onLeave}
-    sx=${{ all: 'unset', ...base, ...(muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
-      : s.ev ? { bgcolor: '#7C4DFF', color: '#fff' }
-      : musicOn ? { bgcolor: '#DCEBFA', border: '2px solid ' + MUSIC_BLUE, color: MUSIC_BLUE, fontWeight: 500 }
-      : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' }) }}>
+    sx=${{ all: 'unset', ...base, ...look }}>
     ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : n}<//>`;
 }
 
-function LineDiagram({ state, onTrack, onLeave, showMusic }) {
+function LineDiagram({ state, onTrack, onLeave, mode }) {
   return html`<${Box} id="lineDiagram" sx=${{ display: 'grid', gridTemplateColumns: `repeat(${STATIONS.length}, 1fr)`, mx: 2 }}>
     ${STATIONS.map(s => html`<${Box} key=${s.c} sx=${{ bgcolor: '#8FA963', color: '#fff', fontWeight: 700, fontSize: 14, textAlign: 'center',
         height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'pre-line' }}>${s.c.replace(' / ', ' /\n')}<//>`)}
@@ -161,7 +170,7 @@ function LineDiagram({ state, onTrack, onLeave, showMusic }) {
       return html`<${Box} key=${s.c} className="st-col" data-st=${s.c} data-music=${m}
         sx=${{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, pt: 2, pb: 2, borderTop: '1px solid #8A94A6' }}>
         ${s.tracks.map((_, i) => html`<${Box} key=${i} sx=${{ position: 'relative' }}>
-          <${TrackBox} s=${s} st=${st} i=${i} onClick=${onTrack} onLeave=${onLeave} showMusic=${showMusic} />
+          <${TrackBox} s=${s} st=${st} i=${i} onClick=${onTrack} onLeave=${onLeave} mode=${mode} />
         <//>`)}
         <${Stack} spacing=${.5} alignItems="center" sx=${{ mt: .5 }}>${s.xfer.map(l => html`<${LineBadge} key=${l} line=${l} />`)}<//>
       <//>`; })}
@@ -327,7 +336,10 @@ function EventTables() {
 function App() {
   // Ignat, 2026-11-11: two buttons it is (option 1), and every user may manage the music —
   // no variant switch, no roles
-  const variant = 1;
+  // Ignat, 2026-11-16: two variants again — 1 music on the line view, 2 a separate music view
+  const [layout, setLayoutRaw] = useState(() => location.hash === '#v2' ? 2 : 1);
+  const setLayout = n => { setLayoutRaw(n); history.replaceState(null, '', '#v' + n); setPop(null); };
+  const variant = 1;   // the card keeps the two buttons in both
   const [lang, setLangRaw] = useState(() => localStorage.getItem('pims-lang') || 'de');
   LANG = lang;
   const setLang = l => { localStorage.setItem('pims-lang', l); document.documentElement.lang = l; setLangRaw(l); };
@@ -335,6 +347,12 @@ function App() {
   // Ignat, 2026-11-13: one view setting only — show/hide music, saved per user (here: the browser)
   const [showMusic, setShowMusic] = useState(() => localStorage.getItem('pims-show-music') !== '0');
   const toggleMusic = () => setShowMusic(v => { localStorage.setItem('pims-show-music', v ? '0' : '1'); return !v; });
+  const [musicView, setMusicView] = useState(false);   // variant 2 always opens on the default view
+  const mv = layout === 2 && musicView;
+  const mode = layout === 2 ? (musicView ? 'music' : 'none') : (showMusic ? 'overlay' : 'none');
+  const btnOn = layout === 2 ? musicView : showMusic;
+  const btnLabel = layout === 2 ? (musicView ? L('Standardansicht', 'Default view') : L('Musikansicht', 'Music view'))
+    : (showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music'));
   const [state, setState] = useState(SEED);
   const [pop, setPop] = useState(null);
   const [dlg, setDlg] = useState(null);
@@ -364,6 +382,7 @@ function App() {
   };
 
   return html`<${Box} sx=${{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <${VariantBar} v=${layout} setV=${setLayout} />
     <${TopBar} lang=${lang} setLang=${setLang} unread=${reminders.length > 0 && !seen} onBell=${() => { setPop(null); setSheet(true); setSeen(true); }} />
     <${Box} sx=${{ display: 'flex' }}>
       <${Box} id="lineRail" sx=${{ width: 56, bgcolor: '#fff', borderRight: '1px solid #E0E0E0', py: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.25 }}>
@@ -375,14 +394,17 @@ function App() {
           <${Box} sx=${{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1.5, mb: 2 }}>
             <${LineBadge} line="U1" big /><${Typography} sx=${{ fontSize: 22 }} id="lineTitle">U Uhlandstraße - S+U Warschauer Straße<//>
             <${Box} sx=${{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)' }}>
-              <${Tooltip} title=${showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music')}>
-                <${IconButton} id="btnMusicView" aria-pressed=${showMusic} onClick=${toggleMusic}
-                  aria-label=${showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music')}
-                  sx=${{ color: '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>${showMusic ? 'music_off' : 'music_note'}<//><//>
+              <${Tooltip} title=${btnLabel}>
+                <${IconButton} id="btnMusicView" aria-pressed=${btnOn} onClick=${layout === 2 ? () => { setMusicView(v => !v); setPop(null); } : toggleMusic}
+                  aria-label=${btnLabel} sx=${{ color: '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>${btnOn ? 'music_off' : 'music_note'}<//><//>
               <//>
             <//>
           <//>
-          <${LineDiagram} state=${state} showMusic=${showMusic} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
+          ${mv ? html`<${Stack} direction="row" spacing=${3} justifyContent="center" id="musicLegend" sx=${{ mb: 1.5, fontSize: 14 }}>
+            ${[['playing', L('Musik läuft', 'Music playing')], ['paused', L('Musik pausiert', 'Music paused')], ['none', L('Keine Musik eingerichtet', 'No music set up')]].map(([k, l]) => html`
+              <${Stack} key=${k} direction="row" spacing=${1} alignItems="center"><${Box} sx=${{ width: 18, height: 18, borderRadius: '2px', ...MUSIC_LOOK[k], border: MUSIC_LOOK[k].border }} /><span>${l}</span><//>`)}
+          <//>` : null}
+          <${LineDiagram} state=${state} mode=${mode} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
         <//>
         <${EventTables} />
       <//>
