@@ -139,9 +139,13 @@ const MUSIC_BLUE = '#1976D2';
 /* mode: 'overlay' (variant 1, music shown) · 'none' (no music info) · 'music' (variant 2 music view:
    only the music state, no mute / no events — Ignat, 2026-11-16) */
 const MUSIC_LOOK = {
-  playing: { bgcolor: '#DCEBFA', border: '2px solid #1976D2', color: '#1976D2', fontWeight: 500 },
-  paused:  { bgcolor: '#E0E0E0', border: '2px solid #616161', color: '#424242', fontWeight: 500 },
-  none:    { bgcolor: '#fff', border: '1px dashed #9E9E9E', color: '#757575' },
+  playing: { bgcolor: '#DCEBFA', border: '2px solid #1976D2', color: '#1976D2', fontWeight: 500 },   // variant 1 overlay
+};
+// Ignat, 2026-11-16: music view — grey = not set up, light blue = paused, blue = playing
+const MUSIC_VIEW = {
+  playing: { bgcolor: '#1976D2', border: '1px solid #1976D2', color: '#fff', fontWeight: 500 },
+  paused:  { bgcolor: '#BBDEFB', border: '1px solid #64B5F6', color: '#0D47A1', fontWeight: 500 },
+  none:    { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' },
 };
 function TrackBox({ s, st, i, onClick, onLeave, mode }) {
   const m = musicNow(s, st), n = s.tracks[i];
@@ -149,7 +153,7 @@ function TrackBox({ s, st, i, onClick, onLeave, mode }) {
   const ev = mode !== 'music' && s.ev;
   const musicOn = mode === 'overlay' && !muted && !ev && m === 'playing';   // blue = playing; events and the mute win
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
-  const look = mode === 'music' ? MUSIC_LOOK[m]
+  const look = mode === 'music' ? MUSIC_VIEW[m]
     : muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
     : ev ? { bgcolor: '#7C4DFF', color: '#fff' }
     : musicOn ? MUSIC_LOOK.playing
@@ -189,7 +193,9 @@ function MusicInfo({ s, st }) {
       : head(m === 'none' ? L('nicht eingerichtet', 'not set') : L('läuft', 'playing'))}<//>`;
 }
 
-function TrackPopover({ pop, state, variant, role, onClose, open, hold, release }) {
+function TrackPopover({ pop, state, variant, role, onClose, open, hold, release, mode }) {
+  // Ignat, 2026-11-16 (variant 2): music view card = music only; events view card = no music
+  const showEv = mode !== 'music', showMus = mode !== 'events';
   if (!pop) return null;
   const s = BY[pop.c], st = state[pop.c], m = musicNow(s, st);
   // Ignat, 2026-11-11: pausing works despite the schedule — at night FGI can pause for the next day
@@ -201,7 +207,7 @@ function TrackPopover({ pop, state, variant, role, onClose, open, hold, release 
     <${Paper} onMouseEnter=${hold} onMouseLeave=${release}
       sx=${{ p: 2, width: 340, boxShadow: '0 4px 16px rgba(0,0,0,.18)', border: '1px solid #E0E0E0', borderRadius: 1 }}>
     <${Typography} sx=${{ fontWeight: 700, fontSize: 16, mb: 1 }} id="popTitle">${s.name} (${s.c}) · ${L('Gleis', 'Track')} ${s.tracks[pop.i]}<//>
-    ${s.ev ? html`<${Box} className="event-card" sx=${{ bgcolor: '#E8F5E9', borderRadius: 1, p: 1.5, mb: 1.5, '& p': { fontSize: 16 } }}>
+    ${showEv && s.ev ? html`<${Box} className="event-card" sx=${{ bgcolor: '#E8F5E9', borderRadius: 1, p: 1.5, mb: 1.5, '& p': { fontSize: 16 } }}>
       <${Typography}><b>Dano / Name:</b><//>
       <${Typography}><b>${L('Grund', 'Reason')}:</b> ${L('Baumaßnahme', 'Construction work')}<//>
       <${Typography}><b>${L('Startdatum', 'Start date')}:</b> 09.11.2026 03:30<//>
@@ -209,12 +215,12 @@ function TrackPopover({ pop, state, variant, role, onClose, open, hold, release 
       <${Typography} component="div"><b>Status:</b> <${Chip} label=${L('Aktiv', 'Active')} sx=${{ bgcolor: '#CDE6CB', color: '#2E6930', fontSize: 14, ml: .5 }} /><//>
       <${Button} variant="outlined" fullWidth sx=${{ mt: 1.5 }}>${L('Ereignis anzeigen', 'View event')}<//>
     <//>` : null}
-    ${st.mute ? html`<${Typography} className="mute-reason" sx=${{ fontSize: 16 }}><b>${L('Grund', 'Reason')}:</b> ${st.mute.reason}<//>` : null}
-    <${MusicInfo} s=${s} st=${st} />
+    ${showEv && st.mute ? html`<${Typography} className="mute-reason" sx=${{ fontSize: 16 }}><b>${L('Grund', 'Reason')}:</b> ${st.mute.reason}<//>` : null}
+    ${showMus ? html`<${MusicInfo} s=${s} st=${st} />` : null}
     <${Stack} spacing=${1} sx=${{ mt: 2 }}>
-      <${Button} variant="outlined" id="btnMute" onClick=${() => open(st.mute ? 'unmute' : variant === 2 ? 'combo' : 'mute')}
-        sx=${{ color: MUTE_ORANGE, borderColor: '#F0B58D', '&:hover': { borderColor: MUTE_ORANGE, bgcolor: '#FFF6EF' } }}>${L('Stummschaltung', 'Mute')}<//>
-      ${variant === 1 && canMusic ? html`<${Button} variant="outlined" id="btnMusic"
+      ${showEv ? html`<${Button} variant="outlined" id="btnMute" onClick=${() => open(st.mute ? 'unmute' : variant === 2 ? 'combo' : 'mute')}
+        sx=${{ color: MUTE_ORANGE, borderColor: '#F0B58D', '&:hover': { borderColor: MUTE_ORANGE, bgcolor: '#FFF6EF' } }}>${L('Stummschaltung', 'Mute')}<//>` : null}
+      ${showMus && variant === 1 && canMusic ? html`<${Button} variant="outlined" id="btnMusic"
         startIcon=${html`<${Icon} sx=${{ fontSize: 20 }}>${m === 'paused' ? 'music_note' : 'music_off'}<//>`}
         onClick=${() => open(m === 'paused' ? 'musicStart' : 'musicPause')}
         sx=${{ color: '#424242', borderColor: '#BDBDBD', '&:hover': { borderColor: '#757575', bgcolor: '#F5F5F5' } }}>
@@ -400,16 +406,12 @@ function App() {
               <//>
             <//>
           <//>
-          ${mv ? html`<${Stack} direction="row" spacing=${3} justifyContent="center" id="musicLegend" sx=${{ mb: 1.5, fontSize: 14 }}>
-            ${[['playing', L('Musik läuft', 'Music playing')], ['paused', L('Musik pausiert', 'Music paused')], ['none', L('Keine Musik eingerichtet', 'No music set up')]].map(([k, l]) => html`
-              <${Stack} key=${k} direction="row" spacing=${1} alignItems="center"><${Box} sx=${{ width: 18, height: 18, borderRadius: '2px', ...MUSIC_LOOK[k], border: MUSIC_LOOK[k].border }} /><span>${l}</span><//>`)}
-          <//>` : null}
           <${LineDiagram} state=${state} mode=${mode} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
         <//>
         <${EventTables} />
       <//>
     <//>
-    <${TrackPopover} pop=${pop} state=${state} variant=${variant} role=${role} onClose=${() => setPop(null)} hold=${hold} release=${release}
+    <${TrackPopover} pop=${pop} state=${state} variant=${variant} mode=${layout === 2 ? (musicView ? 'music' : 'events') : 'all'} role=${role} onClose=${() => setPop(null)} hold=${hold} release=${release}
       open=${kind => { setDlg({ kind, c: pop.c, i: pop.i }); setPop(null); }} />
     <${NotificationSheet} open=${sheet} onClose=${() => setSheet(false)} items=${reminders}
       onKeep=${c => setKept(k => [...k, c])}
