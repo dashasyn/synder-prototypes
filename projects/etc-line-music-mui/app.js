@@ -70,6 +70,10 @@ const STATIONS = [
   { c: 'WA',      name: 'Warschauer Straße', tracks: [1, 2, 3], xfer: ['U3', 'S'] },
 ];
 const BY = Object.fromEntries(STATIONS.map(s => [s.c, s]));
+// Ignat, 2026-11-16: a playing station says what plays — SAMPLE sources
+const SOURCES = [['radio', 'Klassik Radio Berlin'], ['playlist', 'Weihnachten 2026'], ['track', 'Vivaldi — Frühling'], ['radio', 'radioeins'], ['playlist', 'Klassik Vormittag']];
+const SRC_LABEL = { radio: ['Radio', 'Radio'], playlist: ['Playlist', 'Playlist'], track: ['Einzeltitel', 'Single track'] };
+const sourceOf = c => SOURCES[STATIONS.findIndex(s => s.c === c) % SOURCES.length];
 const ME = 'M. Krüger';   // the signed-in FGI user (sample)
 
 /* station state: the existing mute (announcements) and the music, kept apart */
@@ -190,7 +194,8 @@ function MusicInfo({ s, st }) {
   return html`<${Box} className="music-info" data-music=${m} sx=${{ mt: 1.5 }}>
     ${m === 'paused' ? html`${head(html`${L('pausiert', 'paused')} · ${st.pause.by} · ${st.pause.at}`)}
       ${line(html`<b>${L('Grund', 'Reason')}:</b> ${st.pause.reason}`, 'music-reason')}`
-      : head(m === 'none' ? L('nicht eingerichtet', 'not set') : L('läuft', 'playing'))}<//>`;
+      : m === 'none' ? head(L('nicht eingerichtet', 'not set'))
+      : html`${head(L('läuft', 'playing'))}${(([t, n]) => line(html`<b>${L(SRC_LABEL[t][0], SRC_LABEL[t][1])}:</b> ${n}`, 'music-source'))(sourceOf(s.c))}`}<//>`;
 }
 
 function TrackPopover({ pop, state, variant, role, onClose, open, hold, release, mode }) {
