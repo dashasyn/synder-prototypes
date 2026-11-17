@@ -37,6 +37,12 @@ header{display:flex;align-items:center;gap:10px;padding:4px 0 12px}
 .opt:active{background:#f0f2ee}
 .opt.right{border-color:var(--green);background:var(--green-bg)}
 .opt.wrong{border-color:var(--red);background:var(--red-bg)}
+.typein{width:100%;border:1.5px solid var(--line);background:var(--card);border-radius:12px;padding:15px 16px;font:inherit;font-size:20px;color:var(--ink)}
+.typein:focus{outline:none;border-color:var(--accent)}
+.typein.right{border-color:var(--green);background:var(--green-bg)}
+.typein.wrong{border-color:var(--red);background:var(--red-bg)}
+.keys{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.keys button{flex:1 0 calc(11% - 6px);min-width:34px;border:1.5px solid var(--line);background:var(--card);border-radius:10px;padding:10px 0;font:inherit;font-size:18px;color:var(--ink)}
 .opt:disabled{color:var(--ink);opacity:1}
 .next{margin-top:14px;width:100%;border:none;background:var(--accent);color:#fff;border-radius:12px;padding:16px;font:inherit;font-size:17px;font-weight:600}
 .hidden{display:none!important}
@@ -188,6 +194,11 @@ header{display:flex;align-items:center;gap:10px;padding:4px 0 12px}
       <div class="hint hidden" id="vHint"></div>
     </div>
     <div class="opts" id="vopts"></div>
+    <div id="vtype" class="hidden">
+      <input class="typein" id="vInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" placeholder="Type the verb">
+      <div class="keys" id="vKeys"></div>
+      <button class="next" id="vCheck">Check</button>
+    </div>
     <button class="next hidden" id="vNext">Next</button>
   </section>
 
@@ -474,8 +485,14 @@ const VLEVELS=[
   {t:"Past",d:"vakar / praeitą savaitę — valgiau, valgei, valgė",f:(fr,t)=>t===1&&!VERB[fr.v].refl},
   {t:"Future",d:"rytoj / kitą savaitę — valgysiu, valgysi, valgys",f:(fr,t)=>t===2&&!VERB[fr.v].refl},
   {t:"All three tenses",d:"present, past and future mixed",f:fr=>!VERB[fr.v].refl},
-  {t:"Reflexive verbs · advanced",d:"mokausi, mokiausi, mokysiuosi",f:fr=>VERB[fr.v].refl}
+  {t:"Reflexive verbs · advanced",d:"mokausi, mokiausi, mokysiuosi",f:fr=>VERB[fr.v].refl},
+  {t:"Write it · all tenses",d:"same sentences, type the form yourself",f:fr=>!VERB[fr.v].refl,w:1},
+  {t:"Write it · reflexive",d:"type mokausi, mokiausi, mokysiuosi",f:fr=>VERB[fr.v].refl,w:1}
 ];
+for(const ch of "ąčęėįšųūž"){const b=document.createElement("button");b.textContent=ch;b.onmousedown=e=>e.preventDefault();
+  b.onclick=()=>{const i=$("vInput");if(i.readOnly)return;const s=i.selectionStart??i.value.length,e=i.selectionEnd??s;i.value=i.value.slice(0,s)+ch+i.value.slice(e);i.focus();i.setSelectionRange(s+1,s+1)};$("vKeys").appendChild(b)}
+$("vCheck").onclick=()=>{const i=$("vInput");if(!i.readOnly&&i.value.trim())vPick(i.value.trim().toLowerCase(),null)};
+$("vInput").onkeydown=e=>{if(e.key==="Enter"){e.preventDefault();if($("vInput").readOnly)vNext();else $("vCheck").click()}};
 function enVerb(fr,t,p){
   const third=p===2||p===3, plural=p>=4;
   if(fr.eb==="be"){
@@ -577,6 +594,10 @@ function vAsk(){
   const any=shuffle([].concat(...v.t));
   for(const x of any)if(x!==correct&&!pool.includes(x))pool.push(x);
   pool=[...new Set(pool)];
+  const typing=!!VLEVELS[vstartLevel-1].w;
+  $("vopts").classList.toggle("hidden",typing);$("vtype").classList.toggle("hidden",!typing);
+  $("vNext").classList.add("hidden");
+  if(typing){const i=$("vInput");i.value="";i.readOnly=false;i.className="typein";$("vCheck").classList.remove("hidden");i.focus();return}
   const opts=shuffle([correct,...pool.slice(0,3)]);
   const box=$("vopts");box.innerHTML="";
   for(const o of opts){const b=document.createElement("button");b.className="opt";b.textContent=o;b.onclick=()=>vPick(o,b);box.appendChild(b)}
@@ -586,7 +607,8 @@ $("vHintBtn").onclick=()=>{$("vHint").classList.remove("hidden");$("vHintBtn").c
 function vPick(o,btn){
   const it=vcur,v=VERB[it.fr.v],correct=v.t[it.t][PIDX[it.p]],ok=o===correct;
   for(const b of $("vopts").children){b.disabled=true;if(b.textContent===correct)b.classList.add("right")}
-  if(!ok)btn.classList.add("wrong");
+  if(!ok&&btn)btn.classList.add("wrong");
+  if(!btn){const i=$("vInput");i.readOnly=true;i.classList.add(ok?"right":"wrong");$("vCheck").classList.add("hidden")}
   $("vSent").innerHTML=vSentence(it,correct,ok?"right":"wrong");
   const key=m=>m.f===it.fr.i&&m.t===it.t&&m.p===it.p&&m.lv===vstartLevel;
   if(ok){vright++;S.vmiss=S.vmiss.filter(m=>!key(m))}
