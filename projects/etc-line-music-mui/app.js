@@ -169,14 +169,14 @@ function TrackBox({ s, st, i, onClick, onLeave, mode }) {
     ${muted ? html`<${Icon} sx=${{ fontSize: 18 }}>volume_off<//>` : n}<//>`;
 }
 
-function LineDiagram({ state, onTrack, onLeave, mode }) {
+function LineDiagram({ state, onTrack, onLeave, mode, focus }) {
   return html`<${Box} id="lineDiagram" sx=${{ display: 'grid', gridTemplateColumns: `repeat(${STATIONS.length}, 1fr)`, mx: 2 }}>
     ${STATIONS.map(s => html`<${Box} key=${s.c} sx=${{ bgcolor: '#8FA963', color: '#fff', fontWeight: 700, fontSize: 14, textAlign: 'center',
         height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'pre-line' }}>${s.c.replace(' / ', ' /\n')}<//>`)}
     ${STATIONS.map(s => {
       const st = state[s.c], m = musicNow(s, st);
-      return html`<${Box} key=${s.c} className="st-col" data-st=${s.c} data-music=${m}
-        sx=${{ position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, pt: 2, pb: 2, borderTop: '1px solid #8A94A6' }}>
+      return html`<${Box} key=${s.c} className=${'st-col' + (focus === s.c ? ' focused' : '')} data-st=${s.c} data-music=${m}
+        sx=${{ ...(focus === s.c ? { bgcolor: '#E3F2FD', transition: 'background-color .6s' } : { transition: 'background-color .6s' }), position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, pt: 2, pb: 2, borderTop: '1px solid #8A94A6' }}>
         ${s.tracks.map((_, i) => html`<${Box} key=${i} sx=${{ position: 'relative' }}>
           <${TrackBox} s=${s} st=${st} i=${i} onClick=${onTrack} onLeave=${onLeave} mode=${mode} />
         <//>`)}
@@ -192,7 +192,7 @@ function MusicInfo({ s, st }) {
   const line = (t, cls) => html`<${Typography} className=${cls} sx=${{ fontSize: 16 }}>${t}<//>`;
   const head = t => line(html`<b>${L('Musik', 'Music')}:</b> ${t}`, 'music-state');
   return html`<${Box} className="music-info" data-music=${m} sx=${{ mt: 1.5 }}>
-    ${m === 'paused' ? html`${head(html`${L('pausiert', 'paused')} · ${st.pause.by} · ${st.pause.at}`)}
+    ${m === 'paused' ? html`${head(html`${L('pausiert', 'paused')} · ${st.pause.at}`)}
       ${line(html`<b>${L('Grund', 'Reason')}:</b> ${st.pause.reason}`, 'music-reason')}`
       : m === 'none' ? head(L('nicht eingerichtet', 'not set'))
       : html`${head(L('läuft', 'playing'))}${(([t, n]) => line(html`<b>${L(SRC_LABEL[t][0], SRC_LABEL[t][1])}:</b> ${n}`, 'music-source'))(sourceOf(s.c))}`}<//>`;
@@ -225,7 +225,7 @@ function TrackPopover({ pop, state, variant, role, onClose, open, hold, release,
     <${Stack} spacing=${1} sx=${{ mt: 2 }}>
       ${showEv ? html`<${Button} variant="outlined" id="btnMute" onClick=${() => open(st.mute ? 'unmute' : variant === 2 ? 'combo' : 'mute')}
         sx=${{ color: MUTE_ORANGE, borderColor: '#F0B58D', '&:hover': { borderColor: MUTE_ORANGE, bgcolor: '#FFF6EF' } }}>${L('Stummschaltung', 'Mute')}<//>` : null}
-      ${showMus && variant === 1 && canMusic ? html`<${Button} variant="outlined" id="btnMusic"
+      ${/* Ignat, 2026-11-18: also in the events view, under Stummschaltung */ ''}${variant === 1 && canMusic ? html`<${Button} variant="outlined" id="btnMusic"
         startIcon=${html`<${Icon} sx=${{ fontSize: 20 }}>${m === 'paused' ? 'music_note' : 'music_off'}<//>`}
         onClick=${() => open(m === 'paused' ? 'musicStart' : 'musicPause')}
         sx=${{ color: '#424242', borderColor: '#BDBDBD', '&:hover': { borderColor: '#757575', bgcolor: '#F5F5F5' } }}>
@@ -284,7 +284,7 @@ function ActionDialog({ dlg, state, role, onClose, onApply }) {
    Ignat, 2026-11-11: the 3-h reminder lives here. The backend raises it; the
    prototype shows one per station paused by someone else. Schichtwechsel items are SAMPLE. */
 const SHIFT = [['U6, Mic'], ['U7, Jt'], ['U3, K - Os']];
-function NotificationSheet({ open, onClose, items, onResume, onKeep }) {
+function NotificationSheet({ open, onClose, items, onResume, onKeep, onGo }) {
   const chip = (label, sx) => html`<${Chip} label=${label} sx=${{ fontSize: 14, height: 28, ...sx }} />`;
   const btn = (label, onClick, id) => html`<${Button} onClick=${onClick} className=${id} sx=${{ display: 'block', mx: 'auto', mt: .5 }}>${label}<//>`;
   return html`<${Drawer} anchor="right" open=${open} onClose=${onClose} id="notifSheet" PaperProps=${{ sx: { width: 480 } }}>
@@ -300,7 +300,10 @@ function NotificationSheet({ open, onClose, items, onResume, onKeep }) {
         <//>
         <${Typography} sx=${{ fontSize: 16 }}>U1, ${n.c}, ${n.at}, ${L('Musik seit 3 Std. pausiert. Bitte prüfen, ob sie fortgesetzt werden soll.', 'Music paused for 3 h. Please check whether it should be resumed.')} ${L('Grund', 'Reason')}: ${n.reason}<//>
         ${/* Ignat, 2026-11-16: only hide here — the music is resumed on the line, by hand */ ''}
-        ${btn(L('Ausblenden', 'Hide'), () => onKeep(n.c), 'notif-hide')}
+        <${Stack} direction="row" justifyContent="center" spacing=${2}>
+          ${btn(L('Ausblenden', 'Hide'), () => onKeep(n.c), 'notif-hide')}
+          ${btn(L('Zur Linie', 'Go to line'), () => onGo(n.c), 'notif-go')}
+        <//>
       <//>`)}
       ${SHIFT.map(([w]) => html`<${Box} key=${w} className="notif" sx=${{ py: 1.5 }}>
         <${Box} sx=${{ display: 'flex', justifyContent: 'flex-end', mb: 1 }}>${chip(L('Schichtwechsel', 'Shift change'), { bgcolor: '#EEF3B5', color: '#6B6B1E' })}<//>
@@ -356,7 +359,8 @@ function App() {
   // Ignat, 2026-11-13: one view setting only — show/hide music, saved per user (here: the browser)
   const [showMusic, setShowMusic] = useState(() => localStorage.getItem('pims-show-music') !== '0');
   const toggleMusic = () => setShowMusic(v => { localStorage.setItem('pims-show-music', v ? '0' : '1'); return !v; });
-  const [musicView, setMusicView] = useState(false);   // variant 2 always opens on the default view
+  const [musicView, setMusicView] = useState(false);
+  const [focusSt, setFocusSt] = useState(null);   // 'Zur Linie' highlights the station for 3 s   // variant 2 always opens on the default view
   const mv = layout === 2 && musicView;
   const mode = layout === 2 ? (musicView ? 'music' : 'none') : (showMusic ? 'overlay' : 'none');
   const btnOn = layout === 2 ? musicView : showMusic;
@@ -409,7 +413,7 @@ function App() {
               <//>
             <//>
           <//>
-          <${LineDiagram} state=${state} mode=${mode} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
+          <${LineDiagram} state=${state} mode=${mode} focus=${focusSt} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
         <//>
         <${EventTables} />
       <//>
@@ -418,6 +422,9 @@ function App() {
       open=${kind => { setDlg({ kind, c: pop.c, i: pop.i }); setPop(null); }} />
     <${NotificationSheet} open=${sheet} onClose=${() => setSheet(false)} items=${reminders}
       onKeep=${c => setKept(k => [...k, c])}
+      onGo=${c => { setSheet(false); if (layout === 2) setMusicView(true);
+        setFocusSt(c); setTimeout(() => setFocusSt(null), 3000);
+        setTimeout(() => { const el = document.querySelector(`.st-col[data-st="${c}"]`); el && el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 250); }}
       onResume=${c => { patch(c, x => ({ ...x, music: 'playing', pause: null })); setToast(L(`Musik an ${BY[c].name} fortgesetzt.`, `Music at ${BY[c].name} resumed.`)); }} />
     <${ActionDialog} dlg=${dlg} state=${state} role=${role} onClose=${() => setDlg(null)} onApply=${onApply} />
     <${Snackbar} open=${!!toast} autoHideDuration=${2400} message=${toast}
