@@ -34,10 +34,28 @@
   .aw-agent-cell { font-weight: 500; }
   .aw-meta { color: var(--text-secondary); margin-top: 4px; }
   .aw-nowrap { white-space: nowrap; }
+  .aw-empty { padding: 24px; display: flex; flex-direction: column; gap: 24px; }
+  .aw-empty .aw-steps { margin: 0; max-width: none; }
+  .aw-empty-title { font-size: 20px; line-height: 28px; font-weight: 400; margin: 0; color: var(--text-primary); }
+  .aw-examples ul { margin: 4px 0 0; padding-left: 18px; }
+  .aw-examples li + li { margin-top: 4px; }
+  .aw-agent { padding: 0; }
+  .aw-agent-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px; }
+  .aw-agent-title { display: flex; align-items: center; gap: 8px; font-size: 16px; line-height: 24px; font-weight: 500; margin-bottom: 2px; }
+  .aw-task { display: grid; grid-template-columns: minmax(0, 2.2fr) 130px minmax(0, 1.4fr) minmax(0, 1.5fr) minmax(0, 1.5fr); gap: 16px; align-items: center; padding: 12px 16px; border-top: 1px solid var(--border-default); }
+  .aw-task--empty { display: block; }
+  .aw-task-name { font-weight: 500; }
   .aw-hidden { display: none !important; }
 </style>
 </head>
 <body>
+<div class="variant-switch">
+  <span class="vs-label">Start</span>
+  <div class="vs-opts">
+    <button id="vs-1" onclick="setVariant(1)">1 · First visit, no agents</button>
+    <button id="vs-2" onclick="setVariant(2)">2 · With agents and tasks</button>
+  </div>
+</div>
 <div class="synder-app">
   <header class="topbar topbar--app">
     <div class="topbar-org"><span class="sidebar-org-avatar">AC</span><span class="topbar-org-name">Acme Corp</span><span class="material-icons">expand_more</span></div>
@@ -127,7 +145,15 @@ let tasks = [
 ];
 
 const params = new URLSearchParams(location.search);
-if (params.get('state') === 'empty') { agents = []; tasks = []; }
+const SEED = JSON.stringify({ agents, tasks });
+let variant = params.get('state') === 'filled' ? 2 : 1;
+function seed() { const d = JSON.parse(SEED); agents = variant === 1 ? [] : d.agents; tasks = variant === 1 ? [] : d.tasks; }
+seed();
+function setVariant(n) {
+  variant = n; seed();
+  document.querySelectorAll('.variant-switch button').forEach((b, i) => b.classList.toggle('on', i + 1 === n));
+  if (location.hash && location.hash !== '#/') location.hash = '#/'; else render();
+}
 const expanded = {};
 
 /* ---------- Helpers ---------- */
@@ -182,51 +208,55 @@ function pageList() {
         <p class="synder-page-subtitle">Describe a recurring bookkeeping job in plain words. Synder prepares it, runs it on a schedule and reports every record it touched.</p>
       </div>
       <div class="synder-page-actions">
-        ${agents.length ? `<span class="aw-quota">Tasks: ${used()} of ${ALLOWANCE} used <button class="btn-text" onclick="requestMore()">Request more tasks</button></span>` : ''}
-        <a class="btn" href="#/agents/new">New agent</a>
+        ${agents.length ? `<span class="aw-quota">Tasks: ${used()} of ${ALLOWANCE} used <button class="btn-text" onclick="requestMore()">Request more tasks</button></span>
+        <a class="btn" href="#/agents/new">New agent</a>` : ''}
       </div>
     </div>`;
   if (st === 'loading') return header + `<div class="card aw-card">${'<div class="skeleton" style="height:20px;margin:14px 0"></div>'.repeat(6)}</div>`;
   if (st === 'error') return header + `<div class="alert alert-error"><span class="material-icons">error_outline</span><span>[live copy not captured] <button class="btn-text" onclick="location.search=''">Retry</button></span></div>`;
   if (!agents.length) return header + `
-    <div class="card aw-card"><div class="empty-state">
-      <div class="empty-state-title">You have no agents yet</div>
+    <div class="card aw-card aw-empty">
+      <h2 class="aw-empty-title">How AI workflows work</h2>
       <div class="aw-steps">
-        <div><div class="aw-step-num">1</div><div class="aw-step-title">Agent</div><div>Who does the work and what it may access: Synder data, changes, emails and connected integrations.</div></div>
-        <div><div class="aw-step-num">2</div><div class="aw-step-title">Task</div><div>What the agent should do, in plain words, and when: daily, weekly, monthly or on request.</div></div>
-        <div><div class="aw-step-num">3</div><div class="aw-step-title">Run</div><div>One execution of a task. Every run has a report of the records it touched.</div></div>
+        <div><div class="aw-step-num">1</div><div class="aw-step-title">Create an agent</div><div>Choose what it may do: read Synder data, make changes, send emails, use a connected integration. It can do nothing else.</div></div>
+        <div><div class="aw-step-num">2</div><div class="aw-step-title">Give it a task</div><div>Write the job in plain words and pick when it runs: daily, weekly, monthly or on request.</div></div>
+        <div><div class="aw-step-num">3</div><div class="aw-step-title">Check the report</div><div>Every run lists the records it looked at or changed. A dry run first shows what would happen without changing anything.</div></div>
       </div>
-      <a class="btn" href="#/agents/new">New agent</a>
-    </div></div>`;
-
-  const rows = agents.map(a => {
-    const ts = tasksOf(a.id);
-    const open = expanded[a.id] !== false;
-    const head = `<tr data-agent="${a.id}">
-      <td>${ts.length ? `<button class="row-toggle" aria-expanded="${open}" aria-label="Show tasks of ${esc(a.name)}" onclick="toggleAgent(${a.id})"><span class="material-icons">chevron_right</span></button>` : '<span class="row-toggle-spacer"></span>'}<a class="table-link aw-agent-cell" href="#/agents/${a.id}">${esc(a.name)}</a><span class="cell-subtext">${esc(permSummary(a))}</span></td>
-      <td>${chip(a.status)}</td>
-      <td colspan="3">${ts.length ? `${ts.length} task${ts.length === 1 ? '' : 's'}` : 'No tasks yet'}</td>
-      <td class="text-right aw-nowrap"><a class="link link--add" href="#/agents/${a.id}/tasks/new"><span class="material-icons">add</span>Add task</a></td>
-    </tr>`;
-    const kids = open ? ts.map(t => `<tr data-task="${t.id}">
-      <td><span class="row-toggle-spacer"></span><span class="row-toggle-spacer"></span><a class="table-link" href="#/tasks/${t.id}">${esc(t.name)}</a></td>
-      <td>${chip(t.status)}</td>
-      <td>${esc(schedText(t))}</td>
-      <td>${t.next ? esc(t.next) : '–'}</td>
-      <td>${esc(lastText(t))}</td>
-      <td></td>
-    </tr>`).join('') : '';
-    return head + kids;
-  }).join('');
-  return header + `
-    <div class="table-wrap aw-card">
-      <table class="synder-table">
-        <thead><tr><th>Agent / task</th><th>Status</th><th>Schedule</th><th>Next run</th><th>Last run</th><th class="col-actions"><span class="sr-only">Actions</span></th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+      <div class="aw-examples">
+        <div class="aw-step-title">Tasks you could give an agent</div>
+        <ul>
+          <li>Every Monday, list syncs that failed last week with the error and the integration.</li>
+          <li>Every morning, list yesterday’s Stripe payouts that have no matching deposit.</li>
+          <li>At month end, find Stripe fees synced without a fee account.</li>
+        </ul>
+      </div>
+      <div><a class="btn" href="#/agents/new">New agent</a></div>
     </div>`;
+
+  return header + agents.map(a => {
+    const ts = tasksOf(a.id);
+    const taskRows = ts.length ? ts.map(t => `
+      <div class="aw-task" data-task="${t.id}">
+        <a class="table-link aw-task-name" href="#/tasks/${t.id}">${esc(t.name)}</a>
+        <span>${chip(t.status)}</span>
+        <span>${esc(schedText(t))}</span>
+        <span><span class="text-secondary">Next run</span> ${t.next ? esc(t.next) : '–'}</span>
+        <span><span class="text-secondary">Last run</span> ${esc(lastText(t))}</span>
+      </div>`).join('')
+      : `<div class="aw-task aw-task--empty"><span class="text-secondary">No tasks yet. Describe in plain words what this agent should do.</span></div>`;
+    return `
+    <section class="card aw-card aw-agent" data-agent="${a.id}">
+      <div class="aw-agent-head">
+        <div class="aw-agent-text">
+          <div class="aw-agent-title"><a class="table-link" href="#/agents/${a.id}">${esc(a.name)}</a> ${chip(a.status)}</div>
+          <div class="text-secondary">${esc(permSummary(a))}${a.desc ? ` · ${esc(a.desc)}` : ''}</div>
+        </div>
+        <a class="btn-outlined aw-nowrap" href="#/agents/${a.id}/tasks/new">Add task</a>
+      </div>
+      ${taskRows}
+    </section>`;
+  }).join('');
 }
-function toggleAgent(id) { expanded[id] = expanded[id] === false; render(); }
 function requestMore() { toast('[live copy not captured]', 'success'); }
 
 /* ---------- Page 2a: Agent overview ---------- */
@@ -492,6 +522,7 @@ function render() {
   $('#page').innerHTML = html;
   window.scrollTo(0, 0);
 }
+document.getElementById('vs-' + variant).classList.add('on');
 window.addEventListener('hashchange', render);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeSheet(); closeConfirm(); } });
 render();
