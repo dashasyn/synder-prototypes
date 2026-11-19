@@ -21,7 +21,11 @@
   .aw-cols li + li { margin-top: 4px; }
   .aw-examples { margin: 0; padding-left: 18px; }
   .aw-examples li + li { margin-top: 4px; }
-  .aw-agent-head { display: flex; align-items: center; gap: 16px; cursor: pointer; }
+  .aw-agent { background: var(--color-white); border: 1px solid var(--border-default); border-radius: var(--radius-sm); overflow: hidden; }
+  .aw-agent-head { display: flex; align-items: center; gap: 16px; padding: 16px; cursor: pointer; }
+  .aw-agent > table { border-top: 1px solid var(--border-default); }
+  .aw-int { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+  .aw-int-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; }
   .aw-agent-title { display: flex; align-items: center; gap: 8px; font-size: 16px; line-height: 24px; font-weight: 700; color: var(--text-primary); }
   .aw-agent-text { flex: 1; min-width: 0; }
   .aw-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 16px; }
@@ -115,16 +119,21 @@ const WRITE = [
   'Ignore, un-ignore, match and unmatch transaction reconciliation results',
   'Start a transaction reconciliation of an integration'
 ];
-const CONNECTIONS = ['Synder test (STRIPE)', 'Sandbox Company_US_1 (INTUIT)'];
+const CONNECTIONS = {
+  stripe: { name: 'Synder test', provider: 'STRIPE', logo: 'stripe', alias: 'stripe_1', read: null, readNote: 'Read-only Stripe API list and get calls' },
+  shopify: { name: 'acme-store', provider: 'SHOPIFY', logo: 'shopify', alias: 'shopify_1',
+    read: ['One Shopify order', 'Shopify orders in a date range', 'One Shopify refund', 'One Shopify payout', 'Balance transactions of a Shopify payout'] }
+};
+const logo = k => `<img class="integration-logo" src="../../ui-kit/logos/${CONNECTIONS[k].logo}-square.svg" alt="">`;
 const ALLOWANCE = 5;
 
 /* ---------- Fake data ---------- */
 const DATA = {
   agents: [
     { id: 1, name: 'Sync monitor', desc: 'Watches syncs and imports for errors', status: 'Active',
-      read: [0, 2, 3, 6], write: [], email: 'jane.doe@example.com', integrations: [] },
+      read: [0, 2, 3, 6], write: [], email: 'jane.doe@example.com', integrations: [{ key: 'shopify', alias: 'shopify_1', read: [1, 2] }] },
     { id: 2, name: 'Stripe sync fixer for payouts, fees and refunds across all connected Stripe accounts', desc: 'Resyncs Stripe transactions that failed for a known reason', status: 'Active',
-      read: [0, 2, 3], write: [2], email: '', integrations: ['Synder test (STRIPE)'] },
+      read: [0, 2, 3], write: [2], email: '', integrations: [{ key: 'stripe', alias: 'stripe_1', read: [0] }, { key: 'shopify', alias: 'shopify_1', read: [3, 4] }] },
     { id: 3, name: 'Reconciliation reviewer', desc: '', status: 'Disabled', read: [7], write: [], email: '', integrations: [] }
   ],
   tasks: [
@@ -188,7 +197,7 @@ function permSummary(a) {
   if (a.read.length) p.push('Reads Synder data');
   if (a.write.length) p.push('makes changes in Synder');
   if (a.email) p.push('sends emails');
-  if (a.integrations.length) p.push(a.integrations.map(i => i.split(' (')[0]).join(', '));
+  if (a.integrations.length) p.push('reads ' + a.integrations.map(i => CONNECTIONS[i.key].name).join(', '));
   if (!p.length) return 'No permissions';
   const s = p.join(', '); return s[0].toUpperCase() + s.slice(1);
 }
@@ -215,12 +224,12 @@ const rowAttrs = h => `class="row-clickable" tabindex="0" onclick="go('${h}')" o
 
 /* ---------- Page 1: AI Workflows ---------- */
 const SUBTITLE = 'Hand a recurring bookkeeping job to an agent: describe it in your own words, and it runs on a schedule with only the permissions you give it.';
-function taskTable(ts, emptyText) {
-  return `<div class="table-wrap"><table class="synder-table">
+function taskTable(ts, emptyText, flush) {
+  return `${flush ? '' : '<div class="table-wrap">'}<table class="synder-table">
     <thead><tr><th>Task</th><th>Status</th><th>Schedule</th><th>Next run</th><th>Last run</th></tr></thead>
     <tbody>${ts.length ? ts.map(t => `<tr ${rowAttrs('#/tasks/' + t.id)} data-task="${t.id}"><td>${esc(t.name)}</td><td>${chip(effStatus(t))}</td><td>${esc(schedText(t))}</td><td>${esc(nextRun(t))}</td><td>${esc(lastText(t))}</td></tr>`).join('')
       : `<tr><td class="table-empty" colspan="5">${emptyText}</td></tr>`}</tbody>
-  </table></div>`;
+  </table>${flush ? '' : '</div>'}`;
 }
 function pageList() {
   const st = params.get('state');
@@ -253,7 +262,7 @@ function pageList() {
     </section>`;
 
   return header + `<div class="aw-page">${agents.map(a => `
-    <section class="box box--white flex-col gap-16 aw-agent" data-agent="${a.id}">
+    <section class="aw-agent" data-agent="${a.id}">
       <div class="aw-agent-head" role="link" tabindex="0" aria-label="Open agent ${esc(a.name)}" onclick="go('#/agents/${a.id}')" onkeydown="if(event.key==='Enter')go('#/agents/${a.id}')">
         <div class="aw-agent-text">
           <div class="aw-agent-title"><span>${esc(a.name)}</span>${chip(a.status)}</div>
@@ -262,7 +271,7 @@ function pageList() {
         <a class="btn-outlined aw-nowrap" href="#/agents/${a.id}/tasks/new" onclick="event.stopPropagation()">Add task</a>
         <span class="material-icons text-secondary" aria-hidden="true">chevron_right</span>
       </div>
-      ${taskTable(tasksOf(a.id), 'No tasks yet. Describe in plain words what this agent should do.')}
+      ${taskTable(tasksOf(a.id), 'No tasks yet. Describe in plain words what this agent should do.', true)}
     </section>`).join('')}</div>`;
 }
 function requestMore() { toast('[live copy not captured]'); }
@@ -274,7 +283,9 @@ function permBlock(a) {
     <div class="text-bold">Read data in Synder</div><div>${list(a.read, READ)}</div>
     <div class="text-bold">Make changes in Synder</div><div>${list(a.write, WRITE)}</div>
     <div class="text-bold">Send emails</div><div>${a.email ? `One email per run to ${esc(a.email)}` : 'Not allowed'}</div>
-    <div class="text-bold">Integrations</div><div>${a.integrations.length ? esc(a.integrations.join(', ')) : 'None'}</div>
+    <div class="text-bold">Integrations</div><div>${a.integrations.length ? a.integrations.map(i => { const c = CONNECTIONS[i.key];
+      return `<div class="mb-16"><span class="integration-name">${logo(i.key)}${esc(c.name)}</span> <span class="text-secondary">· alias ${esc(i.alias)}</span>
+        <ul>${c.read ? i.read.map(r => `<li>${esc(c.read[r])}</li>`).join('') : `<li>${esc(c.readNote)}</li>`}</ul></div>`; }).join('') : 'None'}</div>
   </div>`;
 }
 function pageAgent(id) {
@@ -317,6 +328,29 @@ function checkGroup(key, label, list, picked) {
       <div class="form-error-msg aw-hidden" id="p-${key}-err">${key === 'read' ? 'Choose what the agent may read' : 'Choose what the agent may change'}</div>
     </div>`;
 }
+function intBlock(i) {
+  const c = CONNECTIONS[i.key];
+  const reads = c.read
+    ? `<label class="synder-checkbox"><input type="checkbox" id="pi-${i.key}" ${i.read.length ? 'checked' : ''} onchange="$('#pi-${i.key}-sub').classList.toggle('aw-hidden', !this.checked)"><span>Read data</span></label>
+       <div class="aw-sub ${i.read.length ? '' : 'aw-hidden'}" id="pi-${i.key}-sub">
+         <label class="synder-checkbox"><input type="checkbox" onchange="document.querySelectorAll('input[name=int-${i.key}]').forEach(x=>x.checked=this.checked)"><span class="text-bold">Select all</span></label>
+         ${c.read.map((r, n) => `<label class="synder-checkbox"><input type="checkbox" name="int-${i.key}" value="${n}" ${i.read.includes(n) ? 'checked' : ''}><span>${esc(r)}</span></label>`).join('')}
+         <div class="form-error-msg aw-hidden" id="pi-${i.key}-err">Choose what the agent may read</div>
+       </div>`
+    : `<label class="synder-checkbox"><input type="checkbox" id="pi-${i.key}" ${i.read.length ? 'checked' : ''}><span>Read data<span class="cell-subtext">${esc(c.readNote)}</span></span></label>`;
+  return `<div class="box box--white flex-col gap-16" data-int="${i.key}">
+    <div class="aw-int-head"><span class="integration-name text-bold">${logo(i.key)}${esc(c.name)}</span><button type="button" class="btn-outlined btn-outlined-error" onclick="removeInt('${i.key}')">Remove</button></div>
+    <div class="form-field" style="width:320px"><label class="form-label" for="pa-${i.key}">Alias</label><input class="input" id="pa-${i.key}" value="${esc(i.alias)}"><div class="form-hint">The name the task uses for this connection</div></div>
+    <div class="aw-checks">${reads}</div>
+  </div>`;
+}
+function intSelect(list) {
+  const left = Object.keys(CONNECTIONS).filter(k => !list.some(i => i.key === k));
+  return `<select class="select" id="p-int" onchange="addInt(this.value)"><option value="">${left.length ? 'Select a connection' : 'All connections added'}</option>${left.map(k => `<option value="${k}">${esc(CONNECTIONS[k].name)} (${CONNECTIONS[k].provider})</option>`).join('')}</select>`;
+}
+let formInts = [];
+function addInt(k) { if (!k) return; formInts.push({ key: k, alias: CONNECTIONS[k].alias, read: CONNECTIONS[k].read ? [] : [0] }); $('#int-add-f').insertAdjacentHTML('beforebegin', intBlock(formInts[formInts.length - 1])); $('#p-int').outerHTML = intSelect(formInts); }
+function removeInt(k) { formInts = formInts.filter(i => i.key !== k); document.querySelector(`[data-int="${k}"]`).remove(); $('#p-int').outerHTML = intSelect(formInts); }
 function pageAgentForm(id) {
   const isNew = id === 'new';
   const a = isNew ? { name: '', desc: '', read: [], write: [], email: '', integrations: [] } : agentById(id);
@@ -324,6 +358,7 @@ function pageAgentForm(id) {
   const ret = params.get('return');
   const back = ret ? `#/tasks/${ret}` : isNew ? '#/' : `#/agents/${a.id}`;
   const ts = isNew ? [] : tasksOf(a.id);
+  formInts = JSON.parse(JSON.stringify(a.integrations));
   return `<div class="aw-page">${crumbs(isNew ? [['AI Workflows', '#/']] : [['AI Workflows', '#/'], [a.name, `#/agents/${a.id}`]])}
     <div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">${isNew ? 'New agent' : 'Edit agent'}</h1></div></div>
     ${ts.length ? `<div class="alert alert-info" id="ag-scope"><span class="material-icons">info_outline</span><span>Changes apply to all ${ts.length} task${ts.length === 1 ? '' : 's'} of this agent: ${ts.map(t => esc(t.name)).join(', ')}.</span></div>` : ''}
@@ -341,8 +376,8 @@ function pageAgentForm(id) {
           <div class="aw-sub ${a.email ? '' : 'aw-hidden'}" id="p-email-sub"><div class="form-field" style="width:480px"><label class="form-label" for="p-rcpt">Recipients</label><input class="input" id="p-rcpt" value="${esc(a.email)}"><div class="form-hint">Members of your organization, separated by commas</div></div></div>
         </div>
       </div>
-      <div class="form-field" style="width:320px"><label class="form-label" for="p-int">Integrations</label>
-        <select class="select" id="p-int"><option value="">No integration</option>${CONNECTIONS.map(c => `<option ${a.integrations.includes(c) ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+      <div class="aw-int" id="int-list"><div class="form-label">Integrations</div>${a.integrations.map(intBlock).join('')}
+        <div class="form-field" style="width:480px" id="int-add-f"><label class="form-label" for="p-int">Add integration</label>${intSelect(a.integrations)}<div class="form-hint">Other platforms appear here once they are connected to Synder.</div></div>
       </div>
     </section>
     <div class="aw-actions"><button class="btn" type="submit">${isNew ? 'Create agent' : 'Save agent'}</button><a class="btn-outlined" href="${back}">Cancel</a></div>
@@ -354,10 +389,18 @@ function saveAgent(e, id) {
   const pick = k => $('#p-' + k).checked ? [...document.querySelectorAll(`input[name=${k}]:checked`)].map(i => +i.value) : [];
   const read = pick('read'), write = pick('write');
   const errs = { name: !name, read: $('#p-read').checked && !read.length, write: $('#p-write').checked && !write.length };
+  let intErr = false;
+  const integrations = formInts.map(i => {
+    const c = CONNECTIONS[i.key], on = $('#pi-' + i.key).checked;
+    const r = !on ? [] : c.read ? [...document.querySelectorAll(`input[name=int-${i.key}]:checked`)].map(x => +x.value) : [0];
+    const bad = on && c.read && !r.length; if (bad) intErr = true;
+    if (c.read) $('#pi-' + i.key + '-err').classList.toggle('aw-hidden', !bad);
+    return { key: i.key, alias: $('#pa-' + i.key).value.trim() || c.alias, read: r };
+  });
   $('#ag-name').classList.toggle('input--error', errs.name); $('#ag-name-err').classList.toggle('aw-hidden', !errs.name);
   $('#p-read-err').classList.toggle('aw-hidden', !errs.read); $('#p-write-err').classList.toggle('aw-hidden', !errs.write);
-  if (errs.name || errs.read || errs.write) { (errs.name ? $('#ag-name') : $(errs.read ? '#p-read' : '#p-write')).focus(); return false; }
-  const data = { name, desc: $('#ag-desc').value.trim(), read, write, email: $('#p-email').checked ? $('#p-rcpt').value.trim() || 'jane.doe@example.com' : '', integrations: $('#p-int').value ? [$('#p-int').value] : [] };
+  if (errs.name || errs.read || errs.write || intErr) { (errs.name ? $('#ag-name') : $(errs.read ? '#p-read' : '#p-write')).focus(); return false; }
+  const data = { name, desc: $('#ag-desc').value.trim(), read, write, email: $('#p-email').checked ? $('#p-rcpt').value.trim() || 'jane.doe@example.com' : '', integrations };
   if (id === 'new') {
     const nid = Math.max(0, ...agents.map(a => a.id)) + 1;
     agents.push({ id: nid, status: 'Active', ...data });
