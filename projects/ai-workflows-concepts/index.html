@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Workflows — concept round: task only, no agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<!-- CONCEPT ROUND (rough, agreed with Ignat 2026-11-20): judged on the idea, not pixels.
+     Kit classes where they fit; layout-only local styles. Text ≥ 14px. -->
+<style>
+  .c-wrap { max-width: 880px; display: flex; flex-direction: column; gap: 16px; }
+  .c-box { background: var(--color-white); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .c-box--soft { background: var(--color-grey-5); }
+  .c-h { margin: 0; font-size: 16px; line-height: 24px; font-weight: 700; color: var(--text-primary); }
+  .c-big { font-size: 20px; line-height: 28px; color: var(--text-primary); margin: 0; }
+  .c-ask { width: 100%; min-height: 96px; font-size: 16px; line-height: 24px; }
+  .c-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .c-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .c-between { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+  .c-perm { display: flex; align-items: flex-start; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border-default); }
+  .c-perm:first-of-type { border-top: 0; }
+  .c-perm .material-icons { color: var(--color-primary); }
+  .c-perm-text { flex: 1; }
+  .c-msg { display: flex; gap: 12px; align-items: flex-start; }
+  .c-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--color-primary-10); color: var(--color-primary); display: grid; place-items: center; flex-shrink: 0; }
+  .c-bubble { flex: 1; }
+  .c-you { align-self: flex-end; max-width: 640px; background: var(--color-primary-10); border-radius: var(--radius-sm); padding: 12px 16px; color: var(--text-primary); }
+  .c-stats { display: flex; gap: 32px; flex-wrap: wrap; }
+  .c-num { font-size: 28px; line-height: 36px; color: var(--text-primary); }
+  .c-recipes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .c-recipe { text-align: left; cursor: pointer; font: inherit; }
+  .c-recipe:hover { border-color: var(--color-primary); }
+  .c-recipe.on { border-color: var(--color-primary); box-shadow: inset 0 0 0 1px var(--color-primary); }
+  .c-steps { display: flex; gap: 8px; align-items: center; color: var(--text-secondary); }
+  .c-steps .on { color: var(--color-primary); font-weight: 700; }
+  .c-note { border-left: 3px solid var(--color-yellow); padding: 8px 12px; background: var(--color-yellow-light); color: var(--text-primary); }
+  .c-hidden { display: none !important; }
+  .c-name-input { font-size: 20px; line-height: 28px; height: 40px; width: 480px; }
+</style>
+</head>
+<body>
+<div class="variant-switch">
+  <span class="vs-label">Concept</span>
+  <div class="vs-opts">
+    <button id="vs-1" onclick="setV(1)">A · Ask, then allow</button>
+    <button id="vs-2" onclick="setV(2)">B · See last month first</button>
+    <button id="vs-3" onclick="setV(3)">C · Pick a recipe</button>
+  </div>
+  <span class="vs-note" id="vs-note"></span>
+</div>
+<div class="synder-app">
+  <header class="topbar topbar--app">
+    <div class="topbar-org"><span class="sidebar-org-avatar">AC</span><span class="topbar-org-name">Acme Corp</span><span class="material-icons">expand_more</span></div>
+    <div class="topbar-right">
+      <div class="topbar-balance"><span>Balance:</span> <b>10,000</b><span class="topbar-meter"><span style="width:96%"></span></span></div>
+      <button class="topbar-icon" aria-label="Notifications"><span class="material-icons">notifications</span></button>
+      <button class="topbar-icon" aria-label="Account"><span class="material-icons">person</span><span class="material-icons topbar-caret">expand_more</span></button>
+    </div>
+  </header>
+  <div class="synder-layout">
+    <nav class="sidebar sidebar--notch" aria-label="Main">
+      <a class="sidebar-item"><span class="material-icons">dashboard</span><span>Dashboard</span></a>
+      <a class="sidebar-item sidebar-item--group"><span class="material-icons">swap_horiz</span><span>Transactions</span><span class="material-icons sidebar-chevron">expand_more</span></a>
+      <a class="sidebar-item active" href="#/"><span class="material-icons">android</span><span>AI workflows</span></a>
+      <a class="sidebar-item"><span class="material-icons">settings</span><span>Settings</span></a>
+    </nav>
+    <main class="synder-page" id="page"></main>
+  </div>
+</div>
+<div class="synder-toast-stack" id="toasts" aria-live="polite"></div>
+
+<script>
+/* ===== What AI would infer (simulated by keywords). Labels from the backend catalog. ===== */
+const RULES = [
+  { re: /stripe/i, key: 'stripe', icon: 'visibility', title: 'Read Stripe', detail: 'Read-only Stripe API list and get calls' },
+  { re: /shopify|payout/i, key: 'shopify', icon: 'visibility', title: 'Read Shopify', detail: 'Shopify payouts and their balance transactions' },
+  { re: /quickbooks|invoice|deposit|qbo/i, key: 'qbo', icon: 'visibility', title: 'Read QuickBooks', detail: 'Read-only QuickBooks Online queries, accounts' },
+  { re: /\b(apply|create|record|match|post)\b/i, key: 'qbo-w', icon: 'edit', title: 'Create payments in QuickBooks', detail: 'Create or update QuickBooks Online records, never delete', write: true },
+  { re: /sync/i, key: 'syncs', icon: 'visibility', title: 'Read Synder syncs', detail: 'Synder syncs by status, company and sync date; one sync with its linked accounting records' },
+  { re: /email|send me|notify/i, key: 'email', icon: 'mail', title: 'Email you after each run', detail: 'One email per run to jane.doe@example.com' }
+];
+const SCHED_RE = [[/every monday|weekly|each week|last week/i, 'Every Monday at 06:00', 'Weekly'], [/month end|end of (the )?month|monthly/i, 'On the 1st, for the previous month', 'At month end'], [/every (day|morning)|daily|yesterday/i, 'Every day at 06:00', 'Daily']];
+function infer(text) {
+  const perms = RULES.filter(r => r.re.test(text));
+  const s = SCHED_RE.find(x => x[0].test(text)) || [null, 'Every day at 06:00', 'Daily'];
+  return { perms, sched: s[1], preset: s[2], name: autoName(text), writes: perms.some(p => p.write) };
+}
+function autoName(text) {
+  const t = text.replace(/^(every|each|at)\s+[a-z ]+?,\s*/i, '').replace(/^(please|can you)\s+/i, '');
+  const known = [[/sync.*fail|fail.*sync/i, 'Failed syncs report'], [/apply .*payments?|payments? .*invoice/i, 'Apply Stripe payments to invoices'], [/payout.*deposit|deposit.*payout/i, 'Payouts without a deposit'], [/fee/i, 'Fee check']];
+  const k = known.find(x => x[0].test(text)); if (k) return k[1];
+  const w = t.split(/\s+/).slice(0, 5).join(' ').replace(/[.,;:]$/, '');
+  return w ? w[0].toUpperCase() + w.slice(1) : 'New task';
+}
+const RECIPES = [
+  { name: 'Apply Stripe payments to invoices', text: 'Every day, find Stripe payments that have an invoice number and apply them to the open invoices in QuickBooks.', who: 'Most used', icon: 'receipt_long' },
+  { name: 'Failed syncs report', text: 'Every Monday, email me the syncs that failed last week with the error and the integration.', who: 'No changes in your books', icon: 'report' },
+  { name: 'Payouts without a deposit', text: 'Every morning, list yesterday’s Shopify payouts that have no matching deposit in QuickBooks and email me.', who: 'No changes in your books', icon: 'savings' },
+  { name: 'Month-end Stripe fee check', text: 'At month end, list Stripe fees that were synced without a fee account and email me.', who: 'No changes in your books', icon: 'event' },
+  { name: 'Unapplied payments digest', text: 'Every Monday, email me QuickBooks payments from Stripe that are not applied to any invoice.', who: 'No changes in your books', icon: 'mark_email_unread' }
+];
+const NOTE = {
+  1: 'A · Ask, then allow — one sentence in, AI shows the plan and asks for exactly the access it needs. Backend: create a hidden agent per task; return missing permissions as a list, not a sentence.',
+  2: 'B · See last month first — the 30-day check dry run (already exists) becomes the approval screen. Backend: hidden agent per task; a customer "approve" step after the check (approval switch exists, today staff-only).',
+  3: 'C · Pick a recipe — Synder-written tasks, one click. Write-your-own falls back to A. Backend: hidden agent per task; stored pre-approved recipes skip AI preparation.'
+};
+
+/* ===== State ===== */
+let V = +(new URLSearchParams(location.search).get('v') || 1);
+let tasks = [];
+let draft = null; // { text, name, perms[], sched, preset, writes, dry }
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const go = h => { location.hash = h; };
+function toast(t) { const el = document.createElement('div'); el.className = 'synder-toast synder-toast-success'; el.innerHTML = `<span class="material-icons">check_circle</span><span>${esc(t)}</span>`; $('#toasts').appendChild(el); setTimeout(() => el.remove(), 4000); }
+function setV(n) { V = n; tasks = []; draft = null; document.querySelectorAll('.variant-switch button').forEach((b, i) => b.classList.toggle('on', i + 1 === n)); $('#vs-note').textContent = ''; if (location.hash && location.hash !== '#/') go('#/'); else render(); }
+
+/* ===== Home: tasks only, no agents ===== */
+function home() {
+  const head = `<div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">AI Workflows</h1>
+    <p class="synder-page-subtitle">Tell Synder a bookkeeping job in your own words. It runs on a schedule and reports every record it touched.</p></div>
+    ${tasks.length ? `<div class="synder-page-actions"><span class="text-secondary">Tasks: ${tasks.length} of 1 used</span><button class="btn" onclick="go('#/new')">New task</button></div>` : ''}</div>`;
+  const note = `<div class="c-note">${esc(NOTE[V])}</div>`;
+  if (!tasks.length) return head + `<div class="c-wrap" style="margin-top:24px">${note}${startBlock()}</div>`;
+  return head + `<div class="c-wrap" style="margin-top:24px">${note}
+    <div class="table-wrap"><table class="synder-table"><thead><tr><th>Task</th><th>Status</th><th>Schedule</th><th>Last result</th></tr></thead><tbody>
+    ${tasks.map(t => `<tr class="row-clickable" tabindex="0" onclick="go('#/task/${t.id}')"><td>${esc(t.name)}</td><td>${t.state === 'ready' ? '<span class="status status-green">Active</span>' : '<span class="status status-blue">Preparing</span>'}</td><td>${esc(t.sched)}</td><td>${esc(t.last || 'Not run yet')}</td></tr>`).join('')}
+    </tbody></table></div></div>`;
+}
+function startBlock() {
+  if (V === 3) return recipesBlock();
+  return `<div class="c-box">
+    <p class="c-big">What should Synder do for you?</p>
+    <textarea class="textarea c-ask" id="ask" placeholder="For example: every day, apply Stripe payments to the open invoices in QuickBooks">${draft ? esc(draft.text) : ''}</textarea>
+    <div class="form-error-msg c-hidden" id="ask-err">Describe the job in a sentence or two</div>
+    <div class="c-chips">${RECIPES.slice(0, 3).map((r, i) => `<button class="btn-outlined" onclick="$('#ask').value=RECIPES[${i}].text">${esc(r.name)}</button>`).join('')}</div>
+    <div class="c-row"><button class="btn" onclick="ask()">${V === 1 ? 'Continue' : 'Show what it would do'}</button><span class="text-secondary">Synder does not share your business information with AI. AI only reads what you write here.</span></div>
+  </div>`;
+}
+function ask() {
+  const text = $('#ask').value.trim();
+  $('#ask-err').classList.toggle('c-hidden', !!text); if (!text) return;
+  draft = { text, ...infer(text), dry: true };
+  go(V === 1 ? '#/plan' : '#/preview');
+}
+
+/* ===== A · Ask, then allow ===== */
+function plan() {
+  if (!draft) return home();
+  const d = draft;
+  return `<div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">New task</h1></div></div>
+  <div class="c-wrap" style="margin-top:24px">
+    <div class="c-you">${esc(d.text)}</div>
+    <div class="c-msg"><div class="c-avatar"><span class="material-icons">auto_awesome</span></div><div class="c-bubble c-box">
+      <div class="c-between"><input class="input c-name-input" id="p-name" value="${esc(d.name)}" aria-label="Task name"><span class="text-secondary">Name suggested by AI, change it if you like</span></div>
+      <div>I’ll ${esc(planSentence(d))}</div>
+      <div class="c-box c-box--soft" style="gap:0">
+        <div class="c-h" style="margin-bottom:4px">To do this I need</div>
+        ${d.perms.length ? d.perms.map((p, i) => `<label class="c-perm"><span class="material-icons">${p.icon}</span><span class="c-perm-text"><b>${esc(p.title)}</b><span class="cell-subtext">${esc(p.detail)}</span></span><span class="synder-checkbox"><input type="checkbox" name="allow" value="${i}" checked aria-label="Allow ${esc(p.title)}"></span></label>`).join('') : '<div class="text-secondary">Nothing beyond reading Synder data.</div>'}
+      </div>
+      <div class="c-row"><span class="material-icons text-secondary">schedule</span><span><b>${esc(d.sched)}</b> · first run is a dry run that changes nothing</span><button class="btn-text" onclick="$('#p-sched').classList.toggle('c-hidden')">Change</button></div>
+      <div id="p-sched" class="c-hidden c-row"><select class="select" id="p-preset" style="width:280px">${['Daily', 'Weekly', 'At month end', 'First working day of the month', 'On request'].map(s => `<option ${s === d.preset ? 'selected' : ''}>${s}</option>`).join('')}</select></div>
+      <div class="c-row"><button class="btn" onclick="allow()">Allow and create task</button><button class="btn-outlined" onclick="go('#/')">Reword</button></div>
+    </div></div>
+  </div>`;
+}
+function planSentence(d) {
+  const p = d.perms.map(x => x.key);
+  if (p.includes('qbo-w')) return 'find Stripe payments with an invoice number and apply each one to its open QuickBooks invoice. Payments without a match are listed for you, not changed.';
+  if (p.includes('syncs') && p.includes('email')) return 'collect last week’s failed syncs with their error and integration, and email you the list. Nothing in your books changes.';
+  if (p.includes('shopify')) return 'compare yesterday’s Shopify payouts with QuickBooks deposits and list the ones without a match. Nothing in your books changes.';
+  return 'do this on schedule and report every record I looked at.';
+}
+function allow() {
+  const allowed = [...document.querySelectorAll('input[name=allow]:checked')].map(i => draft.perms[+i.value]);
+  const preset = $('#p-preset').value;
+  create($('#p-name').value.trim() || draft.name, allowed, preset === draft.preset ? draft.sched : preset);
+}
+
+/* ===== B · See last month first ===== */
+function preview() {
+  if (!draft) return home();
+  const d = draft;
+  const rows = d.writes ? [['Payment pi_3QA1 · 1,204.35', 'Apply to Invoice 1043'], ['Payment pi_3QA4 · 89.00', 'Apply to Invoice 1051'], ['Payment pi_3QB0 · 12.00', 'Skip: no invoice number'], ['Payment pi_3QB7 · 7,450.00', 'Needs your eye: two open invoices match']]
+    : [['Sync #48213 · Charge ch_3Q9x', 'Customer not found in QuickBooks'], ['Sync #48207 · Refund re_1Lk2', 'Account is inactive'], ['Sync #48190 · Payout po_7Hd1', 'Deposit already exists']];
+  return `<div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">${esc(d.name)}</h1><p class="synder-page-subtitle">“${esc(d.text)}”</p></div></div>
+  <div class="c-wrap" style="margin-top:24px">
+    <div class="c-steps"><span>1 Describe</span><span class="material-icons">chevron_right</span><span class="on">2 Check last month</span><span class="material-icons">chevron_right</span><span>3 Schedule</span></div>
+    <div class="c-box">
+      <div class="c-h">If this task had run Oct 21 – Nov 19, it would have</div>
+      <div class="c-stats">${d.writes ? `<div><div class="c-num">42</div><div class="text-secondary">payments applied</div></div><div><div class="c-num">7</div><div class="text-secondary">skipped</div></div><div><div class="c-num">1</div><div class="text-secondary">needs your eye</div></div>` : `<div><div class="c-num">3</div><div class="text-secondary">failed syncs found</div></div><div><div class="c-num">1</div><div class="text-secondary">email sent to you</div></div>`}</div>
+      <div class="table-wrap"><table class="synder-table"><thead><tr><th>Record</th><th>${d.writes ? 'What it would do' : 'What it found'}</th></tr></thead><tbody>${rows.map(r => `<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join('')}</tbody></table></div>
+      <div class="text-secondary">Nothing was changed. This was a dry run on your real data.</div>
+    </div>
+    <div class="c-box c-box--soft"><div class="c-h">It used</div><div class="c-chips">${d.perms.map(p => `<span class="status ${p.write ? 'status-yellow' : 'status-grey'}">${esc(p.title)}</span>`).join('') || '<span class="text-secondary">Synder data only</span>'}</div>
+      ${d.writes ? '<div>When you schedule it, it gets these permissions, including the one that changes your books.</div>' : ''}</div>
+    <div class="c-box"><div class="c-h">Looks right?</div>
+      <div class="c-row"><label class="form-label" for="b-preset" style="margin:0">Run it</label><select class="select" id="b-preset" style="width:280px">${['Daily', 'Weekly', 'At month end', 'First working day of the month', 'On request'].map(s => `<option ${s === d.preset ? 'selected' : ''}>${s}</option>`).join('')}</select><span class="text-secondary">at 06:00</span></div>
+      <div class="c-row"><button class="btn" onclick="create(draft.name, draft.perms, $('#b-preset').value + ' at 06:00', true)">Looks right, schedule it</button><button class="btn-outlined" onclick="go('#/')">Change the description</button></div></div>
+  </div>`;
+}
+
+/* ===== C · Pick a recipe ===== */
+let picked = null;
+function recipesBlock() {
+  return `<div class="c-box"><p class="c-big">Pick a job, or write your own</p>
+    <div class="c-recipes">${RECIPES.map((r, i) => `<button class="c-box c-recipe ${picked === i ? 'on' : ''}" onclick="pick(${i})"><span class="material-icons text-secondary">${r.icon}</span><b>${esc(r.name)}</b><span class="text-secondary">${esc(r.who)}</span></button>`).join('')}
+      <button class="c-box c-recipe c-box--soft" onclick="V=1;document.querySelectorAll('.variant-switch button').forEach((b,i)=>b.classList.toggle('on',i===0));render()"><span class="material-icons text-secondary">edit_note</span><b>Write your own</b><span class="text-secondary">Describe it in a sentence (goes to A)</span></button></div>
+    ${picked !== null ? recipeDetail() : ''}</div>`;
+}
+function pick(i) { picked = i; render(); }
+function recipeDetail() {
+  const r = RECIPES[picked], d = infer(r.text);
+  return `<div class="c-box c-box--soft" id="recipe-detail">
+    <div class="c-h">${esc(r.name)}</div><div>${esc(r.text)}</div>
+    <div class="c-chips">${d.perms.map(p => `<span class="status ${p.write ? 'status-yellow' : 'status-grey'}">${esc(p.title)}</span>`).join('')}</div>
+    <div class="c-row"><span class="material-icons text-secondary">schedule</span><span>${esc(d.sched)} · Written and tested by Synder, starts tomorrow with a dry run</span></div>
+    <div class="c-row"><button class="btn" onclick="create(RECIPES[${picked}].name, infer(RECIPES[${picked}].text).perms, infer(RECIPES[${picked}].text).sched, true)">Use this recipe</button><button class="btn-text" onclick="draft={text:RECIPES[${picked}].text,...infer(RECIPES[${picked}].text),dry:true};V=1;go('#/plan')">Adjust it first</button></div></div>`;
+}
+
+/* ===== Shared: create → results page ===== */
+function create(name, perms, sched, instant) {
+  const id = tasks.length + 1;
+  tasks.push({ id, name, perms, sched, text: draft ? draft.text : (RECIPES[picked] || {}).text, state: instant ? 'ready' : 'preparing', last: null, writes: perms.some(p => p.write) });
+  draft = null; toast('Task created'); go('#/task/' + id);
+}
+function taskPage(id) {
+  const t = tasks.find(x => x.id === +id); if (!t) return home();
+  const ready = t.state === 'ready';
+  return `${'<nav class="text-secondary"><a class="link" href="#/">AI Workflows</a></nav>'}
+  <div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">${esc(t.name)}</h1><p class="synder-page-subtitle">${esc(t.sched)}</p></div>
+    <div class="synder-page-actions"><button class="btn-outlined">Pause</button><button class="btn-outlined">Edit</button></div></div>
+  <div class="c-wrap" style="margin-top:24px">
+    ${ready ? `<div class="c-box"><div class="c-h">What happens next</div>
+      <div class="c-row"><span class="status status-blue">Tomorrow 06:00</span><span>Dry run: shows what it would do, changes nothing. You get the report here.</span></div>
+      <div class="c-row"><span class="status status-green">From Nov 22</span><span>${t.writes ? 'Runs on its own and makes the changes. Pause it any time.' : 'Runs on its own and reports what it found.'}</span></div></div>`
+    : `<div class="alert alert-info" style="margin:0"><span class="spinner"></span><span><span class="alert-title">AI is preparing your task</span>Then Synder checks it on the last 30 days. Usually a few minutes. <button class="btn-text" onclick="ready(${t.id})">Simulate: done</button></span></div>`}
+    <div class="c-box"><div class="c-h">Results</div>
+      ${t.last ? `<div class="c-stats"><div><div class="c-num">14</div><div class="text-secondary">done</div></div><div><div class="c-num">3</div><div class="text-secondary">skipped</div></div><div><div class="c-num">1</div><div class="text-secondary">needs your eye</div></div></div><div class="text-secondary">Check run · Oct 21 – Nov 19 · nothing was changed</div>` : '<div class="text-secondary">The first results appear here after the check.</div>'}</div>
+    <div class="c-box c-box--soft"><div class="c-h">It may</div><div class="c-chips">${t.perms.map(p => `<span class="status ${p.write ? 'status-yellow' : 'status-grey'}">${esc(p.title)}</span>`).join('') || 'Read Synder data'}</div></div>
+  </div>`;
+}
+function ready(id) { const t = tasks.find(x => x.id === id); t.state = 'ready'; t.last = 'Check: 14 done, 1 needs your eye'; render(); }
+
+function render() {
+  const h = (location.hash || '#/').slice(1), m = h.split('/').filter(Boolean);
+  let html;
+  if (!m.length) html = home();
+  else if (m[0] === 'new') { draft = null; picked = null; html = `<div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">New task</h1></div></div><div class="c-wrap" style="margin-top:24px">${startBlock()}</div>`; }
+  else if (m[0] === 'plan') html = plan();
+  else if (m[0] === 'preview') html = preview();
+  else if (m[0] === 'task') html = taskPage(m[1]);
+  else html = home();
+  $('#page').innerHTML = html; window.scrollTo(0, 0);
+}
+document.getElementById('vs-' + V).classList.add('on');
+window.addEventListener('hashchange', render);
+render();
+</script>
+</body>
+</html>
