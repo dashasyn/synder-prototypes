@@ -98,10 +98,11 @@ const musicNow = (s, st) => st.music === 'none' ? 'none'   // Ignat, 2026-11-13:
   : st.music;   // Ignat, 2026-11-11: no schedule on this screen — paused or playing
 
 /* ── chrome ───────────────────────────────────────────────────────── */
+// Ignat, 2026-11-23: one layout (separate music view); the bar switches the role instead
 function VariantBar({ v, setV }) {
-  const items = [[1, L('1 · Musik im Liniensicht', '1 · Music on the line view')], [2, L('2 · Eigene Musikansicht', '2 · Separate music view')]];
+  const items = [['admin', L('Admin Jukebox', 'Jukebox admin')], ['user', L('Nutzer', 'User')]];
   return html`<${Box} className="variant-switch" sx=${{ display: 'flex', alignItems: 'center', gap: 1.5, bgcolor: '#2B2B2B', color: '#fff', px: 2.5, py: 1 }}>
-    <${Box} component="span" sx=${{ opacity: .75, textTransform: 'uppercase', fontSize: 14 }}>${L('Variante', 'Variant')}<//>
+    <${Box} component="span" sx=${{ opacity: .75, textTransform: 'uppercase', fontSize: 14 }}>${L('Rolle', 'Role')}<//>
     <${Box} sx=${{ display: 'flex', gap: .5, bgcolor: 'rgba(255,255,255,.1)', borderRadius: '6px', p: '3px' }}>
       ${items.map(([k, l]) => html`<${Box} key=${k} component="button" id=${'vs-' + k} onClick=${() => setV(k)}
         sx=${{ all: 'unset', cursor: 'pointer', px: 1.5, py: .6, borderRadius: '4px', fontSize: 14,
@@ -140,11 +141,8 @@ function TopBar({ lang, setLang, unread, onBell }) {
 /* ── the line ─────────────────────────────────────────────────────── */
 const MUTE_ORANGE = '#E8792E';
 const MUSIC_BLUE = '#1976D2';
-/* mode: 'overlay' (variant 1, music shown) · 'none' (no music info) · 'music' (variant 2 music view:
-   only the music state, no mute / no events — Ignat, 2026-11-16) */
-const MUSIC_LOOK = {
-  playing: { bgcolor: '#DCEBFA', border: '2px solid #1976D2', color: '#1976D2', fontWeight: 500 },   // variant 1 overlay
-};
+/* mode: 'none' (events view, no music info) · 'music' (music view: only the music state,
+   no mute / no events — Ignat, 2026-11-16) */
 // Ignat, 2026-11-16: music view — grey = not set up, light blue = paused, blue = playing
 const MUSIC_VIEW = {
   playing: { bgcolor: '#1976D2', border: '1px solid #1976D2', color: '#fff', fontWeight: 500 },
@@ -155,14 +153,12 @@ function TrackBox({ s, st, i, onClick, onLeave, mode }) {
   const m = musicNow(s, st), n = s.tracks[i];
   const muted = mode !== 'music' && st.mute && st.mute.tracks.includes(i);
   const ev = mode !== 'music' && s.ev;
-  const musicOn = mode === 'overlay' && !muted && !ev && m === 'playing';   // blue = playing; events and the mute win
   const base = { width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 14, borderRadius: '2px' };
   const look = mode === 'music' ? MUSIC_VIEW[m]
     : muted ? { bgcolor: '#FBE3D2', border: '2px solid ' + MUTE_ORANGE, color: MUTE_ORANGE }
     : ev ? { bgcolor: '#7C4DFF', color: '#fff' }
-    : musicOn ? MUSIC_LOOK.playing
     : { bgcolor: '#E0E0E0', border: '1px solid #616161', color: '#000' };
-  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (musicOn ? ' music-on' : '') + (mode === 'music' ? ' mv-' + m : '')}
+  return html`<${Box} component="button" className=${'track' + (muted ? ' muted' : '') + (mode === 'music' ? ' mv-' + m : '')}
     data-st=${s.c} data-track=${i}
     aria-label=${s.name + L(' Gleis ', ' track ') + n} onClick=${e => onClick(e, s.c, i)} onMouseEnter=${e => onClick(e, s.c, i)} onMouseLeave=${onLeave}
     sx=${{ all: 'unset', ...base, ...look }}>
@@ -198,9 +194,10 @@ function MusicInfo({ s, st }) {
       : html`${head(L('läuft', 'playing'))}${(([t, n]) => line(html`<b>${L(SRC_LABEL[t][0], SRC_LABEL[t][1])}:</b> ${n}`, 'music-source'))(sourceOf(s.c))}`}<//>`;
 }
 
-function TrackPopover({ pop, state, variant, role, onClose, open, hold, release, mode }) {
-  // Ignat, 2026-11-16 (variant 2): music view card = music only; events view card = no music
-  const showEv = mode !== 'music', showMus = mode !== 'events';
+function TrackPopover({ pop, state, onClose, open, hold, release, mode }) {
+  // Ignat, 2026-11-16: music view card = music only; events view card = no music
+  // Ignat, 2026-11-23: the music button lives only in the music view (admin)
+  const showEv = mode !== 'music', showMus = mode === 'music';
   if (!pop) return null;
   const s = BY[pop.c], st = state[pop.c], m = musicNow(s, st);
   // Ignat, 2026-11-11: pausing works despite the schedule — at night FGI can pause for the next day
@@ -223,9 +220,9 @@ function TrackPopover({ pop, state, variant, role, onClose, open, hold, release,
     ${showEv && st.mute ? html`<${Typography} className="mute-reason" sx=${{ fontSize: 16 }}><b>${L('Grund', 'Reason')}:</b> ${st.mute.reason}<//>` : null}
     ${showMus ? html`<${MusicInfo} s=${s} st=${st} />` : null}
     <${Stack} spacing=${1} sx=${{ mt: 2 }}>
-      ${showEv ? html`<${Button} variant="outlined" id="btnMute" onClick=${() => open(st.mute ? 'unmute' : variant === 2 ? 'combo' : 'mute')}
+      ${showEv ? html`<${Button} variant="outlined" id="btnMute" onClick=${() => open(st.mute ? 'unmute' : 'mute')}
         sx=${{ color: MUTE_ORANGE, borderColor: '#F0B58D', '&:hover': { borderColor: MUTE_ORANGE, bgcolor: '#FFF6EF' } }}>${L('Stummschaltung', 'Mute')}<//>` : null}
-      ${/* Ignat, 2026-11-18: also in the events view, under Stummschaltung */ ''}${variant === 1 && canMusic ? html`<${Button} variant="outlined" id="btnMusic"
+      ${showMus && canMusic ? html`<${Button} variant="outlined" id="btnMusic"
         startIcon=${html`<${Icon} sx=${{ fontSize: 20 }}>${m === 'paused' ? 'music_note' : 'music_off'}<//>`}
         onClick=${() => open(m === 'paused' ? 'musicStart' : 'musicPause')}
         sx=${{ color: '#424242', borderColor: '#BDBDBD', '&:hover': { borderColor: '#757575', bgcolor: '#F5F5F5' } }}>
@@ -236,14 +233,14 @@ function TrackPopover({ pop, state, variant, role, onClose, open, hold, release,
 
 /* ── dialogs ──────────────────────────────────────────────────────── */
 const MUTE_OPTS = () => [['Bahnhof', L('Bahnhof stummschalten', 'Mute station')], ['Bahnsteig', L('Bahnsteig/e stummschalten', 'Mute platform(s)')], ['Gleis', L('Gleis stummschalten', 'Mute track')]];
-function ActionDialog({ dlg, state, role, onClose, onApply }) {
+function ActionDialog({ dlg, state, onClose, onApply }) {
   const [opt, setOpt] = useState('');
   const [reason, setReason] = useState('');
   React.useEffect(() => { setOpt(''); setReason(''); }, [dlg && dlg.kind, dlg && dlg.c]);
   if (!dlg) return html`<${Dialog} open=${false} />`;
   const s = BY[dlg.c], st = state[dlg.c], m = musicNow(s, st);
   const MUTE_T = L('Stummschaltung', 'Mute');
-  const title = { mute: MUTE_T, combo: MUTE_T, unmute: MUTE_T, musicPause: L('Musik pausieren', 'Pause music'),
+  const title = { mute: MUTE_T, unmute: MUTE_T, musicPause: L('Musik pausieren', 'Pause music'),
                   musicStart: L('Musik fortsetzen', 'Resume music') }[dlg.kind];
   const T = t => html`<${Typography} sx=${{ fontSize: 16, mb: 2 }} className="dlg-text">${t}<//>`;
   const reasonField = html`<${TextField} id="dlgReason" label=${L('Grund', 'Reason')} required fullWidth value=${reason} autoFocus
@@ -255,20 +252,14 @@ function ActionDialog({ dlg, state, role, onClose, onApply }) {
   else if (dlg.kind === 'musicStart') body = T(L(`Musik an ${s.name} (${s.c}) wieder starten`, `Start the music at ${s.name} (${s.c}) again`));
   else if (dlg.kind === 'musicPause') { body = html`${T(L(`Musik an ${s.name} (${s.c}) pausieren, bis sie manuell fortgesetzt wird.`, `Pause the music at ${s.name} (${s.c}) until it is resumed manually.`))}${reasonField}`; applyOk = !!reason.trim(); }
   else {
-    // mute (production) — and in variant 2 the music choice joins the same list
-    const musicOpt = dlg.kind === 'combo' && role === 'fgi' && (m === 'playing' || m === 'paused' || m === 'schedule') ? (m === 'paused' ? 'musicStart' : 'musicPause') : null;
-    const isMusic = opt === 'musicPause' || opt === 'musicStart';
+    // mute (production)
     body = html`
-      ${T(opt === 'musicPause' ? L('Nur die Musik am Bahnhof wird pausiert. Ansagen laufen weiter.', 'Only the music at the station is paused. Announcements keep playing.')
-        : opt === 'musicStart' ? L(`Musik an ${s.name} (${s.c}) wieder starten`, `Start the music at ${s.name} (${s.c}) again`)
-        : L('Alle Ansagen aus PIMS werden stummgeschaltet, bis sie manuell wieder aktiviert werden.', 'All PIMS announcements are muted until they are re-enabled manually.'))}
+      ${T(L('Alle Ansagen aus PIMS werden stummgeschaltet, bis sie manuell wieder aktiviert werden.', 'All PIMS announcements are muted until they are re-enabled manually.'))}
       <${RadioGroup} value=${opt} onChange=${e => setOpt(e.target.value)} id="dlgOpts">
         ${MUTE_OPTS().map(([v, l]) => radio(v, l))}
-        ${musicOpt ? html`<${Divider} sx=${{ my: 1 }} />${radio(musicOpt, musicOpt === 'musicPause' ? L('Nur Musik pausieren', 'Pause music only') : L('Musik fortsetzen', 'Resume music'))}` : null}
       <//>
-      ${opt && opt !== 'musicStart' ? reasonField : null}`;
-    applyOk = !!opt && (opt === 'musicStart' || !!reason.trim());
-    if (isMusic) apply = () => onApply(opt, { reason });
+      ${opt ? reasonField : null}`;
+    applyOk = !!opt && !!reason.trim();
   }
   return html`<${Dialog} open=${true} onClose=${onClose} id="actionDialog" data-kind=${dlg.kind} PaperProps=${{ sx: { width: 520, borderRadius: 2 } }}>
     <${DialogTitle} sx=${{ textAlign: 'center', fontSize: 22, fontWeight: 500, pt: 3 }} id="dlgTitle">${title}<//>
@@ -346,26 +337,18 @@ function EventTables() {
 
 /* ── the page ─────────────────────────────────────────────────────── */
 function App() {
-  // Ignat, 2026-11-11: two buttons it is (option 1), and every user may manage the music —
-  // no variant switch, no roles
-  // Ignat, 2026-11-16: two variants again — 1 music on the line view, 2 a separate music view
-  const [layout, setLayoutRaw] = useState(() => location.hash === '#v2' ? 2 : 1);
-  const setLayout = n => { setLayoutRaw(n); history.replaceState(null, '', '#v' + n); setPop(null); };
-  const variant = 1;   // the card keeps the two buttons in both
+  // Ignat, 2026-11-23: only the separate music view stays (variant 1 gone). Roles are back:
+  // the Jukebox admin gets the music view and every music action; a user sees no music at all.
+  const [role, setRoleRaw] = useState(() => location.hash === '#user' ? 'user' : 'admin');
+  const setRole = r => { setRoleRaw(r); history.replaceState(null, '', '#' + r); setPop(null); setMusicView(false); setSheet(false); };
+  const isAdmin = role === 'admin';
   const [lang, setLangRaw] = useState(() => localStorage.getItem('pims-lang') || 'de');
   LANG = lang;
   const setLang = l => { localStorage.setItem('pims-lang', l); document.documentElement.lang = l; setLangRaw(l); };
-  const role = 'fgi';
-  // Ignat, 2026-11-13: one view setting only — show/hide music, saved per user (here: the browser)
-  const [showMusic, setShowMusic] = useState(() => localStorage.getItem('pims-show-music') !== '0');
-  const toggleMusic = () => setShowMusic(v => { localStorage.setItem('pims-show-music', v ? '0' : '1'); return !v; });
-  const [musicView, setMusicView] = useState(false);
-  const [focusSt, setFocusSt] = useState(null);   // 'Zur Linie' highlights the station for 3 s   // variant 2 always opens on the default view
-  const mv = layout === 2 && musicView;
-  const mode = layout === 2 ? (musicView ? 'music' : 'none') : (showMusic ? 'overlay' : 'none');
-  const btnOn = layout === 2 ? musicView : showMusic;
-  const btnLabel = layout === 2 ? (musicView ? L('Standardansicht', 'Default view') : L('Musikansicht', 'Music view'))
-    : (showMusic ? L('Musik ausblenden', 'Hide music') : L('Musik einblenden', 'Show music'));
+  const [musicView, setMusicView] = useState(false);   // always opens on the events view
+  const [focusSt, setFocusSt] = useState(null);   // 'Zur Linie' highlights the station for 3 s
+  const mode = isAdmin && musicView ? 'music' : 'none';
+  const btnLabel = musicView ? L('Standardansicht', 'Default view') : L('Musikansicht', 'Music view');
   const [state, setState] = useState(SEED);
   const [pop, setPop] = useState(null);
   const [dlg, setDlg] = useState(null);
@@ -375,7 +358,7 @@ function App() {
   const [sheet, setSheet] = useState(false);
   const [seen, setSeen] = useState(false);
   // 3-h reminders: stations paused by someone else and not yet answered
-  const reminders = role === 'fgi' ? Object.keys(state).filter(c => state[c].music === 'paused' && state[c].pause && state[c].pause.by !== ME && !kept.includes(c))
+  const reminders = isAdmin ? Object.keys(state).filter(c => state[c].music === 'paused' && state[c].pause && state[c].pause.by !== ME && !kept.includes(c))
     .map(c => ({ c, ...state[c].pause })) : [];
   const timer = React.useRef(null);
   const hold = () => clearTimeout(timer.current);
@@ -395,7 +378,7 @@ function App() {
   };
 
   return html`<${Box} sx=${{ minHeight: '100vh', bgcolor: 'background.default' }}>
-    <${VariantBar} v=${layout} setV=${setLayout} />
+    <${VariantBar} v=${role} setV=${setRole} />
     <${TopBar} lang=${lang} setLang=${setLang} unread=${reminders.length > 0 && !seen} onBell=${() => { setPop(null); setSheet(true); setSeen(true); }} />
     <${Box} sx=${{ display: 'flex' }}>
       <${Box} id="lineRail" sx=${{ width: 56, bgcolor: '#fff', borderRight: '1px solid #E0E0E0', py: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.25 }}>
@@ -406,27 +389,27 @@ function App() {
         <${Paper} sx=${{ border: '1px solid #E0E0E0', pt: 2, pb: 1 }}>
           <${Box} sx=${{ position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 1.5, mb: 2 }}>
             <${LineBadge} line="U1" big /><${Typography} sx=${{ fontSize: 22 }} id="lineTitle">U Uhlandstraße - S+U Warschauer Straße<//>
-            <${Box} sx=${{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)' }}>
+            ${isAdmin ? html`<${Box} sx=${{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)' }}>
               <${Tooltip} title=${btnLabel}>
-                <${IconButton} id="btnMusicView" aria-pressed=${btnOn} onClick=${layout === 2 ? () => { setMusicView(v => !v); setPop(null); } : toggleMusic}
-                  aria-label=${btnLabel} sx=${{ color: '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>${btnOn ? 'music_off' : 'music_note'}<//><//>
+                <${IconButton} id="btnMusicView" aria-pressed=${musicView} onClick=${() => { setMusicView(v => !v); setPop(null); }}
+                  aria-label=${btnLabel} sx=${{ color: '#616161' }}><${Icon} sx=${{ fontSize: 24 }}>${musicView ? 'music_off' : 'music_note'}<//><//>
               <//>
-            <//>
+            <//>` : null}
           <//>
           <${LineDiagram} state=${state} mode=${mode} focus=${focusSt} onTrack=${(e, c, i) => { hold(); setPop({ c, i, el: e.currentTarget }); }} onLeave=${release} />
         <//>
         <${EventTables} />
       <//>
     <//>
-    <${TrackPopover} pop=${pop} state=${state} variant=${variant} mode=${layout === 2 ? (musicView ? 'music' : 'events') : 'all'} role=${role} onClose=${() => setPop(null)} hold=${hold} release=${release}
+    <${TrackPopover} pop=${pop} state=${state} mode=${mode === 'music' ? 'music' : 'events'} onClose=${() => setPop(null)} hold=${hold} release=${release}
       open=${kind => { setDlg({ kind, c: pop.c, i: pop.i }); setPop(null); }} />
     <${NotificationSheet} open=${sheet} onClose=${() => setSheet(false)} items=${reminders}
       onKeep=${c => setKept(k => [...k, c])}
-      onGo=${c => { setSheet(false); if (layout === 2) setMusicView(true);
+      onGo=${c => { setSheet(false); setMusicView(true);
         setFocusSt(c); setTimeout(() => setFocusSt(null), 3000);
         setTimeout(() => { const el = document.querySelector(`.st-col[data-st="${c}"]`); el && el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, 250); }}
       onResume=${c => { patch(c, x => ({ ...x, music: 'playing', pause: null })); setToast(L(`Musik an ${BY[c].name} fortgesetzt.`, `Music at ${BY[c].name} resumed.`)); }} />
-    <${ActionDialog} dlg=${dlg} state=${state} role=${role} onClose=${() => setDlg(null)} onApply=${onApply} />
+    <${ActionDialog} dlg=${dlg} state=${state} onClose=${() => setDlg(null)} onApply=${onApply} />
     <${Snackbar} open=${!!toast} autoHideDuration=${2400} message=${toast}
       onClose=${(e, why) => { if (why !== 'clickaway') setToast(''); }} anchorOrigin=${{ vertical: 'bottom', horizontal: 'center' }} />
   <//>`;
