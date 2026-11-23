@@ -187,7 +187,7 @@ function MusicInfo({ s, st }) {
   const m = musicNow(s, st);
   const line = (t, cls) => html`<${Typography} className=${cls} sx=${{ fontSize: 16 }}>${t}<//>`;
   const head = t => line(html`<b>${L('Musik', 'Music')}:</b> ${t}`, 'music-state');
-  return html`<${Box} className="music-info" data-music=${m} sx=${{ mt: 1.5 }}>
+  return html`<${Box} className="music-info" data-music=${m}>
     ${m === 'paused' ? html`${head(html`${L('pausiert', 'paused')} · ${st.pause.at}`)}
       ${line(html`<b>${L('Grund', 'Reason')}:</b> ${st.pause.reason}`, 'music-reason')}`
       : m === 'none' ? head(L('nicht eingerichtet', 'not set'))
@@ -208,7 +208,7 @@ function TrackPopover({ pop, state, onClose, open, hold, release, mode }) {
     modifiers=${[{ name: 'offset', options: { offset: [0, 4] } }]}>
     <${Paper} onMouseEnter=${hold} onMouseLeave=${release}
       sx=${{ p: 2, width: 340, boxShadow: '0 4px 16px rgba(0,0,0,.18)', border: '1px solid #E0E0E0', borderRadius: 1 }}>
-    <${Typography} sx=${{ fontWeight: 700, fontSize: 16, mb: 1 }} id="popTitle">${s.name} (${s.c}) · ${L('Gleis', 'Track')} ${s.tracks[pop.i]}<//>
+    ${/* Ignat, 2026-11-23: no station / track title — the line already shows both */ ''}
     ${showEv && s.ev ? html`<${Box} className="event-card" sx=${{ bgcolor: '#E8F5E9', borderRadius: 1, p: 1.5, mb: 1.5, '& p': { fontSize: 16 } }}>
       <${Typography}><b>Dano / Name:</b><//>
       <${Typography}><b>${L('Grund', 'Reason')}:</b> ${L('Baumaßnahme', 'Construction work')}<//>
