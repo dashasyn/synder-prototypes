@@ -173,7 +173,7 @@
   .sr{position:absolute;left:0;top:0;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
   /* ===== condensed (2026-11-22): Shopify / Jira / Stripe density. 32px rows, icons on top-level rows only ===== */
-  .sb{width:244px;transition:width .15s ease}
+  .sb{width:256px;transition:width .15s ease}
   .sb-in{display:flex;flex-direction:column;flex:1;min-height:0;background:var(--sb-bg)}
   .sb-org{margin:8px 8px 4px;padding:6px;width:calc(100% - 16px);gap:8px}
   .sb-org .av,.sw-head .av{width:24px;height:24px;border-radius:6px}
@@ -195,7 +195,8 @@
   .sb-group.on-parent{color:var(--sb-on-fg);font-weight:500} .sb-group.on-parent .mi{color:var(--sb-on-fg)}
   .sb-admin-row{display:flex;align-items:center}
   .sb-admin-row .sb-item{flex:1;min-width:0}
-  .sb-admin-row .sb-fold{margin-left:2px}
+  .sb-admin-row .sb-fold{margin-left:0;width:26px}
+  .sb-admin-row .sb-item{padding-right:0}
   .sb-fold{width:28px;height:28px;border:none;background:none;border-radius:6px;color:var(--sb-ic);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
   .sb-fold:hover{background:var(--sb-hover)}
   .sb-collapse{display:flex;align-items:center;gap:10px;min-height:32px;margin:4px 8px 8px;padding:0 8px;border:none;background:none;border-radius:6px;
@@ -213,6 +214,13 @@
   .variant-switch button.on{background:var(--color-white);color:var(--text-primary);font-weight:500}
   .variant-switch .vs-note{margin-left:auto;opacity:.75}
 
+  /* merged: Shopify / Jira panel toggle next to the org switcher */
+  .sb-head{display:flex;align-items:center;gap:2px;padding-right:8px}
+  .sb-head .sb-org{flex:1;min-width:0;margin-right:0;width:auto}
+  .sb-toggle{width:32px;height:32px;min-height:32px;margin:0;padding:0;justify-content:center;flex-shrink:0;color:var(--sb-ic)}
+  body.rail .sb-head{flex-direction:column;padding:0;gap:2px}
+  body.rail .sb-head .sb-org{width:calc(100% - 12px)}
+  body.rail .sb-toggle{margin-bottom:4px}
   /* A · icon rail */
   body.rail .sb{width:56px}
 
@@ -234,7 +242,7 @@
   /* B · hover peek: a 56px rail that slides open over the page; Keep open docks it */
   body.peek .sb{width:56px;border-right:none}
   body.peek .sb-in{position:absolute;top:0;left:0;bottom:0;width:56px;z-index:30;border-right:1px solid var(--sb-border);transition:width .15s ease,box-shadow .15s}
-  body.peek .sb:hover .sb-in,body.peek .sb:has(:focus-visible) .sb-in,body.peek .sb.sw-open .sb-in{width:244px;box-shadow:8px 0 24px rgba(16,24,40,.12)}
+  body.peek .sb:hover .sb-in,body.peek .sb:has(:focus-visible) .sb-in,body.peek .sb.sw-open .sb-in{width:256px;box-shadow:8px 0 24px rgba(16,24,40,.12)}
 
   body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-org .nm,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-org > .mi,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .lb,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .chev,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-badge,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-sub,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-pin,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .promo,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-label,body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-collapse .cl-lb{display:none!important}
   body.peek .sb:not(:hover):not(:has(:focus-visible)):not(.sw-open) .sb-org{justify-content:center;margin:8px 6px 4px;width:calc(100% - 12px);padding:6px 0}
@@ -416,6 +424,7 @@ var LABELS = {};
 function indexLabels(){ LABELS = {}; [NAV.pt, NAV.summary].forEach(function(n){ n.main.concat(BOTTOM).forEach(function(i){ LABELS[i.k] = i.label; (i.sub || []).forEach(function(s){ LABELS[s[0]] = s[1]; }); }); }); }
 indexLabels();
 var MODE = 'peek';
+var RAIL = MODE === 'rail' || MODE === 'merged', SECT = MODE === 'sections' || MODE === 'merged';
 var view = 'admin';
 function navFor(){ return NAV[view === 'summary' ? 'summary' : 'pt']; }
 var ST_KEY = 'synder-sb-condensed-' + MODE;
@@ -430,7 +439,7 @@ function badge(t){ return t ? '<span class="sb-badge ' + (t === 'Beta' ? 'beta' 
 function groupOf(r){ var g = null; navFor().main.forEach(function(i){ (i.sub || []).forEach(function(s){ if (s[0] === r) g = i.k; }); }); return g; }
 function toggleGroup(k){
   var was = !!st.open[k];
-  if (MODE === 'sections') st.open = {};          // C: one group open at a time
+  if (SECT) st.open = {};          // C: one group open at a time
   st.open[k] = !was; saveSt(); renderSidebar();
   var b = document.querySelector('[data-group="' + k + '"]'); if (b) b.focus();
 }
@@ -459,18 +468,18 @@ function pinRow(k){
 function renderSidebar(){
   var n = navFor(), h = '';
   if (view === 'admin') {
-    var showPins = pins.length && (MODE !== 'sections' || st.pinsOpen);
+    var showPins = pins.length && (!SECT || st.pinsOpen);
     h += '<div class="sb-sec sb-admin-end" id="sb-admin-sec"><div class="sb-admin-row">'
        + '<a class="sb-item' + (route === 'admin' ? ' on' : '') + '" href="#admin" id="sb-admin" data-fly="admin"' + (route === 'admin' ? ' aria-current="page"' : '') + ' aria-label="Administrative functions">'
        + '<span class="mi">apps</span><span class="lb">Administrative functions</span></a>'
-       + (MODE === 'sections' && pins.length ? '<button class="sb-fold chev" id="fold-pins" aria-expanded="' + !!st.pinsOpen + '" aria-label="' + (st.pinsOpen ? 'Hide' : 'Show') + ' pinned pages" onclick="st.pinsOpen=!st.pinsOpen;saveSt();renderSidebar();document.getElementById(\'fold-pins\').focus()"><span class="mi">' + (st.pinsOpen ? 'expand_less' : 'expand_more') + '</span></button>' : '')
+       + (SECT && pins.length ? '<button class="sb-fold chev" id="fold-pins" aria-expanded="' + !!st.pinsOpen + '" aria-label="' + (st.pinsOpen ? 'Hide' : 'Show') + ' pinned pages" onclick="st.pinsOpen=!st.pinsOpen;saveSt();renderSidebar();document.getElementById(\'fold-pins\').focus()"><span class="mi">' + (st.pinsOpen ? 'expand_less' : 'expand_more') + '</span></button>' : '')
        + '</div>'
        + (showPins ? '<div id="sb-pins" class="sb-sec" role="list" aria-label="Pinned admin pages">' + pins.map(pinRow).join('') + '</div>' : '<div id="sb-pins" hidden></div>')
        + '</div>';
   }
   h += '<div class="sb-sec" id="sb-main">' + n.main.filter(function(i){ return !i.admin || view === 'admin'; }).map(topRow).join('') + '</div>';
   var bottom = BOTTOM.map(topRow).join('');
-  if (MODE === 'sections') {
+  if (SECT) {
     var bOn = BOTTOM.some(function(i){ return i.k === route; });
     h += '<div class="sb-sec bottom" id="sb-bottom"><button class="sb-group' + (bOn && !st.moreOpen ? ' on-parent' : '') + '" id="sb-more" data-group="more" aria-expanded="' + !!st.moreOpen + '" onclick="st.moreOpen=!st.moreOpen;saveSt();renderSidebar();document.getElementById(\'sb-more\').focus()">'
        + '<span class="mi">more_horiz</span><span class="lb">More</span><span class="mi chev">' + (st.moreOpen ? 'expand_less' : 'expand_more') + '</span></button>'
@@ -484,15 +493,21 @@ function renderSidebar(){
 }
 
 /* ---------- collapse ---------- */
-function isRail(){ return (MODE === 'rail' || MODE === 'peek') && st.collapsed; }
+function isRail(){ return (RAIL || MODE === 'peek') && st.collapsed; }
 function applyMode(){
-  document.body.classList.toggle('rail', MODE === 'rail' && st.collapsed);
+  document.body.classList.toggle('rail', RAIL && st.collapsed);
   document.body.classList.toggle('peek', MODE === 'peek' && st.collapsed);
 }
 function renderCollapseBtn(){
   var b = document.getElementById('sb-collapse'); if (!b) return;
   var lbl, ic;
-  if (MODE === 'rail') { lbl = st.collapsed ? 'Expand menu' : 'Collapse menu'; ic = st.collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'; }
+  if (MODE === 'merged') {
+    lbl = st.collapsed ? 'Expand menu' : 'Collapse menu';
+    b.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><line x1="7.5" y1="3.5" x2="7.5" y2="16.5"/>'
+      + (st.collapsed ? '<polyline points="11,8 13,10 11,12"/>' : '<polyline points="13,8 11,10 13,12"/>') + '</svg>';
+    b.setAttribute('aria-label', lbl); b.title = lbl; b.setAttribute('aria-expanded', String(!st.collapsed)); return;
+  }
+  if (RAIL) { lbl = st.collapsed ? 'Expand menu' : 'Collapse menu'; ic = st.collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'; }
   else { lbl = st.collapsed ? 'Keep menu open' : 'Collapse menu'; ic = st.collapsed ? 'push_pin' : 'keyboard_double_arrow_left'; }
   b.innerHTML = '<span class="mi">' + ic + '</span><span class="cl-lb">' + lbl + '</span>';
   b.setAttribute('aria-label', lbl); b.title = lbl;
@@ -506,7 +521,7 @@ function toggleCollapse(){
 /* A · flyout for rail icons: group → its sub-pages; Administrative functions → pinned pages; plain page → its name */
 var flyTimer;
 function showFly(el){
-  if (!(MODE === 'rail' && st.collapsed)) return;
+  if (!(RAIL && st.collapsed)) return;
   clearTimeout(flyTimer);
   var k = el.getAttribute('data-fly'), fly = document.getElementById('fly'), h = '', n = navFor();
   var item = n.main.concat(BOTTOM).filter(function(i){ return i.k === k; })[0];
@@ -536,7 +551,7 @@ document.addEventListener('focusin', function(e){
 document.addEventListener('click', function(e){
   // in the rail a group icon opens its flyout instead of expanding in place
   var g = e.target.closest && e.target.closest('#sb .sb-group[data-fly]');
-  if (g && MODE === 'rail' && st.collapsed) { e.stopPropagation(); e.preventDefault(); showFly(g); var f = document.querySelector('#fly a'); if (f) f.focus(); }
+  if (g && RAIL && st.collapsed) { e.stopPropagation(); e.preventDefault(); showFly(g); var f = document.querySelector('#fly a'); if (f) f.focus(); }
   if (e.target.closest && e.target.closest('#fly a')) hideFly(true);
 }, true);
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !document.getElementById('fly').hidden) { var k = document.getElementById('fly').getAttribute('data-for'); hideFly(true); var b = document.querySelector('#sb [data-fly="' + k + '"]'); if (b) b.focus(); } });
@@ -753,7 +768,7 @@ function render(){
   route = (location.hash || (view === 'admin' ? '#admin' : '#dashboard')).slice(1) || 'dashboard';
   if (route === 'p/current-org') { location.replace('#org/' + current); return; }
   var g = groupOf(route);
-  if (g && !st.open[g]) { if (MODE === 'sections') st.open = {}; st.open[g] = true; saveSt(); }   // landing on a sub-page opens its group
+  if (g && !st.open[g]) { if (SECT) st.open = {}; st.open[g] = true; saveSt(); }   // landing on a sub-page opens its group
   renderSidebar(); renderContent();
 }
 window.addEventListener('hashchange', function(){ render(); var h = document.querySelector('#content h1'); if (h) h.focus({ preventScroll: true }); });
