@@ -222,6 +222,12 @@
   body.rail .sb-head{flex-direction:column;padding:0;gap:2px}
   body.rail .sb-head .sb-org{width:calc(100% - 12px)}
   body.rail .sb-toggle{margin-bottom:4px}
+  /* edge: round button straddling the sidebar's right border, under the header */
+  body.m-edge .sb-collapse{position:absolute;top:44px;right:-14px;width:28px;height:28px;min-height:28px;margin:0;padding:0;z-index:25;
+    justify-content:center;border-radius:50%;background:#fff;border:1px solid var(--sb-border);box-shadow:0 1px 3px rgba(16,24,40,.12);color:var(--sb-ic)}
+  body.m-edge .sb-collapse:hover{background:var(--sb-hover);color:var(--sb-fg)}
+  body.m-edge .sb-collapse .mi{font-size:18px}
+  body.m-edge.rail .sb-collapse{justify-content:center;padding:0}
   /* A · icon rail */
   body.rail .sb{width:56px}
 
@@ -267,6 +273,7 @@
     <button id="vm-rail" onclick="setMode('rail')">A · Icon rail</button>
     <button id="vm-sections" onclick="setMode('sections')">C · Sections</button>
     <button id="vm-merged" onclick="setMode('merged')">A + C · Top button</button>
+    <button id="vm-edge" onclick="setMode('edge')">A + C · Edge button</button>
   </div>
   <span class="vs-note"></span>
 </div>
@@ -432,9 +439,9 @@ var BOTTOM = [ { k: 'ai-hub', icon: 'hub', label: 'AI Hub' }, { k: 'whats-new', 
 var LABELS = {};
 function indexLabels(){ LABELS = {}; [NAV.pt, NAV.summary].forEach(function(n){ n.main.concat(BOTTOM).forEach(function(i){ LABELS[i.k] = i.label; (i.sub || []).forEach(function(s){ LABELS[s[0]] = s[1]; }); }); }); }
 indexLabels();
-var MODE = (function(){ var m; try { m = sessionStorage.getItem('sb-mode'); } catch(e){} return ['rail', 'sections', 'merged'].indexOf(m) >= 0 ? m : 'merged'; })();
+var MODE = (function(){ var m; try { m = sessionStorage.getItem('sb-mode'); } catch(e){} return ['rail', 'sections', 'merged', 'edge'].indexOf(m) >= 0 ? m : 'merged'; })();
 function setMode(m){ try { sessionStorage.setItem('sb-mode', m); } catch(e){} location.reload(); }
-var RAIL = MODE === 'rail' || MODE === 'merged', SECT = MODE === 'sections' || MODE === 'merged';
+var RAIL = MODE === 'rail' || MODE === 'merged' || MODE === 'edge', SECT = MODE === 'sections' || MODE === 'merged' || MODE === 'edge';
 var view = 'admin';
 function navFor(){ return NAV[view === 'summary' ? 'summary' : 'pt']; }
 var ST_KEY = 'synder-sb-condensed-' + MODE;
@@ -511,6 +518,11 @@ function applyMode(){
 function renderCollapseBtn(){
   var b = document.getElementById('sb-collapse'); if (!b) return;
   var lbl, ic;
+  if (MODE === 'edge') {
+    lbl = st.collapsed ? 'Expand menu' : 'Collapse menu';
+    b.innerHTML = '<span class="mi">' + (st.collapsed ? 'chevron_right' : 'chevron_left') + '</span>';
+    b.setAttribute('aria-label', lbl); b.title = lbl; b.setAttribute('aria-expanded', String(!st.collapsed)); return;
+  }
   if (MODE === 'merged') {
     lbl = st.collapsed ? 'Expand menu' : 'Collapse menu';
     b.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><line x1="7.5" y1="3.5" x2="7.5" y2="16.5"/>'
@@ -544,7 +556,7 @@ function showFly(el){
   } else if (item) h = '<a class="fly-h" href="#' + item.k + '">' + esc(item.label) + badge(item.badge) + '</a>';
   fly.innerHTML = h; fly.hidden = false; fly.setAttribute('data-for', k);
   var r = el.getBoundingClientRect();
-  fly.style.left = (r.right + 6) + 'px';
+  fly.style.left = (r.right + (MODE === 'edge' ? 20 : 6)) + 'px';   // edge: clear the round toggle on the border
   fly.style.top = Math.min(r.top - 6, innerHeight - fly.offsetHeight - 8) + 'px';
 }
 function hideFly(now){ clearTimeout(flyTimer); var go = function(){ document.getElementById('fly').hidden = true; }; if (now) go(); else flyTimer = setTimeout(go, 180); }
@@ -786,7 +798,8 @@ window.addEventListener('hashchange', function(){ render(); var h = document.que
 (function(){
   var top = document.getElementById('sb-collapse-top'), bottom = document.getElementById('sb-collapse');
   if (MODE === 'merged') { bottom.remove(); top.id = 'sb-collapse'; }
-  else { top.remove(); if (MODE !== 'rail' && MODE !== 'peek') bottom.remove(); }
+  else { top.remove(); if (MODE !== 'rail' && MODE !== 'peek' && MODE !== 'edge') bottom.remove(); }
+  document.body.classList.add('m-' + MODE);
   var b = document.getElementById('vm-' + MODE); if (b) b.classList.add('on');
 })();
 applyMode();
