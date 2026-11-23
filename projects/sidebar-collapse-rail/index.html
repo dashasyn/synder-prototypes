@@ -225,7 +225,14 @@
   body.m-hover .sb-org:hover > .mi,body.m-hover .sb-org:focus-visible > .mi,body.m-hover .sb-org[aria-expanded="true"] > .mi{opacity:1}
   body.m-hover .sb-org[aria-expanded="true"]{background:var(--sb-hover)}
   body.m-hover .top{padding-left:12px}
-  .bar-toggle{margin:0 auto 0 0;color:#6B778C}
+  .bar-toggle{margin:0;color:#6B778C}
+  .bar-left{display:flex;align-items:center;gap:8px;margin-right:auto;min-width:0}
+  /* collapsed: the full org/client name stays visible in the top bar (review blocker: never initials alone) */
+  .bar-org{display:none;align-items:center;height:32px;padding:0 8px;border:1px solid transparent;border-radius:var(--radius-sm);background:none;
+    font:inherit;font-size:14px;color:var(--text-primary);cursor:pointer;max-width:360px}
+  .bar-org .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .bar-org:hover{border-color:var(--border-default)}
+  body.rail .bar-org{display:inline-flex}
   .bar-toggle:hover{background:#F2F4F7;color:#1A1B24}
   /* org selector (2026-11-23): search on top, firm row + search fixed, list scrolls, accountant footer */
   .sw{top:48px;left:8px;width:320px;max-height:min(560px,calc(100vh - 120px))}
@@ -337,6 +344,7 @@
   </div></nav>
   <div class="main">
     <div class="top">
+      <div class="bar-left"><button class="bar-org" id="bar-org" onclick="openSwitcher()"><span class="nm" id="bar-org-nm"></span></button></div>
       <a class="more" href="#">Add more syncs &gt;</a>
       <span class="trial">Trial syncs : <b>0</b></span>
       <a class="how" href="#">How it works?</a>
@@ -403,19 +411,19 @@ var ORGS = [
   // accountant firm + its clients (mock names from Ignat's reference screenshot)
   org('nwb','Northwind Bookkeeping', 0, 0, 'US', { firm: true, ini: 'NB' }),
   org('cl1','Bluebird Bakery', 0, 0, 'US', { client: true, ini: 'BB' }),
-  org('cl2','Cedar & Pine Interiors', 0, 0, 'US', { client: true, ini: 'CP' }),
+  org('cl2','Cedar & Pine Interiors', 0, 0, 'US', { client: true, ini: 'CP', mode: 'summary' }),
   org('cl3','Delta Freight LLC', 0, 0, 'US', { client: true, ini: 'DF' }),
   org('cl4','Evergreen Landscaping', 0, 0, 'US', { client: true, ini: 'EL' }),
-  org('cl5','Fable Coffee Roasters', 0, 0, 'US', { client: true, ini: 'FC' }),
+  org('cl5','Fable Coffee Roasters', 0, 0, 'US', { client: true, ini: 'FC', mode: 'summary' }),
   org('cl6','Granite Peak Dental', 0, 0, 'US', { client: true, ini: 'GP' }),
   org('cl7','Harbor Street Books', 0, 0, 'US', { client: true, ini: 'HS' }),
-  org('cl8','Ironwood Fitness', 0, 0, 'US', { client: true, ini: 'IF' }),
+  org('cl8','Ironwood Fitness', 0, 0, 'US', { client: true, ini: 'IF', mode: 'summary' }),
   org('cl9','Juniper Yoga Studio', 0, 0, 'US', { client: true, ini: 'JY' }),
   org('cl10','Kestrel Auto Parts', 0, 0, 'US', { client: true, ini: 'KA' }),
-  org('cl11','Lantern Toy Co', 0, 0, 'US', { client: true, ini: 'LT' }),
+  org('cl11','Lantern Toy Co', 0, 0, 'US', { client: true, ini: 'LT', mode: 'summary' }),
   org('cl12','Maple Row Candles', 0, 0, 'US', { client: true, ini: 'MR' }),
   org('cl13','Nimbus Print Shop', 0, 0, 'US', { client: true, ini: 'NP' }),
-  org('cl14','Orchard Lane Cider', 0, 0, 'US', { client: true, ini: 'OL' }),
+  org('cl14','Orchard Lane Cider', 0, 0, 'US', { client: true, ini: 'OL', mode: 'summary' }),
 
   org('c1','Shopify txnrecon', 0, 0, 'RS', { gp:'9,795.77', plan:'TRIAL (INSIGHTS)\nPRO (SYNC) Yearly 2880.00000 USD', providers:'custom(ACTIVE)\nintuit(ACTIVE)\nshopify(ACTIVE)\nshopify(ACTIVE)\nshopify(ACTIVE)', cc:'RS, US, FR,', syncs:100, created:'2026-10-12 09:06:47 UTC' }),
   org('c2','SD-18428_Rules_UK(onboardcus)', 0, 0, 'PL', { gp:'44,379.70', plan:'TRIAL (INSIGHTS)\nTRIAL (SYNC)\nTRIAL_SMART_RULE (SYNC)', providers:'intuit(ACTIVE)\nstripe(ACTIVE)', cc:'GB, US', syncs:2, created:'2026-10-12 06:54:56 UTC' }),
@@ -462,6 +470,7 @@ function renderOrg(){
   var o = byId(current);
   ['org-av','sw-av'].forEach(function(id){ var el = document.getElementById(id); el.style.background = o.color; el.innerHTML = esc(o.ini || initials(o.name)) + (o.dot ? '<span class="dot"></span>' : ''); });
   document.getElementById('org-nm').textContent = o.name;
+  var bo = document.getElementById('bar-org-nm'); if (bo) { bo.textContent = o.name; document.getElementById('bar-org').setAttribute('aria-label', (view === 'accountant' ? 'Client: ' : 'Organization: ') + o.name + '. Switch'); }
   document.getElementById('sw-nm').textContent = o.name;
   document.getElementById('org-btn').setAttribute('aria-label', (view === 'accountant' ? (o.firm ? 'Firm: ' : 'Client: ') + o.name + '. Switch client' : 'Organization: ' + o.name + '. Switch organization'));
 }
@@ -500,7 +509,7 @@ indexLabels(); LABELS['add-client'] = 'Add client';
 var MODE = 'rail';
 var RAIL = ['rail', 'merged', 'edge', 'hover'].indexOf(MODE) >= 0, SECT = ['sections', 'merged', 'edge', 'hover'].indexOf(MODE) >= 0;
 var view = 'admin';
-function navFor(){ return NAV[view === 'summary' ? 'summary' : 'pt']; }
+function navFor(){ var o = view === 'accountant' && typeof byId === 'function' && byId(current); return NAV[view === 'summary' || (o && o.mode === 'summary') ? 'summary' : 'pt']; }   // accountants: menu follows the client's sync mode
 var ST_KEY = 'synder-sb-condensed-' + MODE;
 var st = (function(){ try { return JSON.parse(localStorage.getItem(ST_KEY)) || {}; } catch(e){ return {}; } })();
 function saveSt(){ try { localStorage.setItem(ST_KEY, JSON.stringify(st)); } catch(e){} }
@@ -578,9 +587,10 @@ function renderCollapseBtn(){
   }
   if (MODE === 'merged' || MODE === 'hover') {
     lbl = st.collapsed ? 'Expand menu' : 'Collapse menu';
+    var tip = document.getElementById('bar-tip'); if (tip) tip.textContent = lbl;
     b.innerHTML = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2.5" y="3.5" width="15" height="13" rx="2.5"/><line x1="7.5" y1="3.5" x2="7.5" y2="16.5"/>'
       + (st.collapsed ? '<polyline points="11,8 13,10 11,12"/>' : '<polyline points="13,8 11,10 13,12"/>') + '</svg>';
-    b.setAttribute('aria-label', lbl); b.title = lbl; b.setAttribute('aria-expanded', String(!st.collapsed)); return;
+    b.setAttribute('aria-label', lbl); if (MODE !== 'hover') b.title = lbl; b.setAttribute('aria-expanded', String(!st.collapsed)); return;
   }
   if (RAIL) { lbl = st.collapsed ? 'Expand menu' : 'Collapse menu'; ic = st.collapsed ? 'keyboard_double_arrow_right' : 'keyboard_double_arrow_left'; }
   else { lbl = st.collapsed ? 'Keep menu open' : 'Collapse menu'; ic = st.collapsed ? 'push_pin' : 'keyboard_double_arrow_left'; }
@@ -624,7 +634,7 @@ function showFly(el){
     h = '<a class="fly-i' + (route === 'admin' ? ' on' : '') + '" href="#admin">Administrative functions</a>' + (pins.length ? '<div class="fly-sep"></div>' + pins.map(function(p){
       var r = pageHref(p); return '<a class="fly-i' + (route === r ? ' on' : '') + '" href="#' + r + '">' + esc(PAGES[p].label) + '</a>'; }).join('') : '');
   } else if (item && item.sub) {
-    h = '<div class="fly-h">' + esc(item.label) + '</div><div class="fly-sep"></div>' + item.sub.map(function(s){
+    h = '<a class="fly-h" href="#' + item.sub[0][0] + '">' + esc(item.label) + '</a><div class="fly-sep"></div>' + item.sub.map(function(s){
       return '<a class="fly-i' + (route === s[0] ? ' on' : '') + '" href="#' + s[0] + '">' + esc(s[1]) + badge(s[2]) + '</a>'; }).join('');
   } else if (item) h = '<a class="fly-i' + (route === item.k ? ' on' : '') + '" href="#' + item.k + '">' + esc(item.label) + badge(item.badge) + '</a>';   // a page is a normal row; bold is only for group headers (Ignat 2026-11-23)
   fly.innerHTML = h; fly.hidden = false; fly.setAttribute('data-for', k);
@@ -655,6 +665,14 @@ document.addEventListener('click', function(e){
   if (g && RAIL && st.collapsed) { e.stopPropagation(); e.preventDefault(); showFly(g); var f = document.querySelector('#fly a'); if (f) f.focus(); }
   if (e.target.closest && e.target.closest('#fly a')) hideFly(true);
 }, true);
+document.addEventListener('keydown', function(e){   // arrow keys move through the tooltip menu
+  var fly = document.getElementById('fly'); if (fly.hidden || !fly.contains(document.activeElement)) return;
+  var items = [].slice.call(fly.querySelectorAll('a')), i = items.indexOf(document.activeElement);
+  if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+  else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+  else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+});
 document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && !document.getElementById('fly').hidden) { var k = document.getElementById('fly').getAttribute('data-for'); hideFly(true); var b = document.querySelector('#sb [data-fly="' + k + '"]'); if (b) b.focus(); } });
 
 /* ---------- view switch (prototype) ---------- */
