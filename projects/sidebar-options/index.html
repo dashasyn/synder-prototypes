@@ -121,7 +121,7 @@
   .af-row{display:flex;align-items:center;min-height:28px}
   .af-row a{color:var(--text-link);text-decoration:none}
   .af-row a:hover{text-decoration:underline}
-  .pin{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;margin-left:2px;opacity:0;
+  .pin{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;margin-left:2px;opacity:0;
     border:none;border-radius:4px;background:none;padding:0;cursor:pointer;color:var(--text-muted)}
   .pin .mi,.pin .mf{font-size:18px}
   .af-row:hover .pin,.pin:focus-visible,.pin[aria-pressed="true"]{opacity:1}
@@ -193,9 +193,9 @@
   .sb-group.on-parent,.sb-item.on-parent{background:var(--sb-on-bg);color:var(--sb-on-fg);font-weight:400} .sb-group.on-parent .mi,.sb-item.on-parent .mi{color:var(--sb-on-fg)}   /* folded group holding the current page looks selected (Stripe; Ignat 2026-11-23) */
   .sb-admin-row{display:flex;align-items:center}
   .sb-admin-row .sb-item{flex:1;min-width:0}
-  .sb-admin-row .sb-fold{margin-left:0;width:24px}
+  .sb-admin-row{position:relative} .sb-admin-row .sb-fold{position:absolute;right:0;top:0;margin:0}
   .sb-admin-row .sb-item{padding-right:0}
-  .sb-fold{width:28px;height:28px;border:none;background:none;border-radius:6px;color:var(--sb-ic);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
+  .sb-fold{width:32px;height:32px;border:none;background:none;border-radius:6px;color:var(--sb-ic);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0}
   .sb-fold:hover{background:var(--sb-hover)}
   .sb-collapse{display:flex;align-items:center;gap:10px;min-height:32px;margin:4px 8px 8px;padding:0 8px;border:none;background:none;border-radius:6px;
     font:inherit;font-size:14px;color:var(--sb-muted);cursor:pointer;flex-shrink:0}
@@ -220,9 +220,7 @@
   body.m-edge.rail .sb-collapse{justify-content:center;padding:0}
   /* A + C · hover chevron (Ignat's sketch 2026-11-23): org chevron only on hover, collapse button in the page's top bar */
   body.m-hover .sb-head{padding-right:0}
-  body.m-hover .sb-head .sb-org{margin-right:8px;position:relative}
-  body.m-hover .sb-org > .mi{position:absolute;right:4px;top:50%;transform:translateY(-50%);background:var(--sb-hover);border-radius:4px;opacity:0;pointer-events:none}
-  body.m-hover .sb-org:hover > .mi,body.m-hover .sb-org:focus-visible > .mi,body.m-hover .sb-org[aria-expanded="true"] > .mi{opacity:1}
+  body.m-hover .sb-head .sb-org{margin-right:8px}   /* chevron always visible (Ignat 2026-11-24) */
   body.m-hover .sb-org[aria-expanded="true"]{background:var(--sb-hover)}
   body.m-hover .top{padding-left:12px}
   .bar-toggle{margin:0;color:#6B778C}
@@ -670,8 +668,15 @@ document.addEventListener('mouseover', function(e){
     else showFly(t);
   }
   else if (e.target.closest && e.target.closest('#fly')) { clearTimeout(flyTimer); clearTimeout(swapTimer); }
-  else { clearTimeout(swapTimer); hideFly(); }
+  else { clearTimeout(swapTimer); if (!flyPinned) hideFly(); }
 });
+// touch / click: a flyout opened by tap stays until a tap outside it (no hover on touchscreens)
+var flyPinned = false;
+document.addEventListener('pointerdown', function(e){
+  if (!flyPinned) return;
+  var t = e.target.closest && (e.target.closest('#fly') || e.target.closest('#sb [data-fly]'));
+  if (!t) { flyPinned = false; hideFly(true); }
+}, true);
 document.addEventListener('focusin', function(e){
   var t = e.target.closest && e.target.closest('[data-fly]');
   if (t && t.closest('#sb')) showFly(t); else if (!(e.target.closest && e.target.closest('#fly'))) hideFly(true);
@@ -679,8 +684,8 @@ document.addEventListener('focusin', function(e){
 document.addEventListener('click', function(e){
   // in the rail a group icon opens its flyout instead of expanding in place
   var g = e.target.closest && e.target.closest('#sb .sb-group[data-fly]');
-  if (g && RAIL && st.collapsed) { e.stopPropagation(); e.preventDefault(); showFly(g); var f = document.querySelector('#fly a'); if (f) f.focus(); }
-  if (e.target.closest && e.target.closest('#fly a')) hideFly(true);
+  if (g && RAIL && st.collapsed) { e.stopPropagation(); e.preventDefault(); showFly(g); flyPinned = true; var f = document.querySelector('#fly a'); if (f) f.focus(); }
+  if (e.target.closest && e.target.closest('#fly a')) { flyPinned = false; hideFly(true); }
 }, true);
 document.addEventListener('keydown', function(e){   // arrow keys move through the tooltip menu
   var fly = document.getElementById('fly'); if (fly.hidden || !fly.contains(document.activeElement)) return;
