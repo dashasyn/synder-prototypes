@@ -1647,7 +1647,7 @@ function ReportConnection({ go, row }) {
   const adj = v => connAdjust(v, reduce, strict);
   const setLevel = (i, v) => setDims(d => { const n = [...d]; n[i] = v; for (let j = i + 1; j < 3; j++) n[j] = ''; return n; });
   const val = v => v === null || v === undefined
-    ? html`<${Typography} variant="body2" component="span" color="text.secondary">n/a<//>`
+    ? html`<${Typography} variant="body2" component="span" color="text.secondary">N/A<//>`
     : html`<${Typography} variant="body2" component="span" color=${v < CONN_RED ? 'error.main' : 'text.primary'}>
         ${v.toFixed(2).replace('.', ',')}%<//>`;
   const fields = connParamFields(t, lang, row);
@@ -2602,7 +2602,7 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
                       <${FilterSelect} id=${'raw-f-' + i} minWidth=${120}
                         label=${t(RAW_COLS[i])} value=${filters[i] || ''}
                         onChange=${v => { setPage(1); setFilters(f => ({ ...f, [i]: v })); }}
-                        options=${RAW_ENUM[i].map(o => ({ value: o, label: o }))} />`
+                        options=${RAW_ENUM[i].map(o => ({ value: o, label: cap(o) }))} />`
                     : html`
                       <${TextField} variant="standard" size="small" placeholder="…"
                         value=${filters[i] || ''}
@@ -2614,7 +2614,7 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
             <${TableBody}>
               ${shown.map((r, ri) => html`
                 <${TableRow} key=${ri} hover>
-                  ${r.map((c, ci) => html`<${TableCell} key=${ci}>${c}<//>`)}
+                  ${r.map((c, ci) => html`<${TableCell} key=${ci}>${RAW_ENUM[ci] ? cap(c) : c}<//>`)}
                 <//>`)}
               ${shown.length === 0 && html`
                 <${TableRow}><${TableCell} colSpan=${rows[0].length}>
@@ -3252,7 +3252,7 @@ function ReportLineAnalysis({ go, row }) {
                 const soll = laTrips[ci] + LA_SEG_MIN.slice(0, idx).reduce((a, b) => a + b, 0);
                 return { v, label: String(v), tip: `${hm(laTrips[ci])}\n${stops[r][0]} ${stops[r][1]}\nSoll ${t(hmKind === 'arr' ? 'la_arr' : 'la_dep')}: ${hm(soll % 1440)}:00\n${t('la_' + q)}: ${laMs(v)}\nFahrtnummer: ${70001 + ci}` };
               }}
-              colour=${v => laDiv(v, -44, 179)} legendTitle="min:sec" xTitle=${t('la_x_deptimes')}
+              colour=${v => laDiv(v, -44, 179)} legendTitle=${t('la_minsec')} xTitle=${t('la_x_deptimes')}
               legend=${{ gradient: 'linear-gradient(to bottom, rgb(196,136,88), rgb(226,226,226) 80%, rgb(125,163,196))',
                          ticks: ['02:59', '02:00', '01:00', '00:00', '-00:44'] }} />`}
 
@@ -3336,7 +3336,7 @@ function LaStopHeatmap({ go, row, stop, kind, dir, mode }) {
               const v = Math.max(0, Math.round(base[q] + 70 + 60 * (laRand(idx * 7 + d * 24 + h) - .3) + (h >= 7 && h <= 8 ? 50 : 0)));
               return { v, label: String(v), tip: `${days[d]} ${String(h).padStart(2, '0')}:00\n${t('la_' + q)}: ${laMs(v)}` };
             }}
-            colour=${v => laSeq(v, 221)} legendTitle="min:sec" xTitle=${t('la_hours')}
+            colour=${v => laSeq(v, 221)} legendTitle=${t('la_minsec')} xTitle=${t('la_hours')}
             legend=${{ gradient: 'linear-gradient(to bottom, rgb(200,105,42), rgb(201,201,201))', ticks: ['03:41', '02:30', '01:30', '00:30'] }} />
         <//><//>
       <//>
