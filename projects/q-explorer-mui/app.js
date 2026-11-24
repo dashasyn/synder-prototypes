@@ -22,6 +22,13 @@ const {
   FormControlLabel, Divider, Autocomplete, createFilterOptions, Pagination, Radio, RadioGroup,
 } = M;
 const Fragment = React.Fragment;
+// Ignat, 2026-11-24: labels and values in tables and filters start with a capital
+const cap = v => typeof v === 'string' && v ? v[0].toUpperCase() + v.slice(1) : v;
+// Ignat, 2026-11-24: every filter row fits one line; fields share the width,
+// long values ellipsize, checkbox labels may wrap to 2–3 lines
+const ONE_LINE = { display: 'flex', flexWrap: 'nowrap', gap: 2, alignItems: 'flex-start',
+  '& > *': { minWidth: 0 }, '& > span': { display: 'flex', flex: '1 1 0' },
+  '& .MuiFormControl-root, & .MuiAutocomplete-root': { minWidth: '0 !important', width: 'auto !important', flex: '1 1 0' } };
 
 // sx here is a plain style object, so theme tokens ('text.secondary') must be
 // resolved by hand — the browser silently drops them otherwise
@@ -72,7 +79,8 @@ const theme = createTheme({
     MuiAppBar:      { defaultProps: { elevation: 0 } },
     MuiToolbar:     { defaultProps: { variant: 'dense' } },
     // measured: TableHead carries a band; MUI's own is transparent
-    MuiTableHead:   { styleOverrides: { root: { backgroundColor: '#F4F4F4' } } },
+    MuiTableHead:   { styleOverrides: { root: { backgroundColor: '#F4F4F4',
+                      '& th::first-letter': { textTransform: 'uppercase' } } } },
     // measured: cards are a 1px #E7E7E7 hairline, no shadow
     MuiCard:        { defaultProps: { variant: 'outlined' },
                       styleOverrides: { root: { borderColor: '#E7E7E7' } } },
@@ -155,8 +163,8 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id }) {
   const labelId = (id || 'sel') + '-label';
   return html`
     <${FormControl} sx=${{ minWidth }} id=${id}>
-      <${InputLabel} id=${labelId}>${label}<//>
-      <${Select} value=${value} label=${label} labelId=${labelId}
+      <${InputLabel} id=${labelId}>${cap(label)}<//>
+      <${Select} value=${value} label=${cap(label)} labelId=${labelId}
         onChange=${e => onChange(e.target.value)}
         endAdornment=${value ? html`
           <${InputAdornment} position="end" sx=${{ mr: 3 }}>
@@ -164,7 +172,7 @@ function FilterSelect({ label, value, onChange, options, minWidth = 180, id }) {
               <${Icon} sx=${{ fontSize: 18 }}>close<//>
             <//>
           <//>` : null}>
-        ${options.map(o => html`<${MenuItem} key=${o.value} value=${o.value}>${o.label}<//>`)}
+        ${options.map(o => html`<${MenuItem} key=${o.value} value=${o.value}>${cap(o.label)}<//>`)}
       <//>
     <//>`;
 }
@@ -1490,7 +1498,7 @@ function ReportPunctuality({ go, row }) {
             <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>
               ${t('breakdown_heading')}
             <//>
-            <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+            <${Box} sx=${ONE_LINE} className="one-line">
               ${[0, 1, 2].map(i => html`
                 <${FilterSelect} key=${i} id=${'punct-auf-' + (i + 1)}
                   label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
@@ -1655,8 +1663,8 @@ function ReportConnection({ go, row }) {
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="conn-params" fields=${fields} />
         <${Card} sx=${{ mb: 2 }} id="conn-controls"><${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
-          <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-            <${Box}>
+          <${Box} sx=${{ ...ONE_LINE, gap: 3 }} className="one-line">
+            <${Box} sx=${{ flex: '3 1 0' }}>
               <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('breakdown_heading')}<//>
               <${Stack} direction="row" spacing=${1}>
                 ${[0, 1, 2].map(i => html`<${FilterSelect} key=${i} id=${'rpt-auf-' + (i + 1)} minWidth=${220}
@@ -1666,7 +1674,7 @@ function ReportConnection({ go, row }) {
                     .map(d => ({ value: d, label: t(RPT_DIM_LABELS[d]) }))} />`)}
               <//>
             <//>
-            <${Box}>
+            <${Box} sx=${{ flex: '2 1 0' }}>
               <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('conn_calc')}<//>
               <${Stack}>
                 <${FormControlLabel} control=${html`<${Checkbox} id="conn-reduce" checked=${reduce}
@@ -1774,7 +1782,7 @@ function ConnRows({ go, row, node, reduce }) {
               <${TableRow} className="conn-filter-row">${CONN_ROW_COLS.map((k, i) => html`<${TableCell} key=${k} sx=${{ py: .5 }}>
                 ${i >= 11 ? html`<${Select} variant="standard" fullWidth value=${f[i]} displayEmpty id=${'conn-f-' + i}
                     onChange=${e => setFilter(i, e.target.value)} inputProps=${{ 'aria-label': t(k) }}>
-                    <${MenuItem} value="">${t('la_all')}<//><${MenuItem} value="ja">ja<//><${MenuItem} value="nein">nein<//><//>`
+                    <${MenuItem} value="">${t('la_all')}<//><${MenuItem} value="ja">Ja<//><${MenuItem} value="nein">Nein<//><//>`
                   : html`<${TextField} variant="standard" size="small" fullWidth value=${f[i]} id=${'conn-f-' + i}
                     inputProps=${{ 'aria-label': t(k) }} onChange=${e => setFilter(i, e.target.value)} />`}
               <//>`)}<//>
@@ -1782,7 +1790,7 @@ function ConnRows({ go, row, node, reduce }) {
             <${TableBody}>
               ${shown.map((r, k) => html`<${TableRow} key=${k} hover>
                 ${r.map((c, i) => html`<${TableCell} key=${i} align=${i >= 5 ? 'right' : 'left'}
-                  sx=${(i === 11 || i === 12) && c === 'nein' ? { color: 'error.main' } : undefined}>${i === 0 ? fmtDate(c, lang) : c}<//>`)}
+                  sx=${(i === 11 || i === 12) && c === 'nein' ? { color: 'error.main' } : undefined}>${i === 0 ? fmtDate(c, lang) : cap(c)}<//>`)}
               <//>`)}
             <//>
           <//>
@@ -1815,8 +1823,8 @@ function ParamGrid({ id, fields, hotClass = 'param-hot' }) {
             sx=${hot ? { px: 1.5, mx: .5, border: '1px solid', borderColor: 'primary.main', borderRadius: 1,
                          bgcolor: 'rgba(33,150,243,0.06)' }
                      : { px: 1.5, borderLeft: i ? '1px solid #E7E7E7' : 'none' }}>
-            <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${label}<//>
-            <${Typography} variant="body2" color=${dim ? 'text.secondary' : 'text.primary'}>${value}<//>
+            <${Typography} variant="body2" sx=${{ fontWeight: 500 }}>${cap(label)}<//>
+            <${Typography} variant="body2" color=${dim ? 'text.secondary' : 'text.primary'}>${cap(value)}<//>
           <//>`)}
       <//>
     <//><//>`;
@@ -2114,8 +2122,8 @@ function ReportTripFailures({ go, row }) {
         ${tab === 0 ? html`<${FaOverview} t=${t} lang=${lang} row=${row} />` : html`
           <${Box} id="fa-tabelle">
             <${Card} sx=${{ mb: 2 }}><${CardContent}>
-              <${Box} sx=${{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                <${Box}>
+              <${Box} sx=${{ ...ONE_LINE, gap: 3 }} className="one-line">
+                <${Box} sx=${{ flex: '3 1 0' }}>
                   <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('breakdown_heading')}<//>
                   <${Stack} direction="row" spacing=${1}>
                     ${[0, 1, 2].map(i => html`
@@ -2126,7 +2134,7 @@ function ReportTripFailures({ go, row }) {
                           .map(d => ({ value: d, label: dimLabel(d) }))} />`)}
                   <//>
                 <//>
-                <${Box}>
+                <${Box} sx=${{ flex: '2 1 0' }}>
                   <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('fa_add_aufschluss_label')}<//>
                   <${Stack} direction="row" spacing=${1}>
                     ${[0, 1].map(i => html`
@@ -2137,20 +2145,18 @@ function ReportTripFailures({ go, row }) {
                           .map(d => ({ value: d, label: dimLabel(d) }))} />`)}
                   <//>
                 <//>
-                <${Box}>
+                <${Box} sx=${{ flex: '1.4 1 0' }}>
                   <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('fa_netto_label')}<//>
                   <${FormControlLabel} control=${html`<${Checkbox} id="fa-netto"
                       checked=${netto} onChange=${e => setNetto(e.target.checked)} />`}
                     label=${t('fa_ersatz_cb')} />
                 <//>
-                <${Box}>
+                <${Box} sx=${{ flex: '1.2 1 0' }}>
                   <${Typography} variant="subtitle2" sx=${{ mb: .5 }}>${t('fa_filter_label')}<//>
                   <${FormControlLabel} control=${html`<${Checkbox} id="fa-hide-zero"
                       checked=${hideZero} onChange=${e => setHideZero(e.target.checked)} />`}
                     label=${t('fa_filter_hide_cb')} />
                 <//>
-                <${Box} sx=${{ flex: 1 }} />
-                <${Link} href="#" onClick=${e => e.preventDefault()} sx=${{ pt: 1 }}>${t('fa_infoblatt')}<//>
               <//>
             <//><//>
 
@@ -2409,10 +2415,10 @@ function ReportDQI({ go, row }) {
         ${tab === 'table' && html`
           <${Box} id="dqi-table-panel">
             <${Card} sx=${{ mb: 3 }}><${CardContent}>
-              <${Stack} direction="row" spacing=${4} flexWrap="wrap" useFlexGap alignItems="flex-start">
-                <${Box}>
+              <${Box} sx=${{ ...ONE_LINE, gap: 4 }} className="one-line">
+                <${Box} sx=${{ flex: '3 1 0' }}>
                   <${Typography} variant="subtitle2" sx=${{ mb: 1.5 }}>${t('breakdown_heading')}<//>
-                  <${Stack} direction="row" spacing=${2} flexWrap="wrap" useFlexGap>
+                  <${Stack} direction="row" spacing=${2}>
                     ${[0, 1, 2].map(i => html`
                       <${FilterSelect} key=${i} id=${'dqi-auf-' + (i + 1)} minWidth=${200}
                         label=${t(i === 0 ? 'sel_breakdown_1' : i === 1 ? 'sel_breakdown_2' : 'sel_breakdown_3')}
@@ -2422,7 +2428,7 @@ function ReportDQI({ go, row }) {
                           .map(([d, key]) => ({ value: d, label: t(key) }))} />`)}
                   <//>
                 <//>
-                <${Box}>
+                <${Box} sx=${{ flex: '1 1 0' }}>
                   <${Typography} variant="subtitle2" sx=${{ mb: 1 }}>${t('dqi_filter')}<//>
                   <${FormControlLabel}
                     control=${html`<${Checkbox} id="dqi-only-below" checked=${onlyBelow}
@@ -3042,9 +3048,9 @@ function LaRouteSelect({ route, selected, setSelected }) {
 // a single required choice — no clear ✕, unlike the filters
 function LaSelect({ id, label, value, onChange, options, minWidth = 200, disabled, tip }) {
   const field = html`<${FormControl} id=${id} sx=${{ minWidth }} disabled=${!!disabled}>
-    <${InputLabel} id=${id + '-label'}>${label}<//>
-    <${Select} labelId=${id + '-label'} label=${label} value=${value} onChange=${e => onChange(e.target.value)}>
-      ${options.map(o => html`<${MenuItem} key=${o.value} value=${o.value} disabled=${!!o.disabled}>${o.label}<//>`)}
+    <${InputLabel} id=${id + '-label'}>${cap(label)}<//>
+    <${Select} labelId=${id + '-label'} label=${cap(label)} value=${value} onChange=${e => onChange(e.target.value)}>
+      ${options.map(o => html`<${MenuItem} key=${o.value} value=${o.value} disabled=${!!o.disabled}>${cap(o.label)}<//>`)}
     <//><//>`;
   return tip ? html`<${Tooltip} title=${tip}><span>${field}</span><//>` : field;
 }
@@ -3196,7 +3202,7 @@ function ReportLineAnalysis({ go, row }) {
               and "both" do not apply to a heatmap, so there they are disabled
               with the reason, not hidden — the bar never jumps between tabs. */''}
         <${Card} sx=${{ mb: 2 }} id="la-controls"><${CardContent} sx=${{ '&:last-child': { pb: 2 } }}>
-          <${Box} sx=${{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+          <${Box} sx=${ONE_LINE} className="one-line">
             <${LaSelect} id="la-dir" label=${t('la_direction')} value=${dir} onChange=${setDir} minWidth=${300}
               options=${[0, 1].map(d => { const r = laRoute(d);
                 return { value: d, label: `${t(d ? 'la_dir_back' : 'la_dir_out')} (${r[0][1].split(',')[0]} → ${r[r.length - 1][1].split(',')[0]})` }; })} />
