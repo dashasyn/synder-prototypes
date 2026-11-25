@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Synder — new user flow (draft)</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+<link rel="stylesheet" href="../../ui-kit/synder-ui-kit.css">
+<link rel="stylesheet" href="../../ui-kit/proposed.css">
+<!-- New user flow draft (topic "New user flow", 2026-11-25). One product: import everything, adjust,
+     choose grouping only at export. Onboarding = sign up + connect a sales source. Home like Shopify:
+     4 numbers + Ask Syndy. Kit classes/tokens only; page-layout helpers below are prototype-local. -->
+<style>
+  /* prototype chrome: demo controls in the dark bar */
+  #vbar{position:relative;z-index:1200}
+  .demo-ctrls{margin-left:auto;display:flex;align-items:center;gap:12px}
+  .demo-ctrls select,.demo-ctrls button{font:inherit;font-size:14px;background:rgba(255,255,255,.1);color:var(--color-white);border:1px solid rgba(255,255,255,.25);border-radius:4px;padding:4px 8px;cursor:pointer}
+  .demo-ctrls select option{color:var(--text-primary)}
+  html,body{height:100%}
+  body{display:flex;flex-direction:column;min-width:1280px;margin:0}
+  .screen{display:none;flex:1;min-height:0}
+  .screen.on{display:flex;flex-direction:column}
+  .synder-app{flex:1;min-height:0;display:flex;flex-direction:column}
+  .synder-layout{flex:1;min-height:0}
+  .app-scroll{flex:1;min-width:0;overflow:auto;display:flex}
+  .page[hidden]{display:none}
+
+  /* onboarding */
+  .onb-body{flex:1;overflow:auto;background:var(--bg-page)}
+  .onb-col{width:640px;margin:56px auto 48px}
+  .onb-col.narrow{width:440px}
+  .onb-step{color:var(--text-secondary);margin-bottom:8px}
+  .onb-title{font-size:24px;line-height:32px;font-weight:400;margin:0 0 8px}
+  .onb-sub{font-size:16px;line-height:24px;color:var(--text-secondary);margin:0 0 24px}
+  .onb-panel{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md);padding:24px}
+  .onb-actions{display:flex;justify-content:space-between;align-items:center;margin-top:24px}
+  .or-line{display:flex;align-items:center;gap:12px;color:var(--text-secondary);margin:20px 0}
+  .or-line::before,.or-line::after{content:'';flex:1;height:1px;background:var(--border-default)}
+  .sso{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .sso .btn-outlined{display:inline-flex;align-items:center;justify-content:center;gap:8px}
+  .stack{display:flex;flex-direction:column;gap:16px}
+  .src-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+  .src-grid .choice-card{align-items:center;padding:16px}
+  .src-grid .choice-card img{width:32px;height:32px}
+  .src-grid .choice-card .grow{flex:1;min-width:0}
+  .src-grid .choice-card .status{margin-left:auto}
+
+  /* app */
+  .syndy-pill{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 14px;border-radius:16px;border:1px solid var(--color-primary-20);background:var(--bg-surface);color:var(--color-primary);font:inherit;font-size:14px;font-weight:500;cursor:pointer}
+  .syndy-pill:hover{background:var(--color-primary-5)}
+  .syndy-pill .material-icons{font-size:18px}
+  .head-row{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:24px}
+  .stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin-top:16px}
+  .kpi{display:block;width:100%;text-align:left;padding:16px 20px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md);font:inherit;color:var(--text-primary);cursor:pointer}
+  .kpi:hover{border-color:var(--border-strong);background:var(--bg-row-hover)}
+  .kpi:focus-visible{outline:2px solid var(--border-focus);outline-offset:2px}
+  .kpi-label{display:flex;align-items:center;gap:6px;font-size:14px;line-height:20px;color:var(--text-secondary)}
+  .kpi-label .material-icons{font-size:18px}
+  .kpi-value{display:block;font-size:28px;line-height:36px;margin-top:8px;font-variant-numeric:tabular-nums}
+  .kpi-sub{display:block;font-size:14px;line-height:20px;color:var(--text-secondary);margin-top:2px}
+  .kpi--warn .kpi-label .material-icons{color:var(--color-yellow)}
+  .ask{margin-top:24px;padding:20px;background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md)}
+  .ask-row{display:flex;gap:8px;align-items:center}
+  .ask-row .material-icons.lead{color:var(--color-primary)}
+  .ask-row .input{flex:1;height:44px;font-size:16px}
+  .ask-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+  .two-col{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:16px;margin-top:24px;align-items:start}
+  .box{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md)}
+  .box-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border-default)}
+  .box-title{font-size:16px;line-height:24px;font-weight:500;margin:0}
+  .box-body{padding:16px 20px}
+  .issue{display:flex;align-items:center;gap:12px;width:100%;padding:14px 20px;border:0;border-bottom:1px solid var(--border-default);background:none;font:inherit;font-size:14px;text-align:left;color:var(--text-primary);cursor:pointer}
+  .issue:last-child{border-bottom:0}
+  .issue:hover{background:var(--bg-row-hover)}
+  .issue .material-icons:first-child{color:var(--color-yellow)}
+  .issue .grow{flex:1}
+  .issue .n{color:var(--text-secondary)}
+  .books-logos{display:flex;gap:8px;margin:4px 0 16px}
+  .books-logos .btn-outlined{display:inline-flex;align-items:center;gap:8px}
+  .kv{display:grid;grid-template-columns:140px 1fr;gap:8px 16px;font-size:14px;line-height:20px}
+  .kv dt{color:var(--text-secondary)}
+  .kv dd{margin:0}
+  .import-alert{margin-top:16px;display:flex;align-items:center;gap:16px}
+  .import-alert .progress{flex:0 0 240px}
+  .import-alert .grow{flex:1}
+  .src-cell{display:inline-flex;align-items:center;gap:8px}
+  .synder-table tbody tr.clickable{cursor:pointer}
+  .bulk-note{color:var(--text-secondary)}
+
+  /* export sheet */
+  .sec{margin-top:20px}
+  .sec:first-child{margin-top:0}
+  .sec-title{font-size:16px;line-height:24px;font-weight:500;margin:0 0 8px}
+  .group-opts{display:flex;flex-direction:column;gap:8px}
+  .group-opts .choice-card{padding:12px 16px;align-items:center}
+  .group-opts .choice-card-desc{margin-top:0}
+  .preview{border:1px solid var(--border-default);border-radius:var(--radius-md);padding:16px}
+  .preview-num{font-size:20px;line-height:28px}
+  .preview .synder-table td,.preview .synder-table th{height:36px}
+
+  /* Syndy drawer: docked right, 440px, pushes content (production pattern, project-notes/syndy-ai-assistant.md) */
+  .syndy{width:440px;flex-shrink:0;border-left:1px solid var(--border-default);background:var(--bg-surface);display:flex;flex-direction:column;min-height:0}
+  .syndy[hidden]{display:none}
+  .syndy-head{display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--border-default);font-size:16px;font-weight:500}
+  .syndy-head .grow{flex:1}
+  .syndy-body{flex:1;overflow:auto;padding:16px;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:20px}
+  .msg{max-width:90%;padding:10px 14px;border-radius:var(--radius-md)}
+  .msg.me{align-self:flex-end;background:var(--color-primary-10)}
+  .msg.bot{align-self:flex-start;background:var(--bg-page)}
+  .msg.bot p{margin:0 0 8px}.msg.bot p:last-child{margin:0}
+  .syndy-foot{display:flex;gap:8px;padding:12px 16px;border-top:1px solid var(--border-default)}
+  .syndy-foot .input{flex:1}
+  #ex-sheet{display:contents}
+  #modal-bg{z-index:1050}   /* connect dialog opens over the export sheet */
+  .proto-note{color:var(--text-secondary);border:1px dashed var(--border-strong);border-radius:var(--radius-md);padding:16px}
+</style>
+</head>
+<body>
+<div class="variant-switch" id="vbar">
+  <span class="vs-label">Demo</span>
+  <div class="demo-ctrls">
+    <label for="jump">Jump to</label>
+    <select id="jump" onchange="jumpTo(this.value);this.value=''">
+      <option value="">…</option>
+      <option value="signup">1 · Sign up</option>
+      <option value="connect">2 · Connect where you sell</option>
+      <option value="home-importing">Home · import running</option>
+      <option value="home">Home · import done, books not connected</option>
+      <option value="home-exported">Home · after first export</option>
+      <option value="transactions">Transactions</option>
+      <option value="exports">Exports · empty</option>
+      <option value="exports-full">Exports · with history</option>
+      <option value="rules">Rules (placeholder)</option>
+      <option value="settings">Settings</option>
+    </select>
+    <button id="reset" onclick="resetDemo()">Reset</button>
+  </div>
+</div>
+
+<div class="synder-toast-stack" id="toasts" aria-live="polite"></div>
+
+<!-- ========== ONBOARDING ========== -->
+<section class="screen on" id="s-onb">
+  <div class="topbar">
+    <a class="topbar-title"><img class="brand-logo" src="../../ui-kit/logos/synder-full-color.svg" alt="Synder"></a>
+  </div>
+  <div class="onb-body"><div class="onb-col narrow" id="onb"></div></div>
+</section>
+
+<!-- ========== APP ========== -->
+<section class="screen" id="s-app">
+<div class="synder-app">
+  <header class="topbar topbar--app">
+    <div class="topbar-org"><span class="sidebar-org-avatar">NG</span><span class="topbar-org-name">Northwind Goods</span><span class="material-icons">expand_more</span></div>
+    <div class="topbar-right">
+      <button class="syndy-pill" id="syndy-pill" onclick="openSyndy()"><span class="material-icons">auto_awesome</span>Ask Syndy</button>
+      <button class="topbar-icon" aria-label="Notifications"><span class="material-icons">notifications</span></button>
+      <button class="topbar-icon" aria-label="Help"><span class="material-icons">help_outline</span><span class="material-icons topbar-caret">expand_more</span></button>
+      <button class="topbar-icon" aria-label="Account"><span class="material-icons">person</span><span class="material-icons topbar-caret">expand_more</span></button>
+    </div>
+  </header>
+  <div class="synder-layout">
+    <nav class="sidebar sidebar--notch" aria-label="Main" id="nav">
+      <a class="sidebar-item" data-p="home" href="#home"><span class="material-icons">home</span><span>Home</span></a>
+      <a class="sidebar-item" data-p="transactions" href="#transactions"><span class="material-icons">receipt_long</span><span>Transactions</span></a>
+      <a class="sidebar-item" data-p="exports" href="#exports"><span class="material-icons">ios_share</span><span>Exports</span></a>
+      <a class="sidebar-item" data-p="rules" href="#rules"><span class="material-icons">rule</span><span>Rules</span></a>
+      <a class="sidebar-item" data-p="settings" href="#settings"><span class="material-icons">settings</span><span>Settings</span></a>
+    </nav>
+    <div class="app-scroll">
+      <main class="synder-page" id="main"></main>
+    </div>
+    <aside class="syndy" id="syndy" hidden aria-label="Syndy">
+      <div class="syndy-head"><span class="material-icons" style="color:var(--color-primary)">auto_awesome</span><span class="grow">Syndy · Northwind Goods</span><button class="btn-icon" aria-label="Close Syndy" onclick="closeSyndy()"><span class="material-icons">close</span></button></div>
+      <div class="syndy-body" id="syndy-body"></div>
+      <div class="syndy-foot"><input class="input" id="syndy-in" placeholder="Ask about your data, a rule or an export" onkeydown="if(event.key==='Enter')askFrom('syndy-in')"><button class="btn" onclick="askFrom('syndy-in')">Send</button></div>
+    </aside>
+  </div>
+</div>
+</section>
+
+<!-- side sheet host -->
+<div id="sheet-host"></div>
+<!-- modal host -->
+<div class="modal-bg" id="modal-bg"><div class="modal modal-md" role="dialog" aria-modal="true" id="modal"></div></div>
+
+<script>
+/* ---------- state ---------- */
+const S0 = () => ({
+  email:'', sources:[], period:'Since Jan 1, 2026',
+  importPct:100, books:null, exports:[], autos:[], period2:'30', tab:'all', srcFilter:'', q:'', page:1, sel:new Set()
+});
+let S = S0();
+let importTimer = null;
+const TOTAL = 3812, ATTN = 48;
+const LOGO = n => `../../ui-kit/logos/${n}-square.svg`;
+const SRC = { Shopify:'shopify', Stripe:'stripe', PayPal:'paypal', Amazon:'amazon', Square:'square', WooCommerce:'woo', Etsy:'etsy', eBay:'ebay', BigCommerce:'bigcommerce' };
+const BOOKS = { 'QuickBooks Online':'quickbooks', 'Xero':'xero' };
+const fmt = n => n.toLocaleString('en-US');
+const money = n => n.toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* mock transactions (sample of the 3,812) */
+const NAMES = ['Jane Doe','John Smith','Alex Example','Sam Sample','Pat Placeholder','Chris Test','Robin Demo','Taylor Mock'];
+const ISSUES = ['No product match','Refund without original sale','Missing tax rate'];
+let TX = [];
+function buildTx(){
+  TX = []; let seed = 7; const r = () => (seed = (seed*9301+49297)%233280)/233280;
+  const srcs = S.sources.length ? S.sources : ['Shopify','Stripe'];
+  for (let i=0;i<120;i++){
+    const src = srcs[i % srcs.length], d = 24 - Math.floor(i/6);
+    const t = r(); const type = t<.72?'Sale':t<.84?'Refund':t<.94?'Fee':'Payout';
+    let amt = type==='Sale'? 20+r()*980 : type==='Refund'? -(10+r()*300) : type==='Fee'? -(1+r()*30) : 2000+r()*9000;
+    const n = NAMES[i%NAMES.length];
+    const issue = (i%11===4) ? ISSUES[i%3] : null;
+    TX.push({ id:'TX-'+(48210-i), date:`Nov ${Math.max(d,1)}, 2026`, src, type, cust: type==='Payout'||type==='Fee' ? '—' : n,
+      email: type==='Payout'||type==='Fee' ? '' : n.toLowerCase().replace(' ','.')+'@example.com',
+      amt: Math.round(amt*100)/100, issue, exported:null });
+  }
+}
+function counts(){
+  const p = S.importPct/100;
+  const imported = Math.round(TOTAL*p), attn = Math.round(ATTN*p);
+  const exp = S.exports.filter(e=>e.books).reduce((a,e)=>a+e.n,0);
+  return { imported, attn, exported: exp, ready: Math.max(imported - attn - exp, 0), amount: 412560.18*p };
+}
+
+/* ---------- routing ---------- */
+function go(h){ location.hash = h; }
+window.addEventListener('hashchange', render);
+function render(){
+  const h = (location.hash||'#signup').slice(1);
+  const onb = ['signup','connect'].includes(h);
+  document.getElementById('s-onb').classList.toggle('on', onb);
+  document.getElementById('s-app').classList.toggle('on', !onb);
+  if (onb) return h==='signup' ? renderSignup() : renderConnect();
+  document.querySelectorAll('#nav .sidebar-item').forEach(a => a.classList.toggle('active', a.dataset.p===h));
+  ({home:renderHome, transactions:renderTx, exports:renderExports, rules:renderRules, settings:renderSettings}[h] || renderHome)();
+}
+
+/* ---------- onboarding ---------- */
+function renderSignup(){
+  const o = document.getElementById('onb'); o.className='onb-col narrow';
+  o.innerHTML = `<div class="onb-step">Step 1 of 2</div>
+    <h1 class="onb-title">Create your Synder account</h1>
+    <p class="onb-sub">Free for 14 days. No card needed.</p>
+    <div class="onb-panel">
+      <div class="sso">
+        <button class="btn-outlined" onclick="signup(true)"><span class="material-icons">account_circle</span>Google</button>
+        <button class="btn-outlined" onclick="signup(true)"><img class="integration-logo" src="${LOGO('quickbooks')}" alt="">Intuit</button>
+      </div>
+      <div class="or-line">or</div>
+      <div class="stack">
+        <div class="form-field"><label class="form-label form-label-required" for="su-email">Work email</label><input class="input w-full" id="su-email" type="email" placeholder="jane.doe@example.com" value="${esc(S.email)}"><div class="form-error-msg" id="su-email-err" hidden>Enter your work email</div></div>
+        <div class="form-field"><label class="form-label form-label-required" for="su-pass">Password</label><input class="input w-full" id="su-pass" type="password" onkeydown="if(event.key==='Enter')signup()"><div class="form-error-msg" id="su-pass-err" hidden>At least 8 characters</div></div>
+      </div>
+      <button class="btn w-full" id="su-go" style="margin-top:24px" onclick="signup()">Create account</button>
+    </div>
+    <p class="text-secondary" style="margin-top:16px">Already have an account? <a class="text-link" href="https://app.synderapp.com/" target="_blank" rel="noopener">Sign in</a></p>`;
+}
+function signup(sso){
+  if (!sso){
+    const e = document.getElementById('su-email'), p = document.getElementById('su-pass');
+    const eBad = !/^\S+@\S+\.\S+$/.test(e.value), pBad = p.value.length < 8;
+    e.classList.toggle('error', eBad); p.classList.toggle('error', pBad);
+    document.getElementById('su-email-err').hidden = !eBad; document.getElementById('su-pass-err').hidden = !pBad;
+    if (eBad || pBad) return;
+    S.email = e.value;
+  } else S.email = 'jane.doe@example.com';
+  go('#connect');
+}
+function renderConnect(){
+  const o = document.getElementById('onb'); o.className='onb-col';
+  o.innerHTML = `<div class="onb-step">Step 2 of 2</div>
+    <h1 class="onb-title">Connect where you sell</h1>
+    <p class="onb-sub">We import every transaction. Nothing goes to your books until you export it.</p>
+    <div class="src-grid" id="src-grid">${Object.keys(SRC).map(n => {
+      const on = S.sources.includes(n);
+      return `<button class="choice-card" aria-pressed="${on}" data-src="${n}" onclick="connectSrc('${n}')"><img src="${LOGO(SRC[n])}" alt=""><span class="grow choice-card-title">${n}</span>${on?'<span class="status status-green">Connected</span>':''}</button>`;
+    }).join('')}</div>
+    <div class="form-error-msg" id="src-err" hidden style="margin-top:8px">Connect at least one place where you sell</div>
+    <div class="onb-panel" style="margin-top:24px">
+      <div class="form-field" style="max-width:280px"><label class="form-label" for="imp-from">Import transactions from</label>
+        <select class="select w-full" id="imp-from" onchange="S.period=this.value">${['Last 30 days','Since Jan 1, 2026','Last 12 months'].map(x=>`<option ${x===S.period?'selected':''}>${x}</option>`).join('')}</select></div>
+    </div>
+    <div class="onb-actions"><button class="btn-outlined" onclick="go('#signup')">Back</button><button class="btn" id="start-import" onclick="startImport()">Start import</button></div>`;
+}
+function connectSrc(n){
+  if (S.sources.includes(n)) { S.sources = S.sources.filter(x=>x!==n); return renderConnect(); }
+  modal(`<div class="synder-modal-header"><span>Connect ${n}</span></div>
+    <div class="synder-modal-body" style="display:flex;align-items:center;gap:12px"><span class="spinner"></span>Waiting for ${n} to confirm access…</div>`);
+  setTimeout(() => { closeModal(); S.sources.push(n); renderConnect(); toast(`${n} connected`); }, 900);
+}
+function startImport(){
+  if (!S.sources.length){ document.getElementById('src-err').hidden=false; return; }
+  buildTx(); runImport(0); go('#home');
+}
+function runImport(from){
+  clearInterval(importTimer); S.importPct = from;
+  importTimer = setInterval(() => {
+    S.importPct = Math.min(100, S.importPct + 4);
+    if (S.importPct >= 100){ clearInterval(importTimer); toast(`Import finished: ${fmt(TOTAL)} transactions`); }
+    const h = location.hash.slice(1); if (h==='home' || h==='transactions') render();
+  }, 500);
+}
+
+/* ---------- shared ---------- */
+function header(title, sub, actions=''){
+  return `<div class="synder-page-header"><div class="synder-page-header-text"><h1 class="synder-page-title">${title}</h1><p class="synder-page-subtitle">${sub}</p></div><div class="synder-page-actions">${actions}</div></div>`;
+}
+function srcNames(){ return (S.sources.length?S.sources:['Shopify','Stripe']).join(' and '); }
+function importBanner(){
+  if (S.importPct >= 100) return '';
+  const c = counts();
+  return `<div class="alert alert-info import-alert" id="import-banner"><span class="spinner"></span><span class="grow">Importing from ${srcNames()} · ${fmt(c.imported)} of ${fmt(TOTAL)} transactions</span><div class="progress"><div class="progress-fill" style="width:${S.importPct}%"></div></div></div>`;
+}
+
+/* ---------- HOME ---------- */
+const PERIODS = { '7':['Last 7 days',.22], '30':['Last 30 days',1], 'ytd':['Since Jan 1',1] };
+function renderHome(){
+  const c = counts(), f = PERIODS[S.period2][1];
+  const sc = n => Math.round(n*f);
+  const done = S.importPct >= 100;
+  const m = document.getElementById('main');
+  m.innerHTML = header('Home', 'Your imported data at a glance. Ask Syndy anything about it.') + importBanner() + `
+    <div class="head-row"><div class="segmented segmented--sm" role="group" aria-label="Period">${Object.entries(PERIODS).map(([k,[l]])=>`<button class="segmented-btn" aria-pressed="${k===S.period2}" onclick="S.period2='${k}';render()">${l}</button>`).join('')}</div></div>
+    <div class="stat-grid">
+      <button class="kpi" id="kpi-imported" onclick="openTx('all')"><span class="kpi-label"><span class="material-icons">download</span>Imported</span><span class="kpi-value">${fmt(sc(c.imported))}</span><span class="kpi-sub">$${money(c.amount*f)} in sales</span></button>
+      <button class="kpi" id="kpi-ready" onclick="openTx('ready')"><span class="kpi-label"><span class="material-icons">task_alt</span>Ready to export</span><span class="kpi-value">${fmt(sc(c.ready))}</span><span class="kpi-sub">${c.ready? 'Rules and settings applied':'Nothing waiting'}</span></button>
+      <button class="kpi kpi--warn" id="kpi-attn" onclick="openTx('attn')"><span class="kpi-label"><span class="material-icons">error_outline</span>Needs attention</span><span class="kpi-value">${fmt(sc(c.attn))}</span><span class="kpi-sub">Won't be exported until fixed</span></button>
+      <button class="kpi" id="kpi-exported" onclick="${S.books?`openTx('exported')`:`connectBooks()`}"><span class="kpi-label"><span class="material-icons">menu_book</span>Exported to books</span><span class="kpi-value">${fmt(sc(c.exported))}</span><span class="kpi-sub">${S.books? esc(S.books) : '<span class="text-link">Connect your books</span>'}</span></button>
+    </div>
+    <div class="ask">
+      <div class="ask-row"><span class="material-icons lead">auto_awesome</span><input class="input" id="ask-in" placeholder="Ask Syndy about your sales, fees, refunds or exports" onkeydown="if(event.key==='Enter')askFrom('ask-in')"><button class="btn" id="ask-go" onclick="askFrom('ask-in')">Ask</button></div>
+      <div class="ask-chips">${PROMPTS.map((p,i)=>`<button class="btn-outlined btn-sm" onclick="ask(PROMPTS[${i}])">${p}</button>`).join('')}</div>
+    </div>
+    <div class="two-col">
+      <div class="box" id="attn-box">
+        <div class="box-head"><h2 class="box-title">Needs attention</h2><button class="btn-text" onclick="openTx('attn')">View all</button></div>
+        ${c.attn ? [['No product match',22],['Refund without original sale',17],['Missing tax rate',9]].map(([t,n])=>`<button class="issue" onclick="openTx('attn','${t}')"><span class="material-icons">error_outline</span><span class="grow">${t}</span><span class="n">${fmt(Math.round(n*S.importPct/100))}</span><span class="material-icons text-secondary">chevron_right</span></button>`).join('')
+          : `<div class="box-body text-secondary">${done?'Nothing needs attention.':'Checking transactions as they arrive…'}</div>`}
+      </div>
+      ${S.exports.length ? lastExportBox() : booksBox()}
+    </div>`;
+}
+function booksBox(){
+  if (!S.books) return `<div class="box" id="books-box"><div class="box-head"><h2 class="box-title">Send your data to your books</h2></div><div class="box-body">
+      <p style="margin:0 0 12px">Connect QuickBooks or Xero, then export as summaries or per transaction.</p>
+      <div class="books-logos"><button class="btn-outlined" onclick="connectBooks('QuickBooks Online')"><img class="integration-logo" src="${LOGO('quickbooks')}" alt="">QuickBooks Online</button><button class="btn-outlined" onclick="connectBooks('Xero')"><img class="integration-logo" src="${LOGO('xero')}" alt="">Xero</button></div>
+      <button class="btn-text" style="padding-left:0" onclick="openExport('CSV file')">Export to CSV or Excel instead</button></div></div>`;
+  return `<div class="box" id="books-box"><div class="box-head"><h2 class="box-title">Ready for your first export</h2></div><div class="box-body">
+      <p style="margin:0 0 16px">${fmt(counts().ready)} transactions can go to ${esc(S.books)}.</p>
+      <button class="btn" onclick="openExport()">Export</button></div></div>`;
+}
+function lastExportBox(){
+  const e = S.exports[0];
+  return `<div class="box" id="last-export"><div class="box-head"><h2 class="box-title">Last export</h2><button class="btn-text" onclick="go('#exports')">All exports</button></div><div class="box-body">
+    <dl class="kv"><dt>When</dt><dd>${e.date}</dd><dt>Where</dt><dd><span class="src-cell"><img class="integration-logo" src="${e.logo}" alt="">${esc(e.dest)}</span></dd><dt>Grouping</dt><dd>${e.group}</dd><dt>Result</dt><dd>${fmt(e.n)} transactions → ${fmt(e.entries)} ${e.books?'entries':'rows'}</dd></dl>
+    ${S.autos.length?`<p class="text-secondary" style="margin:16px 0 0">Automatic: ${esc(S.autos[0].src)} → ${esc(S.autos[0].dest)}, ${S.autos[0].sched.toLowerCase()}</p>`:''}</div></div>`;
+}
+function connectBooks(which){
+  const opts = which ? [which] : Object.keys(BOOKS);
+  if (!which){
+    modal(`<div class="synder-modal-header"><span>Connect your books</span><button class="modal-close" aria-label="Close" onclick="closeModal()"><span class="material-icons">close</span></button></div>
+      <div class="synder-modal-body"><div class="stack">${opts.map(b=>`<button class="choice-card" onclick="connectBooks('${b}')"><img class="integration-logo" src="${LOGO(BOOKS[b])}" alt=""><span class="choice-card-title">${b}</span></button>`).join('')}</div></div>`);
+    return;
+  }
+  modal(`<div class="synder-modal-header"><span>Connect ${which}</span></div><div class="synder-modal-body" style="display:flex;align-items:center;gap:12px"><span class="spinner"></span>Waiting for ${which} to confirm access…</div>`);
+  setTimeout(()=>{ closeModal(); S.books = which; toast(`${which} connected`); render(); if (document.getElementById('ex-sheet')) renderExportSheet(); }, 900);
+}
+
+/* ---------- Syndy ---------- */
+const PROMPTS = ['What were my net sales last month?','Why do 48 transactions need attention?','How much did I pay in Stripe fees?','Summary or per transaction: which fits me?'];
+const ANSWERS = {
+  0:'<p>Net sales for October 2026: <b>$134,208.40</b> (gross $141,950.12, refunds $7,741.72).</p><p>Shopify brought 68% of it, Stripe 32%.</p>',
+  1:'<p>48 transactions are held back:</p><p>• 22 sales have a product that isn\'t in your books yet<br>• 17 refunds have no original sale in the import period<br>• 9 sales have no tax rate</p><p><a class="text-link" href="#transactions" onclick="openTx(\'attn\');return false">Open them in Transactions</a></p>',
+  2:'<p>Stripe fees since Jan 1, 2026: <b>$11,482.06</b>, about 2.9% of Stripe volume.</p>',
+  3:'<p>You sell high volume with small orders, so <b>by payout</b> keeps your books readable: one entry per deposit, matching your bank feed.</p><p>You can still export per transaction to CSV at any time.</p>'
+};
+function openSyndy(){ document.getElementById('syndy').hidden = false; const b = document.getElementById('syndy-body'); if (!b.children.length) b.innerHTML = `<div class="msg bot"><p>I know every transaction you imported. Ask about sales, fees, refunds, or how to export.</p></div>`; }
+function closeSyndy(){ document.getElementById('syndy').hidden = true; }
+function askFrom(id){ const i = document.getElementById(id); const v = i.value.trim(); if (!v){ i.classList.add('error'); i.focus(); return; } i.classList.remove('error'); i.value=''; ask(v); }
+function ask(q){
+  openSyndy(); const b = document.getElementById('syndy-body');
+  b.insertAdjacentHTML('beforeend', `<div class="msg me">${esc(q)}</div><div class="msg bot" data-pending><span class="spinner"></span></div>`);
+  b.scrollTop = b.scrollHeight;
+  const k = PROMPTS.indexOf(q);
+  setTimeout(()=>{ const p = b.querySelector('[data-pending]'); p.removeAttribute('data-pending');
+    p.innerHTML = k>=0 ? ANSWERS[k] : '<p>[mock] In the real product Syndy answers from your imported data here.</p>'; b.scrollTop = b.scrollHeight; }, 700);
+}
+
+/* ---------- TRANSACTIONS ---------- */
+function openTx(tab, issue){ S.tab = tab; S.issue = issue||''; S.page = 1; S.sel.clear(); go('#transactions'); render(); }
+function status(t){
+  if (t.issue) return `<span class="status status-yellow">Needs attention</span><span class="cell-subtext">${t.issue}</span>`;
+  if (t.exported) return `<span class="status status-green">Exported</span><span class="cell-subtext">${esc(t.exported)}</span>`;
+  return `<span class="status status-blue">Ready</span>`;
+}
+function filtered(){
+  return TX.filter(t => (!S.srcFilter || t.src===S.srcFilter)
+    && (!S.q || (t.cust+t.id+t.email).toLowerCase().includes(S.q.toLowerCase()))
+    && (S.tab==='all' || (S.tab==='attn' && t.issue && (!S.issue || t.issue===S.issue)) || (S.tab==='ready' && !t.issue && !t.exported) || (S.tab==='exported' && t.exported)));
+}
+function renderTx(){
+  if (!TX.length) buildTx();
+  const c = counts(), rows = filtered(), per = 25, pages = Math.max(1, Math.ceil(rows.length/per));
+  S.page = Math.min(S.page, pages);
+  const vis = rows.slice((S.page-1)*per, S.page*per);
+  const tabs = [['all','All',c.imported],['ready','Ready to export',c.ready],['attn','Needs attention',c.attn],['exported','Exported',c.exported]];
+  const nSel = S.sel.size;
+  const m = document.getElementById('main');
+  m.innerHTML = header('Transactions', 'Everything imported from your sales channels, after your rules are applied.',
+      `<button class="btn" id="export-btn" onclick="openExport()">${nSel?`Export ${nSel} selected`:'Export'}</button>`) + importBanner() + `
+    <div class="synder-list-block">
+      <div class="synder-filter-bar">
+        <div class="synder-filter-bar-fields">
+          <div class="form-field" style="width:200px"><label class="form-label" for="f-src">Source</label><select class="select" id="f-src"><option value="">All sources</option>${(S.sources.length?S.sources:['Shopify','Stripe']).map(s=>`<option ${s===S.srcFilter?'selected':''}>${s}</option>`).join('')}</select></div>
+          <div class="form-field" style="width:260px"><label class="form-label" for="f-q">Search</label><input class="input input-search" id="f-q" placeholder="Customer, email or ID" value="${esc(S.q)}" onkeydown="if(event.key==='Enter')applyF()"></div>
+        </div>
+        <div class="synder-filter-bar-actions"><button class="btn" onclick="applyF()">Apply</button><button class="btn-outlined" onclick="S.srcFilter='';S.q='';S.issue='';render()">Reset filters</button></div>
+      </div>
+      <div class="tabs" role="tablist">${tabs.map(([k,l,n])=>`<div class="tab ${k===S.tab?'active':''}" role="tab" tabindex="0" aria-selected="${k===S.tab}" onclick="S.tab='${k}';S.issue='';S.page=1;render()">${l} <span class="tab-count">${fmt(n)}</span></div>`).join('')}</div>
+      ${S.issue?`<div class="synder-page-chips"><span class="chip-input">Issue: ${esc(S.issue)}<button class="chip-remove" aria-label="Clear issue filter" onclick="S.issue='';render()"><span class="material-icons">close</span></button></span></div>`:''}
+      ${vis.length ? `<div class="table-wrap"><table class="synder-table table--lg">
+        <thead><tr><th class="col-check"><input class="checkbox" type="checkbox" aria-label="Select all on page" onclick="selAll(this.checked)" ${vis.length && vis.every(t=>S.sel.has(t.id))?'checked':''}></th><th>Date</th><th>Source</th><th>Type</th><th>Customer</th><th class="col-amount">Amount, USD</th><th>Status</th></tr></thead>
+        <tbody>${vis.map(t=>`<tr class="clickable" onclick="openTxSheet('${t.id}')"><td class="col-check" onclick="event.stopPropagation()"><input class="checkbox" type="checkbox" aria-label="Select ${t.id}" ${S.sel.has(t.id)?'checked':''} onclick="sel('${t.id}',this.checked)"></td><td>${t.date}</td><td><span class="src-cell"><img class="integration-logo" src="${LOGO(SRC[t.src])}" alt="">${t.src}</span></td><td>${t.type}</td><td>${t.cust}${t.email?`<span class="cell-subtext">${t.email}</span>`:''}</td><td class="col-amount">${money(t.amt)}</td><td>${status(t)}</td></tr>`).join('')}</tbody>
+      </table></div>
+      <div class="synder-pagination"><span class="synder-pagination-range">${(S.page-1)*per+1}–${Math.min(S.page*per, rows.length)} of ${fmt(rows.length)} shown in this prototype</span><span class="synder-pagination-pages">${Array.from({length:pages},(_,i)=>`<button ${i+1===S.page?'aria-current="page"':''} onclick="S.page=${i+1};render()">${i+1}</button>`).join('')}</span></div>`
+      : `<div class="empty-state" id="tx-empty"><span class="material-icons empty-state-icon">inbox</span><div class="empty-state-title">${S.tab==='exported'?'Nothing exported yet':S.tab==='attn'?'Nothing needs attention':'No transactions match these filters'}</div></div>`}
+    </div>`;
+}
+function applyF(){ S.srcFilter = document.getElementById('f-src').value; S.q = document.getElementById('f-q').value; S.page=1; render(); }
+function sel(id,on){ on?S.sel.add(id):S.sel.delete(id); render(); }
+function selAll(on){ const rows = filtered().slice((S.page-1)*25, S.page*25); rows.forEach(t=> on?S.sel.add(t.id):S.sel.delete(t.id)); render(); }
+function openTxSheet(id){
+  const t = TX.find(x=>x.id===id);
+  sheet(`<div class="synder-side-sheet-header"><span>${t.src} ${t.type.toLowerCase()} ${t.id}</span><button class="modal-close" aria-label="Close" onclick="closeSheet()"><span class="material-icons">close</span></button></div>
+    <div class="synder-side-sheet-body" id="tx-sheet">
+      ${t.issue?`<div class="alert alert-warning" style="margin-bottom:16px"><span class="material-icons">error_outline</span><div><div class="alert-title">${t.issue}</div>This transaction stays out of exports until it's fixed.</div></div>`:''}
+      <dl class="kv"><dt>Status</dt><dd>${status(t)}</dd><dt>Date</dt><dd>${t.date}</dd><dt>Source</dt><dd><span class="src-cell"><img class="integration-logo" src="${LOGO(SRC[t.src])}" alt="">${t.src}</span></dd><dt>Customer</dt><dd>${t.cust}</dd><dt>Amount</dt><dd>${money(t.amt)} USD</dd><dt>Rules applied</dt><dd>${t.type==='Fee'?'Fees → Merchant fees':'Default mapping'}</dd></dl>
+    </div>
+    <div class="synder-side-sheet-footer">${t.issue?`<button class="btn" onclick="fixTx('${t.id}')">Mark as fixed</button>`:''}<button class="btn-outlined" onclick="closeSheet()">Close</button></div>`);
+}
+function fixTx(id){ TX.find(x=>x.id===id).issue = null; closeSheet(); toast('Moved to Ready to export'); render(); }
+
+/* ---------- EXPORT SHEET ---------- */
+const GROUPS = [
+  ['tx','Per transaction','One entry for each sale, refund and fee'],
+  ['payout','By payout','One entry per payout, matches your bank deposits'],
+  ['day','By day','One summary entry per day'],
+  ['period','By period','One summary entry for the whole period']];
+let EX = {};
+function openExport(dest){
+  const srcs = S.sources.length?S.sources:['Shopify','Stripe'];
+  EX = { src: srcs[0], dest: dest || (S.books || 'QuickBooks Online'), group:'payout', auto:false, sched:'Daily', err:false };
+  sheet('<div id="ex-sheet"></div>', true); renderExportSheet();
+}
+function exportable(){
+  if (S.sel.size) return TX.filter(t=>S.sel.has(t.id) && !t.issue && !t.exported).length;
+  const share = 1/(S.sources.length||2);
+  return Math.round(counts().ready * share);
+}
+function entries(n){ return EX.group==='tx'? n : EX.group==='payout'? Math.max(1,Math.round(n/41)) : EX.group==='day'? Math.min(n, 30) : 1; }
+function renderExportSheet(){
+  const srcs = S.sources.length?S.sources:['Shopify','Stripe'];
+  const isBooks = !!BOOKS[EX.dest], connected = !isBooks || S.books===EX.dest;
+  const n = exportable(), e = entries(n), held = S.sel.size ? 0 : Math.round(counts().attn/(srcs.length));
+  const destLogo = isBooks ? LOGO(BOOKS[EX.dest]) : '';
+  document.getElementById('ex-sheet').innerHTML = `
+    <div class="synder-side-sheet-header"><span>Export</span><button class="modal-close" aria-label="Close" onclick="closeSheet()"><span class="material-icons">close</span></button></div>
+    <div class="synder-side-sheet-body">
+      <div class="sec">
+        <div class="d-flex gap-16">
+          ${S.sel.size?`<div class="form-field flex-1"><span class="form-label">Transactions</span><div style="line-height:40px">${S.sel.size} selected</div></div>`:
+          `<div class="form-field flex-1"><label class="form-label" for="ex-src">Source</label><select class="select w-full" id="ex-src" onchange="EX.src=this.value;renderExportSheet()">${srcs.map(s=>`<option ${s===EX.src?'selected':''}>${s}</option>`).join('')}</select></div>`}
+          <div class="form-field flex-1"><label class="form-label" for="ex-dest">Export to</label><select class="select w-full" id="ex-dest" onchange="EX.dest=this.value;EX.err=false;if(!BOOKS[EX.dest])EX.auto=false;renderExportSheet()">${['QuickBooks Online','Xero','CSV file','Excel file'].map(d=>`<option ${d===EX.dest?'selected':''}>${d}</option>`).join('')}</select></div>
+        </div>
+        ${connected?'':`<div class="alert ${EX.err?'alert-error':'alert-warning'}" id="ex-conn" style="margin-top:12px"><span class="material-icons">link_off</span><div style="flex:1">${EX.dest} isn't connected</div><button class="btn-outlined btn-sm" onclick="connectBooks('${EX.dest}')">Connect</button></div>`}
+      </div>
+      <div class="sec"><h3 class="sec-title">Grouping</h3><div class="group-opts" role="radiogroup">${GROUPS.map(([k,l,d])=>`<button class="choice-card" role="radio" aria-checked="${k===EX.group}" aria-pressed="${k===EX.group}" onclick="EX.group='${k}';renderExportSheet()"><span><span class="choice-card-title">${l}</span><span class="choice-card-desc">${d}</span></span></button>`).join('')}</div></div>
+      <div class="sec"><h3 class="sec-title">Preview</h3><div class="preview" id="ex-preview">
+        <div class="preview-num">${fmt(n)} transactions → ${fmt(e)} ${isBooks?'entries in '+EX.dest:'rows in the file'}</div>
+        ${held?`<div class="text-secondary" style="margin-top:4px">${held} transactions need attention and are left out</div>`:''}
+        ${isBooks?`<div class="text-secondary" style="margin:12px 0 4px">Example entry · ${EX.group==='tx'?'Sales receipt, Nov 24':'Journal entry, '+(EX.group==='payout'?'payout Nov 24':EX.group==='day'?'Nov 24':'Nov 1–24')}</div>
+        <table class="synder-table"><thead><tr><th>Account</th><th class="col-amount">Debit</th><th class="col-amount">Credit</th></tr></thead><tbody>${exampleLines().map(([a,d,c])=>`<tr><td>${a}</td><td class="col-amount">${d?money(d):''}</td><td class="col-amount">${c?money(c):''}</td></tr>`).join('')}</tbody></table>`:''}
+      </div></div>
+      ${isBooks?`<div class="sec"><label class="checkbox-wrap"><input type="checkbox" id="ex-auto" ${EX.auto?'checked':''} onchange="EX.auto=this.checked;renderExportSheet()"><span>Export new ${esc(EX.src)} transactions automatically</span></label>
+        ${EX.auto?`<div class="form-field" style="width:220px;margin-top:12px"><label class="form-label" for="ex-sched">How often</label><select class="select w-full" id="ex-sched" onchange="EX.sched=this.value">${['As they arrive','Daily','Weekly'].map(x=>`<option ${x===EX.sched?'selected':''}>${x}</option>`).join('')}</select></div>`:''}</div>`:''}
+    </div>
+    <div class="synder-side-sheet-footer"><button class="btn-outlined" onclick="closeSheet()">Cancel</button><button class="btn" id="ex-go" onclick="doExport()">${isBooks?`Export to ${EX.dest==='QuickBooks Online'?'QuickBooks':EX.dest}`:`Download ${EX.dest.split(' ')[0]}`}</button></div>`;
+}
+function exampleLines(){
+  if (EX.group==='tx') return [['Undeposited funds',84.20,0],['Sales',0,78.00],['Sales tax payable',0,6.20]];
+  const k = EX.group==='payout'?1: EX.group==='day'?1.3:24;
+  return [['Bank: Operating',8204.18*k,0],['Merchant fees',261.40*k,0],['Refunds',312.00*k,0],['Sales',0,8121.30*k],['Sales tax payable',0,656.28*k]].map(([a,d,c])=>[a,Math.round(d*100)/100,Math.round(c*100)/100]);
+}
+function doExport(){
+  const isBooks = !!BOOKS[EX.dest];
+  if (isBooks && S.books!==EX.dest){ EX.err = true; renderExportSheet(); return; }
+  const n = exportable(), e = entries(n), grp = GROUPS.find(g=>g[0]===EX.group)[1];
+  const btn = document.getElementById('ex-go'); btn.innerHTML = '<span class="spinner"></span> Exporting…';
+  setTimeout(()=>{
+    if (isBooks){
+      const ids = S.sel.size ? [...S.sel] : TX.filter(t=>t.src===EX.src && !t.issue && !t.exported).map(t=>t.id);
+      ids.forEach(id => { const t = TX.find(x=>x.id===id); if (!t.issue) t.exported = EX.dest; });
+      if (EX.auto) S.autos.unshift({src:EX.src, dest:EX.dest, group:grp, sched:EX.sched, on:true});
+    }
+    S.exports.unshift({ date:'Nov 25, 2026 15:42', dest:EX.dest, logo: isBooks?LOGO(BOOKS[EX.dest]):'../../ui-kit/logos/'+(EX.dest.startsWith('Excel')?'excel-full.svg':'custom-square.svg'), src: S.sel.size?'Selected':EX.src, group:grp, n, entries:e, books:isBooks, status:'Done' });
+    S.sel.clear(); closeSheet();
+    toast(isBooks ? `Exported ${fmt(n)} transactions to ${EX.dest} as ${fmt(e)} entries` : `Downloaded northwind-${EX.src.toLowerCase()}-export.${EX.dest.startsWith('Excel')?'xlsx':'csv'}`);
+    render();
+  }, 900);
+}
+
+/* ---------- EXPORTS ---------- */
+function renderExports(){
+  const tab = S.exTab || 'history';
+  const m = document.getElementById('main');
+  m.innerHTML = header('Exports', 'Every export to your books or to a file, and the ones that run automatically.', `<button class="btn" onclick="openExport()">New export</button>`) + `
+    <div class="synder-list-block">
+      <div class="tabs" role="tablist"><div class="tab ${tab==='history'?'active':''}" role="tab" tabindex="0" onclick="S.exTab='history';render()">History <span class="tab-count">${S.exports.length}</span></div><div class="tab ${tab==='auto'?'active':''}" role="tab" tabindex="0" onclick="S.exTab='auto';render()">Automatic <span class="tab-count">${S.autos.length}</span></div></div>
+      ${tab==='history' ? (S.exports.length ? `<div class="table-wrap"><table class="synder-table table--lg" id="ex-table"><thead><tr><th>Date</th><th>Destination</th><th>Source</th><th>Grouping</th><th class="col-amount">Transactions</th><th class="col-amount">Result</th><th>Status</th></tr></thead><tbody>
+        ${S.exports.map(e=>`<tr><td>${e.date}</td><td><span class="src-cell"><img class="integration-logo" src="${e.logo}" alt="">${esc(e.dest)}</span></td><td>${esc(e.src)}</td><td>${e.group}</td><td class="col-amount">${fmt(e.n)}</td><td class="col-amount">${fmt(e.entries)} ${e.books?'entries':'rows'}</td><td>${e.status==='Failed'?`<span class="status status-red">Failed</span><span class="cell-subtext">${e.reason}</span>`:`<span class="status status-green">${e.books?'Posted':'Downloaded'}</span>`}</td></tr>`).join('')}
+        </tbody></table></div>`
+        : `<div class="empty-state" id="ex-empty"><span class="material-icons empty-state-icon">ios_share</span><div class="empty-state-title">No exports yet</div><div class="empty-state-desc">Send your transactions to QuickBooks, Xero or a file.</div><button class="btn" style="margin-top:16px" onclick="openExport()">New export</button></div>`)
+      : (S.autos.length ? `<div class="table-wrap"><table class="synder-table table--lg"><thead><tr><th>Source</th><th>Destination</th><th>Grouping</th><th>Runs</th><th>On</th></tr></thead><tbody>
+        ${S.autos.map((a,i)=>`<tr><td><span class="src-cell"><img class="integration-logo" src="${LOGO(SRC[a.src]||'custom')}" alt="">${esc(a.src)}</span></td><td>${esc(a.dest)}</td><td>${a.group}</td><td>${a.sched}</td><td><button class="toggle ${a.on?'on':''}" aria-label="Automatic export on" onclick="S.autos[${i}].on=!S.autos[${i}].on;toast(S.autos[${i}].on?'Automatic export on':'Automatic export paused');render()"></button></td></tr>`).join('')}
+        </tbody></table></div>`
+        : `<div class="empty-state"><span class="material-icons empty-state-icon">schedule</span><div class="empty-state-title">No automatic exports</div><div class="empty-state-desc">Tick "Export new transactions automatically" when you export to your books.</div></div>`)}
+    </div>`;
+}
+
+/* ---------- RULES / SETTINGS ---------- */
+function renderRules(){
+  document.getElementById('main').innerHTML = header('Rules', 'Change imported transactions before export: accounts, products, taxes, fees.', `<button class="btn" onclick="toast('Rules are not part of this draft')">Create rule</button>`) +
+    `<div class="synder-page-section"><div class="proto-note">Placeholder. Rules and settings change individual transactions; grouping happens only at export. Out of scope for this draft.</div></div>`;
+}
+function renderSettings(){
+  const srcs = S.sources.length?S.sources:['Shopify','Stripe'];
+  document.getElementById('main').innerHTML = header('Settings', 'Your connections and organization settings.') + `
+    <div class="synder-page-section"><div class="table-wrap"><table class="synder-table table--lg"><thead><tr><th>Connection</th><th>Used for</th><th>Status</th></tr></thead><tbody>
+      ${srcs.map(s=>`<tr><td><span class="src-cell"><img class="integration-logo" src="${LOGO(SRC[s])}" alt="">${s}</span></td><td>Import</td><td><span class="status status-green">Connected</span></td></tr>`).join('')}
+      <tr><td>${S.books?`<span class="src-cell"><img class="integration-logo" src="${LOGO(BOOKS[S.books])}" alt="">${S.books}</span>`:'Books'}</td><td>Export</td><td>${S.books?'<span class="status status-green">Connected</span>':`<button class="btn-outlined btn-sm" onclick="connectBooks()">Connect</button>`}</td></tr>
+    </tbody></table></div>
+    <div class="proto-note" style="margin-top:24px">Other settings (organization, users, billing) are out of scope for this draft.</div></div>`;
+}
+
+/* ---------- toast / modal / sheet ---------- */
+function toast(t){ const s = document.getElementById('toasts'); const el = document.createElement('div'); el.className='synder-toast synder-toast-success'; el.innerHTML = `<span class="material-icons">check_circle</span><span>${esc(t)}</span><button class="synder-toast-close" aria-label="Close" onclick="this.parentNode.remove()"><span class="material-icons">close</span></button>`; s.appendChild(el); setTimeout(()=>el.remove(), 4000); }
+function modal(html){ document.getElementById('modal').innerHTML = html; document.getElementById('modal-bg').classList.add('show'); }
+function closeModal(){ document.getElementById('modal-bg').classList.remove('show'); }
+function sheet(html){ document.getElementById('sheet-host').innerHTML = `<div class="synder-side-sheet-bg" onclick="closeSheet()"></div><div class="synder-side-sheet" role="dialog" aria-modal="true">${html}</div>`; }
+function closeSheet(){ document.getElementById('sheet-host').innerHTML=''; }
+document.addEventListener('keydown', e => { if (e.key==='Escape'){ closeSheet(); closeModal(); } });
+
+/* ---------- demo ---------- */
+function seedApp(){ if (!S.sources.length) S.sources = ['Shopify','Stripe']; buildTx(); }
+function jumpTo(v){
+  clearInterval(importTimer); closeSheet(); closeModal();
+  if (v==='signup' || v==='connect'){ S = S0(); TX=[]; return go('#'+v); }
+  S = S0(); seedApp();
+  if (v==='home-importing'){ runImport(8); return go('#home'), render(); }
+  if (v==='home-exported' || v==='exports-full'){
+    S.books = 'QuickBooks Online';
+    TX.filter(t=>t.src==='Shopify'&&!t.issue).forEach(t=>t.exported='QuickBooks Online');
+    S.exports = [
+      { date:'Nov 25, 2026 15:42', dest:'QuickBooks Online', logo:LOGO('quickbooks'), src:'Shopify', group:'By payout', n:1882, entries:46, books:true, status:'Done' },
+      { date:'Nov 25, 2026 15:30', dest:'CSV file', logo:LOGO('custom'), src:'Stripe', group:'Per transaction', n:1882, entries:1882, books:false, status:'Done' },
+      { date:'Nov 25, 2026 15:12', dest:'QuickBooks Online', logo:LOGO('quickbooks'), src:'Stripe', group:'By day', n:0, entries:0, books:true, status:'Failed', reason:'QuickBooks session expired' }];
+    S.autos = [{src:'Shopify', dest:'QuickBooks Online', group:'By payout', sched:'Daily', on:true}];
+  }
+  const h = {home:'home','home-exported':'home',transactions:'transactions',exports:'exports','exports-full':'exports',rules:'rules',settings:'settings'}[v];
+  if (location.hash === '#'+h) render(); else go('#'+h);
+}
+function resetDemo(){ clearInterval(importTimer); S = S0(); TX=[]; closeSheet(); closeModal(); if (location.hash==='#signup') render(); else go('#signup'); }
+
+/* deep links straight into the app get seeded data */
+if (location.hash && !['#signup','#connect'].includes(location.hash)) seedApp();
+render();
+</script>
+</body>
+</html>
