@@ -7,6 +7,8 @@ var translations = {
       nav_scheduled: 'Scheduled Reports',
       btn_logout: 'Log out',
       evaluations_word: 'Evaluations',
+      tab_all: 'All',
+      col_type: 'Type',
       evaluation_word: 'Evaluation',
 
       page_new_eval: 'New Evaluation',
@@ -641,6 +643,8 @@ var translations = {
       nav_scheduled: 'Geplante Berichte',
       btn_logout: 'Abmelden',
       evaluations_word: 'Auswertungen',
+      tab_all: 'Alle',
+      col_type: 'Typ',
       evaluation_word: 'Auswertung',
 
       page_new_eval: 'Neue Auswertung',

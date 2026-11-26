@@ -338,6 +338,8 @@ function PageHeader({ crumbs, title, subtitle, action }) {
 /* ── Screen: Evaluations ──────────────────────────────────────────── */
 // Name · Period · Created · Status · Actions (room for four icons)
 const EVAL_COL_W = ['auto', 240, 140, 150, 184];
+// Ignat, 2026-11-26: the type groups became tabs — All + one per type
+const LIST_TABS = ['punctuality', 'connection', 'trip_failures', 'data_quality', 'line_analysis', 'raw_data'];
 
 function EvaluationsList({ go }) {
   const { t, lang } = useT();
@@ -345,7 +347,9 @@ function EvaluationsList({ go }) {
   const [q, setQ] = useState('');
   const { removed, askDelete, notify, ui: actionUi } = useListActions(t, 'toast_eval_deleted');
   const { openPicker, pickerUi } = useTypePicker(go);
-  const [collapsed, setCollapsed] = useState([]);
+  const [tab, setTab] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pp, setPp] = useState(25);
   // retryEvaluation(): a failed row flips to in_progress, loses its reason and
   // its retry button, and its remaining actions go dead while it runs.
   const [retried, setRetried] = useState([]);
@@ -357,7 +361,9 @@ function EvaluationsList({ go }) {
   // descending for dates, ascending for text — newest-first is what you want
   // from a date, A-Z from a name.
   const [sort, setSort] = useState({ col: 'col_created', dir: 'desc' });
-  const COLS = ['col_name', 'col_period', 'col_created', 'col_status'];
+  const COLS = tab === 'all' ? ['col_name', 'col_type', 'col_period', 'col_created', 'col_status']
+                             : ['col_name', 'col_period', 'col_created', 'col_status'];
+  const colW = tab === 'all' ? ['auto', 230, ...EVAL_COL_W.slice(1)] : EVAL_COL_W;
   const DATE_COLS = ['col_period', 'col_created'];
   // dd.mm.yyyy sorts wrong as text — "03.05.2026" lands before "08.01.2026".
   // The vanilla's sortByColumn() compares the cell text and has that bug; a
@@ -368,6 +374,7 @@ function EvaluationsList({ go }) {
   };
   const sortValue = (r, col) =>
     col === 'col_name' ? r.name
+    : col === 'col_type' ? t('type_' + r.group)
     : col === 'col_period' ? swissDate(r.period)
     : col === 'col_created' ? swissDate(r.created)
     : t(STATUS_KEY[retried.includes(r.name) ? 'in_progress' : r.status]);
@@ -383,8 +390,6 @@ function EvaluationsList({ go }) {
       ? { col, dir: s2.dir === 'asc' ? 'desc' : 'asc' }
       : { col, dir: DATE_COLS.includes(col) ? 'desc' : 'asc' });
   const statusOf = r => (retried.includes(r.name) ? 'in_progress' : r.status);
-  const toggleGroup = g =>
-    setCollapsed(c => c.includes(g) ? c.filter(x => x !== g) : [...c, g]);
 
   // Matching on the LABEL, not the raw value, so selecting "In Progress"
   // returns the `running` rows too rather than silently dropping them.
@@ -397,7 +402,11 @@ function EvaluationsList({ go }) {
     (!status || t(STATUS_KEY[retried.includes(r.name) ? 'in_progress' : r.status] || r.status)
                   === t(STATUS_KEY[status] || status)) &&
     (!q || r.name.toLowerCase().includes(q.toLowerCase()))), [status, q, t, removed, retried]);
-  const groups = [...new Set(rows.map(r => r.group))];
+  const count = g => rows.filter(r => r.group === g).length;
+  const tabRows = sorted(tab === 'all' ? rows : rows.filter(r => r.group === tab));
+  const pages = Math.max(1, Math.ceil(tabRows.length / pp));
+  const shownRows = tabRows.slice((Math.min(page, pages) - 1) * pp, Math.min(page, pages) * pp);
+  React.useEffect(() => setPage(1), [tab, q, status]);
   const dirty = !!(q || status);
   const clearAll = () => { setQ(''); setStatus(''); };
   // Ignat, 2026-09-17: "I think we dont need the Filter Zeitraum." Dropped.
@@ -427,41 +436,21 @@ function EvaluationsList({ go }) {
             <${Button} id="f-clear-all" onClick=${clearAll}>${t('clear_filters')}<//>`}
         <//>
 
-        ${rows.length === 0 && html`
+        <${Tabs} value=${tab} onChange=${(e, v) => setTab(v)} id="eval-tabs" variant="scrollable"
+          sx=${{ mb: 2, borderBottom: '1px solid #E7E7E7' }}>
+          <${Tab} value="all" id="eval-tab-all" label=${`${t('tab_all')} ${rows.length}`} />
+          ${LIST_TABS.map(g => html`<${Tab} key=${g} value=${g} id=${'eval-tab-' + g}
+            disabled=${count(g) === 0} label=${`${t('type_' + g)} ${count(g)}`} />`)}
+        <//>
+        ${tabRows.length === 0 && html`
           <${Alert} severity="info" id="empty-state">${t('empty_no_evals')}<//>`}
-
-        ${/* Each type is an accordion in the vanilla — a clickable group-header
-              with a rotating chevron and aria-expanded, collapsing its table.
-              Mine was a static heading. Controls and tables both matched, which
-              is why the parity checker had nothing to say. */''}
-        ${groups.map(g => html`
-          <${Box} key=${g} className="report-group" sx=${{ mb: 1 }}>
-            <${Box} className="group-header" role="button" tabIndex=${0}
-              id=${'group-' + g} aria-expanded=${!collapsed.includes(g)}
-              onClick=${() => toggleGroup(g)}
-              onKeyDown=${e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleGroup(g); } }}
-              sx=${{ display: 'flex', alignItems: 'center', gap: 1, py: '10px 8px',
-                      cursor: 'pointer', userSelect: 'none' }}>
-              <${Icon} sx=${{ fontSize: 16, color: 'text.disabled',
-                               transition: 'transform .15s',
-                               transform: collapsed.includes(g) ? 'rotate(-90deg)' : 'none' }}>
-                expand_more<//>
-              <${Typography} variant="subtitle2" sx=${{ textTransform: 'uppercase',
-                               color: 'text.secondary', letterSpacing: '.05em' }}>
-                ${t('type_' + g)}
-              <//>
-              <${Typography} variant="body2" sx=${{ color: 'text.disabled' }}>
-                ${rows.filter(r => r.group === g).length} ${t('evaluations_word')}
-              <//>
-            <//>
-            ${!collapsed.includes(g) && html`
-            <${TableContainer} component=${Paper} variant="outlined" sx=${{ borderColor: '#E7E7E7' }}>
-              ${/* Ignat, 2026-10-27: one grid for every group — a fixed layout
-                    with set widths, so Period, Created, Status and Actions line
-                    up from table to table and only Name takes the rest. */''}
-              <${Table} className="eval-table" sx=${{ tableLayout: 'fixed' }}>
+        ${tabRows.length > 0 && html`
+          <${Box} className="report-group">
+            <${TableContainer} component=${Paper} variant="outlined"
+              sx=${{ borderColor: '#E7E7E7', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }}>
+              <${Table} className="eval-table" id="eval-table" sx=${{ tableLayout: 'fixed' }}>
                 <colgroup>
-                  ${EVAL_COL_W.map((w, i) => html`<col key=${i} style=${{ width: w }} />`)}
+                  ${colW.map((w, i) => html`<col key=${i} style=${{ width: w }} />`)}
                 </colgroup>
                 <${TableHead}>
                   <${TableRow}>
@@ -475,7 +464,7 @@ function EvaluationsList({ go }) {
                   <//>
                 <//>
                 <${TableBody}>
-                  ${sorted(rows.filter(r => r.group === g)).map(r => html`
+                  ${shownRows.map(r => html`
                     <${TableRow} key=${r.name} hover>
                       ${/* Plain text, as in the vanilla. It was a Link here, which
                             opened a report for failed and in-progress rows that
@@ -487,8 +476,9 @@ function EvaluationsList({ go }) {
                           <${Typography} variant="caption" color="error" display="block"
                             className="fail-reason">${t(FAIL_REASON_OF(r))}<//>`}
                       <//>
-                      <${TableCell}>${fmtPeriod(r.period, lang)}<//>
-                      <${TableCell}>${fmtDate(r.created, lang)}<//>
+                      ${tab === 'all' && html`<${TableCell} className="eval-type">${t('type_' + r.group)}<//>`}
+                      <${TableCell} className="eval-period">${fmtPeriod(r.period, lang)}<//>
+                      <${TableCell} className="eval-created">${fmtDate(r.created, lang)}<//>
                       <${TableCell}>
                         <${Tooltip} title=${statusOf(r) === 'failed' && FAIL_REASON_OF(r)
                                              ? t(FAIL_REASON_OF(r)) : ''}>
@@ -530,8 +520,9 @@ function EvaluationsList({ go }) {
                     <//>`)}
                 <//>
               <//>
-            <//>`}
-          <//>`)}
+            <//>
+            <${TablePager} id="eval-pager" total=${tabRows.length} page=${page} pp=${pp} setPage=${setPage} setPp=${setPp} />
+          <//>`}
       <//>
       ${actionUi}
       ${pickerUi}
