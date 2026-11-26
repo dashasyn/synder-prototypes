@@ -189,6 +189,46 @@ function useSticky(key, init) {
 }
 const rk = (row, k) => ((row && row.name) || '') + '::' + k;
 
+/* Ignat, 2026-11-26: icons that open a page are links — Ctrl/Cmd+click,
+   middle-click and right-click → "Open in new tab" work as in any browser.
+   Every page has an address: #/<view>/<row>?d=<what was clicked>. Icons that
+   DO something (delete, run again, download) stay buttons. */
+const ROUTE_DROP = new Set(['recs', 'records', 'agg', 'format']);
+const slim = (v, d = 0) => Array.isArray(v) ? v.map(x => slim(x, d))
+  : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v)
+      .filter(([k, x]) => !ROUTE_DROP.has(k) && typeof x !== 'function')
+      .map(([k, x]) => [k, (k === 'kids' || k === 'children') ? (d >= 3 ? [] : slim(x, d + 1)) : slim(x, d)]))
+  : v;
+const routeHash = (name, row, extra) => {
+  if (!name || name === 'list') return '#/';
+  const i = row ? ROWS.indexOf(row) : -1;
+  let h = '#/' + name + (i >= 0 ? '/' + i : '');
+  if (extra && Object.keys(extra).length) h += '?d=' + encodeURIComponent(JSON.stringify(slim(extra)));
+  return h;
+};
+const parseHash = () => {
+  const m = location.hash.match(/^#\/([\w-]+)(?:\/(\d+))?(?:\?d=(.*))?$/);
+  if (!m) return { name: 'list' };
+  const row = m[2] !== undefined ? ROWS[+m[2]] : undefined;
+  let extra = {};
+  try { if (m[3]) extra = JSON.parse(decodeURIComponent(m[3])); } catch (e) { /* a broken address opens the view bare */ }
+  const r = { name: m[1], row, ...extra };
+  // what the address could not carry is rebuilt from the data
+  const fix = n => { if (n && n.path) { n.recs = RPT_RECORDS.filter(x => n.path.every(([d, v]) => x[d] === v)); (n.kids || []).forEach(fix); } };
+  if (r.name === 'conn-chart' || r.name === 'conn-rows') fix(r.node);
+  if (r.chart && !r.chart.format) r.chart.format = row && row.group === 'punctuality'
+    ? v => v.toFixed(2).replace('.', ',') + '%' : v => v.toFixed(2) + '%';
+  return r;
+};
+const isMod = e => e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button === 1;
+// props that turn an IconButton / Link into a real link; the full address is
+// built when the pointer or focus reaches it, so long trees cost nothing up front
+const link = (go, name, row, mk) => {
+  const full = e => e.currentTarget.setAttribute('href', routeHash(name, row, mk ? mk() : undefined));
+  return { component: 'a', href: routeHash(name, row), onMouseEnter: full, onFocus: full, onContextMenu: full,
+    onClick: e => { if (isMod(e)) { full(e); return; } e.preventDefault(); go(name, row, mk ? mk() : undefined); } };
+};
+
 /* Ignat, 2026-11-10: every paged table ends the same way, MUI style — one
    footer attached to the table: rows per page, the range, the page numbers.
    page is 1-based. */
@@ -320,9 +360,9 @@ function PageHeader({ crumbs, title, subtitle, action }) {
           <${Breadcrumbs} sx=${{ fontSize: 14 }}
             separator=${html`<${Icon} sx=${{ fontSize: 16 }}>chevron_right<//>`}>
             ${crumbs.map((c, i) => c.onClick
-              ? html`<${Link} key=${i} underline="hover" color="text.secondary" href="#"
-                              sx=${{ fontSize: 14 }}
-                              onClick=${e => { e.preventDefault(); c.onClick(); }}>${c.label}<//>`
+              ? html`<${Link} key=${i} underline="hover" color="text.secondary"
+                              href=${c.to ? routeHash(...c.to) : '#'} sx=${{ fontSize: 14 }}
+                              onClick=${e => { if (c.to && isMod(e)) return; e.preventDefault(); c.onClick(); }}>${c.label}<//>`
               : html`<${Typography} key=${i} color="text.primary" variant="body2">${c.label}<//>`)}
           <//>`}
         <${Box} sx=${{ display: 'flex', alignItems: 'baseline', gap: 1, minWidth: 0 }}>
@@ -509,7 +549,7 @@ function EvaluationsList({ go }) {
                                   not fight over the same attribute. */''}
                             <${IconButton} aria-label=${aria} data-act=${a} color=${spec.color}
                               disabled=${off} aria-disabled=${off || undefined}
-                              onClick=${off ? undefined : onClick}><${Icon}>${a}<//><//>`;
+                              ...${a === 'visibility' && !off ? link(go, 'report', r) : { onClick: off ? undefined : onClick }}><${Icon}>${a}<//><//>`;
                           return html`
                             <${Tooltip} key=${a}
                               title=${off ? t('act_unavailable_running') : t(spec.key)}>
@@ -1025,7 +1065,7 @@ function NewEvaluation({ go, initialType }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: t('new_eval_title') }]}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] }, { label: t('new_eval_title') }]}
         title=${t('new_eval_title')}
         ${/* Ignat, 2026-09-22: "remove evaluation type from the first block".
               Gone from the identity card — but the page still has to say which
@@ -1413,10 +1453,10 @@ function PunctRow({ node, depth, t, onChart, onRaw, open0 }) {
         <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
           ${/* production: the chart only where there is something to chart */''}
           ${kids.length > 0 && html`<${Tooltip} title=${t('rpt_action_chart')}>
-            <${IconButton} aria-label="chart" onClick=${() => onChart && onChart(node)}>
+            <${IconButton} aria-label="chart" ...${onChart(node)}>
               <${Icon}>bar_chart<//><//><//>`}
           <${Tooltip} title=${t('rpt_action_raw')}>
-            <${IconButton} aria-label="raw" onClick=${() => onRaw && onRaw(node)}>
+            <${IconButton} aria-label="raw" ...${onRaw(node)}>
               <${Icon}>table_chart<//><//><//>
         <//>
       <//>
@@ -1473,7 +1513,7 @@ function ReportPunctuality({ go, row }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
                   { label: row ? row.name : t('type_punctuality') }]}
         title=${row ? row.name : t('type_punctuality')}
         subtitle=${t('type_punctuality')}
@@ -1518,14 +1558,14 @@ function ReportPunctuality({ go, row }) {
                     production draws it */''}
               <${PunctRow} open0 depth=${0} t=${t}
                 node=${{ label: t('rpt_gesamt'), agg: total, children: tree }}
-                onChart=${node => go('chart', row, { chart: {
+                onChart=${node => link(go, 'chart', row, () => ({ chart: {
                   title: node.label, backLabel: t('type_punctuality'),
                   hot: node.dim ? [t(PUNCT_DIM_LABELS[node.dim] || node.dim), node.label] : null,
                   format: v => v.toFixed(2).replace('.', ',') + '%',
                   items: (node.children && node.children.length ? node.children : [node])
                     .map(c => ({ label: c.label, value: c.agg.wert || 0 })),
-                } })}
-                onRaw=${node => go('raw', row, { node })} />
+                } }))}
+                onRaw=${node => link(go, 'raw', row, () => ({ node }))} />
             <//>
           <//>
         <//>
@@ -1617,9 +1657,9 @@ function ConnRow({ node, depth, t, val, adj, onChart, onRows, open0 }) {
         ${v.map((x, i) => html`<${TableCell} key=${i} align="right" sx=${{ bgcolor: CONN_TINT[i < 4 ? 0 : 1] }}>${val(x)}<//>`)}
         <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
           ${kids.length > 0 && html`<${Tooltip} title=${t('rpt_action_chart')}>
-            <${IconButton} aria-label="chart" className="conn-chart-btn" onClick=${() => onChart(node)}><${Icon}>bar_chart<//><//><//>`}
+            <${IconButton} aria-label="chart" className="conn-chart-btn" ...${onChart(node)}><${Icon}>bar_chart<//><//><//>`}
           <${Tooltip} title=${t('rpt_action_raw')}>
-            <${IconButton} aria-label="raw" className="conn-rows-btn" onClick=${() => onRows(node)}><${Icon}>table_chart<//><//><//>
+            <${IconButton} aria-label="raw" className="conn-rows-btn" ...${onRows(node)}><${Icon}>table_chart<//><//><//>
         <//>
       <//>
       ${open && kids.map((k, i) => html`<${ConnRow} key=${k.label + i} node=${k} depth=${depth + 1} t=${t}
@@ -1645,7 +1685,7 @@ function ReportConnection({ go, row }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') }, { label: row ? row.name : t('type_connection') }]}
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] }, { label: row ? row.name : t('type_connection') }]}
         title=${row ? row.name : t('type_connection')} subtitle=${t('type_connection')}
         action=${html`<${Stack} direction="row" spacing=${1} alignItems="center">
           <${Tooltip} title=${t('fa_infoblatt')}><${IconButton} aria-label=${t('fa_infoblatt')} id="conn-infoblatt">
@@ -1686,8 +1726,8 @@ function ReportConnection({ go, row }) {
             <//><//>
             <${TableBody}>
               <${ConnRow} node=${root} depth=${0} t=${t} val=${val} adj=${adj} open0
-                onChart=${node => go('conn-chart', row, { node, reduce, strict })}
-                onRows=${node => go('conn-rows', row, { node, reduce })} />
+                onChart=${node => link(go, 'conn-chart', row, () => ({ node, reduce, strict }))}
+                onRows=${node => link(go, 'conn-rows', row, () => ({ node, reduce }))} />
             <//>
           <//>
         <//>
@@ -1706,8 +1746,8 @@ function ConnChart({ go, row, node, reduce, strict }) {
   const sub = node.path.length ? node.path.map(x => x[1]).join(', ') : t('rpt_gesamt');
   return html`
     <${Box}>
-      <${PageHeader} crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-          { label: row ? row.name : t('type_connection'), onClick: () => go('report', row) }, { label: t('rpt_action_chart') }]}
+      <${PageHeader} crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
+          { label: row ? row.name : t('type_connection'), onClick: () => go('report', row), to: ['report', row] }, { label: t('rpt_action_chart') }]}
         title=${t('rpt_action_chart')} subtitle=${sub} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="conn-chart-params" fields=${[...connParamFields(t, lang, row),
@@ -1760,8 +1800,8 @@ function ConnRows({ go, row, node, reduce }) {
   const fields = [...base, ...sel];
   return html`
     <${Box}>
-      <${PageHeader} crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-          { label: row ? row.name : t('type_connection'), onClick: () => go('report', row) }, { label: t('conn_rows_title') }]}
+      <${PageHeader} crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
+          { label: row ? row.name : t('type_connection'), onClick: () => go('report', row), to: ['report', row] }, { label: t('conn_rows_title') }]}
         title=${t('conn_rows_title')} subtitle=${node.path.length ? node.path.map(x => x[1]).join(' · ') : t('rpt_gesamt')} />
       <${Box} sx=${{ p: 3 }}>
         <${ParamGrid} id="conn-rows-params" hotClass="conn-hot" fields=${fields} />
@@ -2042,10 +2082,10 @@ function FaRow({ node, depth, t, onChart, onMask, hideZero, startOpen }) {
         <${TableCell} align="right" sx=${{ whiteSpace: 'nowrap' }}>
           ${node.chart !== false && html`
             <${Tooltip} title=${t('rpt_action_chart')}>
-              <${IconButton} aria-label="chart" className="fa-chart-btn" onClick=${() => onChart(node)}>
+              <${IconButton} aria-label="chart" className="fa-chart-btn" ...${onChart(node)}>
                 <${Icon}>bar_chart<//><//><//>
             <${Tooltip} title=${t('fa_mask_title')}>
-              <${IconButton} aria-label="mask" className="fa-mask-btn" onClick=${() => onMask(node)}>
+              <${IconButton} aria-label="mask" className="fa-mask-btn" ...${onMask(node)}>
                 <${Icon}>table_chart<//><//><//>`}
         <//>
       <//>
@@ -2089,13 +2129,13 @@ function ReportTripFailures({ go, row }) {
     })),
   }), [withDays, withErsatz, t]);
 
-  const onChart = node => go('fa-chart', row, { node });
-  const onMask = node => go('mask', row, { tuId: node.tu || 'GESAMT', day: node.day });
+  const onChart = node => link(go, 'fa-chart', row, () => ({ node }));
+  const onMask = node => link(go, 'mask', row, () => ({ tuId: node.tu || 'GESAMT', day: node.day }));
 
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
                   { label: row ? row.name : t('type_trip_failures') }]}
         title=${row ? row.name : t('type_trip_failures')} subtitle=${t('type_trip_failures')}
         action=${html`<${Stack} direction="row" spacing=${1} alignItems="center">
@@ -2196,8 +2236,8 @@ function FaChart({ go, row, node }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                  { label: row ? row.name : t('type_trip_failures'), onClick: () => go('report', row) },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
+                  { label: row ? row.name : t('type_trip_failures'), onClick: () => go('report', row), to: ['report', row] },
                   { label: t('rpt_action_chart') }]}
         title=${t('rpt_action_chart')} subtitle=${sub} />
       <${Box} sx=${{ p: 3 }}>
@@ -2296,7 +2336,7 @@ function ReportDQI({ go, row }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
                   { label: row ? row.name : t('type_data_quality') }]}
         title=${row ? row.name : t('type_data_quality')}
         subtitle=${t('type_data_quality')}
@@ -2454,11 +2494,11 @@ function ReportDQI({ go, row }) {
                       <${TableCell} key=${i} align="right">${dqiPct(v)}<//>`)}
                     <${TableCell} align="right">
                       <${Tooltip} title=${t('rpt_action_chart')}>
-                        <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
+                        <${IconButton} aria-label="chart" ...${link(go, 'chart', row, () => ({ chart: {
                           title: t('dqi_lg_avg'), backLabel: t('type_data_quality'), hot: null,
                           format: v => v.toFixed(2) + '%',
                           items: DQI_INDICATORS.map((ind, i) => ({ label: String(ind.n), value: DQI_NATIONAL[i] })),
-                        } })}><${Icon}>bar_chart<//><//><//>
+                        } }))}><${Icon}>bar_chart<//><//><//>
                     <//>
                   <//>
                   ${visible.map((r, ri) => html`
@@ -2476,12 +2516,12 @@ function ReportDQI({ go, row }) {
                         <//>`)}
                       <${TableCell} align="right">
                         <${Tooltip} title=${t('rpt_action_chart')}>
-                          <${IconButton} aria-label="chart" onClick=${() => go('chart', row, { chart: {
+                          <${IconButton} aria-label="chart" ...${link(go, 'chart', row, () => ({ chart: {
                             title: r.total ? t('rpt_gesamt') : r.label, backLabel: t('type_data_quality'),
                             hot: r.total ? null : [t(scope === 'kanton' ? 'dqi_dim_kanton' : 'dqi_dim_tu'), r.label],
                             format: v => v.toFixed(2) + '%',
                             items: DQI_INDICATORS.map((ind, i) => ({ label: String(ind.n), value: r.v[i] })),
-                          } })}><${Icon}>bar_chart<//><//>
+                          } }))}><${Icon}>bar_chart<//><//>
                         <//>
                         <${Tooltip} title=${t('dqi_by_day')}>
                           <${IconButton} aria-label="by-day"
@@ -2570,8 +2610,8 @@ function RawDataTable({ go, row, rows: allRows, title, onBack, backLabel, node }
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                   ...(onBack ? [{ label: backLabel, onClick: onBack }] : []),
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
+                   ...(onBack ? [{ label: backLabel, onClick: onBack, to: ['report', row] }] : []),
                    { label: title }]}
         title=${title}
         subtitle=${node ? (hot ? hot[1] : t('rpt_gesamt')) : ''} />
@@ -2663,8 +2703,8 @@ function ChartView({ go, row, title, items, format, backLabel, onBack, hot }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                  { label: (row && row.name) || backLabel, onClick: onBack },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
+                  { label: (row && row.name) || backLabel, onClick: onBack, to: ['report', row] },
                   { label: t('rpt_action_chart') }]}
         title=${t('rpt_action_chart')} subtitle=${title} />
       <${Box} sx=${{ p: 3 }}>
@@ -2712,7 +2752,7 @@ function RohdatenConfig({ go, row }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
                   { label: row ? row.name : t('type_raw_data') }]}
         title=${row ? row.name : t('type_raw_data')} subtitle=${t('type_raw_data')}
         action=${html`<${Button} variant="contained" id="rd-run-btn"
@@ -2826,8 +2866,8 @@ function Ausfallmaske({ go, row, tuId, day }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                  { label: row ? row.name : t('type_trip_failures'), onClick: () => go('report', row) },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
+                  { label: row ? row.name : t('type_trip_failures'), onClick: () => go('report', row), to: ['report', row] },
                   { label: t('fa_mask_title') }]}
         title=${t('fa_mask_title')} subtitle=${[key === 'GESAMT' ? t('rpt_gesamt') : key, day ? fmtDate(day, lang) : '']
           .filter(Boolean).join(' · ')} />
@@ -3178,7 +3218,7 @@ function ReportLineAnalysis({ go, row }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
                   { label: row ? row.name : t('type_line_analysis') }]}
         title=${row ? row.name : t('type_line_analysis')} subtitle=${t('la_title_ext')}
         action=${html`<${Stack} direction="row" spacing=${1} alignItems="center">
@@ -3280,7 +3320,7 @@ function ReportLineAnalysis({ go, row }) {
                         <${TableCell} align="right">
                           ${r.line.stops === null && html`<${Tooltip} title=${t('la_stop_heatmap')}>
                             <${IconButton} aria-label=${t('la_stop_heatmap')} className="la-stop-hm-btn"
-                              onClick=${() => go('la-stop', row, { stop: s, kind: pt.kind, dir, mode })}>
+                              ...${link(go, 'la-stop', row, () => ({ stop: s, kind: pt.kind, dir, mode }))}>
                               <${Icon}>calendar_view_month<//><//><//>`}
                         <//>
                       <//>`)))}
@@ -3308,8 +3348,8 @@ function LaStopHeatmap({ go, row, stop, kind, dir, mode }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
-                  { label: row ? row.name : t('type_line_analysis'), onClick: () => go('report', row) },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
+                  { label: row ? row.name : t('type_line_analysis'), onClick: () => go('report', row), to: ['report', row] },
                   { label: `${stop[0]} ${stop[1]}` }]}
         title=${t('la_stop_hm_title')} subtitle=${`${stop[0]} ${stop[1]}`} />
       <${Box} sx=${{ p: 3 }}>
@@ -3340,7 +3380,7 @@ function NotPorted({ go, row }) {
   return html`
     <${Box}>
       <${PageHeader}
-        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list') },
+        crumbs=${[{ label: t('nav_evaluations'), onClick: () => go('list'), to: ['list'] },
                   { label: row ? row.name : t('page_evaluations') }]}
         title=${row ? row.name : ''} />
       <${Box} sx=${{ p: 3, maxWidth: 800 }}>
@@ -3752,10 +3792,21 @@ function App() {
   // The vanilla prototype starts in English (index.html: `let lang = 'en'`).
   // This defaulted to German and my own suite asserted that as correct — a
   // test that enshrined my invention rather than checking the original.
-  const [lang, setLang] = useState('en');
-  const [route, setRoute] = useState({ name: 'list' });
-  const [authed, setAuthed] = useState(false);
-  const [role, setRole] = useState('admin');
+  // remembered in this browser, so a link opened in a new tab lands signed in
+  const mem = (k, d) => { try { return localStorage.getItem('qx-' + k) || d; } catch (e) { return d; } };
+  const keep = (k, v) => { try { v === null ? localStorage.removeItem('qx-' + k) : localStorage.setItem('qx-' + k, v); } catch (e) {} };
+  const [lang, setLangRaw] = useState(() => mem('lang', 'en'));
+  const setLang = l => { keep('lang', l); setLangRaw(l); };
+  const [route, setRoute] = useState(parseHash);
+  const [authed, setAuthedRaw] = useState(() => mem('auth', '') === '1');
+  const setAuthed = v => { keep('auth', v ? '1' : null); setAuthedRaw(v); };
+  const [role, setRoleRaw] = useState(() => mem('role', 'admin'));
+  const setRole = r => { keep('role', r); setRoleRaw(r); };
+  React.useEffect(() => {
+    const back = () => setRoute(parseHash());
+    window.addEventListener('popstate', back);
+    return () => window.removeEventListener('popstate', back);
+  }, []);
   // data.js owns t() and its lang binding, because the extracted record sets
   // call it while they build. Duplicating the lookup here would give two
   // implementations that can disagree.
@@ -3763,7 +3814,10 @@ function App() {
   const go = (name, row, extra) => {
     // leaving the reports for a list or a form forgets every report's view
     if (['list', 'scheduled', 'new'].includes(name)) STICKY.clear();
+    const h = routeHash(name, row, extra);
+    if (location.hash !== h && !(h === '#/' && !location.hash)) history.pushState(null, '', h);
     setRoute({ name, row, ...(extra || {}) });
+    window.scrollTo(0, 0);
   };
 
   const screen =
@@ -3805,7 +3859,7 @@ function App() {
     <${I18n.Provider} value=${{ t, lang, setLang }}>
       <${ThemeProvider} theme=${theme}>
         <${CssBaseline} />
-        <${Login} onLogin=${() => { setAuthed(true); setRoute({ name: 'list' }); }} />
+        <${Login} onLogin=${() => { setAuthed(true); setRoute(parseHash()); }} />
       <//>
     <//>`;
 
