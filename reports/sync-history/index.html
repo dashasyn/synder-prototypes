@@ -215,11 +215,20 @@ const date = d => d ? esc(d) : '';                                   // producti
 // transaction in the source integration, e.g. Stripe (transactionDetailsLink; Ignat 2026-11-27). Dead link in the prototype.
 const txLink = t => `<a class="table-link" href="#" target="_blank" rel="noopener" onclick="return false" title="Opens the transaction in ${t.i === 'stripe' ? 'Stripe' : 'Shopify'} in a new tab">${esc(t.id)}</a>`;
 const DETAILS = '../sync-details-layouts/';   // the sync details prototype stands in for the real page
-const syncLink = id => `<a class="table-link" href="${DETAILS}" target="_blank" rel="noopener" title="Opens sync details in a new tab">${id}</a>`;
-/* Row click opens sync details in a new tab, like other tables (Ignat 2026-11-27). Guards from LogRocket (Register page):
-   a click on a link/button inside the row only does that thing, and finishing a text selection does nothing. */
+// The row opens sync details, so Sync ID is plain text, not a link (Ignat 2026-11-27; production: link)
+const syncLink = id => `${id}`;
+/* Row click works like Stripe and Shopify (Ignat 2026-11-27): a click opens sync details on the same page;
+   Cmd/Ctrl+click or middle-click opens a new tab, Shift+click a new window — the browser's own link shortcuts.
+   A click on a link/button inside the row only does that thing; finishing a text selection does nothing. */
 const selecting = () => String(window.getSelection()).length > 0;
-function openRow(e) { if (e.target.closest('a, button') || selecting()) return; window.open(DETAILS, '_blank', 'noopener'); }
+function openRow(e) {
+  if (e.target.closest('a, button') || selecting()) return;
+  if (e.metaKey || e.ctrlKey || e.button === 1) window.open(DETAILS, '_blank', 'noopener');
+  else if (e.shiftKey) window.open(DETAILS, '_blank', 'noopener,popup');
+  else location.assign(DETAILS);
+}
+document.addEventListener('auxclick', e => { const r = e.target.closest('tr.row-clickable'); if (r && e.button === 1 && r.getAttribute('onclick')) openRow(e); });
+document.addEventListener('mousedown', e => { if (e.button === 1 && e.target.closest('tr.row-clickable') && !e.target.closest('a')) e.preventDefault(); });   // no autoscroll on middle-click
 const PAGE = 25;
 let sortDir = 'desc';
 
