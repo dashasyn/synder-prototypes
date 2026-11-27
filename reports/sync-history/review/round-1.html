@@ -1,0 +1,176 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validator round 1 — Sync history — round 1 (flat)</title>
+<link rel="stylesheet" href="https://dashasyn.github.io/synder-prototypes/ui-kit/synder-ui-kit.css">
+<style>
+ body{font-family:Roboto,system-ui,sans-serif;max-width:900px;margin:0 auto;padding:24px;color:var(--color-grey-90,#212121);background:var(--color-grey-05,#fafafa)}
+ h1{font-size:24px;margin:0 0 4px} .sub{color:var(--color-grey-60,#757575);margin:0 0 20px}
+ table{border-collapse:collapse;width:100%;margin:12px 0 24px;background:#fff}
+ th,td{border:1px solid var(--color-grey-20,#e0e0e0);padding:6px 10px;text-align:left;font-size:13px}
+ th{background:var(--color-grey-10,#f5f5f5)}
+ .f{background:#fff;border:1px solid var(--color-grey-20,#e0e0e0);border-radius:4px;padding:14px 16px;margin:10px 0}
+ .f.Critical{border-left:4px solid #C62828} .f.High{border-left:4px solid #EF6C00}
+ .f.Medium{border-left:4px solid #FBC02D} .f.Low{border-left:4px solid #9E9E9E}
+ .f h3{font-size:16px;margin:8px 0} .f p{margin:6px 0;font-size:14px}
+ header{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12px}
+ .sev{font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+ .id,.lens{color:var(--color-grey-60,#757575)}
+ .corr{background:#0053CC;color:#fff;border-radius:2px;padding:1px 6px}
+ .ev{background:var(--color-grey-05,#fafafa);border:1px solid var(--color-grey-20,#e0e0e0);border-radius:3px;padding:8px 10px}
+ h2{font-size:18px;margin:28px 0 4px;padding-top:12px;border-top:1px solid var(--color-grey-20,#e0e0e0)}
+ li{font-size:14px;margin:4px 0}
+</style></head><body>
+<h1>Validator round 1 — Sync history — round 1 (flat)</h1>
+<p class="sub"> · state map recorded  · 26 controls driven · 4 declared not exercised</p>
+
+<h2>Which lenses ran</h2>
+<table><tr><th>Lens</th><th>Payload</th><th>Items checked</th><th>Findings</th></tr>
+<tr><td>clarity</td><td>clarity.json</td><td>17</td><td>3</td></tr><tr><td>domain</td><td>domain.json</td><td>17</td><td>2</td></tr><tr><td>ux</td><td>ux1.json</td><td>26</td><td>4</td></tr><tr><td>ux</td><td>ux2.json</td><td>27</td><td>3</td></tr><tr><td>ux</td><td>ux3.json</td><td>29</td><td>4</td></tr>
+
+</table>
+
+<h2>Automated checks (no LLM)</h2>
+<p>No deterministic failures: contrast, palette, radii, fonts, dead controls, accessible names and JS errors all clean.</p>
+
+<h2>Critical and High (5)</h2>
+<article class="f High">
+  <header><span class="sev">High</span><span class="id">UX-1</span>
+    <span class="corr">corroborated</span>
+    <span class="lens">clarity + ux2 + ux3</span></header>
+  <h3>Search is ANDed with the pre-set To integration, so a pasted transaction/sync/webhook ID whose syncs went to the other accounting company returns 'No syncs', and a transaction synced to both companies shows only half its history.</h3>
+  <p class="el"><b>Where:</b> Search combined with the default To integration filter ('Sandbox Company US 62ce (QuickBooks Online)') + empty state 'No syncs'</p>
+  <p><b>Impact:</b> Support pastes a valid ID, gets 'No syncs' (or misses the Canceled/Not parsed sync on the Synder company) and concludes the transaction never synced, which defeats the 'all syncs of one transaction' task.</p>
+  <p class="ev"><b>Did:</b> Page source match(): `if (F.a &amp;&amp; s[2] !== F.a) return false` runs before the search check, with DEFAULTS.a='qbo'; searched the transaction whose only sync is to 'QB PT Demo - Shopify (Synder)' (Not parsed / Rollback canceled stories), and checked the 'Canceled on Synder, synced on QBO' refund<br><b>Saw:</b> Synder-only transactions can't be found under the default filter → 'No syncs' with no hint that the To filter hides them; the refund shows only its QBO 'Synced' row and its Synder 'Canceled' sync is hidden</p>
+  <details><summary>Also reported by clarity, ux3</summary><p><b>clarity CLR-1:</b> Search only looks inside the preset To integration ("Sandbox Company US 62ce (QuickBooks Online)"), so a transaction synced only to another company returns "No syncs". The empty state doesn't say a filter is hiding results.</p><p class="ev"><b>On screen:</b> “No syncs”<br><b>Against:</b> plain-language</p><p><b>ux3 UX-2:</b> When a search returns nothing, the empty state only says 'No syncs' and does not mention that To integration is pre-filtered to the QuickBooks company, which silently hides syncs to other companies.</p><p class="ev"><b>Did:</b> Loaded ?state=empty (search 000000) with default To = 'Sandbox Company US 62ce (QuickBooks Online)'; compared To filter counts<br><b>Saw:</b> Body shows only 'No syncs', 0–0 of 0, no next step; To default yields 82 rows vs 37 for the Synder company, so a search is scoped to one company without saying so</p></details>
+  <p class="fix"><b>Fix:</b> When a search ID is entered, search across all To integrations (or clear the default To filter on search), and make the empty state name the active filters with a 'Reset filters' path.</p>
+</article><article class="f High">
+  <header><span class="sev">High</span><span class="id">UX-1</span>
+    <span class="corr">corroborated</span>
+    <span class="lens">ux1 + ux3</span></header>
+  <h3>Back from sync details puts the list back to its default filters. Search text, From/To/status filters, date range and sort are all lost because none of them is kept in the URL or in history state.</h3>
+  <p class="el"><b>Where:</b> Row click → sync details → browser Back</p>
+  <p><b>Impact:</b> A support agent who searched or filtered to find one sync, opened it and came back has to redo the search before checking the next sync. That is a loop on exactly the flow the page exists for.</p>
+  <p class="ev"><b>Did:</b> Applied filters/search, clicked a row (same tab to /reports/sync-details-layouts/), pressed browser Back<br><b>Saw:</b> State map: 'Back returns to list (filters reset to defaults)'. The source confirms that applyFilters() only writes the in-memory F object, and replaceState carries only the variant hash.</p>
+  <details><summary>Also reported by ux3</summary><p><b>ux3 UX-1:</b> Returning from sync details resets search, filters and sort to defaults, so the list the user narrowed down is lost.</p><p class="ev"><b>Did:</b> Searched/filtered, clicked a row (same tab to /reports/sync-details-layouts/), pressed Back<br><b>Saw:</b> State map: 'Back returns to list (filters reset to defaults)'; source has no URL/session persistence of F or sortDir</p></details>
+  <p class="fix"><b>Fix:</b> Store the applied filters, search and sort in the query string (history.replaceState on Apply/sort), so Back restores the same filtered list.</p>
+</article><article class="f High">
+  <header><span class="sev">High</span><span class="id">DOM-1</span>
+    
+    <span class="lens">domain</span></header>
+  <h3>The subtitle calls the destination "your accounting", a term vocabulary.md explicitly bans in favour of "books" (the ledger) or "accounting company" (the software), so it blurs whether the page covers postings to the ledger or connections to the software.</h3>
+  <p class="el"><b>Where:</b> Page subtitle under "Sync history"</p>
+  <p><b>Impact:</b> An accountant can't tell from the page description whether a row is a posting to the client's books, and the wording drifts from every other Synder surface that says "synced to your books".</p>
+  <p class="ev"><b>On screen:</b> “Every sync of each transaction to your accounting, including re-syncs, deletions and rollbacks.”<br><b>Against:</b> vocabulary.md, UI Words — Canonical Terms: "Books | NOT: your company, your accounting, ledger — the data/ledger inside the accounting company"</p>
+  
+  <p class="fix"><b>Fix:</b> Every sync of each transaction to your books, including re-syncs, deletions and rollbacks.</p>
+</article><article class="f High">
+  <header><span class="sev">High</span><span class="id">UX-2</span>
+    
+    <span class="lens">ux1</span></header>
+  <h3>Search runs inside the default To = QBO filter. A search for a transaction or sync ID that went to the other accounting company (QB PT Demo - Shopify (Synder)) silently hides those syncs or returns 'No syncs'.</h3>
+  <p class="el"><b>Where:</b> To integration default ('Sandbox Company US 62ce (QuickBooks Online)') combined with Search</p>
+  <p><b>Impact:</b> The task 'see all syncs of one transaction' gives only part of the history, or none of it. A user who doesn't notice the pre-filled To field can wrongly decide the sync never happened.</p>
+  <p class="ev"><b>Did:</b> Default load (To = QBO, 1–25 of 82), then To switched to 'QB PT Demo - Shopify (Synder)' + Apply<br><b>Saw:</b> The other company has 37 syncs, none of them in the default list. match() applies F.a ('qbo' by default) before the search term, so a search on a Synder-target transaction is limited to QBO syncs.</p>
+  
+  <p class="fix"><b>Fix:</b> When an ID is searched, ignore or clear the default To filter. If that's not acceptable, show a line on a partial or empty result, e.g. 'N more syncs to other integrations, clear To integration'.</p>
+</article><article class="f High">
+  <header><span class="sev">High</span><span class="id">UX-2</span>
+    
+    <span class="lens">ux2</span></header>
+  <h3>Returning from sync details resets search and filters to their defaults.</h3>
+  <p class="el"><b>Where:</b> Row click → sync details → browser Back</p>
+  <p><b>Impact:</b> Someone comparing several syncs of one transaction (failed, then synced) has to paste the ID and re-apply filters after every detail view, which causes repeated loops on the primary task.</p>
+  <p class="ev"><b>Did:</b> State map: searched/filtered the list, clicked a row, pressed Back<br><b>Saw:</b> 'Back returns to list (filters reset to defaults)'</p>
+  
+  <p class="fix"><b>Fix:</b> Keep search, filters and sort in the URL query so Back (and a Cmd+click tab) restores the same filtered list.</p>
+</article>
+
+<h2>Polish (8)</h2>
+<article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">CLR-2</span>
+    
+    <span class="lens">clarity</span></header>
+  <h3>"webhook" is technical jargon, and since the Webhook column was dropped, no webhook ID is shown anywhere on the page.</h3>
+  <p class="el"><b>Where:</b> Search field placeholder</p>
+  <p><b>Impact:</b> The owner doesn't know what a webhook ID is or where to find one, wonders whether they need it to search, and hesitates at the one control they need for the task.</p>
+  <p class="ev"><b>On screen:</b> “Transaction, sync or webhook ID”<br><b>Against:</b> vocabulary.md: Default search placeholder: `Search by {list}`; "webhook" plain-language</p>
+  
+  <p class="fix"><b>Fix:</b> Follow the vocabulary's "Search by {list}" pattern and lead with what the owner has, e.g. "Search by transaction or sync ID". Keep webhook matching silent, or explain it in a hint aimed at support.</p>
+</article><article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">CLR-3</span>
+    
+    <span class="lens">clarity</span></header>
+  <h3>"deletions and rollbacks" are scary and unexplained (deleted from where? what is a rollback?), and "your accounting" isn't the approved term "books".</h3>
+  <p class="el"><b>Where:</b> Page subtitle under "Sync history"</p>
+  <p><b>Impact:</b> A nervous owner reads that something in their accounting was deleted or rolled back, fears they lost data, and either avoids the page or opens a worried support ticket.</p>
+  <p class="ev"><b>On screen:</b> “Every sync of each transaction to your accounting, including re-syncs, deletions and rollbacks.”<br><b>Against:</b> vocabulary.md: Books | NOT: your company, your accounting, ledger; Rollback (buttons/statuses; "rolled back" in past tense)</p>
+  
+  <p class="fix"><b>Fix:</b> Reword with the approved term and a plain-language gloss, e.g. "Every sync of each transaction to your books, including re-syncs and syncs that were later removed or undone (rolled back)."</p>
+</article><article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">DOM-2</span>
+    
+    <span class="lens">domain</span></header>
+  <h3>The search placeholder doesn't follow the canonical "Search by {list}" pattern, and it offers webhook ID as a search key even though the Webhook column is gone, so a search by webhook ID returns rows that show nothing matching the term typed.</h3>
+  <p class="el"><b>Where:</b> Search field placeholder in filter bar</p>
+  <p><b>Impact:</b> A support person who searches webhook 786478 and gets 3 Skipped rows has nothing on screen to confirm those rows belong to that webhook before they copy IDs for a ticket.</p>
+  <p class="ev"><b>On screen:</b> “Transaction, sync or webhook ID”<br><b>Against:</b> vocabulary.md, Dropdowns, Selects, Inputs, Search: "Default search placeholder: `Search by {list}`"</p>
+  
+  <p class="fix"><b>Fix:</b> Use "Search by transaction, sync or webhook ID", and show the matched webhook ID somewhere in the result (for example a match hint or in sync details) so the match can be checked.</p>
+</article><article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">UX-3</span>
+    
+    <span class="lens">ux1</span></header>
+  <h3>The empty result says only 'No syncs'. It doesn't say that the search or active filters (including the pre-filled To integration) caused it, and it gives no way to clear them from that spot.</h3>
+  <p class="el"><b>Where:</b> Empty state table body 'No syncs'</p>
+  <p><b>Impact:</b> A user with a mistyped ID or a hidden default filter stalls on a dead end and can't tell 'no such sync' from 'filtered out'.</p>
+  <p class="ev"><b>Did:</b> Opened ?state=empty (search '000000')<br><b>Saw:</b> Table body shows only 'No syncs', range 0–0 of 0, with no action in the table area.</p>
+  
+  <p class="fix"><b>Fix:</b> When filters or search are active, add a proposed line under 'No syncs' naming them, plus a Reset filters / clear search link in the empty row.</p>
+</article><article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">UX-4</span>
+    
+    <span class="lens">ux1</span></header>
+  <h3>Search matches webhook IDs as substrings, but the Webhook column was dropped. Rows found through their webhook look unrelated to the query, and a numeric query can mix sync-ID and webhook-ID matches with nothing showing why each row matched.</h3>
+  <p class="el"><b>Where:</b> Search results when the match is on webhook ID</p>
+  <p><b>Impact:</b> A user who searches '786478' sees rows whose visible IDs (e.g. 774372, po_1TFOFU…) don't contain it, and can doubt the result or keep searching.</p>
+  <p class="ev"><b>Did:</b> Typed 786478 + Enter (also entry via ?webhookId=786478)<br><b>Saw:</b> 1–3 of 3. First row shows Sync ID 774372 and Transaction ID po_1TFOFUE4pygkgelbaVjxKhmJ, and neither visible value contains 786478.</p>
+  
+  <p class="fix"><b>Fix:</b> Show a short 'Matched webhook 786478' note above the results (or as a hint on the matched row) when the search matched a webhook ID.</p>
+</article><article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">UX-3</span>
+    
+    <span class="lens">ux2</span></header>
+  <h3>Clearing a filter with × changes the field to 'All' but leaves the list filtered until Apply, while 'Reset filters' re-filters immediately, so the same 'clear' intent behaves two ways and the fields can disagree with the rows shown.</h3>
+  <p class="el"><b>Where:</b> Filter × clear vs Reset filters</p>
+  <p><b>Impact:</b> After × the user sees 'All' above a list that's still narrowed (e.g. 1–25 of 26 Shopify only) and may misread what the history contains.</p>
+  <p class="ev"><b>Did:</b> Picked From 'lilys-shop-test (Shopify)', Apply (1–25 of 26), then clicked × on From; separately clicked Reset filters<br><b>Saw:</b> After × the field shows 'All' but the list isn't re-filtered until Apply; Reset filters immediately shows 1–25 of 82</p>
+  
+  <p class="fix"><b>Fix:</b> Make × re-apply the list immediately, as Reset filters does (or mark pending, unapplied field changes visibly).</p>
+</article><article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">UX-3</span>
+    
+    <span class="lens">ux3</span></header>
+  <h3>Clicking × resets the field to 'All' but the table stays filtered until Apply, so the filter bar and the table disagree.</h3>
+  <p class="el"><b>Where:</b> × clear on From integration / To integration / Sync status selects</p>
+  <p><b>Impact:</b> Users read the bar as unfiltered while rows are still filtered (e.g. 26 Shopify rows labelled 'All'), and misjudge whether a sync exists.</p>
+  <p class="ev"><b>Did:</b> Picked 'lilys-shop-test (Shopify)', Apply (1–25 of 26), then clicked ×<br><b>Saw:</b> Field shows 'All'; state map: 'list not re-filtered until Apply' — range stays 1–25 of 26</p>
+  
+  <p class="fix"><b>Fix:</b> Make × apply immediately (re-filter on clear), consistent with the kit rule that filters clear with ×.</p>
+</article><article class="f Medium">
+  <header><span class="sev">Medium</span><span class="id">UX-4</span>
+    
+    <span class="lens">ux3</span></header>
+  <h3>The error state is a single text cell with no retry or next-step action, leaving the user at a dead end.</h3>
+  <p class="el"><b>Where:</b> Error state (?state=error) table body</p>
+  <p><b>Impact:</b> When loading fails the user cannot recover except by reloading the whole page, encouraging Reload hammering (KF-1 pattern).</p>
+  <p class="ev"><b>Did:</b> Loaded ?state=error<br><b>Saw:</b> Table body '[live copy not captured]', no button or link, 0–0 of 0</p>
+  
+  <p class="fix"><b>Fix:</b> Add a 'Try again' button in the error row that re-requests the list, keeping the uncaptured-copy marker for the message.</p>
+</article>
+
+<h2>Gaps the validators flagged in the recon</h2>
+<ul><li><b>clarity:</b> Error state: table body shows "[live copy not captured]", so I can't judge whether the error message reassures or blames the user.</li><li><b>clarity:</b> Sync details destination (/reports/sync-details-layouts/) is a separate prototype that was not reviewed, so I can't check whether it explains failed/warning statuses in plain language.</li><li><b>clarity:</b> Sync status multi-select: the state map records "2 items selected" after picking only the 1st option, so it's unclear what the user sees as selected; the recorded behaviour may be wrong.</li><li><b>clarity:</b> Back from sync details resets filters to defaults; the state map doesn't show whether the user gets any cue that their search/filters were lost.</li><li><b>clarity:</b> Search vs To filter interaction was confirmed from the prototype's source (match() applies the To filter before the search query), not from the state map. The state map never ran a search for an ID that only exists under another To integration.</li><li><b>domain:</b> Search vs. To integration default: the state map doesn't record whether a transaction-ID search ignores the default To integration filter (Sandbox Company US 62ce). If it doesn't, syncs of the same transaction to the other accounting company (QB PT Demo - Shopify (Synder), 37 rows) are hidden, and the primary task ('all syncs of one transaction') could wrongly conclude the transaction never synced there.</li><li><b>domain:</b> Sync date meaning on Deleted / Rollback rows: the map doesn't record whether "Sync date" on a Deleted, Rollback scheduled or Rollback in progress row is when the original posting landed in the books or when the deletion/rollback ran. For an audit trail these are different events, and the column label alone doesn't say which.</li><li><b>domain:</b> Rows with no sync date (e.g. Ready to sync, Scheduled, Pending): the map doesn't record what the Sync date cell shows or where these rows sort. Date-range filtering silently drops them, so an accountant filtering by date may miss transactions that have not reached the books yet.</li><li><b>domain:</b> Error state body is [live copy not captured], so error wording couldn't be checked for accounting accuracy.</li><li><b>ux:</b> In progress / Rollback in progress / Scheduled rows (KF-1): the state map doesn't record whether the list auto-refreshes or how a user learns a sync finished, so the reload-hammering risk can't be judged.</li><li><b>ux:</b> Error state: the body shows only the '[live copy not captured]' marker; whether production offers Retry or a next step isn't recorded, so I can't tell if this is a dead end.</li><li><b>ux:</b> Sync status multi-select: the state map shows the first pick giving '2 items selected' (the code shows the single value when one item is picked). The exact clicks weren't recorded, so I can't reproduce it; worth re-running.</li><li><b>ux:</b> Browser fetch failed (Chrome CDP wouldn't start: profile lock, permission denied), so I checked behaviour against the published source in reports/sync-history/index.html rather than live.</li><li><b>ux:</b> Error state: the body shows only '[live copy not captured]' with no Retry or next step recorded. Whether production offers a recovery action is unknown, so I can't judge whether this is a dead end.</li><li><b>ux:</b> KF-1: rows in 'In progress', 'Rollback in progress' and 'Scheduled' states. The state map doesn't record whether the list auto-refreshes or shows a last-updated time, so I can't check the progress feedback.</li><li><b>ux:</b> Sync status multi-select: picking the 1st option (Canceled) reportedly gave '2 items selected' and first rows 'Synced'. The code has no preselection, so either the harness clicked twice or a label/checkbox double-toggles. Needs a single-click recheck.</li><li><b>ux:</b> Pagination is inert, so it's unknown whether sort and filters persist across pages.</li><li><b>ux:</b> In-progress rows (In progress, Rollback in progress, Rollback scheduled, Scheduled): the state map does not record whether the list auto-refreshes or how a user sees the terminal state, so KF-1 (reload hammering) could not be judged</li><li><b>ux:</b> Sync status multi-select: the state map says picking the 1st option gave '2 items selected' and Apply showed Synced rows; the source labels a single pick by its name, so the harness pick is ambiguous and the single-pick label was not verified</li><li><b>ux:</b> Browser could not be started (Chrome profile lock), so kit values were taken from the kit-conformance output and source only, not re-measured</li></ul>
+
+<h2>Reference gaps (the FDD is silent)</h2>
+<p>None.</p>
+</body></html>
