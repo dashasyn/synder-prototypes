@@ -213,7 +213,12 @@ const pill = s => `<span class="status status-${STATUS[s] || 'grey'}">${esc(s)}<
 const date = d => d ? esc(d) : '';                                   // production leaves it empty when the sync never started
 // captured behaviour: both IDs open details in a new tab (IdComponent.tsx, target="_blank"); dead links in the prototype
 const txLink = t => `<a class="table-link" href="#" target="_blank" rel="noopener" onclick="return false" title="Opens transaction details in a new tab">${esc(t.id)}</a>`;
-const syncLink = id => `<a class="table-link" href="#" target="_blank" rel="noopener" onclick="return false" title="Opens sync details in a new tab">${id}</a>`;
+const DETAILS = '../sync-details-layouts/';   // the sync details prototype stands in for the real page
+const syncLink = id => `<a class="table-link" href="${DETAILS}" target="_blank" rel="noopener" title="Opens sync details in a new tab">${id}</a>`;
+/* Row click opens sync details in a new tab, like other tables (Ignat 2026-11-27). Guards from LogRocket (Register page):
+   a click on a link/button inside the row only does that thing, and finishing a text selection does nothing. */
+const selecting = () => String(window.getSelection()).length > 0;
+function openRow(e) { if (e.target.closest('a, button') || selecting()) return; window.open(DETAILS, '_blank', 'noopener'); }
 const PAGE = 25;
 let sortDir = 'desc';
 
@@ -307,7 +312,7 @@ function setRange(n) {
 }
 function renderFlat() {
   const list = FLAT.filter(({t, s}) => match(t, s)).sort((a, b) => dir(a.s, b.s));
-  const rows = list.slice(0, PAGE).map(({t, s}) => `<tr>
+  const rows = list.slice(0, PAGE).map(({t, s}) => `<tr class="row-clickable" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)">
     <td>${syncLink(s[0])}</td><td>${txLink(t)}</td><td>${co(INT[t.i])}</td><td>${co(ACC[s[2]])}</td>
     <td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
   document.getElementById('tbl').innerHTML = head(1) + `<tbody>${rows || empty}</tbody>`;
@@ -322,7 +327,7 @@ function renderGrouped() {
     .filter(g => g.m.some(Boolean)).sort((a, b) => dir(a.syncs.reduce((x, y) => key(x) > key(y) ? x : y), b.syncs.reduce((x, y) => key(x) > key(y) ? x : y)));
   const autoOpen = !!(F.s.length || F.q);
   const rows = GROUPS.slice(0, PAGE).map(({t, syncs, m}, gi) => {
-    if (syncs.length === 1) return `<tr>${syncRow(t, syncs[0], `<span class="row-toggle-spacer"></span>${txLink(t)}`).replace(`<td>${syncLink(syncs[0][0])}</td>`, `<td>${syncLink(syncs[0][0])}</td>`)}</tr>`;
+    if (syncs.length === 1) return `<tr class="row-clickable" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)">${syncRow(t, syncs[0], `<span class="row-toggle-spacer"></span>${txLink(t)}`).replace(`<td>${syncLink(syncs[0][0])}</td>`, `<td>${syncLink(syncs[0][0])}</td>`)}</tr>`;
     const latest = t.syncs.reduce((x, y) => key(x) > key(y) ? x : y);
     const accs = [...new Set(syncs.map(s => s[2]))];
     const others = m.filter(x => !x).length;
@@ -331,7 +336,7 @@ function renderGrouped() {
       <td data-copy="proposed">${syncs.length} syncs</td><td>${co(INT[t.i])}</td>
       <td>${accs.length > 1 ? `<span data-copy="proposed">${accs.length} companies</span>` : co(ACC[accs[0]])}</td>
       <td>${date(latest[3])}</td><td>${pill(latest[4])}</td></tr>`;
-    const kids = syncs.map((s, k) => `<tr class="child ${m[k] ? 'match' : 'other'}" data-of="${gi}" hidden>
+    const kids = syncs.map((s, k) => `<tr class="child row-clickable ${m[k] ? 'match' : 'other'}" data-of="${gi}" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)" hidden>
       <td></td><td>${syncLink(s[0])}</td><td></td><td>${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
     const more = others ? `<tr class="child others-row" data-of="${gi}" hidden><td></td><td colspan="5"><button class="btn-text others" type="button" aria-expanded="false" data-n="${others}" onclick="toggleOthers(${gi}, this)" data-copy="proposed">Show ${others} other sync${others === 1 ? '' : 's'}</button></td></tr>` : '';
     return parent + kids + more;
@@ -341,7 +346,7 @@ function renderGrouped() {
   setRange(GROUPS.length);
 }
 function toggle(gi, e) {
-  if (e && e.target.closest('a')) return;
+  if (e && (e.target.closest('a') || selecting())) return;
   const btn = document.querySelector(`tr.grp[data-g="${gi}"] .row-toggle`);
   const open = btn.getAttribute('aria-expanded') !== 'true';
   btn.setAttribute('aria-expanded', open);
