@@ -213,10 +213,30 @@ const pill = s => `<span class="status status-${STATUS[s] || 'grey'}">${esc(s)}<
 const date = d => d ? esc(d) : '';                                   // production leaves it empty when the sync never started
 // captured behaviour: both IDs open in a new tab (IdComponent.tsx, target="_blank"). Transaction ID goes to the
 // transaction in the source integration, e.g. Stripe (transactionDetailsLink; Ignat 2026-11-27). Dead link in the prototype.
-const txLink = t => `<a class="table-link" href="#" target="_blank" rel="noopener" onclick="return false" title="Opens the transaction in ${t.i === 'stripe' ? 'Stripe' : 'Shopify'} in a new tab">${esc(t.id)}</a>`;
+// Option 3 (Ignat 2026-11-27): Transaction ID = truncated blue link; hover → full ID tooltip (only when cut) + grey copy icon.
+const txLink = t => `<span class="copyable" style="max-width:180px"><a class="table-link copyable-text" href="#" target="_blank" rel="noopener" onclick="return false" data-full="${esc(t.id)}" aria-label="${esc(t.id)}, opens in ${t.i === 'stripe' ? 'Stripe' : 'Shopify'}">${esc(t.id)}</a>${copyBtn(t.id, 'transaction ID')}</span>`;
+// captured: CopyToClipboardIconButton — tooltip "Copy" → "Copied" for 2 s; failure "Couldn't copy to clipboard."
+const copyBtn = (v, what) => `<button type="button" class="copy-btn" data-copy-value="${esc(v)}" aria-label="Copy ${what}"><span class="material-icons" aria-hidden="true">content_copy</span></button>`;
+const TIP = document.createElement('div'); TIP.className = 'tooltip'; TIP.setAttribute('role', 'tooltip'); document.body.appendChild(TIP);
+function showTip(el, text) { const r = el.getBoundingClientRect(); TIP.textContent = text; TIP.style.left = (r.left + scrollX) + 'px'; TIP.style.top = (r.bottom + scrollY + 5) + 'px'; TIP.classList.add('is-open'); TIP._for = el; }
+function hideTip(el) { if (!el || TIP._for === el) { TIP.classList.remove('is-open'); TIP._for = null; } }
+const tipText = el => el.classList.contains('copy-btn') ? (el.classList.contains('is-copied') ? 'Copied' : 'Copy')
+  : (el.scrollWidth > el.clientWidth ? el.dataset.full : '');   // full ID only when it is cut, like CommonTextCutter
+['mouseover', 'focusin'].forEach(ev => document.addEventListener(ev, e => { const el = e.target.closest && e.target.closest('.copy-btn, .copyable-text[data-full]'); if (!el) return; const t = tipText(el); t ? showTip(el, t) : hideTip(); }));
+['mouseout', 'focusout'].forEach(ev => document.addEventListener(ev, e => { const el = e.target.closest && e.target.closest('.copy-btn, .copyable-text[data-full]'); if (el && !el.contains(e.relatedTarget)) hideTip(el); }));
+document.addEventListener('click', async e => {
+  const b = e.target.closest('.copy-btn'); if (!b) return;
+  e.stopPropagation();
+  let ok = false;
+  try { await navigator.clipboard.writeText(b.dataset.copyValue); ok = true; }
+  catch { const ta = document.createElement('textarea'); ta.value = b.dataset.copyValue; document.body.appendChild(ta); ta.select(); ok = document.execCommand('copy'); ta.remove(); }
+  b.dataset.label = b.dataset.label || b.getAttribute('aria-label'); b.classList.toggle('is-copied', ok); b.setAttribute('aria-label', ok ? 'Copied' : b.dataset.label);
+  showTip(b, ok ? 'Copied' : "Couldn't copy to clipboard.");
+  clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove('is-copied'); b.setAttribute('aria-label', b.dataset.label); if (TIP._for === b && !b.matches(':hover')) hideTip(b); else if (TIP._for === b) showTip(b, 'Copy'); }, 2000);
+}, true);
 const DETAILS = '../sync-details-layouts/';   // the sync details prototype stands in for the real page
 // The row opens sync details, so Sync ID is plain text, not a link (Ignat 2026-11-27; production: link)
-const syncLink = id => `${id}`;
+const syncLink = id => `<span class="copyable"><span class="copyable-text">${id}</span>${copyBtn(id, 'sync ID')}</span>`;
 /* Row click works like Stripe and Shopify (Ignat 2026-11-27): a click opens sync details on the same page;
    Cmd/Ctrl+click or middle-click opens a new tab, Shift+click a new window — the browser's own link shortcuts.
    A click on a link/button inside the row only does that thing; finishing a text selection does nothing. */
