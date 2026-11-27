@@ -52,7 +52,7 @@
       <div class="synder-page-header">
         <div class="synder-page-header-text">
           <h1 class="synder-page-title" data-copy="proposed" title="Production: Syncs History">Sync history</h1>
-          <p class="synder-page-subtitle" data-copy="proposed">Every sync of each transaction to your accounting, including re-syncs, deletions and rollbacks.</p>
+          <p class="synder-page-subtitle" data-copy="proposed">Every sync of each transaction to your books, including re-syncs and syncs that were later deleted or rolled back.</p>
         </div>
       </div>
 
@@ -60,7 +60,7 @@
         <form class="synder-filter-bar" id="filters" onsubmit="applyFilters(); return false">
           <div class="synder-filter-bar-fields">
             <div class="form-field" style="width:260px"><label class="form-label" for="f-q">Search</label>
-              <input class="input input-search" id="f-q" type="search" autocomplete="off" data-copy="proposed" placeholder="Transaction, sync or webhook ID"></div>
+              <input class="input input-search" id="f-q" type="search" autocomplete="off" data-copy="proposed" placeholder="Search by transaction or sync ID"></div>
             <div class="form-field"><span class="form-label">Sync date</span>
               <span class="synder-filter-bar-fields"><input id="f-from" class="input" type="date" aria-label="Sync date from" style="width:150px"><input id="f-to" class="input" type="date" aria-label="Sync date to" style="width:150px"></span></div>
             <div class="form-field" style="width:220px"><span class="form-label">From integration</span>
@@ -214,9 +214,11 @@ const date = d => d ? esc(d) : '';                                   // producti
 // captured behaviour: both IDs open in a new tab (IdComponent.tsx, target="_blank"). Transaction ID goes to the
 // transaction in the source integration, e.g. Stripe (transactionDetailsLink; Ignat 2026-11-27). Dead link in the prototype.
 // Option 3 (Ignat 2026-11-27): Transaction ID = truncated blue link; hover → full ID tooltip (only when cut) + grey copy icon.
-const txLink = t => `<span class="copyable" style="max-width:180px"><a class="table-link copyable-text" href="#" target="_blank" rel="noopener" onclick="return false" data-full="${esc(t.id)}" aria-label="${esc(t.id)}, opens in ${t.i === 'stripe' ? 'Stripe' : 'Shopify'}">${esc(t.id)}</a>${copyBtn(t.id, 'transaction ID')}</span>`;
+const txLink = t => `<span class="copyable" style="width:${TX_W}px"><a class="table-link copyable-text" href="#" target="_blank" rel="noopener" onclick="return false" data-full="${esc(t.id)}" aria-label="${esc(t.id)}, opens in ${t.i === 'stripe' ? 'Stripe' : 'Shopify'}">${esc(t.id)}</a>${copyBtn(t.id)}</span>`;
 // captured: CopyToClipboardIconButton — tooltip "Copy" → "Copied" for 2 s; failure "Couldn't copy to clipboard."
-const copyBtn = (v, what) => `<button type="button" class="copy-btn" data-copy-value="${esc(v)}" aria-label="Copy ${what}"><span class="material-icons" aria-hidden="true">content_copy</span></button>`;
+// Icon = MUI FileCopyOutlined, as in production; aria-label "Copy ID" captured from Summary preview
+const COPY_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm-1 4H8c-1.1 0-1.99.9-1.99 2L6 21c0 1.1.89 2 1.99 2H19c1.1 0 2-.9 2-2V11l-6-6zM8 21V7h6v5h5v9H8z"/></svg>';
+const copyBtn = (v) => `<button type="button" class="copy-btn" data-copy-value="${esc(v)}" aria-label="Copy ID">${COPY_SVG}</button>`;
 const TIP = document.createElement('div'); TIP.className = 'tooltip'; TIP.setAttribute('role', 'tooltip'); document.body.appendChild(TIP);
 function showTip(el, text) { const r = el.getBoundingClientRect(); TIP.textContent = text; TIP.style.left = (r.left + scrollX) + 'px'; TIP.style.top = (r.bottom + scrollY + 5) + 'px'; TIP.classList.add('is-open'); TIP._for = el; }
 function hideTip(el) { if (!el || TIP._for === el) { TIP.classList.remove('is-open'); TIP._for = null; } }
@@ -234,18 +236,22 @@ document.addEventListener('click', async e => {
   showTip(b, ok ? 'Copied' : "Couldn't copy to clipboard.");
   clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove('is-copied'); b.setAttribute('aria-label', b.dataset.label); if (TIP._for === b && !b.matches(':hover')) hideTip(b); else if (TIP._for === b) showTip(b, 'Copy'); }, 2000);
 }, true);
-const DETAILS = '../sync-details-layouts/';   // the sync details prototype stands in for the real page
+// Fixed ID boxes, like production's fixed 182px column: hover reveals the icon inside, never widens the column
+const TX_W = 182, SY_W = 84;
+const DETAILS = 'details.html';   // placeholder page (Ignat 2026-11-27); real sync details are out of scope
 // The row opens sync details, so Sync ID is plain text, not a link (Ignat 2026-11-27; production: link)
-const syncLink = id => `<span class="copyable"><span class="copyable-text">${id}</span>${copyBtn(id, 'sync ID')}</span>`;
+const syncLink = id => `<span class="copyable" style="width:${SY_W}px"><span class="copyable-text">${id}</span>${copyBtn(id)}</span>`;
 /* Row click works like Stripe and Shopify (Ignat 2026-11-27): a click opens sync details on the same page;
    Cmd/Ctrl+click or middle-click opens a new tab, Shift+click a new window — the browser's own link shortcuts.
    A click on a link/button inside the row only does that thing; finishing a text selection does nothing. */
 const selecting = () => String(window.getSelection()).length > 0;
 function openRow(e) {
   if (e.target.closest('a, button') || selecting()) return;
-  if (e.metaKey || e.ctrlKey || e.button === 1) window.open(DETAILS, '_blank', 'noopener');
-  else if (e.shiftKey) window.open(DETAILS, '_blank', 'noopener,popup');
-  else location.assign(DETAILS);
+  const tr = e.target.closest('tr'); const id = tr && tr.querySelector('.copy-btn[data-copy-value]:not([data-tx])');
+  const url = DETAILS + (tr && tr.dataset.sync ? '?sync=' + tr.dataset.sync : '');
+  if (e.metaKey || e.ctrlKey || e.button === 1) window.open(url, '_blank', 'noopener');
+  else if (e.shiftKey) window.open(url, '_blank', 'noopener,popup');
+  else location.assign(url);
 }
 document.addEventListener('auxclick', e => { const r = e.target.closest('tr.row-clickable'); if (r && e.button === 1 && r.getAttribute('onclick')) openRow(e); });
 document.addEventListener('mousedown', e => { if (e.button === 1 && e.target.closest('tr.row-clickable') && !e.target.closest('a')) e.preventDefault(); });   // no autoscroll on middle-click
@@ -281,7 +287,8 @@ function setSel(id, v) {
   const label = !has ? 'All' : st.multi ? (v.length === 1 ? v[0] : `${v.length} items selected`) : st.options.find(o => o[0] === v)[1];
   const val = st.el.querySelector('.select-ms-value');
   val.textContent = label; val.classList.toggle('is-placeholder', !has); val.title = has ? label : '';
-  st.el.querySelector('.select-clear').style.display = has ? '' : 'none';   // kit sets display, so [hidden] alone doesn't hide it
+  st.el.querySelector('.select-clear').style.display = has ? '' : 'none';
+  if (id === 'f-a' && !syncing && booted) toTouched = true;   // kit sets display, so [hidden] alone doesn't hide it
   if (st.multi) st.el.querySelectorAll('input').forEach(i => i.checked = v.includes(i.value));
 }
 function closeAll() { document.querySelectorAll('.select-ms.open').forEach(e => { e.classList.remove('open'); e.querySelector('.select-ms-control').setAttribute('aria-expanded', 'false'); }); }
@@ -294,6 +301,7 @@ selectMs('f-s', STATUS_OPTIONS.map(x => [x, x]), true);
 // To integration defaults to the accounting company (support, Hendrick) — visible in the field, cleared with ×
 const DEFAULTS = {q:'', from:'', to:'', i:'', a:'qbo', s:[]};
 let F = {...DEFAULTS, s: []};
+var toTouched = false, booted = false;   // set when the user changes To integration themselves
 const inputs = { q:'f-q', from:'f-from', to:'f-to' }, sels = { i:'f-i', a:'f-a', s:'f-s' };
 const dayStart = v => Date.parse(v + 'T00:00:00'), dayEnd = v => Date.parse(v + 'T23:59:59');
 function match(t, s) {
@@ -309,17 +317,36 @@ function match(t, s) {
   if (F.q) { const q = F.q.toLowerCase(); if (!(t.id.toLowerCase().includes(q) || String(s[0]).includes(q) || String(s[1]).includes(q))) return false; }
   return true;
 }
-function writeFields() { Object.entries(inputs).forEach(([k, id]) => document.getElementById(id).value = F[k]); Object.entries(sels).forEach(([k, id]) => setSel(id, Array.isArray(F[k]) ? [...F[k]] : F[k])); }
+var syncing = false;
+function writeFields() { syncing = true; try { writeFields0(); } finally { syncing = false; } }
+function writeFields0() { Object.entries(inputs).forEach(([k, id]) => document.getElementById(id).value = F[k]); Object.entries(sels).forEach(([k, id]) => setSel(id, Array.isArray(F[k]) ? [...F[k]] : F[k])); }
 function applyFilters() {
   closeAll(); STATE = '';
   Object.entries(inputs).forEach(([k, id]) => F[k] = document.getElementById(id).value.trim());
   Object.entries(sels).forEach(([k, id]) => F[k] = Array.isArray(SEL[id].value) ? [...SEL[id].value] : SEL[id].value);
-  render();
+  /* Review round 1, fix 1: an ID search looks across every accounting company. If To integration is still the
+     default the user never touched, it clears to All, visibly, so the field and the list agree. */
+  if (F.q && !toTouched && F.a === DEFAULTS.a) { F.a = ''; syncing = true; setSel('f-a', ''); syncing = false; }
+  render(); saveUrl();
 }
-function resetFilters() { STATE = ''; F = {...DEFAULTS, q: '', s: []}; writeFields(); render(); }
+function resetFilters() { STATE = ''; toTouched = false; F = {...DEFAULTS, q: '', s: []}; writeFields(); render(); saveUrl(); }
 
 // Sync date sorts, newest first by default (support, Alex: production orders by sync ID)
-function toggleSort() { sortDir = sortDir === 'desc' ? 'asc' : 'desc'; render(); }
+function toggleSort() { sortDir = sortDir === 'desc' ? 'asc' : 'desc'; render(); saveUrl(); }
+/* Review round 1, fix 2: applied search, filters and sort live in the address, so Back from sync details
+   (and a Cmd+click tab) restores the same list. */
+function saveUrl() {
+  const q = new URLSearchParams();
+  if (F.q) q.set('q', F.q); if (F.from) q.set('from', F.from); if (F.to) q.set('to', F.to); if (F.i) q.set('from_int', F.i);
+  if (F.a !== DEFAULTS.a) q.set('to_int', F.a || 'all'); if (F.s.length) q.set('status', F.s.join(',')); if (sortDir !== 'desc') q.set('sort', 'asc');
+  if (toTouched) q.set('to_set', '1');
+  history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+}
+function loadUrl(qs) {
+  if (qs.get('q')) F.q = qs.get('q'); if (qs.get('from')) F.from = qs.get('from'); if (qs.get('to')) F.to = qs.get('to');
+  if (qs.get('from_int')) F.i = qs.get('from_int'); if (qs.get('to_int')) F.a = qs.get('to_int') === 'all' ? '' : qs.get('to_int');
+  if (qs.get('status')) F.s = qs.get('status').split(','); if (qs.get('sort') === 'asc') sortDir = 'asc'; toTouched = qs.get('to_set') === '1';
+}
 
 function syncRow(t, s, firstCell) {
   return `<td>${firstCell}</td><td>${syncLink(s[0])}</td><td>${co(INT[t.i])}</td><td>${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td>`;
@@ -332,7 +359,10 @@ function head(v) {
     <th class="sortable sorted${sortDir === 'desc' ? ' desc' : ''}" aria-sort="${sortDir === 'desc' ? 'descending' : 'ascending'}" tabindex="0" onclick="toggleSort()" onkeydown="if(event.key==='Enter')toggleSort()">Sync date</th>
     <th>Sync status</th></tr></thead>`;
 }
-const empty = `<tr><td class="table-empty" colspan="6" data-copy="captured">No syncs</td></tr>`;   // captured: SyncsHistoryTable.tsx customNoDataText
+// "No syncs" captured (SyncsHistoryTable.tsx customNoDataText). When search/filters narrow the list, a Reset filters
+// button (existing label, zero new copy) sits under it, so "filtered out" is never a dead end (review round 1).
+const filtersActive = () => !!(F.q || F.from || F.to || F.i || F.s.length || (F.a && F.a !== DEFAULTS.a));
+const emptyRow = () => `<tr><td class="table-empty" colspan="6"><div data-copy="captured">No syncs</div>${filtersActive() ? '<button type="button" class="btn-text" id="empty-reset" onclick="resetFilters()">Reset filters</button>' : ''}</td></tr>`;
 const LOADING = `<tr><td class="table-empty" colspan="6"><span class="spinner" role="status" aria-label="Loading"></span></td></tr>`;
 const ERROR = `<tr><td class="table-empty" colspan="6">[live copy not captured]</td></tr>`;   // production error text not captured
 function setRange(n) {
@@ -342,10 +372,10 @@ function setRange(n) {
 }
 function renderFlat() {
   const list = FLAT.filter(({t, s}) => match(t, s)).sort((a, b) => dir(a.s, b.s));
-  const rows = list.slice(0, PAGE).map(({t, s}) => `<tr class="row-clickable" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)">
+  const rows = list.slice(0, PAGE).map(({t, s}) => `<tr class="row-clickable" data-sync="${s[0]}" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)">
     <td>${syncLink(s[0])}</td><td>${txLink(t)}</td><td>${co(INT[t.i])}</td><td>${co(ACC[s[2]])}</td>
     <td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
-  document.getElementById('tbl').innerHTML = head(1) + `<tbody>${rows || empty}</tbody>`;
+  document.getElementById('tbl').innerHTML = head(1) + `<tbody>${rows || emptyRow()}</tbody>`;
   setRange(list.length);
 }
 /* Grouped version: one row per transaction, collapsed. A transaction is listed if any of its syncs
@@ -357,7 +387,7 @@ function renderGrouped() {
     .filter(g => g.m.some(Boolean)).sort((a, b) => dir(a.syncs.reduce((x, y) => key(x) > key(y) ? x : y), b.syncs.reduce((x, y) => key(x) > key(y) ? x : y)));
   const autoOpen = !!(F.s.length || F.q);
   const rows = GROUPS.slice(0, PAGE).map(({t, syncs, m}, gi) => {
-    if (syncs.length === 1) return `<tr class="row-clickable" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)">${syncRow(t, syncs[0], `<span class="row-toggle-spacer"></span>${txLink(t)}`).replace(`<td>${syncLink(syncs[0][0])}</td>`, `<td>${syncLink(syncs[0][0])}</td>`)}</tr>`;
+    if (syncs.length === 1) return `<tr class="row-clickable" data-sync="${syncs[0][0]}" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)">${syncRow(t, syncs[0], `<span class="row-toggle-spacer"></span>${txLink(t)}`).replace(`<td>${syncLink(syncs[0][0])}</td>`, `<td>${syncLink(syncs[0][0])}</td>`)}</tr>`;
     const latest = t.syncs.reduce((x, y) => key(x) > key(y) ? x : y);
     const accs = [...new Set(syncs.map(s => s[2]))];
     const others = m.filter(x => !x).length;
@@ -366,12 +396,12 @@ function renderGrouped() {
       <td data-copy="proposed">${syncs.length} syncs</td><td>${co(INT[t.i])}</td>
       <td>${accs.length > 1 ? `<span data-copy="proposed">${accs.length} companies</span>` : co(ACC[accs[0]])}</td>
       <td>${date(latest[3])}</td><td>${pill(latest[4])}</td></tr>`;
-    const kids = syncs.map((s, k) => `<tr class="child row-clickable ${m[k] ? 'match' : 'other'}" data-of="${gi}" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)" hidden>
+    const kids = syncs.map((s, k) => `<tr class="child row-clickable ${m[k] ? 'match' : 'other'}" data-of="${gi}" data-sync="${s[0]}" tabindex="0" onclick="openRow(event)" onkeydown="if(event.key==='Enter')openRow(event)" hidden>
       <td></td><td>${syncLink(s[0])}</td><td></td><td>${co(ACC[s[2]])}</td><td>${date(s[3])}</td><td>${pill(s[4])}</td></tr>`).join('');
     const more = others ? `<tr class="child others-row" data-of="${gi}" hidden><td></td><td colspan="5"><button class="btn-text others" type="button" aria-expanded="false" data-n="${others}" onclick="toggleOthers(${gi}, this)" data-copy="proposed">Show ${others} other sync${others === 1 ? '' : 's'}</button></td></tr>` : '';
     return parent + kids + more;
   }).join('');
-  document.getElementById('tbl').innerHTML = head(2) + `<tbody>${rows || empty}</tbody>`;
+  document.getElementById('tbl').innerHTML = head(2) + `<tbody>${rows || emptyRow()}</tbody>`;
   if (autoOpen) GROUPS.slice(0, PAGE).forEach((g, gi) => { if (g.syncs.length > 1) toggle(gi); });
   setRange(GROUPS.length);
 }
@@ -408,10 +438,13 @@ function setVariant(v) {
   render();
   history.replaceState(null, '', location.pathname + location.search + (v === 2 ? '#grouped' : ''));
 }
-if (QS.get('webhookId')) DEFAULTS.q = QS.get('webhookId');
-if (STATE === 'empty') { DEFAULTS.q = '000000'; STATE = ''; }
+let webhookQ = QS.get('webhookId') || '';
 F = {...DEFAULTS, s: []};
+if (webhookQ) { F.q = webhookQ; F.a = ''; }   // entry from a webhook: search across every accounting company
+if (STATE === 'empty') { F.q = '000000'; STATE = ''; }
+loadUrl(QS);
 writeFields();
+booted = true;
 setVariant(location.hash === '#grouped' ? 2 : 1);
 </script>
 </body>
